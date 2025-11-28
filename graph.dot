@@ -1,5 +1,4 @@
 digraph pamphlet_pipeline {
-
     rankdir=TB;  // top-to-bottom layout
     node [shape=box, style=rounded, fontname="Helvetica", width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
 
@@ -12,18 +11,17 @@ digraph pamphlet_pipeline {
         style=filled;
         color="#6666FF";
         fontcolor=white;
-        node [style=filled, fillcolor=blue, fontcolor=white, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
+        node [style=filled, fillcolor=blue, fontcolor=white, width=3];
 
         EEBO_images [label="EEBO Page Images\n(public domain / via Oxford)"];
         EEBO_TEI_XML [label="EEBO-TCP XML\nGold standard"];
         MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML\nproduces fine-tuned model"];
 
-        // Merge node
         merge_training [label="", shape=circle, width=0.2, fixedsize=true, style=filled, fillcolor=black];
     }
 
     // ========================
-    // Production phase cluster (with two horizontal lanes)
+    // Production phase cluster
     // ========================
     subgraph cluster_production {
         label="Production Phase";
@@ -31,11 +29,7 @@ digraph pamphlet_pipeline {
         style=filled;
         color="#AADDAA";
         fontcolor=black;
-        node [style=filled, fillcolor=green, fontcolor=black, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
-
-        // Anchor nodes to enforce same rank (these anchors belong to the production cluster)
-        prod_anchor_digit [shape=point, width=0.01];
-        prod_anchor_tei   [shape=point, width=0.01];
+        node [style=filled, fillcolor=green, fontcolor=black, width=3];
 
         // --- Subgraph: Digitisation ---
         subgraph cluster_digitisation {
@@ -43,20 +37,18 @@ digraph pamphlet_pipeline {
             fontsize=14;
             fontcolor=white;
             style=filled;
-            color="#0b6623";  // darker green outline
-            rankdir=LR;      // internal layout left-to-right
+            color="#0b6623";
 
-            // connect the anchor inside the subcluster to the global production anchor
-            digitisation_anchor [shape=point, width=0.01];
+            // force LR order
+            { rank=same;
+                d_anchor [label="", shape=point, width=0];
+                Lincoln_scans [label="Lincoln College/Bodleian\nNew Pamphlet Scans"];
+                OCR_tool [label="Kraken / Transkribus\nOCR / HTR"];
+            }
 
-            Lincoln_scans [label="Lincoln College/Bodleian\nNew Pamphlet Scans"];
-            OCR_tool [label="Kraken / Transkribus\nOCR / HTR"];
-
-            // keep the internal flow left->right
-            Lincoln_scans -> OCR_tool [style=solid, penwidth=2, fontcolor=black];
-
-            // tie the subcluster anchor to the production anchor (use visible or invisible edge)
-            digitisation_anchor -> prod_anchor_digit [style=invis];
+            // invisible LR ordering
+            d_anchor -> Lincoln_scans [style=invis];
+            Lincoln_scans -> OCR_tool [style=invis];
         }
 
         // --- Subgraph: TEI Generation ---
@@ -65,18 +57,16 @@ digraph pamphlet_pipeline {
             fontsize=14;
             fontcolor=white;
             style=filled;
-            color="#145214";  // slightly different green
-            rankdir=LR;       // internal layout left-to-right
+            color="#145214";
 
-            tei_anchor [shape=point, width=0.01];
+            { rank=same;
+                t_anchor [label="", shape=point, width=0];
+                MacBERTh_TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
+                Lincoln_TEI [label="Lincoln/Bodleian TEI Outputs"];
+            }
 
-            MacBERTh_TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
-            Lincoln_TEI [label="Lincoln/Bodleian TEI Outputs"];
-
-            MacBERTh_TEI -> Lincoln_TEI [style=solid, penwidth=2, fontcolor=black];
-
-            // tie the subcluster anchor to the production anchor
-            tei_anchor -> prod_anchor_tei [style=invis];
+            t_anchor -> MacBERTh_TEI [style=invis];
+            MacBERTh_TEI -> Lincoln_TEI [style=invis];
         }
     }
 
@@ -89,7 +79,7 @@ digraph pamphlet_pipeline {
         style=filled;
         color=darkgoldenrod4;
         fontcolor=white;
-        node [style=filled, fillcolor=goldenrod, fontcolor=black, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
+        node [style=filled, fillcolor=goldenrod, fontcolor=black, width=3];
 
         MacBERTh_analysis [label="MacBERTh for\nSemantic & Geospatial Analysis"];
         DB [label="TEI Database (PostGres)"];
@@ -108,31 +98,25 @@ digraph pamphlet_pipeline {
     // ========================
     EEBO_images -> merge_training  [arrowhead=none, penwidth=2];
     EEBO_TEI_XML -> merge_training  [arrowhead=none, penwidth=2];
-    merge_training -> MacBERTh_training [penwidth=2, style=solid, label="OCR + Gold TEI"];
+    merge_training -> MacBERTh_training [penwidth=2, label="OCR + Gold TEI"];
 
     // ========================
-    // Production edges (connect across the two lanes)
+    // Production edges
     // ========================
-    // Note: Lincoln_scans -> OCR_tool already declared inside digitisation cluster
-    OCR_tool -> MacBERTh_TEI [fontcolor=black, penwidth=2];
-    MacBERTh_training -> MacBERTh_TEI [label="Fine-tuned model", fontcolor=white, penwidth=2];
-    // MacBERTh_TEI -> Lincoln_TEI already declared inside TEI cluster
-
-    // Force the two anchors to be on the same rank (this makes the two subclusters sit side-by-side)
-    { rank = same; prod_anchor_digit; prod_anchor_tei; }
-
-    // Also ensure the internal subcluster anchors align horizontally (helps stability)
-    { rank = same; digitisation_anchor; tei_anchor; }
+    Lincoln_scans -> OCR_tool [penwidth=2];
+    OCR_tool -> MacBERTh_TEI [penwidth=2];
+    MacBERTh_training -> MacBERTh_TEI [label="Fine-tuned model", penwidth=2];
+    MacBERTh_TEI -> Lincoln_TEI [penwidth=2];
 
     // ========================
     // Analysis edges
     // ========================
     Lincoln_TEI -> DB [penwidth=2];
-    DB -> MacBERTh_analysis [fontcolor=black, penwidth=2];
+    DB -> MacBERTh_analysis [penwidth=2];
     DB -> RAG_index [penwidth=2];
     DB -> IFI [penwidth=2];
 
-    // Outputs / use cases edges
+    // outputs
     IFI -> Semantic_drift [penwidth=2];
     RAG_index -> Semantic_drift [penwidth=2];
 
@@ -147,7 +131,9 @@ digraph pamphlet_pipeline {
     Geo_temporal_mapping -> Interpretation [penwidth=2];
     Historical_context -> Interpretation [penwidth=2];
 
-    // invisible vertical ordering constraints
+    // ========================
+    // Invisible edges for global vertical order
+    // ========================
     MacBERTh_training -> Lincoln_scans [style=invis];
     Lincoln_TEI -> MacBERTh_analysis [style=invis];
     MacBERTh_analysis -> Semantic_drift [style=invis];
