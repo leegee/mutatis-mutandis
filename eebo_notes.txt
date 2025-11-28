@@ -1,0 +1,191 @@
+Permalink in CSV/DB: https: //artfl-permalink.uchicago.edu/eebo-tcp/ENG803oICKCKn05s
+Redirects to https: //artflsrv04.uchicago.edu/philologic4.7/eebo_08_2022/navigate/13506/table-of-contents
+
+Which produces two requests:
+
+https: //artflsrv04.uchicago.edu/philologic4.7/eebo_08_2022//scripts/get_table_of_contents.py?philo_id=17338+1
+
+RV
+
+{
+    "query": {
+        "philo_id": "17338 1",
+        "arg": 0,
+        "sort_order": [
+            "rowid"
+        ]
+    },
+    "philo_id": [
+        17338,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "toc": [
+        {
+            "philo_id": "17338 1",
+            "philo_type": "div1",
+            "label": "THE DECLARATION OF Commiſſary Generall BEHR, Againſt divers ſlanders and lies ſpread abroad againſt him.",
+            "href": "/navigate/17338/1",
+            "citation": []
+        }
+    ],
+    "metadata_fields": {
+        "filename": "A76351.xml",
+        "author": "Behr, Hans.",
+        "title": "The declaration of Commissary Generall Behr, against divers slanders and lies spread abroad against him.",
+        "create_date": "1644]",
+        "publisher": "s.n.,",
+        "pub_place": "[London :",
+        "pub_date": "1644]",
+        "extent": "1 sheet ([1] p.)",
+        "notes": "(EEBO-TCP ; phase 1, no. A76351)",
+        "collection": "Early English books online.",
+        "idno": "A76351",
+        "year": 1644,
+        "philo_doc_id": "17338"
+    },
+    "citation": [
+        {
+            "label": "Behr, Hans.",
+            "prefix": "",
+            "suffix": "",
+            "href": "/query?report=bibliography&author=%22Behr%2C+Hans.%22",
+            "style": {
+                "font-variant": "small-caps"
+            },
+            "object_type": "doc"
+        },
+        {
+            "label": "The declaration of Commissary Generall Behr, against divers slanders and lies spread abroad against him.",
+            "prefix": "",
+            "suffix": "",
+            "href": "/navigate/17338/table-of-contents",
+            "style": {
+                "font-variant": "small-caps",
+                "font-style": "italic",
+                "font-weight": 700
+            },
+            "object_type": "doc"
+        },
+        {
+            "label": "s.n.,",
+            "prefix": "",
+            "suffix": "",
+            "href": null,
+            "style": {},
+            "object_type": "doc"
+        },
+        {
+            "label": "[London :",
+            "prefix": "",
+            "suffix": "",
+            "href": null,
+            "style": {},
+            "object_type": "doc"
+        },
+        {
+            "label": "1644]",
+            "prefix": "",
+            "suffix": "",
+            "href": null,
+            "style": {},
+            "object_type": "doc"
+        }
+    ],
+    "current_obj_position": 0
+}
+
+
+And https: //artflsrv04.uchicago.edu/philologic4.7/eebo_08_2022//reports/navigation.py?&philo_id=17338%201
+
+RV
+
+{
+    "query": {
+        "philo_id": "17338 1",
+        "arg": 0,
+        "sort_order": [
+            "rowid"
+        ]
+    },
+    "philo_id": "17338 1",
+    "prev": "",
+    "next": "",
+    "metadata_fields": {
+        "filename": "A76351.xml",
+        "author": "Behr, Hans.",
+        "title": "The declaration of Commissary Generall Behr, against divers slanders and lies spread abroad against him.",
+        "create_date": "1644]",
+        "publisher": "s.n.,",
+        "pub_place": "[London :",
+        "pub_date": "1644]",
+        "extent": "1 sheet ([1] p.)",
+        "notes": "(EEBO-TCP ; phase 1, no. A76351)",
+        "collection": "Early English books online.",
+        "idno": "A76351",
+        "year": 1644,
+        "head": "THE DECLARATION OF Commiſſary Generall BEHR, Againſt divers ſlanders and lies ſpread abroad againſt him.",
+        "type": "text",
+        "n": "",
+        "speaker": "",
+        "resp": "",
+        "philo_doc_id": "17338",
+        "philo_div1_id": "17338 1",
+        "philo_div2_id": "",
+        "philo_div3_id": ""
+    },
+    "citation": [
+        {
+            "label": "Behr, Hans.",
+            "prefix": "",
+            "suffix": "",
+            "href": "/query?report=bibliography&author=%22Behr%2C+Hans.%22",
+            "style": {
+                "font-variant": "small-caps"
+            },
+            "object_type": "doc"
+        },
+        {
+            "label": "The declaration of Commissary Generall Behr, against divers slanders and lies spread abroad against him.",
+            "prefix": "",
+            "suffix": "",
+            "href": "/navigate/17338/table-of-contents",
+            "style": {
+                "font-variant": "small-caps",
+                "font-style": "italic",
+                "font-weight": 700
+            },
+            "object_type": "doc"
+        },
+        {
+            "label": "s.n.,",
+            "prefix": "",
+            "suffix": "",
+            "href": null,
+            "style": {},
+            "object_type": "doc"
+        },
+        {
+            "label": "[London :",
+            "prefix": "",
+            "suffix": "",
+            "href": null,
+            "style": {},
+            "object_type": "doc"
+        },
+        {
+            "label": "1644]",
+            "prefix": "",
+            "suffix": "",
+            "href": null,
+            "style": {},
+            "object_type": "doc"
+        }
+    ],
+    "text": "<div class=\"philologic-fragment\"><div><div type=\"text\">....",
+    "imgs": {}
+}

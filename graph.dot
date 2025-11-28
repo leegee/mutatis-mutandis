@@ -1,0 +1,108 @@
+digraph pamphlet_pipeline {
+    rankdir=TB;  // top-to-bottom layout
+    node [shape=box, style=rounded, fontname="Helvetica", width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
+
+    // ========================
+    // Training phase cluster
+    // ========================
+    subgraph cluster_training {
+        label="Training Phase";
+        fontsize=18;
+        style=filled;
+        color="#6666FF";
+        fontcolor=white;
+        node [style=filled, fillcolor=blue, fontcolor=white, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
+
+        EEBO_images [label="EEBO Page Images\n(public domain / via Oxford)"];
+        EEBO_TEI_XML [label="EEBO-TCP XML\nGold standard"];
+        MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML\nproduces fine-tuned model"];
+
+        // Merge node
+        merge_training [label="", shape=circle, width=0.2, fixedsize=true, style=filled, fillcolor=black];
+    }
+
+    // ========================
+    // Production phase cluster
+    // ========================
+    subgraph cluster_production {
+        label="Production Phase";
+        fontsize=18;
+        style=filled;
+        color=darkgreen;
+        fontcolor=white;
+        node [style=filled, fillcolor=green, fontcolor=black, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
+
+        Lincoln_scans [label="Lincoln College/Bodleian\nNew Pamphlet Scans"];
+        OCR_tool [label="Kraken / Transkribus\nOCR / HTR"];
+        MacBERTh_TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
+        Lincoln_TEI [label="Lincoln/Bodleian TEI Outputs"];
+    }
+
+    // ========================
+    // Analysis phase cluster
+    // ========================
+    subgraph cluster_analysis {
+        label="Analysis Phase";
+        fontsize=18;
+        style=filled;
+        color=darkgoldenrod4;
+        fontcolor=white;
+        node [style=filled, fillcolor=goldenrod, fontcolor=black, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
+
+        MacBERTh_analysis [label="MacBERTh for\nSemantic & Geospatial Analysis"];
+        DB [label="TEI Database (PostGres)"];
+        IFI [label="Inverse Frequency Index\nquantify novelty\ntrace early occurrences of concepts"];
+        RAG_index [label="RAG Index (FAISS)\nideological clusters,\nphrase reuse,\nthematic influence"];
+        
+        Semantic_drift [label="Semantic drift analysis\nvia dynamic embeddings\ncosine-distance timelines"];
+        Network_analysis [label="Network analysis\ncitation, phrase-sharing,\nauthorial & geo-temporal diffusion"];
+        Geo_temporal_mapping [label="Pamphlets, ideas, and drift\nmapped across time and space"];
+        Historical_context [label="Computational outputs grounded\nin early modern print culture"];
+        Interpretation [label="Historically-informed interpretation\nof ideological innovation,\npolitical discourse, and pamphlet circulation"];
+    }
+
+    // ========================
+    // Training edges
+    // ========================
+    EEBO_images -> merge_training  [arrowhead=none, penwidth=2];
+    EEBO_TEI_XML -> merge_training  [arrowhead=none, penwidth=2];
+    merge_training -> MacBERTh_training [penwidth=2, style=solid, label="OCR + Gold TEI"];
+
+    // ========================
+    // Production edges
+    // ========================
+    Lincoln_scans -> OCR_tool [fontcolor=black, penwidth=2];
+    OCR_tool -> MacBERTh_TEI [fontcolor=black, penwidth=2];
+    MacBERTh_training -> MacBERTh_TEI [label="Fine-tuned model", fontcolor=white, penwidth=2];
+    MacBERTh_TEI -> Lincoln_TEI [fontcolor=black, penwidth=2];
+
+    // ========================
+    // Analysis edges
+    // ========================
+    Lincoln_TEI -> DB [penwidth=2];
+    DB -> MacBERTh_analysis [fontcolor=black, penwidth=2];
+    DB -> RAG_index [penwidth=2];
+    DB -> IFI [penwidth=2];
+
+    // Outputs / use cases edges
+    IFI -> Semantic_drift [penwidth=2];
+    RAG_index -> Semantic_drift [penwidth=2];
+
+    IFI -> Network_analysis [penwidth=2];
+    RAG_index -> Network_analysis [penwidth=2];
+
+    MacBERTh_analysis -> Geo_temporal_mapping [penwidth=2];
+    DB -> Historical_context [penwidth=2];
+
+    Semantic_drift -> Interpretation [penwidth=2];
+    Network_analysis -> Interpretation [penwidth=2];
+    Geo_temporal_mapping -> Interpretation [penwidth=2];
+    Historical_context -> Interpretation [penwidth=2];
+
+    // ========================
+    // Invisible edges to enforce vertical order
+    // ========================
+    MacBERTh_training -> Lincoln_scans [style=invis];
+    Lincoln_TEI -> MacBERTh_analysis [style=invis];
+    MacBERTh_analysis -> Semantic_drift [style=invis];
+}
