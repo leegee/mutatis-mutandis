@@ -1,5 +1,5 @@
 digraph pamphlet_pipeline {
-    rankdir=TB;  // top-to-bottom layout
+    rankdir=TB;
     node [shape=box, style=rounded, fontname="Helvetica", width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
 
     // ========================
@@ -11,12 +11,13 @@ digraph pamphlet_pipeline {
         style=filled;
         color="#6666FF";
         fontcolor=white;
-        node [style=filled, fillcolor=blue, fontcolor=white, width=3];
+        node [style=filled, fillcolor=blue, fontcolor=white, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
 
         EEBO_images [label="EEBO Page Images\n(public domain / via Oxford)"];
         EEBO_TEI_XML [label="EEBO-TCP XML\nGold standard"];
         MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML\nproduces fine-tuned model"];
 
+        // Merge node
         merge_training [label="", shape=circle, width=0.2, fixedsize=true, style=filled, fillcolor=black];
     }
 
@@ -29,7 +30,6 @@ digraph pamphlet_pipeline {
         style=filled;
         color="#AADDAA";
         fontcolor=black;
-        node [style=filled, fillcolor=green, fontcolor=black, width=3];
 
         // --- Subgraph: Digitisation ---
         subgraph cluster_digitisation {
@@ -38,17 +38,10 @@ digraph pamphlet_pipeline {
             fontcolor=white;
             style=filled;
             color="#0b6623";
+            rankdir=LR;
 
-            // force LR order
-            { rank=same;
-                d_anchor [label="", shape=point, width=0];
-                Lincoln_scans [label="Lincoln College/Bodleian\nNew Pamphlet Scans"];
-                OCR_tool [label="Kraken / Transkribus\nOCR / HTR"];
-            }
-
-            // invisible LR ordering
-            d_anchor -> Lincoln_scans [style=invis];
-            Lincoln_scans -> OCR_tool [style=invis];
+            Lincoln_scans [fontcolor=white, label="Lincoln College/Bodleian\nNew Pamphlet Scans"];
+            OCR_tool [fontcolor=white, label="Kraken / Transkribus\nOCR / HTR"];
         }
 
         // --- Subgraph: TEI Generation ---
@@ -58,15 +51,13 @@ digraph pamphlet_pipeline {
             fontcolor=white;
             style=filled;
             color="#145214";
+            rankdir=LR;
 
-            { rank=same;
-                t_anchor [label="", shape=point, width=0];
-                MacBERTh_TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
-                Lincoln_TEI [label="Lincoln/Bodleian TEI Outputs"];
-            }
+            MacBERTh_TEI [fontcolor=white, label="Fine-Tuned MacBERTh\nhandles OCR correction, tokenisation,\northography, lemmatisation, POS tagging,\nproduces TEI from OCR"];
+            Lincoln_TEI [fontcolor=white, label="Lincoln/Bodleian TEI Outputs"];
 
-            t_anchor -> MacBERTh_TEI [style=invis];
-            MacBERTh_TEI -> Lincoln_TEI [style=invis];
+            Metadata_extraction [label="Material Metadata Extraction\nImprint, Format, Provenance, Associations", style=filled, fillcolor=lightblue, fontcolor=black];
+            WYSIWYG [label="Optional Human-in-the-loop (crowdsourced?) Editing", style=filled, fillcolor=lightblue, fontcolor=black];
         }
     }
 
@@ -79,13 +70,13 @@ digraph pamphlet_pipeline {
         style=filled;
         color=darkgoldenrod4;
         fontcolor=white;
-        node [style=filled, fillcolor=goldenrod, fontcolor=black, width=3];
+        node [style=filled, fillcolor=goldenrod, fontcolor=black, width=3, fixedsize=false, fontsize=10, labelloc=c, align=center];
 
         MacBERTh_analysis [label="MacBERTh for\nSemantic & Geospatial Analysis"];
         DB [label="TEI Database (PostGres)"];
         IFI [label="Inverse Frequency Index\nquantify novelty\ntrace early occurrences of concepts"];
         RAG_index [label="RAG Index (FAISS)\nideological clusters,\nphrase reuse,\nthematic influence"];
-
+        
         Semantic_drift [label="Semantic drift analysis\nvia dynamic embeddings\ncosine-distance timelines"];
         Network_analysis [label="Network analysis\ncitation, phrase-sharing,\nauthorial & geo-temporal diffusion"];
         Geo_temporal_mapping [label="Pamphlets, ideas, and drift\nmapped across time and space"];
@@ -98,25 +89,29 @@ digraph pamphlet_pipeline {
     // ========================
     EEBO_images -> merge_training  [arrowhead=none, penwidth=2];
     EEBO_TEI_XML -> merge_training  [arrowhead=none, penwidth=2];
-    merge_training -> MacBERTh_training [penwidth=2, label="OCR + Gold TEI"];
+    merge_training -> MacBERTh_training [penwidth=2, style=solid, label="OCR + Gold TEI"];
 
     // ========================
     // Production edges
     // ========================
-    Lincoln_scans -> OCR_tool [penwidth=2];
-    OCR_tool -> MacBERTh_TEI [penwidth=2];
-    MacBERTh_training -> MacBERTh_TEI [label="Fine-tuned model", penwidth=2];
-    MacBERTh_TEI -> Lincoln_TEI [penwidth=2];
+    Lincoln_scans -> OCR_tool [fontcolor=black, penwidth=2];
+    OCR_tool -> MacBERTh_TEI [fontcolor=black, penwidth=2];
+    MacBERTh_training -> MacBERTh_TEI [label="Fine-tuned model", fontcolor=white, penwidth=2];
+    MacBERTh_TEI -> Lincoln_TEI [fontcolor=black, penwidth=2];
+
+    Lincoln_TEI -> Metadata_extraction [penwidth=2];
+    Lincoln_TEI -> WYSIWYG [penwidth=2];
+    Metadata_extraction -> DB [penwidth=2];
+    WYSIWYG -> DB [penwidth=2];
 
     // ========================
     // Analysis edges
     // ========================
-    Lincoln_TEI -> DB [penwidth=2];
-    DB -> MacBERTh_analysis [penwidth=2];
+    DB -> MacBERTh_analysis [fontcolor=black, penwidth=2];
     DB -> RAG_index [penwidth=2];
     DB -> IFI [penwidth=2];
 
-    // outputs
+    // Outputs / use cases edges
     IFI -> Semantic_drift [penwidth=2];
     RAG_index -> Semantic_drift [penwidth=2];
 
@@ -132,7 +127,7 @@ digraph pamphlet_pipeline {
     Historical_context -> Interpretation [penwidth=2];
 
     // ========================
-    // Invisible edges for global vertical order
+    // Invisible edges to enforce vertical order
     // ========================
     MacBERTh_training -> Lincoln_scans [style=invis];
     Lincoln_TEI -> MacBERTh_analysis [style=invis];
