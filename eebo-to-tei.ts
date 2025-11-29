@@ -85,7 +85,7 @@ const topDiv = bodyNode.ele("div", { type: "text" });
  * This prevents illegal nesting like <div> inside <p> or <p> inside <hi>.
  */
 function htmlNodeToTEI(node: Node, blockParent: any, curP: any): { blockParent: any; curP: any } {
-  // Helper: ensure we have a paragraph to append inline content
+  // Ensures there is a paragraph to append inline content
   function ensureP(): any {
     if (curP) return curP;
     curP = blockParent.ele("p");
@@ -269,35 +269,22 @@ try {
 
 export function buildTeiHeader(root: XMLBuilder, meta: Metadata) {
   const header = root.ele("teiHeader");
-
-  //
-  // ===== fileDesc =====
-  //
   const fileDesc = header.ele("fileDesc");
 
-  //
-  // ---- titleStmt ----
-  //
   const titleStmt = fileDesc.ele("titleStmt");
   titleStmt.ele("title").txt(meta.title || "Untitled");
   if (meta.author) {
     titleStmt.ele("author").txt(meta.author);
   }
 
-  //
-  // ---- publicationStmt ----
-  //
   const pub = fileDesc.ele("publicationStmt");
 
-  // FIRST: publisher/distributor/authority (required)
   if (meta.publisher) {
     pub.ele("publisher").txt(meta.publisher);
   } else {
-    // TEI requires at least one of these
     pub.ele("authority").txt("Unknown");
   }
 
-  // THEN: other allowed children, in *any* order
   if (meta.pub_place) pub.ele("pubPlace").txt(meta.pub_place);
 
   // Date
@@ -315,18 +302,12 @@ export function buildTeiHeader(root: XMLBuilder, meta: Metadata) {
     }
   }
 
-  // Identifier
   if (meta.idno) {
     pub.ele("idno", { type: "eebo" }).txt(meta.idno);
   }
 
-  // Availability: we can safely add a default
   pub.ele("availability").ele("p").txt("Digitised for research use.");
 
-  //
-  // ---- sourceDesc ----
-  // (extent goes here)
-  //
   const sourceDesc = fileDesc.ele("sourceDesc");
   const bibl = sourceDesc.ele("bibl");
 
@@ -335,7 +316,11 @@ export function buildTeiHeader(root: XMLBuilder, meta: Metadata) {
   if (meta.author) bibl.ele("author").txt(meta.author);
 
   if (meta.extent) bibl.ele("extent").txt(meta.extent);
-  if (meta.notes) bibl.ele("note").txt(meta.notes);
+  if (meta.notes) {
+    bibl.ele("note").txt(meta.notes);
+    bibl.ele("note", { type: "eebo-tcp" }).txt(meta.notes);
+  }
+
   if (meta.collection) bibl.ele("idno", { type: "collection" }).txt(meta.collection);
 
 }
