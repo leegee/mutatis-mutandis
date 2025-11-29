@@ -5,7 +5,7 @@
  * into TEI P5 that respects block/inline constraints required by the DTD.
  *
  * Usage:
- *   bun eebo-to-tei.ts 13506_1
+ *   bun eebo-to-tei.ts 13506_1  
  */
 
 import fs from "fs";
