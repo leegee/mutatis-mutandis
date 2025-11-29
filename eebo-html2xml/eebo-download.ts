@@ -1,13 +1,13 @@
 import fs from "fs";
 import { Database } from "bun:sqlite";
-import { htmlDir, htmlFile, jsonFile, normalisePhiloId } from "./lib";
-const dbFile = "./eebo-tcp_metadata.sqlite";
+import { htmlDir, htmlFile, jsonFile } from "./lib";
+const dbFile = "./eebo-data/eebo-tcp_metadata.sqlite";
 
 if (!fs.existsSync(htmlDir)) fs.mkdirSync(htmlDir, { recursive: true });
 
 const db = new Database(dbFile);
 
-async function fetchJSON(url) {
+async function fetchJSON(url: string) {
     try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -18,7 +18,7 @@ async function fetchJSON(url) {
     }
 }
 
-async function getNumericId(permalink) {
+async function getNumericId(permalink: string) {
     if (!permalink) return null;
     try {
         const res = await fetch(permalink, { redirect: "follow" });
@@ -32,21 +32,21 @@ async function getNumericId(permalink) {
     }
 }
 
-async function resolvePhiloDiv1Id(philoDocId) {
+async function resolvePhiloDiv1Id(philoDocId: string) {
     if (!philoDocId) return null;
 
     const url = `https://artflsrv04.uchicago.edu/philologic4.7/eebo_08_2022/scripts/get_table_of_contents.py?philo_id=${encodeURIComponent(philoDocId)}+1`;
     const data = await fetchJSON(url);
     if (!data?.toc?.length) return null;
 
-    const div1 = data.toc.find(d => d.philo_type === "div1");
+    const div1 = data.toc.find((d: any) => d.philo_type === "div1");
     if (!div1) return null;
 
     return div1.philo_id; // e.g., "17338 1"
 }
 
 // --- Download EEBO HTML + metadata ---
-async function downloadEEBO(philoDiv1Id) {
+async function downloadEEBO(philoDiv1Id: string) {
     if (!philoDiv1Id) return;
 
     const url = `https://artflsrv04.uchicago.edu/philologic4.7/eebo_08_2022/reports/navigation.py?&philo_id=${encodeURIComponent(philoDiv1Id)}`;
@@ -75,7 +75,7 @@ async function main() {
     const rows = db.query("SELECT id, permalink, philo_div1_id FROM eebo");
 
     for (const row of rows) {
-        const { id, permalink, philo_div1_id } = row;
+        const { id, permalink, philo_div1_id } = row as any;
 
         let philoDiv1Id = philo_div1_id;
 

@@ -36,6 +36,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 tei_dtd/
 tei_out/
 texts/
-eebo-tcp_metadata.xlsx
-eebo-tcp_metadata.csv
-eebo-tcp_metadata.sqlite
+eebo-data/*
