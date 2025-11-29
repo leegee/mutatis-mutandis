@@ -1,0 +1,7 @@
+-r torch_cpu.txt
+transformers
+datasets
+tqdm
+lxml
+beautifulsoup4
+xmltodict

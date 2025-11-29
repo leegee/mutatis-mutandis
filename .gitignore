@@ -37,3 +37,4 @@ tei_dtd/
 tei_out/
 texts/
 eebo-data/*
+python/macberth_env/
