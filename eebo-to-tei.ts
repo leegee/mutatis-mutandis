@@ -12,7 +12,33 @@ import fs from "fs";
 import path from "path";
 import { JSDOM } from "jsdom";
 import { create } from "xmlbuilder2";
+import { type XMLBuilder } from "xmlbuilder2/lib/interfaces";
 import { validateTEI } from "./validate-tei";
+
+interface Metadata {
+  filename: string;
+  author: string;
+  title: string;
+  create_date?: string;
+  publisher?: string;
+  pub_place?: string;
+  pub_date?: string;
+  extent?: string;
+  notes?: string;
+  collection?: string;
+  idno: string;
+  year?: number;
+  head?: string;
+  type?: string;
+  n?: string;
+  speaker?: string;
+  resp?: string;
+  philo_doc_id?: string;
+  philo_div1_id?: string;
+  philo_div2_id?: string;
+  philo_div3_id?: string;
+}
+
 
 if (process.argv.length < 3 || !process.argv[2]) {
   console.error("Usage: bun eebo-to-tei.ts <baseId>");
@@ -42,20 +68,7 @@ const fragmentRoot = document.body;
 const doc = create({ version: "1.0", encoding: "UTF-8" })
   .ele("TEI", { xmlns: "http://www.tei-c.org/ns/1.0" });
 
-const teiHeader = doc.ele("teiHeader");
-const fileDesc = teiHeader.ele("fileDesc");
-const titleStmt = fileDesc.ele("titleStmt");
-titleStmt.ele("title").txt((meta.title || "").toString() || base);
-if (meta.author) titleStmt.ele("author").txt(meta.author);
-
-const publicationStmt = fileDesc.ele("publicationStmt");
-if (meta.publisher) publicationStmt.ele("publisher").txt(meta.publisher);
-if (meta.pubPlace) publicationStmt.ele("pubPlace").txt(meta.pubPlace);
-if (meta.date) publicationStmt.ele("date").txt(meta.date);
-
-// sourceDesc must contain <p> (or bibl, etc.) per DTD
-const sourceDesc = fileDesc.ele("sourceDesc");
-sourceDesc.ele("p").txt(meta.source || `EEBO HTML fragment ${base}`);
+buildTeiHeader(doc, meta);
 
 const textNode = doc.ele("text");
 const bodyNode = textNode.ele("body");
@@ -250,4 +263,79 @@ try {
   // validateTEI prints errors itself; rethrow so caller sees exit code
   process.exitCode = 1;
   // still exit after showing messages
+}
+
+
+
+export function buildTeiHeader(root: XMLBuilder, meta: Metadata) {
+  const header = root.ele("teiHeader");
+
+  //
+  // ===== fileDesc =====
+  //
+  const fileDesc = header.ele("fileDesc");
+
+  //
+  // ---- titleStmt ----
+  //
+  const titleStmt = fileDesc.ele("titleStmt");
+  titleStmt.ele("title").txt(meta.title || "Untitled");
+  if (meta.author) {
+    titleStmt.ele("author").txt(meta.author);
+  }
+
+  //
+  // ---- publicationStmt ----
+  //
+  const pub = fileDesc.ele("publicationStmt");
+
+  // FIRST: publisher/distributor/authority (required)
+  if (meta.publisher) {
+    pub.ele("publisher").txt(meta.publisher);
+  } else {
+    // TEI requires at least one of these
+    pub.ele("authority").txt("Unknown");
+  }
+
+  // THEN: other allowed children, in *any* order
+  if (meta.pub_place) pub.ele("pubPlace").txt(meta.pub_place);
+
+  // Date
+  if (meta.pub_date || meta.create_date) {
+    const dateStr = meta.pub_date || meta.create_date;
+    const year =
+      meta.year ||
+      parseInt((dateStr || "").replace(/[^0-9]/g, "")) ||
+      undefined;
+
+    if (year) {
+      pub.ele("date", { when: year.toString() }).txt(dateStr || "");
+    } else {
+      pub.ele("date").txt(dateStr || "");
+    }
+  }
+
+  // Identifier
+  if (meta.idno) {
+    pub.ele("idno", { type: "eebo" }).txt(meta.idno);
+  }
+
+  // Availability: we can safely add a default
+  pub.ele("availability").ele("p").txt("Digitised for research use.");
+
+  //
+  // ---- sourceDesc ----
+  // (extent goes here)
+  //
+  const sourceDesc = fileDesc.ele("sourceDesc");
+  const bibl = sourceDesc.ele("bibl");
+
+  // Title and author again (TEI convention)
+  bibl.ele("title").txt(meta.title || "Untitled");
+  if (meta.author) bibl.ele("author").txt(meta.author);
+
+  if (meta.extent) bibl.ele("extent").txt(meta.extent);
+  if (meta.notes) bibl.ele("note").txt(meta.notes);
+  if (meta.collection) bibl.ele("idno", { type: "collection" }).txt(meta.collection);
+
 }
