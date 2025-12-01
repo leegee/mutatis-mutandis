@@ -38,3 +38,4 @@ eebo_tei/
 texts/
 eebo-data/*
 python/macberth_env/
+macberth_env/
