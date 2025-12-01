@@ -95,6 +95,7 @@ digraph pamphlet_pipeline {
             Geo_temporal_mapping [label="Pamphlets, ideas & drift\nmapped across time and space"];
             Historical_context [label="Computational outputs grounded\nin early modern print culture"];
             Interpretation [label="Historically-informed Interpretation"];
+            Meta [label="Conceptual Metaphors As Deep Semantic Frames:\nthe way a single root or stem in a language carries a “cultural worldview,”\nshaping not just vocabulary but the way speakers conceptualize\nreality, morality, action, and social relations.\nThe intersection of historical linguistics, cognitive semantics, and cultural anthropology." ]
         }
 
         // --- Edges from computational processes to outputs ---
@@ -112,6 +113,7 @@ digraph pamphlet_pipeline {
         Network_analysis -> Interpretation [penwidth=2];
         Geo_temporal_mapping -> Interpretation [penwidth=2];
         Historical_context -> Interpretation [penwidth=2];
+        Interpretation -> Meta [penwidth=2];
     }
 
     // ========================
