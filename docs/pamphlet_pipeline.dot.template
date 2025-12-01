@@ -1,0 +1,193 @@
+digraph pamphlet_pipeline {
+
+    rankdir = TB;
+    linewidth=3;
+    colorscheme="${COLORSCHEME}";
+    // =========================
+    // Global node defaults
+    // =========================
+    node [
+        colorscheme="${COLORSCHEME}",
+        shape=box,
+        style=filled,
+        fontname="Helvetica",
+        width=3,
+        fixedsize=false,
+        fontsize=24,
+        labelloc=c,
+        align=center,
+        margin="0.3,0.3",
+        fillcolor="${NODE_FILL}",
+        fontcolor="${NODE_FONT}"
+    ];
+
+    // =========================
+    // Training Phase Cluster
+    // =========================
+    subgraph cluster_training {
+        label="Training Phase";
+        fontsize=64;
+        fontname=sans;
+        style=filled;
+        fillcolor="${CLUSTER_FILL}";
+        fontcolor="${CLUSTER_FONT}";
+
+        node [
+            style=filled,
+            fillcolor="${SUBCLUSTER_FILL}",
+            fontcolor="${NODE_FONT}",
+        ];
+
+        EEBO_images     [label="EEBO Page Images\n(public domain / via Oxford)", shape=folder];
+        EEBO_TEI_XML    [label="EEBO-TCP XML\nGold standard", shape=folder];
+        MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML\nproduces fine-tuned model", shape=parallelogram];
+
+        merge_training  [label="", shape=circle, width=0.2, fixedsize=true, style=filled, fillcolor="${NODE_FILL}"];
+    }
+
+    MacBERTh_Fine_Tuned [
+        label="Fine-tuned\nMacBERTh",
+        shape=cylinder,
+        style=filled,
+        fillcolor="${NODE_FILL}",
+        fontcolor="${NODE_FONT}"
+    ];
+
+    // =========================
+    // Production Phase Cluster
+    // =========================
+    subgraph cluster_production {
+        label="Production Phase";
+        fontsize=64;
+        fontname=sans;
+        style=filled;
+        fillcolor="${CLUSTER_FILL}";
+        fontcolor="${NODE_FONT}";
+
+        // Digitisation
+        subgraph cluster_digitisation {
+            label="Digitisation";
+            fontsize=48;
+            style=filled;
+            fillcolor="${SUBCLUSTER_FILL}";
+            fontcolor="${NODE_FONT}";
+
+            Lincoln_scans [label="Lincoln College/Bodleian\nScan pamphlets", shape=folder];
+            OCR_tool      [label="Kraken / Transkribus\nOCR / HTR", shape=parallelogram];
+        }
+
+        // TEI Generation
+        subgraph cluster_tei_generation {
+            label="TEI Generation";
+            fontsize=48;
+            style=filled;
+            fillcolor="${SUBCLUSTER_FILL}";
+            fontcolor="${NODE_FONT}";
+
+            MACBERTH_OCR2TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
+            Lincoln_TEI      [label="Lincoln/Bodleian TEI Outputs", shape=cylinder];
+        }
+
+        // Dictionary / Normalisation
+        subgraph cluster_dictionary {
+            label="Linguistic Normalisation / Mapping";
+            fontsize=48;
+            style=filled;
+            fillcolor="${SUBCLUSTER_FILL}";
+            fontcolor="${NODE_FONT}";
+
+            EME_to_ME_dict [label="Normalisation of EME to ME via dictionary/library", shape=cylinder];
+            Normalised [label="Normalised data", shape=cylinder]
+            Normaliser_DB  [label="EME to ME Dictionary", shape=cylinder];
+        }
+    }
+
+    // =========================
+    // Analysis Phase Cluster
+    // =========================
+    subgraph cluster_analysis {
+        label="Analysis Phase";
+        fontsize=64;
+        fontname=sans;
+        style=filled;
+        fillcolor="${CLUSTER_FILL}";
+        fontcolor="${NODE_FONT}";
+        nargin="1,1";
+
+        // Computational Processes
+        subgraph cluster_computation {
+            label="Computational Processes";
+            fontsize=48;
+            style=filled;
+            fillcolor="${SUBCLUSTER_FILL}";
+            fontcolor="${SUBCLLUSTER_FONT}";
+            nargin="1,1";
+
+            MacBERTh_analysis [label="MacBERTh for Analysis"];
+            DB                [label="TEI Database (PostGres)", shape=cylinder];
+            IFI               [label="Inverse Frequency Index"];
+            RAG_index         [label="RAG Index (FAISS)\nideological clusters,\nphrase reuse"];
+        }
+
+        // Outputs
+        subgraph cluster_outputs {
+            nargin="1,1";
+            label="Analytical & Interpretative Outputs";
+            fontsize=48;
+            style=filled;
+            fillcolor="${SUBCLUSTER_FILL}";
+            fontcolor="${SUBCLUSTER_FONT}";
+
+            Semantic_drift        [label="Semantic Drift\nvia dynamic embeddings"];
+            Network_analysis      [label="Network Analysis\ncitation, phrase-sharing,\nauthorial & geo-temporal diffusion"];
+            Geo_temporal_mapping  [label="Pamphlets, ideas & drift\nmapped across time and space"];
+            Historical_context    [label="Computational outputs grounded\nin early modern print culture"];
+            Interpretation        [label="Historically-informed Interpretation"];
+            Meta                  [label="Conceptual Metaphors As Deep Semantic Frames"];
+        }
+    }
+
+    // =========================
+    // Edges
+    // =========================
+    EEBO_images    -> merge_training;
+    EEBO_TEI_XML   -> merge_training;
+    merge_training -> MacBERTh_training;
+
+    MacBERTh_training -> MacBERTh_Fine_Tuned;
+    MacBERTh_Fine_Tuned -> MACBERTH_OCR2TEI;
+
+    Lincoln_scans -> OCR_tool;
+    OCR_tool      -> MACBERTH_OCR2TEI;
+    MACBERTH_OCR2TEI -> Lincoln_TEI;
+    Lincoln_TEI  -> EME_to_ME_dict; 
+    EME_to_ME_dict-> Normalised;
+
+    DB -> MacBERTh_analysis;
+    DB -> RAG_index;
+    DB -> IFI;
+
+    MacBERTh_analysis -> Semantic_drift;
+    MacBERTh_analysis -> Network_analysis;
+    DB -> Semantic_drift;
+    DB -> Network_analysis;
+    IFI -> Semantic_drift;
+    RAG_index -> Semantic_drift;
+
+    MacBERTh_analysis -> Geo_temporal_mapping;
+    DB -> Historical_context;
+
+    Semantic_drift -> Interpretation;
+    Network_analysis -> Interpretation;
+    Geo_temporal_mapping -> Interpretation;
+    Historical_context -> Interpretation;
+    Interpretation -> Meta;
+
+    Lincoln_TEI -> DB;
+
+    Normaliser_DB -> EME_to_ME_dict;
+
+    // Invisible edges to enforce vertical order
+    MacBERTh_training -> Lincoln_scans [style=invis];
+    Lincoln_TEI       -> MacBERTh_analysis [style=invis];
+}

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+cd python
 
 source macberth_env/Scripts/activate
 
