@@ -48,7 +48,7 @@ if (process.argv.length < 3 || !process.argv[2]) {
 const base = path.basename(process.argv[2]); // e.g. "13506_1"
 const htmlPath = path.join("texts", `${base}.html`);
 const jsonPath = path.join("texts", `${base}.json`);
-const outDir = "tei_out";
+const outDir = "eebo_tei";
 const outPath = path.join(outDir, `${base}.xml`);
 
 if (!fs.existsSync(htmlPath)) {

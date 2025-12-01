@@ -1,22 +1,11 @@
 import fs from "fs";
 import { Database } from "bun:sqlite";
-import { htmlDir, htmlFile, jsonFile } from "./lib";
+import { fetchJSON, htmlDir, htmlFile, jsonFile } from "./lib";
 const dbFile = "./eebo-data/eebo-tcp_metadata.sqlite";
 
 if (!fs.existsSync(htmlDir)) fs.mkdirSync(htmlDir, { recursive: true });
 
 const db = new Database(dbFile);
-
-async function fetchJSON(url: string) {
-    try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-    } catch (err) {
-        console.error("Fetch error:", url, err);
-        return null;
-    }
-}
 
 async function getNumericId(permalink: string) {
     if (!permalink) return null;
@@ -45,8 +34,7 @@ async function resolvePhiloDiv1Id(philoDocId: string) {
     return div1.philo_id; // e.g., "17338 1"
 }
 
-// --- Download EEBO HTML + metadata ---
-async function downloadEEBO(philoDiv1Id: string) {
+async function downloadEEBO(philoDiv1Id: string): Promise<void> {
     if (!philoDiv1Id) return;
 
     const url = `https://artflsrv04.uchicago.edu/philologic4.7/eebo_08_2022/reports/navigation.py?&philo_id=${encodeURIComponent(philoDiv1Id)}`;

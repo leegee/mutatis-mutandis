@@ -34,7 +34,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 tei_dtd/
-tei_out/
+eebo_tei/
 texts/
 eebo-data/*
 python/macberth_env/
