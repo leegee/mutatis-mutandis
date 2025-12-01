@@ -3,8 +3,7 @@
 ## Install
 
     # First time:
-    cat $HOME/.bsahrc >> python$ bash ./login
+    echo "python$ bash ./login" >> "$HOME/.bsahrc"
 
     # Log in again or run:
-    python$ bash ./login
-
+    python$ source "$HOME/.bashrc"
