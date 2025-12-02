@@ -4,25 +4,36 @@ OUTFILE="${1:-pamphlet_pipeline_output.$TYPE}"
 
 
 # https://graphviz.org/doc/info/colors.html#brewer
-export COLORSCHEME="gnbu3"
+export COLORSCHEME="gnbu5"
 
 # Set hierarchical colours (1 = lightest/top-level, 2 = subcluster, 3 = nodes)
 export PAGE_BG="#DDDDE0"
+
+export HELP_FG="black"
+export HELP_BG="#EECCCC"
+
 export CLUSTER_BG="1"
+export CLUSTER_FG="5"
+
 export SUBCLUSTER_BG="2"
+export SUBCLUSTER_FG="5"
+
 export NODE_BG="3"
+export NODE_FG="black"
 
-export CLUSTER_FG="#333333"
-export SUBCLUSTER_FG="#333333"
-export NODE_FG="#333333"
+export OUTPUT_BG="4"
+export OUTPUT_FG="white"
 
-export FONT_NODE="14"
+export FONT_NODE="24"
 export FONT_H1="48"
 export FONT_H2="32"
 export FONT_H3="24"
 
 # Read template and substitute variables
 sed \
+  -e "s/\${OUTPUT_BG}/$OUTPUT_BG/g" \
+  -e "s/\${HELP_FG}/$HELP_FG/g" \
+  -e "s/\${HELP_BG}/$HELP_BG/g" \
   -e "s/\${PAGE_BG}/$PAGE_BG/g" \
   -e "s/\${CLUSTER_BG}/$CLUSTER_BG/g" \
   -e "s/\${SUBCLUSTER_BG}/$SUBCLUSTER_BG/g" \
