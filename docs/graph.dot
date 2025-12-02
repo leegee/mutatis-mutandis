@@ -7,12 +7,15 @@ digraph pamphlet_pipeline {
     //   2 = medium  → sub-clusters
     //   3 = darkest → nodes
     // ======================================================
-    engine=patchwork;
-    rankdir=TB;
     colorscheme=gnbu4;
+    compound=true;
+    rankdir=TB;
+    center=true;
+    bgcolor="#ddf5dd";
+    fontname="Figtree";
     ranksep=0.4;
     nodesep=0.3;
-    fontname="Figtree";
+    margin="10";
 
     node [
         shape=box,
@@ -31,6 +34,7 @@ digraph pamphlet_pipeline {
     // Training Phase
     // =========================
     subgraph cluster_training {
+        clusterrank=local;
         label="Training Phase";
         fontweight="light";
         fontname="Figtree Light";
@@ -63,6 +67,7 @@ digraph pamphlet_pipeline {
     // Production Phase
     // =========================
     subgraph cluster_production {
+        clusterrank=local;
         label="Production Phase";
         fontname="Figtree Light";
         fontsize=32;
@@ -116,6 +121,7 @@ digraph pamphlet_pipeline {
     // Analysis Phase
     // =========================
     subgraph cluster_analysis {
+        clusterrank=local;
         label="Analysis Phase";
         fontname="Figtree Light";
         fontsize=32;
@@ -124,6 +130,7 @@ digraph pamphlet_pipeline {
 
         // Computation
         subgraph cluster_computation {
+            clusterrank=local;
             label="Computational Processes";
             fontname="Figtree Light";
             fontsize=24;

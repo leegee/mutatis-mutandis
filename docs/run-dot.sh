@@ -26,7 +26,7 @@ sed \
   -e "s/\${COLORSCHEME}/$COLORSCHEME/g" \
   pamphlet_pipeline.dot.template > /tmp/pamphlet_pipeline.dot
 
-dot -Gengine=neato -T${TYPE} /tmp/pamphlet_pipeline.dot -o "$OUTFILE"
+dot -T${TYPE} /tmp/pamphlet_pipeline.dot -o "$OUTFILE"
 
 # cat /tmp/pamphlet_pipeline.dot
 

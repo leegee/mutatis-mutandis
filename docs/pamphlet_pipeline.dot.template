@@ -4,7 +4,7 @@ digraph pamphlet_pipeline {
     splines=polyline;
     ranksep=0.4;
     linewidth=3;
-    nodesep=0.3;
+    nodesep=0.3; 
     // =========================
     // Global node defaults
     // =========================
