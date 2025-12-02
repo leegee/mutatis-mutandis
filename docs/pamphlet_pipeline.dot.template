@@ -1,10 +1,16 @@
 digraph pamphlet_pipeline {
     colorscheme="${COLORSCHEME}";
-    rankdir = TB;
+    rankdir=TB;
     splines=polyline;
-    ranksep=0.4;
-    linewidth=3;
-    nodesep=0.3; 
+    ranksep=0.2;
+    nodesep=0.15;
+
+    // Output A4
+    ratio="fill";
+    size="8.3,11.7!";
+    margin=0;
+    bgcolor="${PAGE_BG}";
+
     // =========================
     // Global node defaults
     // =========================
@@ -15,7 +21,7 @@ digraph pamphlet_pipeline {
         fontname="Figtree",
         width=3,
         fixedsize=false,
-        fontsize=24,
+        fontsize="${FONT_NODE}",
         labelloc=c,
         align=center,
         margin="0.3,0.3",
@@ -28,23 +34,20 @@ digraph pamphlet_pipeline {
     // =========================
     subgraph cluster_training {
         label="Training Phase";
-        fontsize=64;
+        fontsize="${FONT_H2}";
         fontname=sans;
         style=filled;
         fillcolor="${CLUSTER_BG}";
         fontcolor="${CLUSTER_FG}";
 
-        node [
-            style=filled,
-            fillcolor="${SUBCLUSTER_BG}",
-            fontcolor="${NODE_FG}",
-        ];
-
         EEBO_images     [label="EEBO Page Images\n(public domain / via Oxford)", shape=folder];
         EEBO_TEI_XML    [label="EEBO-TCP XML\nGold standard", shape=folder];
         MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML\nproduces fine-tuned model", shape=parallelogram];
-
         merge_training  [label="", shape=circle, width=0.2, fixedsize=true, style=filled, fillcolor="${NODE_BG}"];
+
+        EEBO_images -> merge_training;
+        EEBO_TEI_XML -> merge_training;
+        merge_training -> MacBERTh_training;
     }
 
     MacBERTh_Fine_Tuned [
@@ -55,12 +58,14 @@ digraph pamphlet_pipeline {
         fontcolor="${NODE_FG}"
     ];
 
+    MacBERTh_training -> MacBERTh_Fine_Tuned;
+
     // =========================
     // Production Phase Cluster
     // =========================
     subgraph cluster_production {
         label="Production Phase";
-        fontsize=64;
+        fontsize="${FONT_H2}";
         fontname=sans;
         style=filled;
         fillcolor="${CLUSTER_BG}";
@@ -68,39 +73,49 @@ digraph pamphlet_pipeline {
 
         // Digitisation
         subgraph cluster_digitisation {
-            label="Digitisation";
-            fontsize=48;
             style=filled;
+            label="Digitisation";
+            fontsize="${FONT_H3}";
             fillcolor="${SUBCLUSTER_BG}";
             fontcolor="${NODE_FG}";
 
             Lincoln_scans [label="Lincoln College/Bodleian\nScan pamphlets", shape=folder];
             OCR_tool      [label="Kraken / Transkribus\nOCR / HTR", shape=parallelogram];
+
+            Lincoln_scans -> OCR_tool;
         }
 
         // TEI Generation
         subgraph cluster_tei_generation {
             label="TEI Generation";
-            fontsize=48;
+            fontsize="${FONT_H3}";
             style=filled;
             fillcolor="${SUBCLUSTER_BG}";
             fontcolor="${NODE_FG}";
 
             MACBERTH_OCR2TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
             Lincoln_TEI      [label="Lincoln/Bodleian TEI Outputs", shape=cylinder];
+
+            OCR_tool -> MACBERTH_OCR2TEI;
+            MACBERTH_OCR2TEI -> Lincoln_TEI;
+            MacBERTh_Fine_Tuned -> MACBERTH_OCR2TEI;
         }
 
         // Dictionary / Normalisation
         subgraph cluster_dictionary {
             label="Linguistic Normalisation / Mapping";
-            fontsize=48;
+            fontsize="${FONT_H3}";
             style=filled;
             fillcolor="${SUBCLUSTER_BG}";
             fontcolor="${NODE_FG}";
 
             EME_to_ME_dict [label="Normalisation of EME to ME via dictionary/library", shape=cylinder];
-            Normalised [label="Normalised data", shape=cylinder]
             Normaliser_DB  [label="EME to ME Dictionary", shape=cylinder];
+            Normalised     [label="Normalised data", shape=cylinder];
+
+            Lincoln_TEI -> EME_to_ME_dict;
+            EME_to_ME_dict -> Normalised;
+            Normaliser_DB -> EME_to_ME_dict;
         }
     }
 
@@ -109,33 +124,40 @@ digraph pamphlet_pipeline {
     // =========================
     subgraph cluster_analysis {
         label="Analysis Phase";
-        fontsize=64;
+        fontsize="${FONT_H2}";
         fontname=sans;
         style=filled;
         fillcolor="${CLUSTER_BG}";
         fontcolor="${NODE_FG}";
-        nargin="1,1";
 
         // Computational Processes
         subgraph cluster_computation {
             label="Computational Processes";
-            fontsize=48;
+            fontsize="${FONT_H3}";
             style=filled;
             fillcolor="${SUBCLUSTER_BG}";
             fontcolor="${SUBCLUSTER_FG}";
-            nargin="1,1";
 
             MacBERTh_analysis [label="MacBERTh for Analysis"];
             DB                [label="TEI Database (PostGres)", shape=cylinder];
             IFI               [label="Inverse Frequency Index"];
             RAG_index         [label="RAG Index (FAISS)\nideological clusters,\nphrase reuse"];
+
+            Lincoln_TEI -> DB;
+            MacBERTh_analysis -> Semantic_drift;
+            MacBERTh_analysis -> Network_analysis;
+            MacBERTh_analysis -> Geo_temporal_mapping;
+            DB -> Semantic_drift;
+            DB -> Network_analysis;
+            DB -> Historical_context;
+            IFI -> Semantic_drift;
+            RAG_index -> Semantic_drift;
         }
 
         // Outputs
         subgraph cluster_outputs {
-            nargin="1,1";
             label="Analytical & Interpretative Outputs";
-            fontsize=48;
+            fontsize="${FONT_H3}";
             style=filled;
             fillcolor="${SUBCLUSTER_BG}";
             fontcolor="${SUBCLUSTER_FG}";
@@ -146,50 +168,12 @@ digraph pamphlet_pipeline {
             Historical_context    [label="Computational outputs grounded\nin early modern print culture"];
             Interpretation        [label="Historically-informed Interpretation"];
             Meta                  [label="Conceptual Metaphors As Deep Semantic Frames"];
+
+            Semantic_drift -> Interpretation;
+            Network_analysis -> Interpretation;
+            Geo_temporal_mapping -> Interpretation;
+            Historical_context -> Interpretation;
+            Interpretation -> Meta;
         }
     }
-
-    // =========================
-    // Edges
-    // =========================
-    EEBO_images    -> merge_training;
-    EEBO_TEI_XML   -> merge_training;
-    merge_training -> MacBERTh_training;
-
-    MacBERTh_training -> MacBERTh_Fine_Tuned;
-    MacBERTh_Fine_Tuned -> MACBERTH_OCR2TEI;
-
-    Lincoln_scans -> OCR_tool;
-    OCR_tool      -> MACBERTH_OCR2TEI;
-    MACBERTH_OCR2TEI -> Lincoln_TEI;
-    Lincoln_TEI  -> EME_to_ME_dict; 
-    EME_to_ME_dict-> Normalised;
-
-    DB -> MacBERTh_analysis;
-    DB -> RAG_index;
-    DB -> IFI;
-
-    MacBERTh_analysis -> Semantic_drift;
-    MacBERTh_analysis -> Network_analysis;
-    DB -> Semantic_drift;
-    DB -> Network_analysis;
-    IFI -> Semantic_drift;
-    RAG_index -> Semantic_drift;
-
-    MacBERTh_analysis -> Geo_temporal_mapping;
-    DB -> Historical_context;
-
-    Semantic_drift -> Interpretation;
-    Network_analysis -> Interpretation;
-    Geo_temporal_mapping -> Interpretation;
-    Historical_context -> Interpretation;
-    Interpretation -> Meta;
-
-    Lincoln_TEI -> DB;
-
-    Normaliser_DB -> EME_to_ME_dict;
-
-    // Invisible edges to enforce vertical order
-    MacBERTh_training -> Lincoln_scans [style=invis];
-    Lincoln_TEI       -> MacBERTh_analysis [style=invis];
 }
