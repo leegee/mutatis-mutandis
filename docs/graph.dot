@@ -7,10 +7,9 @@ digraph pamphlet_pipeline {
     //   2 = medium  → sub-clusters
     //   3 = darkest → nodes
     // ======================================================
-
-    splines=polyline;    // or: splines=ortho or splines=polyline
+    engine=patchwork;
     rankdir=TB;
-    colorscheme=gnbu3;
+    colorscheme=gnbu4;
     ranksep=0.4;
     nodesep=0.3;
     fontname="Figtree";
@@ -42,12 +41,13 @@ digraph pamphlet_pipeline {
         node [
             style=filled
             fillcolor="3",
+            fontcolor="black",
             fontsize="12"
         ];
 
         EEBO_TEI_XML     [label="EEBO-TCP XML\nGold standard", shape=folder];
         EEBO_images      [label="EEBO Page Images\n(public domain / via Oxford)", shape=folder, ];
-        MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML\nproduces fine-tuned model", shape=parallelogram];
+        MacBERTh_training [label="Fine-tune MacBERTh\non extand EEBO OCR and TEI XML\nproduces fine-tuned model", shape=parallelogram];
 
         merge_training [label="", shape=circle, width=0.2, fixedsize=true, fillcolor="3"];
     }
@@ -56,7 +56,7 @@ digraph pamphlet_pipeline {
         label="Fine-tuned\nMacBERTh",
         shape=cylinder,
         style=filled,
-        fillcolor="3"
+        fillcolor="4"
     ];
 
     // =========================
@@ -77,7 +77,7 @@ digraph pamphlet_pipeline {
             style=filled;
             fillcolor="2";
 
-            node [style=filled, fillcolor="3"];
+            node [style=filled, fillcolor="3", fontcolor="black"];
 
             Lincoln_scans [label="Lincoln College/Bodleian\nScan pamphlets", shape=folder];
             OCR_tool      [label="Kraken / Transkribus\nOCR / HTR", shape=parallelogram];
@@ -91,23 +91,23 @@ digraph pamphlet_pipeline {
             style=filled;
             fillcolor="2";
 
-            node [style=filled, fillcolor="3"];
+            node [style=filled, fillcolor="3", fontcolor="black"];
 
             MACBERTH_OCR2TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
-            Lincoln_TEI      [label="Lincoln/Bodleian TEI Outputs", shape=cylinder];
+            Lincoln_TEI      [label="Lincoln/Bodleian TEI XML Outputs", shape=cylinder, fillcolor="4"];
         }
 
         // Dictionary / Normalisation
         subgraph cluster_dictionary {
-            label="Linguistic Normalisation / Mapping";
+            label="Linguistic\nNormalisation &amp; Mapping";
             fontname="Figtree Light";
             fontsize=24;
             style=filled;
             fillcolor="2";
 
-            node [style=filled, fillcolor="3"];
+            node [style=filled, fillcolor="3", fontcolor="black"];
 
-            EME_to_ME_dict [label="Normalisation of EME to ME via dictionary/library"];
+            EME_to_ME_dict [label="Normalisation of EME to ME via dictionary/library", fillcolor="4", shape=cylinder];
             Normaliser_DB  [label="EME to ME Dictionary", shape=cylinder];
         }
     }
@@ -130,12 +130,12 @@ digraph pamphlet_pipeline {
             style=filled;
             fillcolor="2";
 
-            node [style=filled, fillcolor="3"];
+            node [style=filled, fillcolor="3", fontcolor="black"];
 
-            MacBERTh_analysis [label="MacBERTh for Analysis"];
-            DB                [label="TEI Database (PostGres)", shape=cylinder];
-            IFI               [label="Inverse Frequency Index"];
-            RAG_index         [label="RAG Index (FAISS)\nideological clusters,\nphrase reuse"];
+            MacBERTh_analysis [label="MacBERTh for Analysis", shape=cylinder, fillcolor="4"];
+            DB                [label="TEI PostGIS Database", shape=cylinder, fillcolor="4"];
+            IFI               [label="Inverse Frequency Index", shape=cylinder, fillcolor="4"];
+            RAG_index         [label="RAG Index (FAISS)\nideological clusters,\nphrase reuse", shape=cylinder, fillcolor="4"];
         }
 
         // Outputs
@@ -148,7 +148,7 @@ digraph pamphlet_pipeline {
             style=filled;
             fillcolor="2";
 
-            node [style=filled, fillcolor="3"];
+            node [style=filled, fillcolor="3", fontcolor="black"];
 
             Semantic_drift        [label="Semantic Drift\nvia dynamic embeddings"];
             Network_analysis      [label="Network Analysis\ncitation, phrase-sharing,\nauthorial & geo-temporal diffusion"];
@@ -188,7 +188,7 @@ digraph pamphlet_pipeline {
     MacBERTh_training -> MacBERTh_Fine_Tuned;
     MacBERTh_Fine_Tuned -> MACBERTH_OCR2TEI;
     MACBERTH_OCR2TEI -> Lincoln_TEI;
-    Lincoln_TEI -> EME_to_ME_dict [style=dotted, label="For normalisation"];
+    Lincoln_TEI -> EME_to_ME_dict [label="For normalisation"];
 
     // Analysis edges
     DB -> MacBERTh_analysis;

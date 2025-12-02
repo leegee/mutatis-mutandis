@@ -1,8 +1,10 @@
 digraph pamphlet_pipeline {
-
-    rankdir = TB;
-    linewidth=3;
     colorscheme="${COLORSCHEME}";
+    rankdir = TB;
+    splines=polyline;
+    ranksep=0.4;
+    linewidth=3;
+    nodesep=0.3;
     // =========================
     // Global node defaults
     // =========================
@@ -10,15 +12,15 @@ digraph pamphlet_pipeline {
         colorscheme="${COLORSCHEME}",
         shape=box,
         style=filled,
-        fontname="Helvetica",
+        fontname="Figtree",
         width=3,
         fixedsize=false,
         fontsize=24,
         labelloc=c,
         align=center,
         margin="0.3,0.3",
-        fillcolor="${NODE_FILL}",
-        fontcolor="${NODE_FONT}"
+        fillcolor="${NODE_BG}",
+        fontcolor="${NODE_FG}"
     ];
 
     // =========================
@@ -29,28 +31,28 @@ digraph pamphlet_pipeline {
         fontsize=64;
         fontname=sans;
         style=filled;
-        fillcolor="${CLUSTER_FILL}";
-        fontcolor="${CLUSTER_FONT}";
+        fillcolor="${CLUSTER_BG}";
+        fontcolor="${CLUSTER_FG}";
 
         node [
             style=filled,
-            fillcolor="${SUBCLUSTER_FILL}",
-            fontcolor="${NODE_FONT}",
+            fillcolor="${SUBCLUSTER_BG}",
+            fontcolor="${NODE_FG}",
         ];
 
         EEBO_images     [label="EEBO Page Images\n(public domain / via Oxford)", shape=folder];
         EEBO_TEI_XML    [label="EEBO-TCP XML\nGold standard", shape=folder];
         MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML\nproduces fine-tuned model", shape=parallelogram];
 
-        merge_training  [label="", shape=circle, width=0.2, fixedsize=true, style=filled, fillcolor="${NODE_FILL}"];
+        merge_training  [label="", shape=circle, width=0.2, fixedsize=true, style=filled, fillcolor="${NODE_BG}"];
     }
 
     MacBERTh_Fine_Tuned [
         label="Fine-tuned\nMacBERTh",
         shape=cylinder,
         style=filled,
-        fillcolor="${NODE_FILL}",
-        fontcolor="${NODE_FONT}"
+        fillcolor="${NODE_BG}",
+        fontcolor="${NODE_FG}"
     ];
 
     // =========================
@@ -61,16 +63,16 @@ digraph pamphlet_pipeline {
         fontsize=64;
         fontname=sans;
         style=filled;
-        fillcolor="${CLUSTER_FILL}";
-        fontcolor="${NODE_FONT}";
+        fillcolor="${CLUSTER_BG}";
+        fontcolor="${NODE_FG}";
 
         // Digitisation
         subgraph cluster_digitisation {
             label="Digitisation";
             fontsize=48;
             style=filled;
-            fillcolor="${SUBCLUSTER_FILL}";
-            fontcolor="${NODE_FONT}";
+            fillcolor="${SUBCLUSTER_BG}";
+            fontcolor="${NODE_FG}";
 
             Lincoln_scans [label="Lincoln College/Bodleian\nScan pamphlets", shape=folder];
             OCR_tool      [label="Kraken / Transkribus\nOCR / HTR", shape=parallelogram];
@@ -81,8 +83,8 @@ digraph pamphlet_pipeline {
             label="TEI Generation";
             fontsize=48;
             style=filled;
-            fillcolor="${SUBCLUSTER_FILL}";
-            fontcolor="${NODE_FONT}";
+            fillcolor="${SUBCLUSTER_BG}";
+            fontcolor="${NODE_FG}";
 
             MACBERTH_OCR2TEI [label="Fine-Tuned MacBERTh\nproduces TEI from OCR"];
             Lincoln_TEI      [label="Lincoln/Bodleian TEI Outputs", shape=cylinder];
@@ -93,8 +95,8 @@ digraph pamphlet_pipeline {
             label="Linguistic Normalisation / Mapping";
             fontsize=48;
             style=filled;
-            fillcolor="${SUBCLUSTER_FILL}";
-            fontcolor="${NODE_FONT}";
+            fillcolor="${SUBCLUSTER_BG}";
+            fontcolor="${NODE_FG}";
 
             EME_to_ME_dict [label="Normalisation of EME to ME via dictionary/library", shape=cylinder];
             Normalised [label="Normalised data", shape=cylinder]
@@ -110,8 +112,8 @@ digraph pamphlet_pipeline {
         fontsize=64;
         fontname=sans;
         style=filled;
-        fillcolor="${CLUSTER_FILL}";
-        fontcolor="${NODE_FONT}";
+        fillcolor="${CLUSTER_BG}";
+        fontcolor="${NODE_FG}";
         nargin="1,1";
 
         // Computational Processes
@@ -119,8 +121,8 @@ digraph pamphlet_pipeline {
             label="Computational Processes";
             fontsize=48;
             style=filled;
-            fillcolor="${SUBCLUSTER_FILL}";
-            fontcolor="${SUBCLLUSTER_FONT}";
+            fillcolor="${SUBCLUSTER_BG}";
+            fontcolor="${SUBCLUSTER_FG}";
             nargin="1,1";
 
             MacBERTh_analysis [label="MacBERTh for Analysis"];
@@ -135,8 +137,8 @@ digraph pamphlet_pipeline {
             label="Analytical & Interpretative Outputs";
             fontsize=48;
             style=filled;
-            fillcolor="${SUBCLUSTER_FILL}";
-            fontcolor="${SUBCLUSTER_FONT}";
+            fillcolor="${SUBCLUSTER_BG}";
+            fontcolor="${SUBCLUSTER_FG}";
 
             Semantic_drift        [label="Semantic Drift\nvia dynamic embeddings"];
             Network_analysis      [label="Network Analysis\ncitation, phrase-sharing,\nauthorial & geo-temporal diffusion"];
