@@ -2,12 +2,14 @@
 title System Architecture – EEBO → TEI → Analysis Pipeline
 
 package "Input Sources" {
+  [EEBO HTML]
   [EEBO XML]
   [EEBO Images (TIFF/JPEG)]
 }
 
 package "Ingestion Layer" {
-  [EEBO Parser]
+  [EEBO HTML Parser]
+  [TEI Parser]
   [Image Preprocessor]
 }
 
@@ -32,10 +34,12 @@ package "Analysis + Tools" {
   [Statistics + Graphing Tools]
 }
 
-[EEBO XML] --> [EEBO Parser]
+[EEBO HTML] --> [EEBO HTML Parser]
+[EEBO XML] --> [TEI Parser]
 [EEBO Images (TIFF/JPEG)] --> [Image Preprocessor]
 
-[EEBO Parser] --> [TEI Converter]
+[EEBO HTML Parser] --> [TEI Converter]
+[TEI Parser] --> [TEI Converter]
 [Image Preprocessor] --> [TEI Converter]
 
 [TEI Converter] --> [TEI Repository]
