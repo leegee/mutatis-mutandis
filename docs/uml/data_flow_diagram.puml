@@ -1,23 +1,38 @@
 @startuml
 title Data Flow Diagram – From EEBO to Analysis
 
+'============================
+' Actors
+'============================
 actor User
 
+'============================
+' External Data / Sources
+'============================
 rectangle "EEBO Data" {
-  rectangle "EEBO XML" as EEBO_XML
-  rectangle "EEBO Images" as EEBO_Images
+    rectangle "EEBO XML" as EEBO_XML
+    rectangle "EEBO Images" as EEBO_Images
 }
 
-rectangle "Ingest EEBO Data" as P1
-rectangle "Generate TEI" as P2
-rectangle "Normalise Tokens" as P3
-rectangle "Run MacBERTh" as P4
-rectangle "Corpus Analysis" as P5
+'============================
+' Processes (DFD style)
+'============================
+circle "Ingest EEBO Data" as P1
+circle "Generate TEI" as P2
+circle "Normalise Tokens" as P3
+circle "Run MacBERTh" as P4
+circle "Corpus Analysis" as P5
 
+'============================
+' Data Stores
+'============================
 database "TEI Store" as D1
 database "Normalised DB" as D2
 database "Embeddings/Features" as D3
 
+'============================
+' Data Flows
+'============================
 EEBO_XML --> P1
 EEBO_Images --> P1
 
