@@ -1,0 +1,32 @@
+@startgantt
+[EEBO seed images and TEI] lasts 15 days
+[Combine EEBO corpus] lasts 3 days
+[Lincoln and Bodleian scans] lasts 10 days
+[OCR new scans] lasts 7 days
+[Pre-fine-tune MacBERTh for new TEI] lasts 10 days
+[Combine TEI corpus] lasts 3 days
+[Fine-tune MacBERTh] lasts 15 days
+[Production: OCR new items] lasts 10 days
+[Normalisation and Mapping] lasts 7 days
+[Populate TEI database] lasts 5 days
+[Analysis: Semantic Drift] lasts 10 days
+[Analysis: Network Analysis] lasts 10 days
+[Analysis: Geo-temporal Mapping] lasts 10 days
+[Interpretation and Meta] lasts 15 days
+
+[EEBO seed images and TEI] --> [Combine EEBO corpus]
+[Combine EEBO corpus] --> [Fine-tune MacBERTh]
+[Lincoln and Bodleian scans] --> [OCR new scans]
+[OCR new scans] --> [Pre-fine-tune MacBERTh for new TEI]
+[Pre-fine-tune MacBERTh for new TEI] --> [Combine TEI corpus]
+[Combine TEI corpus] --> [Fine-tune MacBERTh]
+[Fine-tune MacBERTh] --> [Production: OCR new items]
+[Production: OCR new items] --> [Normalisation and Mapping]
+[Normalisation and Mapping] --> [Populate TEI database]
+[Populate TEI database] --> [Analysis: Semantic Drift]
+[Populate TEI database] --> [Analysis: Network Analysis]
+[Populate TEI database] --> [Analysis: Geo-temporal Mapping]
+[Analysis: Semantic Drift] --> [Interpretation and Meta]
+[Analysis: Network Analysis] --> [Interpretation and Meta]
+[Analysis: Geo-temporal Mapping] --> [Interpretation and Meta]
+@endgantt

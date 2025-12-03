@@ -1,0 +1,43 @@
+@startuml
+|Training Phase|
+start
+:Collect EEBO Page Images;
+:Collect EEBO-TCP TEI XML;
+:Merge Training Data;
+:Fine-Tune MacBERTh;
+
+|Production Phase|
+partition "Digitisation" {
+  :Scan Pamphlets (Lincoln/Bodleian);
+  :OCR/HTR (Kraken/Transkribus);
+}
+
+partition "TEI Generation" {
+  :MacBERTh (OCR → TEI);
+  :Generate TEI XML;
+}
+
+partition "Normalisation" {
+  :Lookup EME→ME Dictionary;
+  :Normalise Text;
+  :Store Normalised Dataset;
+}
+
+|Analysis Phase|
+partition "Computational Analysis" {
+  :Load TEI Database;
+  :Compute IFI;
+  :Compute RAG Index;
+  :Semantic Drift Analysis;
+  :Network Analysis;
+  :Geo-Temporal Mapping;
+  :Historical Contextualisation;
+}
+
+partition "Interpretation Layer" {
+  :Historically-Informed Interpretation;
+  :Conceptual Metaphor Analysis;
+}
+
+stop
+@enduml

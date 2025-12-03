@@ -29,6 +29,18 @@ digraph pamphlet_pipeline {
         fontcolor="${NODE_FG}"
     ];
 
+    MacBERTh_Fine_Tuned [
+        label="Our MacBERTh\nFine-tuned",
+        shape="cylinder", 
+        style=filled,
+        margin="2,1",
+        weight="{OUTPUT_FONTWEIGHT}"
+        fontsize="${OUTPUT_FONTSIZE}"
+        fillcolor="${OUTPUT_BG}",
+        fontcolor="${OUTPUT_FG}"
+        fontname="${OUTPUT_FONTNAME}"
+    ];
+
     // =========================
     // Training Phase
     // =========================
@@ -50,15 +62,6 @@ digraph pamphlet_pipeline {
         EEBO_TEI_XML -> merge_training;
         merge_training -> MacBERTh_training;
     }
-
-    MacBERTh_Fine_Tuned [
-        label="MacBERTh (Fine-tuned)",
-        shape="parallelogram", 
-        margin="0.1,0.1",
-        style=filled,
-        fillcolor="${NODE_BG}",
-        fontcolor="${NODE_FG}"
-    ];
 
     MacBERTh_training -> MacBERTh_Fine_Tuned;
 
@@ -102,7 +105,7 @@ digraph pamphlet_pipeline {
             fillcolor="${SUBCLUSTER_BG}";
             fontcolor="${SUBCLUSTER_FG}";
 
-            MacBERTh_OCR2TEI [label="MacBERTh produced TEI from OCR", shape=cylinder, fillcolor=${OUTPUT_BG}];
+            MacBERTh_OCR2TEI [label="MacBERTh produced TEI from OCR", shape=cylinder, fontcolor=${OUTPUT_FG} fillcolor=${OUTPUT_BG}];
 
             OCR_tool -> MacBERTh_OCR2TEI;
             MacBERTh_Fine_Tuned -> MacBERTh_OCR2TEI;
@@ -123,7 +126,6 @@ digraph pamphlet_pipeline {
             MacBERTh_OCR2TEI -> EME_to_ME_dict;
             EME_to_ME_dict -> Tokenizer;
             Tokenizer -> Normalised;
-            MacBERTh_Fine_Tuned -> EME_to_ME_dict;
         }
     }
 
@@ -151,15 +153,16 @@ digraph pamphlet_pipeline {
             IFI               [label="Inverse Frequency Index", shape=cylinder, fillcolor=${OUTPUT_BG}];
             RAG_index         [label="RAG Index (FAISS)", shape=cylinder, fillcolor=${OUTPUT_BG}];
 
+            MacBERTh_Fine_Tuned -> MacBERTh_analysis;
             Normalised -> DB;
             MacBERTh_analysis -> Semantic_drift;
             MacBERTh_analysis -> Network_analysis;
             MacBERTh_analysis -> Geo_temporal_mapping;
             DB -> Semantic_drift;
             DB -> Network_analysis;
-            DB -> Historical_context;
             IFI -> Semantic_drift;
             RAG_index -> Semantic_drift;
+            DB -> IFI;
         }
 
         // Outputs
@@ -170,18 +173,20 @@ digraph pamphlet_pipeline {
             fillcolor="${SUBCLUSTER_BG}";
             fontcolor="${SUBCLUSTER_FG}";
 
-            Semantic_drift        [label="Semantic Drift", shape=signature, fillcolor=${OUTPUT_BG}];
-            Network_analysis      [label="Network Analysis", shape=signature, fillcolor=${OUTPUT_BG}];
-            Geo_temporal_mapping  [label="Pamphlets, ideas & drift", shape=signature, fillcolor=${OUTPUT_BG}];
-            Historical_context    [label="Computational outputs", shape=signature, fillcolor=${OUTPUT_BG}];
+            Semantic_drift        [label="Semantic Drift", shape=cylinder, fillcolor=${OUTPUT_BG}];
+            Network_analysis      [label="Network Analysis", shape=component, fillcolor=${OUTPUT_BG}];
+            Geo_temporal_mapping  [label="Geo-temporal map", shape=cylinder, fillcolor=${OUTPUT_BG}];
+            Computational_Outputs [label="Computational outputs", shape=signature, fillcolor=${OUTPUT_BG}];
             Interpretation        [label="Historically-informed Interpretation", shape=signature, fillcolor=${OUTPUT_BG}];
             Meta                  [label="Conceptual Metaphors as Deep Semantic Frames", shape=signature, fillcolor=${OUTPUT_BG}];
+            
+            Geo_temporal_mapping -> Semantic_drift;
+            Network_analysis     -> Semantic_drift;
 
-            Semantic_drift -> Interpretation;
-            Network_analysis -> Interpretation;
-            Geo_temporal_mapping -> Interpretation;
-            Historical_context -> Interpretation;
-            Interpretation -> Meta;
+            Semantic_drift        -> Computational_Outputs;
+            Computational_Outputs -> Interpretation;
+            Interpretation        -> Meta;
+            
         }
     }
 }

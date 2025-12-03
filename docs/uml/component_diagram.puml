@@ -1,0 +1,54 @@
+@startuml
+title System Architecture – EEBO → TEI → Analysis Pipeline
+
+package "Input Sources" {
+  [EEBO XML]
+  [EEBO Images (TIFF/JPEG)]
+}
+
+package "Ingestion Layer" {
+  [EEBO Parser]
+  [Image Preprocessor]
+}
+
+package "Processing Pipeline" {
+  [TEI Converter]
+  [Normalisation Engine]
+  [MacBERTh NLP Model]
+  [Metadata Extractor]
+}
+
+package "Data Storage" {
+  [Raw EEBO Store]
+  [TEI Repository]
+  [Normalised Text DB]
+  [Metadata DB]
+}
+
+package "Analysis + Tools" {
+  [Corpus Explorer UI]
+  [WYSIWYG Editor]
+  [Novelty Detection]
+  [Statistics + Graphing Tools]
+}
+
+[EEBO XML] --> [EEBO Parser]
+[EEBO Images (TIFF/JPEG)] --> [Image Preprocessor]
+
+[EEBO Parser] --> [TEI Converter]
+[Image Preprocessor] --> [TEI Converter]
+
+[TEI Converter] --> [TEI Repository]
+[TEI Converter] --> [Normalisation Engine]
+
+[Normalisation Engine] --> [Normalised Text DB]
+[Normalisation Engine] --> [Metadata Extractor]
+[Metadata Extractor] --> [Metadata DB]
+
+[Normalised Text DB] --> [MacBERTh NLP Model]
+[TEI Repository] --> [Corpus Explorer UI]
+
+[MacBERTh NLP Model] --> [Novelty Detection]
+[Novelty Detection] --> [Corpus Explorer UI]
+
+@enduml

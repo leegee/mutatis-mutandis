@@ -1,0 +1,65 @@
+@startuml
+title Class Diagram – TEI & Normalisation DB Schema
+
+class Material
+
+enum Paper {
+  pulp
+  velum
+}
+
+class Woodcut
+class FixedType
+class MoveableType
+
+Paper --|> Material
+Woodcut --|> Material
+FixedType --|> Material
+MoveableType --|> Material
+
+class Pamphlet {
+  id: UUID
+  eebo_id: string
+  title: string
+  date: string
+  author: string
+  printer: UUID
+  geolocation: UUID
+  material: Material
+}
+
+class TEIDocument {
+  id: UUID
+  pamphlet_id: UUID
+  eebo_id: string
+  title: string
+  date: string
+  author: string
+  printer: UUID
+  geolocation: UUID
+  material: Material
+  tei_xml: TEXT
+  created_at: datetime
+}
+
+class NormalisedToken {
+  id: UUID
+  pamphlet_id: UUID
+  token: string
+  lemma: string
+  pos: string
+  char_start: int
+  char_end: int
+}
+
+class Embedding {
+  id: UUID
+  token_id: UUID
+  vector: float[768]
+}
+
+Pamphlet "1" --> "1" TEIDocument: has
+Pamphlet "1" --> "many" NormalisedToken: contains tokens
+NormalisedToken "1" --> "1" Embedding: has embedding
+
+@enduml
