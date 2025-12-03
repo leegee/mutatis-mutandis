@@ -41,5 +41,6 @@ python/macberth_env/
 python/VARD2.5.4/
 docs/**/*.png
 docs/**/*.svg
+docs/output/*
+docs/output/*.dot
 docs/uml/lib/plantuml*.jar
-output/*
