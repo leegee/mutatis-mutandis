@@ -1,0 +1,31 @@
+@startuml
+title Sequence – Single Pamphlet Through Pipeline
+
+actor Researcher
+participant "EEBO_fetcher" as F
+participant "TEI_Converter" as T
+participant "Normaliser" as N
+participant "MacBERTh" as M
+database "TEI DB" as D1
+database "Normalised DB" as D2
+database "Embeddings" as D3
+
+Researcher -> F: Request pamphlet (ID)
+F -> F: Download XML + images
+F -> T: Provide raw EEBO object
+
+T -> T: Parse + construct TEI XML
+T -> D1: Save TEI
+
+T -> N: Send text for normalisation
+N -> N: Apply normalisation rules
+N -> D2: Store normalised tokens
+
+N -> M: Send normalised text
+M -> M: Embed + tag features
+M -> D3: Store embeddings/features
+
+Researcher -> D3: Query features
+Researcher <- D3: Results
+
+@enduml
