@@ -1,0 +1,192 @@
+digraph pamphlet_pipeline {
+    colorscheme="gnbu5";
+    rankdir=TB;
+    fontname="Figtree";
+    splines=polyline;
+    ranksep=0.25;
+    nodesep=0.2;
+
+    // Output A4
+    ratio="fill";
+    size="8,10";
+    bgcolor="#DDDDE0";
+
+    // =========================
+    // Global node defaults
+    // =========================
+    node [
+        colorscheme="gnbu5",
+        shape=box,
+        style=filled,
+        fontname="Figtree",
+        width=3,
+        fixedsize=false,
+        fontsize="24",
+        labelloc=c,
+        align=center,
+        margin="0.3,0.3",
+        fillcolor="3",
+        fontcolor="black"
+    ];
+
+    MacBERTh_Fine_Tuned [
+        label="Our MacBERTh\nFine-tuned",
+        shape="cylinder", 
+        style=filled,
+        margin="2,1",
+        weight="{OUTPUT_FONTWEIGHT}"
+        fontsize="32"
+        fillcolor="4",
+        fontcolor="white"
+        fontname="Figtree"
+    ];
+
+    // =========================
+    // Training Phase
+    // =========================
+    subgraph cluster_training {
+        label="Training Phase";
+        fontsize="48";
+        
+        style=filled;
+        fillcolor="1";
+        fontcolor="5";
+
+        EEBO_images     [label="EEBO Page Images\n(public domain / via Oxford)", shape=box3d];
+        EEBO_TEI_XML    [label="EEBO-TCP XML\nGold standard", shape=folder];
+        MacBERTh_training [label="Fine-tune MacBERTh\non OCR + TEI XML", shape="parallelogram", margin="0.1,0.1"];
+
+        merge_training  [label="", shape=point, width=0.2, fixedsize=true, style=filled, fillcolor="3"];
+
+        EEBO_images -> merge_training;
+        EEBO_TEI_XML -> merge_training;
+        merge_training -> MacBERTh_training;
+    }
+
+    MacBERTh_training -> MacBERTh_Fine_Tuned;
+
+    // =========================
+    // Production Phase
+    // =========================
+    subgraph cluster_production {
+        label="Production Phase";
+        fontsize="48";
+        
+        style=filled;
+        fillcolor="1";
+        fontcolor="5";
+
+        // Digitisation
+        subgraph cluster_digitisation {
+            label="Digitisation";
+            fontsize="32";
+            style=filled;
+            fillcolor="2";
+            fontcolor="5";
+
+            Scan_OCR      [label="Pamphlet scanned", shape="parallelogram", margin="0.1,0.1"];
+
+            subgraph cluster_help_digitise {
+                Lincoln_scans [label="Lincoln College/Bodleian\nScan pamphlets", shape=box3d];
+                OCR_tool      [label="Kraken / Transkribus\nOCR / HTR", shape="component", margin="0.1,0.1"];
+                fillcolor="#EECCCC";
+                fontcolor="black";
+            }
+
+            Lincoln_scans -> Scan_OCR;
+            Scan_OCR -> OCR_tool;
+        }
+
+        // TEI Generation
+        subgraph cluster_tei_generation {
+            label="TEI Generation";
+            fontsize="32";
+            style=filled;
+            fillcolor="2";
+            fontcolor="5";
+
+            MacBERTh_OCR2TEI [label="MacBERTh produced TEI from OCR", shape=cylinder, fontcolor=white fillcolor=4];
+
+            OCR_tool -> MacBERTh_OCR2TEI;
+            MacBERTh_Fine_Tuned -> MacBERTh_OCR2TEI;
+        }
+
+        // Normalisation
+        subgraph cluster_normalisation {
+            label="Linguistic Normalisation / Mapping";
+            fontsize="32";
+            style=filled;
+            fillcolor="2";
+            fontcolor="5";
+
+            EME_to_ME_dict [label="Normalisation of EME to ME\nvia dictionary/library", shape="component"];
+            Normalised     [label="Normalised TEI / Texts", shape=cylinder, fillcolor=4];
+            Tokenizer      [label="Tokenizer", shape="component", margin="0.1,0.1"];
+
+            MacBERTh_OCR2TEI -> EME_to_ME_dict;
+            EME_to_ME_dict -> Tokenizer;
+            Tokenizer -> Normalised;
+        }
+    }
+
+    // =========================
+    // Analysis Phase
+    // =========================
+    subgraph cluster_analysis {
+        label="Analysis Phase";
+        fontsize="32";
+        
+        style=filled;
+        fillcolor="1";
+        fontcolor="5";
+
+        // Computational
+        subgraph cluster_computation {
+            label="Computational Processes";
+            fontsize="32";
+            style=filled;
+            fillcolor="2";
+            fontcolor="5";
+
+            MacBERTh_analysis [label="MacBERTh for Analysis", shape="parallelogram", margin="0.1,0.1"];
+            DB                [label="TEI Database (PostGres)", shape=cylinder, fillcolor=4];
+            IFI               [label="Inverse Frequency Index", shape=cylinder, fillcolor=4];
+            RAG_index         [label="RAG Index (FAISS)", shape=cylinder, fillcolor=4];
+
+            MacBERTh_Fine_Tuned -> MacBERTh_analysis;
+            Normalised -> DB;
+            MacBERTh_analysis -> Semantic_drift;
+            MacBERTh_analysis -> Network_analysis;
+            MacBERTh_analysis -> Geo_temporal_mapping;
+            DB -> Semantic_drift;
+            DB -> Network_analysis;
+            IFI -> Semantic_drift;
+            RAG_index -> Semantic_drift;
+            DB -> IFI;
+        }
+
+        // Outputs
+        subgraph cluster_outputs {
+            label="In Sum";
+            fontsize="32";
+            style=filled;
+            fillcolor="2";
+            fontcolor="5";
+
+            Semantic_drift        [label="Semantic Drift", shape=cylinder, fillcolor=4];
+            Network_analysis      [label="Network Analysis", shape=component, fillcolor=4];
+            Geo_temporal_mapping  [label="Geo-temporal map", shape=cylinder, fillcolor=4];
+            Computational_Outputs [label="Computational outputs", shape=signature, fillcolor=4];
+            Interpretation        [label="Historically-informed Interpretation", shape=signature, fillcolor=4];
+            Meta                  [label="Conceptual Metaphors as Deep Semantic Frames", shape=signature, fillcolor=4];
+            
+            Geo_temporal_mapping -> Semantic_drift;
+            Network_analysis     -> Semantic_drift;
+
+            Semantic_drift        -> Computational_Outputs;
+            Computational_Outputs -> Interpretation;
+            Interpretation        -> Meta;
+            
+        }
+    }
+}

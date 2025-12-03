@@ -1,6 +1,7 @@
 #!/bin/bash
 TYPE=svg
-OUTFILE="${1:-pamphlet_pipeline_output.$TYPE}"
+OUTFILE_TYPE="${1:-../output/pamphlet_pipeline_output.$TYPE}"
+OUTFILE_DOT="${1:-../output/pamphlet_pipeline_output.dot}"
 
 
 # https://graphviz.org/doc/info/colors.html#brewer
@@ -55,10 +56,11 @@ sed \
   -e "s/\${FONT_H1}/$FONT_H1/g" \
   -e "s/\${FONT_H2}/$FONT_H2/g" \
   -e "s/\${FONT_H3}/$FONT_H3/g" \
-  pamphlet_pipeline.dot.template > /tmp/pamphlet_pipeline.dot
+  pamphlet_pipeline.dot.template > "$OUTFILE_DOT"
 
-dot -T${TYPE} /tmp/pamphlet_pipeline.dot -o "$OUTFILE"
+dot -T${TYPE} "$OUTFILE_DOT" -o "$OUTFILE_TYPE"
 
-# cat /tmp/pamphlet_pipeline.dot
+# cat "$OUTFILE_DOT"
 
-echo "Graph generated -> $OUTFILE"
+echo "Dot generated at $OUTFILE_DOT"
+echo "$TYPE graph generated at $OUTFILE_TYPE"
