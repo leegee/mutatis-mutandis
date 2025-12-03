@@ -1,31 +1,37 @@
 @startuml
-title Sequence – Single Pamphlet Through Pipeline
+title Data Flow Diagram – From EEBO to Analysis
 
-actor Researcher
-participant "EEBO_fetcher" as F
-participant "TEI_Converter" as T
-participant "Normaliser" as N
-participant "MacBERTh" as M
-database "TEI DB" as D1
+actor User
+
+rectangle "EEBO Data" {
+  rectangle "EEBO XML" as EEBO_XML
+  rectangle "EEBO Images" as EEBO_Images
+}
+
+rectangle "Ingest EEBO Data" as P1
+rectangle "Generate TEI" as P2
+rectangle "Normalise Tokens" as P3
+rectangle "Run MacBERTh" as P4
+rectangle "Corpus Analysis" as P5
+
+database "TEI Store" as D1
 database "Normalised DB" as D2
-database "Embeddings" as D3
+database "Embeddings/Features" as D3
 
-Researcher -> F: Request pamphlet (ID)
-F -> F: Download XML + images
-F -> T: Provide raw EEBO object
+EEBO_XML --> P1
+EEBO_Images --> P1
 
-T -> T: Parse + construct TEI XML
-T -> D1: Save TEI
+P1 --> P2
+P2 --> D1
 
-T -> N: Send text for normalisation
-N -> N: Apply normalisation rules
-N -> D2: Store normalised tokens
+D1 --> P3
+P3 --> D2
 
-N -> M: Send normalised text
-M -> M: Embed + tag features
-M -> D3: Store embeddings/features
+D2 --> P4
+P4 --> D3
 
-Researcher -> D3: Query features
-Researcher <- D3: Results
+D3 --> P5
+User --> P5
+P5 --> User
 
 @enduml
