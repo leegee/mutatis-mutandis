@@ -34,25 +34,43 @@ package "Analysis + Tools" {
   [Statistics + Graphing Tools]
 }
 
+' -------------------------------
+' Input → Ingestion
+' -------------------------------
 [EEBO HTML] --> [EEBO HTML Parser]
 [EEBO XML] --> [TEI Parser]
 [EEBO Images (TIFF/JPEG)] --> [Image Preprocessor]
 
+' -------------------------------
+' Ingestion → TEI Conversion
+' -------------------------------
 [EEBO HTML Parser] --> [TEI Converter]
 [TEI Parser] --> [TEI Converter]
 [Image Preprocessor] --> [TEI Converter]
 
-[TEI Converter] --> [TEI Repository]
-[TEI Converter] --> [Normalisation Engine]
+' -------------------------------
+' TEI Converter → Data Storage
+' -------------------------------
+[TEI Converter] --> [TEI Repository]        
+[TEI Converter] --> [Normalisation Engine]  
 
+' -------------------------------
+' Normalisation → Storage & MacBERTh
+' -------------------------------
 [Normalisation Engine] --> [Normalised Text DB]
 [Normalisation Engine] --> [Metadata Extractor]
 [Metadata Extractor] --> [Metadata DB]
 
 [Normalised Text DB] --> [MacBERTh NLP Model]
-[TEI Repository] --> [Corpus Explorer UI]
 
+' -------------------------------
+' Analysis Layer
+' -------------------------------
+[TEI Repository] --> [Corpus Explorer UI]  
 [MacBERTh NLP Model] --> [Novelty Detection]
 [Novelty Detection] --> [Corpus Explorer UI]
+
+[Normalised Text DB] --> [Statistics + Graphing Tools]
+[Metadata DB] --> [Statistics + Graphing Tools]
 
 @enduml
