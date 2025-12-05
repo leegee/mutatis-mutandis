@@ -1,0 +1,6 @@
+
+' Relationships among Research modules and Inputs
+[Identify targets: keywords for ideology, geography, etc] --> [Identify and map extant corpus of EEBO-TCP]
+[Identify and map extant corpus of EEBO-TCP] --> [Corpus Explorer UI]
+[Corpus Explorer UI] --> [Identify targets: keywords for ideology, geography, etc]
+

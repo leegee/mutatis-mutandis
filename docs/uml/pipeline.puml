@@ -1,0 +1,8 @@
+package "Processing_Pipeline" {
+    class "EEBO HTML Parser"
+    class "TEI Parser"
+    class "Image Preprocessor"
+    class "TEI Converter"
+    class "Normalisation Engine"
+    class "Metadata Extractor"
+}

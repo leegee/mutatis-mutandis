@@ -1,0 +1,12 @@
+
+' Analysis & UI
+[Metadata DB] --> [Corpus Explorer UI]
+[TEI Repository] --> [Corpus Explorer UI]
+
+[MacBERTh NLP Model] --> [Novelty Detection]
+[Novelty Detection] --> [Corpus Explorer UI]
+
+[WYSIWYG Editor] <-> [Corpus Explorer UI]
+[Statistics + Graphing Tools] --> [Corpus Explorer UI]
+[Normalised Text DB] --> [Statistics + Graphing Tools]
+[Metadata DB] --> [Statistics + Graphing Tools]

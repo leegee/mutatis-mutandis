@@ -1,5 +1,4 @@
 @startuml component_diagram_master
-
 !include entities.puml
 !include inputs.puml
 !include pipeline.puml

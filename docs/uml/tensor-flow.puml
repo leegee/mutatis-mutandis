@@ -1,0 +1,17 @@
+@startuml
+title Text → Embeddings → Semantic Search Flow
+
+actor User
+
+User -> "Raw Text" : provides documents
+"Raw Text" -> "Tokenizer" : tokenize text
+"Tokenizer" -> "Input IDs (PyTorch tensor)" : create input_ids
+"Input IDs (PyTorch tensor)" -> "Transformer Model (MacBERTh/BERT)" : forward pass
+"Transformer Model (MacBERTh/BERT)" -> "last_hidden_state (tensor)" : output
+"last_hidden_state (tensor)" -> "Aggregate Token Embeddings" : mean over tokens
+"Aggregate Token Embeddings" -> "Chunk Vector Tensor" : result per chunk
+"Chunk Vector Tensor" -> "NumPy Array (vectors)" : .cpu().numpy()
+"NumPy Array (vectors)" -> "Embeddings Object" : store vectors, ids, metas
+"Embeddings Object" -> "Semantic Search / Clustering" : FAISS search, KMeans clustering
+
+@enduml

@@ -44,3 +44,7 @@ docs/**/*.svg
 docs/output/*
 docs/output/*.dot
 docs/uml/lib/plantuml*.jar
+*.diff
+python/test_output/*
+python/my_macberth/src/macberth_pipe/__pycache__/
+python/my_macberth/src/macberth_pipe.egg-info/

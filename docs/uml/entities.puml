@@ -1,0 +1,20 @@
+' entities.puml
+' Define core data and model entities
+
+package "Data / Corpus" {
+    class "Training Corpus" 
+    class "TEI Repository"
+    class "Normalised Text DB"
+    class "Metadata DB"
+}
+
+package "Models" {
+    class "MacBERTh NLP Model"
+}
+
+package "UI / Tools" {
+    class "Corpus Explorer UI"
+    class "WYSIWYG Editor"
+    class "Novelty Detection"
+    class "Statistics + Graphing Tools"
+}

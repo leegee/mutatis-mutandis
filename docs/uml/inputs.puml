@@ -1,0 +1,6 @@
+package "Input Sources" {
+    class "EEBO HTML"
+    class "EEBO XML"
+    class "EEBO Images (TIFF/JPEG)"
+    class "Lincoln / Bodleian Scans"
+}

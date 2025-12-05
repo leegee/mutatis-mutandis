@@ -1,14 +1,43 @@
 #!/usr/bin/env bash
-cd python
+set -e
 
-source macberth_env/Scripts/activate
+VENV_DIR="./macberth_env"
+STAMP="$VENV_DIR/.installed"
 
-python -m venv macberth_env
+# --- 1. Create venv if missing ---
+if [ ! -d "$VENV_DIR" ]; then
+    echo "🔧 Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+else
+    echo "✔ Virtual environment already exists."
+fi
 
-source macberth_env/Scripts/activate || source macberth_env/bin/activate
+# --- 2. Detect platform + activate ---
+if [[ -f "$VENV_DIR/Scripts/activate" ]]; then
+    # Windows (Git Bash, Cygwin, MSYS)
+    echo "🔌 Activating Windows venv..."
+    source "$VENV_DIR/Scripts/activate"
+elif [[ -f "$VENV_DIR/bin/activate" ]]; then
+    # Linux / macOS
+    echo "🔌 Activating UNIX venv..."
+    source "$VENV_DIR/bin/activate"
+else
+    echo "❌ ERROR: Could not find activate script. The venv may be corrupted."
+    exit 1
+fi
 
+# --- 3. Upgrade pip safely ---
+echo "⬆️  Upgrading pip..."
 python -m pip install --upgrade pip
 
-pip install -r requirements.txt
+# --- 4. Install requirements only on first run ---
+if [[ ! -f "$STAMP" ]]; then
+    echo "📦 Installing dependencies from requirements.txt..."
+    python -m pip install -r requirements.txt
+    touch "$STAMP"
+    echo "✔ Dependencies installed."
+else
+    echo "✔ Dependencies already installed. Skipping."
+fi
 
-source macberth_env/Scripts/activate
+echo "🎉 Environment ready!"

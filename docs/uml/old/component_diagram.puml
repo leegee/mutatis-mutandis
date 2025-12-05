@@ -1,0 +1,90 @@
+@startuml
+title System Architecture – EEBO → TEI → Analysis Pipeline
+
+package "Input Sources" {
+  [EEBO HTML]
+  [EEBO XML]
+  [EEBO Images (TIFF/JPEG)]
+}
+
+package "Ingestion Layer" {
+  [EEBO HTML Parser]
+  [TEI Parser]
+  [Image Preprocessor]
+}
+
+package "Processing Pipeline" {
+  [TEI Converter]
+  [Normalisation Engine]
+  [MacBERTh NLP Model]
+  [Metadata Extractor]
+}
+
+package "Data Storage" {
+  [Raw EEBO Cache]
+  [TEI Repository]
+  [Normalised Text DB]
+  [Metadata DB]
+}
+
+package "Analysis + Tools" {
+  [Corpus Explorer UI]
+  [WYSIWYG Editor]
+  [Novelty Detection]
+  [Statistics + Graphing Tools]
+}
+
+package "Research" {
+  [Identify targets: keywords for ideology, geography, etc]
+  [Identify and map extant corpus of EEBO-TCP]
+}
+
+' -------------------------------
+' Research
+' -------------------------------
+[Identify targets: keywords for ideology, geography, etc] --> [Identify and map extant corpus of EEBO-TCP]
+[Identify and map extant corpus of EEBO-TCP] -> [Corpus Explorer UI]
+[Corpus Explorer UI] --> [Identify targets: keywords for ideology, geography, etc]
+
+' -------------------------------
+' Input → Ingestion
+' -------------------------------
+[EEBO HTML] --> [EEBO HTML Parser]
+[EEBO XML] --> [TEI Parser]
+[EEBO Images (TIFF/JPEG)] --> [Image Preprocessor]
+
+' -------------------------------
+' Ingestion → TEI Conversion
+' -------------------------------
+[EEBO HTML Parser] --> [TEI Converter]
+[TEI Parser] --> [TEI Converter]
+[Image Preprocessor] --> [TEI Converter]
+
+' -------------------------------
+' TEI Converter → Data Storage
+' -------------------------------
+[TEI Converter] --> [TEI Repository]        
+[TEI Converter] --> [Normalisation Engine]  
+
+' -------------------------------
+' Normalisation → Storage & MacBERTh
+' -------------------------------
+[Normalisation Engine] --> [Normalised Text DB]
+[Normalisation Engine] --> [Metadata Extractor]
+[Metadata Extractor] --> [Metadata DB]
+
+[Normalised Text DB] --> [MacBERTh NLP Model]
+
+' -------------------------------
+' Analysis Layer
+' -------------------------------
+[Metadata DB] --> [Corpus Explorer UI]
+[TEI Repository] --> [Corpus Explorer UI]  
+[MacBERTh NLP Model] --> [Novelty Detection]
+[Novelty Detection] --> [Corpus Explorer UI]
+
+[WYSIWYG Editor] <-> [Corpus Explorer UI]
+[Statistics + Graphing Tools] --> [Corpus Explorer UI]
+[Normalised Text DB] --> [Statistics + Graphing Tools]
+[Metadata DB] --> [Statistics + Graphing Tools]
+@enduml

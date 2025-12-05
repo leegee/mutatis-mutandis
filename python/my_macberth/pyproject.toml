@@ -1,0 +1,15 @@
+[project]
+name = "macberth-pipe"
+version = "0.1.0"
+description = "Functional MacBERTh pipeline for historical English corpora"
+authors = [
+    {name = "Your Name", email = "you@example.com"}
+]
+dependencies = [
+    "numpy",
+    "scikit-learn",
+    "faiss-cpu",
+    "transformers",
+    "torch",
+    "lxml"
+]
