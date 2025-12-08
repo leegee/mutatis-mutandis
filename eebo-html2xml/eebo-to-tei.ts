@@ -5,7 +5,7 @@
  * into TEI P5 that respects block/inline constraints required by the DTD.
  *
  * Usage:
- *   bun eebo-to-tei.ts 13506_1  
+ *   bun eebo-to-tei.ts 13506_1
  */
 
 import fs from "fs";
@@ -39,6 +39,7 @@ interface Metadata {
   philo_div3_id?: string;
 }
 
+console.log('Convert EEBO HTML to XML')
 
 if (process.argv.length < 3 || !process.argv[2]) {
   console.error("Usage: bun eebo-to-tei.ts <baseId>");
