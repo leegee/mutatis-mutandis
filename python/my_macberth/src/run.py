@@ -1,5 +1,6 @@
-from glob import glob
+import time
 import logging
+from glob import glob
 
 from macberth_pipe.tei import load_tei
 from macberth_pipe.normalization import normalize
@@ -22,17 +23,19 @@ AVERAGE_CHUNKS = True
 K_CLUSTERS = 5
 SQLITE_DB = "S:/src/pamphlets/eebo-data/eebo-tcp_metadata.sqlite"
 
-# LOAD & NORMALIZE TEI
+start_time = time.perf_counter()
+
+logging.info("Loading and normalizing TEI files...")
 docs = [load_tei(p) for p in FILES]
 texts = [normalize(d.text) for d in docs]
 
-# LOAD DOC METADATA
+logging.info("Loading document metadata...")
 doc_meta = load_doc_meta(FILES, SQLITE_DB)
 
-# LOAD MODEL
+logging.info("Loading MacBERTh model...")
 model = load_model(device=DEVICE)
 
-# EMBEDDING
+logging.info("Embedding documents...")
 emb = embed_documents(
     model,
     texts,
@@ -42,7 +45,7 @@ emb = embed_documents(
     doc_meta=doc_meta
 )
 
-# SEMANTIC SEARCH
+logging.info("Performing semantic search for query: 'divine right of kings'")
 query = ["divine right of kings"]
 query_emb = embed_documents(
     model,
@@ -54,16 +57,25 @@ query_emb = embed_documents(
 index = SemanticIndex(emb)
 results = search(index, query_emb, top_k=5)
 
-print("\nTop snippet matches:\n")
+logging.info("Top snippet matches:")
 for r in results:
-    print(f"[{r['doc_id']} chunk {r['chunk_idx']}] {r['text'][:120]}...")
-    print(f"Title: {r.get('title','')}, Author: {r.get('author','')}, Year: {r.get('year','')}")
-    print(f"Permalink: {r.get('permalink','')}\n")
+    meta = next((m for m in emb.metas if m.doc_id == r['doc_id']), None)
+    if meta:
+        logging.info(
+            f"[{r['doc_id']} chunk {r['chunk_idx']}] {r['text'][:120]}...\n"
+            f"Title: {meta.title}, Author: {meta.author}, Year: {meta.year}\n"
+            f"Permalink: {meta.permalink}"
+        )
+    else:
+        logging.info(f"[{r['doc_id']} chunk {r['chunk_idx']}] {r['text'][:120]}...")
 
-# CLUSTERING (safe)
+# CLUSTERING
 if emb.vectors.shape[0] >= 2:
     safe_k = min(K_CLUSTERS, len(emb.ids))
     labels = cluster_embeddings(emb, k=safe_k)
-    print("Cluster labels:")
+    logging.info("Cluster labels:")
     for doc_id, label in zip(emb.ids, labels):
-        print(f"{doc_id}: cluster {label}")
+        logging.info(f"{doc_id}: cluster {label}")
+
+end_time = time.perf_counter()
+logging.info(f"Total processing time: {end_time - start_time:.2f} seconds")
