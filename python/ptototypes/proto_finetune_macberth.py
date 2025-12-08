@@ -14,7 +14,7 @@ from datasets import Dataset, concatenate_datasets
 import pickle
 
 # --- Paths & model ---
-VARD_DIR = "../lib/VARD2.5.4"
+VARD_DIR = "../my_macberth/lib/VARD2.5.4"
 JARS = [
     f"{VARD_DIR}/vardstdin.jar",
     f"{VARD_DIR}/model.jar",

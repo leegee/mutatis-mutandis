@@ -47,4 +47,4 @@ docs/uml/lib/plantuml*.jar
 python/test_output/*
 python/my_macberth/src/macberth_pipe/__pycache__/
 python/my_macberth/src/macberth_pipe.egg-info/
-python/lib/VARD2.5.4/
+python/my_macberth/lib/VARD2.5.4/
