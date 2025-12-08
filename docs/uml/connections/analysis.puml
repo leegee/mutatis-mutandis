@@ -1,12 +1,12 @@
 ' Analysis & UI
-"Metadata DB" --> "Corpus Explorer UI"
-"TEI Repository" --> "Corpus Explorer UI"
+"Metadata DB" --> "Corpus Explorer UI" #darkred
+"TEI Repository" --> "Corpus Explorer UI" #darkred
 
-"MacBERTh NLP Model" --> "Novelty Detection"
-"Novelty Detection" --> "Corpus Explorer UI"
+"MacBERTh NLP Model" --> "Novelty Detection" #darkred
+"Novelty Detection" --> "Corpus Explorer UI" #darkred
 
-"WYSIWYG Editor" <-> "Corpus Explorer UI"
-"Statistics + Graphing Tools" --> "Corpus Explorer UI"
+"WYSIWYG Editor" <-> "Corpus Explorer UI" #darkred
+"Statistics + Graphing Tools" --> "Corpus Explorer UI" #darkred
 
-"Normalised Text DB" --> "Statistics + Graphing Tools"
-"Metadata DB" --> "Statistics + Graphing Tools"
+"Normalised Text DB" --> "Statistics + Graphing Tools" #darkred
+"Metadata DB" --> "Statistics + Graphing Tools" #darkred

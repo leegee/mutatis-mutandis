@@ -1,8 +1,9 @@
 ' Ingestion → Processing Pipeline
-"EEBO HTML Parser" --> "TEI Converter"
-"TEI Parser" --> "TEI Converter"
-"Image Preprocessor" --> "TEI Converter"
+"EEBO HTML Parser" --> "TEI Converter" #brown
+"TEI Parser" --> "TEI Converter" #brown
+"Image Preprocessor" --> "OCR" #brown
+"OCR" =-> "TEI Converter" #brown
 
 ' TEI Converter → Storage
-"TEI Converter" --> "TEI Repository"
-"TEI Converter" --> "Normalisation Engine"
+"TEI Converter" --> "TEI Repository" #brown
+"TEI Converter" --> "Normalisation Engine" #brown

@@ -1,11 +1,11 @@
 ' connections/research.puml
 ' Research relationships among existing components
 
-"Corpus Explorer UI" --> "Training Corpus"
-"Corpus Explorer UI" --> "TEI Repository"
+"Corpus Explorer UI" --> "Training Corpus" #red
+"Corpus Explorer UI" --> "TEI Repository" #red
 
-"Training Corpus" --> "MacBERTh NLP Model"
-"TEI Repository" --> "MacBERTh NLP Model"
+"Training Corpus" --> "MacBERTh NLP Model" #red
+"TEI Repository" --> "MacBERTh NLP Model" #red
 
-"Statistics + Graphing Tools" --> "Corpus Explorer UI"
-"Novelty Detection" --> "MacBERTh NLP Model"
+"Statistics + Graphing Tools" --> "Corpus Explorer UI" #red
+"Novelty Detection" --> "MacBERTh NLP Model" #red
