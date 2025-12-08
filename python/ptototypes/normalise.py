@@ -5,7 +5,7 @@ import os
 import sys
 
 # --- Paths & model ---
-VARD_DIR = "./VARD2.5.4"
+VARD_DIR = "../lib/VARD2.5.4"
 JARS = [
     f"{VARD_DIR}/vardstdin.jar",
     f"{VARD_DIR}/model.jar",
