@@ -1,3 +1,3 @@
 #!/bin/bash
 
-java -jar ./lib/plantuml-1.2025.10.jar -tsvg -o ../output *.puml
+java -jar ./lib/plantuml.jar -tsvg -o ../output/ ./src/diagrams/component_diagram.puml

@@ -1,0 +1,43 @@
+@startuml component_diagram_master
+    skinparam component {
+        BackgroundColor<<Data>> lightyellow
+        BackgroundColor<<Pipeline>> lavender
+        BackgroundColor<<Model>> lightblue
+        BackgroundColor<<UI>> lightgreen
+        BackgroundColor<<Input>> lightpink
+        BorderColor #444444
+        FontSize 14
+        FontName Figtree
+    }
+
+    skinparam arrow {
+        Thickness 4
+        FontSize 12
+        Color #77777788
+    }
+
+    skinparam {
+        noteBackgroundColor lightyellow
+        noteBorderColor black
+    }
+
+    note right of "Corpus Explorer UI"
+        This component displays processed corpus data
+        and allows user interaction with analysis tools.
+    end note
+
+    note left of "MacBERTh NLP Model"
+      Performs NLP analysis on Normalised Text DB
+      and generates features for Novelty Detection.
+    end note
+
+    !include ../components/entities.puml
+    !include ../components/inputs.puml
+    !include ../components/pipeline.puml
+
+    !include ../connections/research.puml 
+    !include ../connections/ingestion.puml 
+    !include ../connections/processing.puml 
+    !include ../connections/normalisation.puml 
+    !include ../connections/analysis.puml 
+@enduml
