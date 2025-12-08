@@ -1,5 +1,4 @@
 
-' Input → Ingestion Layer
-[EEBO HTML] --> [EEBO HTML Parser]
-[EEBO XML] --> [TEI Parser]
-[EEBO Images (TIFF/JPEG)] --> [Image Preprocessor]
+"EEBO HTML" --> "EEBO HTML Parser"
+"EEBO XML" --> "TEI Parser"
+"EEBO Images (TIFF/JPEG)" --> "Image Preprocessor"

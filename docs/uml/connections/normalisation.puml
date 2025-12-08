@@ -1,8 +1,6 @@
-
 ' Normalisation → DB & MacBERTh
-[Normalisation Engine] --> [Normalised Text DB]
-[Normalisation Engine] --> [Metadata Extractor]
-[Metadata Extractor] --> [Metadata DB]
+"Normalisation Engine" --> "Normalised Text DB"
+"Normalisation Engine" --> "Metadata Extractor"
+"Metadata Extractor" --> "Metadata DB"
 
-[Normalised Text DB] --> [MacBERTh NLP Model]
-
+"Normalised Text DB" --> "MacBERTh NLP Model"

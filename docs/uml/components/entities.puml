@@ -1,18 +1,18 @@
 ' entities.puml
 ' Define core data and model entities
 
-package "Data / Corpus" {
+package "Data / Corpus" #LightYellow {
     class "Training Corpus" 
     class "TEI Repository"
     class "Normalised Text DB"
     class "Metadata DB"
 }
 
-package "Models" {
+package "Models" #lightblue {
     class "MacBERTh NLP Model"
 }
 
-package "UI / Tools" {
+package "UI / Tools" #LightGreen {
     class "Corpus Explorer UI"
     class "WYSIWYG Editor"
     class "Novelty Detection"

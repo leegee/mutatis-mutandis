@@ -1,6 +1,11 @@
+' connections/research.puml
+' Research relationships among existing components
 
-' Relationships among Research modules and Inputs
-[Identify targets: keywords for ideology, geography, etc] --> [Identify and map extant corpus of EEBO-TCP]
-[Identify and map extant corpus of EEBO-TCP] --> [Corpus Explorer UI]
-[Corpus Explorer UI] --> [Identify targets: keywords for ideology, geography, etc]
+"Corpus Explorer UI" --> "Training Corpus"
+"Corpus Explorer UI" --> "TEI Repository"
 
+"Training Corpus" --> "MacBERTh NLP Model"
+"TEI Repository" --> "MacBERTh NLP Model"
+
+"Statistics + Graphing Tools" --> "Corpus Explorer UI"
+"Novelty Detection" --> "MacBERTh NLP Model"

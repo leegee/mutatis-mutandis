@@ -1,4 +1,4 @@
-package "Processing_Pipeline" {
+package "Processing_Pipeline" #Lavender {
     class "EEBO HTML Parser"
     class "TEI Parser"
     class "Image Preprocessor"

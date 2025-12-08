@@ -1,5 +1,5 @@
 @startuml
-title Text → Embeddings → Semantic Search Flow
+title Text to Embeddings to Semantic Search Flow
 
 actor User
 

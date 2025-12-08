@@ -1,13 +1,30 @@
 @startuml component_diagram_master
 
-!include entities.puml
-!include inputs.puml
-!include pipeline.puml
+    ' --- Global styling ---
+    skinparam component {
+        BackgroundColor<<Data>> lightyellow
+        BackgroundColor<<Pipeline>> lavender
+        BackgroundColor<<Model>> lightblue
+        BackgroundColor<<UI>> lightgreen
+        BackgroundColor<<Input>> lightpink
+        BorderColor #444444
+        FontSize 14
+        FontName Figtree
+    }
 
-!include connections/research.puml
-!include connections/ingestion.puml
-!include connections/processing.puml
-!include connections/normalisation.puml
-!include connections/analysis.puml
+    skinparam arrow {
+        Thickness 4
+        FontSize 12
+        Color #77777788
+    }
 
+    !include components/entities.puml
+    !include components/inputs.puml
+    !include components/pipeline.puml
+
+    !include connections/research.puml 
+    !include connections/ingestion.puml 
+    !include connections/processing.puml 
+    !include connections/normalisation.puml 
+    !include connections/analysis.puml 
 @enduml

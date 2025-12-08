@@ -1,4 +1,5 @@
 from glob import glob
+import logging
 
 from macberth_pipe.tei import load_tei
 from macberth_pipe.normalization import normalize
@@ -6,6 +7,11 @@ from macberth_pipe.embedding import load_model, embed_documents, Embeddings
 from macberth_pipe.semantic import SemanticIndex, search
 from macberth_pipe.clustering import cluster_embeddings
 from macberth_pipe.metadata import load_doc_meta
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s'
+)
 
 DEVICE = "cpu"
 

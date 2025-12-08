@@ -1,4 +1,4 @@
-package "Input Sources" {
+package "Input Sources" #lightpink {
     class "EEBO HTML"
     class "EEBO XML"
     class "EEBO Images (TIFF/JPEG)"
