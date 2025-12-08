@@ -14,6 +14,10 @@ import { JSDOM } from "jsdom";
 import { create } from "xmlbuilder2";
 import { type XMLBuilder } from "xmlbuilder2/lib/interfaces";
 import { validateTEI } from "./validate-tei";
+import { EeboDAO } from "./eebo-dao";
+
+const dbFile = "../eebo-data/eebo-tcp_metadata.sqlite";
+const dao = new EeboDAO(dbFile);
 
 interface Metadata {
   filename: string;

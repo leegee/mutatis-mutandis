@@ -37,7 +37,8 @@ db.run(`
     year TEXT,
     permalink TEXT,
     philo_div1_id TEXT,
-    access TEXT
+    access TEXT,
+    xml_created BOOLEAN DEFAULT NULL
   )
 `);
 
