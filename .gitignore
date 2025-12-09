@@ -1,36 +1,28 @@
-# dependencies (bun install)
 node_modules
 
-# output
+output
 out
 dist
 *.tgz
 
-# code coverage
 coverage
 *.lcov
+*.diff
 
-# logs
 logs
 _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
-# dotenv environment variable files
 .env
 .env.development.local
 .env.test.local
 .env.production.local
 .env.local
 
-# caches
 .eslintcache
 .cache
 *.tsbuildinfo
-
-# IntelliJ based IDEs
 .idea
-
-# Finder (MacOS) folder config
 .DS_Store
 
 tei_dtd/
@@ -39,14 +31,10 @@ texts/
 eebo-data/
 faiss-cache/
 
-
 docs/**/*.png
 docs/**/*.svg
 docs/output/*
-docs/output/*.dot
 docs/uml/lib/plantuml*.jar
-
-*.diff
 
 python/macberth_env/
 python/test_output/

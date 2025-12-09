@@ -3,7 +3,8 @@
 
 ' --- Corpus building ---
 [EEBO seed images and TEI] lasts 15 days
-[Combine EEBO corpus] lasts 3 days
+[Combine EEBO corpus] lasts 5 days
+[Combine Manuscript Pamphleteering in Early Stuart England sources] lasts 5 days
 [Lincoln and Bodleian scans] lasts 10 days
 [OCR new scans] lasts 7 days
 
@@ -26,6 +27,7 @@
 ' Initial corpus contributions
 [EEBO seed images and TEI] --> [Training Corpus]
 [Combine EEBO corpus] --> [Training Corpus]
+[Combine Manuscript Pamphleteering in Early Stuart England sources] --> [Training Corpus]
 
 ' New scans feed into corpus
 [Lincoln and Bodleian scans] --> [OCR new scans]

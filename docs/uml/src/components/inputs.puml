@@ -3,4 +3,5 @@ package "Input Sources" #lightpink {
     class "EEBO XML"
     class "EEBO Images (TIFF/JPEG)"
     class "Lincoln / Bodleian Scans"
+    class "Manuscript Pamphleteering in Early Stuart England sources" as MPESE
 }

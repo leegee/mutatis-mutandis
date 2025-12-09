@@ -2,3 +2,5 @@
 "EEBO HTML" --> "EEBO HTML Parser" #green
 "EEBO XML" --> "TEI Parser" #green
 "EEBO Images (TIFF/JPEG)" --> "Image Preprocessor" #green
+MPESE --> "TEI Parser" #green
+MPESE --> "Image Preprocessor" #green

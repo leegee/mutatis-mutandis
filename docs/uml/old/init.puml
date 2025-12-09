@@ -9,6 +9,7 @@ start
 |Production Phase|
 partition "Digitisation" {
   :Scan Pamphlets (Lincoln/Bodleian);
+  :Combine Manuscript Pamphleteering in Early Stuart England sources;
   :OCR/HTR (Kraken/Transkribus);
 }
 
