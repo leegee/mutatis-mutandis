@@ -19,9 +19,6 @@ import { EeboDAO } from "./eebo-dao";
 const outDir = "../eebo-tei";
 if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-const dbFile = "../eebo-data/eebo-tcp_metadata.sqlite";
-if (!fs.existsSync(dbFile)) throw new Error(`Cannot find dbFile "${dbFile}".`);
-
 interface Metadata {
   filename: string;
   author: string;
@@ -51,7 +48,7 @@ if (process.argv.length < 3 || !process.argv[2]) {
   process.exit(1);
 }
 
-const dao = new EeboDAO(dbFile);
+const dao = new EeboDAO();
 
 const target = process.argv[2];
 

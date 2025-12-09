@@ -3,11 +3,6 @@ from pathlib import Path
 from typing import Dict
 import logging
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-
 def load_doc_meta(tei_files: list[str], db_path: str) -> Dict[str, dict]:
     """
     Load metadata for TEI files using the EEBO SQLite database.

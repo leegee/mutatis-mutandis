@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { Database } from "bun:sqlite";
 
 export interface EeboRow {
@@ -5,26 +7,31 @@ export interface EeboRow {
     xml_created: number | null;
 }
 
+export const DB_PATH = path.resolve(import.meta.dir, "../eebo-data/eebo-tcp_metadata.sqlite");
+
 export class EeboDAO {
     private db: Database;
 
-    constructor(dbFile: string) {
-        this.db = new Database(dbFile);
+    constructor(dbFile?: string) {
+        const dbPath = dbFile || DB_PATH;
+
+        if (!fs.existsSync(dbPath)) throw new Error(`Cannot find dbFile "${dbPath}".`);
+
+        this.db = new Database(dbPath);
         this.ensureColumn();
     }
 
-    /** Ensure xml_created column exists (boolean/null) */
     private ensureColumn() {
-        const col = this.db
-            .prepare("PRAGMA table_info(eebo)")
-            .all()
-            .map((r: any) => r.name)
-            .includes("xml_created");
+        // const col = this.db
+        //     .prepare("PRAGMA table_info(eebo)")
+        //     .all()
+        //     .map((r: any) => r.name)
+        //     .includes("xml_created");
 
-        if (!col) {
-            console.log("Adding xml_created column to eebo table...");
-            this.db.run("ALTER TABLE eebo ADD COLUMN xml_created INTEGER DEFAULT NULL");
-        }
+        // if (!col) {
+        //     console.log("Adding xml_created column to eebo table...");
+        //     this.db.run("ALTER TABLE eebo ADD COLUMN xml_created INTEGER DEFAULT NULL");
+        // }
     }
 
     /** Get xml_created for a given id */

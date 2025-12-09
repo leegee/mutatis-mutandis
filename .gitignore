@@ -34,17 +34,22 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 tei_dtd/
-eebo_tei/
+eebo-tei/
 texts/
-eebo-data/*
-python/macberth_env/
+eebo-data/
+faiss-cache/
+
+
 docs/**/*.png
 docs/**/*.svg
 docs/output/*
 docs/output/*.dot
 docs/uml/lib/plantuml*.jar
+
 *.diff
-python/test_output/*
+
+python/macberth_env/
+python/test_output/
 python/my_macberth/src/macberth_pipe/__pycache__/
 python/my_macberth/src/macberth_pipe.egg-info/
-python/my_macberth/lib/VARD2.5.4/
+python/my_macberth/lib/

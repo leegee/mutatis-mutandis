@@ -1,12 +1,14 @@
-# python/my_macberth/src/macberth_pipe/embedding.py
+# embeddings.py
 
 from dataclasses import dataclass
 from typing import List, Optional, Dict
 import numpy as np
+from pathlib import Path
 
 from .macberth_model import MacBERThModel
 from .model_loader import get_local_macberth_path
 from .semantic import ChunkMeta
+from .embedding_store import EmbeddingsStore, save_embeddings, append_embeddings, load_embeddings
 
 
 @dataclass(frozen=True)
@@ -17,10 +19,6 @@ class Embeddings:
 
 
 def load_model(device="cpu"):
-    """
-    Unified model loader – uses shared logic from model_loader.py.
-    No hardcoded paths.
-    """
     model_path = get_local_macberth_path()
     return MacBERThModel(model_path=model_path, device=device)
 
@@ -31,22 +29,33 @@ def embed_documents(
     device="cpu",
     chunk_size=512,
     average_chunks=True,
-    doc_meta: Optional[Dict[str, dict]] = None
+    doc_meta: Optional[Dict[str, dict]] = None,
+    store_dir: Optional[Path] = None,
+    append_to_store: bool = False
 ) -> Embeddings:
     """
-    Embed a list of documents with optional averaging and chunk metadata.
+    Embed documents and optionally save or append to a disk store.
     """
     all_vecs = []
     all_ids = []
     metas = []
 
     for doc_i, text in enumerate(texts):
+        # Skip if doc_id already exists in store
         doc_id = f"doc{doc_i}"
+        if store_dir and (store_dir / "ids.json").exists():
+            try:
+                with open(store_dir / "ids.json") as f:
+                    existing_ids = json.load(f)
+                if doc_id in existing_ids:
+                    continue
+            except Exception:
+                pass
+
         meta_info = doc_meta.get(doc_id, {}) if doc_meta else {}
 
-        chunk_vecs = model.embed_text(text, chunk_size=chunk_size)
+        chunk_vecs = model.embed_text(text, chunk_size=chunk_size)(text, chunk_size=chunk_size)
 
-        # Approximate char alignment
         char_per_chunk = max(1, len(text) // max(1, len(chunk_vecs)))
         chunk_metas = []
         for ci, vec in enumerate(chunk_vecs):
@@ -79,4 +88,17 @@ def embed_documents(
             metas.extend(chunk_metas)
 
     vectors = np.vstack(all_vecs)
-    return Embeddings(ids=all_ids, vectors=vectors, metas=metas)
+    emb = Embeddings(ids=all_ids, vectors=vectors, metas=metas)
+
+    if store_dir:
+        store = EmbeddingsStore(store_dir)
+        if append_to_store:
+            store.append(emb)
+        else:
+            store.save(emb)
+
+    return emb
+
+
+def load_embeddings_from_store(store_dir: Path) -> Embeddings:
+    return load_embeddings(store_dir)
