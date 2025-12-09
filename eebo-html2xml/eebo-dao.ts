@@ -1,8 +1,7 @@
 import { Database } from "bun:sqlite";
 
 export interface EeboRow {
-    id?: number;
-    idno: string;
+    id: string;
     xml_created: number | null;
 }
 
@@ -28,25 +27,25 @@ export class EeboDAO {
         }
     }
 
-    /** Get xml_created for a given idno */
-    isProcessed(idno: string): boolean {
+    /** Get xml_created for a given id */
+    xmlGenerated(id: string): boolean {
         const row = this.db
-            .prepare("SELECT xml_created FROM eebo WHERE idno = ?")
-            .get(idno) as EeboRow | undefined;
+            .prepare("SELECT xml_created FROM eebo WHERE id = ?")
+            .get(id) as EeboRow | undefined;
         return row?.xml_created === 1;
     }
 
     /** Update xml_created status (1 = success, 0 = failed) */
-    updateStatus(idno: string, status: 0 | 1) {
-        this.db.prepare("UPDATE eebo SET xml_created = ? WHERE idno = ?").run(status, idno);
+    updateStatus(id: string, status: 0 | 1) {
+        this.db.prepare("UPDATE eebo SET xml_created = ? WHERE id = ?").run(status, id);
     }
 
     /** Optional: insert new record if needed */
     insert(row: EeboRow) {
         this.db
             .prepare(
-                "INSERT INTO eebo (idno, xml_created) VALUES (?, ?)"
+                "INSERT INTO eebo (id, xml_created) VALUES (?, ?)"
             )
-            .run(row.idno, row.xml_created ?? null);
+            .run(row.id, row.xml_created ?? null);
     }
 }

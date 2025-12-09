@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 /**
  * eebo-to-tei.ts
- * Convert an EEBO HTML fragment (texts/<id>.html) + metadata (texts/<id>.json)
- * into TEI P5 that respects block/inline constraints required by the DTD.
+ * Convert EEBO HTML fragments (texts/<id>.html) + metadata (texts/<id>.json)
+ * into TEI P5, respecting block/inline constraints required by the DTD.
  *
  * Usage:
- *   bun eebo-to-tei.ts 13506_1
+ *   bun eebo-to-tei.ts <fileOrDir>
  */
 
 import fs from "fs";
@@ -16,8 +16,11 @@ import { type XMLBuilder } from "xmlbuilder2/lib/interfaces";
 import { validateTEI } from "./validate-tei";
 import { EeboDAO } from "./eebo-dao";
 
+const outDir = "../eebo-tei";
+if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
 const dbFile = "../eebo-data/eebo-tcp_metadata.sqlite";
-const dao = new EeboDAO(dbFile);
+if (!fs.existsSync(dbFile)) throw new Error(`Cannot find dbFile "${dbFile}".`);
 
 interface Metadata {
   filename: string;
@@ -43,289 +46,227 @@ interface Metadata {
   philo_div3_id?: string;
 }
 
-console.log('Convert EEBO HTML to XML')
-
 if (process.argv.length < 3 || !process.argv[2]) {
-  console.error("Usage: bun eebo-to-tei.ts <baseId>");
+  console.error("Usage: bun eebo-to-tei.ts <file or directory>");
   process.exit(1);
 }
 
-const base = path.basename(process.argv[2]); // e.g. "13506_1"
-const htmlPath = path.join("texts", `${base}.html`);
-const jsonPath = path.join("texts", `${base}.json`);
-const outDir = "eebo_tei";
-const outPath = path.join(outDir, `${base}.xml`);
+const dao = new EeboDAO(dbFile);
 
-if (!fs.existsSync(htmlPath)) {
-  console.error("HTML not found:", htmlPath);
-  process.exit(1);
+const target = process.argv[2];
+
+// Determine files to process
+let bases: string[] = [];
+if (fs.statSync(target).isDirectory()) {
+  bases = fs.readdirSync(target)
+    .filter(f => f.endsWith(".html"))
+    .map(f => path.basename(f, ".html"));
+} else {
+  bases = [path.basename(target, ".html")];
 }
 
-const html = fs.readFileSync(htmlPath, "utf8");
-const meta = fs.existsSync(jsonPath) ? JSON.parse(fs.readFileSync(jsonPath, "utf8")) : {};
+console.log(`Processing ${bases.length} files...`);
 
-// Parse HTML fragment (wrap in a body to be safe)
-const dom = new JSDOM(`<body>${html}</body>`);
-const document = dom.window.document;
-const fragmentRoot = document.body;
+for (const base of bases) {
+  try {
+    // Skip if already processed successfully
+    if (dao.xmlGenerated(base)) {
+      console.log("Skipping already processed:", base);
+      continue;
+    }
 
-// Create TEI skeleton
-const doc = create({ version: "1.0", encoding: "UTF-8" })
-  .ele("TEI", { xmlns: "http://www.tei-c.org/ns/1.0" });
+    const htmlPath = path.join(target, `${base}.html`);
+    const jsonPath = path.join(target, `${base}.json`);
+    const outPath = path.join(outDir, `${base}.xml`);
 
-buildTeiHeader(doc, meta);
+    if (!fs.existsSync(htmlPath)) {
+      console.warn("HTML not found:", htmlPath);
+      dao.updateStatus(base, 0);
+      continue;
+    }
 
-const textNode = doc.ele("text");
-const bodyNode = textNode.ele("body");
-// top-level div in body; we'll use this as the initial block parent
-const topDiv = bodyNode.ele("div", { type: "text" });
+    const html = fs.readFileSync(htmlPath, "utf8");
+    const meta: Metadata = fs.existsSync(jsonPath)
+      ? JSON.parse(fs.readFileSync(jsonPath, "utf8"))
+      : { idno: base };
+
+    // Parse HTML fragment (wrap in body)
+    const dom = new JSDOM(`<body>${html}</body>`);
+    const fragmentRoot = dom.window.document.body;
+
+    // Create TEI skeleton
+    const doc = create({ version: "1.0", encoding: "UTF-8" })
+      .ele("TEI", { xmlns: "http://www.tei-c.org/ns/1.0" });
+
+    buildTeiHeader(doc, meta);
+
+    const textNode = doc.ele("text");
+    const bodyNode = textNode.ele("body");
+    const topDiv = bodyNode.ele("div", { type: "text" });
+
+    // Recursive conversion
+    htmlNodeToTEI(fragmentRoot, topDiv, null);
+
+    fs.writeFileSync(outPath, doc.end({ prettyPrint: true }), "utf8");
+    console.log("Wrote TEI:", outPath);
+
+    validateTEI(outPath);
+
+    dao.updateStatus(base, 1);
+
+  } catch (err) {
+    console.error("Error processing", base, err);
+    dao.updateStatus(base, 0);
+  }
+}
 
 /**
- * Walk the HTML and append TEI to the XML builder.
- *
- * We keep two pointers:
- *  - blockParent: nearest TEI block (a <div> in the TEI body)
- *  - curP: current TEI <p> (for inline content). If null, text/inline will auto-open a <p>.
- *
- * This prevents illegal nesting like <div> inside <p> or <p> inside <hi>.
+ * Recursive HTML → TEI converter (inline/block)
  */
 function htmlNodeToTEI(node: Node, blockParent: any, curP: any): { blockParent: any; curP: any } {
-  // Ensures there is a paragraph to append inline content
-  function ensureP(): any {
+  function ensureP() {
     if (curP) return curP;
     curP = blockParent.ele("p");
     return curP;
   }
 
   if (node.nodeType === 3) { // TEXT
-    const raw = node.textContent || "";
-    const text = raw.replace(/\s+/g, " ").trim();
+    const text = (node.textContent || "").replace(/\s+/g, " ").trim();
     if (!text) return { blockParent, curP };
-
-    // if we're currently inside a block but not inside a <p>, open one
-    if (!curP) {
-      curP = blockParent.ele("p");
-    }
+    curP = curP || blockParent.ele("p");
     curP.txt(text);
     return { blockParent, curP };
   }
 
-  if (node.nodeType !== 1) return { blockParent, curP }; // ignore comments, etc.
+  if (node.nodeType !== 1) return { blockParent, curP };
 
   const el = node as HTMLElement;
   const tag = el.tagName.toLowerCase();
 
-  // BLOCK elements
-  if (tag === "div" || tag === "section" || tag === "article" || tag === "body") {
-    // close current paragraph context (we will not put a <div> inside a <p>)
+  if (["div", "section", "article", "body"].includes(tag)) {
     curP = null;
     const newDiv = blockParent.ele("div", { type: "text" });
     for (const child of Array.from(el.childNodes)) {
       const res = htmlNodeToTEI(child, newDiv, curP);
-      newDiv; // keep
       curP = res.curP;
     }
-    // after finishing a block-level element, close paragraph context
-    curP = null;
-    return { blockParent, curP };
+    return { blockParent, curP: null };
   }
 
-  // Page breaks: TEI <pb/> should be placed at block level (as sibling to <p>)
   if (tag === "pb" || (tag === "span" && (el.className || "").includes("xml-pb"))) {
-    // close any current paragraph context (so pb is sibling to p)
     curP = null;
-    const facs = (el.getAttribute("facs") || el.getAttribute("data-facs")) || undefined;
+    const facs = el.getAttribute("facs") || el.getAttribute("data-facs");
     if (facs) blockParent.ele("pb", { facs });
     else blockParent.ele("pb");
     return { blockParent, curP };
   }
 
-  // Paragraph: create <p> under current block parent
   if (tag === "p" || tag === "para") {
-    // close any previous paragraph and start a new one
     curP = blockParent.ele("p");
     for (const child of Array.from(el.childNodes)) {
       const res = htmlNodeToTEI(child, blockParent, curP);
       curP = res.curP;
     }
-    // keep curP as is (we may add inline content later) or close it
-    // we choose to close after finishing the <p>
-    curP = null;
-    return { blockParent, curP };
+    return { blockParent, curP: null };
   }
 
-  // Headings could map to <head> within blockParent (allowed)
   if (/^h[1-6]$/.test(tag)) {
-    // close paragraph context
     curP = null;
     const head = blockParent.ele("head");
-    for (const child of Array.from(el.childNodes)) {
-      // inside head, we treat children like inline but we can simply append text
-      const txt = (child.textContent || "").replace(/\s+/g, " ").trim();
-      if (txt) head.txt(txt);
-    }
+    head.txt(el.textContent?.replace(/\s+/g, " ").trim() || "");
     return { blockParent, curP };
   }
 
-  // Inline formatting — must be inside a <p> (ensure one exists)
-  if (tag === "b" || tag === "strong") {
+  if (["b", "strong"].includes(tag)) {
     const p = ensureP();
     const hi = p.ele("hi", { rend: "bold" });
-    for (const child of Array.from(el.childNodes)) {
-      const res = htmlNodeToTEI(child, blockParent, hi);
-      // ensure we don't accidentally set curP to an inline element
-      if (res.curP && res.curP !== hi) {
-        // if child created a paragraph, keep original p
-        // (unlikely since inline children shouldn't create block <p>)
-      }
-    }
+    for (const child of Array.from(el.childNodes)) htmlNodeToTEI(child, blockParent, hi);
     return { blockParent, curP: p };
   }
 
-  if (tag === "i" || tag === "em") {
+  if (["i", "em"].includes(tag)) {
     const p = ensureP();
     const hi = p.ele("hi", { rend: "italic" });
-    for (const child of Array.from(el.childNodes)) {
-      htmlNodeToTEI(child, blockParent, hi);
-    }
+    for (const child of Array.from(el.childNodes)) htmlNodeToTEI(child, blockParent, hi);
     return { blockParent, curP: p };
   }
 
-  // links -> TEI <ref target="...">...</ref>
   if (tag === "a") {
-    const href = el.getAttribute("href") || undefined;
     const p = ensureP();
+    const href = el.getAttribute("href");
     const ref = href ? p.ele("ref", { target: href }) : p.ele("ref");
-    for (const child of Array.from(el.childNodes)) {
-      htmlNodeToTEI(child, blockParent, ref);
-    }
+    for (const child of Array.from(el.childNodes)) htmlNodeToTEI(child, blockParent, ref);
     return { blockParent, curP: p };
   }
 
-  // line break: use TEI <lb/>
   if (tag === "br") {
-    // ensure a paragraph exists to hold the lb
     const p = ensureP();
     p.ele("lb");
     return { blockParent, curP };
   }
 
-  // lists: map <ul>/<ol> -> TEI <list> with <item>
-  if (tag === "ul" || tag === "ol") {
+  if (["ul", "ol"].includes(tag)) {
     curP = null;
     const list = blockParent.ele("list");
     for (const li of Array.from(el.querySelectorAll("li"))) {
       const item = list.ele("item");
-      // each li -> item -> p children
-      for (const child of Array.from(li.childNodes)) {
-        const res = htmlNodeToTEI(child, item, null);
-        // if inline produced text, ensure it's inside <p>
-        if (res.curP) {
-          // move on
-        }
-      }
+      for (const child of Array.from(li.childNodes)) htmlNodeToTEI(child, item, null);
     }
     return { blockParent, curP: null };
   }
 
-  // span / inline fallback: treat as inline; ensure p and recurse
-  // (many EEBO inline features live in <span class="xml-hi"> etc.)
-  if (tag === "span" || tag === "emph" || tag === "small" || tag === "strong") {
+  if (["span", "emph", "small", "strong"].includes(tag)) {
     const p = ensureP();
-    // don't create extra hi if span just contains text; but we allow nested parsing
-    for (const child of Array.from(el.childNodes)) {
-      htmlNodeToTEI(child, blockParent, p);
-    }
+    for (const child of Array.from(el.childNodes)) htmlNodeToTEI(child, blockParent, p);
     return { blockParent, curP: p };
   }
 
-  // default: recurse over children, treating unknown tags as transparent inline/block depending on content
-  // we must be careful: unknown block-like tags that contain block children should be handled by the top recursion
-  // safest fallback: walk children and let children decide
+  // default fallback: recurse over children
   for (const child of Array.from(el.childNodes)) {
     const res = htmlNodeToTEI(child, blockParent, curP);
     blockParent = res.blockParent;
     curP = res.curP;
   }
+
   return { blockParent, curP };
 }
 
-// Walk fragment children and convert
-let state = { blockParent: topDiv, curP: null as any | null };
-for (const child of Array.from(fragmentRoot.childNodes)) {
-  state = htmlNodeToTEI(child, state.blockParent, state.curP);
-}
-
-// Finalize output
-if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(outPath, doc.end({ prettyPrint: true }), "utf8");
-console.log("Wrote TEI:", outPath);
-
-// Validate
-try {
-  validateTEI(outPath);
-} catch (err) {
-  // validateTEI prints errors itself; rethrow so caller sees exit code
-  process.exitCode = 1;
-  // still exit after showing messages
-}
-
-
-
+/**
+ * Build TEI Header (unchanged)
+ */
 export function buildTeiHeader(root: XMLBuilder, meta: Metadata) {
   const header = root.ele("teiHeader");
   const fileDesc = header.ele("fileDesc");
 
   const titleStmt = fileDesc.ele("titleStmt");
   titleStmt.ele("title").txt(meta.title || "Untitled");
-  if (meta.author) {
-    titleStmt.ele("author").txt(meta.author);
-  }
+  if (meta.author) titleStmt.ele("author").txt(meta.author);
 
   const pub = fileDesc.ele("publicationStmt");
-
-  if (meta.publisher) {
-    pub.ele("publisher").txt(meta.publisher);
-  } else {
-    pub.ele("authority").txt("Unknown");
-  }
+  if (meta.publisher) pub.ele("publisher").txt(meta.publisher);
+  else pub.ele("authority").txt("Unknown");
 
   if (meta.pub_place) pub.ele("pubPlace").txt(meta.pub_place);
 
-  // Date
   if (meta.pub_date || meta.create_date) {
     const dateStr = meta.pub_date || meta.create_date;
-    const year =
-      meta.year ||
-      parseInt((dateStr || "").replace(/[^0-9]/g, "")) ||
-      undefined;
-
-    if (year) {
-      pub.ele("date", { when: year.toString() }).txt(dateStr || "");
-    } else {
-      pub.ele("date").txt(dateStr || "");
-    }
+    const year = meta.year || parseInt((dateStr || "").replace(/\D/g, "")) || undefined;
+    if (year) pub.ele("date", { when: year.toString() }).txt(dateStr || "");
+    else pub.ele("date").txt(dateStr || "");
   }
 
-  if (meta.idno) {
-    pub.ele("idno", { type: "eebo" }).txt(meta.idno);
-  }
+  if (meta.idno) pub.ele("idno", { type: "eebo" }).txt(meta.idno);
 
   pub.ele("availability").ele("p").txt("Digitised for research use.");
 
   const sourceDesc = fileDesc.ele("sourceDesc");
   const bibl = sourceDesc.ele("bibl");
-
-  // Title and author again (TEI convention)
   bibl.ele("title").txt(meta.title || "Untitled");
   if (meta.author) bibl.ele("author").txt(meta.author);
-
   if (meta.extent) bibl.ele("extent").txt(meta.extent);
   if (meta.notes) {
     bibl.ele("note").txt(meta.notes);
     bibl.ele("note", { type: "eebo-tcp" }).txt(meta.notes);
   }
-
   if (meta.collection) bibl.ele("idno", { type: "collection" }).txt(meta.collection);
-
 }
