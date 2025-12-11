@@ -6,11 +6,15 @@ import numpy as np
 from pathlib import Path
 import json
 import hashlib
+import logger;
 
 from .macberth_model import MacBERThModel
 from .model_loader import get_local_macberth_path
 from .types import Embeddings, ChunkMeta
 from .embedding_store import EmbeddingsStore, save_embeddings, append_embeddings, load_embeddings
+
+
+logger = logging.getLogger(__name__)
 
 
 def stable_doc_id(text: str) -> str:
@@ -29,7 +33,7 @@ def embed_documents(
     texts: List[str],
     device: str = "cpu",
     chunk_size: int = 512,
-    average_chunks: bool = True,
+    average_chunks: bool = False,
     doc_meta: Optional[Dict[str, dict]] = None,
     store_dir: Optional[Path] = None,
     append_to_store: bool = False
@@ -43,6 +47,7 @@ def embed_documents(
 
     for doc_i, text in enumerate(texts):
         doc_id = stable_doc_id(text)
+        logger.debug("Embed doc ", doc_id)
 
         # Skip if doc_id already exists in store
         if store_dir and (store_dir / "ids.json").exists():
@@ -56,7 +61,6 @@ def embed_documents(
 
         meta_info = doc_meta.get(doc_id, {}) if doc_meta else {}
 
-        # Corrected: embed_text returns a list; no extra () call
         chunk_vecs = model.embed_text(text, chunk_size=chunk_size)
 
         if not chunk_vecs:

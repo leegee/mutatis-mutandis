@@ -9,7 +9,7 @@ TEI_PATH = Path("../../eebo-tei")
 FAISS_STORE_DIR = Path("faiss-cache/faiss-index")
 DEVICE = "cpu"
 CHUNK_SIZE = 512
-AVERAGE_CHUNKS = True
+AVERAGE_CHUNKS = False
 K_CLUSTERS = 5
 SQLITE_DB = Path("../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
 

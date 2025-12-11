@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DEVICE = "cpu"
 DEFAULT_CHUNK_SIZE = 512
-DEFAULT_AVERAGE_CHUNKS = True
+DEFAULT_AVERAGE_CHUNKS = False
 DEFAULT_K_CLUSTERS = 5
 DEFAULT_SQLITE_DB = Path("../../../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
 DEFAULT_FAISS_STORE = Path("../../../../faiss-cache/faiss-index")
@@ -71,7 +71,7 @@ def run_pipeline(
         model,
         query,
         device=device,
-        average_chunks=True
+        average_chunks=average_chunks,
     ).vectors
     results = index.search(query_emb, top_k=5)
 
