@@ -14,6 +14,13 @@ bun run
 
 This project was created using `bun init` in bun v1.2.22. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
 
+## Questions The System Might Help Answer
+
+* Did The Ranters exist?
+* Semantic drift in KEYWORDS
+* Natural clusters
+* Semantic drift/evolution of least frequent terms whose use grows over the period
+
 ## Bibliography
 
 * Raymond, Joab

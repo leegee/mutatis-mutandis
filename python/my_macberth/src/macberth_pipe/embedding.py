@@ -55,30 +55,36 @@ def embed_documents(
         logger.debug(f"Processing document {doc_id}")
 
         meta_info = doc_meta.get(doc_id, {}) if doc_meta else {}
+
         chunks = model.split_into_chunks(text, chunk_size=chunk_size)
         if not chunks:
             continue
 
+        # embed with batching
         chunk_vecs = embed_chunks_batched(model, chunks, batch_size)
 
+        # simple equal-length mapping (not exact but deterministic) TODO Refine
         char_per_chunk = max(1, len(text) // len(chunk_vecs))
+
         chunk_metas = []
         for ci, vec in enumerate(chunk_vecs):
-            start_char = ci * char_per_chunk
-            end_char   = min(len(text), (ci + 1) * char_per_chunk)
-            chunk_text = text[start_char:end_char]
+            start = ci * char_per_chunk
+            end = min(len(text), (ci + 1) * char_per_chunk)
+            chunk_text = text[start:end]
 
-            chunk_metas.append(ChunkMeta(
-                doc_id=doc_id,
-                chunk_idx=ci,
-                text=chunk_text,
-                start_char=start_char,
-                end_char=end_char,
-                title=meta_info.get("title", ""),
-                author=meta_info.get("author", ""),
-                year=meta_info.get("year", ""),
-                permalink=meta_info.get("permalink", "")
-            ))
+            chunk_metas.append(
+                ChunkMeta(
+                    doc_id=doc_id,
+                    chunk_idx=ci,
+                    text=chunk_text,
+                    start_char=start,
+                    end_char=end,
+                    title=meta_info.get("title", ""),
+                    author=meta_info.get("author", ""),
+                    year=meta_info.get("year", ""),
+                    permalink=meta_info.get("permalink", "")
+                )
+            )
 
         chunk_vecs = np.vstack(chunk_vecs)
 
@@ -91,20 +97,28 @@ def embed_documents(
             all_ids.extend([f"{doc_id}_chunk{ci}" for ci in range(len(chunk_vecs))])
             metas.extend(chunk_metas)
 
+    # Nothing to embed
     if not all_vecs:
         return Embeddings(ids=[], vectors=np.empty((0, 0)), metas=[])
 
     vectors = np.vstack(all_vecs)
     emb = Embeddings(ids=all_ids, vectors=vectors, metas=metas)
 
-    # Save embeddings and persist to FAISS + SQLite if requested
+    # persistence section 
     if store_dir:
         store_dir.mkdir(parents=True, exist_ok=True)
         faiss_store = FaissStore(store_dir, sqlite_db=sqlite_db)
+
         if append_to_store:
+            logger.debug(
+                f"Appending {len(emb.ids)} embeddings to FAISS store at {store_dir}"
+            )
             faiss_store.append(emb)
         else:
+            logger.debug(
+                f"Building FAISS store with {len(emb.ids)} embeddings at {store_dir}"
+            )
             faiss_store.build(emb)
-        logger.debug(f"Saved {len(all_ids)} embeddings to FAISS store at {store_dir}")
 
+    logger.debug(f"Embedded {len(all_ids)} chunks total")
     return emb
