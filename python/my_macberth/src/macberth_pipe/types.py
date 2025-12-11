@@ -1,13 +1,6 @@
 from dataclasses import dataclass
 from typing import List
 import numpy as np
-from .types import ChunkMeta
-
-@dataclass(frozen=True)
-class Embeddings:
-    ids: List[str]
-    vectors: np.ndarray
-    metas: List[ChunkMeta]
 
 @dataclass
 class ChunkMeta:
@@ -21,3 +14,9 @@ class ChunkMeta:
     author: str = ""
     year: str = ""
     permalink: str = ""
+
+@dataclass(frozen=True)
+class Embeddings:
+    ids: List[str]
+    vectors: np.ndarray
+    metas: List[ChunkMeta]

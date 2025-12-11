@@ -1,6 +1,7 @@
 # run.py
 
 import logging
+import logging.config
 from pathlib import Path
 from macberth_pipe.pipeline import run_pipeline
 
@@ -12,10 +13,33 @@ AVERAGE_CHUNKS = True
 K_CLUSTERS = 5
 SQLITE_DB = Path("../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(message)s'
-)
+
+logging.config.dictConfig({
+    "version": 1,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "level": "DEBUG",
+            "formatter": "std",
+        }
+    },
+    "formatters": {
+        "std": {
+            "format": "%(asctime)s [%(levelname)s] %(message)s"
+        }
+    },
+    "loggers": {
+        "root": {
+            "level": "DEBUG",
+            "handlers": ["console"]
+        }
+    },
+})
+
+logger = logging.getLogger(__name__)
+
+logger.debug("Configured logger.")
 
 results = run_pipeline(
     tei_path=TEI_PATH,
