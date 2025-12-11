@@ -3,6 +3,7 @@
 import time
 from pathlib import Path
 from typing import Optional
+import logging
 
 from macberth_pipe.tei import load_tei
 from macberth_pipe.normalization import normalize
@@ -11,15 +12,15 @@ from macberth_pipe.semantic import SemanticIndex
 from macberth_pipe.clustering import cluster_embeddings
 from macberth_pipe.metadata import load_doc_meta
 
-# ------------------- DEFAULT CONFIG -------------------
+logger = logging.getLogger(__name__)
+
 DEFAULT_DEVICE = "cpu"
 DEFAULT_CHUNK_SIZE = 512
 DEFAULT_AVERAGE_CHUNKS = True
 DEFAULT_K_CLUSTERS = 5
-DEFAULT_SQLITE_DB = Path("../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
-DEFAULT_FAISS_STORE = Path("faiss-cache/faiss-index")
+DEFAULT_SQLITE_DB = Path("../../../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
+DEFAULT_FAISS_STORE = Path("../../../../faiss-cache/faiss-index")
 
-# ------------------- UTILS -------------------
 
 def gather_files(path: Path):
     if not path.exists():
@@ -28,8 +29,6 @@ def gather_files(path: Path):
         return sorted([p for p in path.iterdir() if p.suffix.lower() == ".xml"])
     else:
         return [path]
-
-# ------------------- PIPELINE FUNCTION -------------------
 
 def run_pipeline(
     tei_path: Path,
@@ -49,8 +48,10 @@ def run_pipeline(
 
     doc_meta = load_doc_meta(files, sqlite_db)
 
+    logger.debug("Loading model")
     model = load_model(device=device)
 
+    logger.debug("Getting embeddings")
     emb = embed_documents(
         model,
         texts,
@@ -60,9 +61,10 @@ def run_pipeline(
         doc_meta=doc_meta
     )
 
+    logger.debug("Getting semantic index")
     index = SemanticIndex(emb, store_dir=faiss_store_dir)
 
-    # Semantic search example
+    logger.debug("Running semantic search test")
     query = ["divine right of kings"]
     query_emb = embed_documents(
         model,
@@ -72,7 +74,7 @@ def run_pipeline(
     ).vectors
     results = index.search(query_emb, top_k=5)
 
-    # Clustering
+    logger.debug("Running clustering")
     if emb.vectors.shape[0] >= 2:
         safe_k = min(k_clusters, len(emb.ids))
         labels = cluster_embeddings(emb, k=safe_k)
@@ -80,10 +82,14 @@ def run_pipeline(
         labels = []
 
     end_time = time.perf_counter()
-    return {
+    rv = {
         'emb': emb,
         'index': index,
         'results': results,
         'labels': labels,
         'time': end_time - start_time
     }
+
+    logger.debig("RV", rv)
+
+    return rv

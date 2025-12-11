@@ -3,9 +3,7 @@ import json
 import numpy as np
 from pathlib import Path
 from typing import List
-from macberth_pipe.semantic import ChunkMeta
-from macberth_pipe.embedding import Embeddings
-
+from .types import Embeddings, ChunkMeta
 
 def save_embeddings(emb: Embeddings, directory: Path):
     directory.mkdir(parents=True, exist_ok=True)

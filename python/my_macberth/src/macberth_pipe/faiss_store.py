@@ -6,9 +6,8 @@ import numpy as np
 import json
 from typing import Optional
 
-from macberth_pipe.embedding import Embeddings
+from .types import Embeddings, ChunkMeta
 from macberth_pipe.embedding_store import EmbeddingsStore
-from macberth_pipe.semantic import ChunkMeta
 
 
 class FaissStore:
@@ -39,7 +38,6 @@ class FaissStore:
         index.add(emb.vectors.astype("float32"))
         self.index = index
 
-        # Build mapping
         self.mapping = [
             {
                 "doc_id": m.doc_id,
@@ -56,7 +54,6 @@ class FaissStore:
 
         self.index.add(new_emb.vectors.astype("float32"))
 
-        # Append mapping
         new_map = [
             {
                 "doc_id": m.doc_id,
@@ -76,7 +73,7 @@ class FaissStore:
     def search(self, query_vec: np.ndarray, top_k: int = 5):
         q = np.asarray(query_vec, dtype="float32")
         if q.ndim == 1:
-            q = q.reshape(1, -1)
+            q = q.reshape(1, -1) # TODO I've forgotten why
 
         scores, idxs = self.index.search(q, top_k)
 

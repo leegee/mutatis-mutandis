@@ -7,21 +7,13 @@ from pathlib import Path
 
 from .macberth_model import MacBERThModel
 from .model_loader import get_local_macberth_path
-from .semantic import ChunkMeta
+from .types import Embeddings, ChunkMeta
 from .embedding_store import EmbeddingsStore, save_embeddings, append_embeddings, load_embeddings
-
-
-@dataclass(frozen=True)
-class Embeddings:
-    ids: List[str]
-    vectors: np.ndarray
-    metas: List[ChunkMeta]
 
 
 def load_model(device="cpu"):
     model_path = get_local_macberth_path()
     return MacBERThModel(model_path=model_path, device=device)
-
 
 def embed_documents(
     model: MacBERThModel,
@@ -41,6 +33,9 @@ def embed_documents(
     metas = []
 
     for doc_i, text in enumerate(texts):
+
+        # TODO Fix doc0 doc1 docN by hashing or finding existing id
+        # TODO This is a mess. Separate out the filehandling, store loading etc
         # Skip if doc_id already exists in store
         doc_id = f"doc{doc_i}"
         if store_dir and (store_dir / "ids.json").exists():

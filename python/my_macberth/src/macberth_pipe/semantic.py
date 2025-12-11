@@ -2,22 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
 
-from macberth_pipe.embedding import Embeddings
-from macberth_pipe.faiss_store import FaissStore
+from .types import Embeddings, ChunkMeta
 
 FAISS_FILE_PATH = Path("faiss-cache/faiss-index")
-
-@dataclass
-class ChunkMeta:
-    doc_id: str
-    chunk_idx: int
-    text: str
-    start_char: int
-    end_char: int
-    title: str = ""
-    author: str = ""
-    year: str = ""
-    permalink: str = ""
 
 class SemanticIndex:
     """

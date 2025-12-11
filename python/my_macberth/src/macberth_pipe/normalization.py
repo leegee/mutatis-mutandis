@@ -1,3 +1,4 @@
+# This is just a placeholder.
 import re
 
 def normalize(text: str, lowercase=True, strip_punct=False) -> str:
