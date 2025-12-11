@@ -110,15 +110,13 @@ def embed_documents(
         faiss_store = FaissStore(store_dir, sqlite_db=sqlite_db)
 
         if append_to_store:
-            logger.debug(
-                f"Appending {len(emb.ids)} embeddings to FAISS store at {store_dir}"
-            )
-            faiss_store.append(emb)
+            logger.debug(f"Appending {len(emb.ids)} embeddings to FAISS store at {store_dir}")
+            faiss_store.append(emb.vectors)        # <-- pass vectors, not Embeddings
+            faiss_store.register_embeddings(emb.metas)  # register metadata in SQLite
         else:
-            logger.debug(
-                f"Building FAISS store with {len(emb.ids)} embeddings at {store_dir}"
-            )
-            faiss_store.build(emb)
+            logger.debug(f"Building FAISS store with {len(emb.ids)} embeddings at {store_dir}")
+            faiss_store.build(emb.vectors)         # <-- pass vectors
+            faiss_store.register_embeddings(emb.metas)  # register metadata in SQLite
 
     logger.debug(f"Embedded {len(all_ids)} chunks total")
     return emb
