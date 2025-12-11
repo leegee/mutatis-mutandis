@@ -13,7 +13,6 @@ AVERAGE_CHUNKS = True
 K_CLUSTERS = 5
 SQLITE_DB = Path("../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
 
-
 logging.config.dictConfig({
     "version": 1,
     "handlers": {
@@ -26,19 +25,24 @@ logging.config.dictConfig({
     },
     "formatters": {
         "std": {
-            "format": "%(asctime)s [%(levelname)s] %(message)s"
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
         }
+    },
+    "root": {
+        "level": "DEBUG",
+        "handlers": ["console"]
     },
     "loggers": {
-        "root": {
+        "macberth_pipe": {
             "level": "DEBUG",
-            "handlers": ["console"]
+            "handlers": ["console"],
+            "propagate": False
         }
     },
+    "disable_existing_loggers": False
 })
 
 logger = logging.getLogger(__name__)
-
 logger.debug("Configured logger.")
 
 results = run_pipeline(
