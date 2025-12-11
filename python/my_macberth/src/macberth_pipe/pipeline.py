@@ -1,5 +1,3 @@
-# macberth_pipe/pipeline.py
-
 import time
 from pathlib import Path
 from typing import Optional
@@ -16,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DEVICE = "cpu"
 DEFAULT_CHUNK_SIZE = 512
-DEFAULT_AVERAGE_CHUNKS = False
+DEFAULT_AVERAGE_CHUNKS = True
 DEFAULT_K_CLUSTERS = 5
 DEFAULT_SQLITE_DB = Path("../../../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
 DEFAULT_FAISS_STORE = Path("../../../../faiss-cache/faiss-index")
@@ -30,6 +28,7 @@ def gather_files(path: Path):
     else:
         return [path]
 
+
 def run_pipeline(
     tei_path: Path,
     device: str = DEFAULT_DEVICE,
@@ -37,35 +36,34 @@ def run_pipeline(
     average_chunks: bool = DEFAULT_AVERAGE_CHUNKS,
     k_clusters: int = DEFAULT_K_CLUSTERS,
     sqlite_db: Path = DEFAULT_SQLITE_DB,
-    faiss_store_dir: Path = DEFAULT_FAISS_STORE
+    faiss_store_dir: Path = DEFAULT_FAISS_STORE,
+    batch_size: int = 8,
 ):
     start_time = time.perf_counter()
 
     files = gather_files(tei_path)
-
     docs = [load_tei(p) for p in files]
     texts = [normalize(d.text) for d in docs]
 
-    logger.debug("Loading metadata")
+    logger.debug(f"Loading metadata for %d files", len(files) )
     doc_meta = load_doc_meta(files, sqlite_db)
 
     logger.debug("Loading model")
     model = load_model(device=device)
 
     logger.debug("Getting embeddings")
-    if (faiss_store_dir / "embeddings.npy").exists():
-        emb = load_embeddings_from_store(faiss_store_dir)
-    else:
-        emb = embed_documents(
-            model,
-            texts,
-            device=device,
-            chunk_size=chunk_size,
-            average_chunks=average_chunks,
-            doc_meta=doc_meta,
-            store_dir=faiss_store_dir,
-            append_to_store=True
-        )
+    emb = embed_documents(
+        model,
+        texts,
+        device=device,
+        chunk_size=chunk_size,
+        average_chunks=average_chunks,
+        doc_meta=doc_meta,
+        store_dir=faiss_store_dir,
+        sqlite_db=sqlite_db,
+        append_to_store=True,
+        batch_size=batch_size
+    )
 
     logger.debug("Getting semantic index")
     index = SemanticIndex(emb, store_dir=faiss_store_dir)
@@ -76,7 +74,8 @@ def run_pipeline(
         model,
         query,
         device=device,
-        average_chunks=average_chunks,
+        average_chunks=True,
+        batch_size=batch_size
     ).vectors
     results = index.search(query_emb, top_k=5)
 
@@ -96,6 +95,5 @@ def run_pipeline(
         'time': end_time - start_time
     }
 
-    logger.debug("RV", rv)
-
+    logger.debug(f"Pipeline finished. Time elapsed: {rv['time']:.2f} seconds")
     return rv

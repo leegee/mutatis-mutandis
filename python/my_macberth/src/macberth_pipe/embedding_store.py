@@ -1,66 +1,81 @@
-# embedding_store.py
-import json
-import numpy as np
+import sqlite3
 from pathlib import Path
-from typing import List
-from .types import Embeddings, ChunkMeta
+import numpy as np
+import faiss
+from typing import Optional
+from macberth_pipe.types import Embeddings, ChunkMeta
 
-def save_embeddings(emb: Embeddings, directory: Path):
-    directory.mkdir(parents=True, exist_ok=True)
+class FaissStore:
+    def __init__(self, store_dir: Path, sqlite_db: Optional[Path] = None):
+        self.store_dir = store_dir
+        self.store_dir.mkdir(parents=True, exist_ok=True)
+        self.index_path = self.store_dir / "index.faiss"
+        self.sqlite_db = sqlite_db
 
-    np.save(directory / "vectors.npy", emb.vectors.astype(np.float32))
+        self.index: Optional[faiss.IndexFlatL2] = None
+        self.dim: Optional[int] = None
 
-    with open(directory / "ids.json", "w") as f:
-        json.dump(emb.ids, f)
+        # Initialize SQLite table if provided
+        if self.sqlite_db:
+            self._init_sqlite()
 
-    with open(directory / "metas.jsonl", "w") as f:
-        for m in emb.metas:
-            f.write(json.dumps(m.__dict__) + "\n")
+        # Load FAISS index if exists
+        if self.index_path.exists():
+            self.index = faiss.read_index(str(self.index_path))
 
+    def _init_sqlite(self):
+        with sqlite3.connect(self.sqlite_db) as conn:
+            c = conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS embeddings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    doc_id TEXT,
+                    chunk_idx INTEGER,
+                    title TEXT,
+                    author TEXT,
+                    year TEXT,
+                    permalink TEXT
+                )
+            """)
+            conn.commit()
 
-def load_embeddings(directory: Path) -> Embeddings:
-    vectors = np.load(directory / "vectors.npy")
-
-    with open(directory / "ids.json") as f:
-        ids = json.load(f)
-
-    metas: List[ChunkMeta] = []
-    with open(directory / "metas.jsonl") as f:
-        for line in f:
-            metas.append(ChunkMeta(**json.loads(line)))
-
-    return Embeddings(ids=ids, vectors=vectors, metas=metas)
-
-
-def append_embeddings(directory: Path, new_emb: Embeddings):
-    vec_path = directory / "vectors.npy"
-    old_vecs = np.load(vec_path)
-    combined = np.vstack([old_vecs, new_emb.vectors])
-    np.save(vec_path, combined.astype(np.float32))
-
-    id_path = directory / "ids.json"
-    with open(id_path) as f:
-        ids = json.load(f)
-    ids.extend(new_emb.ids)
-    with open(id_path, "w") as f:
-        json.dump(ids, f)
-
-    meta_path = directory / "metas.jsonl"
-    with open(meta_path, "a") as f:
-        for m in new_emb.metas:
-            f.write(json.dumps(m.__dict__) + "\n")
-
-
-class EmbeddingsStore:
-    def __init__(self, directory: Path):
-        self.directory = directory
-        self.directory.mkdir(parents=True, exist_ok=True)
-
-    def save(self, emb: Embeddings):
-        save_embeddings(emb, self.directory)
-
-    def load(self) -> Embeddings:
-        return load_embeddings(self.directory)
+    def build(self, emb: Embeddings):
+        self.dim = emb.vectors.shape[1]
+        self.index = faiss.IndexFlatL2(self.dim)
+        self.index.add(emb.vectors.astype("float32"))
+        self._save_metadata(emb)
+        self._save_index()
 
     def append(self, emb: Embeddings):
-        append_embeddings(self.directory, emb)
+        if self.index is None:
+            self.build(emb)
+        else:
+            self.index.add(emb.vectors.astype("float32"))
+            self._save_metadata(emb)
+            self._save_index()
+
+    def _save_index(self):
+        faiss.write_index(self.index, str(self.index_path))
+
+    def _save_metadata(self, emb: Embeddings):
+        if not self.sqlite_db:
+            return
+        with sqlite3.connect(self.sqlite_db) as conn:
+            c = conn.cursor()
+            rows = [(m.doc_id, m.chunk_idx, m.title, m.author, m.year, m.permalink)
+                    for m in emb.metas]
+            c.executemany("""
+                INSERT INTO embeddings
+                (doc_id, chunk_idx, title, author, year, permalink)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, rows)
+            conn.commit()
+
+    def search(self, query_vec: np.ndarray, top_k: int = 5):
+        q = np.asarray(query_vec, dtype="float32")
+        if q.ndim == 1:
+            q = q.reshape(1, -1)
+        if self.index is None:
+            raise RuntimeError("FAISS index not initialized")
+        scores, idxs = self.index.search(q, top_k)
+        return [{'rank': r, 'idx': int(id_), 'score': float(scores[0, r])} for r, id_ in enumerate(idxs[0])]

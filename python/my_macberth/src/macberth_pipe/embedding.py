@@ -1,32 +1,37 @@
-# embeddings.py
-
 from dataclasses import dataclass
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 import numpy as np
 from pathlib import Path
-import json
 import hashlib
-import logging;
+import logging
 
 from .macberth_model import MacBERThModel
 from .model_loader import get_local_macberth_path
 from .types import Embeddings, ChunkMeta
-from .embedding_store import EmbeddingsStore, save_embeddings, append_embeddings, load_embeddings
-
+from .faiss_store import FaissStore
 
 logger = logging.getLogger(__name__)
 
 
 def stable_doc_id(text: str) -> str:
     """Generate a stable document ID by hashing the text content."""
-    h = hashlib.sha1(text.encode('utf-8')).hexdigest()
-    return f"doc_{h[:10]}"  # first 10 hex chars
-
+    h = hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return f"doc_{h[:10]}"
 
 def load_model(device: str = "cpu") -> MacBERThModel:
     model_path = get_local_macberth_path()
     return MacBERThModel(model_path=model_path, device=device)
 
+
+def embed_chunks_batched(model: MacBERThModel, chunks: List[str], batch_size: int) -> List[np.ndarray]:
+    """Embed a list of chunk strings using batched inference."""
+    all_vecs = []
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        logger.debug(f"Embedding batch of size {len(batch)}")
+        batch_vecs = model.embed_text(batch)  # now supports list input
+        all_vecs.extend(batch_vecs)
+    return all_vecs
 
 def embed_documents(
     model: MacBERThModel,
@@ -36,55 +41,44 @@ def embed_documents(
     average_chunks: bool = False,
     doc_meta: Optional[Dict[str, dict]] = None,
     store_dir: Optional[Path] = None,
-    append_to_store: bool = False
+    sqlite_db: Optional[Path] = None,
+    append_to_store: bool = False,
+    batch_size: int = 8
 ) -> Embeddings:
-    """
-    Embed documents and optionally save or append to a disk store.
-    """
+
     all_vecs = []
     all_ids = []
     metas = []
 
-    for doc_i, text in enumerate(texts):
+    for text in texts:
         doc_id = stable_doc_id(text)
-        logger.debug(f"Embed doc {doc_id}")
-
-        # Skip if doc_id already exists in store
-        if store_dir and (store_dir / "ids.json").exists():
-            try:
-                with open(store_dir / "ids.json") as f:
-                    existing_ids = json.load(f)
-                if doc_id in existing_ids:
-                    continue
-            except Exception:
-                pass
+        logger.debug(f"Processing document {doc_id}")
 
         meta_info = doc_meta.get(doc_id, {}) if doc_meta else {}
+        chunks = model.split_into_chunks(text, chunk_size=chunk_size)
+        if not chunks:
+            continue
 
-        chunk_vecs = model.embed_text(text, chunk_size=chunk_size)
-
-        if not chunk_vecs:
-            continue  # skip empty embedding results
+        chunk_vecs = embed_chunks_batched(model, chunks, batch_size)
 
         char_per_chunk = max(1, len(text) // len(chunk_vecs))
         chunk_metas = []
         for ci, vec in enumerate(chunk_vecs):
             start_char = ci * char_per_chunk
-            end_char = min(len(text), (ci + 1) * char_per_chunk)
+            end_char   = min(len(text), (ci + 1) * char_per_chunk)
             chunk_text = text[start_char:end_char]
-            chunk_metas.append(
-                ChunkMeta(
-                    doc_id=doc_id,
-                    chunk_idx=ci,
-                    text=chunk_text,
-                    start_char=start_char,
-                    end_char=end_char,
-                    title=meta_info.get("title", ""),
-                    author=meta_info.get("author", ""),
-                    year=meta_info.get("year", ""),
-                    permalink=meta_info.get("permalink", "")
-                )
-            )
+
+            chunk_metas.append(ChunkMeta(
+                doc_id=doc_id,
+                chunk_idx=ci,
+                text=chunk_text,
+                start_char=start_char,
+                end_char=end_char,
+                title=meta_info.get("title", ""),
+                author=meta_info.get("author", ""),
+                year=meta_info.get("year", ""),
+                permalink=meta_info.get("permalink", "")
+            ))
 
         chunk_vecs = np.vstack(chunk_vecs)
 
@@ -103,19 +97,14 @@ def embed_documents(
     vectors = np.vstack(all_vecs)
     emb = Embeddings(ids=all_ids, vectors=vectors, metas=metas)
 
+    # Save embeddings and persist to FAISS + SQLite if requested
     if store_dir:
-        store = EmbeddingsStore(store_dir)
+        store_dir.mkdir(parents=True, exist_ok=True)
+        faiss_store = FaissStore(store_dir, sqlite_db=sqlite_db)
         if append_to_store:
-            store.append(emb)
-            logger.debug(f"Added embeddings to {store_dir}")
+            faiss_store.append(emb)
         else:
-            store.save(emb)
-            logger.debug(f"Wrote embeddings to {store_dir}")
-    else:
-        logger.debug("Embeddings not saved, no store_dir provided")
+            faiss_store.build(emb)
+        logger.debug(f"Saved {len(all_ids)} embeddings to FAISS store at {store_dir}")
 
     return emb
-
-
-def load_embeddings_from_store(store_dir: Path) -> Embeddings:
-    return load_embeddings(store_dir)

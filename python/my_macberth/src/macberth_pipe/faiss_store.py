@@ -1,90 +1,142 @@
 # faiss_store.py
 
 from pathlib import Path
-import faiss
 import numpy as np
-import json
-from typing import Optional
+import sqlite3
+from typing import Optional, List
+import faiss
+import logging
 
-from .types import Embeddings, ChunkMeta
-from macberth_pipe.embedding_store import EmbeddingsStore
+logger = logging.getLogger(__name__)
 
 
 class FaissStore:
     """
-    Persistent FAISS index that stays in sync with EmbeddingsStore.
-    Stores:
-      - index.faiss : FAISS binary index
-      - mapping.json : mapping of FAISS row -> (doc_id, chunk_idx)
+    Persistent FAISS index with SQLite-backed ID mapping.
+    Each embedding chunk gets a unique faiss_id stored in SQLite.
     """
 
-    def __init__(self, directory: Path):
-        self.directory = directory
-        self.directory.mkdir(parents=True, exist_ok=True)
-        self.index_path = self.directory / "index.faiss"
-        self.map_path = self.directory / "mapping.json"
+    def __init__(self, store_dir: Path, sqlite_db: Optional[Path] = None):
+        self.store_dir = store_dir
+        self.store_dir.mkdir(parents=True, exist_ok=True)
 
-        if self.index_path.exists():
-            self.index = faiss.read_index(str(self.index_path))
-            with open(self.map_path) as f:
-                self.mapping = json.load(f)
+        self.index_file = store_dir / "index.faiss"
+        self.sqlite_db = sqlite_db
+        self.index: Optional[faiss.Index] = None
+        self.dim: Optional[int] = None
+
+        if self.sqlite_db:
+            self._ensure_sqlite_table()
+
+        self._load_index()
+
+    def _ensure_sqlite_table(self):
+        conn = sqlite3.connect(self.sqlite_db)
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS faiss_embeddings (
+                faiss_id INTEGER PRIMARY KEY,
+                doc_id TEXT NOT NULL,
+                chunk_idx INTEGER NOT NULL,
+                UNIQUE(doc_id, chunk_idx)
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+    def _load_index(self):
+        if self.index_file.exists():
+            self.index = faiss.read_index(str(self.index_file))
+            self.dim = self.index.d
+            logger.debug(f"Loaded FAISS index from {self.index_file}")
         else:
             self.index = None
-            self.mapping = []
 
-    def build(self, emb: Embeddings):
-        dim = emb.vectors.shape[1]
-        index = faiss.IndexFlatL2(dim)
-        index.add(emb.vectors.astype("float32"))
-        self.index = index
+    def build(self, emb_vectors: np.ndarray):
+        self.dim = emb_vectors.shape[1]
+        self.index = faiss.IndexFlatL2(self.dim)
+        self.index.add(emb_vectors.astype("float32"))
+        self._save_index()
+        logger.debug(f"Built new FAISS index with {emb_vectors.shape[0]} vectors")
 
-        self.mapping = [
-            {
-                "doc_id": m.doc_id,
-                "chunk_idx": m.chunk_idx
-            }
-            for m in emb.metas
-        ]
-
-        self._save()
-
-    def append(self, new_emb: Embeddings):
+    def append(self, emb_vectors: np.ndarray):
         if self.index is None:
-            return self.build(new_emb)
+            self.build(emb_vectors)
+        else:
+            self.index.add(emb_vectors.astype("float32"))
+            self._save_index()
+            logger.debug(f"Appended {emb_vectors.shape[0]} vectors to FAISS index")
 
-        self.index.add(new_emb.vectors.astype("float32"))
+    def _save_index(self):
+        faiss.write_index(self.index, str(self.index_file))
 
-        new_map = [
-            {
-                "doc_id": m.doc_id,
-                "chunk_idx": m.chunk_idx
-            }
-            for m in new_emb.metas
-        ]
-        self.mapping.extend(new_map)
+    def register_embeddings(self, metas: list):
+        """Register chunk metadata in SQLite to assign persistent faiss_ids."""
+        if self.sqlite_db is None:
+            return
 
-        self._save()
+        conn = sqlite3.connect(self.sqlite_db)
+        c = conn.cursor()
 
-    def _save(self):
-        faiss.write_index(self.index, str(self.index_path))
-        with open(self.map_path, "w") as f:
-            json.dump(self.mapping, f)
+        start_id = self._get_next_faiss_id()
+        for i, meta in enumerate(metas):
+            faiss_id = start_id + i
+            try:
+                c.execute(
+                    "INSERT OR IGNORE INTO faiss_embeddings (faiss_id, doc_id, chunk_idx) VALUES (?, ?, ?)",
+                    (faiss_id, meta.doc_id, meta.chunk_idx)
+                )
+            except sqlite3.IntegrityError:
+                pass
+        conn.commit()
+        conn.close()
+        logger.debug(f"Registered {len(metas)} embeddings in SQLite")
 
-    def search(self, query_vec: np.ndarray, top_k: int = 5):
-        q = np.asarray(query_vec, dtype="float32")
+    def _get_next_faiss_id(self) -> int:
+        if self.sqlite_db is None:
+            return 0
+        conn = sqlite3.connect(self.sqlite_db)
+        c = conn.cursor()
+        c.execute("SELECT MAX(faiss_id) FROM faiss_embeddings")
+        row = c.fetchone()
+        conn.close()
+        return (row[0] + 1) if row[0] is not None else 0
+
+    def search(self, query_vectors: np.ndarray, top_k: int = 5) -> List[dict]:
+        """
+        Returns list of dicts containing: query_idx, rank, score, faiss_id, doc_id, chunk_idx
+        """
+        q = np.asarray(query_vectors, dtype="float32")
         if q.ndim == 1:
-            q = q.reshape(1, -1) # TODO I've forgotten why
+            q = q.reshape(1, -1)
+        if self.index is None:
+            raise RuntimeError("FAISS index is not built")
 
         scores, idxs = self.index.search(q, top_k)
-
         results = []
-        for rank, idx in enumerate(idxs[0]):
-            m = self.mapping[idx]
-            results.append({
-                "rank": rank,
-                "score": float(scores[0, rank]),
-                "doc_id": m["doc_id"],
-                "chunk_idx": m["chunk_idx"],
-            })
+
+        # Bulk lookup for faiss_id -> doc_id, chunk_idx
+        if self.sqlite_db:
+            conn = sqlite3.connect(self.sqlite_db)
+            c = conn.cursor()
+            faiss_ids = set(id for row in idxs for id in row)
+            placeholders = ",".join("?" for _ in faiss_ids)
+            c.execute(f"SELECT faiss_id, doc_id, chunk_idx FROM faiss_embeddings WHERE faiss_id IN ({placeholders})", tuple(faiss_ids))
+            id_map = {row[0]: (row[1], row[2]) for row in c.fetchall()}
+            conn.close()
+        else:
+            id_map = {}
+
+        for qi, (score_row, idx_row) in enumerate(zip(scores, idxs)):
+            for rank, (idx, score) in enumerate(zip(idx_row, score_row)):
+                doc_id, chunk_idx = id_map.get(idx, (None, None))
+                results.append({
+                    "query_idx": qi,
+                    "rank": rank,
+                    "faiss_id": int(idx),
+                    "score": float(score),
+                    "doc_id": doc_id,
+                    "chunk_idx": chunk_idx
+                })
 
         return results

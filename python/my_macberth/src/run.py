@@ -6,7 +6,7 @@ from pathlib import Path
 from macberth_pipe.pipeline import run_pipeline
 
 TEI_PATH = Path("../../eebo-tei")  
-FAISS_STORE_DIR = Path("faiss-cache/faiss-index")
+FAISS_STORE_DIR = Path("../../../faiss-cache/faiss-index")
 DEVICE = "cpu"
 CHUNK_SIZE = 512
 AVERAGE_CHUNKS = False

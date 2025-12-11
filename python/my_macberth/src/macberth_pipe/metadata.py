@@ -41,7 +41,7 @@ def load_doc_meta(tei_files: list[str], db_path: str) -> Dict[str, dict]:
                 "year": year or "",
                 "permalink": permalink or "",
             }
-            logging.debug("Metadata found for %s: %s", base_id, meta[doc_id])
+            # logging.debug("Metadata found for %s: %s", base_id, meta[doc_id])
         else:
             logging.warning("No metadata found for '%s' in DB", base_id)
             meta[doc_id] = {
