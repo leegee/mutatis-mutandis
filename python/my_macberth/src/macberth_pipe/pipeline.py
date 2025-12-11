@@ -53,14 +53,19 @@ def run_pipeline(
     model = load_model(device=device)
 
     logger.debug("Getting embeddings")
-    emb = embed_documents(
-        model,
-        texts,
-        device=device,
-        chunk_size=chunk_size,
-        average_chunks=average_chunks,
-        doc_meta=doc_meta
-    )
+    if (faiss_store_dir / "embeddings.npy").exists():
+        emb = load_embeddings_from_store(faiss_store_dir)
+    else:
+        emb = embed_documents(
+            model,
+            texts,
+            device=device,
+            chunk_size=chunk_size,
+            average_chunks=average_chunks,
+            doc_meta=doc_meta,
+            store_dir=faiss_store_dir,
+            append_to_store=True
+        )
 
     logger.debug("Getting semantic index")
     index = SemanticIndex(emb, store_dir=faiss_store_dir)

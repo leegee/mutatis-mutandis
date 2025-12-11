@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 import json
 import hashlib
-import logger;
+import logging;
 
 from .macberth_model import MacBERThModel
 from .model_loader import get_local_macberth_path
@@ -47,7 +47,7 @@ def embed_documents(
 
     for doc_i, text in enumerate(texts):
         doc_id = stable_doc_id(text)
-        logger.debug("Embed doc ", doc_id)
+        logger.debug(f"Embed doc {doc_id}")
 
         # Skip if doc_id already exists in store
         if store_dir and (store_dir / "ids.json").exists():
@@ -107,8 +107,12 @@ def embed_documents(
         store = EmbeddingsStore(store_dir)
         if append_to_store:
             store.append(emb)
+            logger.debug(f"Added embeddings to {store_dir}")
         else:
             store.save(emb)
+            logger.debug(f"Wrote embeddings to {store_dir}")
+    else:
+        logger.debug("Embeddings not saved, no store_dir provided")
 
     return emb
 

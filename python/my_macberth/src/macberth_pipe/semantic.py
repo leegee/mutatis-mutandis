@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
 
+from .faiss_store import FaissStore
 from .types import Embeddings, ChunkMeta
 
 FAISS_FILE_PATH = Path("faiss-cache/faiss-index")
