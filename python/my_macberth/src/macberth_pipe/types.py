@@ -50,3 +50,21 @@ class QueryEmbeddings(Embeddings):
             vectors=vectors,
             metas=dummy_metas
         )
+
+@dataclass(frozen=True)
+class Embeddings:
+    ids: List[str]
+    vectors: np.ndarray
+    metas: List[ChunkMeta]
+
+    @staticmethod
+    def from_chunks(ids: List[str], vectors: np.ndarray, metas: List[ChunkMeta]) -> "Embeddings":
+        """
+        Factory method to create Embeddings from raw vectors, ids, and metadata.
+        Ensures type consistency and immutability.
+        """
+        if len(ids) != vectors.shape[0]:
+            raise ValueError(f"Length of ids ({len(ids)}) must match number of vectors ({vectors.shape[0]})")
+        if len(ids) != len(metas):
+            raise ValueError(f"Length of ids ({len(ids)}) must match length of metas ({len(metas)})")
+        return Embeddings(ids=ids, vectors=vectors, metas=metas)

@@ -102,7 +102,7 @@ def embed_documents(
         return Embeddings(ids=[], vectors=np.empty((0, 0)), metas=[])
 
     vectors = np.vstack(all_vecs)
-    emb = Embeddings(ids=all_ids, vectors=vectors, metas=metas)
+    emb = Embeddings.from_chunks(all_ids, vectors, metas)
 
     # persistence section 
     if store_dir:
