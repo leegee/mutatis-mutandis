@@ -46,6 +46,7 @@ def run_pipeline(
     docs = [load_tei(p) for p in files]
     texts = [normalize(d.text) for d in docs]
 
+    logger.debug("Loading metadata")
     doc_meta = load_doc_meta(files, sqlite_db)
 
     logger.debug("Loading model")
@@ -90,6 +91,6 @@ def run_pipeline(
         'time': end_time - start_time
     }
 
-    logger.debig("RV", rv)
+    logger.debug("RV", rv)
 
     return rv
