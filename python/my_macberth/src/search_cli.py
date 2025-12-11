@@ -68,18 +68,21 @@ def print_result(res: dict, colour: bool = True):
 
 
 def run_query(query: str):
-    logger.info(f"Loading model…")
+    logger.info("Loading model…")
     model = MacBERThModel(device="cpu")
 
-    logger.info(f"Embedding query…")
+    logger.info("Embedding query…")
     qvec = embed_query(model, query)
 
-    logger.info(f"Loading FAISS index…")
+    logger.info("Loading FAISS index…")
+    # Load SemanticIndex with existing FAISS + SQLite store
     idx = SemanticIndex(
-        QueryEmbeddings.from_vectors(emb)
+        emb=Embeddings(ids=[], vectors=np.empty((0, 0)), metas=[]),
+        store_dir=FAISS_STORE,
+        sqlite_db=SQLITE_DB,
     )
 
-    logger.info(f"Searching…")
+    logger.info("Searching…")
     results = idx.search(qvec, top_k=10)
 
     if not results:
@@ -95,7 +98,6 @@ def interactive():
     print("Type a query or 'quit' to exit.")
     print("-----------------------------------------")
 
-    # Load once
     model = MacBERThModel(device="cpu")
     idx = SemanticIndex(
         emb=Embeddings(ids=[], vectors=np.empty((0, 0)), metas=[]),
