@@ -22,9 +22,6 @@ def load_doc_meta(tei_files: list[str], db_path: str) -> Dict[str, dict]:
         # File stem "13506_1" must be mapped to DB format "13506 1"
         base_id = Path(tei_file).stem.replace("_", " ")
 
-        logging.debug("Looking up metadata for TEI file '%s' → ID '%s'",
-                      tei_file, base_id)
-
         cursor.execute(
             """
             SELECT title, author, year, permalink
