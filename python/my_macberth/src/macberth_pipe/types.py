@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from typing import List
 import numpy as np
 
-from macberth_pipe.types import QueryEmbeddings
-
 @dataclass
 class ChunkMeta:
     # TODO Finalise this list

@@ -17,7 +17,7 @@ from macberth_pipe.model_loader import get_local_macberth_path
 from macberth_pipe.macberth_model import MacBERThModel
 from macberth_pipe.semantic import SemanticIndex
 from macberth_pipe.embedding import embed_chunks_batched
-from macberth_pipe.types import Embeddings
+from macberth_pipe.types import Embeddings, QueryEmbeddings
 
 # Paths (adapt as needed)
 FAISS_STORE = Path("../../../faiss-cache/faiss-index")
