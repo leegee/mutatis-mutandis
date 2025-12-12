@@ -1,7 +1,7 @@
 import faiss
 import numpy as np
 from pathlib import Path
-import pickle
+
 
 class FaissIndex:
     def __init__(self, dim: int, path: Path):

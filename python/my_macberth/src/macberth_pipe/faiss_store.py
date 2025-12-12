@@ -6,7 +6,7 @@ from typing import Optional, List, Tuple
 import faiss
 import logging
 
-from .types import Embeddings, ChunkMeta
+from .types import Embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -114,36 +114,29 @@ class FaissStore:
         faiss.write_index(self.index, str(self.index_file))
         logger.debug("Saved FAISS index to %s", self.index_file)
 
-    # ---------- Build / Append (accept Embeddings) ----------
     def build(self, emb: Embeddings):
-        """
-        Build a new FAISS index from Embeddings object and register mappings.
-        Overwrites any existing index in store_dir.
-        """
+        """Build FAISS index from Embeddings object"""
         if emb.vectors.size == 0:
-            logger.debug("No vectors to build from (empty Embeddings)")
+            self.index = None
+            self.dim = None
             return
-
-        self.dim = int(emb.vectors.shape[1])
-        # Create an IndexFlatL2 wrapped by IndexIDMap so we can use explicit IDs
-        base_index = faiss.IndexFlatL2(self.dim)
-        index = faiss.IndexIDMap(base_index)
-
-        n = emb.vectors.shape[0]
-        ids = np.arange(0, n, dtype="int64")  # start ids at 0 for a fresh build
-        vecs = emb.vectors.astype("float32")
-        index.add_with_ids(vecs, ids)
-        self.index = index
+        self.dim = emb.vectors.shape[1]
+        self.index = faiss.IndexFlatL2(self.dim)
+        self.index.add(emb.vectors.astype("float32"))
         self._save_index()
-
-        # register in sqlite: ids -> (doc_id, chunk_idx)
-        rows = []
-        for i, meta in enumerate(emb.metas):
-            rows.append((int(ids[i]), meta.doc_id, int(meta.chunk_idx)))
-        self._register_many(rows)
-        logger.info("Built FAISS index with %d vectors and registered %d metas", n, len(rows))
+        logger.debug(f"Built new FAISS index with {emb.vectors.shape[0]} vectors")
 
     def append(self, emb: Embeddings):
+        """Append embeddings to existing FAISS index"""
+        if emb.vectors.size == 0:
+            return
+        if self.index is None:
+            self.build(emb)
+        else:
+            self.index.add(emb.vectors.astype("float32"))
+            self._save_index()
+            logger.debug(f"Appended {emb.vectors.shape[0]} vectors to FAISS index")
+
         """
         Append new embeddings to an existing index. Skips metas already registered (doc_id,chunk_idx).
         If no index exists, behaves like build().

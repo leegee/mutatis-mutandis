@@ -3,7 +3,8 @@ from pathlib import Path
 import numpy as np
 import faiss
 from typing import Optional
-from macberth_pipe.types import Embeddings, ChunkMeta
+from macberth_pipe.types import Embeddings, ChunkMeta # noqa F401
+
 
 class FaissStore:
     def __init__(self, store_dir: Path, sqlite_db: Optional[Path] = None):
@@ -62,7 +63,9 @@ class FaissStore:
             return
         with sqlite3.connect(self.sqlite_db) as conn:
             c = conn.cursor()
-            rows = [(m.doc_id, m.chunk_idx, m.title, m.author, m.year, m.permalink)
+            rows = [(
+                m.doc_id, m.chunk_idx, m.title, m.author, m.year, m.permalink
+            )
                     for m in emb.metas]
             c.executemany("""
                 INSERT INTO embeddings
@@ -78,4 +81,8 @@ class FaissStore:
         if self.index is None:
             raise RuntimeError("FAISS index not initialized")
         scores, idxs = self.index.search(q, top_k)
-        return [{'rank': r, 'idx': int(id_), 'score': float(scores[0, r])} for r, id_ in enumerate(idxs[0])]
+        results = [
+            {'rank': r, 'idx': int(id_), 'score': float(scores[0, r])}
+            for r, id_ in enumerate(idxs[0])
+        ]
+        return results

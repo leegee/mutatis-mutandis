@@ -1,11 +1,10 @@
 import time
 from pathlib import Path
-from typing import Optional
 import logging
 
 from macberth_pipe.tei import load_tei
 from macberth_pipe.normalization import normalize
-from macberth_pipe.embedding import load_model, embed_documents, Embeddings
+from macberth_pipe.embedding import load_model, embed_documents
 from macberth_pipe.semantic import SemanticIndex
 from macberth_pipe.clustering import cluster_embeddings
 from macberth_pipe.metadata import load_doc_meta
@@ -16,8 +15,8 @@ DEFAULT_DEVICE = "cpu"
 DEFAULT_CHUNK_SIZE = 512
 DEFAULT_AVERAGE_CHUNKS = True
 DEFAULT_K_CLUSTERS = 5
+DEFAULT_FAISS_STORE = Path("../../../../faiss-cache/faiss-index").resolve()
 DEFAULT_SQLITE_DB = Path("../../../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
-DEFAULT_FAISS_STORE = Path("../../../../faiss-cache/faiss-index")
 
 
 def gather_files(path: Path):
@@ -45,7 +44,7 @@ def run_pipeline(
     docs = [load_tei(p) for p in files]
     texts = [normalize(d.text) for d in docs]
 
-    logger.debug(f"Loading metadata for %d files", len(files) )
+    logger.debug(f"Loading metadata for {len(files)} files")
     doc_meta = load_doc_meta(files, sqlite_db)
 
     logger.debug("Loading model")

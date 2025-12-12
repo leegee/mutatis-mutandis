@@ -3,11 +3,13 @@ from dataclasses import dataclass
 from typing import Dict
 import os
 
+
 @dataclass(frozen=True)
 class Doc:
     id: str
     text: str
     meta: Dict[str, str]
+
 
 def load_tei(path: str) -> Doc:
     tree = etree.parse(path)

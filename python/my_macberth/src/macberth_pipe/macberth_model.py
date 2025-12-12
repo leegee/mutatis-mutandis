@@ -7,6 +7,7 @@ import numpy as np
 from transformers import AutoModel, AutoTokenizer
 from .model_loader import get_local_macberth_path
 
+
 class MacBERThModel:
     def __init__(self, model_path=None, device="cpu"):
         self.device = device
@@ -31,25 +32,6 @@ class MacBERThModel:
     def split_into_chunks(self, text: str, chunk_size: int = 512) -> list[str]:
         """Split a text string into roughly equal chunks of given size."""
         return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-
-    def embed_text(self, texts: Union[str, List[str]]) -> List[np.ndarray]:
-        """
-        Embed a single string or a list of strings.
-        Returns a list of numpy arrays.
-        """
-        single_input = False
-        if isinstance(texts, str):
-            texts = [texts]
-            single_input = True
-
-        # Your actual embedding logic here
-        # Example: using model.encode() or whatever your embedding function is
-        vectors = []
-        for t in texts:
-            vec = self._encode_text(t)  # returns np.ndarray
-            vectors.append(vec)
-
-        return vectors if not single_input else vectors  # always list
 
     def _encode_text(self, text: str) -> np.ndarray:
         # Tokenize input

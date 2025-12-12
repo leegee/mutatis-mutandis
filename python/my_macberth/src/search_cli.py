@@ -13,11 +13,10 @@ from pathlib import Path
 
 import numpy as np
 
-from macberth_pipe.model_loader import get_local_macberth_path
 from macberth_pipe.macberth_model import MacBERThModel
 from macberth_pipe.semantic import SemanticIndex
 from macberth_pipe.embedding import embed_chunks_batched
-from macberth_pipe.types import Embeddings, QueryEmbeddings
+from macberth_pipe.types import Embeddings
 
 # Paths (adapt as needed)
 FAISS_STORE = Path("../../../faiss-cache/faiss-index")
@@ -75,11 +74,10 @@ def run_query(query: str):
     qvec = embed_query(model, query)
 
     logger.info("Loading FAISS index…")
-    # Load SemanticIndex with existing FAISS + SQLite store
     idx = SemanticIndex(
         emb=Embeddings(ids=[], vectors=np.empty((0, 0)), metas=[]),
         store_dir=FAISS_STORE,
-        sqlite_db=SQLITE_DB,
+        sqlite_db=SQLITE_DB
     )
 
     logger.info("Searching…")

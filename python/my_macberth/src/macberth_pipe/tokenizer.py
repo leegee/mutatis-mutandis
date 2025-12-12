@@ -5,6 +5,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_MODEL_DIR = (BASE_DIR / "../../../lib/macberth-huggingface").resolve()
 
+
 class MacBERThTokenizer:
     """Wrapper for MacBERTh tokenizer using local model files."""
 

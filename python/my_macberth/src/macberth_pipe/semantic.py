@@ -1,15 +1,13 @@
 # semantic.py
 
-from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
 import sqlite3
-from typing import Optional
 
 from .faiss_store import FaissStore
-from .types import Embeddings, ChunkMeta
+from .types import Embeddings
 
-FAISS_FILE_PATH = Path("../../../faiss-cache/faiss-index")
+FAISS_FILE_PATH = Path("../../../faiss-cache/faiss-index").resolve()
 SQLITE_DB_PATH = Path("../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
 
 
@@ -36,18 +34,12 @@ class SemanticIndex:
         # Initialize FAISS
         if store_dir:
             self.faiss_store = FaissStore(store_dir, sqlite_db=sqlite_db)
-            if self.faiss_store.index is None:
-                self.faiss_store.build(emb.vectors)
-            else:
-                self.faiss_store.append(emb.vectors)
-            self.faiss_store.register_embeddings(emb.metas)
-        else:
-            # In-memory FAISS index
-            import faiss
-            dim = emb.vectors.shape[1]
-            self.faiss_store = None
-            self.index = faiss.IndexFlatL2(dim)
-            self.index.add(emb.vectors.astype("float32"))
+            if emb is not None and isinstance(emb, Embeddings) and len(emb.ids) > 0:
+                if self.faiss_store.index is None:
+                    self.faiss_store.build(emb)
+                else:
+                    self.faiss_store.append(emb)
+                self.faiss_store.register_embeddings(emb.metas)
 
     def _ensure_sqlite_table(self):
         """Create table for FAISS ID mapping if it doesn't exist."""

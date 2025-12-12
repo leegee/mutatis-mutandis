@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict
 import numpy as np
 from pathlib import Path
 import hashlib
@@ -18,12 +17,17 @@ def stable_doc_id(text: str) -> str:
     h = hashlib.sha1(text.encode("utf-8")).hexdigest()
     return f"doc_{h[:10]}"
 
+
 def load_model(device: str = "cpu") -> MacBERThModel:
     model_path = get_local_macberth_path()
     return MacBERThModel(model_path=model_path, device=device)
 
 
-def embed_chunks_batched(model: MacBERThModel, chunks: List[str], batch_size: int) -> List[np.ndarray]:
+def embed_chunks_batched(
+    model: MacBERThModel,
+    chunks: List[str],
+    batch_size: int
+) -> List[np.ndarray]:
     """Embed a list of chunk strings using batched inference."""
     all_vecs = []
     for i in range(0, len(chunks), batch_size):
@@ -32,6 +36,7 @@ def embed_chunks_batched(model: MacBERThModel, chunks: List[str], batch_size: in
         batch_vecs = model.embed_text(batch)  # now supports list input
         all_vecs.extend(batch_vecs)
     return all_vecs
+
 
 def embed_documents(
     model: MacBERThModel,
@@ -94,7 +99,9 @@ def embed_documents(
             metas.append(chunk_metas[0])
         else:
             all_vecs.append(chunk_vecs)
-            all_ids.extend([f"{doc_id}_chunk{ci}" for ci in range(len(chunk_vecs))])
+            all_ids.extend([f"{doc_id}_chunk{ci}" for ci in range(
+                len(chunk_vecs)
+            )])
             metas.extend(chunk_metas)
 
     # Nothing to embed
@@ -104,19 +111,19 @@ def embed_documents(
     vectors = np.vstack(all_vecs)
     emb = Embeddings.from_chunks(all_ids, vectors, metas)
 
-    # persistence section 
+    # persistence section
     if store_dir:
         store_dir.mkdir(parents=True, exist_ok=True)
         faiss_store = FaissStore(store_dir, sqlite_db=sqlite_db)
 
         if append_to_store:
-            logger.debug(f"Appending {len(emb.ids)} embeddings to FAISS store at {store_dir}")
-            faiss_store.append(emb.vectors)        # <-- pass vectors, not Embeddings
-            faiss_store.register_embeddings(emb.metas)  # register metadata in SQLite
+            logger.debug(f"Appending {len(emb.ids)} embeddings to FAISS store at {store_dir}") # noqa F401
+            faiss_store.append(emb.vectors)
+            faiss_store.register_embeddings(emb.metas)
         else:
-            logger.debug(f"Building FAISS store with {len(emb.ids)} embeddings at {store_dir}")
-            faiss_store.build(emb.vectors)         # <-- pass vectors
-            faiss_store.register_embeddings(emb.metas)  # register metadata in SQLite
+            logger.debug(f"Building FAISS store with {len(emb.ids)} embeddings at {store_dir}") # noqa F401
+            faiss_store.build(emb.vectors)
+            faiss_store.register_embeddings(emb.metas)
 
     logger.debug(f"Embedded {len(all_ids)} chunks total")
     return emb

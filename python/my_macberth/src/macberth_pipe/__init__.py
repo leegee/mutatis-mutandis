@@ -6,3 +6,6 @@
 from .macberth_model import MacBERThModel
 from .embedding import load_model
 from .tokenizer import MacBERThTokenizer
+
+
+__all__ = ["MacBERThModel", "load_model", "MacBERThTokenizer"]

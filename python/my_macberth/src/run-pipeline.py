@@ -1,11 +1,11 @@
-# run.py
+#!/usr/bin/env python3
 
 import logging
 import logging.config
 from pathlib import Path
 from macberth_pipe.pipeline import run_pipeline
 
-TEI_PATH = Path("../../eebo-tei")  
+TEI_PATH = Path("../../eebo-tei")
 FAISS_STORE_DIR = Path("../../../faiss-cache/faiss-index")
 DEVICE = "cpu"
 CHUNK_SIZE = 512
@@ -56,6 +56,8 @@ results = run_pipeline(
 )
 
 logging.info(f"Pipeline completed in {results['time']:.2f} seconds")
-logging.info(f"Top 5 search results:")
+logging.info("Top 5 search results:")
 for r in results['results']:
-    logging.info(f"[{r['doc_id']} chunk {r['chunk_idx']}] {r['text'][:120]}...")
+    logging.info(
+        f"[{r['doc_id']} chunk {r['chunk_idx']}] {r['text'][:120]}..."
+    )

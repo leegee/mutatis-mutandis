@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
 );
 """
 
+
 class EmbeddingStore:
     def __init__(self, db_path: Path):
         self.db_path = db_path
@@ -29,7 +30,7 @@ class EmbeddingStore:
         )
         return cur.fetchone() is not None
 
-    def get_by_faiss_id(self, fid: int) -> Optional[Tuple[int,int,int,str]]:
+    def get_by_faiss_id(self, fid: int) -> Optional[Tuple[int, int, int, str]]:
         """
         Returns (id, eebo_id, chunk_index, text)
         """
@@ -66,7 +67,7 @@ class EmbeddingStore:
         self.conn.commit()
 
     # --- bulk insert (faster with batching) ---
-    def add_many(self, rows: Iterable[Tuple[int,int,int,str,str]]):
+    def add_many(self, rows: Iterable[Tuple[int, int, int, str, str]]):
         """
         rows = [(faiss_id, eebo_id, chunk_index, hash, text), ...]
         """

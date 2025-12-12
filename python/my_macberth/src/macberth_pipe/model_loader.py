@@ -5,6 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def get_local_macberth_path() -> Path:
     """
     Resolve and validate the local MacBERTh model directory.

@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 120
+extend-ignore = F401  # ignore "imported but unused" (optional, e.g., for __init__.py re-exports)
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist
