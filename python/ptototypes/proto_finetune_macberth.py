@@ -1,7 +1,6 @@
 import subprocess
 from pathlib import Path
 from pprint import pprint
-import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForTokenClassification,
@@ -14,7 +13,7 @@ from datasets import Dataset, concatenate_datasets
 import pickle
 
 # --- Paths & model ---
-VARD_DIR = "../my_macberth/lib/VARD2.5.4"
+VARD_DIR = "../lib/VARD2.5.4"
 JARS = [
     f"{VARD_DIR}/vardstdin.jar",
     f"{VARD_DIR}/model.jar",
@@ -41,12 +40,13 @@ else:
 
 nlp = pipeline("token-classification", model=model, tokenizer=tokenizer, device=-1)
 
-# --- Function to normalize text using VARD2 via STDIN/STDOUT ---
+
+# normalize text using VARD2 via STDIN/STDOUT ---
 def normalize_with_vard(text: str, cache_file: Path) -> str:
     """Normalize text using VARD2, with caching."""
     if cache_file.exists():
         return cache_file.read_text()
-    
+   
     try:
         proc = subprocess.Popen(
             ["java", "-cp", CLASSPATH, VARD_MAIN_CLASS],
@@ -67,7 +67,7 @@ def normalize_with_vard(text: str, cache_file: Path) -> str:
         print("Exception while running VARD2:", e)
         return text  # fallback
 
-# --- Incremental fine-tuning ---
+
 def incremental_fine_tune(new_texts, new_labels):
     """Fine-tune MacBERTh incrementally with new texts and labels."""
     # Load previous dataset if exists

@@ -36,8 +36,8 @@ docs/**/*.svg
 docs/output/*
 docs/uml/lib/plantuml*.jar
 
+__pycache__
 python/macberth_env/
 python/test_output/
-python/my_macberth/src/macberth_pipe/__pycache__/
-python/my_macberth/src/macberth_pipe.egg-info/
-python/my_macberth/lib/
+python/src/macberth_pipe.egg-info/
+python/lib/

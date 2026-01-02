@@ -1,16 +1,16 @@
 import subprocess
 from pprint import pprint
 import os
-import sys
+import torch
 
-# --- LOCAL MacBERTh tagger ---
+# Local MacBERTh
 # Replace this with your actual tagging head when available.
 from macberth_pipe.tokenizer import MacBERThTokenizer
 from macberth_pipe.network import MacBERThModel
 
 
 # VARD2 CONFIG
-VARD_DIR = "../my_macberth/lib/VARD2.5.4"
+VARD_DIR = "../lib/VARD2.5.4"
 JARS = [
     f"{VARD_DIR}/vardstdin.jar",
     f"{VARD_DIR}/model.jar",
@@ -112,7 +112,7 @@ def normalize_with_vard(text: str) -> str:
         return text
 
 
-#PIPELINE
+# PIPELINE
 
 def normalize_and_classify(text: str):
     normalized_text = normalize_with_vard(text)

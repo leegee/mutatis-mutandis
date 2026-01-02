@@ -1,4 +1,4 @@
-# python/my_macberth/src/macberth_pipe/macberth_model.py
+# python/src/macberth_pipe/macberth_model.py
 
 from pathlib import Path
 from typing import List, Union

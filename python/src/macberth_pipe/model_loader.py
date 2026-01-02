@@ -1,4 +1,4 @@
-# python/my_macberth/src/macberth_pipe/model_loader.py
+# python/src/macberth_pipe/model_loader.py
 
 from pathlib import Path
 import logging

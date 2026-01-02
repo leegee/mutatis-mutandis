@@ -1,4 +1,4 @@
-# python/my_macberth/src/macberth_pipe/tokenizer.py
+# python/src/macberth_pipe/tokenizer.py
 from transformers import AutoTokenizer
 from pathlib import Path
 
