@@ -1,7 +1,6 @@
 import fs from "fs";
 import { Database } from "bun:sqlite";
-import { fetchJSON, htmlDir, htmlFile, jsonFile } from "./lib";
-const dbFile = "./eebo-data/eebo-tcp_metadata.sqlite";
+import { dbFile, fetchJSON, htmlDir, htmlFile, jsonFile } from "./lib";
 
 if (!fs.existsSync(htmlDir)) fs.mkdirSync(htmlDir, { recursive: true });
 
@@ -14,7 +13,7 @@ async function getNumericId(permalink: string) {
         const finalUrl = res.url;
         const match = finalUrl.match(/\/navigate\/(\d+)\/table-of-contents/);
         if (!match) return null;
-        return match[1]; // e.g., "17338"
+        return match[1]; // eg "17338"
     } catch (err) {
         console.error("Error following permalink:", permalink, err);
         return null;
@@ -54,7 +53,7 @@ async function downloadEEBO(philoDiv1Id: string): Promise<void> {
 
     console.log(`Saved ${htmlFile(philoDiv1Id)}`);
     console.log(`Saved ${jsonFile(philoDiv1Id)}`);
-    console.log(`Saved "${metadata.title ? metadata.title.substring(0, 15) + '...' : philoDiv1Id}" → HTML + JSON`);
+    console.log(`Saved "${metadata.title ? metadata.title.substring(0, 15) + '...' : philoDiv1Id}" to HTML + JSON`);
     console.log("\n");
 }
 
@@ -81,7 +80,7 @@ async function main() {
             }
 
             db.run("UPDATE eebo SET philo_div1_id = ? WHERE id = ?", philoDiv1Id, id);
-            console.log(`Resolved row ${id} → philo_div1_id = ${philoDiv1Id}`);
+            console.log(`Resolved row ${id} to philo_div1_id = ${philoDiv1Id}`);
         }
 
         if (fs.existsSync(htmlFile(philoDiv1Id)) && fs.existsSync(jsonFile(philoDiv1Id))) {
