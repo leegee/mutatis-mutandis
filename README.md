@@ -17,9 +17,17 @@ This project was created using `bun init` in bun v1.2.22. [Bun](https://bun.com)
 ## Questions The System Might Help Answer
 
 * Did The Ranters exist?
-* Semantic drift in KEYWORDS
 * Natural clusters
+* Semantic drift in keywords
 * Semantic drift/evolution of least frequent terms whose use grows over the period
+
+### Semantic drift in keywords
+
+Semantic drift analysis using temporally-aligned dynamic embeddings and cosine-distance trajectories to quantify shifts in lexical semantics across seventeenth-century pamphlet discourse.
+
+Dynamic embeddings are required because static models conflate historically distinct usages into a single semantic representation, whereas this aspect of the project aims to trace how religious/political concepts are reconfigured through time within pamphlet discourse.
+
+To compare embeddings across temporal slices, each earlier slice is aligned to the subsequent slice using Orthogonal Procrustes, which rotates the vector space to minimise orientation differences while preserving relative distances, ensuring that measured cosine-distance trajectories reflect genuine semantic drift rather than random variation.
 
 ## Bibliography
 
