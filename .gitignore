@@ -41,3 +41,5 @@ python/macberth_env/
 python/test_output/
 python/src/macberth_pipe.egg-info/
 python/lib/
+out/
+eebo_all/
