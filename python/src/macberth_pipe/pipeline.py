@@ -1,144 +1,98 @@
+import time
 from pathlib import Path
-from lxml import etree
-import sqlite3
-import re
+import logging
+
+from macberth_pipe.tei import load_tei
+from macberth_pipe.normalization import normalize
+from macberth_pipe.embedding import load_model, embed_documents
+from macberth_pipe.semantic import SemanticIndex
+from macberth_pipe.clustering import cluster_embeddings
+from macberth_pipe.metadata import load_doc_meta
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_DEVICE = "cpu"
+DEFAULT_CHUNK_SIZE = 512
+DEFAULT_AVERAGE_CHUNKS = True
+DEFAULT_K_CLUSTERS = 5
+DEFAULT_FAISS_STORE = Path("../../../../faiss-cache/faiss-index").resolve()
+DEFAULT_SQLITE_DB = Path("../../../../eebo-data/eebo-tcp_metadata.sqlite").resolve()
 
 
-# Paths
+def gather_files(path: Path):
+    if not path.exists():
+        raise FileNotFoundError(f"Path not found: {path}")
+    if path.is_dir():
+        return sorted([p for p in path.iterdir() if p.suffix.lower() == ".xml"])
+    else:
+        return [path]
 
 
-INPUT_DIR = Path(r"S:\src\pamphlets\eebo_all\eebo_phase1\P4_XML_TCP")
-OUT_DIR = Path(r"S:\src\pamphlets\out")
-PLAIN_DIR = OUT_DIR / "plain"
-DB_PATH = OUT_DIR / "metadata.sqlite"
+def run_pipeline(
+    tei_path: Path,
+    device: str = DEFAULT_DEVICE,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    average_chunks: bool = DEFAULT_AVERAGE_CHUNKS,
+    k_clusters: int = DEFAULT_K_CLUSTERS,
+    sqlite_db: Path = DEFAULT_SQLITE_DB,
+    faiss_store_dir: Path = DEFAULT_FAISS_STORE,
+    batch_size: int = 8,
+):
+    start_time = time.perf_counter()
 
-PLAIN_DIR.mkdir(parents=True, exist_ok=True)
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+    files = gather_files(tei_path)
+    docs = [load_tei(p) for p in files]
+    texts = [normalize(d.text) for d in docs]
 
+    logger.debug(f"Loading metadata for {len(files)} files")
+    doc_meta = load_doc_meta(files, sqlite_db)
 
-def normalize_early_modern(text: str) -> str:
-    text = text.lower()
+    logger.debug("Loading model")
+    model = load_model(device=device)
 
-    text = text.replace("ſ", "s")
-    text = re.sub(r'-\s+', '', text)
-    text = re.sub(r'\bv(?=[aeiou])', 'u', text)
-    text = re.sub(r'\bj(?=[aeiou])', 'i', text)
-    text = re.sub(r'\s+', ' ', text)
+    logger.debug("Getting embeddings")
+    emb = embed_documents(
+        model,
+        texts,
+        device=device,
+        chunk_size=chunk_size,
+        average_chunks=average_chunks,
+        doc_meta=doc_meta,
+        store_dir=faiss_store_dir,
+        sqlite_db=sqlite_db,
+        append_to_store=True,
+        batch_size=batch_size
+    )
 
-    return text.strip()
+    logger.debug("Getting semantic index")
+    index = SemanticIndex(emb, store_dir=faiss_store_dir)
 
+    logger.debug("Running semantic search test")
+    query = ["divine right of kings"]
+    query_emb = embed_documents(
+        model,
+        query,
+        device=device,
+        average_chunks=True,
+        batch_size=batch_size
+    ).vectors
+    results = index.search(query_emb, top_k=5)
 
-def extract_first(tree, xpath):
-    result = tree.xpath(xpath)
-    if result:
-        return result[0].strip()
-    return None
+    logger.debug("Running clustering")
+    if emb.vectors.shape[0] >= 2:
+        safe_k = min(k_clusters, len(emb.ids))
+        labels = cluster_embeddings(emb, k=safe_k)
+    else:
+        labels = []
 
+    end_time = time.perf_counter()
+    rv = {
+        'emb': emb,
+        'index': index,
+        'results': results,
+        'labels': labels,
+        'time': end_time - start_time
+    }
 
-def extract_pub_year(date_str):
-    if not date_str:
-        return None
-    match = re.search(r'\b(1[5-7][0-9]{2})\b', date_str)
-    return int(match.group(1)) if match else None
-
-
-def init_db(conn):
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS documents (
-            doc_id TEXT PRIMARY KEY,
-            title TEXT,
-            author TEXT,
-            pub_year INTEGER,
-            publisher TEXT,
-            pub_place TEXT,
-            source_date_raw TEXT
-        )
-    """)
-    conn.commit()
-
-
-# Main processing
-
-
-def process_file(xml_path, conn):
-    try:
-        tree = etree.parse(str(xml_path))
-    except Exception as e:
-        print(f"[ERROR] XML parse failed: {xml_path.name}: {e}")
-        return False
-
-    # ---------- Metadata ----------
-    doc_id = extract_first(tree, "//HEADER//IDNO[@TYPE='DLPS']/text()")
-    if not doc_id:
-        return False
-
-    title = extract_first(tree, "//HEADER//TITLESTMT/TITLE/text()")
-    author = extract_first(tree, "//HEADER//TITLESTMT/AUTHOR/text()")
-
-    date_raw = extract_first(tree, "//HEADER//SOURCEDESC//DATE/text()")
-    pub_year = extract_pub_year(date_raw)
-
-    publisher = extract_first(tree, "//HEADER//SOURCEDESC//PUBLISHER/text()")
-    pub_place = extract_first(tree, "//HEADER//SOURCEDESC//PUBPLACE/text()")
-
-    conn.execute("""
-        INSERT OR REPLACE INTO documents (
-        doc_id, title, author, pub_year, publisher,
-        pub_place, source_date_raw
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        doc_id,
-        title,
-        author,
-        pub_year,
-        publisher,
-        pub_place,
-        date_raw
-    ))
-
-    # ---------- Body text ----------
-    body_text_nodes = tree.xpath("//EEBO/BODY//text()")
-    if not body_text_nodes:
-        return False
-
-    raw_text = " ".join(t.strip() for t in body_text_nodes if t.strip())
-    normalized = normalize_early_modern(raw_text)
-
-    if len(normalized) < 100:
-        return False
-
-    out_path = PLAIN_DIR / f"{doc_id}.txt"
-    out_path.write_text(normalized, encoding="utf-8")
-
-    return True
-
-
-# Entry point
-
-
-def main():
-    conn = sqlite3.connect(DB_PATH)
-    init_db(conn)
-
-    xml_files = list(INPUT_DIR.glob("*.xml"))
-    print(f"Found {len(xml_files)} XML files")
-
-    processed = 0
-
-    for i, xml_file in enumerate(xml_files, 1):
-        if process_file(xml_file, conn):
-            processed += 1
-
-        if i % 500 == 0:
-            conn.commit()
-            print(f"Processed {i} files ({processed} usable texts)")
-
-    conn.commit()
-    conn.close()
-
-    print(f"Done. {processed} texts written to {PLAIN_DIR}")
-    print(f"Metadata database: {DB_PATH}")
-
-
-if __name__ == "__main__":
-    main()
+    logger.debug(f"Pipeline finished. Time elapsed: {rv['time']:.2f} seconds")
+    return rv
