@@ -4,12 +4,12 @@ import sqlite3
 import re
 import sys
 
-import eebo_config
+import eebo_config as config
 
 # Ensure output directories exist
 try:
-    eebo_config.OUT_DIR.mkdir(parents=True, exist_ok=True)
-    eebo_config.PLAIN_DIR.mkdir(parents=True, exist_ok=True)
+    config.OUT_DIR.mkdir(parents=True, exist_ok=True)
+    config.PLAIN_DIR.mkdir(parents=True, exist_ok=True)
 except Exception as e:
     print(f"[ERROR] Cannot create output directories: {e}")
     sys.exit(1)
@@ -17,26 +17,28 @@ except Exception as e:
 
 # Check SQLite3 can create DB
 try:
-    conn_test = sqlite3.connect(eebo_config.DB_PATH)
+    conn_test = sqlite3.connect(config.DB_PATH)
     conn_test.execute("CREATE TABLE IF NOT EXISTS _test (id INTEGER);")
     conn_test.execute("DROP TABLE _test;")
     conn_test.commit()
     conn_test.close()
 except Exception as e:
     print(
-        f"[ERROR] Cannot create or write to SQLite DB at {eebo_config.DB_PATH}: {e}"
+        f"[ERROR] Cannot create or write to SQLite DB at {config.DB_PATH}: {e}"
     )
     sys.exit(1)
 
-print(f"[INFO] SQLite DB will be created at: {eebo_config.DB_PATH}")
+print(f"[INFO] SQLite DB will be created at: {config.DB_PATH}")
 
 
 def normalize_early_modern(text: str) -> str:
     text = text.lower()
-    text = text.replace("ſ", "s")           # long s
-    text = re.sub(r'-\s+', '', text)        # join hyphenated line breaks
-    text = re.sub(r'\bv(?=[aeiou])', 'u', text)
-    text = re.sub(r'\bj(?=[aeiou])', 'i', text)
+    text = text.replace("ſ", "s")                  # long s
+    text = re.sub(r'-\s+', '', text)               # join hyphenated lines
+    text = re.sub(r'\bv(?=[aeiou])', 'u', text)    # initial u
+    text = re.sub(r'\bj(?=[aeiou])', 'i', text)    # initial v
+    text = re.sub(r"[.,;:!?()\[\]{}]", " ", text)  # sentance punctuation
+    text = re.sub(r"[│¦]", "", text)               # EEBO OCR artifacts
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
@@ -127,7 +129,7 @@ def process_file(xml_path, conn):
         print(f"[WARN] Skipping very short text for {doc_id}")
         return False
 
-    out_path = eebo_config.PLAIN_DIR / f"{doc_id}.txt"
+    out_path = config.PLAIN_DIR / f"{doc_id}.txt"
     try:
         out_path.write_text(normalized, encoding="utf-8")
     except Exception as e:
@@ -139,14 +141,14 @@ def process_file(xml_path, conn):
 
 def main():
     try:
-        conn = sqlite3.connect(eebo_config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
     except Exception as e:
-        print(f"[ERROR] Cannot open SQLite DB at {eebo_config.DB_PATH}: {e}")
+        print(f"[ERROR] Cannot open SQLite DB at {config.DB_PATH}: {e}")
         sys.exit(1)
 
     init_db(conn)
 
-    xml_files = list(eebo_config.INPUT_DIR.glob("*.xml"))
+    xml_files = list(config.INPUT_DIR.glob("*.xml"))
     print(f"[INFO] Found {len(xml_files)} XML files")
 
     processed = 0
@@ -158,14 +160,12 @@ def main():
         if i % 500 == 0:
             conn.commit()
             print(f"[INFO] Processed {i} files ({processed} usable texts)")
-        else:
-            print(f"[DEBUG] Skipped file: {xml_file.name}")
 
     conn.commit()
     conn.close()
 
-    print(f"[DONE] {processed} texts written to {eebo_config.PLAIN_DIR}")
-    print(f"[DONE] Metadata database: {eebo_config.DB_PATH}")
+    print(f"[DONE] {processed} texts written to {config.PLAIN_DIR}")
+    print(f"[DONE] Metadata database: {config.DB_PATH}")
 
 
 if __name__ == "__main__":

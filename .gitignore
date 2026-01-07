@@ -43,3 +43,7 @@ python/src/macberth_pipe.egg-info/
 python/lib/
 out/
 eebo_all/
+python/out_old/
+python/vard_outupt/
+python/faiss_cache/
+cache/

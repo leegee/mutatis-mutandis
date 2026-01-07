@@ -69,7 +69,7 @@ for start_year, end_year in slices:
         )
 
         model.save_model(str(model_file))
-        print(f"[DONE] Saved model for slice {slice_name} → {model_file}")
+        print(f"[DONE] Saved model for slice {slice_name} to {model_file}")
 
     except Exception as e:
         print(f"[ERROR] Training failed for slice {slice_name}: {e}")
