@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import fasttext
 import pandas as pd
 from scipy.spatial.distance import cosine

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 Command-line semantic search for the MacBERTh FAISS + SQLite index.
 

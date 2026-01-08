@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import sqlite3
 import sys
 
@@ -22,7 +22,7 @@ cursor = conn.cursor()
 
 
 # Process each slice
-for start_year, end_year in config.slices:
+for start_year, end_year in config.SLICES:
     slice_name = f"{start_year}-{end_year}"
     out_path = config.SLICES_DIR / f"{slice_name}.txt"
     print(f"[INFO] Processing slice {slice_name}")
