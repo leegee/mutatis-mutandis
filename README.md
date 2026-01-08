@@ -47,17 +47,31 @@ Polemical clustering by concept usage an rhetorical posture (genre) to show who 
 
 Where drift is seen to accelerate, apply a Skinnerian close reading to identify illocutionary force.
 
+## Visualisation
+
+2D graph where x = time slicse, y = semantic proximity to target word, cells = words.
+
 ## Bibliography
 
 * Austin, JL: "How To Do Things With Words"
+
+* Harris, Zellig: [Methods in Structural Linguistics] (1951) (meaning inferred from distribution)
+
+* Firth, John R: [Synopsis of Linguistic Theory 1930–55. In: F. R. Palmer (ed.) Studies in Linguistic Analysis. Oxford: Blackwell, pp 1–32]() ("You shall know a word by the company it keeps.", 1957)
 
 * Raymond, Joab:
 
 * Skinner, Quentin:
 
-* Williams, Raymond: [Keywords: A Volcabulary of Culture And Society (1976)]()
+* Williams, Raymond: [Keywords: A Volcabulary of Culture And Society]() (1976)
 
-* Koselleck, Reinhart: [Futures Past; Social History and Conceptual History; Geschichtliche Grundbegriffe]()
+* Williams, Raymond: [Culture And Society 1780-1950]() (1958)
+
+* Koselleck, Reinhart: [Futures Past]()
+
+* Koselleck, Reinhart: [Geschichtliche Grundbegriffe]() (1972, 1997)
+
+* Koselleck, Reinhart: [Social History and Conceptual History]()
 
 * [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
 
@@ -68,3 +82,7 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 * [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
 
 * ? Heusser, Ryan: [Computing Kosselleck: Modelling Semantic Revolutions 1720-1960](https://www.youtube.com/watch?v=7L-PO-AqG60)
+
+* [Computing Koselleck](https://www.kcl.ac.uk/events/computing-koselleck-modelling-semantic-revolutions-17201960)
+
+* [Ryan Heuser](https://www.english.cam.ac.uk/people/Ryan.Heuser)
