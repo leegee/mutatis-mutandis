@@ -23,15 +23,41 @@ This project was created using `bun init` in bun v1.2.22. [Bun](https://bun.com)
 
 ### Semantic drift in keywords
 
-Semantic drift analysis using temporally-aligned dynamic embeddings and cosine-distance trajectories to quantify shifts in lexical semantics across seventeenth-century pamphlet discourse.
+Whilst Austin/Skinner allow an understanding of how the text functioned at its time of writing in its native environment, Koselleck helps to understand how the same concepts change their function over time, and over social and ideological conditions.
+
+* Diachronic tracking of concepts
+* Attention to semantic layering
+* Focus on conflict rather than consensus
+* Analysis of conceptual pairs/poles and asymmetries
+
+Initial corpus: TEI-encoded EEBO-TCP Phase I - including rich metadata
+
+* Date (can be mechanically extracted)
+* Genre (can be mechanically inferred)
+* Printer / place (possibly mechanically extracted)
+* Political alignment (where known/inferred)
+
+Semantic drift analysis using temporally-aligned dynamic embeddings of conceptual tokens (eg liberty) and cosine-distance trajectories to quantify shifts in lexical semantics across seventeenth-century pamphlet discourse.
 
 Dynamic embeddings are required because static models conflate historically distinct usages into a single semantic representation, whereas this aspect of the project aims to trace how religious/political concepts are reconfigured through time within pamphlet discourse.
 
-To compare embeddings across temporal slices, each earlier slice is aligned to the subsequent slice using Orthogonal Procrustes, which rotates the vector space to minimise orientation differences while preserving relative distances, ensuring that measured cosine-distance trajectories reflect genuine semantic drift rather than random variation.
+To compare embeddings across temporal slices, each earlier slice is aligned to the subsequent slice using Orthogonal Procrustes, ie rotating the vector space to minimise orientation differences whilst preserving relative distances, ensuring that measured cosine-distance trajectories reflect genuine semantic drift rather than random variation.
+
+Polemical clustering by concept usage an rhetorical posture (genre) to show who uses the same word (where) differently at the same time (and location) to capture asymmetrical counter-concepts and reveal conceptual struggle.
+
+Where drift is seen to accelerate, apply a Skinnerian close reading to identify illocutionary force.
 
 ## Bibliography
 
-* Raymond, Joab
+* Austin, JL: "How To Do Things With Words"
+
+* Raymond, Joab:
+
+* Skinner, Quentin:
+
+* Williams, Raymond: [Keywords: A Volcabulary of Culture And Society (1976)]()
+
+* Koselleck, Reinhart: [Futures Past; Social History and Conceptual History; Geschichtliche Grundbegriffe]()
 
 * [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
 
@@ -40,3 +66,5 @@ To compare embeddings across temporal slices, each earlier slice is aligned to t
 * [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
 
 * [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
+
+* ? Heusser, Ryan: [Computing Kosselleck: Modelling Semantic Revolutions 1720-1960](https://www.youtube.com/watch?v=7L-PO-AqG60)
