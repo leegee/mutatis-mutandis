@@ -1,7 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from lxml import etree
 import sqlite3
 import re
+import unicodedata
 import sys
 
 import eebo_config as config
@@ -32,14 +33,31 @@ print(f"[INFO] SQLite DB will be created at: {config.DB_PATH}")
 
 
 def normalize_early_modern(text: str) -> str:
+    # Lowercase
     text = text.lower()
-    text = text.replace("ſ", "s")                  # long s
-    text = re.sub(r'-\s+', '', text)               # join hyphenated lines
-    text = re.sub(r'\bv(?=[aeiou])', 'u', text)    # initial u
-    text = re.sub(r'\bj(?=[aeiou])', 'i', text)    # initial v
-    text = re.sub(r"[.,;:!?()\[\]{}]", " ", text)  # sentance punctuation
-    text = re.sub(r"[│¦]", "", text)               # EEBO OCR artifacts
+
+    # normalize all apostrophes to simple ASCII '
+    text = re.sub(r"(\w)[’‘ʼ′´](\w)", r"\1'\2", text)
+
+    # Long s
+    text = text.replace("ſ", "s")
+
+    # Unicode normalization to remove accents, etc
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+
+    # Join hyphenated line breaks
+    text = re.sub(r'-\s*', '', text)
+
+    # Initial u/v, j/i
+    text = re.sub(r'\bv(?=[aeiou])', 'u', text)
+    text = re.sub(r'\bj(?=[aeiou])', 'i', text)
+
+    text = re.sub(r"[^\w\s]", " ", text)
+
+    # Collapse whitespace
     text = re.sub(r'\s+', ' ', text)
+
     return text.strip()
 
 
@@ -117,10 +135,12 @@ def process_file(xml_path, conn):
         print(f"[WARN] No <EEBO> element for {doc_id}")
         return False
 
-    body_text_nodes = list(eebo_elem.itertext())
-    if not body_text_nodes:
-        print(f"[WARN] <EEBO> has no text for {doc_id}")
+    body = eebo_elem.find(".//TEXT/BODY")
+    if body is None:
+        print(f"[WARN] No <BODY> inside <EEBO> for {doc_id}")
         return False
+
+    body_text_nodes = list(body.itertext())
 
     raw_text = " ".join(t.strip() for t in body_text_nodes if t.strip())
     normalized = normalize_early_modern(raw_text)
