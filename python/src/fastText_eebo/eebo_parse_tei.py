@@ -6,6 +6,7 @@ import unicodedata
 import sys
 
 import eebo_config as config
+from eebo_parse_dates import update_document_dates
 
 # Ensure output directories exist
 try:
@@ -47,13 +48,13 @@ def normalize_early_modern(text: str) -> str:
     text = text.encode("ascii", "ignore").decode("ascii")
 
     # Join hyphenated line breaks
-    text = re.sub(r'-\s*', '', text)
+    text = re.sub(r'-\s*', ' ', text)
 
     # Initial u/v, j/i
     text = re.sub(r'\bv(?=[aeiou])', 'u', text)
     text = re.sub(r'\bj(?=[aeiou])', 'i', text)
 
-    text = re.sub(r"[^\w\s]", " ", text)
+    text = re.sub(r'[^\w\s]', ' ', text)
 
     # Collapse whitespace
     text = re.sub(r'\s+', ' ', text)
@@ -186,6 +187,8 @@ def main():
 
     print(f"[DONE] {processed} texts written to {config.PLAIN_DIR}")
     print(f"[DONE] Metadata database: {config.DB_PATH}")
+
+    update_document_dates()
 
 
 if __name__ == "__main__":
