@@ -6,6 +6,8 @@ import unicodedata
 import sys
 
 import eebo_config as config
+import eebo_db
+import eebo_ocr_fixes
 
 # Ensure output directories exist
 try:
@@ -18,6 +20,9 @@ except Exception as e:
 
 print(f"[INFO] SQLite DB will be created at: {config.DB_PATH}")
 
+
+import re
+import unicodedata
 
 def normalize_early_modern(text: str) -> str:
     # Lowercase
@@ -40,7 +45,11 @@ def normalize_early_modern(text: str) -> str:
     text = re.sub(r'\bv(?=[aeiou])', 'u', text)
     text = re.sub(r'\bj(?=[aeiou])', 'i', text)
 
-    text = re.sub(r'[^\w\s]', ' ', text)
+    # Remove OCR artefacts inside words
+    text = re.sub(r'(?<=\w)[^\w\s](?=\w)', '', text)
+
+    # Remove remaining non-letter characters but keep spaces
+    text = re.sub(r'[^a-z\s]', ' ', text)
 
     # Collapse whitespace
     text = re.sub(r'\s+', ' ', text)
@@ -130,7 +139,8 @@ def process_file(xml_path, conn):
     body_text_nodes = list(body.itertext())
 
     raw_text = " ".join(t.strip() for t in body_text_nodes if t.strip())
-    normalized = normalize_early_modern(raw_text)
+    fixed_text = eebo_ocr_fixes.apply_ocr_fixes(raw_text)
+    normalized = normalize_early_modern(fixed_text)
 
     if len(normalized) < 100:
         print(f"[WARN] Skipping very short text for {doc_id}")

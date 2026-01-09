@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
+
 """
 Collapse orthographic variants of neighbours at analysis time only.
 
@@ -20,12 +21,12 @@ import sqlite3
 import sys
 
 import eebo_config as config
-from eebo_db import dbh
+import eebo_db
 
 
 QUERY_WORD = "liberty"
-TOP_K_RAW = 50      # how deep to look before collapsing
-TOP_K_CONCEPTS = 10 # how many concepts to report per slice
+TOP_K_RAW = 75      # how deep to look before collapsing
+TOP_K_CONCEPTS = 20 # how many concepts to report per slice
 
 
 def ensure_spelling_map(conn):
@@ -71,8 +72,19 @@ def fetch_collapsed_neighbours(conn):
         SELECT
             n.slice_start,
             n.slice_end,
-            COALESCE(m.canonical, n.neighbour) AS concept,
-            AVG(n.similarity) AS mean_similarity,
+            
+            COALESCE(
+                m.canonical,
+                CASE
+                    WHEN
+                        LENGTH(n.neighbour) >= LENGTH(n.query)
+                        AND n.neighbour LIKE '%' || n.query || '%'
+                    THEN n.query
+                    ELSE n.neighbour
+                END
+            ) AS concept,
+
+            AVG(n.cosine) AS mean_similarity,
             COUNT(*) AS variant_count
         FROM neighbourhoods n
         LEFT JOIN spelling_map m
@@ -127,7 +139,7 @@ def print_report(rows):
 
 
 def main():
-    conn = get_dbh()
+    conn = eebo_db.dbh
 
     ensure_spelling_map(conn)
     populate_minimal_spelling_map(conn)
