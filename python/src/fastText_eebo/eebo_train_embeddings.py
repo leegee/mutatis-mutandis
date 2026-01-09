@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import fasttext
 import sys
-
 import eebo_config as config
 
 # Ensure models directory exists
@@ -10,7 +9,6 @@ try:
 except Exception as e:
     print(f"[ERROR] Cannot create models directory: {e}")
     sys.exit(1)
-
 
 for start_year, end_year in config.SLICES:
     slice_name = f"{start_year}-{end_year}"
@@ -21,7 +19,7 @@ for start_year, end_year in config.SLICES:
         print(f"[WARN] Slice file missing: {slice_file}")
         continue
 
-    print(f"[INFO] Training fastText for slice {slice_name} ({slice_file})")
+    print(f"[INFO] Training fastText for slice {slice_name} ({slice_file})...")
 
     try:
         model = fasttext.train_unsupervised(
