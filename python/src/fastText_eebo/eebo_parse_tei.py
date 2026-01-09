@@ -8,6 +8,7 @@ import sys
 import eebo_config as config
 import eebo_db
 import eebo_ocr_fixes
+import eebo_slice
 
 # Ensure output directories exist
 try:
@@ -178,6 +179,7 @@ def main():
     print(f"[DONE] {processed} texts written to {config.PLAIN_DIR}")
     print(f"[DONE] Metadata database: {config.DB_PATH}")
 
+    eebo_slice.make_slices()
 
 if __name__ == "__main__":
     main()
