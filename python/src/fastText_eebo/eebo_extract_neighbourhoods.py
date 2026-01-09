@@ -4,7 +4,7 @@ import sqlite3
 import fasttext
 
 import eebo_config as config
-
+import eebo_db
 
 def load_wordlist(path):
     if not path.exists():
@@ -23,13 +23,7 @@ stopwords = load_wordlist(config.STOPWORD_FILE)
 print(f"[INFO] Loaded {len(queries)} query terms")
 print(f"[INFO] Loaded {len(stopwords)} stopwords")
 
-try:
-    conn = sqlite3.connect(config.DB_PATH)
-except Exception as e:
-    print(f"[ERROR] Cannot open SQLite DB: {e}")
-    sys.exit(1)
-
-conn.execute("""
+eebo_db.dbh.execute("""
     CREATE TABLE IF NOT EXISTS neighbourhoods (
         slice_start INTEGER,
         slice_end INTEGER,
@@ -40,7 +34,7 @@ conn.execute("""
         PRIMARY KEY (slice_start, slice_end, query, rank)
     )
 """)
-conn.commit()
+eebo_db.dbh.commit()
 
 # Iterate over slice models
 model_files = sorted(config.MODELS_DIR.glob("*.bin"))
@@ -77,7 +71,7 @@ for model_path in model_files:
                 continue
 
             rank += 1
-            conn.execute("""
+            eebo_db.dbh.execute("""
                 INSERT OR REPLACE INTO neighbourhoods
                 (slice_start, slice_end, query, neighbour, rank, cosine)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -93,7 +87,7 @@ for model_path in model_files:
             if rank >= config.TOP_K:
                 break
 
-    conn.commit()
+    eebo_db.dbh.commit()
 
-conn.close()
+eebo_db.dbh.close()
 print("[DONE] Neighbourhood extraction complete.")

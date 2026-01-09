@@ -25,7 +25,7 @@ FASTTEXT_PARAMS = {
     "ws": 5,                  # Context window size
     "epoch": 10,              # Number of epochs
     "minCount": 1,            # Keep all words
-    "thread": 6,              # Adjust to for this CPU
+    "thread": 4,              # Adjust to for this CPU
     "minn": 3,                # Subword ngram min length
     "maxn": 6,                # Subword ngram max length
 }

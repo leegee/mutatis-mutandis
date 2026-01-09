@@ -6,7 +6,6 @@ import unicodedata
 import sys
 
 import eebo_config as config
-from eebo_parse_dates import update_document_dates
 
 # Ensure output directories exist
 try:
@@ -16,19 +15,6 @@ except Exception as e:
     print(f"[ERROR] Cannot create output directories: {e}")
     sys.exit(1)
 
-
-# Check SQLite3 can create DB
-try:
-    conn_test = sqlite3.connect(config.DB_PATH)
-    conn_test.execute("CREATE TABLE IF NOT EXISTS _test (id INTEGER);")
-    conn_test.execute("DROP TABLE _test;")
-    conn_test.commit()
-    conn_test.close()
-except Exception as e:
-    print(
-        f"[ERROR] Cannot create or write to SQLite DB at {config.DB_PATH}: {e}"
-    )
-    sys.exit(1)
 
 print(f"[INFO] SQLite DB will be created at: {config.DB_PATH}")
 
@@ -161,13 +147,7 @@ def process_file(xml_path, conn):
 
 
 def main():
-    try:
-        conn = sqlite3.connect(config.DB_PATH)
-    except Exception as e:
-        print(f"[ERROR] Cannot open SQLite DB at {config.DB_PATH}: {e}")
-        sys.exit(1)
-
-    init_db(conn)
+    init_db(eebo_db.dbh)
 
     xml_files = list(config.INPUT_DIR.glob("*.xml"))
     print(f"[INFO] Found {len(xml_files)} XML files")
@@ -175,20 +155,18 @@ def main():
     processed = 0
 
     for i, xml_file in enumerate(xml_files, 1):
-        if process_file(xml_file, conn):
+        if process_file(xml_file, eebo_db.dbh):
             processed += 1
 
         if i % 500 == 0:
-            conn.commit()
+            eebo_db.dbh.commit()
             print(f"[INFO] Processed {i} files ({processed} usable texts)")
 
-    conn.commit()
-    conn.close()
+    eebo_db.dbh.commit()
+    eebo_db.dbh.close()
 
     print(f"[DONE] {processed} texts written to {config.PLAIN_DIR}")
     print(f"[DONE] Metadata database: {config.DB_PATH}")
-
-    update_document_dates()
 
 
 if __name__ == "__main__":

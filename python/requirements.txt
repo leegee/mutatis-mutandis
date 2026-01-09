@@ -6,3 +6,5 @@ lxml
 beautifulsoup4
 xmltodict
 fasttext-wheel
+matplotlib
+seaborn

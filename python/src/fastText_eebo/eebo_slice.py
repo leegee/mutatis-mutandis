@@ -3,6 +3,7 @@ import sqlite3
 import sys
 
 import eebo_config as config
+import eebo_db
 
 # Ensure slices directory exists
 try:
@@ -12,13 +13,7 @@ except Exception as e:
     sys.exit(1)
 
 
-try:
-    conn = sqlite3.connect(config.DB_PATH)
-except Exception as e:
-    print(f"[ERROR] Cannot open SQLite DB at {config.DB_PATH}: {e}")
-    sys.exit(1)
-
-cursor = conn.cursor()
+cursor = eebo_db.dbh.cursor()
 
 
 # Process each slice
@@ -28,7 +23,7 @@ for start_year, end_year in config.SLICES:
     print(f"[INFO] Processing slice {slice_name}")
 
     cursor.execute(
-        "SELECT doc_id FROM documents WHERE date BETWEEN ? AND ?",
+        "SELECT doc_id FROM documents WHERE pub_year BETWEEN ? AND ?",
         (start_year, end_year)
     )
     doc_ids = [row[0] for row in cursor.fetchall()]
@@ -55,5 +50,5 @@ for start_year, end_year in config.SLICES:
     except Exception as e:
         print(f"[ERROR] Failed to write slice {slice_name}: {e}")
 
-conn.close()
+eebo_db.dbh.close()
 print("[INFO] All slices processed.")
