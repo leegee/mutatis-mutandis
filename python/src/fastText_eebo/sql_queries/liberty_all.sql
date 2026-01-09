@@ -1,6 +1,7 @@
 -- compare liberty across slices
-SELECT slice_start, neighbour, rank
+SELECT *
 FROM neighbourhoods
 WHERE query = 'liberty'
   AND rank <= 10
-ORDER BY slice_start, rank;
+-- ORDER BY slice_start, rank;
+ORDER BY rank, slice_start
