@@ -1,118 +1,198 @@
 #!/usr/bin/env python
-import sqlite3
+"""
+PDF visualisations for semantic neighbourhood analysis.
+
+Includes:
+- absorption strength distribution
+- semantic stability
+- liberty vs freedom
+- rank–cosine curves
+- Ryan-Heuser-style semantic drift plot
+
+All outputs are written to config.OUT_DIR
+"""
+
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-import networkx as nx
+from pathlib import Path
 
-import eebo_config as config
 import eebo_db
+import eebo_config as config
 
 QUERY = "liberty"
 
 
-df = pd.read_sql_query(f"""
-    SELECT slice_start, slice_end, neighbour, rank, cosine
-    FROM neighbourhoods
-    WHERE query = '{QUERY}'
-""", eebo_db.dbh)
+def load_data(query):
+    conn = eebo_db.dbh
 
-eebo_db.dbh.close()
+    df = pd.read_sql_query("""
+        SELECT
+            n.slice_start,
+            n.slice_end,
+            n.query,
+            n.neighbour,
+            n.rank,
+            n.cosine,
+            COALESCE(m.canonical, n.neighbour) AS concept,
+            COALESCE(m.concept_type, 'orthographic') AS concept_type
+        FROM neighbourhoods n
+        LEFT JOIN spelling_map m
+            ON n.neighbour = m.variant
+        WHERE n.query = ?
+          AND COALESCE(m.concept_type, 'orthographic') != 'exclude'
+    """, conn, params=(query,))
 
-df['slice_label'] = df['slice_start'].astype(str)
+    conn.close()
 
-
-# Heatmap of cosine similarity
-df_top = df[df['rank'] <= config.TOP_K]
-heatmap_data = df_top.pivot_table(
-    index='slice_label',
-    columns='neighbour',
-    values='cosine'
-).fillna(0)
-
-plt.figure(figsize=(14, 6))
-sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap="YlGnBu")
-plt.title(f"Cosine similarity of top '{QUERY}' neighbours over time")
-plt.xlabel("Neighbour")
-plt.ylabel("Slice / Year")
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+    df["slice"] = df["slice_start"].astype(str)
+    return df
 
 
-# Rank vs cosine scatter
-plt.figure(figsize=(10, 6))
-sns.scatterplot(
-    data=df_top,
-    x='rank',
-    y='cosine',
-    hue='slice_label',
-    palette='viridis',
-    s=100
-)
-plt.title(f"Rank vs Cosine similarity for '{QUERY}' neighbours")
-plt.xlabel("Rank")
-plt.ylabel("Cosine similarity")
-plt.legend(title="Slice / Year", bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.tight_layout()
-plt.show()
+def save(fig, name):
+    out = Path(config.OUT_DIR)
+    out.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out / f"{name}.pdf")
+    plt.close(fig)
 
 
-# Orthographic variant stacked bar
-# Assumes anything that differs only by last few letters is a variant
-# For simplicity, just show counts per neighbour per slice
-variant_counts = df_top.groupby([
-    'slice_label',
-    'neighbour']
-).size().unstack(fill_value=0)
+def plot_absorption_distribution(df):
+    concept_means = df.groupby("concept")["cosine"].mean()
 
-variant_counts.plot(
-    kind='bar',
-    stacked=True,
-    figsize=(14, 6),
-    colormap='tab20'
-)
-plt.title(f"Top '{QUERY}' orthographic variants over time")
-plt.xlabel("Slice / Year")
-plt.ylabel("Count")
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.hist(concept_means, bins=20)
+    ax.set_xlabel("Mean cosine similarity")
+    ax.set_ylabel("Number of concepts")
+    ax.set_title("Distribution of semantic similarity among collapsed concepts")
+
+    fig.tight_layout()
+    save(fig, "absorption_distribution")
 
 
-# Semantic network
-G = nx.Graph()
+def plot_liberty_stability(df):
+    liberty_df = df[df["concept"] == "liberty"]
+    stability = liberty_df.groupby("slice")["cosine"].mean()
 
-for _, row in df_top.iterrows():
-    G.add_node(row['neighbour'])
-    G.add_edge(QUERY, row['neighbour'], weight=row['cosine'])
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(stability.index, stability.values, marker="o")
+    ax.set_xlabel("Slice")
+    ax.set_ylabel("Mean cosine similarity")
+    ax.set_title("Semantic stability of 'liberty' over time")
+    ax.grid(True)
 
-plt.figure(figsize=(10, 10))
-pos = nx.spring_layout(G, k=0.5)
-edges = G.edges(data=True)
-nx.draw(
-    G,
-    pos,
-    with_labels=True,
-    node_size=1000,
-    node_color='skyblue',
-    font_size=10
-)
-nx.draw_networkx_edges(G, pos, width=[d['weight']*3 for (_, _, d) in edges])
-plt.title(f"Semantic network of '{QUERY}' neighbours")
-plt.show()
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    save(fig, "liberty_stability")
 
 
-# Semantic drift line chart
-# Uses mean cosine of top-K neighbours per slice as a proxy for stability
-drift = df_top.groupby('slice_label')['cosine'].mean()
-plt.figure(figsize=(12, 5))
-drift.plot(marker='o')
-plt.title(
-    f"Average cosine of top '{QUERY}' neighbours over time (semantic drift proxy)"
-)
-plt.xlabel("Slice / Year")
-plt.ylabel("Mean cosine similarity")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+def plot_liberty_vs_freedom(df):
+    compare = (
+        df[df["concept"].isin(["liberty", "freedom"])]
+        .groupby(["slice", "concept"])["cosine"]
+        .mean()
+        .unstack()
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(compare.index, compare["liberty"], marker="o", label="liberty")
+    ax.plot(compare.index, compare["freedom"], marker="o", label="freedom")
+
+    ax.set_xlabel("Slice")
+    ax.set_ylabel("Mean cosine similarity")
+    ax.set_title("Semantic proximity of 'liberty' vs 'freedom'")
+    ax.legend()
+    ax.grid(True)
+
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    save(fig, "liberty_vs_freedom")
+
+
+def plot_rank_cosine_curves(df):
+    slices = sorted(df["slice"].unique())
+
+    fig, axes = plt.subplots(
+        nrows=len(slices),
+        ncols=1,
+        figsize=(6, 2.2 * len(slices)),
+        sharex=True
+    )
+
+    if len(slices) == 1:
+        axes = [axes]
+
+    for ax, sl in zip(axes, slices):
+        subset = df[df["slice"] == sl].sort_values("rank")
+        ax.plot(subset["rank"], subset["cosine"], marker=".")
+        ax.set_ylabel("Cosine")
+        ax.set_title(f"Slice {sl}")
+
+    axes[-1].set_xlabel("Rank")
+
+    fig.tight_layout()
+    save(fig, "rank_cosine_curves")
+
+
+def plot_semantic_drift(df, top_n=10):
+    """
+    Shows how the neighbourhood of 'liberty' changes across slices.
+    Each line tracks a concept's cosine similarity over time.
+    """
+
+    top_concepts = (
+        df.groupby("concept")["cosine"]
+        .mean()
+        .sort_values(ascending=False)
+        .head(top_n)
+        .index
+    )
+
+    drift = (
+        df[df["concept"].isin(top_concepts)]
+        .groupby(["slice", "concept"])["cosine"]
+        .mean()
+        .unstack()
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    for concept in drift.columns:
+        ax.plot(
+            drift.index,
+            drift[concept],
+            marker="o",
+            linewidth=1,
+            alpha=0.8,
+            label=concept
+        )
+
+    ax.set_xlabel("Slice")
+    ax.set_ylabel("Mean cosine similarity")
+    ax.set_title("Semantic drift of concepts surrounding 'liberty'")
+    ax.legend(
+        bbox_to_anchor=(1.05, 1),
+        loc="upper left",
+        fontsize="small"
+    )
+    ax.grid(True)
+
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    save(fig, "semantic_drift_liberty")
+
+
+def main():
+    df = load_data(QUERY)
+
+    if df.empty:
+        print("[INFO] No data found.")
+        return
+
+    plot_absorption_distribution(df)
+    plot_liberty_stability(df)
+    plot_liberty_vs_freedom(df)
+    plot_rank_cosine_curves(df)
+    plot_semantic_drift(df)
+
+
+if __name__ == "__main__":
+    main()

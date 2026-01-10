@@ -10,7 +10,7 @@ INPUT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 OUT_DIR = BASE_DIR / "out"
 PLAIN_DIR = OUT_DIR / "plain"
 SLICES_DIR = OUT_DIR / "slices"
-DB_PATH = OUT_DIR / "metadata.sqlite"
+DB_PATH = OUT_DIR / "db/metadata.sqlite"
 
 SLICES_DIR = BASE_DIR / "out" / "slices"
 MODELS_DIR = BASE_DIR / "out" / "models"
@@ -51,3 +51,8 @@ SLICES = [
     (1658, 1660),
     (1661, 1665),
 ]
+
+# Absorption class thresholds
+STRONG_MEAN = 0.80
+MODERATE_MEAN = 0.65
+MIN_SLICES_STRONG = 3
