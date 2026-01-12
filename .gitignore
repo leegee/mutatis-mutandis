@@ -47,3 +47,4 @@ python/out_old/
 python/vard_outupt/
 python/faiss_cache/
 cache/
+*.zip

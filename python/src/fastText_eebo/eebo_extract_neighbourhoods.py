@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import sys
-import sqlite3
 import fasttext
 
 import eebo_config as config
@@ -22,19 +21,6 @@ stopwords = load_wordlist(config.STOPWORD_FILE)
 
 print(f"[INFO] Loaded {len(queries)} query terms")
 print(f"[INFO] Loaded {len(stopwords)} stopwords")
-
-eebo_db.dbh.execute("""
-    CREATE TABLE IF NOT EXISTS neighbourhoods (
-        slice_start INTEGER,
-        slice_end INTEGER,
-        query TEXT,
-        neighbour TEXT,
-        rank INTEGER,
-        cosine REAL,
-        PRIMARY KEY (slice_start, slice_end, query, rank)
-    )
-""")
-eebo_db.dbh.commit()
 
 # Iterate over slice models
 model_files = sorted(config.MODELS_DIR.glob("*.bin"))

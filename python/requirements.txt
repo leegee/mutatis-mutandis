@@ -2,9 +2,13 @@
 transformers
 datasets
 tqdm
-lxml
 beautifulsoup4
 xmltodict
 fasttext-wheel
 matplotlib
 seaborn
+psycopg
+pyright
+mypy
+ruff
+lxml

@@ -3,14 +3,14 @@
 """
 Collapse orthographic variants of neighbours at analysis time only.
 
-Assumes an existing SQLite table:
+Assumes an existing table:
 
 neighbourhoods(
     slice_start INTEGER,
     slice_end INTEGER,
     query TEXT,
     neighbour TEXT,
-    cosine REAL,
+    cosine DOUBLE PRECISION,
     rank INTEGER
 )
 
@@ -18,35 +18,27 @@ Uses a spelling_map table to collapse variants to canonical forms.
 """
 
 from collections import Counter
+from typing import Counter as CounterType
+
+import psycopg
+
 import eebo_db
 import eebo_config as config
+
 
 QUERY_WORD = "liberty"
 TOP_K_RAW = 75
 TOP_K_CONCEPTS = 20
 
 
-def ensure_spelling_map(conn):
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS spelling_map (
-            variant TEXT PRIMARY KEY,
-            canonical TEXT NOT NULL,
-            concept_type TEXT CHECK (
-                concept_type IN ('orthographic','derivational','exclude')
-            ) DEFAULT 'orthographic'
-        )
-    """)
-    conn.commit()
-
-
-def populate_minimal_spelling_map(conn):
+def populate_minimal_spelling_map(conn: psycopg.Connection) -> None:
     """
     Conservative, discipline-enforcing mappings.
     """
 
     mappings = [
 
-        # ---- liberty (orthographic only) ----
+        # liberty (orthographic only)
         ("liberty", "liberty", "orthographic"),
         ("libertie", "liberty", "orthographic"),
         ("libertye", "liberty", "orthographic"),
@@ -59,12 +51,11 @@ def populate_minimal_spelling_map(conn):
         ("leberty", "liberty", "orthographic"),
         ("libertty", "liberty", "orthographic"),
         ("liberry", "liberty", "orthographic"),
-        ("liberty", "liberty", "orthographic"),
         ("libertv", "liberty", "orthographic"),
         ("libertiu", "liberty", "orthographic"),
         ("libertly", "liberty", "orthographic"),
 
-        # ---- libertine family (derivational but internally collapsed) ----
+        # libertine family (derivational)
         ("libertine", "libertine", "derivational"),
         ("libertines", "libertine", "derivational"),
         ("libertin", "libertine", "derivational"),
@@ -74,7 +65,7 @@ def populate_minimal_spelling_map(conn):
         ("libertinous", "libertinous", "derivational"),
         ("libertinage", "libertinage", "derivational"),
 
-        # ---- freedom (orthographic only) ----
+        # freedom (orthographic only)
         ("freedom", "freedom", "orthographic"),
         ("freedome", "freedom", "orthographic"),
         ("freedoms", "freedom", "orthographic"),
@@ -84,7 +75,7 @@ def populate_minimal_spelling_map(conn):
         ("freede", "freedom", "orthographic"),
         ("freeedome", "freedom", "orthographic"),
 
-        # ---- explicit exclusions (proper names, noise) ----
+        # explicit exclusions
         ("philibert", "", "exclude"),
         ("sigibert", "", "exclude"),
         ("filibert", "", "exclude"),
@@ -92,15 +83,20 @@ def populate_minimal_spelling_map(conn):
         ("macberth", "", "exclude"),
     ]
 
-    conn.executemany("""
-        INSERT OR IGNORE INTO spelling_map
-            (variant, canonical, concept_type)
-        VALUES (?, ?, ?)
-    """, mappings)
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO spelling_map (variant, canonical, concept_type)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (variant) DO NOTHING
+            """,
+            mappings,
+        )
+
     conn.commit()
 
 
-def fetch_collapsed_neighbours(conn):
+def fetch_collapsed_neighbours(conn: psycopg.Connection):
     query = """
     WITH mapped AS (
         SELECT
@@ -114,8 +110,8 @@ def fetch_collapsed_neighbours(conn):
         FROM neighbourhoods n
         LEFT JOIN spelling_map m
             ON n.neighbour = m.variant
-        WHERE n.query = ?
-          AND n.rank <= ?
+        WHERE n.query = %s
+          AND n.rank <= %s
           AND COALESCE(m.concept_type, 'orthographic') != 'exclude'
     ),
     collapsed AS (
@@ -125,7 +121,7 @@ def fetch_collapsed_neighbours(conn):
             COALESCE(
                 canonical,
                 CASE
-                    WHEN neighbour LIKE query || '%'
+                    WHEN neighbour LIKE query || '%%'
                      AND LENGTH(neighbour)
                          BETWEEN LENGTH(query)
                              AND LENGTH(query) + 3
@@ -156,17 +152,19 @@ def fetch_collapsed_neighbours(conn):
         peak_similarity,
         variant_count
     FROM ranked
-    WHERE new_rank <= ?
+    WHERE new_rank <= %s
     ORDER BY slice_start, new_rank;
     """
 
-    return conn.execute(
-        query,
-        (QUERY_WORD, TOP_K_RAW, TOP_K_CONCEPTS)
-    ).fetchall()
+    with conn.cursor() as cur:
+        cur.execute(
+            query,
+            (QUERY_WORD, TOP_K_RAW, TOP_K_CONCEPTS),
+        )
+        return cur.fetchall()
 
 
-def print_report(rows):
+def print_report(rows) -> None:
     current_slice = None
 
     for slice_start, slice_end, rank, concept, mean_sim, peak_sim, count in rows:
@@ -182,7 +180,7 @@ def print_report(rows):
         )
 
 
-def fetch_absorption_report(conn):
+def fetch_absorption_report(conn: psycopg.Connection):
     query = """
     SELECT
         m.variant,
@@ -196,7 +194,7 @@ def fetch_absorption_report(conn):
     FROM neighbourhoods n
     JOIN spelling_map m
         ON n.neighbour = m.variant
-    WHERE n.query = ?
+    WHERE n.query = %s
       AND m.concept_type != 'exclude'
     GROUP BY m.variant, m.canonical, m.concept_type
     ORDER BY
@@ -205,10 +203,12 @@ def fetch_absorption_report(conn):
         occurrences DESC;
     """
 
-    return conn.execute(query, (QUERY_WORD,)).fetchall()
+    with conn.cursor() as cur:
+        cur.execute(query, (QUERY_WORD,))
+        return cur.fetchall()
 
 
-def print_absorption_report(rows):
+def print_absorption_report(rows) -> None:
     print()
     print("Absorbed spellings (classified)")
     print("=" * 60)
@@ -221,7 +221,7 @@ def print_absorption_report(rows):
         mean_sim,
         peak_sim,
         first_seen,
-        last_seen
+        last_seen,
     ) in rows:
 
         absorption_class = classify_absorption(mean_sim, occ)
@@ -235,8 +235,11 @@ def print_absorption_report(rows):
         )
 
 
-def classify_absorption(mean_similarity, slice_count):
-    if mean_similarity >= config.STRONG_MEAN and slice_count >= config.MIN_SLICES_STRONG:
+def classify_absorption(mean_similarity: float, slice_count: int) -> str:
+    if (
+        mean_similarity >= config.STRONG_MEAN
+        and slice_count >= config.MIN_SLICES_STRONG
+    ):
         return "strong"
     elif mean_similarity >= config.MODERATE_MEAN:
         return "moderate"
@@ -244,8 +247,8 @@ def classify_absorption(mean_similarity, slice_count):
         return "weak"
 
 
-def summarise_absorption(rows):
-    counter = Counter()
+def summarise_absorption(rows) -> None:
+    counter: CounterType[str] = Counter()
 
     for (_, _, _, occ, mean_sim, *_ ) in rows:
         cls = classify_absorption(mean_sim, occ)
@@ -258,10 +261,9 @@ def summarise_absorption(rows):
         print(f"{cls:<8}: {counter.get(cls, 0)}")
 
 
-def main():
+def main() -> None:
     conn = eebo_db.dbh
 
-    ensure_spelling_map(conn)
     populate_minimal_spelling_map(conn)
 
     rows = fetch_collapsed_neighbours(conn)
@@ -276,6 +278,7 @@ def main():
     absorption = fetch_absorption_report(conn)
     if absorption:
         print_absorption_report(absorption)
+        summarise_absorption(absorption)
 
 
 if __name__ == "__main__":

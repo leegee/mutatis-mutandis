@@ -1,6 +1,6 @@
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
 
 print(f"[INFO] BASE_DIR: {BASE_DIR}")
@@ -10,6 +10,10 @@ INPUT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 OUT_DIR = BASE_DIR / "out"
 PLAIN_DIR = OUT_DIR / "plain"
 SLICES_DIR = OUT_DIR / "slices"
+
+LOG_DIR = OUT_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 DB_PATH = OUT_DIR / "db/metadata.sqlite"
 
 SLICES_DIR = BASE_DIR / "out" / "slices"

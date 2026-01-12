@@ -40,7 +40,7 @@ def load_data(query):
             ON n.neighbour = m.variant
         WHERE n.query = ?
           AND COALESCE(m.concept_type, 'orthographic') != 'exclude'
-    """, conn, params=(query,))
+    """, conn, params=[query])
 
     conn.close()
 
@@ -120,7 +120,7 @@ def plot_rank_cosine_curves(df):
     if len(slices) == 1:
         axes = [axes]
 
-    for ax, sl in zip(axes, slices):
+    for ax, sl in zip(axes, slices, strict=True):
         subset = df[df["slice"] == sl].sort_values("rank")
         ax.plot(subset["rank"], subset["cosine"], marker=".")
         ax.set_ylabel("Cosine")

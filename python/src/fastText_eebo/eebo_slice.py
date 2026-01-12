@@ -1,4 +1,3 @@
-import sqlite3
 import sys
 
 import eebo_config as config
@@ -51,3 +50,7 @@ def make_slices():
 
     eebo_db.dbh.close()
     print("[INFO] All slices processed.")
+
+
+if __name__ == "__main__":
+    make_slices()

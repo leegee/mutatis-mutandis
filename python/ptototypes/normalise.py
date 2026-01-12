@@ -5,8 +5,8 @@ import torch
 
 # Local MacBERTh
 # Replace this with your actual tagging head when available.
-from macberth_pipe.tokenizer import MacBERThTokenizer
-from macberth_pipe.network import MacBERThModel
+from macberth_search.tokenizer import MacBERThTokenizer
+from macberth_search.network import MacBERThModel
 
 
 # VARD2 CONFIG
