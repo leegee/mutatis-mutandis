@@ -14,8 +14,11 @@ SLICES_DIR = OUT_DIR / "slices"
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-DB_PATH = OUT_DIR / "db/metadata.sqlite"
+MODEL_PATH = Path("./lib/macberth-huggingface")
+INGEST_BATCH_SIZE = 32
+INGEST_TOKEN_WINDOW_FALLBACK = 5  # ±5 tokens if sentence unavailable
 
+DB_PATH = OUT_DIR / "db/metadata.sqlite"
 SLICES_DIR = BASE_DIR / "out" / "slices"
 MODELS_DIR = BASE_DIR / "out" / "models"
 

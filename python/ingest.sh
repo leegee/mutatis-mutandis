@@ -18,9 +18,9 @@ echo "✔ All checks passed"
 
 if [[ "${1:-}" == "--smoke" ]]; then
     echo "→ Smoke test"
-    "$PYTHON" "$ENTRY" --limit 5
+    "$PYTHON" "$ENTRY" --phase ingest --limit 5
 else
     echo "→ Running full ingestion pipeline"
-    "$PYTHON" "$ENTRY"
+    # Forward any arguments you pass to the shell script
+    "$PYTHON" "$ENTRY" "$@"
 fi
-
