@@ -15,12 +15,10 @@ import unicodedata
 
 import eebo_config as config
 import eebo_db
-import eebo_logging
 import eebo_ocr_fixes
+from eebo_logging import logger
 
 MAX_DOCS: Optional[int] = None  # For --limit testing
-
-logger = eebo_logging.setup_logging()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -413,6 +411,8 @@ def main() -> None:
     MAX_DOCS = args.limit
 
     if args.phase in {"ingest", "all"}:
+        eebo_db.drop_token_indexes()
+        eebo_db.create_token_indexes()
         ingest_xml()
     if args.phase in {"sentences", "all"}:
         build_sentences()

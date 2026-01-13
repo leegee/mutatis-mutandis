@@ -1,6 +1,6 @@
 import sys
 import psycopg
-
+from eebo_logging import logger
 
 def get_connection():
     """
@@ -27,6 +27,7 @@ def init_db(drop_existing=True):
     with dbh.cursor() as cur:
 
         if drop_existing:
+            logger.info("Dropping all tables")
             cur.execute("""
                 DROP TABLE IF EXISTS neighbourhoods CASCADE;
                 DROP TABLE IF EXISTS sentences CASCADE;
@@ -35,7 +36,9 @@ def init_db(drop_existing=True):
                 DROP TABLE IF EXISTS documents CASCADE;
                 DROP TABLE IF EXISTS ingest_runs CASCADE;
             """)
+            logger.info("Dropped all tables")
 
+        logger.info("Creating tables")
         cur.execute("""
             /* Core document metadata */
             CREATE TABLE documents (
@@ -111,11 +114,11 @@ def init_db(drop_existing=True):
             );
         """)
 
-        create_token_indexes()
+        logger.info("Created tables")
 
 
 def drop_token_indexes():
-    print("[INFO] Dropping token indexes for fast ingestion")
+    logger.info("Dropping table indexes")
     with dbh.cursor() as cur:
         cur.execute("""
             DROP INDEX IF EXISTS idx_tokens_token;
@@ -123,10 +126,11 @@ def drop_token_indexes():
             DROP INDEX IF EXISTS idx_tokens_sentence;
         """)
     dbh.commit()
+    logger.info("Dropped table indexes")
 
 
 def create_token_indexes():
-    print("[INFO] Recreating token indexes")
+    logger.info("Creating table indexes")
     with dbh.cursor() as cur:
         cur.execute("""
             CREATE INDEX idx_tokens_token ON tokens(token);
@@ -134,3 +138,4 @@ def create_token_indexes():
             CREATE INDEX idx_tokens_sentence ON tokens(sentence_id);
         """)
     dbh.commit()
+    logger.info("Created table indexes")
