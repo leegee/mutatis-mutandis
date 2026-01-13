@@ -12,3 +12,4 @@ pyright
 mypy
 ruff
 lxml
+psycopg-binary

@@ -2,19 +2,22 @@ import sys
 import psycopg
 from eebo_logging import logger
 
+
 def get_connection():
     """
     Connect using libpq environment variables:
     PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
     """
     try:
-        return psycopg.connect()
+        # psycopg reads PG* env vars automatically if no params are given
+        dbh = psycopg.connect()
+        dbh.autocommit = False
+        with dbh.cursor() as cur:
+            cur.execute("SET synchronous_commit = OFF;")
+        return dbh
     except Exception as exc:
-        print(f"[ERROR] Cannot open PostgreSQL database: {exc}")
+        logger.error(f"[ERROR] Cannot open PostgreSQL database: {exc}")
         sys.exit(1)
-
-
-dbh = get_connection()
 
 
 def init_db(drop_existing=True):
@@ -118,24 +121,56 @@ def init_db(drop_existing=True):
 
 
 def drop_token_indexes():
-    logger.info("Dropping table indexes")
+    """
+    Drop all token-related indexes before bulk ingestion.
+    """
+    logger.info("Dropping token table indexes...")
     with dbh.cursor() as cur:
         cur.execute("""
             DROP INDEX IF EXISTS idx_tokens_token;
             DROP INDEX IF EXISTS idx_tokens_doc;
             DROP INDEX IF EXISTS idx_tokens_sentence;
+            DROP INDEX IF EXISTS idx_tokens_canonical;
+            DROP INDEX IF EXISTS idx_tokens_sentence_notnull;
         """)
     dbh.commit()
-    logger.info("Dropped table indexes")
+    logger.info("All token table indexes dropped.")
 
 
 def create_token_indexes():
-    logger.info("Creating table indexes")
+    """
+    Create basic token indexes for post-ingest querying.
+    """
+    logger.info("Creating standard token table indexes...")
     with dbh.cursor() as cur:
         cur.execute("""
-            CREATE INDEX idx_tokens_token ON tokens(token);
-            CREATE INDEX idx_tokens_doc ON tokens(doc_id);
-            CREATE INDEX idx_tokens_sentence ON tokens(sentence_id);
+            CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);
+            CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(doc_id);
+            CREATE INDEX IF NOT EXISTS idx_tokens_sentence ON tokens(sentence_id);
         """)
     dbh.commit()
-    logger.info("Created table indexes")
+    logger.info("Standard token table indexes created.")
+
+
+def create_tiered_token_indexes():
+    """
+    Create additional / tiered indexes for canonicalisation and sentence queries.
+    Only run after bulk ingestion is complete.
+    """
+    logger.info("Creating tiered token table indexes...")
+    with dbh.cursor() as cur:
+        # Fast lookup by canonical form
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tokens_canonical ON tokens(canonical);
+        """)
+        # Partial index: only for tokens assigned to a sentence
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tokens_sentence_notnull
+            ON tokens(sentence_id)
+            WHERE sentence_id IS NOT NULL;
+        """)
+    dbh.commit()
+    logger.info("Tiered token table indexes created.")
+
+
+dbh = get_connection()
