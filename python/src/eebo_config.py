@@ -3,9 +3,6 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
 
-print(f"[INFO] BASE_DIR: {BASE_DIR}")
-print(f"[INFO] EEBO_SRC_DIR: {EEBO_SRC_DIR}")
-
 INPUT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 OUT_DIR = BASE_DIR / "out"
 PLAIN_DIR = OUT_DIR / "plain"
@@ -15,10 +12,10 @@ LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 MODEL_PATH = Path("./lib/macberth-huggingface")
-INGEST_BATCH_SIZE = 32
-INGEST_TOKEN_WINDOW_FALLBACK = 5  # ±5 tokens if sentence unavailable
+INGEST_BATCH_SIZE = 20_000
+EMBED_BATCH_SIZE = 256
+INGEST_TOKEN_WINDOW_FALLBACK = 5  # around 5 tokens if sentence unavailable
 
-DB_PATH = OUT_DIR / "db/metadata.sqlite"
 SLICES_DIR = BASE_DIR / "out" / "slices"
 MODELS_DIR = BASE_DIR / "out" / "models"
 

@@ -170,61 +170,48 @@ def batch_update_canonical_dicts(rows: list[tuple[str, int, str]], conn):
 
 
 # Phase 1 — XML Ingestion
-def ingest_xml_parallel() -> None:
-    xml_files = list(config.INPUT_DIR.glob("*.xml"))
-    if MAX_DOCS:
-        xml_files = xml_files[:MAX_DOCS]
-
-    logger.info(f"[PHASE 1] Found {len(xml_files)} XML files to ingest...")
-
-    CHUNK_SIZE = 500
-    for i in range(0, len(xml_files), CHUNK_SIZE):
-        chunk_files = xml_files[i:i+CHUNK_SIZE]
-
-        docs_batch = []
-        tokens_batch = []
-
-        with ProcessPoolExecutor() as executor:
-            futures = {executor.submit(process_file_worker, f): f for f in chunk_files}
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Processing XMLs"):
-                result = future.result()
-                if result is None:
-                    continue
-                doc_meta, token_list = result
-                docs_batch.append((
-                    doc_meta["doc_id"], doc_meta["title"], doc_meta["author"], None,
-                    doc_meta["publisher"], doc_meta["pub_place"], doc_meta["source_date_raw"],
-                    doc_meta["slice_start"], doc_meta["slice_end"]
-                ))
-                tokens_batch.extend([(doc_meta["doc_id"], idx, tok) for idx, tok in token_list])
-
-        with get_db_connection() as conn:
-            with conn.transaction():
-                copy_rows(conn, "documents", [
-                    "doc_id", "title", "author", "pub_year",
-                    "publisher", "pub_place", "source_date_raw",
-                    "slice_start", "slice_end"
-                ], docs_batch)
-                TOKEN_CHUNK = 150_000
-                for j in range(0, len(tokens_batch), TOKEN_CHUNK):
-                    copy_rows(conn, "tokens", ["doc_id", "token_idx", "token"], tokens_batch[j:j+TOKEN_CHUNK])
-
-    logger.info(f"[PHASE 1] Ingested {len(xml_files)} documents.")
-
-
-# Phase 2 — Build Sentences
 def build_sentences_parallel(max_workers: int = 4) -> None:
-    logger.info("[PHASE 2] Building sentences...")
+    """
+    Phase 2: Build sentences and assign sentence_id back to tokens.
 
+    Features:
+      - Hard cap on sentence length
+      - Soft breaks on conjunctions
+      - Discourse-marker hard breaks
+      - Parallel-safe DB access
+      - Bulk COPY for sentences and token updates
+    """
+
+    logger.info("[PHASE 2] Building sentences and assigning sentence IDs...")
+
+    # Fetch documents with slice info (slice not used yet, but future-safe)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT DISTINCT doc_id FROM tokens ORDER BY doc_id")
-            doc_ids = [row[0] for row in cur.fetchall()]
+            cur.execute("""
+                SELECT DISTINCT d.doc_id, d.slice_start, d.slice_end
+                FROM documents d
+                JOIN tokens t ON d.doc_id = t.doc_id
+                ORDER BY d.doc_id
+            """)
+            docs = cur.fetchall()
 
     if MAX_DOCS:
-        doc_ids = doc_ids[:MAX_DOCS]
+        docs = docs[:MAX_DOCS]
 
-    def process_doc(doc_id: str) -> list[tuple[str, int, str, str]]:
+    # Sentence heuristics
+    MAX_SENT_LEN = 60
+    MIN_SENT_LEN = 20
+
+    SOFT_BREAK_TOKENS = {"and", "but", "for", "or"}
+    HARD_BREAK_TOKENS = {"wherefore", "therefore", "thus"}
+
+    def process_doc(doc_id: str, slice_start: int | None, slice_end: int | None):
+        """
+        Returns:
+          sentences: (doc_id, sentence_id, raw_text, norm_text)
+          bounds:    (doc_id, sentence_id, start_idx, end_idx)
+        """
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -235,45 +222,126 @@ def build_sentences_parallel(max_workers: int = 4) -> None:
                 """, (doc_id,))
                 tokens = cur.fetchall()
 
+        if not tokens:
+            return [], []
+
         sentences = []
-        sentence_text = []
+        bounds = []
+
+        sentence_tokens: list[str] = []
         sentence_id = 0
+        start_idx = tokens[0][0]
 
-        for _idx, tok in tokens:
-            sentence_text.append(tok)
-            if tok.endswith((".", "!", "?")):
-                raw_text = " ".join(sentence_text)
-                normalized_text = normalize_early_modern(raw_text)
-                sentences.append((doc_id, sentence_id, raw_text, normalized_text))
-                sentence_text = []
+        for idx, tok in tokens:
+            sentence_tokens.append(tok)
+            token_count = len(sentence_tokens)
+
+            # Boundary rules
+            hard_len_break = token_count >= MAX_SENT_LEN
+            soft_break = token_count >= MIN_SENT_LEN and tok in SOFT_BREAK_TOKENS
+            discourse_break = tok in HARD_BREAK_TOKENS
+
+            if hard_len_break or soft_break or discourse_break:
+                raw_text = " ".join(sentence_tokens)
+                norm_text = normalize_early_modern(raw_text)
+
+                sentences.append(
+                    (doc_id, sentence_id, raw_text, norm_text)
+                )
+                bounds.append(
+                    (doc_id, sentence_id, start_idx, idx)
+                )
+
                 sentence_id += 1
+                sentence_tokens = []
+                start_idx = idx + 1
 
-        if sentence_text:
-            raw_text = " ".join(sentence_text)
-            normalized_text = normalize_early_modern(raw_text)
-            sentences.append((doc_id, sentence_id, raw_text, normalized_text))
+        # Flush trailing sentence
+        if sentence_tokens:
+            raw_text = " ".join(sentence_tokens)
+            norm_text = normalize_early_modern(raw_text)
 
-        return sentences
+            sentences.append(
+                (doc_id, sentence_id, raw_text, norm_text)
+            )
+            bounds.append(
+                (doc_id, sentence_id, start_idx, tokens[-1][0])
+            )
 
-    all_sentences = []
+        return sentences, bounds
+
+    all_sentences: list[tuple[str, int, str, str]] = []
+    all_bounds: list[tuple[str, int, int, int]] = []
+
+    # Parallel sentence construction
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_doc, doc_id): doc_id for doc_id in doc_ids}
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Building sentences"):
-            try:
-                sentences = future.result()
-                all_sentences.extend(sentences)
-            except Exception as e:
-                logger.error(f"Failed to process sentences for {futures[future]}: {e}")
+        futures = {
+            executor.submit(process_doc, doc_id, slice_start, slice_end): doc_id
+            for doc_id, slice_start, slice_end in docs
+        }
 
+        for future in tqdm(
+            as_completed(futures),
+            total=len(futures),
+            desc="Building sentences"
+        ):
+            try:
+                sentences, bounds = future.result()
+                all_sentences.extend(sentences)
+                all_bounds.extend(bounds)
+            except Exception as e:
+                logger.error(
+                    f"Sentence build failed for {futures[future]}: {e}"
+                )
+
+    # ---- Bulk write to DB ----
     with get_db_connection() as conn:
         with conn.transaction():
+
+            # Insert sentences
             SENT_CHUNK = 50_000
             for i in range(0, len(all_sentences), SENT_CHUNK):
-                copy_rows(conn, "sentences",
-                    ["doc_id", "sentence_id", "sentence_text_raw", "sentence_text_norm"],
-                    all_sentences[i:i+SENT_CHUNK]
+                copy_rows(
+                    conn,
+                    "sentences",
+                    ["doc_id", "sentence_id",
+                     "sentence_text_raw", "sentence_text_norm"],
+                    all_sentences[i:i + SENT_CHUNK]
                 )
-    logger.info("[PHASE 2] Sentences built successfully.")
+
+            # Bulk assign sentence_id back to tokens
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TEMP TABLE tmp_sentence_bounds (
+                        doc_id TEXT,
+                        sentence_id INT,
+                        start_idx INT,
+                        end_idx INT
+                    ) ON COMMIT DROP
+                """)
+
+                buf = io.StringIO()
+                for doc_id, sentence_id, start, end in all_bounds:
+                    buf.write(f"{doc_id}\t{sentence_id}\t{start}\t{end}\n")
+                buf.seek(0)
+
+                cur.copy(
+                    "COPY tmp_sentence_bounds (doc_id, sentence_id, start_idx, end_idx) FROM STDIN",
+                    buf
+                )
+
+                cur.execute("""
+                    UPDATE tokens t
+                    SET sentence_id = b.sentence_id
+                    FROM tmp_sentence_bounds b
+                    WHERE t.doc_id = b.doc_id
+                      AND t.token_idx BETWEEN b.start_idx AND b.end_idx
+                """)
+
+    logger.info(
+        "[PHASE 2] Sentences built with length caps, discourse breaks, "
+        "and bulk sentence_id assignment."
+    )
 
 
 # Embeddings + Clustering
@@ -290,20 +358,6 @@ def embed_texts(texts: list[str], batch_size: int = config.INGEST_BATCH_SIZE, ma
             embeddings.append(emb)
     return np.vstack(embeddings)
 
-
-def cluster_embeddings(embeddings: np.ndarray, n_clusters: int | None = None, distance_threshold: float = 1.0) -> np.ndarray:
-    """
-    Cluster embeddings using Agglomerative Clustering.
-    Returns a label per embedding.
-    """
-    from sklearn.cluster import AgglomerativeClustering  # local import to avoid F401 if unused elsewhere
-    if embeddings.shape[0] == 0:
-        return np.empty((0,), dtype=int)
-    if n_clusters is None:
-        clustering = AgglomerativeClustering(distance_threshold=distance_threshold, metric="cosine", linkage="average")
-    else:
-        clustering = AgglomerativeClustering(n_clusters=n_clusters, metric="cosine", linkage="average")
-    return np.asarray(clustering.fit_predict(embeddings), dtype=int)
 
 
 # Token window builder (streaming)
@@ -336,9 +390,9 @@ def build_token_windows_stream(rows, window_size: int = config.INGEST_TOKEN_WIND
 
 
 # Phase 3 — Canonicalisation (streaming)
-def canonicalize_tokens_streaming_embeddings(batch_size: int = 50_000,
+def canonicalize_tokens_streaming_embeddings(batch_size: int = config.INGEST_BATCH_SIZE,
                                              window_size: int = config.INGEST_TOKEN_WINDOW_FALLBACK,
-                                             embed_batch_size: int = config.INGEST_BATCH_SIZE):
+                                             embed_batch_size: int = config.EMBED_BATCH_SIZE):
     """
     Streaming canonicalisation with embeddings & clustering, Phase II-ready.
 
@@ -389,50 +443,65 @@ def process_batch_embeddings(
     canonical_rows: list[tuple[str, int, str]],
     window_size: int,
     embed_batch_size: int,
-    flush_size: int = 100_000
+    similarity_threshold: float = 0.90,
 ):
     """
-    Process a batch of tokens with streaming DB flush:
-      - Build incremental token windows
-      - Embed texts in batches
-      - Cluster embeddings
-      - Assign canonical forms
-      - Append (doc_id, token_idx, canonical) to canonical_rows incrementally
-      - Flush to DB if canonical_rows > flush_size
+    Surface-form–first canonicalisation with semantic validation.
+
+    For each surface form:
+      - Embed token contexts
+      - Use first occurrence as prototype
+      - Merge variants if cosine similarity >= threshold
     """
-    contexts = list(build_token_windows_stream(rows, window_size))
-    if not contexts:
-        return
 
-    texts = [ctx["text"] for ctx in contexts]
-    embeddings_list: list[np.ndarray] = []
+    from sklearn.metrics.pairwise import cosine_similarity
 
-    for i in range(0, len(texts), embed_batch_size):
-        batch = texts[i:i+embed_batch_size]
-        with torch.no_grad():
-            enc = tokenizer(batch, padding=True, truncation=True, max_length=128, return_tensors="pt").to(device)
-            out = model(**enc)
-            emb = out.last_hidden_state.mean(dim=1).cpu().numpy()
-            embeddings_list.append(emb)
+    # Group contexts by (doc_id, surface_form)
+    contexts_by_form = defaultdict(list)
+    for ctx in build_token_windows_stream(rows, window_size):
+        contexts_by_form[(ctx["doc_id"], ctx["surface_form"])].append(ctx)
 
-    embeddings: np.ndarray = np.vstack(embeddings_list)  # type-safe ndarray for clustering
-    labels = cluster_embeddings(embeddings)
+    for (doc_id, surface_form), contexts in contexts_by_form.items():
+        if len(contexts) == 1:
+            ctx = contexts[0]
+            canonical_rows.append(
+                (ctx["doc_id"], ctx["token_idx"], surface_form)
+            )
+            continue
 
-    clusters: dict[int, list[str]] = defaultdict(list)
-    for ctx, label in zip(contexts, labels, strict=True):
-        clusters[label].append(ctx["surface_form"])
+        texts = [ctx["text"] for ctx in contexts]
 
-    canonical_map = {label: max(set(forms), key=forms.count) for label, forms in clusters.items()}
+        embeddings = []
+        for i in range(0, len(texts), embed_batch_size):
+            batch = texts[i:i+embed_batch_size]
+            with torch.no_grad():
+                enc = tokenizer(
+                    batch,
+                    padding=True,
+                    truncation=True,
+                    max_length=128,
+                    return_tensors="pt"
+                ).to(device)
+                out = model(**enc)
+                emb = out.last_hidden_state.mean(dim=1).cpu().numpy()
+                embeddings.append(emb)
 
-    for ctx, label in zip(contexts, labels, strict=True):
-        canonical_rows.append((ctx["doc_id"], ctx["token_idx"], canonical_map[label]))
+        emb = np.vstack(embeddings)
 
-        # Flush incrementally to DB if too large
-        if len(canonical_rows) >= flush_size:
-            with get_db_connection() as conn:
-                batch_update_canonical_dicts(canonical_rows, conn)
-                conn.commit()
-            canonical_rows.clear()
+        # Prototype = first occurrence
+        proto = emb[0:1]
+        sims = cosine_similarity(proto, emb)[0]
+
+        for ctx, sim in zip(contexts, sims, strict=True):
+            if sim >= similarity_threshold:
+                canonical = surface_form
+            else:
+                # semantic drift → self-canonicalise
+                canonical = ctx["surface_form"]
+
+            canonical_rows.append(
+                (ctx["doc_id"], ctx["token_idx"], canonical)
+            )
 
 
 def main() -> None:
