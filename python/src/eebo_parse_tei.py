@@ -1,4 +1,15 @@
 #!/usr/bin/env python
+
+"""
+
+Memory accumulation - monitor
+DB connection churn	- pool
+Token-only sentences - hmmm
+Slice unused - todo
+
+"""
+
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -12,7 +23,7 @@ import re
 import io
 import torch
 import unicodedata
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import eebo_config as config
 import eebo_db
@@ -294,7 +305,7 @@ def build_sentences_parallel(max_workers: int = 4) -> None:
                     f"Sentence build failed for {futures[future]}: {e}"
                 )
 
-    # ---- Bulk write to DB ----
+    # Bulk write to DB
     with get_db_connection() as conn:
         with conn.transaction():
 
@@ -320,14 +331,14 @@ def build_sentences_parallel(max_workers: int = 4) -> None:
                     ) ON COMMIT DROP
                 """)
 
-                buf = io.StringIO()
+                buf: io.StringIO = io.StringIO()
                 for doc_id, sentence_id, start, end in all_bounds:
                     buf.write(f"{doc_id}\t{sentence_id}\t{start}\t{end}\n")
                 buf.seek(0)
 
                 cur.copy(
                     "COPY tmp_sentence_bounds (doc_id, sentence_id, start_idx, end_idx) FROM STDIN",
-                    buf
+                    buf,  # type: ignore[arg-type]
                 )
 
                 cur.execute("""
@@ -358,23 +369,21 @@ def embed_texts(texts: list[str], batch_size: int = config.INGEST_BATCH_SIZE, ma
             embeddings.append(emb)
     return np.vstack(embeddings)
 
-
-
-# Token window builder (streaming)
+# Token window builder (streaming, slice-aware)
 def build_token_windows_stream(rows, window_size: int = config.INGEST_TOKEN_WINDOW_FALLBACK):
     """
     Incremental generator yielding token contexts one by one.
-    Each row: (doc_id, token_idx, token, sentence)
+    Each row: (doc_id, token_idx, token, sentence, slice_start, slice_end)
     """
     doc_tokens = defaultdict(list)
 
     # Group rows by doc_id incrementally
-    for doc_id, token_idx, token, sentence in rows:
-        doc_tokens[doc_id].append((token_idx, token, sentence))
+    for doc_id, token_idx, token, sentence, slice_start, slice_end in rows:
+        doc_tokens[doc_id].append((token_idx, token, sentence, slice_start, slice_end))
 
     for doc_id, tokens in doc_tokens.items():
         tokens.sort(key=lambda x: x[0])
-        for i, (token_idx, token, sentence) in enumerate(tokens):
+        for i, (token_idx, token, sentence, slice_start, slice_end) in enumerate(tokens):
             if sentence:
                 text = sentence
             else:
@@ -385,24 +394,30 @@ def build_token_windows_stream(rows, window_size: int = config.INGEST_TOKEN_WIND
                 "doc_id": doc_id,
                 "token_idx": token_idx,
                 "surface_form": token,
-                "text": text
+                "text": text,
+                "slice_start": slice_start,
+                "slice_end": slice_end
             }
 
 
-# Phase 3 — Canonicalisation (streaming)
-def canonicalize_tokens_streaming_embeddings(batch_size: int = config.INGEST_BATCH_SIZE,
-                                             window_size: int = config.INGEST_TOKEN_WINDOW_FALLBACK,
-                                             embed_batch_size: int = config.EMBED_BATCH_SIZE):
+# Phase 3 — Canonicalisation (streaming, agglomerative)
+def canonicalize_tokens_streaming_embeddings(
+    batch_size: int = config.INGEST_BATCH_SIZE,
+    window_size: int = config.INGEST_TOKEN_WINDOW_FALLBACK,
+    embed_batch_size: int = config.EMBED_BATCH_SIZE,
+    similarity_threshold: float = 0.85,
+):
     """
-    Streaming canonicalisation with embeddings & clustering, Phase II-ready.
+    Streaming canonicalisation with embeddings & agglomerative clustering.
 
     - Server-side cursor
     - Incremental token windows
     - Embeddings in batches
-    - Cluster and assign canonical forms per batch
-    - Write via COPY in batches
+    - Agglomerative clustering per slice × surface_form
+    - Write canonical forms via COPY in batches
     """
-    logger.info("[PHASE 3] Canonicalising tokens with embeddings (streaming, Phase II-ready)")
+
+    logger.info("[PHASE 3] Canonicalising tokens with embeddings (agglomerative, slice-aware)")
 
     canonical_rows: list[tuple[str, int, str]] = []
 
@@ -410,8 +425,15 @@ def canonicalize_tokens_streaming_embeddings(batch_size: int = config.INGEST_BAT
         with conn.cursor(name="token_cursor") as cur:
             cur.itersize = batch_size
             cur.execute("""
-                SELECT t.doc_id, t.token_idx, t.token, s.sentence_text_norm
+                SELECT
+                    t.doc_id,
+                    t.token_idx,
+                    t.token,
+                    s.sentence_text_norm,
+                    d.slice_start,
+                    d.slice_end
                 FROM tokens t
+                JOIN documents d ON t.doc_id = d.doc_id
                 LEFT JOIN sentences s
                   ON t.doc_id = s.doc_id AND t.sentence_id = s.sentence_id
                 ORDER BY t.doc_id, t.token_idx
@@ -421,13 +443,26 @@ def canonicalize_tokens_streaming_embeddings(batch_size: int = config.INGEST_BAT
             for row in tqdm(cur, desc="Streaming tokens"):
                 current_batch.append(row)
                 if len(current_batch) >= batch_size:
-                    process_batch_embeddings(current_batch, canonical_rows, window_size, embed_batch_size)
+                    process_batch_embeddings_agglomerative(
+                        current_batch,
+                        canonical_rows,
+                        window_size,
+                        embed_batch_size,
+                        similarity_threshold
+                    )
                     current_batch.clear()
 
+            # Process leftover batch
             if current_batch:
-                process_batch_embeddings(current_batch, canonical_rows, window_size, embed_batch_size)
+                process_batch_embeddings_agglomerative(
+                    current_batch,
+                    canonical_rows,
+                    window_size,
+                    embed_batch_size,
+                    similarity_threshold
+                )
 
-        # Flush all canonical forms to DB
+        # Bulk write canonical forms to DB
         if canonical_rows:
             logger.info(f"Writing {len(canonical_rows)} canonical forms to DB in batches...")
             chunk_size = 100_000
@@ -435,45 +470,53 @@ def canonicalize_tokens_streaming_embeddings(batch_size: int = config.INGEST_BAT
                 batch_update_canonical_dicts(canonical_rows[i:i+chunk_size], conn)
             conn.commit()
 
-    logger.info("[DONE] Canonicalisation complete (streaming embeddings).")
+    logger.info("[DONE] Canonicalisation complete (agglomerative, slice-aware).")
 
 
-def process_batch_embeddings(
+def process_batch_embeddings_agglomerative(
     rows,
     canonical_rows: list[tuple[str, int, str]],
-    window_size: int,
-    embed_batch_size: int,
-    similarity_threshold: float = 0.90,
+    window_size,
+    embed_batch_size,
+    similarity_threshold: float = 0.85,
 ):
     """
-    Surface-form–first canonicalisation with semantic validation.
+    Slice-aware agglomerative canonicalisation.
 
-    For each surface form:
-      - Embed token contexts
-      - Use first occurrence as prototype
-      - Merge variants if cosine similarity >= threshold
+    Groups by (slice, surface_form), clusters contexts,
+    assigns canonical per cluster.
     """
 
-    from sklearn.metrics.pairwise import cosine_similarity
+    from sklearn.cluster import AgglomerativeClustering
+    from collections import Counter
 
-    # Group contexts by (doc_id, surface_form)
-    contexts_by_form = defaultdict(list)
-    for ctx in build_token_windows_stream(rows, window_size):
-        contexts_by_form[(ctx["doc_id"], ctx["surface_form"])].append(ctx)
+    # Build token windows
+    contexts = list(build_token_windows_stream(rows, window_size))
 
-    for (doc_id, surface_form), contexts in contexts_by_form.items():
-        if len(contexts) == 1:
-            ctx = contexts[0]
+    # Group by (slice_start, slice_end, surface_form)
+    by_key = defaultdict(list)
+    for ctx in contexts:
+        key = (
+            ctx.get("slice_start"),
+            ctx.get("slice_end"),
+            ctx["surface_form"]
+        )
+        by_key[key].append(ctx)
+
+    for (_, _, surface_form), group in by_key.items():  # ignore slice_start to fix B007
+        if len(group) == 1:
+            ctx = group[0]
             canonical_rows.append(
                 (ctx["doc_id"], ctx["token_idx"], surface_form)
             )
             continue
 
-        texts = [ctx["text"] for ctx in contexts]
+        texts = [ctx["text"] for ctx in group]
 
+        # Embed
         embeddings = []
         for i in range(0, len(texts), embed_batch_size):
-            batch = texts[i:i+embed_batch_size]
+            batch = texts[i:i + embed_batch_size]
             with torch.no_grad():
                 enc = tokenizer(
                     batch,
@@ -486,22 +529,73 @@ def process_batch_embeddings(
                 emb = out.last_hidden_state.mean(dim=1).cpu().numpy()
                 embeddings.append(emb)
 
-        emb = np.vstack(embeddings)
+        X = np.vstack(embeddings)
 
-        # Prototype = first occurrence
-        proto = emb[0:1]
-        sims = cosine_similarity(proto, emb)[0]
+        # Cluster
+        clustering = AgglomerativeClustering(
+            metric="cosine",
+            linkage="average",
+            distance_threshold=1 - similarity_threshold,
+            n_clusters=None
+        )
+        labels = clustering.fit_predict(X)
 
-        for ctx, sim in zip(contexts, sims, strict=True):
-            if sim >= similarity_threshold:
-                canonical = surface_form
-            else:
-                # semantic drift → self-canonicalise
-                canonical = ctx["surface_form"]
+        # Canonical per cluster
+        clusters = defaultdict(list)
+        for ctx, label in zip(group, labels, strict=True):
+            clusters[label].append(ctx)
 
-            canonical_rows.append(
-                (ctx["doc_id"], ctx["token_idx"], canonical)
-            )
+        for members in clusters.values():
+            counts = Counter(ctx["surface_form"] for ctx in members)
+            canonical = counts.most_common(1)[0][0]
+
+            for ctx in members:
+                canonical_rows.append(
+                    (ctx["doc_id"], ctx["token_idx"], canonical)
+                )
+
+
+def ingest_xml_parallel(max_workers: int = 4):
+    """
+    Ingest XML files from config.INPUT_DIR and write documents + tokens to DB.
+    Parallel-safe version using ThreadPoolExecutor.
+    """
+    xml_files = list(Path(config.INPUT_DIR).glob("*.xml"))
+    if MAX_DOCS:
+        xml_files = xml_files[:MAX_DOCS]
+
+    all_docs = []
+    all_tokens = []
+
+    def process_and_collect(xml_path):
+        res = process_file_worker(xml_path)
+        if res:
+            doc_meta, tokens = res
+            return doc_meta, tokens
+        return None
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_and_collect, f): f for f in xml_files}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Ingesting XML"):
+            try:
+                result = future.result()
+                if result:
+                    doc_meta, tokens = result
+                    all_docs.append(doc_meta)
+                    all_tokens.extend([(doc_meta["doc_id"], i, tok) for i, tok in tokens])
+            except Exception as e:
+                logger.error(f"Failed to process {futures[future]}: {e}")
+
+    # Bulk insert
+    with get_db_connection() as conn:
+        with conn.transaction():
+            # Insert documents
+            copy_rows(conn, "documents",
+                      ["doc_id", "title", "author", "publisher", "pub_place", "source_date_raw", "slice_start", "slice_end"],
+                      [[d[k] for k in ["doc_id", "title", "author", "publisher", "pub_place", "source_date_raw", "slice_start", "slice_end"]]
+                       for d in all_docs])
+            # Insert tokens
+            copy_rows(conn, "tokens", ["doc_id", "token_idx", "token"], all_tokens)
 
 
 def main() -> None:
