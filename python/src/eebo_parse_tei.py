@@ -16,7 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
-from typing import Optional
+from typing import Any, Optional
 import argparse
 import numpy as np
 import re
@@ -331,14 +331,14 @@ def build_sentences_parallel(max_workers: int = 4) -> None:
                     ) ON COMMIT DROP
                 """)
 
-                buf: io.StringIO = io.StringIO()
+                buf: Any = io.StringIO()
                 for doc_id, sentence_id, start, end in all_bounds:
                     buf.write(f"{doc_id}\t{sentence_id}\t{start}\t{end}\n")
                 buf.seek(0)
 
                 cur.copy(
                     "COPY tmp_sentence_bounds (doc_id, sentence_id, start_idx, end_idx) FROM STDIN",
-                    buf,  # type: ignore[arg-type]
+                    buf
                 )
 
                 cur.execute("""

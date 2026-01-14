@@ -2,5 +2,9 @@
     "typeCheckingMode": "basic",
     "reportMissingImports": false,
     "reportMissingTypeStubs": false,
-    "pythonVersion": "3.11"
+    "pythonVersion": "3.11",
+    "exclude": [
+        "python/src/fastText_eebo/eebo_train_embeddings.py",
+        "python/src/fastText_eebo/eebo_extract_neighbourhoods.py"
+    ]
 }

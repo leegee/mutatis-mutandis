@@ -13,3 +13,5 @@ mypy
 ruff
 lxml
 psycopg-binary
+types-tqdm
+scikit-learn-stubs

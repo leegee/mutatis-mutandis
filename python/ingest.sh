@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC="python/src"
+SRC="./src"
 PYTHON="python"
 ENTRY="$SRC/eebo_parse_tei.py"
 
