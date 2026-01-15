@@ -39,6 +39,8 @@ def init_db(drop_existing=True):
                 DROP TABLE IF EXISTS tokens CASCADE;
                 DROP TABLE IF EXISTS spelling_map CASCADE;
                 DROP TABLE IF EXISTS documents CASCADE;
+                DROP TABLE IF EXISTS documents_stage CASCADE;
+                DROP TABLE IF EXISTS tokens_stage CASCADE;
                 DROP TABLE IF EXISTS ingest_runs CASCADE;
             """)
             logger.info("Dropped all tables")
@@ -61,6 +63,20 @@ def init_db(drop_existing=True):
                 slice_end INTEGER
             );
 
+            CREATE UNLOGGED TABLE documents_stage (
+                doc_id TEXT,
+                title TEXT,
+                author TEXT,
+                pub_year INTEGER,
+                publisher TEXT,
+                pub_place TEXT,
+                source_date_raw TEXT,
+                token_count INTEGER,
+                slice_start INTEGER,
+                slice_end INTEGER
+            );
+
+
             /* Token index (authoritative) */
             CREATE TABLE tokens (
                 doc_id TEXT NOT NULL,
@@ -75,6 +91,12 @@ def init_db(drop_existing=True):
                 FOREIGN KEY (doc_id)
                     REFERENCES documents(doc_id)
                     ON DELETE CASCADE
+            );
+
+            CREATE UNLOGGED TABLE IF NOT EXISTS tokens_stage (
+                doc_id TEXT,
+                token_idx INTEGER,
+                token TEXT
             );
 
             /* Sentence table (derived, optional, post-ingest) */
