@@ -5,6 +5,8 @@ Multi-process streaming EEBO TEI XML ingestion pipeline
 - Multi-process XML parsing
 - Progressive streaming COPY into final tables
 - Safe re-ingest
+- Call with `--limit int` or all documents in the target dir will be processed
+- See `eebo_config.py`
 """
 
 from __future__ import annotations
@@ -258,7 +260,7 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--limit", type=int, default=None, help="Max documents to process")
     args = parser.parse_args()
 
     global MAX_DOCS
