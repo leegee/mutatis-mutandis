@@ -13,15 +13,16 @@ import argparse
 import io
 from typing import List, Optional
 import torch
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
+from typing import cast
 
 import eebo_config as config
 import eebo_db
 from eebo_logging import logger
 
-DEVICE = "cpu"  # Force CPU on this crappy old machine
-BATCH_SIZE = config.EMBED_BATCH_SIZE
+DEVICE = "cpu"   # Force CPU on this crappy old machine
 
 # Load MacBERTh
 tokenizer = AutoTokenizer.from_pretrained(config.MODEL_PATH, local_files_only=True)
@@ -66,8 +67,8 @@ def embed_sentences(sentences: List[str]) -> List[List[float]]:
     Returns list of embedding vectors.
     """
     embeddings: List[List[float]] = []
-    for i in range(0, len(sentences), BATCH_SIZE):
-        batch = sentences[i:i + BATCH_SIZE]
+    for i in range(0, len(sentences), config.EMBED_BATCH_SIZE):
+        batch = sentences[i:i + config.EMBED_BATCH_SIZE]
         inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=False).to(DEVICE)
         with torch.no_grad():
             outputs = model(**inputs)
@@ -79,24 +80,53 @@ def embed_sentences(sentences: List[str]) -> List[List[float]]:
 
 def stream_sentences(doc_id: str, sentences: list[str], embeddings: list[list[float]]):
     """
-    Stream sentences + embeddings into the `sentences` table using COPY (psycopg3).
+    Stream sentences and embeddings into the `sentences` table using COPY (psycopg3),
+    unless the work has already been done.
     """
     if not sentences:
         return
 
     buf = io.StringIO()
-    for idx, (sent_text, emb) in enumerate(zip(sentences, embeddings, strict=True)):
-        emb_str = "{" + ",".join(f"{x:.6f}" for x in emb) + "}"
-        sent_safe = sent_text.replace("\t", " ").replace("\n", " ")
-        buf.write(f"{doc_id}\t{idx}\t{sent_safe}\t{emb_str}\n")
-    buf.seek(0)
-
-    sql = "COPY sentences (doc_id, sentence_id, sentence_text_norm, embedding) " \
-          "FROM STDIN WITH (FORMAT text, DELIMITER E'\t', NULL '\\N')"
-
     with eebo_db.get_connection() as conn:
-        with conn.cursor() as cur, cur.copy(sql) as copy:
-            copy.write(buf.read())
+        with conn.cursor() as cur:
+            cur.execute("SELECT sentence_id FROM sentences WHERE doc_id = %s", (doc_id,))
+            existing_ids = {row[0] for row in cur.fetchall()}
+
+        for idx, (sent_text, emb) in enumerate(zip(sentences, embeddings, strict=True)):
+            if idx in existing_ids:
+                continue
+            emb_str = "{" + ",".join(f"{x:.6f}" for x in emb) + "}"
+            sent_safe = sent_text.replace("\t", " ").replace("\n", " ")
+            buf.write(f"{doc_id}\t{idx}\t{sent_safe}\t{emb_str}\n")
+
+        if buf.tell() > 0:
+            buf.seek(0)
+            sql = "COPY sentences (doc_id, sentence_id, sentence_text_norm, embedding) " \
+                  "FROM STDIN WITH (FORMAT text, DELIMITER E'\t', NULL '\\N')"
+            with conn.cursor() as cur, cur.copy(sql) as copy:
+                copy.write(buf.read())
+
+
+def embed_batch(batch: list[str]) -> list[list[float]]:
+    """Embed a single batch of sentences."""
+    inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=False).to(DEVICE)
+    with torch.no_grad():
+        outputs = model(**inputs)
+        emb = outputs.last_hidden_state.mean(dim=1)
+        return cast(list[list[float]], emb.cpu().tolist())
+
+
+def embed_sentences_threaded(sentences: list[str]) -> list[list[float]]:
+    """Compute embeddings in batches using threads for CPU speedup."""
+    embeddings: list[list[float]] = []
+    # Split sentences into batches
+    batches = [sentences[i:i + config.EMBED_BATCH_SIZE] for i in range(0, len(sentences), config.EMBED_BATCH_SIZE)]
+
+    with ThreadPoolExecutor(max_workers=config.EMBED_MAX_WORKERS) as executor:
+        future_to_batch = {executor.submit(embed_batch, batch): batch for batch in batches}
+        for future in tqdm(as_completed(future_to_batch), total=len(future_to_batch), desc="Batches"):
+            embeddings.extend(future.result())
+    return embeddings
 
 
 def main(limit: Optional[int] = None):
@@ -112,7 +142,8 @@ def main(limit: Optional[int] = None):
     for doc_id in tqdm(doc_ids, desc="Docs"):
         tokens = get_document_tokens(doc_id)
         sentences = split_into_sentences(tokens, window=config.INGEST_TOKEN_WINDOW_FALLBACK)
-        embeddings = embed_sentences(sentences)
+        # embeddings = embed_sentences(sentences)
+        embeddings = embed_sentences_threaded(sentences)
         stream_sentences(doc_id, sentences, embeddings)
 
     logger.info("Sentence embedding pipeline complete")
