@@ -5,10 +5,6 @@ from psycopg import Connection
 from eebo_logging import logger
 
 
-# ---------------------------------------------------------------------
-# Connection handling
-# ---------------------------------------------------------------------
-
 def get_connection() -> Connection:
     """
     Create and return a PostgreSQL connection.
@@ -35,10 +31,6 @@ def get_connection() -> Connection:
         logger.error(f"[ERROR] Cannot open PostgreSQL database: {exc}")
         sys.exit(1)
 
-
-# ---------------------------------------------------------------------
-# Schema management
-# ---------------------------------------------------------------------
 
 def init_db(conn: Connection, drop_existing: bool = True) -> None:
     """
@@ -103,6 +95,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     sentence_id INTEGER NOT NULL,
                     sentence_text_raw TEXT,
                     sentence_text_norm TEXT,
+                    embedding DOUBLE PRECISION[],
 
                     PRIMARY KEY (doc_id, sentence_id),
                     FOREIGN KEY (doc_id)
