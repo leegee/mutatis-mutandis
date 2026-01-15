@@ -304,11 +304,6 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--phase",
-        required=True,
-        choices={"ingest", "sentences", "canonicalize", "all"},
-    )
     parser.add_argument("--limit", type=int)
     args = parser.parse_args()
 
