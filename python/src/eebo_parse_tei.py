@@ -118,7 +118,10 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
     normalized = normalize_early_modern(fixed_text)
 
     if len(normalized) < 100:
-        logger.error(f"XML rejected: {xml_path.name}: text too short")
+        logger.error(
+            f"XML rejected (text too short): {xml_path.name} at {xml_path.resolve()} "
+            f"({len(normalized)} chars after normalization)"
+        )
         return None
 
     tokens = normalized.split()
