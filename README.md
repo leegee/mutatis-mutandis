@@ -61,16 +61,21 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 
 * Koselleck, Reinhart: [Social History and Conceptual History]()
 
+* Heuser, Ryan: [Computing Kosselleck: Modelling Semantic Revolutions 1720-1960 (talk)](https://www.youtube.com/watch?v=7L-PO-AqG60)
+
+* Heuser, Ryan: [Computing Koselleck: Modelling Semantic Revolutions, 1720–1960](https://www.cambridge.org/core/books/abs/explorations-in-the-digital-history-of-ideas/computing-koselleck-modelling-semantic-revolutions-17201960/1ED34828C706CB5A7882E0A825C6F72F) from Part II - Case Studies in the Digital History of Ideas, Published online by Cambridge University Press:  09 November 2023
+
+## People and Projects
+
 * [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
+
+* [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
+
+* [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
+
+* [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
 
 * [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
 
 * [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
 
-* [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
-
-* ? Heusser, Ryan: [Computing Kosselleck: Modelling Semantic Revolutions 1720-1960](https://www.youtube.com/watch?v=7L-PO-AqG60)
-
-* [Computing Koselleck](https://www.kcl.ac.uk/events/computing-koselleck-modelling-semantic-revolutions-17201960)
-
-* [Ryan Heuser](https://www.english.cam.ac.uk/people/Ryan.Heuser)
