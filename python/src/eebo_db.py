@@ -1,16 +1,18 @@
+# eebo_db.py
 import sys
 import psycopg
 from eebo_logging import logger
 
 
 def get_connection():
-    """
-    Connect using libpq environment variables:
-    PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
-    """
     try:
         # psycopg reads PG* env vars automatically if no params are given
-        dbh = psycopg.connect()
+        dbh = psycopg.connect(
+            dbname="eebo",
+            user="postgres",
+            host="localhost",
+            port=5432,
+        )
         dbh.autocommit = False
         with dbh.cursor() as cur:
             cur.execute("SET synchronous_commit = OFF;")

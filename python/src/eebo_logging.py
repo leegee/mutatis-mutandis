@@ -10,7 +10,7 @@ log_file = log_dir / "eebo.log"
 
 # Create logger
 logger = logging.getLogger("eebo")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # Avoid duplicate handlers if imported multiple times
 if not logger.handlers:

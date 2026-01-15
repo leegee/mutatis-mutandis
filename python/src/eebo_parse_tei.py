@@ -144,22 +144,37 @@ def process_file_worker(xml_path: Path):
     return process_file(xml_path)
 
 
-# DB utilities
-def copy_rows(conn, table, columns, rows):
-    """COPY rows into Postgres using TEXT format"""
+def copy_rows(conn, table: str, columns: list[str], rows: list[list[Any]]) -> None:
+    if not rows:
+        return
+
     buf = io.StringIO()
     for row in rows:
-        buf.write("\t".join(
-            "\\N" if v is None else str(v).replace("\t", " ").replace("\n", " ")
-            for v in row
-        ))
-        buf.write("\n")
-    buf.seek(0)
-    with conn.cursor() as cur:
-        cur.copy(
-            f"COPY {table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT text)",
-            buf
+        buf.write(
+            "\t".join(
+                "\\N" if v is None else str(v).replace("\t", " ").replace("\n", " ")
+                for v in row
+            )
+            + "\n"
         )
+    buf.seek(0)
+
+    cols = ", ".join(columns)
+    copy_sql = (
+        f"COPY {table} ({cols}) "
+        "FROM STDIN WITH (FORMAT text, NULL '\\N', DELIMITER E'\\t')"
+    )
+
+    with conn.cursor() as cur:
+        with cur.copy(copy_sql) as copy:
+            copy.write(buf.read())
+
+    logger.debug(
+        "COPYed %d rows into %s(%s)",
+        len(rows),
+        table,
+        cols,
+    )
 
 
 def batch_update_canonical_dicts(rows: list[tuple[str, int, str]], conn):
@@ -181,21 +196,12 @@ def batch_update_canonical_dicts(rows: list[tuple[str, int, str]], conn):
 
 
 # Phase 1 — XML Ingestion
-def build_sentences_parallel(max_workers: int = 4) -> None:
+def build_sentences_parallel(max_workers: int = 4, sent_chunk: int = 50_000):
     """
-    Phase 2: Build sentences and assign sentence_id back to tokens.
-
-    Features:
-      - Hard cap on sentence length
-      - Soft breaks on conjunctions
-      - Discourse-marker hard breaks
-      - Parallel-safe DB access
-      - Bulk COPY for sentences and token updates
+    Build sentences, assign sentence IDs to tokens, and commit in batches.
     """
-
     logger.info("[PHASE 2] Building sentences and assigning sentence IDs...")
 
-    # Fetch documents with slice info (slice not used yet, but future-safe)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -209,20 +215,13 @@ def build_sentences_parallel(max_workers: int = 4) -> None:
     if MAX_DOCS:
         docs = docs[:MAX_DOCS]
 
-    # Sentence heuristics
     MAX_SENT_LEN = 60
     MIN_SENT_LEN = 20
-
     SOFT_BREAK_TOKENS = {"and", "but", "for", "or"}
     HARD_BREAK_TOKENS = {"wherefore", "therefore", "thus"}
 
     def process_doc(doc_id: str, slice_start: int | None, slice_end: int | None):
-        """
-        Returns:
-          sentences: (doc_id, sentence_id, raw_text, norm_text)
-          bounds:    (doc_id, sentence_id, start_idx, end_idx)
-        """
-
+        # Fetch tokens
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -236,18 +235,13 @@ def build_sentences_parallel(max_workers: int = 4) -> None:
         if not tokens:
             return [], []
 
-        sentences = []
-        bounds = []
-
-        sentence_tokens: list[str] = []
-        sentence_id = 0
-        start_idx = tokens[0][0]
+        sentences, bounds = [], []
+        sentence_tokens, sentence_id, start_idx = [], 0, tokens[0][0]
 
         for idx, tok in tokens:
             sentence_tokens.append(tok)
             token_count = len(sentence_tokens)
 
-            # Boundary rules
             hard_len_break = token_count >= MAX_SENT_LEN
             soft_break = token_count >= MIN_SENT_LEN and tok in SOFT_BREAK_TOKENS
             discourse_break = tok in HARD_BREAK_TOKENS
@@ -255,104 +249,98 @@ def build_sentences_parallel(max_workers: int = 4) -> None:
             if hard_len_break or soft_break or discourse_break:
                 raw_text = " ".join(sentence_tokens)
                 norm_text = normalize_early_modern(raw_text)
-
-                sentences.append(
-                    (doc_id, sentence_id, raw_text, norm_text)
-                )
-                bounds.append(
-                    (doc_id, sentence_id, start_idx, idx)
-                )
-
+                sentences.append((doc_id, sentence_id, raw_text, norm_text))
+                bounds.append((doc_id, sentence_id, start_idx, idx))
                 sentence_id += 1
                 sentence_tokens = []
                 start_idx = idx + 1
 
-        # Flush trailing sentence
         if sentence_tokens:
             raw_text = " ".join(sentence_tokens)
             norm_text = normalize_early_modern(raw_text)
-
-            sentences.append(
-                (doc_id, sentence_id, raw_text, norm_text)
-            )
-            bounds.append(
-                (doc_id, sentence_id, start_idx, tokens[-1][0])
-            )
+            sentences.append((doc_id, sentence_id, raw_text, norm_text))
+            bounds.append((doc_id, sentence_id, start_idx, tokens[-1][0]))
 
         return sentences, bounds
 
-    all_sentences: list[tuple[str, int, str, str]] = []
-    all_bounds: list[tuple[str, int, int, int]] = []
+    all_sentences, all_bounds = [], []
 
-    # Parallel sentence construction
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(process_doc, doc_id, slice_start, slice_end): doc_id
-            for doc_id, slice_start, slice_end in docs
-        }
-
-        for future in tqdm(
-            as_completed(futures),
-            total=len(futures),
-            desc="Building sentences"
-        ):
+        futures = {executor.submit(process_doc, doc_id, s, e): doc_id for doc_id, s, e in docs}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Building sentences"):
             try:
                 sentences, bounds = future.result()
                 all_sentences.extend(sentences)
                 all_bounds.extend(bounds)
             except Exception as e:
-                logger.error(
-                    f"Sentence build failed for {futures[future]}: {e}"
-                )
+                logger.error(f"Sentence build failed for {futures[future]}: {e}")
 
-    # Bulk write to DB
-    with get_db_connection() as conn:
-        with conn.transaction():
+            # Commit in chunks
+            while len(all_sentences) >= sent_chunk:
+                batch_sentences = all_sentences[:sent_chunk]
+                batch_bounds = all_bounds[:sent_chunk]
 
-            # Insert sentences
-            SENT_CHUNK = 50_000
-            for i in range(0, len(all_sentences), SENT_CHUNK):
-                copy_rows(
-                    conn,
-                    "sentences",
-                    ["doc_id", "sentence_id",
-                     "sentence_text_raw", "sentence_text_norm"],
-                    all_sentences[i:i + SENT_CHUNK]
-                )
+                with get_db_connection() as conn:
+                    with conn.transaction():
+                        copy_rows(conn, "sentences",
+                                  ["doc_id", "sentence_id", "sentence_text_raw", "sentence_text_norm"],
+                                  batch_sentences)
 
-            # Bulk assign sentence_id back to tokens
-            with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TEMP TABLE tmp_sentence_bounds (
-                        doc_id TEXT,
-                        sentence_id INT,
-                        start_idx INT,
-                        end_idx INT
-                    ) ON COMMIT DROP
-                """)
+                        # Assign sentence IDs back to tokens
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                CREATE TEMP TABLE tmp_sentence_bounds (
+                                    doc_id TEXT,
+                                    sentence_id INT,
+                                    start_idx INT,
+                                    end_idx INT
+                                ) ON COMMIT DROP
+                            """)
+                            buf: Any = io.StringIO()
+                            for doc_id, sentence_id, start, end in batch_bounds:
+                                buf.write(f"{doc_id}\t{sentence_id}\t{start}\t{end}\n")
+                            buf.seek(0)
+                            cur.copy("COPY tmp_sentence_bounds (doc_id, sentence_id, start_idx, end_idx) FROM STDIN", buf)
 
-                buf: Any = io.StringIO()
-                for doc_id, sentence_id, start, end in all_bounds:
-                    buf.write(f"{doc_id}\t{sentence_id}\t{start}\t{end}\n")
-                buf.seek(0)
+                            cur.execute("""
+                                UPDATE tokens t
+                                SET sentence_id = b.sentence_id
+                                FROM tmp_sentence_bounds b
+                                WHERE t.doc_id = b.doc_id
+                                  AND t.token_idx BETWEEN b.start_idx AND b.end_idx
+                            """)
 
-                cur.copy(
-                    "COPY tmp_sentence_bounds (doc_id, sentence_id, start_idx, end_idx) FROM STDIN",
-                    buf
-                )
+                all_sentences = all_sentences[sent_chunk:]
+                all_bounds = all_bounds[sent_chunk:]
 
-                cur.execute("""
-                    UPDATE tokens t
-                    SET sentence_id = b.sentence_id
-                    FROM tmp_sentence_bounds b
-                    WHERE t.doc_id = b.doc_id
-                      AND t.token_idx BETWEEN b.start_idx AND b.end_idx
-                """)
-
-    logger.info(
-        "[PHASE 2] Sentences built with length caps, discourse breaks, "
-        "and bulk sentence_id assignment."
-    )
+    # Commit any remaining sentences
+    if all_sentences:
+        with get_db_connection() as conn:
+            with conn.transaction():
+                copy_rows(conn, "sentences",
+                          ["doc_id", "sentence_id", "sentence_text_raw", "sentence_text_norm"],
+                          all_sentences)
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        CREATE TEMP TABLE tmp_sentence_bounds (
+                            doc_id TEXT,
+                            sentence_id INT,
+                            start_idx INT,
+                            end_idx INT
+                        ) ON COMMIT DROP
+                    """)
+                    buf = io.StringIO()
+                    for doc_id, sentence_id, start, end in all_bounds:
+                        buf.write(f"{doc_id}\t{sentence_id}\t{start}\t{end}\n")
+                    buf.seek(0)
+                    cur.copy("COPY tmp_sentence_bounds (doc_id, sentence_id, start_idx, end_idx) FROM STDIN", buf)
+                    cur.execute("""
+                        UPDATE tokens t
+                        SET sentence_id = b.sentence_id
+                        FROM tmp_sentence_bounds b
+                        WHERE t.doc_id = b.doc_id
+                          AND t.token_idx BETWEEN b.start_idx AND b.end_idx
+                    """)
 
 
 # Embeddings + Clustering
@@ -406,17 +394,13 @@ def canonicalize_tokens_streaming_embeddings(
     window_size: int = config.INGEST_TOKEN_WINDOW_FALLBACK,
     embed_batch_size: int = config.EMBED_BATCH_SIZE,
     similarity_threshold: float = 0.85,
+    commit_chunk: int = 100_000,  # commit every N canonical forms
 ):
     """
     Streaming canonicalisation with embeddings & agglomerative clustering.
 
-    - Server-side cursor
-    - Incremental token windows
-    - Embeddings in batches
-    - Agglomerative clustering per slice × surface_form
-    - Write canonical forms via COPY in batches
+    Commits canonical forms in batches to avoid huge transactions.
     """
-
     logger.info("[PHASE 3] Canonicalising tokens with embeddings (agglomerative, slice-aware)")
 
     canonical_rows: list[tuple[str, int, str]] = []
@@ -452,6 +436,14 @@ def canonicalize_tokens_streaming_embeddings(
                     )
                     current_batch.clear()
 
+                    # Commit if we have enough canonical rows
+                    while len(canonical_rows) >= commit_chunk:
+                        batch_to_commit = canonical_rows[:commit_chunk]
+                        with get_db_connection() as batch_conn:
+                            batch_update_canonical_dicts(batch_to_commit, batch_conn)
+                            batch_conn.commit()
+                        canonical_rows = canonical_rows[commit_chunk:]
+
             # Process leftover batch
             if current_batch:
                 process_batch_embeddings_agglomerative(
@@ -462,13 +454,11 @@ def canonicalize_tokens_streaming_embeddings(
                     similarity_threshold
                 )
 
-        # Bulk write canonical forms to DB
+        # Commit any remaining canonical forms
         if canonical_rows:
-            logger.info(f"Writing {len(canonical_rows)} canonical forms to DB in batches...")
-            chunk_size = 100_000
-            for i in range(0, len(canonical_rows), chunk_size):
-                batch_update_canonical_dicts(canonical_rows[i:i+chunk_size], conn)
-            conn.commit()
+            with get_db_connection() as batch_conn:
+                batch_update_canonical_dicts(canonical_rows, batch_conn)
+                batch_conn.commit()
 
     logger.info("[DONE] Canonicalisation complete (agglomerative, slice-aware).")
 
@@ -555,27 +545,72 @@ def process_batch_embeddings_agglomerative(
                 )
 
 
-def ingest_xml_parallel(max_workers: int = 4):
+def log_post_copy_counts(conn, doc_ids: set[str], context: str) -> None:
+    if not doc_ids:
+        logger.debug("POST-COPY COUNTS (%s): no doc_ids supplied", context)
+        return
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM documents WHERE doc_id = ANY(%s)",
+            (list(doc_ids),),
+        )
+        row = cur.fetchone()
+        doc_count = row[0] if row is not None else 0
+
+        cur.execute(
+            "SELECT COUNT(*) FROM tokens WHERE doc_id = ANY(%s)",
+            (list(doc_ids),),
+        )
+        row = cur.fetchone()
+        tok_count = row[0] if row is not None else 0
+
+    logger.debug(
+        "POST-COPY COUNTS (%s): documents=%d tokens=%d",
+        context,
+        doc_count,
+        tok_count,
+    )
+
+
+def extract_year(date_raw: str | None) -> Optional[int]:
     """
-    Ingest XML files from config.INPUT_DIR and write documents + tokens to DB.
-    Parallel-safe version using ThreadPoolExecutor.
+    Extract a 4-digit year from a raw date string.
+    Returns an int if found, else None.
     """
-    xml_files = list(Path(config.INPUT_DIR).glob("*.xml"))
+    if not date_raw:
+        return None
+    match = re.search(r"\b(\d{4})\b", date_raw)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def ingest_xml_parallel(max_workers: int = 4, batch_size: int = 500) -> None:
+    """
+    Ingest XML files in parallel and write documents + tokens to DB in batches.
+    Commits per batch to avoid huge transactions. Compatible with psycopg v3.
+    """
+
+    xml_files: list[Path] = list(Path(config.INPUT_DIR).glob("*.xml"))
     if MAX_DOCS:
         xml_files = xml_files[:MAX_DOCS]
 
-    all_docs = []
-    all_tokens = []
+    all_docs: list[dict] = []
+    all_tokens: list[tuple[str, int, str]] = []
 
-    def process_and_collect(xml_path):
+    def process_and_collect(xml_path: Path):
         res = process_file_worker(xml_path)
         if res:
             doc_meta, tokens = res
             return doc_meta, tokens
+        logger.warning(f"File rejected: {xml_path.name}")
         return None
 
+    # --- Parallel XML parsing ---
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(process_and_collect, f): f for f in xml_files}
+
         for future in tqdm(as_completed(futures), total=len(futures), desc="Ingesting XML"):
             try:
                 result = future.result()
@@ -583,19 +618,77 @@ def ingest_xml_parallel(max_workers: int = 4):
                     doc_meta, tokens = result
                     all_docs.append(doc_meta)
                     all_tokens.extend([(doc_meta["doc_id"], i, tok) for i, tok in tokens])
+                    logger.debug(f"Collected {len(all_tokens)} tokens from {len(all_docs)} docs")
             except Exception as e:
                 logger.error(f"Failed to process {futures[future]}: {e}")
 
-    # Bulk insert
+    # --- Single connection for all DB writes ---
+    if not all_docs:
+        logger.warning("No valid documents found for ingestion.")
+        return
+
+    logger.info(f"Starting database insertion: {len(all_docs)} docs, {len(all_tokens)} tokens")
+
     with get_db_connection() as conn:
         with conn.transaction():
-            # Insert documents
-            copy_rows(conn, "documents",
-                      ["doc_id", "title", "author", "publisher", "pub_place", "source_date_raw", "slice_start", "slice_end"],
-                      [[d[k] for k in ["doc_id", "title", "author", "publisher", "pub_place", "source_date_raw", "slice_start", "slice_end"]]
-                       for d in all_docs])
-            # Insert tokens
-            copy_rows(conn, "tokens", ["doc_id", "token_idx", "token"], all_tokens)
+            while all_docs:
+                batch_docs = all_docs[:batch_size]
+                batch_doc_ids = {d["doc_id"] for d in batch_docs}
+                batch_tokens = [t for t in all_tokens if t[0] in batch_doc_ids]
+
+                # Prepare documents rows
+                doc_rows = [
+                    [
+                        d["doc_id"],
+                        d["title"],
+                        d["author"],
+                        extract_year(d["source_date_raw"]),
+                        d["publisher"],
+                        d["pub_place"],
+                        d["source_date_raw"],
+                        len([t for t in batch_tokens if t[0] == d["doc_id"]]),
+                        d["slice_start"],
+                        d["slice_end"],
+                    ]
+                    for d in batch_docs
+                ]
+
+                # COPY documents
+                copy_rows(
+                    conn,
+                    "documents",
+                    [
+                        "doc_id",
+                        "title",
+                        "author",
+                        "pub_year",
+                        "publisher",
+                        "pub_place",
+                        "source_date_raw",
+                        "token_count",
+                        "slice_start",
+                        "slice_end",
+                    ],
+                    doc_rows
+                )
+
+                # COPY tokens
+                copy_rows(
+                    conn,
+                    "tokens",
+                    ["doc_id", "token_idx", "token"],
+                    [[t[0], t[1], t[2]] for t in batch_tokens]
+                )
+
+                # Log post-COPY counts
+                log_post_copy_counts(conn, batch_doc_ids, context="batch")
+
+                # Remove committed batch
+                all_docs = all_docs[batch_size:]
+                all_tokens = [t for t in all_tokens if t[0] not in batch_doc_ids]
+
+    logger.info("XML ingestion complete and committed to database.")
+
 
 
 def main() -> None:
