@@ -61,23 +61,6 @@ def split_into_sentences(tokens: List[str], window: int = 10) -> List[str]:
     return sentences
 
 
-def embed_sentences(sentences: List[str]) -> List[List[float]]:
-    """
-    Compute embeddings for a list of sentences using MacBERTh.
-    Returns list of embedding vectors.
-    """
-    embeddings: List[List[float]] = []
-    for i in range(0, len(sentences), config.EMBED_BATCH_SIZE):
-        batch = sentences[i:i + config.EMBED_BATCH_SIZE]
-        inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=False).to(DEVICE)
-        with torch.no_grad():
-            outputs = model(**inputs)
-            # Mean pooling over token embeddings
-            emb = outputs.last_hidden_state.mean(dim=1)
-            embeddings.extend(emb.cpu().tolist())
-    return embeddings
-
-
 def stream_sentences(doc_id: str, sentences: list[str], embeddings: list[list[float]]):
     """
     Stream sentences and embeddings into the `sentences` table using COPY (psycopg3),
@@ -142,7 +125,6 @@ def main(limit: Optional[int] = None):
     for doc_id in tqdm(doc_ids, desc="Docs"):
         tokens = get_document_tokens(doc_id)
         sentences = split_into_sentences(tokens, window=config.INGEST_TOKEN_WINDOW_FALLBACK)
-        # embeddings = embed_sentences(sentences)
         embeddings = embed_sentences_threaded(sentences)
         stream_sentences(doc_id, sentences, embeddings)
 
