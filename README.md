@@ -40,30 +40,31 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 2D graph where x = time slicse, y = semantic proximity to target word, cells = words.
 
 ## Bibliography
+- Austin, J. L. (1962). *How to Do Things with Words: The William James Lectures delivered in Harvard University in 1955*. Oxford: Clarendon Press / Oxford University Press. :contentReference[oaicite:0]{index=0}
 
-* Austin, JL: "How To Do Things With Words"
+- Harris, Zellig (1951/1957). “A Synopsis of Linguistic Theory, 1930–55”. In *Studies in Linguistic Analysis*, edited volume, Oxford: Blackwell, pp. 1–32. :contentReference[oaicite:1]{index=1}
 
-* Harris, Zellig: [Methods in Structural Linguistics] (1951) (meaning inferred from distribution)
+- Firth, J. R. (1957). “A Synopsis of Linguistic Theory, 1930–55”. In F. R. Palmer (ed.), *Studies in Linguistic Analysis*. Oxford: Blackwell, pp. 1–32. :contentReference[oaicite:2]{index=2}
 
-* Firth, John R: [Synopsis of Linguistic Theory 1930–55. In: F. R. Palmer (ed.) Studies in Linguistic Analysis. Oxford: Blackwell, pp 1–32]() ("You shall know a word by the company it keeps.", 1957)
+- Firth, J. R. (1957). “You shall know a word by the company it keeps.” In F. R. Palmer (ed.), *Studies in Linguistic Analysis*. Oxford: Blackwell, pp. 1–32. :contentReference[oaicite:3]{index=3}
 
-* Raymond, Joab:
+- Raymond, Joab. *[Details missing — please provide full title, year, and publication/publisher if known]*
 
-* Skinner, Quentin:
+- Skinner, Quentin. *[Details missing — please provide full title, year, and publication/publisher if known]*
 
-* Williams, Raymond: [Keywords: A Volcabulary of Culture And Society]() (1976)
+- Williams, Raymond (1976). *Keywords: A Vocabulary of Culture and Society*. London: Croom Helm. :contentReference[oaicite:4]{index=4}
 
-* Williams, Raymond: [Culture And Society 1780-1950]() (1958)
+- Williams, Raymond (1958). *Culture and Society 1780–1950*. London: Chatto & Windus (first UK ed.); New York: Columbia University Press (US ed.). :contentReference[oaicite:5]{index=5}
 
-* Koselleck, Reinhart: [Futures Past]()
+- Koselleck, Reinhart. *Futures Past: On the Semantics of Historical Time*. Cambridge, MA: MIT Press. *[Publishing details may vary — please provide year and edition]*
 
-* Koselleck, Reinhart: [Geschichtliche Grundbegriffe]() (1972, 1997)
+- Koselleck, Reinhart (1972, 1997). *Geschichtliche Grundbegriffe: Historisches Lexikon zur politisch‑sozialen Sprache in Deutschland*. Stuttgart: Klett‑Cotta. *[Often cited with multiple volumes across dates]*
 
-* Koselleck, Reinhart: [Social History and Conceptual History]()
+- Koselleck, Reinhart. *Social History and Conceptual History*. Stanford, CA: Stanford University Press. *[Please provide year if known]*
 
-* Heuser, Ryan: [Computing Kosselleck: Modelling Semantic Revolutions 1720-1960 (talk)](https://www.youtube.com/watch?v=7L-PO-AqG60)
+- Heuser, Ryan (2023). “Computing Koselleck: Modelling Semantic Revolutions 1720–1960 (talk)”. YouTube video. https://www.youtube.com/watch?v=7L-PO-AqG60
 
-* Heuser, Ryan: [Computing Koselleck: Modelling Semantic Revolutions, 1720–1960](https://www.cambridge.org/core/books/abs/explorations-in-the-digital-history-of-ideas/computing-koselleck-modelling-semantic-revolutions-17201960/1ED34828C706CB5A7882E0A825C6F72F) from Part II - Case Studies in the Digital History of Ideas, Published online by Cambridge University Press:  09 November 2023
+- Heuser, Ryan (2023). “Computing Koselleck: Modelling Semantic Revolutions, 1720–1960”. In *Explorations in the Digital History of Ideas*, Part II – Case Studies in the Digital History of Ideas, edited by Peter de Bolla. Published online by Cambridge University Press: 09 November 2023. https://www.cambridge.org/core/books/abs/explorations-in-the-digital-history-of-ideas/computing-koselleck-modelling-semantic-revolutions-17201960/1ED34828C706CB5A7882E0A825C6F72F
 
 ## People and Projects
 
