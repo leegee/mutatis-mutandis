@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# eebo_parse_tei.py
 """
 Multi-process streaming EEBO TEI XML ingestion pipeline
 
