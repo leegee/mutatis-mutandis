@@ -16,6 +16,7 @@ import eebo_config as config
 from eebo_logging import logger
 import eebo_db
 
+NUM_WORKERS = 4 # adjust for CPU cores
 
 def fetch_tokens_for_slice(conn, start_year: int, end_year: int):
     """
@@ -96,10 +97,9 @@ def train_slice_wrapper(slice_tuple):
 
 def main():
     slices = config.SLICES
-    max_workers = min(4, len(slices))  # adjust for CPU cores
+    max_workers = min(NUM_WORKERS, len(slices))
     logger.info(f"Training {len(slices)} slices with {max_workers} parallel workers")
 
-    # Parallel slice training
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         list(executor.map(train_slice_wrapper, slices))
 
