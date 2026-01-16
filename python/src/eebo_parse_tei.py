@@ -8,9 +8,6 @@ Multi-process streaming EEBO TEI XML ingestion pipeline
 - Safe re-ingest
 - Call with `--limit int` or all documents in the target dir will be processed
 - See `eebo_config.py`
-
-NB Womdpws multiprocessing queues cannot handle huge pickled objects reliably + transactions block the main process = handle is closed crash
-
 """
 
 from __future__ import annotations
@@ -22,28 +19,16 @@ import argparse
 import io
 import re
 import unicodedata
-
-# import torch
-# from transformers import AutoTokenizer, AutoModel
+import tempfile
+import csv
+import os
 
 import eebo_config as config
 import eebo_db
 import eebo_ocr_fixes
 from eebo_logging import logger
 
-
 MAX_DOCS: Optional[int] = None
-
-# DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-# tokenizer = AutoTokenizer.from_pretrained(
-#     config.MODEL_PATH, local_files_only=True
-# )
-# model = AutoModel.from_pretrained(
-#     config.MODEL_PATH, local_files_only=True
-# ).to(DEVICE)
-# model.eval()
-
 
 def normalize_early_modern(text: str) -> str:
     text = text.lower()
@@ -59,13 +44,11 @@ def normalize_early_modern(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-
 def extract_year(date_raw: str | None) -> Optional[int]:
     if not date_raw:
         return None
     m = re.search(r"\b(\d{4})\b", date_raw)
     return int(m.group(1)) if m else None
-
 
 def assign_slice(date_raw: str | None) -> tuple[int | None, int | None]:
     if not date_raw:
@@ -73,13 +56,11 @@ def assign_slice(date_raw: str | None) -> tuple[int | None, int | None]:
     m = re.search(r"\b(\d{4})\b", date_raw)
     if not m:
         return None, None
-
     year = int(m.group(1))
     for start, end in config.SLICES:
         if start <= year <= end:
             return start, end
     return None, None
-
 
 def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[int, str]]]]:
     """Parse a single XML file and return doc metadata + token list."""
@@ -118,7 +99,6 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
         return None
 
     raw_text = " ".join(
-        # generator expression:
         t.strip()
         for body in body_elems
         for t in body.itertext()
@@ -151,6 +131,22 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
 
     return doc_meta, token_rows
 
+def process_file_to_temp(xml_path: Path) -> Optional[tuple[dict[str, Any], str]]:
+    """Parse a single XML file, write tokens to a temporary file, return metadata + temp file path."""
+    result = process_file(xml_path)
+    if not result:
+        return None
+
+    doc_meta, token_tuples = result
+
+    # Create a temp file for tokens
+    temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="", suffix=".tsv")
+    writer = csv.writer(temp_file, delimiter="\t")
+    for token_idx, token in token_tuples:
+        writer.writerow([doc_meta["doc_id"], token_idx, token])
+    temp_file.close()  # flush and close so main process can read
+
+    return doc_meta, temp_file.name
 
 def stream_copy(conn, table: str, columns: list[str], rows):
     """Streaming COPY directly into final table."""
@@ -176,8 +172,8 @@ def stream_copy(conn, table: str, columns: list[str], rows):
         with cur.copy(sql) as copy:
             copy.write(buf.read())
 
-
-def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
+def ingest_xml_parallel_safe(max_workers: int = 4, batch_docs: int = 100, batch_tokens: int = 10000) -> None:
+    """Main ingestion function using temp files for tokens and batching."""
     xml_files = list(Path(config.INPUT_DIR).glob("*.xml"))
     if MAX_DOCS:
         xml_files = xml_files[:MAX_DOCS]
@@ -189,12 +185,11 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
     logger.info(f"Starting ingestion of {len(xml_files)} XML files")
 
     doc_rows: list[list[Any]] = []
-    token_rows: list[list[Any]] = []
 
-    # Step 1: parse XML in parallel
+    # Step 1: parse XML in parallel, write tokens to temp files
     results = []
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_file, p): p for p in xml_files}
+        futures = {executor.submit(process_file_to_temp, p): p for p in xml_files}
 
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing XML"):
             xml_path = futures[future]
@@ -209,12 +204,14 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
 
     logger.info(f"Parsing complete. {len(results)} documents ready for DB insert")
 
-    # Step 2: write to DB in main process, batching
+    # Step 2: write metadata + tokens to DB in batches
     with eebo_db.get_connection() as conn:
         with conn.transaction():
-            for doc_meta, token_tuples in tqdm(results, desc="Writing to DB"):
+            token_batch: list[list[Any]] = []
+            for doc_meta, token_file in tqdm(results, desc="Writing to DB"):
                 doc_id = doc_meta["doc_id"]
 
+                # Document metadata
                 doc_rows.append([
                     doc_id,
                     doc_meta["title"],
@@ -223,18 +220,14 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
                     doc_meta["publisher"],
                     doc_meta["pub_place"],
                     doc_meta["source_date_raw"],
-                    len(token_tuples),
+                    sum(1 for _ in open(token_file, "r")),  # token count
                     doc_meta["slice_start"],
                     doc_meta["slice_end"],
                 ])
 
-                for token_idx, token in token_tuples:
-                    token_rows.append([doc_id, token_idx, token])
-
-                # Flush batch if needed
+                # Flush document metadata if batch is full
                 if len(doc_rows) >= batch_docs:
-                    logger.info(f"Flushing batch: {len(doc_rows)} docs, {len(token_rows)} tokens")
-
+                    logger.info(f"Flushing {len(doc_rows)} document metadata")
                     stream_copy(
                         conn,
                         "documents",
@@ -245,19 +238,27 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
                         ],
                         doc_rows,
                     )
-                    stream_copy(
-                        conn,
-                        "tokens",
-                        ["doc_id", "token_idx", "token"],
-                        token_rows,
-                    )
-
                     doc_rows.clear()
-                    token_rows.clear()
 
-            # Final flush
+                # Read tokens and batch for COPY
+                with open(token_file, "r") as f:
+                    for line in f:
+                        token_batch.append(line.strip().split("\t"))
+                        if len(token_batch) >= batch_tokens:
+                            stream_copy(
+                                conn,
+                                "tokens",
+                                ["doc_id", "token_idx", "token"],
+                                token_batch,
+                            )
+                            token_batch.clear()
+
+                # Remove temp file
+                os.remove(token_file)
+
+            # Final flush of remaining doc metadata
             if doc_rows:
-                logger.info(f"Final flush: {len(doc_rows)} docs, {len(token_rows)} tokens")
+                logger.info(f"Final flush of {len(doc_rows)} document metadata")
                 stream_copy(
                     conn,
                     "documents",
@@ -268,15 +269,18 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
                     ],
                     doc_rows,
                 )
+
+            # Final flush of remaining token batch
+            if token_batch:
+                logger.info(f"Final flush of {len(token_batch)} tokens")
                 stream_copy(
                     conn,
                     "tokens",
                     ["doc_id", "token_idx", "token"],
-                    token_rows,
+                    token_batch,
                 )
 
     logger.info("XML ingestion complete")
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -289,8 +293,7 @@ def main() -> None:
     with eebo_db.get_connection() as conn:
         eebo_db.init_db(conn)
 
-    ingest_xml_parallel()
-
+    ingest_xml_parallel_safe()
 
 if __name__ == "__main__":
     main()
