@@ -5,7 +5,7 @@ SRC="./src"
 PYTHON="python"
 
 INGEST_SCRIPT="$SRC/eebo_parse_tei.py"
-SENTENCE_SCRIPT="$SRC/eebo_sentence_embedding.py"
+SENTENCE_SCRIPT="$SRC/eebo_macberth_sentence_embedding.py"
 
 # Default values
 PHASE="all"
