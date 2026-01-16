@@ -108,12 +108,19 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
 
     slice_start, slice_end = assign_slice(date_raw)
 
-    body_elem = tree.find(".//EEBO//TEXT//BODY")
-    if body_elem is None:
-        logger.error(f"XML rejected: {xml_path.name}: no body text")
+    body_elems = tree.findall(".//EEBO//TEXT//BODY")
+    if not body_elems:
+        logger.error(f"XML rejected: {xml_path.name} at {xml_path.resolve()}: no body text found")
         return None
 
-    raw_text = " ".join(t.strip() for t in body_elem.itertext() if t.strip())
+    raw_text = " ".join(
+        # generator expression:
+        t.strip()
+        for body in body_elems
+        for t in body.itertext()
+        if t.strip()
+    )
+
     fixed_text = eebo_ocr_fixes.apply_ocr_fixes(raw_text)
     normalized = normalize_early_modern(fixed_text)
 
