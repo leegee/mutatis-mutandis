@@ -155,10 +155,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
     logger.info("Database schema created")
 
 
-# ---------------------------------------------------------------------
-# Index management (explicit, post-ingest)
-# ---------------------------------------------------------------------
-
 def drop_token_indexes(conn: Connection) -> None:
     """
     Drop all token-related indexes before bulk ingestion.
@@ -222,3 +218,33 @@ def create_tiered_token_indexes(conn: Connection) -> None:
             """)
 
     logger.info("Tiered token indexes created")
+
+
+def drop_tokens_fk(conn: Connection) -> None:
+    """
+    Drop the foreign key from tokens to documents before bulk ingestion.
+    """
+    logger.info("Dropping tokens.doc_id foreign key")
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE tokens
+                DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;
+            """)
+    logger.info("tokens.doc_id foreign key dropped")
+
+
+def create_tokens_fk(conn: Connection) -> None:
+    """
+    Recreate the foreign key from tokens to documents after bulk ingestion.
+    """
+    logger.info("Creating tokens.doc_id foreign key")
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE tokens
+                ADD CONSTRAINT tokens_doc_id_fkey FOREIGN KEY (doc_id)
+                REFERENCES documents(doc_id)
+                ON DELETE CASCADE;
+            """)
+    logger.info("tokens.doc_id foreign key created")
