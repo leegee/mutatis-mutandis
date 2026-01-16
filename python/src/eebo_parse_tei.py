@@ -182,7 +182,7 @@ def stream_copy(conn, table: str, columns: list[str], rows):
 
 
 def ingest_xml_parallel_safe(max_workers: int = 4, batch_docs: int = 100, batch_tokens: int = 10000) -> None:
-    xml_files = list(Path(config.INPUT_DIR).glob("*.xml"))
+    xml_files = list(Path(config.INPUT_DIR).rglob("*.xml"))
     if MAX_DOCS:
         xml_files = xml_files[:MAX_DOCS]
 
