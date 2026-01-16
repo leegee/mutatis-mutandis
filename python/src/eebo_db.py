@@ -8,14 +8,16 @@ from eebo_logging import logger
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
 
+
 def get_connection(
     *,
     connect_timeout: int = 5,
     application_name: str = "eebo",
 ) -> Connection:
     """
-    Create and return a PostgreSQL connection with autocommit disabled -
-    callers are expected to use `with conn.transaction():` or call `conn.commit()`.
+    Create and return a PostgreSQL connection with autocommit disabled.
+    Callers should use `with conn.transaction():` or call `conn.commit()`.
+    Applies session-level tuning suitable for large bulk ingestion.
     """
     last_exc: Exception | None = None
 
@@ -31,9 +33,12 @@ def get_connection(
             )
             conn.autocommit = False
 
-            # Ingest / bulk-read optimised settings
+            # Session-level tuning
             with conn.cursor() as cur:
                 cur.execute("SET synchronous_commit = OFF;")
+                cur.execute("SET work_mem = '128MB';")
+                cur.execute("SET maintenance_work_mem = '1GB';")
+                cur.execute("SET temp_buffers = '32MB';")
 
             return conn
 
@@ -48,16 +53,20 @@ def get_connection(
     raise RuntimeError("Could not establish PostgreSQL connection") from last_exc
 
 
-def get_autocommit_connection(*, connect_timeout: int = 5, application_name: str = "eebo"):
+def get_autocommit_connection(
+    *,
+    connect_timeout: int = 5,
+    application_name: str = "eebo",
+) -> Connection:
     """
     Get a fresh PostgreSQL connection in autocommit mode.
     Safe for COPY / bulk insert operations.
+    Applies session-level tuning suitable for high-speed ingestion.
     """
     last_exc: Exception | None = None
 
     for attempt in range(1, _DB_RETRIES + 1):
         try:
-            # Fresh connection, autocommit enabled immediately
             conn = psycopg.connect(
                 dbname="eebo",
                 user="postgres",
@@ -65,8 +74,16 @@ def get_autocommit_connection(*, connect_timeout: int = 5, application_name: str
                 port=5432,
                 connect_timeout=connect_timeout,
                 application_name=application_name,
-                autocommit=True  # enable immediately on connect
+                autocommit=True,  # enable immediately on connect
             )
+
+            # Session-level tuning for bulk insert
+            with conn.cursor() as cur:
+                cur.execute("SET synchronous_commit = OFF;")
+                cur.execute("SET work_mem = '128MB';")
+                cur.execute("SET maintenance_work_mem = '1GB';")
+                cur.execute("SET temp_buffers = '32MB';")
+
             return conn
 
         except Exception as exc:
@@ -77,13 +94,15 @@ def get_autocommit_connection(*, connect_timeout: int = 5, application_name: str
             if attempt < _DB_RETRIES:
                 time.sleep(_DB_RETRY_DELAY)
 
-    raise RuntimeError("Could not establish PostgreSQL autocommit connection") from last_exc
+    raise RuntimeError(
+        "Could not establish PostgreSQL autocommit connection"
+    ) from last_exc
+
 
 
 def init_db(conn: Connection, drop_existing: bool = True) -> None:
     """
     Initialise database schema.
-
     If drop_existing=True, all existing tables are dropped first.
     Intended for clean re-ingestion runs.
     """
@@ -114,54 +133,38 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     publisher TEXT,
                     pub_place TEXT,
                     source_date_raw TEXT,
-
-                    -- analysis helpers
                     token_count INTEGER,
                     slice_start INTEGER,
                     slice_end INTEGER
                 );
 
-                /* Token index (authoritative) */
                 CREATE TABLE tokens (
                     doc_id TEXT NOT NULL,
                     token_idx INTEGER NOT NULL,
                     token TEXT NOT NULL,
-
-                    -- future-proofing (not populated at ingest)
                     sentence_id INTEGER,
                     canonical TEXT,
-
                     PRIMARY KEY (doc_id, token_idx),
-                    FOREIGN KEY (doc_id)
-                        REFERENCES documents(doc_id)
-                        ON DELETE CASCADE
+                    FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
                 );
 
-                /* Sentence table (derived, optional, post-ingest) */
                 CREATE TABLE sentences (
                     doc_id TEXT NOT NULL,
                     sentence_id INTEGER NOT NULL,
                     sentence_text_raw TEXT,
                     sentence_text_norm TEXT,
                     embedding DOUBLE PRECISION[],
-
                     PRIMARY KEY (doc_id, sentence_id),
-                    FOREIGN KEY (doc_id)
-                        REFERENCES documents(doc_id)
-                        ON DELETE CASCADE
+                    FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
                 );
 
-                /* Orthography / variant control */
                 CREATE TABLE spelling_map (
                     variant TEXT PRIMARY KEY,
                     canonical TEXT NOT NULL,
                     concept_type TEXT NOT NULL DEFAULT 'orthographic',
-                    CHECK (
-                        concept_type IN ('orthographic','derivational','exclude')
-                    )
+                    CHECK (concept_type IN ('orthographic','derivational','exclude'))
                 );
 
-                /* Diachronic neighbourhood output */
                 CREATE TABLE neighbourhoods (
                     slice_start INTEGER NOT NULL,
                     slice_end INTEGER NOT NULL,
@@ -169,11 +172,9 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     neighbour TEXT NOT NULL,
                     rank INTEGER NOT NULL,
                     cosine DOUBLE PRECISION,
-
                     PRIMARY KEY (slice_start, slice_end, query, rank)
                 );
 
-                /* Optional provenance tracking */
                 CREATE TABLE ingest_runs (
                     run_id SERIAL PRIMARY KEY,
                     started_at TIMESTAMP DEFAULT now(),
@@ -186,11 +187,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
 
 
 def drop_token_indexes(conn: Connection) -> None:
-    """
-    Drop all token-related indexes before bulk ingestion.
-    """
     logger.info("Dropping token indexes")
-
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("""
@@ -200,74 +197,41 @@ def drop_token_indexes(conn: Connection) -> None:
                 DROP INDEX IF EXISTS idx_tokens_canonical;
                 DROP INDEX IF EXISTS idx_tokens_sentence_notnull;
             """)
-
     logger.info("Token indexes dropped")
 
 
 def create_token_indexes(conn: Connection) -> None:
-    """
-    Create basic token indexes for post-ingest querying.
-    """
     logger.info("Creating basic token indexes")
-
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_tokens_token
-                    ON tokens(token);
-            """)
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_tokens_doc
-                    ON tokens(doc_id);
-            """)
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_tokens_sentence
-                    ON tokens(sentence_id);
-            """)
-
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(doc_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_sentence ON tokens(sentence_id);")
     logger.info("Basic token indexes created")
 
 
 def create_tiered_token_indexes(conn: Connection) -> None:
-    """
-    Create additional / tiered indexes for canonicalisation
-    and sentence-level queries. Run only after ingestion.
-    """
     logger.info("Creating tiered token indexes")
-
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_tokens_canonical
-                    ON tokens(canonical);
-            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical ON tokens(canonical);")
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_tokens_sentence_notnull
-                    ON tokens(sentence_id)
-                    WHERE sentence_id IS NOT NULL;
+                ON tokens(sentence_id)
+                WHERE sentence_id IS NOT NULL;
             """)
-
     logger.info("Tiered token indexes created")
 
 
 def drop_tokens_fk(conn: Connection) -> None:
-    """
-    Drop the foreign key from tokens to documents before bulk ingestion.
-    """
     logger.info("Dropping tokens.doc_id foreign key")
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE tokens
-                DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;
-            """)
+            cur.execute("ALTER TABLE tokens DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;")
     logger.info("tokens.doc_id foreign key dropped")
 
 
 def create_tokens_fk(conn: Connection) -> None:
-    """
-    Recreate the foreign key from tokens to documents after bulk ingestion.
-    """
     logger.info("Creating tokens.doc_id foreign key")
     with conn.transaction():
         with conn.cursor() as cur:
