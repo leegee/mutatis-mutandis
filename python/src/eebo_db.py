@@ -1,35 +1,53 @@
 # eebo_db.py
-import sys
 import psycopg
 from psycopg import Connection
+import time
+
 from eebo_logging import logger
 
+_DB_RETRIES = 3
+_DB_RETRY_DELAY = 5  # seconds
 
-def get_connection() -> Connection:
+def get_connection(
+    *,
+    connect_timeout: int = 5,
+    application_name: str = "eebo",
+) -> Connection:
     """
     Create and return a PostgreSQL connection.
 
     Autocommit is disabled; callers are expected to use
     `with conn.transaction():` or call `conn.commit()`.
     """
-    try:
-        conn = psycopg.connect(
-            dbname="eebo",
-            user="postgres",
-            host="localhost",
-            port=5432,
-        )
-        conn.autocommit = False
+    last_exc: Exception | None = None
 
-        # Ingest-optimised settings
-        with conn.cursor() as cur:
-            cur.execute("SET synchronous_commit = OFF;")
+    for attempt in range(1, _DB_RETRIES + 1):
+        try:
+            conn = psycopg.connect(
+                dbname="eebo",
+                user="postgres",
+                host="localhost",
+                port=5432,
+                connect_timeout=connect_timeout,
+                application_name=application_name,
+            )
+            conn.autocommit = False
 
-        return conn
+            # Ingest / bulk-read optimised settings
+            with conn.cursor() as cur:
+                cur.execute("SET synchronous_commit = OFF;")
 
-    except Exception as exc:
-        logger.error(f"[ERROR] Cannot open PostgreSQL database: {exc}")
-        sys.exit(1)
+            return conn
+
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                f"PostgreSQL connection attempt {attempt}/{_DB_RETRIES} failed: {exc}"
+            )
+            if attempt < _DB_RETRIES:
+                time.sleep(_DB_RETRY_DELAY)
+
+    raise RuntimeError("Could not establish PostgreSQL connection") from last_exc
 
 
 def init_db(conn: Connection, drop_existing: bool = True) -> None:
