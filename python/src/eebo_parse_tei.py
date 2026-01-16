@@ -296,9 +296,12 @@ def main() -> None:
     MAX_DOCS = args.limit
 
     with eebo_db.get_connection() as conn:
+        logger.info('Initialising DB')
         eebo_db.init_db(conn)
         eebo_db.drop_token_indexes(conn)
         eebo_db.drop_tokens_fk(conn)
+
+        logger.info('DB initialised, ingesting XML')
 
         # Ingest XML documents and tokens
         ingest_xml_parallel_safe(
@@ -308,9 +311,11 @@ def main() -> None:
         )
 
         # Restore DB integrity and indexes
+        logger.info('All ingested, restoring indexes')
         eebo_db.create_tokens_fk(conn)
         eebo_db.create_token_indexes(conn)
         eebo_db.create_tiered_token_indexes(conn)
+        logger.info('Done - all ingested, indexes restored')
 
 
 if __name__ == "__main__":
