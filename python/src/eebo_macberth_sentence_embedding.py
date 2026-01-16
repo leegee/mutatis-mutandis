@@ -105,7 +105,7 @@ def embed_sentences_threaded(sentences: list[str]) -> list[list[float]]:
     # Split sentences into batches
     batches = [sentences[i:i + config.EMBED_BATCH_SIZE] for i in range(0, len(sentences), config.EMBED_BATCH_SIZE)]
 
-    with ThreadPoolExecutor(max_workers=config.EMBED_MAX_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=config.NUM_WORKERS) as executor:
         future_to_batch = {executor.submit(embed_batch, batch): batch for batch in batches}
         for future in tqdm(as_completed(future_to_batch), total=len(future_to_batch), desc="Batches"):
             embeddings.extend(future.result())

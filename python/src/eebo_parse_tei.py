@@ -44,11 +44,13 @@ def normalize_early_modern(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
+
 def extract_year(date_raw: str | None) -> Optional[int]:
     if not date_raw:
         return None
     m = re.search(r"\b(\d{4})\b", date_raw)
     return int(m.group(1)) if m else None
+
 
 def assign_slice(date_raw: str | None) -> tuple[int | None, int | None]:
     if not date_raw:
@@ -61,6 +63,7 @@ def assign_slice(date_raw: str | None) -> tuple[int | None, int | None]:
         if start <= year <= end:
             return start, end
     return None, None
+
 
 def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[int, str]]]]:
     """Parse a single XML file and return doc metadata + token list."""
@@ -131,6 +134,7 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
 
     return doc_meta, token_rows
 
+
 def process_file_to_temp(xml_path: Path) -> Optional[tuple[dict[str, Any], str]]:
     """Parse a single XML file, write tokens to a temporary file, return metadata + temp file path."""
     result = process_file(xml_path)
@@ -172,7 +176,8 @@ def stream_copy(conn, table: str, columns: list[str], rows):
         with cur.copy(sql) as copy:
             copy.write(buf.read())
 
-def ingest_xml_parallel_safe(max_workers: int = 4, batch_docs: int = 100, batch_tokens: int = 10000) -> None:
+
+def ingest_xml_parallel_safe(max_workers: int = config.NUM_WORKERS, batch_docs: int = config.BATCH_DOCS, batch_tokens: int = config.BATCH_TOKENS) -> None:
     """Main ingestion function using temp files for tokens and batching."""
     xml_files = list(Path(config.INPUT_DIR).glob("*.xml"))
     if MAX_DOCS:
@@ -186,7 +191,7 @@ def ingest_xml_parallel_safe(max_workers: int = 4, batch_docs: int = 100, batch_
 
     doc_rows: list[list[Any]] = []
 
-    # Step 1: parse XML in parallel, write tokens to temp files
+    # Parse XML in parallel, write tokens to temp files
     results = []
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(process_file_to_temp, p): p for p in xml_files}
@@ -204,7 +209,7 @@ def ingest_xml_parallel_safe(max_workers: int = 4, batch_docs: int = 100, batch_
 
     logger.info(f"Parsing complete. {len(results)} documents ready for DB insert")
 
-    # Step 2: write metadata + tokens to DB in batches
+    # Write metadata and tokens to DB in batches
     with eebo_db.get_connection() as conn:
         with conn.transaction():
             token_batch: list[list[Any]] = []

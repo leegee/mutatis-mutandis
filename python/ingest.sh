@@ -49,7 +49,7 @@ echo "All checks passed"
 
 # Run phase
 case "$PHASE" in
-    ingest)
+    i|ingest)
         echo "> Running ingest phase"
         "$PYTHON" "$INGEST_SCRIPT" "$@"
         ;;
@@ -74,7 +74,7 @@ case "$PHASE" in
         ;;
     *)
         echo "Unknown phase: $PHASE"
-        echo "Usage: $0 [--phase ingest|sentence|s|trainft|t|canonical|c|all] [--limit n] [additional args...]"
+        echo "Usage: $0 [--phase ingest|i|sentence|s|trainft|t|canonical|c|all] [--limit n] [additional args...]"
         exit 1
         ;;
 esac

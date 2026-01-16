@@ -12,10 +12,12 @@ LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 MODEL_PATH = Path("./lib/macberth-huggingface")
+BATCH_DOCS = 100
+BATCH_TOKENS = 10000
 FASTTEXT_BATCH_SIZE = 50_000
 EMBED_BATCH_SIZE = 256
 INGEST_TOKEN_WINDOW_FALLBACK = 5  # around 5 tokens if sentence unavailable
-EMBED_MAX_WORKERS = 4
+NUM_WORKERS = 4
 
 SLICES_DIR = BASE_DIR / "out" / "slices"
 MODELS_DIR = BASE_DIR / "out" / "models"
