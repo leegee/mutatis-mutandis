@@ -8,6 +8,9 @@ Multi-process streaming EEBO TEI XML ingestion pipeline
 - Safe re-ingest
 - Call with `--limit int` or all documents in the target dir will be processed
 - See `eebo_config.py`
+
+NB Womdpws multiprocessing queues cannot handle huge pickled objects reliably + transactions block the main process = handle is closed crash
+
 """
 
 from __future__ import annotations
@@ -188,65 +191,71 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = 100) -> None:
     doc_rows: list[list[Any]] = []
     token_rows: list[list[Any]] = []
 
+    # Step 1: parse XML in parallel
+    results = []
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_file, p): p for p in xml_files}
+
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Processing XML"):
+            xml_path = futures[future]
+            try:
+                result = future.result()
+            except Exception as exc:
+                logger.error(f"XML worker failed for {xml_path.name}: {exc}")
+                continue
+
+            if result:
+                results.append(result)
+
+    logger.info(f"Parsing complete. {len(results)} documents ready for DB insert")
+
+    # Step 2: write to DB in main process, batching
     with eebo_db.get_connection() as conn:
         with conn.transaction():
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(process_file, p): p for p in xml_files}
+            for doc_meta, token_tuples in tqdm(results, desc="Writing to DB"):
+                doc_id = doc_meta["doc_id"]
 
-                for future in tqdm(as_completed(futures), total=len(futures), desc="Processing XML"):
-                    xml_path = futures[future]
+                doc_rows.append([
+                    doc_id,
+                    doc_meta["title"],
+                    doc_meta["author"],
+                    extract_year(doc_meta["source_date_raw"]),
+                    doc_meta["publisher"],
+                    doc_meta["pub_place"],
+                    doc_meta["source_date_raw"],
+                    len(token_tuples),
+                    doc_meta["slice_start"],
+                    doc_meta["slice_end"],
+                ])
 
-                    try:
-                        result = future.result()
-                    except Exception as exc:
-                        logger.error(f"XML worker failed for {xml_path.name}: {exc}")
-                        continue
+                for token_idx, token in token_tuples:
+                    token_rows.append([doc_id, token_idx, token])
 
-                    if not result:
-                        continue
+                # Flush batch if needed
+                if len(doc_rows) >= batch_docs:
+                    logger.info(f"Flushing batch: {len(doc_rows)} docs, {len(token_rows)} tokens")
 
-                    doc_meta, token_tuples = result
-                    doc_id = doc_meta["doc_id"]
+                    stream_copy(
+                        conn,
+                        "documents",
+                        [
+                            "doc_id", "title", "author", "pub_year",
+                            "publisher", "pub_place", "source_date_raw",
+                            "token_count", "slice_start", "slice_end"
+                        ],
+                        doc_rows,
+                    )
+                    stream_copy(
+                        conn,
+                        "tokens",
+                        ["doc_id", "token_idx", "token"],
+                        token_rows,
+                    )
 
-                    doc_rows.append([
-                        doc_id,
-                        doc_meta["title"],
-                        doc_meta["author"],
-                        extract_year(doc_meta["source_date_raw"]),
-                        doc_meta["publisher"],
-                        doc_meta["pub_place"],
-                        doc_meta["source_date_raw"],
-                        len(token_tuples),
-                        doc_meta["slice_start"],
-                        doc_meta["slice_end"],
-                    ])
+                    doc_rows.clear()
+                    token_rows.clear()
 
-                    for token_idx, token in token_tuples:
-                        token_rows.append([doc_id, token_idx, token])
-
-                    if len(doc_rows) >= batch_docs:
-                        logger.info(f"Flushing batch: {len(doc_rows)} docs, {len(token_rows)} tokens")
-
-                        stream_copy(
-                            conn,
-                            "documents",
-                            [
-                                "doc_id", "title", "author", "pub_year",
-                                "publisher", "pub_place", "source_date_raw",
-                                "token_count", "slice_start", "slice_end"
-                            ],
-                            doc_rows,
-                        )
-                        stream_copy(
-                            conn,
-                            "tokens",
-                            ["doc_id", "token_idx", "token"],
-                            token_rows,
-                        )
-
-                        doc_rows.clear()
-                        token_rows.clear()
-
+            # Final flush
             if doc_rows:
                 logger.info(f"Final flush: {len(doc_rows)} docs, {len(token_rows)} tokens")
                 stream_copy(
