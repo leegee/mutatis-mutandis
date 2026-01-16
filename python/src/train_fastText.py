@@ -12,7 +12,7 @@ import fasttext
 import eebo_config as config
 from eebo_logging import logger
 import eebo_db
-# from tqdm import tqdm
+from tqdm import tqdm
 
 
 def fetch_tokens_for_slice(conn, start_year: int, end_year: int):
@@ -45,20 +45,25 @@ def train_slice_model(conn, start_year: int, end_year: int):
     slice_name = f"{start_year}-{end_year}"
     logger.info(f"Training fastText model for slice {slice_name}")
 
-    # Create a temporary text file
+    # Create temporary text file
     tmp_path = config.OUT_DIR / f"{slice_name}_tokens.txt"
     tmp_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write all tokens for slice into a single file (one token per line)
     total_tokens = 0
-    with tmp_path.open("w", encoding="utf-8") as out_f:
-        for batch_tokens in fetch_tokens_for_slice(conn, start_year, end_year):
+
+    for batch_tokens in tqdm(
+        fetch_tokens_for_slice(conn, start_year, end_year),
+        desc=f"Slice {slice_name}",
+        unit="batch"
+    ):
+        with tmp_path.open("a", encoding="utf-8") as out_f:  # append mode
             out_f.write(" ".join(batch_tokens) + "\n")
-            total_tokens += len(batch_tokens)
+        total_tokens += len(batch_tokens)
+
     logger.info(f"Collected {total_tokens} tokens for slice {slice_name}")
 
     if total_tokens == 0:
-        logger.warn(f"No tokens found for slice {slice_name}, skipping model")
+        logger.warning(f"No tokens found for slice {slice_name}, skipping model")
         return
 
     # Train fastText skipgram model
@@ -81,7 +86,6 @@ def train_slice_model(conn, start_year: int, end_year: int):
     model.save_model(str(model_path))
     logger.info(f"Model saved: {model_path}")
     tmp_path.unlink()
-
 
 def main():
     with eebo_db.get_connection() as conn:
