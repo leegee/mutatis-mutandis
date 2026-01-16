@@ -1,22 +1,44 @@
 # `pamphlets`
 
+This project treats early modern English pamphlets as sites of ideological fault lines in Alan Sinfield's sense: points where dominant systems of meaning are placed under historical pressure and must negotiate internal contradiction rather than resolve it.
+
+Following Joad Raymond, pamphlets are treated not as transparent expressions of political doctrine but as an area in which theological, moral, and juridical vocabularies are actively reworked in response to crisis, operating outside the constraints of statute, sermon and institutional doctrine. The significance of pamphlets lies less in the positions they advocate than in the semantic work they perform: justifying authority, law, liberty, and right under conditions of religious fragmentation and constitutional uncertainty.
+
+Building on the computational work of Ryan Heuser, this study uses diachronic distributional semantics to make visible semantic revolutions across the early modern period, connecting lexical neighbourhood shifts to broader social and political transformations. In conjunction with the work of Quentin Skinner, it treats language as both performative and historically situated: semantic drift reflects both the limits and possibilities of argument within specific speech communities. Drawing on Reinhart Koselleck, the project interprets these shifts as evidence of changing conceptual landscapes where key terms such as law, liberty and conscience evolve under pressures, prefiguring modern notions of secular authority and juridical rationality. In the spirit of Raymond Williams' Keywords, these terms are approached as historically contingent sites of debate and negotiation, whose shifting semantic load signals broader cultural and political transformation.
+
+Computational modelling does not intend to replace close reading or ideological critique; rather it renders patterns of semantic drift empirically visible, highlighting points where concepts retain moral force while dropping explicit theological anchoring. The result is an account of secularisation as a distributed, gradual linguistic process, unfolding unevenly across vernacular political argument before formal consolidation in law. This approach demonstrates the explanatory power of digital methods while explicitly situating the analysis within the historiographical and conceptual lineage established by Sinfield, Raymond, Williams, Heuser, Skinner, and Koselleck.
+
 # Notes
 
 ## Questions The System Might Help Answer
 
+* Drift from theocracy to democracy
 * Did The Ranters exist?
 * Natural clusters
 * Semantic drift in keywords
 * Semantic drift/evolution of least frequent terms whose use grows over the period
 
-### Semantic drift in keywords
+### Semantic drift in "keywords"
 
-Whilst Austin/Skinner allow an understanding of how the text functioned at its time of writing in its native environment, Koselleck helps to understand how the same concepts change their function over time, and over social and ideological conditions.
+Illustrating semantic drift in keywords (Williams, 1976) through the faultlines (Sinfield, 1992) between:
+
+* theological and juridical language
+
+* clerical authority and lay readership
+
+*  Latin legal-theological tradition and vernacular political argument
+
+*  sermon, polemic, statute, and petition
+
+Whilst Austin/Skinner will allow an understanding of how the text functioned at its time of writing in its native environment, 
+Koselleck will help to understand how the same concepts change function over both time and over social and ideological conditions.
 
 * Diachronic tracking of concepts
 * Attention to semantic layering
 * Focus on conflict rather than consensus
 * Analysis of conceptual pairs/poles and asymmetries
+
+Revealing diachronic neighbourhoods should reveal the underlying semantic change.
 
 Initial corpus: TEI-encoded EEBO-TCP Phase I - including rich metadata
 
@@ -35,6 +57,16 @@ Polemical clustering by concept usage an rhetorical posture (genre) to show who 
 
 Where drift is seen to accelerate, apply a Skinnerian close reading to identify illocutionary force.
 
+
+| Term | Sinfieldian Contradiction | Early Stabiliser | Pressure Point | Likely Semantic Drift | Fault Line / Observational Significance |
+|------|---------------------------|------------------|----------------|-----------------------|-------------------------------------------|
+| Law | Must appear transcendent and moral, yet function as historically contingent power | Divine ordinance, natural law, providence | Religious fragmentation, civil war, competing claims of authority | God / commandment / scripture to custom / reason / liberty / nation | Moral authority preserved while shedding theological grounding; semantic neighbourhood shifts reveal functional re-legitimation |
+| Authority | Absolute enough to govern, but accountable enough to be argued for | Divine right, ordination | Parliamentarianism, resistance theory, consent | Divine / sacred / ordained to civil / parliamentary / delegated | Authority justified procedurally rather than ontologically; neighbourhood drift exposes ideological negotiation |
+| Liberty | Morally defensible but not anarchic; collective yet increasingly individual | Christian freedom (freedom from sin) | Conscience, toleration, property | Grace / obedience / soul to right / property / subject / English | Moral force persists without theological frame; drift indicates secularisation without disenchantment |
+| Conscience | Binding yet private; authoritative yet resistant to institutional capture | Sin, salvation, divine judgement | Sectarianism, toleration debates | God / soul / damnation to judgement / liberty / inward / persuasion | Moral interiority detaches from ecclesiastical authority; fault line visible in subjective reasoning |
+| Right | Natural yet historically asserted and contested | Divine or customary sanction | Petitions, grievances, property claims | God / law / nature to subject / liberty / property | Naturalisation of historically produced claims; semantic drift shows shifting legitimatory frameworks |
+
+
 ## Visualisation
 
 2D graph where x = time slicse, y = semantic proximity to target word, cells = words.
@@ -49,6 +81,8 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 - Firth, J. R. (1957). “You shall know a word by the company it keeps.” In F. R. Palmer (ed.), *Studies in Linguistic Analysis*. Oxford: Blackwell, pp. 1–32. :contentReference[oaicite:3]{index=3}
 
 - Raymond, Joab. *[Details missing — please provide full title, year, and publication/publisher if known]*
+
+- Sinfield, Alan (1992). Faultlines: Cultural Materialism and the Politics of Dissident Reading. Oxford: Clarendon Press (Oxford University Press).
 
 - Skinner, Quentin. *[Details missing — please provide full title, year, and publication/publisher if known]*
 
@@ -79,4 +113,6 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 * [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
 
 * [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
+
+
 
