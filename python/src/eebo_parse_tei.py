@@ -8,6 +8,13 @@ Multi-process streaming EEBO TEI XML ingestion pipeline
 - Safe re-ingest
 - Call with `--limit int` or all documents in the target dir will be processed
 - See `eebo_config.py`
+
+To do:
+
+- re-introduce `rocessPoolExecutor`with `hunksize`
+- re-introduce `xml`
+- re-introduce concurrent db cx
+
 """
 
 from __future__ import annotations
