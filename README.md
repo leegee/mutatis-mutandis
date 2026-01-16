@@ -1,4 +1,4 @@
-# `pamphlets`
+# Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
 
 This project treats early modern English pamphlets as sites of ideological fault lines in Alan Sinfield's sense: points where dominant systems of meaning are placed under historical pressure and must negotiate internal contradiction rather than resolve it.
 
@@ -9,6 +9,10 @@ Building on the computational work of Ryan Heuser, this study uses diachronic di
 Computational modelling does not intend to replace close reading or ideological critique; rather it renders patterns of semantic drift empirically visible, highlighting points where concepts retain moral force while dropping explicit theological anchoring. The result is an account of secularisation as a distributed, gradual linguistic process, unfolding unevenly across vernacular political argument before formal consolidation in law. This approach demonstrates the explanatory power of digital methods while explicitly situating the analysis within the historiographical and conceptual lineage established by Sinfield, Raymond, Williams, Heuser, Skinner, and Koselleck.
 
 # Notes
+
+Early modern pamphlets repeatedly convert moral vocabulary into instruments of behavioural discipline,
+translating theological anxiety into social coercion 
+at precisely the moment when customary forms of authority were under strain.
 
 ## Questions The System Might Help Answer
 
@@ -99,6 +103,8 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 - Heuser, Ryan (2023). “Computing Koselleck: Modelling Semantic Revolutions 1720–1960 (talk)”. YouTube video. https://www.youtube.com/watch?v=7L-PO-AqG60
 
 - Heuser, Ryan (2023). “Computing Koselleck: Modelling Semantic Revolutions, 1720–1960”. In *Explorations in the Digital History of Ideas*, Part II – Case Studies in the Digital History of Ideas, edited by Peter de Bolla. Published online by Cambridge University Press: 09 November 2023. https://www.cambridge.org/core/books/abs/explorations-in-the-digital-history-of-ideas/computing-koselleck-modelling-semantic-revolutions-17201960/1ED34828C706CB5A7882E0A825C6F72F
+
+- Gramsci on hegemony
 
 ## People and Projects
 

@@ -137,9 +137,7 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
 
 
 def process_file_to_temp(xml_path: Path) -> Optional[tuple[dict[str, Any], str, int]]:
-    """
-    Parse XML, write tokens to temp file, return metadata + temp file path + token count.
-    """
+    """Parse XML, write tokens to temp file, return metadata + temp file path + token count."""
     result = process_file(xml_path)
     if not result:
         return None
@@ -157,31 +155,41 @@ def process_file_to_temp(xml_path: Path) -> Optional[tuple[dict[str, Any], str, 
     return doc_meta, temp_file.name, token_count
 
 
-def stream_copy(conn, table: str, columns: list[str], rows):
+def stream_copy(table: str, columns: list[str], rows):
+    """Use COPY to bulk-insert rows safely in a fresh autocommit connection."""
     if not rows:
         return
 
-    sql = (
-        f"COPY {table} ({', '.join(columns)}) "
-        "FROM STDIN WITH (FORMAT text, DELIMITER E'\t', NULL '\\N')"
-    )
+    logger.info(f"Streaming {len(rows)} rows into {table}")
 
-    buf = io.StringIO()
-    for row in rows:
-        buf.write(
-            "\t".join(
-                "\\N" if v is None else str(v).replace("\t", " ").replace("\n", " ")
-                for v in row
-            ) + "\n"
+    from psycopg import sql
+
+    with eebo_db.get_autocommit_connection() as conn:
+        stmt = sql.SQL(
+            "COPY {table} ({fields}) FROM STDIN WITH (FORMAT text, DELIMITER E'\t', NULL '\\N')"
+        ).format(
+            table=sql.Identifier(table),
+            fields=sql.SQL(', ').join(sql.Identifier(c) for c in columns)
         )
-    buf.seek(0)
 
-    with conn.cursor() as cur:
-        with cur.copy(sql) as copy:
-            copy.write(buf.read())
+        buf = io.StringIO()
+        for row in rows:
+            buf.write(
+                "\t".join(
+                    "\\N" if v is None else str(v).replace("\t", " ").replace("\n", " ")
+                    for v in row
+                ) + "\n"
+            )
+        buf.seek(0)
+
+        with conn.cursor() as cur:
+            with cur.copy(stmt) as copy:
+                copy.write(buf.read())
 
 
-def ingest_xml_parallel_safe(max_workers: int = 4, batch_docs: int = 100, batch_tokens: int = 10000) -> None:
+def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = config.BATCH_DOCS, batch_tokens: int = config.BATCH_TOKENS) -> None:
+    """Parse XML files in parallel and ingest documents + tokens safely with per-batch connections."""
+
     xml_files = list(Path(config.INPUT_DIR).rglob("*.xml"))
     if MAX_DOCS:
         xml_files = xml_files[:MAX_DOCS]
@@ -208,81 +216,78 @@ def ingest_xml_parallel_safe(max_workers: int = 4, batch_docs: int = 100, batch_
 
     logger.info(f"Parsing complete. {len(results)} documents ready for DB insert")
 
-    # Step 2: write documents and tokens in batches
-    with eebo_db.get_connection() as conn:
-        with conn.transaction():
-            doc_batch: list[list[Any]] = []
-            token_batch: list[list[Any]] = []
+    # Step 2: write documents and tokens in batches using fresh connections per flush
+    doc_batch: list[list[Any]] = []
+    token_batch: list[list[Any]] = []
 
-            for doc_meta, token_file, token_count in tqdm(results, desc="Writing to DB"):
-                doc_id = doc_meta["doc_id"]
+    for doc_meta, token_file, token_count in tqdm(results, desc="Writing to DB"):
+        doc_id = doc_meta["doc_id"]
 
-                # Add to doc batch with token_count directly
-                doc_batch.append([
-                    doc_id,
-                    doc_meta["title"],
-                    doc_meta["author"],
-                    extract_year(doc_meta["source_date_raw"]),
-                    doc_meta["publisher"],
-                    doc_meta["pub_place"],
-                    doc_meta["source_date_raw"],
-                    token_count,
-                    doc_meta["slice_start"],
-                    doc_meta["slice_end"],
-                ])
+        # Prepare doc batch
+        doc_batch.append([
+            doc_id,
+            doc_meta["title"],
+            doc_meta["author"],
+            extract_year(doc_meta["source_date_raw"]),
+            doc_meta["publisher"],
+            doc_meta["pub_place"],
+            doc_meta["source_date_raw"],
+            token_count,
+            doc_meta["slice_start"],
+            doc_meta["slice_end"],
+        ])
 
-                # Flush document batch if full
-                if len(doc_batch) >= batch_docs:
-                    logger.info(f"Flushing {len(doc_batch)} documents")
+        # Flush document batch if full
+        if len(doc_batch) >= batch_docs:
+            logger.info(f"Flushing {len(doc_batch)} documents")
+            stream_copy(
+                "documents",
+                [
+                    "doc_id", "title", "author", "pub_year",
+                    "publisher", "pub_place", "source_date_raw",
+                    "token_count", "slice_start", "slice_end"
+                ],
+                doc_batch
+            )
+            doc_batch.clear()
+
+        # Prepare token batch
+        with open(token_file, "r") as f:
+            for line in f:
+                token_batch.append(line.strip().split("\t"))
+                if len(token_batch) >= batch_tokens:
+                    logger.info(f"Flushing {len(token_batch)} tokens")
                     stream_copy(
-                        conn,
-                        "documents",
-                        [
-                            "doc_id", "title", "author", "pub_year",
-                            "publisher", "pub_place", "source_date_raw",
-                            "token_count", "slice_start", "slice_end"
-                        ],
-                        doc_batch,
+                        "tokens",
+                        ["doc_id", "token_idx", "token"],
+                        token_batch
                     )
-                    doc_batch.clear()
+                    token_batch.clear()
 
-                # Read tokens and batch
-                with open(token_file, "r") as f:
-                    for line in f:
-                        token_batch.append(line.strip().split("\t"))
-                        if len(token_batch) >= batch_tokens:
-                            stream_copy(
-                                conn,
-                                "tokens",
-                                ["doc_id", "token_idx", "token"],
-                                token_batch,
-                            )
-                            token_batch.clear()
+        # Remove temp token file
+        os.remove(token_file)
 
-                os.remove(token_file)
+    # Final flush of remaining docs
+    if doc_batch:
+        logger.info(f"Final flush of {len(doc_batch)} documents")
+        stream_copy(
+            "documents",
+            [
+                "doc_id", "title", "author", "pub_year",
+                "publisher", "pub_place", "source_date_raw",
+                "token_count", "slice_start", "slice_end"
+            ],
+            doc_batch
+        )
 
-            # Final flush of remaining docs and tokens
-            if doc_batch:
-                logger.info(f"Final flush of {len(doc_batch)} documents")
-                stream_copy(
-                    conn,
-                    "documents",
-                    [
-                        "doc_id", "title", "author", "pub_year",
-                        "publisher", "pub_place", "source_date_raw",
-                        "token_count", "slice_start", "slice_end"
-                    ],
-                    doc_batch,
-                )
-
-            if token_batch:
-                logger.info(f"Final flush of {len(token_batch)} tokens")
-                stream_copy(
-                    conn,
-                    "tokens",
-                    ["doc_id", "token_idx", "token"],
-                    token_batch,
-                )
+    # Final flush of remaining tokens
+    if token_batch:
+        logger.info(f"Final flush of {len(token_batch)} tokens")
+        stream_copy(
+            "tokens",
+            ["doc_id", "token_idx", "token"],
+            token_batch
+        )
 
     logger.info("XML ingestion complete")
 
@@ -300,22 +305,24 @@ def main() -> None:
         eebo_db.init_db(conn)
         eebo_db.drop_token_indexes(conn)
         eebo_db.drop_tokens_fk(conn)
+        conn.commit()
 
-        logger.info('DB initialised, ingesting XML')
+    logger.info('DB initialised, ingesting XML')
 
-        # Ingest XML documents and tokens
-        ingest_xml_parallel_safe(
-            max_workers=config.NUM_WORKERS,
-            batch_docs=config.BATCH_DOCS,
-            batch_tokens=config.BATCH_TOKENS
-        )
+    ingest_xml_parallel(
+        max_workers=config.NUM_WORKERS,
+        batch_docs=config.BATCH_DOCS,
+        batch_tokens=config.BATCH_TOKENS
+    )
 
-        # Restore DB integrity and indexes
-        logger.info('All ingested, restoring indexes')
+    logger.info('All ingested, restoring indexes')
+    with eebo_db.get_connection() as conn:
         eebo_db.create_tokens_fk(conn)
         eebo_db.create_token_indexes(conn)
         eebo_db.create_tiered_token_indexes(conn)
-        logger.info('Done - all ingested, indexes restored')
+        conn.commit()
+
+    logger.info('Done - all ingested, indexes restored')
 
 
 if __name__ == "__main__":

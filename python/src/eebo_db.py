@@ -14,10 +14,8 @@ def get_connection(
     application_name: str = "eebo",
 ) -> Connection:
     """
-    Create and return a PostgreSQL connection.
-
-    Autocommit is disabled; callers are expected to use
-    `with conn.transaction():` or call `conn.commit()`.
+    Create and return a PostgreSQL connection with autocommit disabled -
+    callers are expected to use `with conn.transaction():` or call `conn.commit()`.
     """
     last_exc: Exception | None = None
 
@@ -48,6 +46,38 @@ def get_connection(
                 time.sleep(_DB_RETRY_DELAY)
 
     raise RuntimeError("Could not establish PostgreSQL connection") from last_exc
+
+
+def get_autocommit_connection(*, connect_timeout: int = 5, application_name: str = "eebo"):
+    """
+    Get a fresh PostgreSQL connection in autocommit mode.
+    Safe for COPY / bulk insert operations.
+    """
+    last_exc: Exception | None = None
+
+    for attempt in range(1, _DB_RETRIES + 1):
+        try:
+            # Fresh connection, autocommit enabled immediately
+            conn = psycopg.connect(
+                dbname="eebo",
+                user="postgres",
+                host="localhost",
+                port=5432,
+                connect_timeout=connect_timeout,
+                application_name=application_name,
+                autocommit=True  # enable immediately on connect
+            )
+            return conn
+
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                f"PostgreSQL autocommit connection attempt {attempt}/{_DB_RETRIES} failed: {exc}"
+            )
+            if attempt < _DB_RETRIES:
+                time.sleep(_DB_RETRY_DELAY)
+
+    raise RuntimeError("Could not establish PostgreSQL autocommit connection") from last_exc
 
 
 def init_db(conn: Connection, drop_existing: bool = True) -> None:
