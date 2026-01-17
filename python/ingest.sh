@@ -6,7 +6,7 @@ PYTHON="python"
 
 INGEST_SCRIPT="$SRC/eebo_parse_tei.py"
 MB_SENTENCE_SCRIPT="$SRC/eebo_macberth_sentence_embedding.py"
-CANONICALISE_SCRIPT="$SRC/populate_canonical.py"
+CANONICALISE_SCRIPT="$SRC/create_fastText_ortho_canon.py"
 TRAIN_FASTTEXT_SCRIPT="$SRC/train_fastText.py"
 
 # Default values
@@ -36,37 +36,37 @@ done
 set -- "${POSITIONAL[@]}"
 
 # Run checks
-echo "> Ruff"
+echo "# Running Ruff"
 ruff check "$SRC"
 
-echo "> Mypy"
+echo "# Running Mypy"
 mypy "$SRC"
 
-echo "> Pyright"
+echo "# Running Pyright"
 pyright "$SRC"
 
-echo "All checks passed"
+echo "# All checks passed"
 
 # Run phase
 case "$PHASE" in
     i|ingest)
-        echo "> Running ingest phase"
+        echo "# Running ingest phase"
         "$PYTHON" "$INGEST_SCRIPT" "$@"
         ;;
     s|sentence)
-        echo "> Running MacBERTh sentence phase"
+        echo "# Running MacBERTh sentence phase"
         "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@"
         ;;
     t|trainft)
-        echo "> Running fastText training phase"
+        echo "# Running fastText training phase"
         "$PYTHON" "$TRAIN_FASTTEXT_SCRIPT" "$@"
         ;;
     c|canonical)
-        echo "> Running canonicalisation phase"
+        echo "# Running canonicalisation phase"
         "$PYTHON" "$CANONICALISE_SCRIPT" "$@"
         ;;
     all)
-        echo "> Running full pipeline: ingest + sentence"
+        echo "# Running full pipeline: ingest + sentence"
         "$PYTHON" "$INGEST_SCRIPT" "$@"
         "$PYTHON" "$TRAIN_FASTTEXT_SCRIPT" "$@"
         # "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@"
