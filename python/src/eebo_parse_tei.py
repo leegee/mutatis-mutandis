@@ -302,19 +302,29 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = config.BATCH_DOC
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="Max documents to process")
+    parser.add_argument("--create", type=int, default=None, help="Re-create the DB losing all data")
     args = parser.parse_args()
 
     global MAX_DOCS
     MAX_DOCS = args.limit
 
     with eebo_db.get_connection() as conn:
-        logger.info('Initialising DB')
-        eebo_db.init_db(conn)
+
+        if args.create:
+            confirm = input( "WARNING: This will DESTROY the current database and re-create it. Type YES to proceed: " )
+            if confirm != "YES":
+                logger.info('Aborted by user')
+                sys.exit(1)
+            logger.info('Initialising DB')
+            eebo_db.init_db(conn)
+            logger.info('DB initialised')
+
         eebo_db.drop_token_indexes(conn)
         eebo_db.drop_tokens_fk(conn)
         conn.commit()
 
     logger.info('DB initialised, ingesting XML')
+    logger.info(f"Processing max {MAX_DOCS if MAX_DOCS else 'all'} documents")
 
     ingest_xml_parallel(
         max_workers=config.NUM_WORKERS,
