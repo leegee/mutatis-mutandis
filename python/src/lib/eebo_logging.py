@@ -2,7 +2,7 @@
 import sys
 import logging
 
-import .eebo_config as config
+import lib.eebo_config as config
 
 # Determine log directory and file
 log_dir = getattr(config, "LOG_DIR", config.OUT_DIR)
