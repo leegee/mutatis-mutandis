@@ -300,9 +300,20 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = config.BATCH_DOC
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=None, help="Max documents to process")
-    parser.add_argument("--create", type=int, default=None, help="Re-create the DB losing all data")
+    parser = argparse.ArgumentParser(
+        description="EEBO XML Ingest Script: Ingests EEBO XML into PostgreSQL with optional DB reset."
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of documents to process"
+    )
+    parser.add_argument(
+        "--create",
+        action="store_true",
+        help="Re-create the DB losing all data"
+    )
     args = parser.parse_args()
 
     global MAX_DOCS
