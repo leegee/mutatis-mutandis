@@ -51,5 +51,5 @@ vard_outupt
 .mypy_cache
 .ruff_cache
 eebo_all
-
+db-backup/
 
