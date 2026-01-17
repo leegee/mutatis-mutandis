@@ -1,5 +1,14 @@
 #!/usr/bin/env python
 # train_fastText.py
+"""
+
+This script is a first attempt experiment to train fastText on
+corpus slices with a view to semantic drift analysis.
+
+This does not perform canonicalisation so it returns mainly
+orthological varients.
+
+"""
 
 import fasttext
 from tqdm.contrib.concurrent import process_map
