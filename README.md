@@ -1,3 +1,7 @@
+# CPU-Bound
+
+For now.
+
 # Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
 
 This project treats early modern English pamphlets as sites of ideological fault lines in Alan Sinfield's sense: points where dominant systems of meaning are placed under historical pressure and must negotiate internal contradiction rather than resolve it.
