@@ -10,6 +10,7 @@
     "editor.renderWhitespace": "all",
     "editor.renderControlCharacters": true,
     "editor.renderFinalNewline": "on",
+    "files.trimTrailingWhitespace": true,
     // "workbench.colorCustomizations": {
     // "editorWhitespace.foreground": "#FF00FF",
     // }
