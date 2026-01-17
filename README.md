@@ -8,38 +8,6 @@ Building on the computational work of Ryan Heuser, this study uses diachronic di
 
 Computational modelling does not intend to replace close reading or ideological critique; rather it renders patterns of semantic drift empirically visible, highlighting points where concepts retain moral force while dropping explicit theological anchoring. The result is an account of secularisation as a distributed, gradual linguistic process, unfolding unevenly across vernacular political argument before formal consolidation in law. This approach demonstrates the explanatory power of digital methods while explicitly situating the analysis within the historiographical and conceptual lineage established by Sinfield, Raymond, Williams, Heuser, Skinner, and Koselleck.
 
-## Geographical Mapping
-
-### Explicit
-
-    Metadata -> map
-
-Remember that radical presses were moved.
-
-### Ideological
-
-Corpus -> Embeddings -> cosine similiarity to poles, keyword scores, PCA/UMAP reduction, supervised learning -> map via metadata
-
-If sufficient sources can be mapped, does their orthography reveal their writers'/printers' locale?
-
-I wonder if we have sufficient sources of known ideological stance to use as training data?
-
-Most keywords will be contested, ambigious.
-
-## Notes
-
-Early modern pamphlets repeatedly convert moral vocabulary into instruments of behavioural discipline,
-translating theological anxiety into social coercion
-at precisely the moment when customary forms of authority were under strain.
-
-## Questions The System Might Help Answer
-
-* Drift from theocracy to democracy
-* Did The Ranters exist?
-* Natural clusters
-* Semantic drift in keywords
-* Semantic drift/evolution of least frequent terms whose use grows over the period
-
 ### Semantic drift in "keywords"
 
 Illustrating semantic drift in keywords (Williams, 1976) through the faultlines (Sinfield, 1992) between:
@@ -79,7 +47,6 @@ Polemical clustering by concept usage an rhetorical posture (genre) to show who 
 
 Where drift is seen to accelerate, apply a Skinnerian close reading to identify illocutionary force.
 
-
 | Term | Sinfieldian Contradiction | Early Stabiliser | Pressure Point | Likely Semantic Drift | Fault Line / Observational Significance |
 |------|---------------------------|------------------|----------------|-----------------------|-------------------------------------------|
 | Law | Must appear transcendent and moral, yet function as historically contingent power | Divine ordinance, natural law, providence | Religious fragmentation, civil war, competing claims of authority | God / commandment / scripture to custom / reason / liberty / nation | Moral authority preserved while shedding theological grounding; semantic neighbourhood shifts reveal functional re-legitimation |
@@ -87,6 +54,20 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 | Liberty | Morally defensible but not anarchic; collective yet increasingly individual | Christian freedom (freedom from sin) | Conscience, toleration, property | Grace / obedience / soul to right / property / subject / English | Moral force persists without theological frame; drift indicates secularisation without disenchantment |
 | Conscience | Binding yet private; authoritative yet resistant to institutional capture | Sin, salvation, divine judgement | Sectarianism, toleration debates | God / soul / damnation to judgement / liberty / inward / persuasion | Moral interiority detaches from ecclesiastical authority; fault line visible in subjective reasoning |
 | Right | Natural yet historically asserted and contested | Divine or customary sanction | Petitions, grievances, property claims | God / law / nature to subject / liberty / property | Naturalisation of historically produced claims; semantic drift shows shifting legitimatory frameworks |
+
+## Notes
+
+Early modern pamphlets repeatedly convert moral vocabulary into instruments of behavioural discipline,
+translating theological anxiety into social coercion
+at precisely the moment when customary forms of authority were under strain.
+
+## Questions The System Might Help Answer
+
+* Drift from theocracy to democracy
+* Did The Ranters exist?
+* Natural diachronic clusters: drift in keywords, IVF
+* Geospatial spread of ideas and ideology
+* Author, printer networks
 
 ## Visualisation
 
@@ -139,6 +120,24 @@ Visualise as a line graph or heatmap to show narrative tension?
 Nodes = authors, edges = textual similarity between their pamphlets.
 
 Visualise clusters or “communities” to show who is ideologically aligned.
+
+### Geographical Mapping
+
+#### Explicit
+
+    Metadata -> map
+
+Remember that radical presses were moved.
+
+#### Ideological
+
+Corpus -> Embeddings -> cosine similiarity to poles, keyword scores, PCA/UMAP reduction, supervised learning -> map via metadata
+
+If sufficient sources can be mapped, does their orthography reveal their writers'/printers' locale?
+
+I wonder if we have sufficient sources of known ideological stance to use as training data?
+
+Most keywords will be contested, ambigious.
 
 ## Bibliography
 
