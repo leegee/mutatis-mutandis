@@ -65,5 +65,3 @@
 * Williams, Raymond. Culture and Society 1780–1950. Chatto & Windus; Columbia University Press, 1958.
 
 * Williams, Raymond. Keywords: A Vocabulary of Culture and Society. Croom Helm, 1976.
-
-*
