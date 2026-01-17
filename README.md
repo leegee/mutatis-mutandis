@@ -8,7 +8,25 @@ Building on the computational work of Ryan Heuser, this study uses diachronic di
 
 Computational modelling does not intend to replace close reading or ideological critique; rather it renders patterns of semantic drift empirically visible, highlighting points where concepts retain moral force while dropping explicit theological anchoring. The result is an account of secularisation as a distributed, gradual linguistic process, unfolding unevenly across vernacular political argument before formal consolidation in law. This approach demonstrates the explanatory power of digital methods while explicitly situating the analysis within the historiographical and conceptual lineage established by Sinfield, Raymond, Williams, Heuser, Skinner, and Koselleck.
 
-# Notes
+## Geographical Mapping
+
+### Explicit
+
+    Metadata -> map
+
+Remember that radical presses were moved.
+
+### Ideological
+
+Corpus -> Embeddings -> cosine similiarity to poles, keyword scores, PCA/UMAP reduction, supervised learning -> map via metadata
+
+If sufficient sources can be mapped, does their orthography reveal their writers'/printers' locale?
+
+I wonder if we have sufficient sources of known ideological stance to use as training data?
+
+Most keywords will be contested, ambigious.
+
+## Notes
 
 Early modern pamphlets repeatedly convert moral vocabulary into instruments of behavioural discipline,
 translating theological anxiety into social coercion 
@@ -70,10 +88,57 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 | Conscience | Binding yet private; authoritative yet resistant to institutional capture | Sin, salvation, divine judgement | Sectarianism, toleration debates | God / soul / damnation to judgement / liberty / inward / persuasion | Moral interiority detaches from ecclesiastical authority; fault line visible in subjective reasoning |
 | Right | Natural yet historically asserted and contested | Divine or customary sanction | Petitions, grievances, property claims | God / law / nature to subject / liberty / property | Naturalisation of historically produced claims; semantic drift shows shifting legitimatory frameworks |
 
-
 ## Visualisation
 
 2D graph where x = time slicse, y = semantic proximity to target word, cells = words.
+
+### Keyword trajectory over time 
+
+The rise and fall of vocab
+
+Relative freq per slice
+
+### Co-occurrence networks 
+
+Conceptual clusters = ideological associations
+
+nodes = words,  edges = co-occurrence strength
+
+### Semantic shift, embedding maps 
+
+Meaning, usage of a word changing over time
+
+UMAP or t-SNE, plot words as points, colour-coded by slice
+
+### Faultline heatmaps 
+
+Areas of ideological tension (eg secular vs religious language across corpus
+
+rows = pamphlets or slices, columns = semantic clusters, values = normalized frequency or association strength
+
+### Phrase, collocation clouds (dynamic word clouds)
+
+Dominant collocations and shifting emphasis in discourse.
+
+Collocations per slice, overlaid in time-lapse/interactive visualization (clouds or layered bar charts)
+
+### Topic Modeling Evolution
+
+Rise and fall of ideological themes
+
+Streamgraphs
+
+### Narrative flow 
+
+Plot cosine similarity in embeddings?
+
+Visualise as a line graph or heatmap to show narrative tension?
+
+### Ideological Network Across Authors
+
+Nodes = authors, edges = textual similarity between their pamphlets.
+
+Visualise clusters or “communities” to show who is ideologically aligned.
 
 ## Bibliography
 - Austin, J. L. (1962). *How to Do Things with Words: The William James Lectures delivered in Harvard University in 1955*. Oxford: Clarendon Press / Oxford University Press. :contentReference[oaicite:0]{index=0}
