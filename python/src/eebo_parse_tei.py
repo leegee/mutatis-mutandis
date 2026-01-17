@@ -73,6 +73,31 @@ def assign_slice(date_raw: str | None) -> tuple[int | None, int | None]:
     return None, None
 
 
+def filter_existing_docs(doc_batch):
+    """Removes from doc_batch docs already in the DB and returns the result"""
+    if not doc_batch:
+        return []
+
+    doc_ids = [doc[0] for doc in doc_batch]
+
+    with eebo_db.get_autocommit_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT doc_id FROM documents WHERE doc_id = ANY(%s)",
+                (doc_ids,)
+            )
+            existing = {row[0] for row in cur.fetchall()}
+
+    # Keep only docs not already in DB
+    new_batch = [doc for doc in doc_batch if doc[0] not in existing]
+
+    skipped = len(doc_ids) - len(new_batch)
+    if skipped:
+        logger.info(f"Skipping {skipped} documents already in DB")
+
+    return new_batch
+
+
 def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[int, str]]]]:
     """Parse a single XML file and return doc metadata + token list."""
     import xml.etree.ElementTree as etree
@@ -194,7 +219,11 @@ def stream_copy(table: str, columns: list[str], rows):
                 copy.write(buf.read())
 
 
-def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = config.BATCH_DOCS, batch_tokens: int = config.BATCH_TOKENS) -> None:
+def ingest_xml_parallel(
+    max_workers: int = 4,
+    batch_docs: int = config.BATCH_DOCS,
+    batch_tokens: int = config.BATCH_TOKENS
+) -> None:
     """Parse XML files in parallel and ingest documents + tokens safely with per-batch connections."""
 
     xml_files = list(Path(config.INPUT_DIR).rglob("*.xml"))
@@ -223,9 +252,10 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = config.BATCH_DOC
 
     logger.info(f"Parsing complete. {len(results)} documents ready for DB insert")
 
-    # Step 2: write documents and tokens in batches using fresh connections per flush
+    # Step 2: write documents and tokens in batches
     doc_batch: list[list[Any]] = []
     token_batch: list[list[Any]] = []
+    inserted_doc_ids: set[str] = set()  # track docs actually inserted
 
     for doc_meta, token_file, token_count in tqdm(results, desc="Writing to DB"):
         doc_id = doc_meta["doc_id"]
@@ -244,9 +274,52 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = config.BATCH_DOC
             doc_meta["slice_end"],
         ])
 
+        # Read tokens into batch
+        with open(token_file, "r") as f:
+            for line in f:
+                token_batch.append(line.strip().split("\t"))
+
+        os.remove(token_file)
+
         # Flush document batch if full
         if len(doc_batch) >= batch_docs:
-            logger.info(f"Flushing {len(doc_batch)} documents")
+            doc_batch = filter_existing_docs(doc_batch)
+            if doc_batch:
+                new_doc_ids = {doc[0] for doc in doc_batch}
+                inserted_doc_ids.update(new_doc_ids)
+
+                logger.info(f"Flushing {len(doc_batch)} documents")
+                stream_copy(
+                    "documents",
+                    [
+                        "doc_id", "title", "author", "pub_year",
+                        "publisher", "pub_place", "source_date_raw",
+                        "token_count", "slice_start", "slice_end"
+                    ],
+                    doc_batch
+                )
+                doc_batch.clear()
+
+            # Flush token batch if it got large
+            if len(token_batch) >= batch_tokens:
+                token_batch = [t for t in token_batch if t[0] in inserted_doc_ids]
+                if token_batch:
+                    logger.info(f"Flushing {len(token_batch)} tokens")
+                    stream_copy(
+                        "tokens",
+                        ["doc_id", "token_idx", "token"],
+                        token_batch
+                    )
+                    token_batch.clear()
+
+    # Final flush of remaining documents
+    if doc_batch:
+        doc_batch = filter_existing_docs(doc_batch)
+        if doc_batch:
+            new_doc_ids = {doc[0] for doc in doc_batch}
+            inserted_doc_ids.update(new_doc_ids)
+
+            logger.info(f"Final flush of {len(doc_batch)} documents")
             stream_copy(
                 "documents",
                 [
@@ -258,43 +331,17 @@ def ingest_xml_parallel(max_workers: int = 4, batch_docs: int = config.BATCH_DOC
             )
             doc_batch.clear()
 
-        # Prepare token batch
-        with open(token_file, "r") as f:
-            for line in f:
-                token_batch.append(line.strip().split("\t"))
-                if len(token_batch) >= batch_tokens:
-                    logger.info(f"Flushing {len(token_batch)} tokens")
-                    stream_copy(
-                        "tokens",
-                        ["doc_id", "token_idx", "token"],
-                        token_batch
-                    )
-                    token_batch.clear()
-
-        # Remove temp token file
-        os.remove(token_file)
-
-    # Final flush of remaining docs
-    if doc_batch:
-        logger.info(f"Final flush of {len(doc_batch)} documents")
-        stream_copy(
-            "documents",
-            [
-                "doc_id", "title", "author", "pub_year",
-                "publisher", "pub_place", "source_date_raw",
-                "token_count", "slice_start", "slice_end"
-            ],
-            doc_batch
-        )
-
     # Final flush of remaining tokens
     if token_batch:
-        logger.info(f"Final flush of {len(token_batch)} tokens")
-        stream_copy(
-            "tokens",
-            ["doc_id", "token_idx", "token"],
-            token_batch
-        )
+        token_batch = [t for t in token_batch if t[0] in inserted_doc_ids]
+        if token_batch:
+            logger.info(f"Final flush of {len(token_batch)} tokens")
+            stream_copy(
+                "tokens",
+                ["doc_id", "token_idx", "token"],
+                token_batch
+            )
+            token_batch.clear()
 
     logger.info("XML ingestion complete")
 
