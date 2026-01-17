@@ -3,7 +3,7 @@ import psycopg
 from psycopg import Connection
 import time
 
-from eebo_logging import logger
+from .eebo_logging import logger
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds

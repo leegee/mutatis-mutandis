@@ -18,9 +18,9 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 from typing import cast
 
-import eebo_config as config
-import eebo_db
-from eebo_logging import logger
+import lib.eebo_config as config
+import lib.eebo_db
+from lib.eebo_logging import logger
 
 DEVICE = "cpu"   # Force CPU on this crappy old machine
 

@@ -1,7 +1,8 @@
 # eebo_logging.py
-import logging
 import sys
-import eebo_config as config
+import logging
+
+import .eebo_config as config
 
 # Determine log directory and file
 log_dir = getattr(config, "LOG_DIR", config.OUT_DIR)

@@ -3,9 +3,10 @@
 
 import fasttext
 from tqdm.contrib.concurrent import process_map
-import eebo_db
-import eebo_config as config
-from eebo_logging import logger
+
+import lib.eebo_db
+import lib.eebo_config as config
+from lib.eebo_logging import logger
 
 
 def fetch_tokens_for_slice(conn, start_year: int, end_year: int):

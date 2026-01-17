@@ -30,10 +30,10 @@ import tempfile
 import csv
 import os
 
-import eebo_config as config
-import eebo_db
-import eebo_ocr_fixes
-from eebo_logging import logger
+import lib.eebo_config as config
+import lib.eebo_db
+import lib.eebo_ocr_fixes
+from lib.eebo_logging import logger
 
 MAX_DOCS: Optional[int] = None
 
