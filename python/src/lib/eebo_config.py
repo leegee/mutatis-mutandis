@@ -32,13 +32,13 @@ TOP_K = 30
 
 FASTTEXT_PARAMS = {
     "model": "skipgram",      # Skip-gram model
-    "dim": 200,               # Word vector dimensionality
+    "dim": 100,               # Word vector dimensionality - 200
+    "epoch": 5,               # Number of epochs           - 10
     "ws": 5,                  # Context window size
-    "epoch": 10,              # Number of epochs
     "minCount": 1,            # Keep all words
-    "thread": 4,              # Adjust to for this CPU
-    "minn": 3,                # Subword ngram min length
-    "maxn": 6,                # Subword ngram max length
+    "thread": 6,              # Adjust to for this CPU
+    "minn": 2,                # Subword ngram min length
+    "maxn": 5,                # Subword ngram max length
 }
 
 SLICES = [
