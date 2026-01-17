@@ -22,6 +22,8 @@ NUM_WORKERS = 4
 SLICES_DIR = BASE_DIR / "out" / "slices"
 MODELS_DIR = BASE_DIR / "out" / "models"
 
+CANONICALISATION_BATCH_SIZE = 50_000
+
 QUERY_FILE = EEBO_SRC_DIR / "queries" / "canonical.txt"
 STOPWORD_FILE = EEBO_SRC_DIR / "stopwords" / "english_basic.txt"
 TOP_K = 30

@@ -12,10 +12,10 @@ from pathlib import Path
 import fasttext
 import psycopg
 from tqdm import tqdm
-import eebo_config as config
-import eebo_db
 
-BATCH_SIZE = 50_000  # Number of tokens to process per batch
+import lib.eebo_config as config
+import lib.eebo_db
+
 
 def load_spelling_map(conn):
     """Load spelling_map table into a Python dict."""
@@ -54,7 +54,7 @@ def populate_canonical(conn, ft_model_path: Path):
             while offset < total_tokens:
                 cur.execute(
                     "SELECT doc_id, token_idx, token FROM tokens ORDER BY doc_id, token_idx LIMIT %s OFFSET %s",
-                    (BATCH_SIZE, offset)
+                    (config.CANONICALISATION_BATCH_SIZE, offset)
                 )
                 batch = cur.fetchall()
                 if not batch:
