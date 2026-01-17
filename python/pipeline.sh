@@ -61,8 +61,8 @@ case "$PHASE" in
         echo "# Running fastText training phase"
         "$PYTHON" "$TRAIN_FASTTEXT_SCRIPT" "$@"
         ;;
-    c|canonical)
-        echo "# Running canonicalisation phase"
+    c|canoical)
+        echo "# Running caonicalisation phase"
         "$PYTHON" "$CANONICALISE_SCRIPT" "$@"
         ;;
     all)

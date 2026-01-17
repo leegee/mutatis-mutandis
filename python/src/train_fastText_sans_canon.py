@@ -13,7 +13,7 @@ orthological varients.
 import fasttext
 from tqdm.contrib.concurrent import process_map
 
-import lib.eebo_db
+import lib.eebo_db as eebo_db
 import lib.eebo_config as config
 from lib.eebo_logging import logger
 
@@ -60,7 +60,6 @@ def dump_tokens_to_disk(start_year: int, end_year: int, tmp_path):
         application_name="fasttext_train",
     ) as conn:
         with conn.cursor() as cur:
-            # Make connection read-only and set per-statement timeout (10 seconds)
             cur.execute("SET default_transaction_read_only = ON;")
             cur.execute("SET statement_timeout = 10000;")  # 10,000 ms = 10 s
 

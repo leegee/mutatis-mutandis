@@ -23,16 +23,17 @@ from pathlib import Path
 from typing import Any, Optional
 from tqdm import tqdm
 import argparse
-import io
-import re
-import unicodedata
-import tempfile
 import csv
+import io
 import os
+import re
+import sys
+import tempfile
+import unicodedata
 
 import lib.eebo_config as config
-import lib.eebo_db
-import lib.eebo_ocr_fixes
+import lib.eebo_db as eebo_db
+import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.eebo_logging import logger
 
 MAX_DOCS: Optional[int] = None

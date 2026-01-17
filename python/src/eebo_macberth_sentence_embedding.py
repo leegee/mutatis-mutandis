@@ -19,7 +19,7 @@ from transformers import AutoTokenizer, AutoModel
 from typing import cast
 
 import lib.eebo_config as config
-import lib.eebo_db
+import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 
 DEVICE = "cpu"   # Force CPU on this crappy old machine

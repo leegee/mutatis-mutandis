@@ -10,11 +10,9 @@ Populate canonical forms for tokens in the EEBO database using fastText and a sp
 
 from pathlib import Path
 import fasttext
-import psycopg
-from tqdm import tqdm
 
 import lib.eebo_config as config
-import lib.eebo_db
+import lib.eebo_db as eebo_db
 
 
 def load_spelling_map(conn):
@@ -31,7 +29,7 @@ def nearest_word(word, vocab, model):
     if word in vocab:
         return word
     neighbors = model.get_nearest_neighbors(word, k=5)
-    for cosine, neighbor in neighbors:
+    for _cosine, neighbor in neighbors:
         if neighbor in vocab:
             return neighbor
     return word  # fallback
