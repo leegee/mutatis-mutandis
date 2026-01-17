@@ -104,7 +104,11 @@ Where drift is seen to accelerate, apply a Skinnerian close reading to identify 
 
 - Heuser, Ryan (2023). “Computing Koselleck: Modelling Semantic Revolutions, 1720–1960”. In *Explorations in the Digital History of Ideas*, Part II – Case Studies in the Digital History of Ideas, edited by Peter de Bolla. Published online by Cambridge University Press: 09 November 2023. https://www.cambridge.org/core/books/abs/explorations-in-the-digital-history-of-ideas/computing-koselleck-modelling-semantic-revolutions-17201960/1ED34828C706CB5A7882E0A825C6F72F
 
-- Gramsci on hegemony
+- Hobbes, Thomas (1651, 1996). Leviathan, or The Matter, Forme, & Power of a Common-Wealth Ecclesiasticall and Civil. London: Andrew Crooke. [Modern critical edition: edited by Richard Tuck, Cambridge: Cambridge University Press, 1996]
+
+- Locke, John (1689, 1980). Two Treatises of Government. London: Awnsham & John Churchill. [Second Treatise often cited separately; modern edition: edited by Peter Laslett, Cambridge: Cambridge University Press, 1980]
+
+- Gramsci, Antonio (1929–1935, 1971, 1992). Selections from the Prison Notebooks. New York: International Publishers. [English edition, translated and edited by Quintin Hoare and Geoffrey Nowell Smith; see especially Part I, “Hegemony and Political Society,” for foundational discussion of cultural and ideological hegemony]
 
 ## People and Projects
 
