@@ -1,67 +1,69 @@
-Philosophy / Political Thought
+* Austin, J. L. How to Do Things with Words: The William James Lectures Delivered in Harvard University in 1955. Clarendon Press / Oxford University Press, 1962.
 
-Austin, J. L. 1962. How to Do Things with Words: The William James Lectures Delivered in Harvard University in 1955. Oxford: Clarendon Press / Oxford University Press.
+* Berger, Peter L. The Sacred Canopy: Elements of a Sociological Theory of Religion. Open Road Media, 2011.
 
-Hobbes, Thomas. 1651. Leviathan, or The Matter, Forme, & Power of a Common-Wealth Ecclesiasticall and Civil. London: Andrew Crooke. 1996 edition edited by Richard Tuck. Cambridge: Cambridge University Press.
+* Caenegem, R. C. van. An Historical Introduction to Private Law. Cambridge University Press, 1992.
 
-Locke, John. 1689. Two Treatises of Government. London: Awnsham & John Churchill. 1980 edition edited by Peter Laslett. Cambridge: Cambridge University Press.
+* Collinson, Patrick. The Elizabethan Puritan Movement. Oxford University Press, 1967.
 
-Law / Legal History
+* Finnis, John. Natural Law and Natural Rights. Clarendon Press, 1980.
 
-Finnis, John. 1980. Natural Law and Natural Rights. Oxford: Clarendon Press.
+* Firth, J. R. ‘A Synopsis of Linguistic Theory, 1930–55’. In Studies in Linguistic Analysis, edited by F. R. Palmer. Blackwell, 1957.
 
-Hart, H. L. A. 1961. The Concept of Law. Oxford: Clarendon Press.
+* Firth, J. R. ‘You Shall Know a Word by the Company It Keeps’. In Studies in Linguistic Analysis, edited by F. R. Palmer. Blackwell, 1957.
 
-Maitland, F. W. 1908. The Constitutional History of England. Cambridge: Cambridge University Press.
+* Fox, Adam. Oral and Literate Culture in England, 1500-1700. 1. publ. in paperback. Oxford Studies in Social History. Oxford Univ. Press, 2002.
 
-Milsom, S. F. C. 1969. Historical Foundations of the Common Law. London: Butterworths.
+* Gramsci, Antonio. Selections from the Prison Notebooks. International Publishers, 1929.
 
-van Caenegem, R. C. 1992. An Historical Introduction to Private Law. Cambridge: Cambridge University Press.
+* Harris, Zellig. ‘A Synopsis of Linguistic Theory, 1930–55’. In Studies in Linguistic Analysis. Blackwell, 1951.
 
-Linguistics / Semantics / Digital History of Ideas
+* Hart, H. L. A. The Concept of Law. Clarendon Press, 1961.
 
-Firth, J. R. 1957a. “A Synopsis of Linguistic Theory, 1930–55.” In Studies in Linguistic Analysis, edited by F. R. Palmer, 1–32. Oxford: Blackwell.
+* Heuser, Ryan. ‘Computing Koselleck: Modelling Semantic Revolutions, 1720–1960’. In Explorations in the Digital History of Ideas, Part II – Case Studies, edited by Peter de Bolla. Cambridge University Press, 2023. https://www.cambridge.org/core/books/abs/explorations-in-the-digital-history-of-ideas/computing-koselleck-modelling-semantic-revolutions-17201960/1ED34828C706CB5A7882E0A825C6F72F.
 
-Firth, J. R. 1957b. “You Shall Know a Word by the Company it Keeps.” In Studies in Linguistic Analysis, edited by F. R. Palmer, 1–32. Oxford: Blackwell.
+* Heuser, Ryan. ‘Computing Koselleck: Modelling Semantic Revolutions 1720–1960 (Talk)’. 2023. https://www.youtube.com/watch?v=7L-PO-AqG60.
 
-Harris, Zellig. 1951/1957. “A Synopsis of Linguistic Theory, 1930–55.” In Studies in Linguistic Analysis, 1–32. Oxford: Blackwell.
+* Hill, Christopher. Puritanism and Revolution. Penguin, 1958.
 
-Heuser, Ryan. 2023a. “Computing Koselleck: Modelling Semantic Revolutions 1720–1960 (talk).” YouTube video. https://www.youtube.com/watch?v=7L-PO-AqG60
-.
+* Hill, Christopher. The World Turned Upside Down: Radical Ideas During the English Revolution. Penguin, 1972.
 
-Heuser, Ryan. 2023b. “Computing Koselleck: Modelling Semantic Revolutions, 1720–1960.” In Explorations in the Digital History of Ideas, Part II – Case Studies, edited by Peter de Bolla. Cambridge: Cambridge University Press. November 9, 2023. https://www.cambridge.org/core/books/abs/explorations-in-the-digital-history-of-ideas/computing-koselleck-modelling-semantic-revolutions-17201960/1ED34828C706CB5A7882E0A825C6F72F
-.
+* Hobbes, Thomas. Leviathan, or The Matter, Forme, & Power of a Common-Wealth Ecclesiasticall and Civil. Andrew Crooke, 1651.
 
-Koselleck, Reinhart. 1972, 1997. Geschichtliche Grundbegriffe: Historisches Lexikon zur politisch‑sozialen Sprache in Deutschland. Stuttgart: Klett‑Cotta.
+* Koselleck, Reinhart. Futures Past: On the Semantics of Historical Time. MIT Press, 1985.
 
-Koselleck, Reinhart. 1985. Futures Past: On the Semantics of Historical Time. Cambridge, MA: MIT Press.
+* Koselleck, Reinhart. Geschichtliche Grundbegriffe: Historisches Lexikon Zur Politisch-Sozialen Sprache in Deutschland. Klett-Cotta, 1972.
 
-Koselleck, Reinhart. 2004. Social History and Conceptual History. Stanford, CA: Stanford University Press.
+* Koselleck, Reinhart. Social History and Conceptual History. Stanford University Press, 2004.
 
-Literary & Cultural Theory
+* Locke, John. Two Treatises of Government. Awnsham & John Churchill, 1689.
 
-Gramsci, Antonio. 1929–1935. Selections from the Prison Notebooks. New York: International Publishers. English edition edited and translated by Quintin Hoare and Geoffrey Nowell Smith. 1971, 1992.
+* MacIntyre, Alasdair C. After Virtue: A Study in Moral Theory. 3rd ed. Bloomsbury, 2011.
 
-Joad Raymond. 2003. Pamphlets and Pamphleteering in Early Modern Britain. Cambridge: Cambridge University Press. xviii + 384 pp. ISBN 978-0-521-81901-5.
+* Maitland, F. W. The Constitutional History of England. Cambridge University Press, 1908.
 
-Raymond, Joab – [merged above; correct name is Joad Raymond]
+* McElligott, Jason. ‘Review of Raymond, Joad, Pamphlets and Pamphleteering in Early Modern Britain’. H-Albion (Michigan State University), April 2004. http://www.h-net.org/reviews/showrev.php?id=9180.
 
-Sinfield, Alan. 1992. Faultlines: Cultural Materialism and the Politics of Dissident Reading. Oxford: Clarendon Press.
+* Milsom, S. F. C. Historical Foundations of the Common Law. Butterworths, 1969.
 
-Skinner, Quentin. 1978. The Foundations of Modern Political Thought: Volume 1, The Renaissance. Cambridge: Cambridge University Press.
+* Pocock, J. G. A. The Machiavellian Moment: Florentine Political Thought and the Atlantic Republican Tradition. Princeton University Press, 1975.
 
-Williams, Raymond. 1958. Culture and Society 1780–1950. London: Chatto & Windus; New York: Columbia University Press.
+* Pocock, J. G. A. Virtue, Commerce, and History: Essays on Political Thought and History, Chiefly in the Eighteenth Century. Cambridge University Press, 1985.
 
-Williams, Raymond. 1976. Keywords: A Vocabulary of Culture and Society. London: Croom Helm.
+* Raymond, Joad. Pamphlets and Pamphleteering in Early Modern Britain. Cambridge University Press, 2003.
 
-Historical / Puritan Studies
+* Sinfield, Alan. Faultlines: Cultural Materialism and the Politics of Dissident Reading. Clarendon Press, 1992.
 
-Collinson, Patrick. 1967. The Elizabethan Puritan Movement. London: Oxford University Press.
+* Skinner, Quentin. The Foundations of Modern Political Thought: Volume 1, The Renaissance. Cambridge University Press, 1978.
 
-Hill, Christopher. 1958. Puritanism and Revolution. London: Penguin. [Verify edition]
+* Spufford, Margaret. Small Books and Pleasant Histories: Popular Fiction and Its Readership in Seventeenth-Century England. Methuen, 1981.
 
-Hill, Christopher. 1972. The World Turned Upside Down: Radical Ideas During the English Revolution. London: Penguin.
+* Taylor, Charles. A Secular Age. The Belknap press of Harvard university press, 2007.
 
-Pocock, J. G. A. 1975. The Machiavellian Moment: Florentine Political Thought and the Atlantic Republican Tradition. Princeton: Princeton University Press.
+* Watt, Tessa. Cheap Print and Popular Piety, 1550-1640. 1st paperback ed. Cambridge Studies in Early Modern British History. Cambridge University Press, 1996.
 
-Pocock, J. G. A. 1985. Virtue, Commerce, and History: Essays on Political Thought and History, Chiefly in the Eighteenth Century. Cambridge: Cambridge University Press.
+* Williams, Raymond. Culture and Society 1780–1950. Chatto & Windus; Columbia University Press, 1958.
+
+* Williams, Raymond. Keywords: A Vocabulary of Culture and Society. Croom Helm, 1976.
+
+*
