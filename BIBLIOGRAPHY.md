@@ -1,10 +1,17 @@
-# BIBLIOGRAPHY
+
+* # BIBLIOGRAPHY
+
+*
 
 * Austin, J. L. How to Do Things with Words: The William James Lectures Delivered in Harvard University in 1955. Clarendon Press / Oxford University Press, 1962.
 
 * Berger, Peter L. The Sacred Canopy: Elements of a Sociological Theory of Religion. Open Road Media, 2011.
 
+* Betz, David. Carnage and Connectivity: Landmarks in the Decline of Conventional Military Power. Oxford University Press, 2016. https://doi.org/10.1093/acprof:oso/9780190264857.001.0001.
+
 * Betz, David. ‘Civil War Comes to the West, Part II: Strategic Realities’. Military Strategy Magazine 10, no. 2 (2025). https://www.militarystrategymagazine.com/article/civil-war-comes-to-the-west-part-ii-strategic-realities/.
+
+* Betz, David J. The Guarded Age: Fortification in the Twenty-First Century. Polity Press, 2024.
 
 * Caenegem, R. C. van. An Historical Introduction to Private Law. Cambridge University Press, 1992.
 
@@ -71,4 +78,3 @@
 * Williams, Raymond. Culture and Society 1780–1950. Chatto & Windus; Columbia University Press, 1958.
 
 * Williams, Raymond. Keywords: A Vocabulary of Culture and Society. Croom Helm, 1976.
-
