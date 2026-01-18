@@ -1,6 +1,10 @@
+# BIBLIOGRAPHY
+
 * Austin, J. L. How to Do Things with Words: The William James Lectures Delivered in Harvard University in 1955. Clarendon Press / Oxford University Press, 1962.
 
 * Berger, Peter L. The Sacred Canopy: Elements of a Sociological Theory of Religion. Open Road Media, 2011.
+
+* Betz, David. ‘Civil War Comes to the West, Part II: Strategic Realities’. Military Strategy Magazine 10, no. 2 (2025). https://www.militarystrategymagazine.com/article/civil-war-comes-to-the-west-part-ii-strategic-realities/.
 
 * Caenegem, R. C. van. An Historical Introduction to Private Law. Cambridge University Press, 1992.
 
@@ -46,6 +50,8 @@
 
 * Milsom, S. F. C. Historical Foundations of the Common Law. Butterworths, 1969.
 
+* O’Connor, Patrick. ‘A Conversation with Lord Dyson’. Council Magazine (London), 23 January 2020. https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson.
+
 * Pocock, J. G. A. The Machiavellian Moment: Florentine Political Thought and the Atlantic Republican Tradition. Princeton University Press, 1975.
 
 * Pocock, J. G. A. Virtue, Commerce, and History: Essays on Political Thought and History, Chiefly in the Eighteenth Century. Cambridge University Press, 1985.
@@ -65,3 +71,4 @@
 * Williams, Raymond. Culture and Society 1780–1950. Chatto & Windus; Columbia University Press, 1958.
 
 * Williams, Raymond. Keywords: A Vocabulary of Culture and Society. Croom Helm, 1976.
+
