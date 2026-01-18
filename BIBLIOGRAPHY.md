@@ -1,7 +1,29 @@
 
 * # BIBLIOGRAPHY
 
-*
+## Parital Modus Operandi of the Bibliography
+
+### Conceptual history
+
+Skinner, Koselleck, Pocock
+
+### Material pamphlet culture as a communicative system
+
+Raymond, Fox, Watt, Spufford
+
+### Constitutional law amd legal history
+
+Hart, Finnis, Maitland, Milsom, van Caenegem
+
+### Framing of (Modern) constitutional crisis/stress
+
+Betz, Dyson
+
+### Bridge linguistics to Digital Humanities to political theory
+
+Firth to Heuser to Williams to Sinfield
+
+## Items
 
 * Austin, J. L. How to Do Things with Words: The William James Lectures Delivered in Harvard University in 1955. Clarendon Press / Oxford University Press, 1962.
 
@@ -26,8 +48,6 @@
 * Fox, Adam. Oral and Literate Culture in England, 1500-1700. 1. publ. in paperback. Oxford Studies in Social History. Oxford Univ. Press, 2002.
 
 * Gramsci, Antonio. Selections from the Prison Notebooks. International Publishers, 1929.
-
-* Harris, Zellig. ‘A Synopsis of Linguistic Theory, 1930–55’. In Studies in Linguistic Analysis. Blackwell, 1951.
 
 * Hart, H. L. A. The Concept of Law. Clarendon Press, 1961.
 
@@ -57,7 +77,7 @@
 
 * Milsom, S. F. C. Historical Foundations of the Common Law. Butterworths, 1969.
 
-* O’Connor, Patrick. ‘A Conversation with Lord Dyson’. Council Magazine (London), 23 January 2020. https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson.
+* O’Connor, Patrick. ‘A Conversation with Lord Dyson’. Counsel Magazine (London), 23 January 2020. https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson.
 
 * Pocock, J. G. A. The Machiavellian Moment: Florentine Political Thought and the Atlantic Republican Tradition. Princeton University Press, 1975.
 
@@ -71,7 +91,7 @@
 
 * Spufford, Margaret. Small Books and Pleasant Histories: Popular Fiction and Its Readership in Seventeenth-Century England. Methuen, 1981.
 
-* Taylor, Charles. A Secular Age. The Belknap press of Harvard university press, 2007.
+* Taylor, Charles. A Secular Age. The Belknap Press of Harvard University Press, 2007.
 
 * Watt, Tessa. Cheap Print and Popular Piety, 1550-1640. 1st paperback ed. Cambridge Studies in Early Modern British History. Cambridge University Press, 1996.
 
