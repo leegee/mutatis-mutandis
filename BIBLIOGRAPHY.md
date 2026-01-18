@@ -15,6 +15,12 @@ Raymond, Fox, Watt, Spufford
 
 Hart, Finnis, Maitland, Milsom, van Caenegem
 
+On for executive power and courts: Adam Tomkins, Public Law
+
+On judicial restraint and politics: Jonathan Sumption, Trials of the State
+
+On constitutional change and stress: Vernon Bogdanor.
+
 ### Framing of (Modern) constitutional crisis/stress
 
 Betz, Dyson
