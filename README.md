@@ -1,8 +1,10 @@
+# _Mutatis Mutandis_
+
 ## Abstract: About This Project
 
-Computational modelling, building on the work of Ryan Heuser, complements rather than replaces close reading, rendering visible the semantic drift of Williams’ *keywords* through diachronic visualisations, whilst close reading interprets their rhetorical and ideological significance, both in historical and present perspective, informed by Sinfield’s concept of ideological Faultlines.
+Computational modelling, building on the work of Ryan Heuser, is consciously used to complement rather than replaces close reading, rendering visible the semantic drift of Williams’ *keywords* through diachronic visualisations, whilst close reading interprets their rhetorical and ideological significance, both in historical and present perspective, informed by Sinfield’s concept of ideological Faultlines.
 
-Following the conceptual frameworks of Skinner and Koselleck, these shifts mark historically-situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended while retaining moral force despite shedding explicit theological grounding.
+Following the conceptual frameworks of Skinner and Koselleck, these shifts mark historically-situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended while retaining moral force despite shedding explicit theological grounding. The medium for this discussion is generically termed pamphlets: as illustrated by Joad Raymond, they functioned as the period's most responsive medium in which concepts are tested and rearticulate as ideas evolve prior to any possibility of stablisation and the possibility of incorporation into law or political doctrine.
 
 Secularisation is treated as a gradual, uneven linguistic process, unfolding within what Joad Raymond describes as the informal, responsive pamphlet culture of early modern England, prior to its formal consolidation into law.
 
@@ -26,7 +28,7 @@ The project will deliver a software pipeline — including orthological maps, RD
 
 ...a period when, as Lord Dyson in Counsel Magazine[1] says of today, the British constitution faces “turmoil as a symptom of wider global forces” when political actors stretch constitutional boundaries such that our values and institutions are in danger
 
-[1] [Counsel Magaine](https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson?utm_source=chatgpt.com)
+[1] [Counsel Magaine](https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson?utm_source=chatgpt.com) - see the [Bibliography](./Bibliography.md).
 
 ## Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
 
@@ -45,12 +47,9 @@ Computational modelling does not intend to replace close reading or ideological 
 Illustrating semantic drift in keywords (Williams, 1976) through the faultlines (Sinfield, 1992) between:
 
 * theological and juridical language
-
 * clerical authority and lay readership
-
-*  Latin legal-theological tradition and vernacular political argument
-
-*  sermon, polemic, statute, and petition
+* Latin legal-theological tradition and vernacular political argument
+* sermon, polemic, statute, and petition
 
 Whilst Austin/Skinner will allow an understanding of how the text functioned at its time of writing in its native environment,
 Koselleck will help to understand how the same concepts change function over both time and over social and ideological conditions.
@@ -79,13 +78,14 @@ Polemical clustering by concept usage an rhetorical posture (genre) to show who 
 
 Where drift is seen to accelerate, apply a Skinnerian close reading to identify illocutionary force.
 
-| Term | Sinfieldian Contradiction | Early Stabiliser | Pressure Point | Likely Semantic Drift | Fault Line / Observational Significance |
-|------|---------------------------|------------------|----------------|-----------------------|-------------------------------------------|
-| Law | Must appear transcendent and moral, yet function as historically contingent power | Divine ordinance, natural law, providence | Religious fragmentation, civil war, competing claims of authority | God / commandment / scripture to custom / reason / liberty / nation | Moral authority preserved while shedding theological grounding; semantic neighbourhood shifts reveal functional re-legitimation |
-| Authority | Absolute enough to govern, but accountable enough to be argued for | Divine right, ordination | Parliamentarianism, resistance theory, consent | Divine / sacred / ordained to civil / parliamentary / delegated | Authority justified procedurally rather than ontologically; neighbourhood drift exposes ideological negotiation |
-| Liberty | Morally defensible but not anarchic; collective yet increasingly individual | Christian freedom (freedom from sin) | Conscience, toleration, property | Grace / obedience / soul to right / property / subject / English | Moral force persists without theological frame; drift indicates secularisation without disenchantment |
-| Conscience | Binding yet private; authoritative yet resistant to institutional capture | Sin, salvation, divine judgement | Sectarianism, toleration debates | God / soul / damnation to judgement / liberty / inward / persuasion | Moral interiority detaches from ecclesiastical authority; fault line visible in subjective reasoning |
-| Right | Natural yet historically asserted and contested | Divine or customary sanction | Petitions, grievances, property claims | God / law / nature to subject / liberty / property | Naturalisation of historically produced claims; semantic drift shows shifting legitimatory frameworks |
+
+| Term       | Sinfieldian Contradiction                                                         | Early Stabiliser                          | Pressure Point                                                    | Likely Semantic Drift                                               | Fault Line / Observational Significance                                                                                         |
+| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Law        | Must appear transcendent and moral, yet function as historically contingent power | Divine ordinance, natural law, providence | Religious fragmentation, civil war, competing claims of authority | God / commandment / scripture to custom / reason / liberty / nation | Moral authority preserved while shedding theological grounding; semantic neighbourhood shifts reveal functional re-legitimation |
+| Authority  | Absolute enough to govern, but accountable enough to be argued for                | Divine right, ordination                  | Parliamentarianism, resistance theory, consent                    | Divine / sacred / ordained to civil / parliamentary / delegated     | Authority justified procedurally rather than ontologically; neighbourhood drift exposes ideological negotiation                 |
+| Liberty    | Morally defensible but not anarchic; collective yet increasingly individual       | Christian freedom (freedom from sin)      | Conscience, toleration, property                                  | Grace / obedience / soul to right / property / subject / English    | Moral force persists without theological frame; drift indicates secularisation without disenchantment                           |
+| Conscience | Binding yet private; authoritative yet resistant to institutional capture         | Sin, salvation, divine judgement          | Sectarianism, toleration debates                                  | God / soul / damnation to judgement / liberty / inward / persuasion | Moral interiority detaches from ecclesiastical authority; fault line visible in subjective reasoning                            |
+| Right      | Natural yet historically asserted and contested                                   | Divine or customary sanction              | Petitions, grievances, property claims                            | God / law / nature to subject / liberty / property                  | Naturalisation of historically produced claims; semantic drift shows shifting legitimatory frameworks                           |
 
 ## Notes
 
@@ -157,8 +157,7 @@ Visualise clusters or “communities” to show who is ideologically aligned.
 
 #### Explicit
 
-    Metadata -> map
-
+Metadata -> map
 Remember that radical presses were moved.
 
 #### Ideological
@@ -178,67 +177,67 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 ## People and Projects
 
 * [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
-
 * [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
-
 * [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
-
 * [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
-
 * [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
-
 * [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
+
+Initial Target Keywords
+
+* Justice
+* Liberty
+* Reasonable
+* Conscience
+* God
+* King
+* Divine
+* sovereign
+* paternal
+* state
+* nation
+*
+
 
 ## Restoring the Database
 
 Make sure the table space is on an SSD:
 
-    CREATE TABLESPACE eebo_space LOCATION 'D:/postgres-data-2/eebo';
-
+CREATE TABLESPACE eebo_space LOCATION 'D:/postgres-data-2/eebo';
 Create a temp tablespace if not already and use it for sorting/indexing:
 
-    CREATE TABLESPACE temp_space LOCATION 'D:/postgres-data-2/temp';
-    ALTER SYSTEM SET temp_tablespaces = 'temp_space';
-
+CREATE TABLESPACE temp_space LOCATION 'D:/postgres-data-2/temp';
+ALTER SYSTEM SET temp_tablespaces = 'temp_space';
 Increase memory for faster index creation
 
-    ALTER SYSTEM SET maintenance_work_mem = '16GB';  -- big enough for token indexes
-    ALTER SYSTEM SET work_mem = '256MB';             -- per sort operation
-    SELECT pg_reload_conf();
-
+ALTER SYSTEM SET maintenance_work_mem = '16GB';  -- big enough for token indexes
+ALTER SYSTEM SET work_mem = '256MB';             -- per sort operation
+SELECT pg_reload_conf();
 Kill all connections:
 
-    SELECT pg_terminate_backend(pid)
-    FROM pg_stat_activity
-    WHERE datname='eebo';
-
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname='eebo';
 Restore with 4 worker jobs:
 
-    pg_restore -v -d eebo -j 4 "./db-backup/eebo_backup.dump"
-
+pg_restore -v -d eebo -j 4 "./db-backup/eebo_backup.dump"
 Monitor:
 
-    -- Active queries (shows index creation)
-    SELECT pid, now() - query_start AS duration, state, query
-    FROM pg_stat_activity
-    WHERE state <> 'idle';
+-- Active queries (shows index creation)
+SELECT pid, now() - query_start AS duration, state, query
+FROM pg_stat_activity
+WHERE state <> 'idle';
 
-    -- Size of largest tables and indexes
-    SELECT relname, pg_size_pretty(pg_total_relation_size(relid))
-    FROM pg_stat_user_tables
-    ORDER BY pg_total_relation_size(relid) DESC;
-
+-- Size of largest tables and indexes
+SELECT relname, pg_size_pretty(pg_total_relation_size(relid))
+FROM pg_stat_user_tables
+ORDER BY pg_total_relation_size(relid) DESC;
 Clean up:
 
-    ALTER SYSTEM RESET maintenance_work_mem;
-    ALTER SYSTEM RESET work_mem;
-    ALTER SYSTEM RESET temp_tablespaces;
-    SELECT pg_reload_conf();
-
-
-
-
-
+ALTER SYSTEM RESET maintenance_work_mem;
+ALTER SYSTEM RESET work_mem;
+ALTER SYSTEM RESET temp_tablespaces;
+SELECT pg_reload_conf();
 # CPU-Bound
 
 For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup.
