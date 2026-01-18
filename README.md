@@ -1,8 +1,8 @@
-# CPU-Bound
+## Abstract
 
-For now.
+Computational modelling, building on the work of Ryan Heuser, complements rather than replaces close reading, rendering the semantic drift of Williams’ keywords visible through diachronic visualisation, while close reading interprets their rhetorical and ideological significance, informed by Sinfield’s concept of ideological fault lines. Following the conceptual frameworks of Skinner and Koselleck, these shifts mark historically situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended while retaining moral force despite shedding explicit theological grounding. Secularisation is treated as a gradual, uneven linguistic process, unfolding within what Joad Raymond describes as the informal, responsive pamphlet culture of early modern England, prior to its formal consolidation in law. This dual approach demonstrates the possibilities of combining computational and interpretive methods to reveal ideological transformation, following a rich and varied tradition of scholarship attentive to semantic, conceptual, and political change.
 
-# Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
+## Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
 
 This project treats early modern English pamphlets as sites of ideological fault lines in Alan Sinfield's sense: points where dominant systems of meaning are placed under historical pressure and must negotiate internal contradiction rather than resolve it.
 
@@ -10,7 +10,7 @@ Following Joad Raymond, pamphlets are treated not as transparent expressions of 
 
 Building on the computational work of Ryan Heuser, this study uses diachronic distributional semantics to make visible semantic revolutions across the early modern period, connecting lexical neighbourhood shifts to broader social and political transformations. In conjunction with the work of Quentin Skinner, it treats language as both performative and historically situated: semantic drift reflects both the limits and possibilities of argument within specific speech communities. Drawing on Reinhart Koselleck, the project interprets these shifts as evidence of changing conceptual landscapes where key terms such as law, liberty and conscience evolve under pressures, prefiguring modern notions of secular authority and juridical rationality. In the spirit of Raymond Williams' Keywords, these terms are approached as historically contingent sites of debate and negotiation, whose shifting semantic load signals broader cultural and political transformation.
 
-Computational modelling does not intend to replace close reading or ideological critique; rather it renders patterns of semantic drift empirically visible, highlighting points where concepts retain moral force while dropping explicit theological anchoring. The result is an account of secularisation as a distributed, gradual linguistic process, unfolding unevenly across vernacular political argument before formal consolidation in law. This approach demonstrates the explanatory power of digital methods while explicitly situating the analysis within the historiographical and conceptual lineage established by Sinfield, Raymond, Williams, Heuser, Skinner, and Koselleck.
+Computational modelling does not intend to replace close reading or ideological critique; rather it renders patterns of semantic drift empirically visible, both literally and figurativly highlighting points where concepts retain moral force whilst dropping explicit theological anchoring, the locations in history where modern English secular law was born. The result is an account of secularisation as a distributed, gradual linguistic process, unfolding unevenly across vernacular political argument before formal consolidation in law. This approach demonstrates the explanatory power of digital methods while explicitly situating the analysis within the historiographical and conceptual lineage established by Sinfield, Raymond, Williams, Heuser, Skinner, and Koselleck.
 
 ### Semantic drift in "keywords"
 
@@ -206,3 +206,11 @@ Clean up:
     ALTER SYSTEM RESET work_mem;
     ALTER SYSTEM RESET temp_tablespaces;
     SELECT pg_reload_conf();
+
+
+
+
+
+# CPU-Bound
+
+For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup.
