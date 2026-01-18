@@ -2,7 +2,13 @@
 
 Computational modelling, building on the work of Ryan Heuser, complements rather than replaces close reading, rendering visible the semantic drift of Williams’ keywords through diachronic visualisations, whilst close reading interprets their rhetorical and ideological significance, both in context and from a present persepctive, informed by Sinfield’s concept of ideological faultlines.
 
-Following the conceptual frameworks of Skinner and Koselleck, these shifts mark historically situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended while retaining moral force despite shedding explicit theological grounding. Secularisation is treated as a gradual, uneven linguistic process, unfolding within what Joad Raymond describes as the informal, responsive pamphlet culture of early modern England, prior to its formal consolidation in law. This dual approach demonstrates the possibilities of combining computational and interpretive methods to reveal ideological transformation, following a rich and varied tradition of scholarship attentive to semantic, conceptual, and political change.
+Following the conceptual frameworks of Skinner and Koselleck, these shifts mark historically-situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended while retaining moral force despite shedding explicit theological grounding.
+
+Secularisation is treated as a gradual, uneven linguistic process, unfolding within what Joad Raymond describes as the informal, responsive pamphlet culture of early modern England, prior to its formal consolidation into law.
+
+This dual approach demonstrates the possibilities of combining computational and interpretive methods to reveal ideological transformation discoverable through semantic drift, following a rich and varied tradition of scholarship attentive to semantic, conceptual, and political change.
+
+The software pipeline - including orthological maps, RDBMS, RAG implementation, fastText and MacBERTh models, modelling, visualisation, web-based search interface and Docker file - will be delivered along with a case study of as-yet to be fully determined keywords, such as 'liberty,' 'justice,' 'conscience,' 'moral.'
 
 ## Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
 
