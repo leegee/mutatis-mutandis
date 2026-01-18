@@ -188,6 +188,7 @@ Initial Target Keywords
 * Justice
 * Liberty
 * Reasonable
+* common
 * Conscience
 * God
 * King
