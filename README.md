@@ -12,6 +12,26 @@ This dual approach demonstrates the possibilities of combining computational and
 
 The software pipeline — including orthological maps, RDBMS, RAG implementation, fastText and MacBERTh models, modelling, visualisation, web-based search interface, and Docker deployment — will be delivered alongside a case study of as-yet-to-be-determined keywords, such as *liberty*, *justice*, *conscience*, and *moral*.
 
+
+...
+
+**Hart vs Finnis**
+
+Hart and Finnis offer competing accounts of legal authority, but both presuppose a historically inherited moral vocabulary whose formation, contestation, and secularisation their theories do not themselves attempt to explain. It is to the formation of such terms, the process of their evolution, to which this thesis addresses itself.
+
+...
+
+
+There is a prior historical formation of moral and legal concepts that both Hart and Finnis take for granted without seeking to explain. It is this formation, and the processes whereby it becomes linguistically and rhetorically stabilised, that this thesis addresses.
+
+
+**Expanded:**
+
+Both Hart and Finnis rely upon a historically inherited moral–legal vocabulary whose emergence, consolidation, and limits they presuppose rather than explain. This thesis intervenes at that prior level, not to resolve their disagreement, but to examine the linguistic and rhetorical formation of the concepts on which it depends. In doing so, it aims to clarify — and where necessary recover — the terms with which such formations can be adequately described.
+
+...
+
+
 ## Abstract: About This Project (AHRC Version)
 
 This project traces semantic drift in Williams’ *keywords* bycombining Skinnerian close reading with computational modelling after the work of Ryan Heuser . Diachronic visualisations make patterns of semantic and orthographic change visible, while close reading interprets rhetorical and ideological significance, both from contemporary historical and present perspective, informed by Alan Sinfield’s concept of ideological *Faultlines*.
@@ -185,8 +205,8 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 
 Initial Target Keywords
 
-* Justice
 * Liberty
+* Justice
 * Reasonable
 * common
 * Conscience
@@ -197,6 +217,11 @@ Initial Target Keywords
 * paternal
 * state
 * nation
+* *obligation*
+* authority
+* duty
+* right
+* rule
 *
 
 
