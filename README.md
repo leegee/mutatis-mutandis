@@ -16,17 +16,25 @@ This project traces semantic drift in Williams’ *keywords* bycombining Skinner
 
 Following the conceptual frameworks of Skinner and Koselleck, these shifts reveal historically-situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended whilst retaining moral force despite shedding explicit theological grounding. ***
 
-Secularisation is approached as a gradual, uneven linguistic process unfolding within what Joad Raymond describes as the informal, responsive pamphlet culture of early modern England, prior to its formal consolidation into law.
+Secularisation is treated as a gradual, uneven linguistic process, unfolding within what Joad Raymond describes as the informal, responsive pamphlet culture of early modern England, prior to its formal consolidation into law.
+
+Read in long perspective, these shifts illuminate moments when inherited moral vocabularies are repurposed under conditions of institutional strain — a pattern with contemporary resonance in a period when, as Lord Dyson has recently observed, the British constitution faces “turmoil”, symptomatic of wider global forces, in which political actors increasingly press against constitutional boundaries, placing institutional norms under strain.
 
 This dual approach demonstrates the possibilities of combining computational and interpretive methods to reveal ideological transformation, situating the study within a diverse tradition of scholarship attentive to semantic, conceptual, and political change.
 
 The project will deliver a software pipeline — including orthological maps, RDBMS, blank RDBS schema, FAISS-based RAG implementation with modern web PWA SPA GUI, trained fastText and fine-tuned MacBERTh models, diachronic visualisation, and a web-based search interface with which to query and visualise the raw and processed data, and a Docker install file — alongside a case study of selected keywords, such as *liberty*, *justice*, *conscience*, and *moral*, and a system that defaults to idempotently reproducing this paper's results, thus including a DB dump populated with raw and tokenised EEBO-TCP and similar pamphlets along with all the orthological maps, dictionaries, mappings, embeddings and Xs the sytem generates.
 
+...a period when, as Lord Dyson in Counsel Magazine[1] says of today, the British constitution faces “turmoil as a symptom of wider global forces” when political actors stretch constitutional boundaries such that our values and institutions are in danger
+
+[1] [Counsel Magaine](https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson?utm_source=chatgpt.com)
+
 ## Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
 
 This project treats early modern English pamphlets as sites of ideological fault lines in Alan Sinfield's sense: points where dominant systems of meaning are placed under historical pressure and must negotiate internal contradiction rather than resolve it.
 
-Following Joad Raymond, pamphlets are treated not as transparent expressions of political doctrine but as an area in which theological, moral, and juridical vocabularies are actively reworked in response to crisis, operating outside the constraints of statute, sermon and institutional doctrine. The significance of pamphlets lies less in the positions they advocate than in the semantic work they perform: justifying authority, law, liberty, and right under conditions of religious fragmentation and constitutional uncertainty.
+Following the conceptual frameworks of Skinner and Koselleck, these shifts reveal historically-situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended whilst retaining moral force despite shedding explicit theological grounding.
+
+Read in long perspective, such transformations help contextualise contemporary constitutional debate: as Lord Dyson has recently noted, the British constitution is undergoing a period of “turmoil”, symptomatic of wider global forces, in which political actors increasingly test the limits of constitutional convention, placing long-standing institutional norms under pressure.
 
 Building on the computational work of Ryan Heuser, this study uses diachronic distributional semantics to make visible semantic revolutions across the early modern period, connecting lexical neighbourhood shifts to broader social and political transformations. In conjunction with the work of Quentin Skinner, it treats language as both performative and historically situated: semantic drift reflects both the limits and possibilities of argument within specific speech communities. Drawing on Reinhart Koselleck, the project interprets these shifts as evidence of changing conceptual landscapes where key terms such as law, liberty and conscience evolve under pressures, prefiguring modern notions of secular authority and juridical rationality. In the spirit of Raymond Williams' Keywords, these terms are approached as historically contingent sites of debate and negotiation, whose shifting semantic load signals broader cultural and political transformation.
 
