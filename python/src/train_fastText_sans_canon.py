@@ -2,11 +2,12 @@
 # train_fastText.py
 """
 
-This script is a first attempt experiment to train fastText on
-corpus slices with a view to semantic drift analysis.
+Trains one single, large fastText model on the entire unsliced corpus.
 
-This does not perform canonicalisation so it returns mainly
-orthological varients.
+Use the output model only to learn orthographic neighbourhoods from which
+can be derived a canonical `spelling_map` to use as a normalisation layer
+when creatingtime-sliced models on canonicalised text, enabling drift analysis
+of semantic change rather than not orthological noise.
 
 """
 
