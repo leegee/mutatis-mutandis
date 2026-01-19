@@ -31,7 +31,10 @@ def dump_tokens_to_file(tmp_file: Path):
                 ) as copy_obj:
                     # copy_obj is now iterable
                     for line in copy_obj:
-                        f.write(line.tobytes().decode("utf-8"))
+                        # copy_obj yields bytes or memoryview
+                        if isinstance(line, memoryview):
+                            line = line.tobytes()
+                        f.write(line.decode("utf-8"))
     logger.info("Token dump complete.")
 
 
@@ -64,13 +67,12 @@ def main():
     config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     tmp_corpus = config.OUT_DIR / "fasttext_corpus.txt"
-    model_path = config.MODELS_DIR / "global_eebo.bin"
 
     # 1. Dump corpus file
     dump_tokens_to_file(tmp_corpus)
 
     # 2. Train fastText model
-    train_fasttext_model(tmp_corpus, model_path)
+    train_fasttext_model(tmp_corpus, config.FASTTEXT_GLOBAL_MODEL_PATH)
 
     # 3. Delete temporary corpus file
     tmp_corpus.unlink(missing_ok=True)

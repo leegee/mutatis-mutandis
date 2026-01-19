@@ -48,7 +48,7 @@ def build_variant_clusters(model, tokens, top_k=30, max_dist=2):
         # Include the token itself
         cluster = [token]
 
-        for sim, neighbor in neighbors:
+        for _sim, neighbor in neighbors:
             # Only orthographic-like neighbours
             if Levenshtein.distance(token, neighbor) <= max_dist:
                 cluster.append(neighbor)

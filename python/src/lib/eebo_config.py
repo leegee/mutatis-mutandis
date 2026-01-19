@@ -9,21 +9,20 @@ INPUT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 OUT_DIR = BASE_DIR / "out"
 PLAIN_DIR = OUT_DIR / "plain"
 SLICES_DIR = OUT_DIR / "slices"
+SLICES_DIR = BASE_DIR / "out" / "slices"
+MODELS_DIR = BASE_DIR / "out" / "models"
 
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-MODEL_PATH = Path("./lib/macberth-huggingface")
+MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
+FASTTEXT_GLOBAL_MODEL_PATH = MODELS_DIR / "global_eebo.bin"
 BATCH_DOCS = 100
 BATCH_TOKENS = 10000
 FASTTEXT_BATCH_SIZE = 50_000
 EMBED_BATCH_SIZE = 256
 INGEST_TOKEN_WINDOW_FALLBACK = 5  # around 5 tokens if sentence unavailable
 NUM_WORKERS = 4
-
-SLICES_DIR = BASE_DIR / "out" / "slices"
-MODELS_DIR = BASE_DIR / "out" / "models"
-
 CANONICALISATION_BATCH_SIZE = 50_000
 
 QUERY_FILE = EEBO_SRC_DIR / "queries" / "canonical.txt"

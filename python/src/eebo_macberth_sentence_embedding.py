@@ -25,8 +25,8 @@ from lib.eebo_logging import logger
 DEVICE = "cpu"   # Force CPU on this crappy old machine
 
 # Load MacBERTh
-tokenizer = AutoTokenizer.from_pretrained(config.MODEL_PATH, local_files_only=True)
-model = AutoModel.from_pretrained(config.MODEL_PATH, local_files_only=True).to(DEVICE)
+tokenizer = AutoTokenizer.from_pretrained(config.MACBERTH_MODEL_PATH, local_files_only=True)
+model = AutoModel.from_pretrained(config.MACBERTH_MODEL_PATH, local_files_only=True).to(DEVICE)
 model.eval()
 
 
