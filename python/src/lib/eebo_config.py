@@ -85,5 +85,4 @@ KEYWORDS_TO_NORMALISE = [
     "duty",
     "right",
     "rule",
-
 ]
