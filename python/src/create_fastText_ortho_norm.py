@@ -59,22 +59,16 @@ def train_fasttext_model(corpus_file: Path, output_path: Path):
     return model
 
 
-# -----------------------------
-# Main
-# -----------------------------
 def main():
     # Ensure MODELS_DIR exists
     config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     tmp_corpus = config.OUT_DIR / "fasttext_corpus.txt"
 
-    # 1. Dump corpus file
     dump_tokens_to_file(tmp_corpus)
 
-    # 2. Train fastText model
     train_fasttext_model(tmp_corpus, config.FASTTEXT_GLOBAL_MODEL_PATH)
 
-    # 3. Delete temporary corpus file
     tmp_corpus.unlink(missing_ok=True)
     logger.info("Temporary corpus file deleted. Training complete.")
 

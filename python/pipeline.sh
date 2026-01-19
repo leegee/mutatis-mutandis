@@ -7,7 +7,7 @@ PYTHON="python"
 # MB_SENTENCE_SCRIPT="$SRC/eebo_macberth_sentence_embedding.py"
 INIT_AND_INGEST_XML="$SRC/eebo_parse_tei.py"
 BUILD_CANONICAL_MAP="$SRC/build_canonical_map.py"
-TRAIN_FASTTEXT_FOR_NORMALISATION="$SRC/create_fastText_ortho_canon.py"
+TRAIN_FASTTEXT_FOR_ORTHO_NORM="$SRC/create_fastText_ortho_norm.py"
 BUILD_SPELLING_MAP_FROM_FASTTEXT="$SRC/build_spelling_map_from_fastText.py"
 MAKE_FASTTEXT_SLICES="$SRC/train_fastText_canonicalised_slices.py"
 VISUALISE="$SRC/semantic_drift_analysis.py"
@@ -63,7 +63,7 @@ case "$PHASE" in
         ;;
     3|o|ortho)
         echo "# Training fastText for orthological normalisation"
-        "$PYTHON" "$TRAIN_FASTTEXT_FOR_NORMALISATION" "$@"
+        "$PYTHON" "$TRAIN_FASTTEXT_FOR_ORTHO_NORM" "$@"
         ;;
     4|sm|spelling)
         echo "# Running spelling_map creation phase"
