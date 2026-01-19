@@ -22,17 +22,11 @@ import lib.eebo_config as config
 import lib.eebo_db as db
 
 
-# -----------------------------
-# Ensure directories exist
-# -----------------------------
 TMP_DIR = Path(config.TMP_DIR)
 TMP_DIR.mkdir(exist_ok=True, parents=True)
 config.MODELS_DIR.mkdir(exist_ok=True)
 
 
-# -----------------------------
-# Argument parsing
-# -----------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--clean",
@@ -42,16 +36,10 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-# -----------------------------
-# Canonical vocabulary
-# -----------------------------
 # Single source of truth: canonical keyword heads
 CANONICAL_TARGETS = sorted(config.KEYWORDS_TO_NORMALISE.keys())
 
 
-# -----------------------------
-# Database access
-# -----------------------------
 def fetch_tokens_for_slice(
     conn: db.Connection,
     start_year: int,
@@ -92,9 +80,6 @@ def fetch_tokens_for_slice(
                 yield token
 
 
-# -----------------------------
-# Slice dumping
-# -----------------------------
 def dump_slice_to_disk(slice_range: Tuple[int, int]) -> Path:
     """
     Fetch canonical tokens for a slice and write them to disk.
@@ -116,9 +101,6 @@ def dump_slice_to_disk(slice_range: Tuple[int, int]) -> Path:
     return slice_file
 
 
-# -----------------------------
-# fastText training
-# -----------------------------
 def train_slice_model(slice_file: Path) -> Path:
     """
     Train a fastText skip-gram model on a canonical slice.
@@ -146,12 +128,9 @@ def train_slice_model(slice_file: Path) -> Path:
     return out_file
 
 
-# -----------------------------
-# Main execution
-# -----------------------------
 if __name__ == "__main__":
     # Example slices (replace with config.SLICES when ready)
-    slice_ranges = [(1640 + i, 1640 + i) for i in range(5)]
+    slice_ranges = config.SLICES
 
     print("Dumping canonical token slices to disk...")
     slice_files = process_map(
