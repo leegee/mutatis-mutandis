@@ -52,46 +52,29 @@ echo "# All checks passed"
 
 # Run phase
 case "$PHASE" in
-    # s|sentence) echo "# Running MacBERTh sentence phase" "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@" ;;
-    i|ingest)
-        echo "# Running ingestion of TEI XML"
-        "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
-        ;;
-    t|trainft)
-        echo "# Running fastText training phase"
-        "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
-        ;;
-    cm|canon)
+    # mb|sentence) echo "# Running MacBERTh sentence phase" "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@" ;;
+    1|i|ingest)
+    echo "# Running ingestion of TEI XML"
+    "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
+    ;;
+    2|c|canon)
         echo "# Building canonical map"
         "$PYTHON" "$BUILD_CANONICAL_MAP" "$@"
         ;;
-    sm|spelling_map)
+    3|o|ortho)
+        echo "# Training fastText for orthological normalisation"
+        "$PYTHON" "$TRAIN_FASTTEXT_FOR_NORMALISATION" "$@"
+        ;;
+    4|sm|spelling)
         echo "# Running spelling_map creation phase"
         "$PYTHON" "$BUILD_SPELLING_MAP_FROM_FASTTEXT" "$@"
         ;;
-
-    c|canoical)
-        echo "# Training fastText for normalisation"
-        "$PYTHON" "$TRAIN_FASTTEXT_FOR_NORMALISATION" "$@"
+    5|t|slices)
+        echo "# Running fastText slices training phase"
+        "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
         ;;
-    v|visual)
+    6|v|visual)
         echo "# Run visualisations of pre-defined keywords"
         "$PYTHON" "$VISUALISE" "$@"
-        ;;
-    all)
-        echo "# Running full pipeline: ingest + sentence"
-        # "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
-        # # "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@"
-        # "$PYTHON" "$TRAIN_FASTTEXT_FOR_NORMALISATION" "$@"
-        INIT_AND_INGEST_XML="$SRC/eebo_parse_tei.py"
-        BUILD_CANONICAL_MAP="$SRC/build_canonical_map.py"
-        TRAIN_FASTTEXT_FOR_NORMALISATION="$SRC/create_fastText_ortho_canon.py"
-        BUILD_SPELLING_MAP_FROM_FASTTEXT="$SRC/build_spelling_map_from_fastText.py"
-        MAKE_FASTTEXT_SLICES="$SRC/train_fastText_canonicalised_slices.py"
-        ;;
-    *)
-        echo "Unknown phase: $PHASE"
-        echo "Usage: $0 [--phase ingest|i|sentence|s|trainft|t|canonical|c|all] [--limit n] [additional args...]"
-        exit 1
         ;;
 esac

@@ -2,17 +2,17 @@
 
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
 
 INPUT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 OUT_DIR = BASE_DIR / "out"
-TMP_DIR = BASE_DIR / "tmp"
+
+TMP_DIR = OUT_DIR / "tmp"
 PLAIN_DIR = OUT_DIR / "plain"
 SLICES_DIR = OUT_DIR / "slices"
-SLICES_DIR = BASE_DIR / "out" / "slices"
-MODELS_DIR = BASE_DIR / "out" / "models"
-
+SLICES_DIR = OUT_DIR / "slices"
+MODELS_DIR = OUT_DIR / "models"
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
