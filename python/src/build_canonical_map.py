@@ -3,7 +3,7 @@
 """
 "Normalisation": equivalence-mapping of orthological variants.
 
-Build a canonical spelling_map from a global fastText model.
+Build a canonical spelling_map from a global fastText model with Levenshtein distance.
 Stores mapping in the eebo database for downstream slicing and drift analysis.
 """
 
