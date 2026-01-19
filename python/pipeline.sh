@@ -57,7 +57,7 @@ case "$PHASE" in
         "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
         ;;
     sm|spelling_map)
-        echo "# Running spellingl map creation phase"
+        echo "# Running spelling_map creation phase"
         "$PYTHON" "$BUILD_SPELLING_MAP_FROM_FASTTEXT" "$@"
         ;;
     c|canoical)
