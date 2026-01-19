@@ -15,6 +15,7 @@ for a curated list of keywords, with Levenshtein filtering and an explicit black
 """
 
 from pathlib import Path
+from typing import Any
 import argparse
 from tqdm import tqdm
 import fasttext
@@ -35,7 +36,7 @@ BLACKLIST = {
 }
 
 
-def load_fasttext_model(model_path: Path) -> fasttext.FastText:
+def load_fasttext_model(model_path: Path) -> Any:
     logger.info(f"Loading global fastText model from {model_path}")
     return fasttext.load_model(str(model_path))
 
