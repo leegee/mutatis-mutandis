@@ -5,7 +5,7 @@ SRC="./src"
 PYTHON="python"
 
 INGEST_SCRIPT="$SRC/eebo_parse_tei.py"
-MB_SENTENCE_SCRIPT="$SRC/eebo_macberth_sentence_embedding.py"
+# MB_SENTENCE_SCRIPT="$SRC/eebo_macberth_sentence_embedding.py"
 CANONICALISE_SCRIPT="$SRC/create_fastText_ortho_canon.py"
 TRAIN_FASTTEXT_SCRIPT="$SRC/train_fastText.py"
 
@@ -53,10 +53,10 @@ case "$PHASE" in
         echo "# Running ingest phase"
         "$PYTHON" "$INGEST_SCRIPT" "$@"
         ;;
-    s|sentence)
-        echo "# Running MacBERTh sentence phase"
-        "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@"
-        ;;
+    # s|sentence)
+    #     echo "# Running MacBERTh sentence phase"
+    #     "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@"
+    #     ;;
     t|trainft)
         echo "# Running fastText training phase"
         "$PYTHON" "$TRAIN_FASTTEXT_SCRIPT" "$@"
