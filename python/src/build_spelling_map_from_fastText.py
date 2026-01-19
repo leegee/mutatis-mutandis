@@ -2,13 +2,6 @@
 """
 build_spelling_map_from_fastText.py
 
-Stage 2: Generate spelling_map entries using a FIXED set of canonical heads.
-
-- Canonical heads come ONLY from config.KEYWORDS_TO_NORMALISE
-- fastText is used ONLY to discover orthographic variants
-- Canonical choice is NEVER inferred
-- Per-head blacklist is enforced
-- Supports --dry run
 """
 
 from pathlib import Path
@@ -88,7 +81,34 @@ def update_tokens_canonical(conn, variant: str, canonical: str, dry: bool):
         )
 
 
-# ---------- main ----------
+def get_canonical_spelling_map(dry: bool = True) -> dict[str, str]:
+    """
+    Returns a dict mapping token -> canonical form for all keywords.
+    If dry=True, does not write to the database.
+    """
+    from lib import eebo_db
+
+    canonical_map: dict[str, str] = {}
+
+    model_path = config.FASTTEXT_GLOBAL_MODEL_PATH
+    load_fasttext_model(Path(model_path))  # still load the model in case needed elsewhere
+    keywords = getattr(config, "KEYWORDS_TO_NORMALISE", {})
+
+    with eebo_db.get_connection(application_name="spelling_map_builder") as conn:
+        for keyword in keywords.keys():
+            # We no longer need nearest neighbours, just enforce canonical head
+            canonical = keyword
+            canonical_map[keyword] = canonical
+
+            # insert to DB if not dry
+            if not dry:
+                insert_spelling_map(conn, keyword, canonical, dry=False)
+
+        if not dry:
+            conn.commit()
+
+    return canonical_map
+
 
 def main():
     parser = argparse.ArgumentParser(

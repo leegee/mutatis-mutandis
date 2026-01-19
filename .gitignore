@@ -52,4 +52,6 @@ vard_outupt
 .ruff_cache
 eebo_all
 db-backup/
-
+python/tmp/
+tmp/
+temp/

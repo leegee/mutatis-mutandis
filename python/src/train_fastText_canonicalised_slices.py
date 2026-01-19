@@ -1,128 +1,174 @@
 #!/usr/bin/env python
 # train_fastText_canonicalised_slices.py
 """
+Train fastText models on canonicalised slices of EEBO tokens.
 
-
+IMPORTANT:
+- We train ONLY on canonical keyword targets
+- Canonical targets are defined exclusively by
+  lib.eebo_config.KEYWORDS_TO_NORMALISE (keys)
+- No fallback to surface forms
+- No NULL canonicals allowed through
 """
 
-import fasttext
+from pathlib import Path
 from tqdm.contrib.concurrent import process_map
+from typing import Tuple, Iterator, List
+import argparse
+import fasttext
+import shutil
 
-import lib.eebo_db as eebo_db
 import lib.eebo_config as config
-from lib.eebo_logging import logger
+import lib.eebo_db as db
 
 
-def fetch_tokens_for_slice(conn, start_year: int, end_year: int):
+# -----------------------------
+# Ensure directories exist
+# -----------------------------
+TMP_DIR = Path(config.TMP_DIR)
+TMP_DIR.mkdir(exist_ok=True, parents=True)
+config.MODELS_DIR.mkdir(exist_ok=True)
+
+
+# -----------------------------
+# Argument parsing
+# -----------------------------
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--clean",
+    action="store_true",
+    help="Delete temporary slices after training"
+)
+args = parser.parse_args()
+
+
+# -----------------------------
+# Canonical vocabulary
+# -----------------------------
+# Single source of truth: canonical keyword heads
+CANONICAL_TARGETS = sorted(config.KEYWORDS_TO_NORMALISE.keys())
+
+
+# -----------------------------
+# Database access
+# -----------------------------
+def fetch_tokens_for_slice(
+    conn: db.Connection,
+    start_year: int,
+    end_year: int,
+    batch_size: int = 100_000,
+) -> Iterator[str]:
     """
-    Generator yielding batches of tokens for a given slice.
-    Uses a read-only server-side cursor.
-    """
-    cursor_name = f"slice_{start_year}_{end_year}"
+    Fetch ONLY canonical keyword tokens for a given year slice.
 
-    with conn.cursor(name=cursor_name) as cur:
-        cur.itersize = config.FASTTEXT_BATCH_SIZE
+    Guarantees:
+    - token is a string
+    - token ∈ KEYWORDS_TO_NORMALISE.keys()
+    - no NULL canonicals
+    """
+    with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT t.token
+            SELECT t.canonical
             FROM tokens t
             JOIN documents d ON t.doc_id = d.doc_id
-            WHERE d.pub_year BETWEEN %s AND %s
-            ORDER BY t.doc_id, t.token_idx
+            WHERE d.pub_year >= %s
+              AND d.pub_year <= %s
+              AND t.canonical IS NOT NULL
+              AND t.canonical = ANY(%s)
             """,
-            (start_year, end_year),
+            (
+                start_year,
+                end_year,
+                list(config.KEYWORDS_TO_NORMALISE.keys()),
+            ),
         )
 
         while True:
-            batch = cur.fetchmany(config.FASTTEXT_BATCH_SIZE)
-            if not batch:
+            rows = cur.fetchmany(batch_size)
+            if not rows:
                 break
-            yield [row[0] for row in batch]
+            for (token,) in rows:
+                yield token
 
 
-def dump_tokens_to_disk(start_year: int, end_year: int, tmp_path):
+# -----------------------------
+# Slice dumping
+# -----------------------------
+def dump_slice_to_disk(slice_range: Tuple[int, int]) -> Path:
     """
-    Fetch tokens for a slice and write them to disk.
-    DB connection is opened and closed entirely within this function.
-
-    - Read-only mode
-    - Per-statement timeout to prevent runaway queries
+    Fetch canonical tokens for a slice and write them to disk.
+    Returns the path of the slice file.
     """
-    total_tokens = 0
+    start_year, end_year = slice_range
+    slice_file = TMP_DIR / f"{start_year}-{end_year}.txt"
 
-    with eebo_db.get_connection(
-        connect_timeout=10,
-        application_name="fasttext_train",
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SET default_transaction_read_only = ON;")
-            cur.execute("SET statement_timeout = 10000;")  # 10,000 ms = 10 s
+    tokens: List[str] = []
 
-        with tmp_path.open("w", encoding="utf-8") as out_f:
-            for batch_tokens in fetch_tokens_for_slice(conn, start_year, end_year):
-                out_f.write(" ".join(batch_tokens) + "\n")
-                total_tokens += len(batch_tokens)
+    with db.get_connection() as conn:
+        for token in fetch_tokens_for_slice(conn, start_year, end_year):
+            tokens.append(token)
 
-    return total_tokens
+    # Write one token per line (fastText-compatible)
+    with slice_file.open("w", encoding="utf-8") as f:
+        f.write("\n".join(tokens))
+
+    return slice_file
 
 
-def train_slice_model(slice_tuple):
-    start_year, end_year = slice_tuple
-    slice_name = f"{start_year}-{end_year}"
-    logger.info(f"Starting training for slice {slice_name}")
+# -----------------------------
+# fastText training
+# -----------------------------
+def train_slice_model(slice_file: Path) -> Path:
+    """
+    Train a fastText skip-gram model on a canonical slice.
+    Returns the path to the saved .bin model file.
+    """
+    training_dir = Path(config.MODELS_DIR) / "fastTextCanonSlice"
+    training_dir.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = config.OUT_DIR / f"{slice_name}_tokens.txt"
-    tmp_path.parent.mkdir(parents=True, exist_ok=True)
+    out_file = training_dir / slice_file.with_suffix(".bin").name
 
-    # 1. Fetch tokens (DB only here)
-    total_tokens = dump_tokens_to_disk(start_year, end_year, tmp_path)
-
-    logger.info(f"Collected {total_tokens} tokens for slice {slice_name}")
-
-    if total_tokens == 0:
-        logger.warning(f"No tokens found for slice {slice_name}, skipping model")
-        tmp_path.unlink(missing_ok=True)
-        return
-
-    # 2. Train fastText (NO DB CONNECTION OPEN)
-    model_path = config.MODELS_DIR / f"{slice_name}.bin"
-    config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Training fastText skipgram model for slice {slice_name} @ {model_path}")
     model = fasttext.train_unsupervised(
-        str(tmp_path),
-        model=config.FASTTEXT_PARAMS["model"],
-        dim=config.FASTTEXT_PARAMS["dim"],
-        ws=config.FASTTEXT_PARAMS["ws"],
-        epoch=config.FASTTEXT_PARAMS["epoch"],
-        minCount=config.FASTTEXT_PARAMS["minCount"],
-        minn=config.FASTTEXT_PARAMS["minn"],
-        maxn=config.FASTTEXT_PARAMS["maxn"],
-        thread=config.FASTTEXT_PARAMS["thread"],
+        input=str(slice_file),
+        model="skipgram",
+        lr=0.05,
+        epoch=5,
+        dim=100,
+        thread=4,
+        minn=2,
+        maxn=5,
+        ws=5,
+        verbose=2,
     )
 
-    model.save_model(str(model_path))
-    logger.info(f"Model saved: {model_path}")
-
-    tmp_path.unlink()
+    model.save_model(str(out_file))
+    return out_file
 
 
-def main():
-    slices = config.SLICES
-    max_workers = min(config.NUM_WORKERS, len(slices))
-
-    logger.info(f"Training {len(slices)} slices with {max_workers} parallel workers")
-
-    process_map(
-        train_slice_model,
-        slices,
-        max_workers=max_workers,
-        chunksize=1,
-        desc="Slices trained",
-    )
-
-    logger.info("All slice models trained.")
-
-
+# -----------------------------
+# Main execution
+# -----------------------------
 if __name__ == "__main__":
-    main()
+    # Example slices (replace with config.SLICES when ready)
+    slice_ranges = [(1640 + i, 1640 + i) for i in range(5)]
+
+    print("Dumping canonical token slices to disk...")
+    slice_files = process_map(
+        dump_slice_to_disk,
+        slice_ranges,
+        max_workers=config.NUM_WORKERS,
+    )
+
+    print("Training fastText models on slices...")
+    models = process_map(
+        train_slice_model,
+        slice_files,
+        max_workers=config.NUM_WORKERS,
+    )
+
+    if args.clean:
+        print("Cleaning up slice files...")
+        shutil.rmtree(TMP_DIR)
+
+    print("All canonical slices trained successfully.")

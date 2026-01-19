@@ -28,12 +28,12 @@ Sinfield, Cultural Materialism pp.32-33
 
 > But in effect I have been addressing the production of ideology. Societies need to produce materially to continue — they need food, shelter, warmth; goods to exchange with other societies; a transport and information infrastructure to carry those processes. Also, they have to produce ideologically (Althusser makes this argument at the start of his essay on ideological state apparatuses). They need knowledges to keep material production going — diverse technical skills and wisdoms in agriculture, industry, science, medicine, economics, law, geography, languages, politics, and so on. And they need understandings, intuitive and explicit, of a system of social relationships within which the whole process can take place more or less evenly. Ideology produces, makes plausible, concepts and systems to explain who we are, who the others are, how the world works. The strength of ideology derives from the way it gets to be common sense; it “goes without saying.” For its production is not an external process, stories are not outside ourselves, something we just hear or read about. Ideology makes sense for us — of us — because it is already proceeding when we arrive in the world, and *we come to consciousness in _its_ terms* [my emphasis]. As the world shapes itself around and through us, certain interpretations of experience strike us as plausible: they fit with what we have experienced already, and are confirmed by others around us. So we complete what Colin Sumner calls a “circle of social reality”: “understanding produces its own social reality at the same time as social reality produces its own understanding.” This is apparent when we observe how people in other cultures than our own make good sense of the world in ways that seem strange to us: their outlook is supported by their social context. For them, those frameworks of perception, maps of meaning, work. The conditions of plausibility are therefore crucial. They govern our understandings of the world and how to live in it
 
-**Expanded:**
 
 Both Hart and Finnis rely upon a historically inherited moral–legal vocabulary whose emergence, consolidation, and limits they presuppose rather than explain. This thesis intervenes at that prior level, not to resolve their disagreement, but to examine the linguistic and rhetorical formation of the concepts on which it depends. In doing so, it aims to clarify — and where necessary recover — the terms with which such formations can be adequately described.
 
 ...
 
+**Expanded:**
 
 ## Abstract: About This Project (AHRC Version)
 
@@ -52,6 +52,10 @@ The project will deliver a software pipeline — including orthological maps, RD
 ...a period when, as Lord Dyson in Counsel Magazine[1] says of today, the British constitution faces “turmoil as a symptom of wider global forces” when political actors stretch constitutional boundaries such that our values and institutions are in danger
 
 [1] [Counsel Magaine](https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson?utm_source=chatgpt.com) - see the [Bibliography](./Bibliography.md).
+
+## A Domain-specific Modification of the Heuser Mechanism to run con-currently and primarily
+
+Heuser’s vector-field approach necessarily smooths semantic space by allowing concepts to emerge from aggregated distributional proximity. While highly productive for large-scale pattern detection, this smoothing does risk collapsing historically salient conceptual distinctions - particularly in polemical corpora where antagonistic terms naturally share contexts. The present study therefore inverts this procedure: canonical concepts are defined in advance and held stable, and distributional modelling is used not to discover semantic identity but to trace shifts in the discursive fields surrounding fixed conceptual anchors.
 
 ## Keywords and Fault Lines: Computationally Mapping Ideological and Semantic Change in the Distributed Secularisation of Early Modern England
 

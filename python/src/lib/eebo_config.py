@@ -7,6 +7,7 @@ EEBO_SRC_DIR = Path(__file__).resolve().parent
 
 INPUT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 OUT_DIR = BASE_DIR / "out"
+TMP_DIR = BASE_DIR / "tmp"
 PLAIN_DIR = OUT_DIR / "plain"
 SLICES_DIR = OUT_DIR / "slices"
 SLICES_DIR = BASE_DIR / "out" / "slices"
