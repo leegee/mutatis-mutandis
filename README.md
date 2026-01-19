@@ -2,7 +2,7 @@
 
 ## Abstract: About This Project
 
-Computational modelling, building on the work of Ryan Heuser, is consciously used to complement rather than replaces close reading, rendering visible the semantic drift of Williams’ *keywords* through diachronic visualisations, whilst close reading interprets their rhetorical and ideological significance, both in historical and present perspective, informed by Sinfield’s concept of ideological Faultlines.
+Computational modelling, building on the work of Firth and Ryan Heuser, is consciously used to complement rather than replaces close reading, rendering visible the semantic drift of Williams’ *keywords* through diachronic visualisations, whilst close reading interprets their rhetorical and ideological significance, both in historical and present perspective, informed by Sinfield’s concept of ideological Faultlines.
 
 Following the conceptual frameworks of Skinner and Koselleck, these shifts mark historically-situated changes in the conceptual limits of vernacular political discourse, and show how salient pivotal terms could be meaningfully expressed and comprehended while retaining moral force despite shedding explicit theological grounding. The medium for this discussion is generically termed pamphlets: as illustrated by Joad Raymond, they functioned as the period's most responsive medium in which concepts are tested and rearticulate as ideas evolve prior to any possibility of stablisation and the possibility of incorporation into law or political doctrine.
 
@@ -12,7 +12,6 @@ This dual approach demonstrates the possibilities of combining computational and
 
 The software pipeline — including orthological maps, RDBMS, RAG implementation, fastText and MacBERTh models, modelling, visualisation, web-based search interface, and Docker deployment — will be delivered alongside a case study of as-yet-to-be-determined keywords, such as *liberty*, *justice*, *conscience*, and *moral*.
 
-
 ...
 
 **Hart vs Finnis**
@@ -21,6 +20,9 @@ Hart and Finnis offer competing accounts of legal authority, but both presuppose
 
 ...
 
+Keyword choice: (Hart argued against) Austin (a student of Benthem): legal authority comes back to what he calls 'the sovereign'.
+
+...
 
 There is a prior historical formation of moral and legal concepts that both Hart and Finnis take for granted without seeking to explain. It is this formation, and the processes whereby it becomes linguistically and rhetorically stabilised, that this thesis addresses.
 

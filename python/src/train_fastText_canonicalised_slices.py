@@ -1,16 +1,7 @@
 #!/usr/bin/env python
-# train_fastText.py
+# train_fastText_canonicalised_slices.py
 """
 
-"Normalisation": equivalence-mapping of orthological variants.
-=============================================================
-
-Trains one single, large fastText model on the entire unsliced corpus.
-
-Use the output model only to learn orthographic neighbourhoods from which
-can be derived a canonical `spelling_map` to use as a normalisation layer
-when creatingtime-sliced models on canonicalised text, enabling drift analysis
-of semantic change rather than not orthological noise.
 
 """
 

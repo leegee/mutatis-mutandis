@@ -4,10 +4,11 @@ set -euo pipefail
 SRC="./src"
 PYTHON="python"
 
-INGEST_SCRIPT="$SRC/eebo_parse_tei.py"
+INIT_AND_INGEST_XML="$SRC/eebo_parse_tei.py"
 # MB_SENTENCE_SCRIPT="$SRC/eebo_macberth_sentence_embedding.py"
-CANONICALISE_SCRIPT="$SRC/create_fastText_ortho_canon.py"
-TRAIN_FASTTEXT_SCRIPT="$SRC/train_fastText.py"
+TRAIN_FASTTEXT_FOR_NORMALISATION="$SRC/create_fastText_ortho_canon.py"
+MAKE_FASTTEXT_SLICES="$SRC/train_fastText_canonicalised_slices.py"
+BUILD_CANONICAL_MAP="$SRC/build_canonical_map.py"
 
 # Default values
 PHASE="all"
@@ -51,7 +52,7 @@ echo "# All checks passed"
 case "$PHASE" in
     i|ingest)
         echo "# Running ingest phase"
-        "$PYTHON" "$INGEST_SCRIPT" "$@"
+        "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
         ;;
     # s|sentence)
     #     echo "# Running MacBERTh sentence phase"
@@ -59,18 +60,18 @@ case "$PHASE" in
     #     ;;
     t|trainft)
         echo "# Running fastText training phase"
-        "$PYTHON" "$TRAIN_FASTTEXT_SCRIPT" "$@"
+        "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
         ;;
     c|canoical)
         echo "# Running caonicalisation phase"
-        "$PYTHON" "$CANONICALISE_SCRIPT" "$@"
+        "$PYTHON" "$TRAIN_FASTTEXT_FOR_NORMALISATION" "$@"
         ;;
     all)
         echo "# Running full pipeline: ingest + sentence"
-        "$PYTHON" "$INGEST_SCRIPT" "$@"
-        "$PYTHON" "$TRAIN_FASTTEXT_SCRIPT" "$@"
+        "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
+        "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
         # "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@"
-        "$PYTHON" "$CANONICALISE_SCRIPT" "$@"
+        "$PYTHON" "$TRAIN_FASTTEXT_FOR_NORMALISATION" "$@"
         ;;
     *)
         echo "Unknown phase: $PHASE"
