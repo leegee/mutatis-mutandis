@@ -67,22 +67,57 @@ STRONG_MEAN = 0.80
 MODERATE_MEAN = 0.65
 MIN_SLICES_STRONG = 3
 
-KEYWORDS_TO_NORMALISE = [
-    "Liberty",
-    "justice",
-    "reasonable",
-    "common",
-    "conscience",
-    "god",
-    "king",
-    "divine",
-    "sovereign",
-    "paternal",
-    "state",
-    "nation",
-    "*obligation",
-    "authority",
-    "duty",
-    "right",
-    "rule",
-]
+"""
+Canonical normalisation configuration.
+
+KEYWORDS_TO_NORMALISE is now the SINGLE source of truth.
+
+- dict keys   → canonical heads (theory-driven)
+- dict values → explicit blacklist of tokens that must NEVER map to that head
+
+Normalisation is restricted to orthographic and boundary-level variation characteristic
+of early modern print and OCR, including the elision of whitespace between function words
+and lexical heads (e.g. ofjustice). These forms are treated as recoverable tokenisation
+artefacts rather than distinct lexical items. Semantic distinctions between canonical
+concepts are preserved through explicit constraints on allowable mappings.
+
+"""
+
+# Canonical heads with per-head exclusion lists
+KEYWORDS_TO_NORMALISE: dict[str, set[str]] = {
+    "justice": {
+        "injustice",
+        "injury",
+        "unjustice",
+        "vnjustice",
+        "dinjustice",
+        "iujustice",
+        "chiefjustice",
+        "executejustice",
+        "satisfiedjustice",
+    },
+    "injustice": {
+        "justice",
+        "dojustice",
+        "ofjustice",
+    },
+    "liberty": {
+        "afreedom",
+        "freeliberty",
+        "bufreedom",
+        "freedomship",
+    },
+    "freedom": {
+        "liberty",
+        "afreedom",
+        "bufreedom",
+    },
+    "reasonable": {
+        "ureasonable",
+        "unreasonable",
+    },
+    "state": {
+        "estate",
+    },
+}
+

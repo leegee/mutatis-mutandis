@@ -2,71 +2,81 @@
 """
 build_spelling_map_from_fastText.py
 
-Stage 2 (refined): Generate the canonical spelling_map table from the global fastText model
-for a curated list of keywords, with Levenshtein filtering and an explicit blacklist.
+Stage 2: Generate spelling_map entries using a FIXED set of canonical heads.
 
-- Loads global fastText skipgram model (Stage 1)
-- Queries nearest neighbours for keywords only
-- Determines canonical form using filtered neighbours
-- Inserts results into `spelling_map` table
-- Updates `tokens.canonical` column
-- Prints a full report at the end
-- Supports dry-run mode (--dry)
+- Canonical heads come ONLY from config.KEYWORDS_TO_NORMALISE
+- fastText is used ONLY to discover orthographic variants
+- Canonical choice is NEVER inferred
+- Per-head blacklist is enforced
+- Supports --dry run
 """
 
 from pathlib import Path
-from typing import Any
 import argparse
-from tqdm import tqdm
-import fasttext
-import Levenshtein
+from typing import Dict
 
-from lib import eebo_db, eebo_config as config
+import fasttext
+from tqdm import tqdm
+
+from lib import eebo_db
+from lib import eebo_config as config
 from lib.eebo_logging import logger
 
 
-# Explicit blacklist of words to ignore as orthographic variants
-BLACKLIST = {
-    "ureasonable",
-    "indiffeasible",
-    "afreedom",
-    "divineinfluence",
-    "supremacy",  # example additional semantic mismatches
-    # Add more problematic tokens here
-}
+# ---------- helpers ----------
 
-
-def load_fasttext_model(model_path: Path) -> Any:
+def load_fasttext_model(model_path: Path):
     logger.info(f"Loading global fastText model from {model_path}")
     return fasttext.load_model(str(model_path))
 
 
-def determine_canonical(neighbours: list[tuple[float, str]]) -> str | None:
-    """Pick canonical token from a set of neighbours: first neighbour if exists."""
-    return neighbours[0][1] if neighbours else None
+def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
+    """
+    Conservative orthographic filter.
+    Allows OCR / early modern variation, blocks semantic drift.
+    """
+
+    if candidate == canonical:
+        return False
+
+    # length sanity
+    if abs(len(candidate) - len(canonical)) > 3:
+        return False
+
+    # stem overlap heuristic
+    if canonical[:4] not in candidate and candidate[:4] not in canonical:
+        return False
+
+    # avoid negation prefixes collapsing concepts
+    for bad_prefix in ("un", "in", "dis", "non"):
+        if candidate.startswith(bad_prefix) and not canonical.startswith(bad_prefix):
+            return False
+
+    return True
 
 
-def insert_spelling_map(conn, variant: str, canonical: str, dry: bool = False) -> None:
-    """Insert one variant → canonical mapping into spelling_map table."""
+def insert_spelling_map(conn, variant: str, canonical: str, dry: bool):
     if dry:
-        logger.debug(f"[DRY] Insert spelling_map: {variant} -> {canonical}")
+        logger.debug(f"[DRY] spelling_map: {variant} -> {canonical}")
         return
+
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO spelling_map(variant, canonical, concept_type)
+            INSERT INTO spelling_map (variant, canonical, concept_type)
             VALUES (%s, %s, 'orthographic')
-            ON CONFLICT (variant) DO UPDATE SET canonical = EXCLUDED.canonical;
+            ON CONFLICT (variant)
+            DO UPDATE SET canonical = EXCLUDED.canonical;
             """,
             (variant, canonical),
         )
 
 
-def update_tokens_canonical(conn, token: str, canonical: str, dry: bool = False) -> None:
-    """Update tokens.canonical column for a single token."""
+def update_tokens_canonical(conn, variant: str, canonical: str, dry: bool):
     if dry:
-        logger.debug(f"[DRY] Update tokens.canonical: {token} -> {canonical}")
+        logger.debug(f"[DRY] tokens.canonical: {variant} -> {canonical}")
         return
+
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -74,86 +84,87 @@ def update_tokens_canonical(conn, token: str, canonical: str, dry: bool = False)
             SET canonical = %s
             WHERE token = %s;
             """,
-            (canonical, token),
+            (canonical, variant),
         )
 
 
-def main() -> None:
+# ---------- main ----------
+
+def main():
     parser = argparse.ArgumentParser(
-        description="Build canonical spelling_map from global fastText model for curated keywords"
+        description="Build spelling_map using fixed canonical heads"
     )
-    parser.add_argument("--model_path", type=str, default=str(config.FASTTEXT_GLOBAL_MODEL_PATH),
-                        help=f"Path to global fastText model (default: {config.FASTTEXT_GLOBAL_MODEL_PATH})")
-    parser.add_argument("--top_k", type=int, default=config.TOP_K,
-                        help=f"Number of nearest neighbours to consider (default: {config.TOP_K})")
-    parser.add_argument("--dry", action="store_true", help="Dry run: do not commit to DB")
-    parser.add_argument("--max_lev_distance", type=int, default=3,
-                        help="Maximum Levenshtein distance for orthographic neighbours")
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        default=str(config.FASTTEXT_GLOBAL_MODEL_PATH),
+    )
+    parser.add_argument(
+        "--top_k",
+        type=int,
+        default=config.TOP_K,
+    )
+    parser.add_argument(
+        "--dry",
+        action="store_true",
+        help="Dry run: no database writes",
+    )
+
     args = parser.parse_args()
 
     if args.dry:
-        logger.info("DRY RUN: no database writes will occur")
+        logger.info("DRY RUN enabled")
 
     model_path = Path(args.model_path)
     if not model_path.exists():
-        logger.error(f"Model not found at {model_path}")
+        logger.error(f"Model not found: {model_path}")
         return
 
     model = load_fasttext_model(model_path)
 
-    # Use only curated keywords from config
-    keywords = getattr(config, "KEYWORDS_TO_NORMALISE", [])
-    if not keywords:
-        logger.error("No keywords defined in config.KEYWORDS_TO_NORMALISE")
+    keyword_map: Dict[str, set[str]] = config.KEYWORDS_TO_NORMALISE
+    if not keyword_map:
+        logger.error("KEYWORDS_TO_NORMALISE is empty")
         return
 
     report = []
 
-    # Open a DB connection
     with eebo_db.get_connection(application_name="spelling_map_builder") as conn:
-        logger.info(f"Processing {len(keywords)} keywords for canonicalisation")
 
-        for keyword in tqdm(keywords, desc="Keywords processed"):
+        for canonical, blacklist in tqdm(
+            keyword_map.items(),
+            desc="Canonical heads processed",
+        ):
             try:
-                neighbours = model.get_nearest_neighbors(keyword, k=args.top_k)
+                neighbors = model.get_nearest_neighbors(canonical, args.top_k)
             except KeyError:
-                logger.warning(f"Keyword '{keyword}' not found in fastText vocabulary")
+                logger.warning(f"Canonical '{canonical}' not in fastText vocab")
                 continue
 
-            # Filter neighbours by Levenshtein distance and blacklist
-            filtered: list[str] = [
-                n for _sim, n in neighbours
-                if Levenshtein.distance(keyword.lower(), n.lower()) <= args.max_lev_distance
-                and n.lower() not in BLACKLIST
-            ]
+            for score, candidate in neighbors:
+                candidate = candidate.lower()
 
-            if not filtered:
-                logger.warning(f"No valid orthographic neighbours for '{keyword}', skipping")
-                continue
+                if candidate in blacklist:
+                    continue
 
-            canonical = filtered[0]  # pick first filtered as canonical
+                if not is_reasonable_orthographic_variant(candidate, canonical):
+                    continue
 
-            insert_spelling_map(conn, keyword, canonical, dry=args.dry)
-            update_tokens_canonical(conn, keyword, canonical, dry=args.dry)
+                insert_spelling_map(conn, candidate, canonical, args.dry)
+                update_tokens_canonical(conn, candidate, canonical, args.dry)
 
-            report.append({
-                "keyword": keyword,
-                "canonical": canonical,
-                "filtered_neighbours": filtered,
-                "original_neighbours": [n for _, n in neighbours],
-            })
-
-            logger.info(f"Keyword: {keyword}")
-            logger.info(f"  Canonical: {canonical}")
-            logger.info(f"  Filtered neighbours: {', '.join(filtered)}")
-            logger.info(f"  Original neighbours: {', '.join([n for _, n in neighbours])}")
-            logger.info("-" * 60)
+                report.append((canonical, candidate, score))
 
         if not args.dry:
             conn.commit()
-            logger.info("Database updated with canonical spellings")
+            logger.info("Database updated")
 
-    logger.info("Canonicalisation complete")
+    # reporting
+    logger.info("Canonicalisation report:")
+    for canonical, variant, score in report:
+        logger.info(f"{variant} -> {canonical} ({score:.3f})")
+
+    logger.info("Done.")
 
 
 if __name__ == "__main__":
