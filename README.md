@@ -208,25 +208,23 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 
 Initial Target Keywords
 
-* Liberty
-* Justice
-* Reasonable
+* liberty
+* justice
+* reasonable
 * common
-* Conscience
-* God
-* King
-* Divine
+* conscience
+* god
+* king
+* divine
 * sovereign
 * paternal
 * state
 * nation
-* *obligation*
+* obligation
 * authority
 * duty
 * right
 * rule
-*
-
 
 ## Restoring the Database
 

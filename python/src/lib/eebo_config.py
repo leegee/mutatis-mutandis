@@ -66,3 +66,24 @@ SLICES = [
 STRONG_MEAN = 0.80
 MODERATE_MEAN = 0.65
 MIN_SLICES_STRONG = 3
+
+KEYWORDS_TO_NORMALISE = [
+    "Liberty",
+    "justice",
+    "reasonable",
+    "common",
+    "conscience",
+    "god",
+    "king",
+    "divine",
+    "sovereign",
+    "paternal",
+    "state",
+    "nation",
+    "*obligation",
+    "authority",
+    "duty",
+    "right",
+    "rule",
+
+]
