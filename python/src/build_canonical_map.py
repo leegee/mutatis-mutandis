@@ -86,7 +86,7 @@ def persist_spelling_map(conn, spelling_map):
 def main():
     # Load global model
     logger.info("Loading global fastText model")
-    model_path = config.MODELS_DIR / "global.bin"
+    model_path = config.FASTTEXT_GLOBAL_MODEL_PATH
     model = fasttext.load_model(str(model_path))
 
     # Get all corpus tokens

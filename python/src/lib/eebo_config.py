@@ -18,6 +18,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 FASTTEXT_GLOBAL_MODEL_PATH = MODELS_DIR / "global_eebo.bin"
+FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextCanonSlice"
 BATCH_DOCS = 100
 BATCH_TOKENS = 10000
 FASTTEXT_BATCH_SIZE = 50_000

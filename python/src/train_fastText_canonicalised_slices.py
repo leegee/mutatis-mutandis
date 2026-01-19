@@ -124,7 +124,7 @@ def train_slice_model(slice_file: Path) -> Path:
     Train a fastText skip-gram model on a canonical slice.
     Returns the path to the saved .bin model file.
     """
-    training_dir = Path(config.MODELS_DIR) / "fastTextCanonSlice"
+    training_dir = config.FASTTEXT_SLICE_MODEL_DIR
     training_dir.mkdir(parents=True, exist_ok=True)
 
     out_file = training_dir / slice_file.with_suffix(".bin").name
