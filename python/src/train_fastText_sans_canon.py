@@ -2,6 +2,9 @@
 # train_fastText.py
 """
 
+"Normalisation": equivalence-mapping of orthological variants.
+=============================================================
+
 Trains one single, large fastText model on the entire unsliced corpus.
 
 Use the output model only to learn orthographic neighbourhoods from which
