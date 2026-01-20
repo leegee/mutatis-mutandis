@@ -6,7 +6,6 @@ build_spelling_map_from_fastText.py
 
 from pathlib import Path
 import argparse
-from typing import Dict
 
 import fasttext
 from tqdm import tqdm
@@ -142,7 +141,7 @@ def main():
 
     model = load_fasttext_model(model_path)
 
-    keyword_map: Dict[str, set[str]] = config.KEYWORDS_TO_NORMALISE
+    keyword_map: config.CanonicalRules = config.KEYWORDS_TO_NORMALISE
     if not keyword_map:
         logger.error("KEYWORDS_TO_NORMALISE is empty")
         return

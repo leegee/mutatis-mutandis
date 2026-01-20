@@ -1,6 +1,8 @@
 # lib/eebo_config.py
 
 from pathlib import Path
+from typing import TypedDict, Set, Dict
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
@@ -84,42 +86,68 @@ artefacts rather than distinct lexical items. Semantic distinctions between cano
 concepts are preserved through explicit constraints on allowable mappings.
 
 """
+class CanonicalRule(TypedDict):
+    allowed_variants: Set[str]
+    false_positives: Set[str]
+
+CanonicalRules = Dict[str, CanonicalRule]
 
 # Canonical heads with per-head exclusion lists
-KEYWORDS_TO_NORMALISE: dict[str, set[str]] = {
+KEYWORDS_TO_NORMALISE: CanonicalRules = {
     "justice": {
-        "injustice",
-        "injury",
-        "unjustice",
-        "vnjustice",
-        "dinjustice",
-        "iujustice",
-        "chiefjustice",
-        "executejustice",
-        "satisfiedjustice",
+        "allowed_variants": {
+            "unjustice",
+            "vnjustice",
+            "dinjustice",
+            "iujustice",
+            "chiefjustice",
+            "executejustice",
+            "satisfiedjustice",
+        },
+        "false_positives": {
+            "injury",
+            "injustice",
+        },
     },
     "injustice": {
-        "justice",
-        "dojustice",
-        "ofjustice",
+        "allowed_variants": {
+            "dojustice",
+            "ofjustice",
+        },
+        "false_positives": {
+            "injury",
+            "justice",
+        },
     },
     "liberty": {
-        "afreedom",
-        "freeliberty",
-        "bufreedom",
-        "freedomship",
+        "allowed_variants": {
+            "afreedom",
+            "freeliberty",
+            "bufreedom",
+            "freedomship",
+        },
+        "false_positives": set(),
     },
     "freedom": {
-        "liberty",
-        "afreedom",
-        "bufreedom",
+        "allowed_variants": {
+            "liberty",
+            "afreedom",
+            "bufreedom",
+        },
+        "false_positives": set(),
     },
     "reasonable": {
-        "ureasonable",
-        "unreasonable",
+        "allowed_variants": {
+            "ureasonable",
+            "unreasonable",
+        },
+        "false_positives": set(),
     },
     "state": {
-        "estate",
+        "allowed_variants": {
+            "estate",
+        },
+        "false_positives": set(),
     },
 }
 
