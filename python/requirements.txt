@@ -16,3 +16,4 @@ psycopg-binary
 types-tqdm
 scikit-learn-stubs
 Levenshtein
+faiss-cpu
