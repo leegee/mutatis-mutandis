@@ -1,5 +1,5 @@
 {
-  "name": "pamphlets",
+  "name": "mutatis-mutandis",
   "private": true,
   "devDependencies": {
     "@types/bun": "latest"
