@@ -42,6 +42,7 @@ python/test_output/
 python/src/macberth_pipe.egg-info/
 python/lib/
 out/
+!./docs/uml/ouput
 out_old/
 faiss_cache/
 cache/

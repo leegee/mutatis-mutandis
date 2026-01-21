@@ -38,7 +38,9 @@ for PUML in $PUML_FILES; do
     echo "[INFO] Processing PUML file: $ABS_PUML"
 
     java -jar "$PLANTUML_JAR" -tsvg -o "$ABS_OUTPUT" "$ABS_PUML"
-    echo "[INFO] Generated SVG for: $("$ABS_PUML") @ $("ABS_OUTPUT")"
+
+    SVG_FILE="$ABS_OUTPUT/$(basename "$PUML" .puml).svg"
+    echo "[INFO] Generated SVG: $SVG_FILE"
 done
 
 echo "[INFO] PlantUML completed for all files."
