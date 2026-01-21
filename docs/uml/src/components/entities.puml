@@ -2,7 +2,7 @@
 ' Define core data and model entities
 
 package "Data / Corpus" #LightYellow {
-    class "Training Corpus" 
+    class "Training Corpus"
     class "TEI Repository"
     class "Normalised Text DB"
     class "Metadata DB"
@@ -10,11 +10,13 @@ package "Data / Corpus" #LightYellow {
 
 package "Models" #lightblue {
     class "MacBERTh NLP Model"
+    class "fastText Global Index"
+    class "fastText Slices Index"
 }
 
 package "UI / Tools" #LightGreen {
     class "Corpus Explorer UI"
-    class "WYSIWYG Editor"
-    class "Novelty Detection"
-    class "Statistics + Graphing Tools"
+    class "WYSIWYG Editor?"
+    class "Novelty Detection (IVNF)"
+    class "Diachornic Statistics and Graphing Tools"
 }

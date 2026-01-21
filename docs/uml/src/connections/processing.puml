@@ -1,5 +1,4 @@
 ' Ingestion → Processing Pipeline
-"EEBO HTML Parser" --> "TEI Converter" #brown
 "TEI Parser" --> "TEI Converter" #brown
 "Image Preprocessor" --> "OCR" #brown
 "OCR" =-> "TEI Converter" #brown
