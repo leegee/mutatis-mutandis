@@ -25,7 +25,7 @@ ABS_OUTPUT=$(realpath "$OUTPUT_DIR")
 mkdir -p "$ABS_OUTPUT"
 echo "[INFO] Output directory: $ABS_OUTPUT"
 
-# --- Find all PUML files in the directory ---
+# --- Find all PUML files ---
 PUML_FILES=$(find "$PUML_DIR" -maxdepth 1 -type f -name "*.puml")
 if [ -z "$PUML_FILES" ]; then
     echo "[WARN] No .puml files found in $PUML_DIR"
