@@ -349,7 +349,7 @@ def ingest_xml_parallel(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="EEBO XML Ingest Script: Ingests EEBO XML into PostgreSQL with optional DB reset."
+        description="EEBO-TCP XML Ingest Script: Ingests EEBO-TCP XML into PostgreSQL with optional DB reset."
     )
     parser.add_argument(
         "--limit",

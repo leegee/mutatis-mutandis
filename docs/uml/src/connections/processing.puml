@@ -1,8 +1,8 @@
 ' Ingestion → Processing Pipeline
-"TEI Parser" --> "TEI Converter" #brown
+"Lincoln / Bodleian Scans (TIFF/JPEG)" --> "Image Preprocessor" #brown
 "Image Preprocessor" --> "OCR" #brown
 "OCR" =-> "TEI Converter" #brown
 
-' TEI Converter → Storage
-"TEI Converter" --> "TEI Repository" #brown
+"TEI Parser" =-> "Normalisation Engine" #brown
+
 "TEI Converter" --> "Normalisation Engine" #brown

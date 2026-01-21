@@ -1,5 +1,4 @@
 
-"EEBO XML" --> "TEI Parser" #green
-"EEBO Images (TIFF/JPEG)" --> "Image Preprocessor" #green
+"EEBO-TCP XML" --> "TEI Parser" #green
 MPESE --> "TEI Parser" #green
 MPESE --> "Image Preprocessor" #green
