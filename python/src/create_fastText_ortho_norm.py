@@ -7,7 +7,6 @@ Train a global fastText skipgram model on EEBO DB tokens (CPU-friendly, fast).
 
 - Dumps tokens from Postgres using COPY (one line per document, tokens space-separated)
 - Trains fastText skipgram with subword ngrams
-- Saves model to MODELS_DIR for canonicalisation / semantic drift analysis
 """
 
 from pathlib import Path
@@ -25,7 +24,7 @@ def dump_tokens_to_file(tmp_file: Path):
     with eebo_db.get_connection() as conn:
         with open(tmp_file, "w", encoding="utf-8") as f:
             with conn.cursor() as cur:
-                # cur.copy(...) returns a context manager; enter it
+                # cur.copy(...) returns a context manager:
                 with cur.copy(
                     "COPY (SELECT string_agg(token, ' ') FROM tokens GROUP BY doc_id ORDER BY doc_id) TO STDOUT WITH (FORMAT text)"
                 ) as copy_obj:
@@ -60,16 +59,13 @@ def train_fasttext_model(corpus_file: Path, output_path: Path):
 
 
 def main():
-    # Ensure MODELS_DIR exists
-    config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    our_temp_corpus_path = config.OUT_DIR / "fasttext_corpus.txt"
 
-    tmp_corpus = config.OUT_DIR / "fasttext_corpus.txt"
+    dump_tokens_to_file(our_temp_corpus_path)
 
-    dump_tokens_to_file(tmp_corpus)
+    train_fasttext_model(our_temp_corpus_path, config.FASTTEXT_GLOBAL_MODEL_PATH)
 
-    train_fasttext_model(tmp_corpus, config.FASTTEXT_GLOBAL_MODEL_PATH)
-
-    tmp_corpus.unlink(missing_ok=True)
+    our_temp_corpus_path.unlink(missing_ok=True)
     logger.info("Temporary corpus file deleted. Training complete.")
 
 

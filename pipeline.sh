@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC="./src"
+OUR_OLDPWD=`pwd`
+cd python
+
+SRC="./src" # relative to pwd set above
 PYTHON="python"
 
 # MB_SENTENCE_SCRIPT="$SRC/eebo_macberth_sentence_embedding.py"
@@ -78,3 +81,5 @@ case "$PHASE" in
         "$PYTHON" "$VISUALISE" "$@"
         ;;
 esac
+
+cd  OUR_OLDPWD

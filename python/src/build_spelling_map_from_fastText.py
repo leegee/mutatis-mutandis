@@ -15,8 +15,6 @@ from lib import eebo_config as config
 from lib.eebo_logging import logger
 
 
-# ---------- helpers ----------
-
 def load_fasttext_model(model_path: Path):
     logger.info(f"Loading global fastText model from {model_path}")
     return fasttext.load_model(str(model_path))
