@@ -12,30 +12,21 @@ This dual approach demonstrates the possibilities of combining computational and
 
 The software pipeline — including orthological maps, RDBMS, RAG implementation, fastText and MacBERTh models, modelling, visualisation, web-based search interface, and Docker deployment — will be delivered alongside a case study of as-yet-to-be-determined keywords, such as *liberty*, *justice*, *conscience*, and *moral*.
 
-...
+---
 
-**Hart vs Finnis**
+#### Jurisprudential persepective: Hart vs Finnis
 
-Hart and Finnis offer competing accounts of legal authority, but both presuppose a historically inherited moral vocabulary whose formation, contestation, and secularisation their theories do not themselves attempt to explain. It is to the formation of such terms, the process of their evolution, to which this thesis addresses itself.
-...
+Hart and Finnis offer competing accounts of legal authority, but both presuppose a historically inherited moral vocabulary whose formation, contestation, and secularisation their theories do not themselves attempt to explain. It is to the formation of such terms, the process of their evolution, to which this thesis addresses itself.Hart and Finnis offer competing accounts of legal authority, but both presuppose a historically inherited moral vocabulary whose formation, contestation, and secularisation their theories do not themselves attempt to explain. It is to the formation of such terms, the process of their evolution, to which this thesis addresses itself.
 
-Keyword choice: (Hart argued against) Austin (a student of Benthem): legal authority comes back to what he calls 'the sovereign'.
-...
+**Keyword choice**: (Hart argued against) Austin (a student of Benthem): legal authority comes back to what he calls 'the sovereign'.Keyword choice: (Hart argued against) Austin (a student of Benthem): legal authority comes back to what he calls 'the sovereign'.
 
-There is a prior historical formation of moral and legal concepts that both Hart and Finnis take for granted without seeking to explain. It is this formation, and the processes whereby it becomes linguistically and rhetorically stabilised, that this thesis addresses.
-...
-Sinfield, Cultural Materialism pp.32-33
+There is a prior historical formation of moral and legal concepts that both Hart and Finnis take for granted without seeking to explain. It is this formation, and the processes whereby it becomes linguistically and rhetorically stabilised, that this thesis addresses.There is a prior historical formation of moral and legal concepts that both Hart and Finnis take for granted without seeking to explain. It is this formation, and the processes whereby it becomes linguistically and rhetorically stabilised, that this thesis addresses.
 
-> But in effect I have been addressing the production of ideology. Societies need to produce materially to continue — they need food, shelter, warmth; goods to exchange with other societies; a transport and information infrastructure to carry those processes. Also, they have to produce ideologically (Althusser makes this argument at the start of his essay on ideological state apparatuses). They need knowledges to keep material production going — diverse technical skills and wisdoms in agriculture, industry, science, medicine, economics, law, geography, languages, politics, and so on. And they need understandings, intuitive and explicit, of a system of social relationships within which the whole process can take place more or less evenly. Ideology produces, makes plausible, concepts and systems to explain who we are, who the others are, how the world works. The strength of ideology derives from the way it gets to be common sense; it “goes without saying.” For its production is not an external process, stories are not outside ourselves, something we just hear or read about. Ideology makes sense for us — of us — because it is already proceeding when we arrive in the world, and *we come to consciousness in _its_ terms* [my emphasis]. As the world shapes itself around and through us, certain interpretations of experience strike us as plausible: they fit with what we have experienced already, and are confirmed by others around us. So we complete what Colin Sumner calls a “circle of social reality”: “understanding produces its own social reality at the same time as social reality produces its own understanding.” This is apparent when we observe how people in other cultures than our own make good sense of the world in ways that seem strange to us: their outlook is supported by their social context. For them, those frameworks of perception, maps of meaning, work. The conditions of plausibility are therefore crucial. They govern our understandings of the world and how to live in it
-
+---
 
 Both Hart and Finnis rely upon a historically inherited moral–legal vocabulary whose emergence, consolidation, and limits they presuppose rather than explain. This thesis intervenes at that prior level, not to resolve their disagreement, but to examine the linguistic and rhetorical formation of the concepts on which it depends. In doing so, it aims to clarify — and where necessary recover — the terms with which such formations can be adequately described.
 
-...
-
-**Expanded:**
-
-## Abstract: About This Project (AHRC Version)
+## Expanded Abstract: About This Project (AHRC Version)
 
 This project traces semantic drift in Williams’ *keywords* bycombining Skinnerian close reading with computational modelling after the work of Ryan Heuser . Diachronic visualisations make patterns of semantic and orthographic change visible, while close reading interprets rhetorical and ideological significance, both from contemporary historical and present perspective, informed by Alan Sinfield’s concept of ideological *Faultlines*.
 
@@ -69,6 +60,10 @@ Building on the computational work of Ryan Heuser, this study uses diachronic di
 
 Computational modelling does not intend to replace close reading or ideological critique; rather it renders patterns of semantic drift empirically visible, both literally and figurativly highlighting points where concepts retain moral force whilst dropping explicit theological anchoring, the locations in history where modern English secular law was born. The result is an account of secularisation as a distributed, gradual linguistic process, unfolding unevenly across vernacular political argument before formal consolidation in law. This approach demonstrates the explanatory power of digital methods while explicitly situating the analysis within the historiographical and conceptual lineage established by Sinfield, Raymond, Williams, Heuser, Skinner, and Koselleck.
 
+> Societies need to produce materially to continue — they need food, shelter, warmth; goods to exchange with other societies; a transport and information infrastructure to carry those processes. Also, they have to produce ideologically...They need knowledges to keep material production going — diverse technical skills and wisdoms in agriculture, industry, science, medicine, economics, law, geography, languages, politics, and so on. And they need understandings, intuitive and explicit, of a system of social relationships within which the whole process can take place more or less evenly. Ideology produces, makes plausible, concepts and systems to explain who we are, who the others are, how the world works. The strength of ideology derives from the way it gets to be common sense; it “goes without saying.” For its production is not an external process, stories are not outside ourselves, something we just hear or read about. Ideology makes sense for us — of us — because it is already proceeding when we arrive in the world, and *we come to consciousness in _its_ terms* [my emphasis]. As the world shapes itself around and through us, certain interpretations of experience strike us as plausible: they fit with what we have experienced already, and are confirmed by others around us. So we complete what Colin Sumner calls a “circle of social reality”: “understanding produces its own social reality at the same time as social reality produces its own understanding.” This is apparent when we observe how people in other cultures than our own make good sense of the world in ways that seem strange to us: their outlook is supported by their social context. For them, those frameworks of perception, maps of meaning, work. The conditions of plausibility are therefore crucial. They govern our understandings of the world and how to live in it.
+
+-- Sinfield, Cultural Materialism pp.32-33
+
 ### Semantic drift in "keywords"
 
 Illustrating semantic drift in keywords (Williams, 1976) through the faultlines (Sinfield, 1992) between:
@@ -76,17 +71,14 @@ Illustrating semantic drift in keywords (Williams, 1976) through the faultlines 
 * theological and juridical language
 * clerical authority and lay readership
 * Latin legal-theological tradition and vernacular political argument
-* sermon, polemic, statute, and petition
+* form: sermon, polemic, statute, and petition
 
-Whilst Austin/Skinner will allow an understanding of how the text functioned at its time of writing in its native environment,
-Koselleck will help to understand how the same concepts change function over both time and over social and ideological conditions.
+Whilst Austin/Skinner will allow an understanding of how the text functioned at its time of writing in its native environment, Koselleck will help to understand how the same concepts change function over both time and in differing social and ideological conditions.
 
 * Diachronic tracking of concepts
 * Attention to semantic layering
-* Focus on conflict rather than consensus
+* Focus on tension, contestion, conflict rather than consensus or apparently agreed-up meaning
 * Analysis of conceptual pairs/poles and asymmetries
-
-Revealing diachronic neighbourhoods should reveal the underlying semantic change.
 
 Initial corpus: TEI-encoded EEBO-TCP Phase I - including rich metadata
 
@@ -99,20 +91,44 @@ Semantic drift analysis using temporally-aligned dynamic embeddings of conceptua
 
 Dynamic embeddings are required because static models conflate historically distinct usages into a single semantic representation, whereas this aspect of the project aims to trace how religious/political concepts are reconfigured through time within pamphlet discourse.
 
-To compare embeddings across temporal slices, each earlier slice is aligned to the subsequent slice using Orthogonal Procrustes, ie rotating the vector space to minimise orientation differences whilst preserving relative distances, ensuring that measured cosine-distance trajectories reflect genuine semantic drift rather than random variation.
+To compare embeddings across temporal slices, a common vector space is used, each slice is aligned to a global constant (the superset of the corpus) using Orthogonal Procrustes, ie rotating the vector space to minimise orientation differences whilst preserving relative distances, ensuring that measured cosine-distance trajectories reflect genuine semantic drift rather than random variation.
 
-Polemical clustering by concept usage an rhetorical posture (genre) to show who uses the same word (where) differently at the same time (and location) to capture asymmetrical counter-concepts and reveal conceptual struggle.
+Polemical clustering by concept usage and rhetorical posture (genre) to show who uses the same word (in context) differently at the same time (and place) to capture asymmetrical counter-concepts and reveal conceptual struggle in expressed stance and geospatial location.
 
 Where drift is seen to accelerate, apply a Skinnerian close reading to identify illocutionary force.
 
 
-| Term       | Sinfieldian Contradiction                                                         | Early Stabiliser                          | Pressure Point                                                    | Likely Semantic Drift                                               | Fault Line / Observational Significance                                                                                         |
-| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Law        | Must appear transcendent and moral, yet function as historically contingent power | Divine ordinance, natural law, providence | Religious fragmentation, civil war, competing claims of authority | God / commandment / scripture to custom / reason / liberty / nation | Moral authority preserved while shedding theological grounding; semantic neighbourhood shifts reveal functional re-legitimation |
-| Authority  | Absolute enough to govern, but accountable enough to be argued for                | Divine right, ordination                  | Parliamentarianism, resistance theory, consent                    | Divine / sacred / ordained to civil / parliamentary / delegated     | Authority justified procedurally rather than ontologically; neighbourhood drift exposes ideological negotiation                 |
-| Liberty    | Morally defensible but not anarchic; collective yet increasingly individual       | Christian freedom (freedom from sin)      | Conscience, toleration, property                                  | Grace / obedience / soul to right / property / subject / English    | Moral force persists without theological frame; drift indicates secularisation without disenchantment                           |
-| Conscience | Binding yet private; authoritative yet resistant to institutional capture         | Sin, salvation, divine judgement          | Sectarianism, toleration debates                                  | God / soul / damnation to judgement / liberty / inward / persuasion | Moral interiority detaches from ecclesiastical authority; fault line visible in subjective reasoning                            |
-| Right      | Natural yet historically asserted and contested                                   | Divine or customary sanction              | Petitions, grievances, property claims                            | God / law / nature to subject / liberty / property                  | Naturalisation of historically produced claims; semantic drift shows shifting legitimatory frameworks                           |
+## Keywords Under Consideration with rationale
+
+Initial Target Keywords
+
+* liberty
+* justice
+* reasonable
+* common
+* conscience
+* god
+* king
+* divine
+* sovereign
+* paternal
+* state
+* nation
+* obligation
+* authority
+* duty
+* right
+* rule
+
+
+
+| Term       | Sinfieldian Contradiction                                                         | Early Stabiliser                          | Pressure Point                                                    | Likely Semantic Drift                                                     | Fault Line / Observational Significance                                                                                         |
+| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Law        | Must appear transcendent and moral, yet function as historically contingent power | Divine ordinance, natural law, providence | Religious fragmentation, civil war, competing claims of authority | God / commandment / scripture to<br />custom / reason / liberty / nation  | Moral authority preserved while shedding theological grounding; semantic neighbourhood shifts reveal functional re-legitimation |
+| Authority  | Absolute enough to govern, but accountable enough to be argued for                | Divine right, ordination                  | Parliamentarianism, resistance theory, consent                    | Divine / sacred / ordained to<br />civil / parliamentary / delegated      | Authority justified procedurally rather than ontologically; neighbourhood drift exposes ideological negotiation                 |
+| Liberty    | Morally defensible but not anarchic; collective yet increasingly individual       | Christian freedom (freedom from sin)      | Conscience, toleration, property                                  | Grace / obedience / soul to<br />right / property / subject / English     | Moral force persists without theological frame; drift indicates secularisation without disenchantment                           |
+| Conscience | Binding yet private; authoritative yet resistant to institutional capture         | Sin, salvation, divine judgement          | Sectarianism, toleration debates                                  | God / soul / damnation to <br />judgement / liberty / inward / persuasion | Moral interiority detaches from ecclesiastical authority; fault line visible in subjective reasoning                            |
+| Right      | Natural yet historically asserted and contested                                   | Divine or customary sanction              | Petitions, grievances, property claims                            | God / law / nature to <br />subject / liberty / property                  | Naturalisation of historically produced claims; semantic drift shows shifting legitimatory frameworks                           |
 
 ## Notes
 
@@ -123,10 +139,10 @@ at precisely the moment when customary forms of authority were under strain.
 ## Questions The System Might Help Answer
 
 * Drift from theocracy to democracy
+* How did the use of 'reasonable' shift?
 * Did The Ranters exist?
-* Natural diachronic clusters: drift in keywords, IVF
-* Geospatial spread of ideas and ideology
-* Author, printer networks
+* Unnamed naturally-occuring diachronic clusters, Inverse Frequnecy terms
+* Geospatial spread of ideas and ideology via author, printer networks, paper supplier
 
 ## Visualisation
 
@@ -210,25 +226,6 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 * [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
 * [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
 
-Initial Target Keywords
-
-* liberty
-* justice
-* reasonable
-* common
-* conscience
-* god
-* king
-* divine
-* sovereign
-* paternal
-* state
-* nation
-* obligation
-* authority
-* duty
-* right
-* rule
 
 ## Restoring the Database
 
@@ -269,7 +266,7 @@ ALTER SYSTEM RESET maintenance_work_mem;
 ALTER SYSTEM RESET work_mem;
 ALTER SYSTEM RESET temp_tablespaces;
 SELECT pg_reload_conf();
+
 ## CPU-Bound
 
-For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup.
-
+For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup so fastText over MacBERTh.
