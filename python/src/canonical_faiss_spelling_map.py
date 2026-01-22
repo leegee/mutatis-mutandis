@@ -17,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 import logging
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import fasttext
 import numpy as np
@@ -69,15 +69,25 @@ def build_weighted_canonical_vectors(
 
     return canonicals, np.vstack(canonical_vectors)
 
-def build_faiss_index(vectors: np.ndarray) -> faiss.IndexFlatL2:
-    index = faiss.IndexFlatL2(vectors.shape[1])
-    index.add(vectors)
+
+def build_faiss_index(vectors: np.ndarray) -> Any:
+    """
+    Build a flat L2 FAISS index over all token vectors.
+    """
+    index: Any = faiss.IndexFlatL2(vectors.shape[1])
+    _add_vectors_to_index(index, vectors)
     return index
+
+
+def _add_vectors_to_index(index: Any, vectors: np.ndarray) -> None:
+    """Wrapper to avoid static type issues with FAISS .add()"""
+    index.add(vectors)
+
 
 def expand_canonicals_with_faiss(
     canonicals: List[str],
     canonical_vectors: np.ndarray,
-    index: faiss.IndexFlatL2,
+    index: Any,
     tokens: List[str],
     top_k: int
 ) -> Dict[str, List[Tuple[str, float]]]:
@@ -89,7 +99,7 @@ def expand_canonicals_with_faiss(
         false_positives = set(rule.get("false_positives", []))
 
         neighbors: List[Tuple[str, float]] = []
-        for dist, idx in zip(distances[row], indices[row]):
+        for dist, idx in zip(distances[row], indices[row], strict=True):
             token = tokens[idx]
             if token == canonical or token in false_positives:
                 continue
@@ -104,7 +114,7 @@ def expand_canonicals_with_faiss(
     return results
 
 
-def insert_spelling_map(conn, variant: str, canonical: str, dry: bool):
+def insert_spelling_map(conn: Any, variant: str, canonical: str, dry: bool) -> None:
     if dry:
         logger.debug(f"[DRY] spelling_map: {variant} -> {canonical}")
         return
@@ -119,7 +129,8 @@ def insert_spelling_map(conn, variant: str, canonical: str, dry: bool):
             (variant, canonical)
         )
 
-def update_tokens_canonical(conn, variant: str, canonical: str, dry: bool):
+
+def update_tokens_canonical(conn: Any, variant: str, canonical: str, dry: bool) -> None:
     if dry:
         logger.debug(f"[DRY] tokens.canonical: {variant} -> {canonical}")
         return
@@ -134,12 +145,10 @@ def update_tokens_canonical(conn, variant: str, canonical: str, dry: bool):
         )
 
 
-def main(dry: bool, top_k: int):
-    # Load fastText model
+def main(dry: bool, top_k: int) -> None:
     logger.info("Loading global fastText model")
     model = fasttext.load_model(str(config.FASTTEXT_GLOBAL_MODEL_PATH))
 
-    # Fetch corpus tokens
     with eebo_db.get_connection() as conn:
         tokens: List[str] = []
         cur = conn.cursor()
@@ -148,24 +157,19 @@ def main(dry: bool, top_k: int):
             tokens.append(tok)
     token_index = {t: i for i, t in enumerate(tokens)}
 
-    # Compute all token vectors **once**
     logger.info(f"Computing vectors for {len(tokens)} tokens")
     token_vectors = np.array([model.get_word_vector(t) for t in tokens], dtype=np.float32)
 
-    # Build canonical vectors
     logger.info("Building weighted canonical vectors")
     canonicals, canonical_vectors = build_weighted_canonical_vectors(token_index, token_vectors)
 
-    # Build FAISS index over full vocabulary
     logger.info("Building FAISS index")
     index = build_faiss_index(token_vectors)
 
-    # Save FAISS index
     faiss_path = Path(config.FAISS_CANONICAL_INDEX_PATH)
     logger.info(f"Saving FAISS index to {faiss_path}")
     faiss.write_index(index, str(faiss_path))
 
-    # Expand canonicals
     logger.info("Expanding canonicals via FAISS")
     expansion = expand_canonicals_with_faiss(
         canonicals=canonicals,
@@ -175,7 +179,6 @@ def main(dry: bool, top_k: int):
         top_k=top_k
     )
 
-    # Insert into spelling_map and update tokens
     with eebo_db.get_connection(application_name="canonical_spelling_map") as conn:
         for canonical, neighbors in expansion.items():
             for variant, _score in neighbors:

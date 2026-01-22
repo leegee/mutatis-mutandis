@@ -22,8 +22,8 @@ spelling_map = get_canonical_spelling_map(dry=True)
 
 def canonicalise(term: str) -> Optional[str]:
     """Map historical variant to canonical form using canonical keyword targets."""
-    canon = spelling_map.get(term, term)
-    if canon in config.KEYWORDS_TO_NORMALISE:
+    canon = spelling_map.get(term)
+    if isinstance(canon, str) and canon in config.KEYWORDS_TO_NORMALISE:
         return canon
     return None
 
