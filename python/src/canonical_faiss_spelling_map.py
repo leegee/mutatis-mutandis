@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 """
-canonical_faiss_spelling_map.py
+canonical_faiss_spelling_map.py (optimized)
 
-Merged Phase 3 (FAISS canonical expansion) + Phase 4 (spelling map canonicalisation).
+Merged Phase 3 + Phase 4 with single computation of token vectors:
 
-Steps:
-1. Load fastText global model
-2. Build weighted canonical vectors
-3. Expand canonicals via FAISS
-4. Apply orthographic filters
-5. Insert spelling_map entries and update tokens.canonical
-6. Save FAISS index to disk for later reuse
+- Load fastText model
+- Compute all token vectors once
+- Build weighted canonical vectors
+- Build FAISS index
+- Expand canonicals
+- Apply orthographic filter and insert into DB
+- Save FAISS index
 """
 
 from __future__ import annotations
@@ -26,11 +26,8 @@ import faiss
 from lib import eebo_db, eebo_config as config
 from lib.eebo_logging import logger
 
-# -------------------------
-# Orthographic / sanity checks
-# -------------------------
+
 def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
-    """Conservative orthographic filter."""
     if candidate == canonical:
         return False
     if abs(len(candidate) - len(canonical)) > 3:
@@ -42,14 +39,11 @@ def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
             return False
     return True
 
-# -------------------------
-# FAISS helpers
-# -------------------------
+
 def build_weighted_canonical_vectors(
-    vectors: np.ndarray,
-    token_index: Dict[str, int]
+    token_index: Dict[str, int],
+    token_vectors: np.ndarray
 ) -> Tuple[List[str], np.ndarray]:
-    """Compute centroid vector for each canonical over its allowed variants."""
     canonicals: List[str] = []
     canonical_vectors: List[np.ndarray] = []
 
@@ -65,7 +59,7 @@ def build_weighted_canonical_vectors(
             )
             continue
 
-        variant_vectors = np.vstack([vectors[token_index[t]] for t in present_tokens])
+        variant_vectors = np.vstack([token_vectors[token_index[t]] for t in present_tokens])
         centroid = variant_vectors.mean(axis=0)
         canonicals.append(canonical)
         canonical_vectors.append(centroid)
@@ -87,7 +81,6 @@ def expand_canonicals_with_faiss(
     tokens: List[str],
     top_k: int
 ) -> Dict[str, List[Tuple[str, float]]]:
-    """Query FAISS to find nearest neighbors for each canonical, excluding known false positives."""
     results: Dict[str, List[Tuple[str, float]]] = {}
     distances, indices = index.search(canonical_vectors, top_k)
 
@@ -110,9 +103,7 @@ def expand_canonicals_with_faiss(
 
     return results
 
-# -------------------------
-# Database helpers
-# -------------------------
+
 def insert_spelling_map(conn, variant: str, canonical: str, dry: bool):
     if dry:
         logger.debug(f"[DRY] spelling_map: {variant} -> {canonical}")
@@ -142,9 +133,7 @@ def update_tokens_canonical(conn, variant: str, canonical: str, dry: bool):
             (canonical, variant)
         )
 
-# -------------------------
-# Main logic
-# -------------------------
+
 def main(dry: bool, top_k: int):
     # Load fastText model
     logger.info("Loading global fastText model")
@@ -159,13 +148,17 @@ def main(dry: bool, top_k: int):
             tokens.append(tok)
     token_index = {t: i for i, t in enumerate(tokens)}
 
+    # Compute all token vectors **once**
+    logger.info(f"Computing vectors for {len(tokens)} tokens")
+    token_vectors = np.array([model.get_word_vector(t) for t in tokens], dtype=np.float32)
+
     # Build canonical vectors
     logger.info("Building weighted canonical vectors")
-    canonicals, canonical_vectors = build_weighted_canonical_vectors(vectors=np.array([model.get_word_vector(t) for t in tokens]), token_index=token_index)
+    canonicals, canonical_vectors = build_weighted_canonical_vectors(token_index, token_vectors)
 
     # Build FAISS index over full vocabulary
-    logger.info("Building FAISS index over all tokens")
-    index = build_faiss_index(np.array([model.get_word_vector(t) for t in tokens]))
+    logger.info("Building FAISS index")
+    index = build_faiss_index(token_vectors)
 
     # Save FAISS index
     faiss_path = Path(config.FAISS_CANONICAL_INDEX_PATH)
@@ -196,9 +189,7 @@ def main(dry: bool, top_k: int):
 
     logger.info("Canonical expansion + spelling map complete")
 
-# -------------------------
-# Entry point
-# -------------------------
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry", action="store_true", help="Dry run, no DB writes")
