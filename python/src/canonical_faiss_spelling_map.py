@@ -2,15 +2,27 @@
 """
 canonical_faiss_spelling_map.py (optimized)
 
-Merged Phase 3 + Phase 4 with single computation of token vectors:
+Merged Phase 3 + Phase 4 with single computation of token vectors.
 
+Pipeline:
 - Load fastText model
 - Compute all token vectors once
-- Build weighted canonical vectors (centroids of allowed variants, weighted by corpus frequency)
+- Build weighted canonical vectors
 - Build FAISS index
-- Expand canonicals
+- Expand canonicals (optionally distance-weighted)
 - Apply orthographic filter and insert into DB
 - Save FAISS index
+
+Canonical centroid construction:
+    c⃗ = ( Σᵢ fᵢ · v⃗ᵢ ) / Σᵢ fᵢ
+
+Optional neighbour distance weighting:
+    wₜ = 1 / (1 + dₜ)
+
+Where:
+- v⃗ᵢ = token vector
+- fᵢ = corpus frequency
+- dₜ = FAISS L2 distance
 """
 
 from __future__ import annotations
@@ -43,11 +55,11 @@ def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
 def build_weighted_canonical_vectors(
     token_index: Dict[str, int],
     token_vectors: np.ndarray,
-    token_counts: Dict[str, int]
+    token_counts: Dict[str, int],
 ) -> Tuple[List[str], np.ndarray]:
     """
     Construct one vector per canonical head by averaging all
-    attested allowed variants, weighted by token frequency.
+    attested allowed variants, weighted by corpus frequency.
     """
     canonicals: List[str] = []
     canonical_vectors: List[np.ndarray] = []
@@ -60,18 +72,19 @@ def build_weighted_canonical_vectors(
         if not present_tokens:
             logger.warning(
                 "Canonical '%s': no allowed variants found in corpus; skipping",
-                canonical
+                canonical,
             )
             continue
 
-        vectors_list = []
+        weighted_vectors = []
         weights = []
+
         for t in present_tokens:
-            freq = token_counts.get(t, 1)  # fallback to 1 if missing
-            vectors_list.append(token_vectors[token_index[t]] * freq)
+            freq = token_counts.get(t, 1)
+            weighted_vectors.append(token_vectors[token_index[t]] * freq)
             weights.append(freq)
 
-        centroid = np.sum(vectors_list, axis=0) / np.sum(weights)
+        centroid = np.sum(weighted_vectors, axis=0) / np.sum(weights)
         canonicals.append(canonical)
         canonical_vectors.append(centroid)
 
@@ -86,13 +99,8 @@ def build_faiss_index(vectors: np.ndarray) -> Any:
     Build a flat L2 FAISS index over all token vectors.
     """
     index: Any = faiss.IndexFlatL2(vectors.shape[1])
-    _add_vectors_to_index(index, vectors)
-    return index
-
-
-def _add_vectors_to_index(index: Any, vectors: np.ndarray) -> None:
-    """Wrapper to avoid static type issues with FAISS .add()"""
     index.add(vectors)
+    return index
 
 
 def expand_canonicals_with_faiss(
@@ -100,8 +108,15 @@ def expand_canonicals_with_faiss(
     canonical_vectors: np.ndarray,
     index: Any,
     tokens: List[str],
-    top_k: int
+    top_k: int,
+    distance_weight_neighbors: bool = False,
 ) -> Dict[str, List[Tuple[str, float]]]:
+    """
+    Expand canonical heads using FAISS nearest neighbours.
+
+    If distance_weight_neighbors=True, neighbours are scored by:
+        w = 1 / (1 + d)
+    """
     results: Dict[str, List[Tuple[str, float]]] = {}
     distances, indices = index.search(canonical_vectors, top_k)
 
@@ -110,16 +125,22 @@ def expand_canonicals_with_faiss(
         false_positives = set(rule.get("false_positives", []))
 
         neighbors: List[Tuple[str, float]] = []
-        for dist, idx in zip(distances[row], indices[row], strict=True):
+
+        for d, idx in zip(distances[row], indices[row], strict=True):
             token = tokens[idx]
             if token == canonical or token in false_positives:
                 continue
-            neighbors.append((token, float(dist)))
+
+            score = float(1.0 / (1.0 + d)) if distance_weight_neighbors else float(d)
+            neighbors.append((token, score))
+
+        neighbors.sort(key=lambda x: x[1], reverse=distance_weight_neighbors)
         results[canonical] = neighbors
+
         logger.info(
             "Canonical '%s': %d neighbors after exclusions",
             canonical,
-            len(neighbors)
+            len(neighbors),
         )
 
     return results
@@ -137,7 +158,7 @@ def insert_spelling_map(conn: Any, variant: str, canonical: str, dry: bool) -> N
             ON CONFLICT (variant)
             DO UPDATE SET canonical = EXCLUDED.canonical;
             """,
-            (variant, canonical)
+            (variant, canonical),
         )
 
 
@@ -152,11 +173,11 @@ def update_tokens_canonical(conn: Any, variant: str, canonical: str, dry: bool) 
             SET canonical = %s
             WHERE token = %s;
             """,
-            (canonical, variant)
+            (canonical, variant),
         )
 
 
-def main(dry: bool, top_k: int) -> None:
+def main(dry: bool, top_k: int, distance_weight_neighbors: bool) -> None:
     logger.info("Loading global fastText model")
     model = fasttext.load_model(str(config.FASTTEXT_GLOBAL_MODEL_PATH))
 
@@ -174,7 +195,9 @@ def main(dry: bool, top_k: int) -> None:
     token_index = {t: i for i, t in enumerate(tokens)}
 
     logger.info(f"Computing vectors for {len(tokens)} tokens")
-    token_vectors = np.array([model.get_word_vector(t) for t in tokens], dtype=np.float32)
+    token_vectors = np.array(
+        [model.get_word_vector(t) for t in tokens], dtype=np.float32
+    )
 
     logger.info("Building weighted canonical vectors")
     canonicals, canonical_vectors = build_weighted_canonical_vectors(
@@ -194,7 +217,8 @@ def main(dry: bool, top_k: int) -> None:
         canonical_vectors=canonical_vectors,
         index=index,
         tokens=tokens,
-        top_k=top_k
+        top_k=top_k,
+        distance_weight_neighbors=distance_weight_neighbors,
     )
 
     with eebo_db.get_connection(application_name="canonical_spelling_map") as conn:
@@ -204,6 +228,7 @@ def main(dry: bool, top_k: int) -> None:
                     continue
                 insert_spelling_map(conn, variant, canonical, dry)
                 update_tokens_canonical(conn, variant, canonical, dry)
+
         if not dry:
             conn.commit()
             logger.info("Database updated")
@@ -215,7 +240,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry", action="store_true", help="Dry run, no DB writes")
     parser.add_argument("--top_k", type=int, default=config.TOP_K)
+    parser.add_argument(
+        "--distance_weight_neighbors",
+        action="store_true",
+        help="Weight FAISS neighbours by inverse distance",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    main(dry=args.dry, top_k=args.top_k)
+    main(
+        dry=args.dry,
+        top_k=args.top_k,
+        distance_weight_neighbors=args.distance_weight_neighbors,
+    )
