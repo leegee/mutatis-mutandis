@@ -6,7 +6,7 @@ Merged Phase 3 + Phase 4 with single computation of token vectors:
 
 - Load fastText model
 - Compute all token vectors once
-- Build weighted canonical vectors
+- Build weighted canonical vectors (centroids of allowed variants, weighted by corpus frequency)
 - Build FAISS index
 - Expand canonicals
 - Apply orthographic filter and insert into DB
@@ -42,8 +42,13 @@ def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
 
 def build_weighted_canonical_vectors(
     token_index: Dict[str, int],
-    token_vectors: np.ndarray
+    token_vectors: np.ndarray,
+    token_counts: Dict[str, int]
 ) -> Tuple[List[str], np.ndarray]:
+    """
+    Construct one vector per canonical head by averaging all
+    attested allowed variants, weighted by token frequency.
+    """
     canonicals: List[str] = []
     canonical_vectors: List[np.ndarray] = []
 
@@ -59,8 +64,14 @@ def build_weighted_canonical_vectors(
             )
             continue
 
-        variant_vectors = np.vstack([token_vectors[token_index[t]] for t in present_tokens])
-        centroid = variant_vectors.mean(axis=0)
+        vectors_list = []
+        weights = []
+        for t in present_tokens:
+            freq = token_counts.get(t, 1)  # fallback to 1 if missing
+            vectors_list.append(token_vectors[token_index[t]] * freq)
+            weights.append(freq)
+
+        centroid = np.sum(vectors_list, axis=0) / np.sum(weights)
         canonicals.append(canonical)
         canonical_vectors.append(centroid)
 
@@ -149,19 +160,26 @@ def main(dry: bool, top_k: int) -> None:
     logger.info("Loading global fastText model")
     model = fasttext.load_model(str(config.FASTTEXT_GLOBAL_MODEL_PATH))
 
+    logger.info("Fetching tokens and counts from database")
+    token_counts: Dict[str, int] = {}
+    tokens: List[str] = []
+
     with eebo_db.get_connection() as conn:
-        tokens: List[str] = []
         cur = conn.cursor()
-        cur.execute("SELECT DISTINCT token FROM tokens")
-        for (tok,) in cur:
-            tokens.append(tok)
+        cur.execute("SELECT token, COUNT(*) FROM tokens GROUP BY token")
+        for token, count in cur:
+            token_counts[token] = count
+            tokens.append(token)
+
     token_index = {t: i for i, t in enumerate(tokens)}
 
     logger.info(f"Computing vectors for {len(tokens)} tokens")
     token_vectors = np.array([model.get_word_vector(t) for t in tokens], dtype=np.float32)
 
     logger.info("Building weighted canonical vectors")
-    canonicals, canonical_vectors = build_weighted_canonical_vectors(token_index, token_vectors)
+    canonicals, canonical_vectors = build_weighted_canonical_vectors(
+        token_index, token_vectors, token_counts
+    )
 
     logger.info("Building FAISS index")
     index = build_faiss_index(token_vectors)
