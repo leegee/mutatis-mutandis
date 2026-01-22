@@ -82,4 +82,4 @@ case "$PHASE" in
         ;;
 esac
 
-cd  OUR_OLDPWD
+cd  $OUR_OLDPWD

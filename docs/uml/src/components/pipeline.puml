@@ -1,8 +1,13 @@
 package "Processing_Pipeline" #Lavender {
-    class "Image Preprocessor"
-    class "OCR"
-    class "TEI Parser"
-    class "TEI Converter"
-    class "Normalisation Engine"
-    class "Metadata Extractor"
+    package "Processing_Pipeline_Images" #LavenderBlush {
+        class "Image Preprocessor"
+        class "OCR"
+        class "TEI Converter"
+    }
+
+    package "Processing_Pipeline_TEI" #LavenderBlush {
+        class "TEI Parser"
+        class "Normalisation Engine"
+        class "Metadata Extractor"
+    }
 }
