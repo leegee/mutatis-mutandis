@@ -13,6 +13,10 @@ CANONICAL_FAISS_SPELLING_MAP="$SRC/canonical_faiss_spelling_map.py"
 MAKE_FASTTEXT_SLICES="$SRC/train_fastText_canonicalised_slices.py"
 VISUALISE="$SRC/semantic_drift_analysis.py"
 
+# Fanning out on neighbours for conceptual meta-neighbourhood
+ANNOTATE_NEIGHBOR_ROLES="$SRC/annotate_neighbors_with_roles.py"
+BUILD_ROLE_PROFILES="$SRC/build_role_profiles_per_slice.py"
+
 # Default values
 PHASE="all"
 
@@ -30,7 +34,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            POSITIONAL+=("$1") # collect extra args for Python scripts
+            POSITIONAL+=("$1")
             shift
             ;;
     esac
@@ -53,11 +57,10 @@ echo "# All checks passed"
 
 # Run phase
 case "$PHASE" in
-    # mb|sentence) echo "# Running MacBERTh sentence phase" "$PYTHON" "$MB_SENTENCE_SCRIPT" "$@" ;;
     1|i|ingest)
-    echo "# Running ingestion of TEI XML"
-    "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
-    ;;
+        echo "# Running ingestion of TEI XML"
+        "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
+        ;;
     2|c|canon)
         echo "# Building canonical map"
         "$PYTHON" "$BUILD_CANONICAL_MAP" "$@"
@@ -70,10 +73,28 @@ case "$PHASE" in
         echo "# Running fastText slices training phase"
         "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
         ;;
-    5|v|visual)
+    5|r|roles)
+        echo "# Annotating FAISS neighbours with conceptual roles"
+        "$PYTHON" "$ANNOTATE_NEIGHBOR_ROLES" "$@"
+        ;;
+    6|p|profiles)
+        echo "# Building role-conditioned neighbour profiles per slice"
+        "$PYTHON" "$BUILD_ROLE_PROFILES" "$@"
+        ;;
+    7|v|visual)
         echo "# Run visualisations of pre-defined keywords"
+        "$PYTHON" "$VISUALISE" "$@"
+        ;;
+    all)
+        echo "# Running full pipeline"
+        "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
+        "$PYTHON" "$BUILD_CANONICAL_MAP" "$@"
+        "$PYTHON" "$CANONICAL_FAISS_SPELLING_MAP" "$@"
+        "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
+        "$PYTHON" "$ANNOTATE_NEIGHBOR_ROLES" "$@"
+        "$PYTHON" "$BUILD_ROLE_PROFILES" "$@"
         "$PYTHON" "$VISUALISE" "$@"
         ;;
 esac
 
-cd  $OUR_OLDPWD
+cd "$OUR_OLDPWD"

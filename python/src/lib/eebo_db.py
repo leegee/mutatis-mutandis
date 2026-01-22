@@ -148,6 +148,11 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE token_vectors (
+                    token TEXT PRIMARY KEY,
+                    vector FLOAT4[] NOT NULL
+                );
+
                 CREATE TABLE sentences (
                     doc_id TEXT NOT NULL,
                     sentence_id INTEGER NOT NULL,
@@ -181,9 +186,45 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     code_version TEXT,
                     notes TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS canonical_centroids (
+                    canonical TEXT PRIMARY KEY,
+                    vector FLOAT4[] NOT NULL,
+                    weighting_scheme TEXT NOT NULL,
+                    source_model TEXT NOT NULL,
+                    faiss_index_id TEXT,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    notes TEXT
+                );
+
             """)
 
     logger.info("Database schema created")
+
+
+def drop_indexes_canonical_centroids() -> None:
+    """Drop FAISS index-related database indexes on canonical_centroids."""
+    logger.info("Dropping indexes on canonical_centroids")
+    with get_connection(application_name="drop_centroid_indexes") as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("""
+                    DROP INDEX IF EXISTS idx_centroids_faiss_index_id;
+                """)
+    logger.info("Dropped indexes on canonical_centroids")
+
+
+def create_indexes_canonical_centroids() -> None:
+    """Create FAISS index-related database indexes on canonical_centroids."""
+    logger.info("Creating indexes on canonical_centroids")
+    with get_connection(application_name="create_centroid_indexes") as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_centroids_faiss_index_id
+                    ON canonical_centroids(faiss_index_id);
+                """)
+    logger.info("Created indexes on canonical_centroids")
 
 
 def drop_token_indexes(conn: Connection) -> None:
