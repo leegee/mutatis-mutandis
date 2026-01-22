@@ -6,18 +6,31 @@ from typing import TypedDict, Set, Dict
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
-
 INPUT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
+
+# Should use a dict for this:
 OUT_DIR = BASE_DIR / "out"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TMP_DIR = OUT_DIR / "tmp"
+TMP_DIR.mkdir(parents=True, exist_ok=True)
+
 PLAIN_DIR = OUT_DIR / "plain"
+PLAIN_DIR.mkdir(parents=True, exist_ok=True)
+
 SLICES_DIR = OUT_DIR / "slices"
-SLICES_DIR = OUT_DIR / "slices"
+SLICES_DIR.mkdir(parents=True, exist_ok=True)
+
+INDEXES_DIR = OUT_DIR / "indexes"
+INDEXES_DIR.mkdir(parents=True, exist_ok=True)
+
 MODELS_DIR = OUT_DIR / "models"
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+FAISS_CANONICAL_INDEX_PATH = INDEXES_DIR / "canonical.faiss.bin"
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 FASTTEXT_GLOBAL_MODEL_PATH = MODELS_DIR / "global_eebo.bin"
 FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextCanonSlice"
