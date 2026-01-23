@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import annotations
-
+from pathlib import Path
 import logging
 from typing import Any, Dict, List, Tuple
 
@@ -9,7 +9,7 @@ import faiss
 import numpy as np
 
 import lib.eebo_db as eebo_db
-from lib.eebo_config import KEYWORDS_TO_NORMALISE, FASTTEXT_GLOBAL_MODEL_PATH, TOP_K
+from lib.eebo_config import KEYWORDS_TO_NORMALISE, FASTTEXT_GLOBAL_MODEL_PATH, TOP_K, FAISS_CANONICAL_INDEX_PATH
 from lib.eebo_logging import logger
 
 
@@ -36,6 +36,12 @@ def build_faiss_index(vectors: np.ndarray) -> Any:
     """Build a flat L2 FAISS index over all token vectors."""
     index: Any = faiss.IndexFlatL2(vectors.shape[1])
     index.add(vectors)
+
+    faiss_path = Path(FAISS_CANONICAL_INDEX_PATH)
+    logger.info(f"Saving FAISS index to {faiss_path}")
+    faiss.write_index(index, str(faiss_path))
+    logger.info(f"Saved FAISS index to {faiss_path}")
+
     return index
 
 
