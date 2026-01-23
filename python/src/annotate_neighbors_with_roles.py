@@ -1,246 +1,150 @@
 #!/usr/bin/env python
 """
-canonical_faiss_spelling_map.py (optimized)
+annotate_neighbors_with_roles.py
 
-Merged Phase 3 + Phase 4 with single computation of token vectors:
+Phase 5: Annotates canonical–neighbour pairs with conceptual roles.
 
-- Load fastText model
-- Compute all token vectors once
-- Build weighted canonical vectors (centroids of allowed variants, weighted by corpus frequency)
-- Persist token vectors to DB for auditability
-- Build FAISS index
-- Expand canonicals
-- Apply orthographic filter and insert into DB
-- Save FAISS index
+- LEFT JOINs to catch missing vectors
+- Logs missing vectors
+- Assigns a role per neighbour where both vectors exist
+- Updates spelling_map.role
 """
 
 from __future__ import annotations
-from pathlib import Path
-import argparse
-import logging
-from typing import Any, Dict, List, Tuple
-
-import fasttext
+from typing import Dict, List, Tuple
 import numpy as np
-import faiss
 
-from lib import eebo_db, eebo_config as config
+from lib import eebo_db
 from lib.eebo_logging import logger
 
 
-def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
-    if candidate == canonical:
-        return False
-    if abs(len(candidate) - len(canonical)) > 3:
-        return False
-    if canonical[:4] not in candidate and candidate[:4] not in canonical:
-        return False
-    for bad_prefix in ("un", "in", "dis", "non"):
-        if candidate.startswith(bad_prefix) and not canonical.startswith(bad_prefix):
-            return False
-    return True
+def assign_role(
+    canonical: str,
+    neighbour: str,
+    c_vec: np.ndarray,
+    n_vec: np.ndarray
+) -> str:
+    """Heuristic role assignment based on vector similarity / morphology."""
+    cos = float(np.dot(c_vec, n_vec) / (np.linalg.norm(c_vec) * np.linalg.norm(n_vec)))
+    delta = n_vec - c_vec
+    d = float(np.dot(delta, c_vec) / np.dot(c_vec, c_vec))
+
+    # Morphological signals
+    if neighbour.startswith(("un", "in", "non", "anti")):
+        return "antithetical"
+    if neighbour.endswith(("ness", "ity", "ship")):
+        return "normative"
+
+    # Vector-based rules
+    if cos > 0.8 and abs(d) < 0.05:
+        return "synonymic"
+    if d > 0.1:
+        return "generalising"
+    if d < -0.1:
+        return "specifying"
+    if cos < 0.6:
+        return "metaphorical"
+
+    return "noise"
 
 
-def build_weighted_canonical_vectors(
-    token_index: Dict[str, int],
-    token_vectors: np.ndarray,
-    token_counts: Dict[str, int]
-) -> Tuple[List[str], np.ndarray]:
-    """
-    Construct one vector per canonical head by averaging all
-    attested allowed variants, weighted by token frequency.
-    """
-    canonicals: List[str] = []
-    canonical_vectors: List[np.ndarray] = []
-
-    for canonical, rule in config.KEYWORDS_TO_NORMALISE.items():
-        allowed = set(rule.get("allowed_variants", []))
-        allowed.add(canonical)
-        present_tokens = [t for t in allowed if t in token_index]
-
-        if not present_tokens:
-            logger.warning(
-                "Canonical '%s': no allowed variants found in corpus; skipping",
-                canonical
-            )
-            continue
-
-        vectors_list = []
-        weights = []
-        for t in present_tokens:
-            freq = token_counts.get(t, 1)  # fallback to 1 if missing
-            vectors_list.append(token_vectors[token_index[t]] * freq)
-            weights.append(freq)
-
-        centroid = np.sum(vectors_list, axis=0) / np.sum(weights)
-        canonicals.append(canonical)
-        canonical_vectors.append(centroid)
-
-    if not canonical_vectors:
-        raise RuntimeError("No canonical vectors could be constructed")
-
-    return canonicals, np.vstack(canonical_vectors)
+def _log_role_summary(role_counts: Dict[str, int]) -> None:
+    """Logs a summary of roles assigned."""
+    logger.info("Role distribution summary:")
+    total = sum(role_counts.values())
+    for role, count in sorted(role_counts.items(), key=lambda x: -x[1]):
+        pct = (count / total) * 100 if total else 0.0
+        logger.info("  %-15s %6d  (%5.1f%%)", role, count, pct)
 
 
-def build_faiss_index(vectors: np.ndarray) -> Any:
-    """Build a flat L2 FAISS index over all token vectors."""
-    index: Any = faiss.IndexFlatL2(vectors.shape[1])
-    _add_vectors_to_index(index, vectors)
-    return index
+def main(dry: bool = False) -> None:
+    logger.info("Starting role annotation phase")
 
+    role_counts: Dict[str, int] = {}
+    canonical_counts: Dict[str, int] = {}
 
-def _add_vectors_to_index(index: Any, vectors: np.ndarray) -> None:
-    """Wrapper to avoid static type issues with FAISS .add()"""
-    index.add(vectors)
-
-
-def persist_token_vectors(tokens: List[str], token_vectors: np.ndarray, dry: bool) -> None:
-    """Save token embeddings to token_vectors table for auditing."""
-    logger.info("Persisting token vectors to DB for auditability")
-    if dry:
-        logger.info("[DRY RUN] Would persist %d token vectors", len(tokens))
-        return
-    with eebo_db.get_connection(application_name="persist_token_vectors") as conn:
+    with eebo_db.get_connection(application_name="annotate_roles") as conn:
         cur = conn.cursor()
-        for token, vec in zip(tokens, token_vectors, strict=True):
-            cur.execute(
-                """
-                INSERT INTO token_vectors (token, vector)
-                VALUES (%s, %s)
-                ON CONFLICT (token) DO UPDATE
-                SET vector = EXCLUDED.vector;
-                """,
-                (token, vec.tolist())
-            )
-        conn.commit()
-    logger.info("Persisted %d token vectors to DB", len(tokens))
 
+        logger.info("Fetching canonical–neighbour vector pairs from DB")
+        cur.execute(
+            """
+            SELECT
+                s.canonical,
+                s.variant,
+                c.vector AS c_vec,
+                t.vector AS n_vec
+            FROM spelling_map s
+            LEFT JOIN canonical_centroids c
+                ON c.canonical = s.canonical
+            LEFT JOIN token_vectors t
+                ON t.token = s.variant
+            """
+        )
 
-def expand_canonicals_with_faiss(
-    canonicals: List[str],
-    canonical_vectors: np.ndarray,
-    index: Any,
-    tokens: List[str],
-    top_k: int
-) -> Dict[str, List[Tuple[str, float]]]:
-    """Find nearest neighbors for each canonical in the FAISS index."""
-    results: Dict[str, List[Tuple[str, float]]] = {}
-    distances, indices = index.search(canonical_vectors, top_k)
+        rows = cur.fetchall()
+        logger.info("Fetched %d rows from spelling_map", len(rows))
 
-    for row, canonical in enumerate(canonicals):
-        rule = config.KEYWORDS_TO_NORMALISE[canonical]
-        false_positives = set(rule.get("false_positives", []))
+        valid_rows: List[Tuple[str, str, np.ndarray, np.ndarray]] = []
+        missing_c_vec = 0
+        missing_n_vec = 0
 
-        neighbors: List[Tuple[str, float]] = []
-        for dist, idx in zip(distances[row], indices[row], strict=True):
-            token = tokens[idx]
-            if token == canonical or token in false_positives:
+        for canonical, neighbour, c_blob, n_blob in rows:
+            if c_blob is None:
+                missing_c_vec += 1
                 continue
-            neighbors.append((token, float(dist)))
-        results[canonical] = neighbors
+            if n_blob is None:
+                missing_n_vec += 1
+                continue
+            valid_rows.append((canonical, neighbour, np.array(c_blob, dtype=np.float32), np.array(n_blob, dtype=np.float32)))
+
         logger.info(
-            "Canonical '%s': %d neighbors after exclusions",
-            canonical,
-            len(neighbors)
+            "Skipping %d rows with missing canonical vectors, %d rows with missing neighbour vectors",
+            missing_c_vec,
+            missing_n_vec
+        )
+        logger.info("Processing %d rows for role assignment", len(valid_rows))
+
+        updates: List[Tuple[str, str, str]] = []
+
+        for canonical, neighbour, c_vec, n_vec in valid_rows:
+            role = assign_role(canonical, neighbour, c_vec, n_vec)
+            role_counts[role] = role_counts.get(role, 0) + 1
+            canonical_counts[canonical] = canonical_counts.get(canonical, 0) + 1
+            updates.append((role, canonical, neighbour))
+
+        logger.info(
+            "Computed %d role assignments across %d canonicals",
+            len(updates),
+            len(canonical_counts)
         )
 
-    return results
+        if dry:
+            logger.info("[DRY RUN] No database updates performed")
+            _log_role_summary(role_counts)
+            return
 
-
-def insert_spelling_map(conn: Any, variant: str, canonical: str, dry: bool) -> None:
-    if dry:
-        logger.debug(f"[DRY] spelling_map: {variant} -> {canonical}")
-        return
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO spelling_map (variant, canonical, concept_type)
-            VALUES (%s, %s, 'orthographic')
-            ON CONFLICT (variant)
-            DO UPDATE SET canonical = EXCLUDED.canonical;
-            """,
-            (variant, canonical)
-        )
-
-
-def update_tokens_canonical(conn: Any, variant: str, canonical: str, dry: bool) -> None:
-    if dry:
-        logger.debug(f"[DRY] tokens.canonical: {variant} -> {canonical}")
-        return
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tokens
-            SET canonical = %s
-            WHERE token = %s;
-            """,
-            (canonical, variant)
-        )
-
-
-def main(dry: bool, top_k: int) -> None:
-    logger.info("Loading global fastText model")
-    model = fasttext.load_model(str(config.FASTTEXT_GLOBAL_MODEL_PATH))
-
-    logger.info("Fetching tokens and counts from database")
-    token_counts: Dict[str, int] = {}
-    tokens: List[str] = []
-
-    with eebo_db.get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT token, COUNT(*) FROM tokens GROUP BY token")
-        for token, count in cur:
-            token_counts[token] = count
-            tokens.append(token)
-
-    token_index = {t: i for i, t in enumerate(tokens)}
-
-    logger.info(f"Computing vectors for {len(tokens)} tokens")
-    token_vectors = np.array([model.get_word_vector(t) for t in tokens], dtype=np.float32)
-
-    # Persist token vectors
-    persist_token_vectors(tokens, token_vectors, dry)
-
-    logger.info("Building weighted canonical vectors")
-    canonicals, canonical_vectors = build_weighted_canonical_vectors(
-        token_index, token_vectors, token_counts
-    )
-
-    logger.info("Building FAISS index")
-    index = build_faiss_index(token_vectors)
-
-    faiss_path = Path(config.FAISS_CANONICAL_INDEX_PATH)
-    logger.info(f"Saving FAISS index to {faiss_path}")
-    faiss.write_index(index, str(faiss_path))
-
-    logger.info("Expanding canonicals via FAISS")
-    expansion = expand_canonicals_with_faiss(
-        canonicals=canonicals,
-        canonical_vectors=canonical_vectors,
-        index=index,
-        tokens=tokens,
-        top_k=top_k
-    )
-
-    with eebo_db.get_connection(application_name="canonical_spelling_map") as conn:
-        for canonical, neighbors in expansion.items():
-            for variant, _score in neighbors:
-                if not is_reasonable_orthographic_variant(variant, canonical):
-                    continue
-                insert_spelling_map(conn, variant, canonical, dry)
-                update_tokens_canonical(conn, variant, canonical, dry)
-        if not dry:
+        if updates:
+            logger.info("Writing role annotations to spelling_map.role")
+            cur.executemany(
+                """
+                UPDATE spelling_map
+                SET role = %s
+                WHERE canonical = %s AND variant = %s;
+                """,
+                updates
+            )
             conn.commit()
-            logger.info("Database updated")
+            logger.info("Database update committed")
 
-    logger.info("Canonical expansion + spelling map complete")
+    _log_role_summary(role_counts)
+    logger.info("Role annotation phase complete")
 
 
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry", action="store_true", help="Dry run, no DB writes")
-    parser.add_argument("--top_k", type=int, default=config.TOP_K)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
-    main(dry=args.dry, top_k=args.top_k)
+    main(dry=args.dry)

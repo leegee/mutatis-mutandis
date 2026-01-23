@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 """
-canonical_faiss_spelling_map.py (optimized)
-
-Merged Phase 3 + Phase 4 with single computation of token vectors.
+canonical_faiss_spelling_map.py (optimized + diagnostics)
 
 Pipeline:
 - Load fastText model
 - Compute all token vectors once
 - Build weighted canonical vectors
 - Build FAISS index
-- Expand canonicals (optionally distance-weighted)
+- Expand canonicals (orthographic + optional distance weighting)
+- Run semantic integrity diagnostics and produce SVG plots
 - Apply orthographic filter and insert into DB
 - Save FAISS index
 
@@ -19,10 +18,7 @@ Canonical centroid construction:
 Optional neighbour distance weighting:
     wₜ = 1 / (1 + dₜ)
 
-Where:
-- v⃗ᵢ = token vector
-- fᵢ = corpus frequency
-- dₜ = FAISS L2 distance
+Semantic diagnostics tunables at top.
 """
 
 from __future__ import annotations
@@ -34,10 +30,20 @@ from typing import Any, Dict, List, Tuple
 import fasttext
 import numpy as np
 import faiss
+import matplotlib.pyplot as plt
+from sklearn.cluster import AgglomerativeClustering
+from scipy.spatial.distance import cosine
 
 from lib import eebo_db, eebo_config as config
 from lib.eebo_logging import logger
 
+# ================= SEMANTIC INTEGRITY CONTROLS =================
+MAX_CLUSTER_RADIUS = 0.35
+MAX_INTERNAL_DISPERSION = 0.40
+SUBCLUSTER_DISTANCE_THRESHOLD = 0.35
+LEAKAGE_SCORE_THRESHOLD = 1.0
+
+# ================================================================
 
 def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
     if candidate == canonical:
@@ -51,16 +57,11 @@ def is_reasonable_orthographic_variant(candidate: str, canonical: str) -> bool:
             return False
     return True
 
-
 def build_weighted_canonical_vectors(
     token_index: Dict[str, int],
     token_vectors: np.ndarray,
     token_counts: Dict[str, int],
 ) -> Tuple[List[str], np.ndarray]:
-    """
-    Construct one vector per canonical head by averaging all
-    attested allowed variants, weighted by corpus frequency.
-    """
     canonicals: List[str] = []
     canonical_vectors: List[np.ndarray] = []
 
@@ -93,15 +94,10 @@ def build_weighted_canonical_vectors(
 
     return canonicals, np.vstack(canonical_vectors)
 
-
 def build_faiss_index(vectors: np.ndarray) -> Any:
-    """
-    Build a flat L2 FAISS index over all token vectors.
-    """
     index: Any = faiss.IndexFlatL2(vectors.shape[1])
     index.add(vectors)
     return index
-
 
 def expand_canonicals_with_faiss(
     canonicals: List[str],
@@ -111,12 +107,6 @@ def expand_canonicals_with_faiss(
     top_k: int,
     distance_weight_neighbors: bool = False,
 ) -> Dict[str, List[Tuple[str, float]]]:
-    """
-    Expand canonical heads using FAISS nearest neighbours.
-
-    If distance_weight_neighbors=True, neighbours are scored by:
-        w = 1 / (1 + d)
-    """
     results: Dict[str, List[Tuple[str, float]]] = {}
     distances, indices = index.search(canonical_vectors, top_k)
 
@@ -130,8 +120,14 @@ def expand_canonicals_with_faiss(
             token = tokens[idx]
             if token == canonical or token in false_positives:
                 continue
-
-            score = float(1.0 / (1.0 + d)) if distance_weight_neighbors else float(d)
+            # Gentle roll off:
+            # score = float(1.0 / (1.0 + d)) if distance_weight_neighbors else float(d)
+            # Threshold inverse distance:
+            score = float(1.0 / (1 + d)) if d < 0.25 else 0.0  # ignore neighbors beyond 0.25
+            # Inverse power law
+            # score = float(1.0 / ((1 + d)**2))  # steeper than 1/(1+d)
+            # Exponential decay:
+            # score = float(np.exp(-d))  # d=0 → 1.0, d=1 → 0.367, d=2 → 0.135
             neighbors.append((token, score))
 
         neighbors.sort(key=lambda x: x[1], reverse=distance_weight_neighbors)
@@ -145,6 +141,88 @@ def expand_canonicals_with_faiss(
 
     return results
 
+# ----------------- Semantic Diagnostics -------------------
+
+def mean_cosine_distance(vec, vecs):
+    return np.mean([cosine(vec, v) for v in vecs])
+
+def mean_pairwise_distance(vecs):
+    dists = []
+    for i in range(len(vecs)):
+        for j in range(i+1, len(vecs)):
+            dists.append(cosine(vecs[i], vecs[j]))
+    return np.mean(dists) if dists else 0
+
+def count_subclusters(vecs):
+    if len(vecs) < 3:
+        return 1
+    model = AgglomerativeClustering(
+        n_clusters=None,
+        metric="cosine",
+        linkage="average",
+        distance_threshold=SUBCLUSTER_DISTANCE_THRESHOLD,
+    )
+    labels = model.fit_predict(vecs)
+    return len(set(labels))
+
+def generate_diagnostic_plots(plot_data):
+    out_dir = Path(config.OUT_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    radii = [r for _, r, _ in plot_data]
+    cohesion = [c for _, _, c in plot_data]
+
+    plt.figure(figsize=(8,6))
+    plt.scatter(radii, cohesion)
+    plt.axvline(MAX_CLUSTER_RADIUS, linestyle="--", color='red')
+    plt.axhline(MAX_INTERNAL_DISPERSION, linestyle="--", color='red')
+    plt.xlabel("Cluster Radius (canonical → variants)")
+    plt.ylabel("Internal Cohesion (variant ↔ variant)")
+    plt.title("Canonical Integrity Diagnostics")
+    out_path = out_dir / "canonical_integrity_diagnostics.svg"
+    plt.savefig(out_path, format="svg")
+    plt.close()
+    logger.info(f"Canonical integrity plot saved to {out_path}")
+
+def run_canonical_integrity_diagnostics(expansion, model):
+    logger.info("Running canonical integrity diagnostics")
+    flagged = []
+    plot_data = []
+
+    for canonical, neighbors in expansion.items():
+        variants = [v for v, _ in neighbors]
+        if canonical not in model or not variants:
+            continue
+        canon_vec = model.get_word_vector(canonical)
+        vecs = [model.get_word_vector(v) for v in variants if v in model]
+        if not vecs:
+            continue
+        radius = mean_cosine_distance(canon_vec, vecs)
+        cohesion = mean_pairwise_distance(vecs)
+        subclusters = count_subclusters(vecs)
+        leakage_score = (
+            radius / MAX_CLUSTER_RADIUS
+            + cohesion / MAX_INTERNAL_DISPERSION
+            + (subclusters - 1)
+        )
+        plot_data.append((canonical, radius, cohesion))
+        logger.info(
+            "Diagnostic of `%s` | radius=%.3f cohesion=%.3f subclusters=%d score=%.2f",
+            canonical, radius, cohesion, subclusters, leakage_score
+        )
+        if leakage_score > LEAKAGE_SCORE_THRESHOLD:
+            flagged.append((canonical, leakage_score))
+
+    generate_diagnostic_plots(plot_data)
+
+    if flagged:
+        logger.warning("Semantic leakage detected in canonicals:")
+        for c, s in flagged:
+            logger.warning("  %s (score=%.2f)", c, s)
+    else:
+        logger.info("All canonicals passed integrity diagnostics")
+
+# ----------------- DB Helpers -------------------
 
 def insert_spelling_map(conn: Any, variant: str, canonical: str, dry: bool) -> None:
     if dry:
@@ -161,7 +239,6 @@ def insert_spelling_map(conn: Any, variant: str, canonical: str, dry: bool) -> N
             (variant, canonical),
         )
 
-
 def update_tokens_canonical(conn: Any, variant: str, canonical: str, dry: bool) -> None:
     if dry:
         logger.debug(f"[DRY] tokens.canonical: {variant} -> {canonical}")
@@ -176,13 +253,14 @@ def update_tokens_canonical(conn: Any, variant: str, canonical: str, dry: bool) 
             (canonical, variant),
         )
 
+# ----------------- Main -------------------
 
 def main(dry: bool, top_k: int, distance_weight_neighbors: bool) -> None:
     logger.info("Loading global fastText model")
     model = fasttext.load_model(str(config.FASTTEXT_GLOBAL_MODEL_PATH))
 
     logger.info("Fetching tokens and counts from database")
-    token_counts: Dict[str, int] = {}
+    token_counts: Dict[str,int] = {}
     tokens: List[str] = []
 
     with eebo_db.get_connection() as conn:
@@ -221,6 +299,9 @@ def main(dry: bool, top_k: int, distance_weight_neighbors: bool) -> None:
         distance_weight_neighbors=distance_weight_neighbors,
     )
 
+    # ----------------- RUN DIAGNOSTICS -------------------
+    run_canonical_integrity_diagnostics(expansion, model)
+
     with eebo_db.get_connection(application_name="canonical_spelling_map") as conn:
         for canonical, neighbors in expansion.items():
             for variant, _score in neighbors:
@@ -235,6 +316,7 @@ def main(dry: bool, top_k: int, distance_weight_neighbors: bool) -> None:
 
     logger.info("Canonical expansion + spelling map complete")
 
+# ----------------- CLI -------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# eebo_extract_neighbourhoods.py
 import sys
 import fasttext
 
@@ -16,7 +17,7 @@ def load_wordlist(path):
     }
 
 
-queries = load_wordlist(config.QUERY_FILE)
+queries = list(KEYWORDS_TO_NORMALISE.keys())
 stopwords = load_wordlist(config.STOPWORD_FILE)
 
 print(f"[INFO] Loaded {len(queries)} query terms")
@@ -58,9 +59,13 @@ for model_path in model_files:
 
             rank += 1
             eebo_db.dbh.execute("""
-                INSERT OR REPLACE INTO neighbourhoods
+                INSERT INTO neighbourhoods
                 (slice_start, slice_end, query, neighbour, rank, cosine)
                 VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (slice_start, slice_end, query, rank)
+                DO UPDATE SET
+                    neighbour = EXCLUDED.neighbour,
+                    cosine    = EXCLUDED.cosine;
             """, (
                 start_year,
                 end_year,

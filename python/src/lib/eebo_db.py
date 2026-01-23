@@ -167,6 +167,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     variant TEXT PRIMARY KEY,
                     canonical TEXT NOT NULL,
                     concept_type TEXT NOT NULL DEFAULT 'orthographic',
+                    role TEXT,
                     CHECK (concept_type IN ('orthographic','derivational','exclude'))
                 );
 
@@ -202,8 +203,31 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
     logger.info("Database schema created")
 
 
+def drop_chk_spelling_map_role() -> None:
+    logger.info("Dropping indexes on spelling_map.role")
+    with get_connection(application_name="drop_chk_spelling_map_role") as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("""
+                    DROP INDEX IF EXISTS drop_chk_spelling_map_role;
+                """)
+    logger.info("Dropped indexes on canonical_centroids")
+
+
+def create_chk_spelling_map_role() -> None:
+    logger.info("Creating  indexes on chk_spelling_map_role")
+    with get_connection(application_name="create_chk_spelling_map_role") as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("""
+                    ALTER TABLE spelling_map
+                        ADD CONSTRAINT chk_spelling_map_role
+                        CHECK (role IN ('synonymic','antithetical','normative','generalising','specifying','metaphorical','noise'));
+                """)
+    logger.info("Dropped indexes on chk_spelling_map_role")
+
+
 def drop_indexes_canonical_centroids() -> None:
-    """Drop FAISS index-related database indexes on canonical_centroids."""
     logger.info("Dropping indexes on canonical_centroids")
     with get_connection(application_name="drop_centroid_indexes") as conn:
         with conn.transaction():
@@ -215,7 +239,6 @@ def drop_indexes_canonical_centroids() -> None:
 
 
 def create_indexes_canonical_centroids() -> None:
-    """Create FAISS index-related database indexes on canonical_centroids."""
     logger.info("Creating indexes on canonical_centroids")
     with get_connection(application_name="create_centroid_indexes") as conn:
         with conn.transaction():

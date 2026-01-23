@@ -30,7 +30,12 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+FAISS_INDEX_DIR = OUT_DIR / "faiss"
+FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
+
 FAISS_CANONICAL_INDEX_PATH = INDEXES_DIR / "canonical.faiss.bin"
+FAISS_CANONICAL_INDEX_PATH = FAISS_INDEX_DIR / "canonical.faiss.bin"
+
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 FASTTEXT_GLOBAL_MODEL_PATH = MODELS_DIR / "global_eebo.bin"
 FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextCanonSlice"
@@ -42,7 +47,6 @@ INGEST_TOKEN_WINDOW_FALLBACK = 5  # around 5 tokens if sentence unavailable
 NUM_WORKERS = 4
 CANONICALISATION_BATCH_SIZE = 50_000
 
-QUERY_FILE = EEBO_SRC_DIR / "queries" / "canonical.txt"
 STOPWORD_FILE = EEBO_SRC_DIR / "stopwords" / "english_basic.txt"
 TOP_K = 30
 

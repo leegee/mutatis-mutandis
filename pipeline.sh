@@ -11,11 +11,14 @@ INIT_AND_INGEST_XML="$SRC/eebo_parse_tei.py"
 BUILD_CANONICAL_MAP="$SRC/build_canonical_map.py"
 CANONICAL_FAISS_SPELLING_MAP="$SRC/canonical_faiss_spelling_map.py"
 MAKE_FASTTEXT_SLICES="$SRC/train_fastText_canonicalised_slices.py"
-VISUALISE="$SRC/semantic_drift_analysis.py"
+
+EXTRACT_NEIGHBOURHOODS="$SRC/extract_neighbourhoods.py"
 
 # Fanning out on neighbours for conceptual meta-neighbourhood
 ANNOTATE_NEIGHBOR_ROLES="$SRC/annotate_neighbors_with_roles.py"
 BUILD_ROLE_PROFILES="$SRC/build_role_profiles_per_slice.py"
+
+VISUALISE="$SRC/semantic_drift_analysis.py"
 
 # Default values
 PHASE="all"
@@ -73,15 +76,19 @@ case "$PHASE" in
         echo "# Running fastText slices training phase"
         "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
         ;;
-    5|r|roles)
+    5|n|Neighbours)
+        echo "# Neighbourhood extraction per slice"
+        "$PYTHON" "$EXTRACT_NEIGHBOURHOODS" "$@"
+        ;;
+    6|r|roles)
         echo "# Annotating FAISS neighbours with conceptual roles"
         "$PYTHON" "$ANNOTATE_NEIGHBOR_ROLES" "$@"
         ;;
-    6|p|profiles)
+    7|p|profiles)
         echo "# Building role-conditioned neighbour profiles per slice"
         "$PYTHON" "$BUILD_ROLE_PROFILES" "$@"
         ;;
-    7|v|visual)
+    8|v|visual)
         echo "# Run visualisations of pre-defined keywords"
         "$PYTHON" "$VISUALISE" "$@"
         ;;
@@ -91,6 +98,7 @@ case "$PHASE" in
         "$PYTHON" "$BUILD_CANONICAL_MAP" "$@"
         "$PYTHON" "$CANONICAL_FAISS_SPELLING_MAP" "$@"
         "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
+        "$PYTHON" "$EXTRACT_NEIGHBOURHOODS" "$@"
         "$PYTHON" "$ANNOTATE_NEIGHBOR_ROLES" "$@"
         "$PYTHON" "$BUILD_ROLE_PROFILES" "$@"
         "$PYTHON" "$VISUALISE" "$@"

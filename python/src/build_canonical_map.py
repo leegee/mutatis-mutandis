@@ -140,6 +140,26 @@ def main(
         token_index=token_index,
     )
 
+    logger.info("Persisting canonical vectors to canonical_centroids")
+
+    with eebo_db.get_connection(application_name="persist_canonicals") as conn:
+        with conn.cursor() as cur:
+            for canonical, vec in zip(canonicals, canonical_vectors, strict=True):
+                cur.execute(
+                    """
+                    INSERT INTO canonical_centroids
+                        (canonical, vector, weighting_scheme, source_model)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (canonical) DO UPDATE
+                        SET vector = EXCLUDED.vector,
+                            weighting_scheme = EXCLUDED.weighting_scheme,
+                            source_model = EXCLUDED.source_model;
+                    """,
+                    (canonical, vec.tolist(), "average_variants", "fasttext_global")
+                )
+        conn.commit()
+    logger.info("Persisted %d canonical vectors to canonical_centroids", len(canonicals))
+
     logger.info("Building FAISS index")
     index = build_faiss_index(vectors)
 
