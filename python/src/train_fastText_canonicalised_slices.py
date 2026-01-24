@@ -22,11 +22,6 @@ import lib.eebo_config as config
 import lib.eebo_db as db
 
 
-TMP_DIR = Path(config.TMP_DIR)
-TMP_DIR.mkdir(exist_ok=True, parents=True)
-config.MODELS_DIR.mkdir(exist_ok=True)
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--clean",
@@ -86,7 +81,7 @@ def dump_slice_to_disk(slice_range: Tuple[int, int]) -> Path:
     Returns the path of the slice file.
     """
     start_year, end_year = slice_range
-    slice_file = TMP_DIR / f"{start_year}-{end_year}.txt"
+    slice_file = config.TMP_DIR / f"{start_year}-{end_year}.txt"
 
     tokens: List[str] = []
 
@@ -148,6 +143,6 @@ if __name__ == "__main__":
 
     if args.clean:
         print("Cleaning up slice files...")
-        shutil.rmtree(TMP_DIR)
+        shutil.rmtree(config.TMP_DIR)
 
     print("All canonical slices trained successfully.")

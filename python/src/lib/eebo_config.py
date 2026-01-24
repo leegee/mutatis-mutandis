@@ -131,30 +131,30 @@ CanonicalRules = Dict[str, CanonicalRule]
 # right
 # property
 KEYWORDS_TO_NORMALISE: CanonicalRules = {
-    "property": {
-        "allowed_variants": {},
-        "false_positives": {},
-    },
-    "justice": {
-        "allowed_variants": {
-            "chiefjustice",
-            "executejustice",
-            "satisfiedjustice",
-        },
-        "false_positives": {
-            "injury",
-            "injustice",
-        },
-    },
-    "injustice": {
-        "allowed_variants": {
-            "unjustice",
-        },
-        "false_positives": {
-            "injury",
-            "justice",
-        },
-    },
+    # "property": {
+    #     "allowed_variants": set(),
+    #     "false_positives": set(),
+    # },
+    # "justice": {
+    #     "allowed_variants": {
+    #         "chiefjustice",
+    #         "executejustice",
+    #         "satisfiedjustice",
+    #     },
+    #     "false_positives": {
+    #         "injury",
+    #         "injustice",
+    #     },
+    # },
+    # "injustice": {
+    #     "allowed_variants": {
+    #         "unjustice",
+    #     },
+    #     "false_positives": {
+    #         "injury",
+    #         "justice",
+    #     },
+    # },
     "liberty": {
         "allowed_variants": {
             "afreedom",
@@ -164,26 +164,26 @@ KEYWORDS_TO_NORMALISE: CanonicalRules = {
         },
         "false_positives": set(),
     },
-    "freedom": {
-        "allowed_variants": {
-            "liberty",
-            "afreedom",
-            "bufreedom",
-        },
-        "false_positives": set(),
-    },
-    "reasonable": {
-        "allowed_variants": {
-            "ureasonable",
-            "unreasonable",
-        },
-        "false_positives": set(),
-    },
-    "state": {
-        "allowed_variants": {
-            "estate",
-        },
-        "false_positives": set(),
-    },
+    # "freedom": {
+    #     "allowed_variants": {
+    #         "liberty",
+    #         "afreedom",
+    #         "bufreedom",
+    #     },
+    #     "false_positives": set(),
+    # },
+    # "reasonable": {
+    #     "allowed_variants": {
+    #         "ureasonable",
+    #         "unreasonable",
+    #     },
+    #     "false_positives": set(),
+    # },
+    # "state": {
+    #     "allowed_variants": {
+    #         "estate",
+    #     },
+    #     "false_positives": set(),
+    # },
 }
 

@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+"""
+train_slice_fasttext.py
+
+Train slice-specific fastText models on the plain text files generated
+by generate_training_files.py.
+"""
+
+from pathlib import Path
+import fasttext
+from lib.eebo_config import SLICES, SLICES_DIR, FASTTEXT_SLICE_MODEL_DIR, FASTTEXT_PARAMS
+
+FASTTEXT_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+def train_slice(slice_file: Path, start: int, end: int) -> Path:
+    """
+    Train fastText skip-gram model on a single slice file.
+    Saves the model as slice_{start}_{end}.bin in FASTTEXT_SLICE_MODEL_DIR
+    """
+    print(f"Training slice {start}-{end} on {slice_file} ...")
+
+    model = fasttext.train_unsupervised(
+        input=str(slice_file),
+        **FASTTEXT_PARAMS
+    )
+
+    model_path = FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
+    model.save_model(str(model_path))
+    print(f"Saved model for slice {start}-{end} → {model_path}")
+    return model_path
+
+
+def main():
+    for start, end in SLICES:
+        slice_file = SLICES_DIR / f"{start}-{end}.txt"
+        if not slice_file.exists():
+            print(f"Warning: slice file {slice_file} missing, skipping")
+            continue
+        train_slice(slice_file, start, end)
+
+    print(f"All slice models saved to {FASTTEXT_SLICE_MODEL_DIR}")
+
+
+if __name__ == "__main__":
+    main()

@@ -8,17 +8,8 @@ SRC="./src" # relative to pwd set above
 PYTHON="python"
 
 INIT_AND_INGEST_XML="$SRC/eebo_parse_tei.py"
-BUILD_SPELLNG_MAP="$SRC/build_spellng_map.py"
-REFINE_SPELLING_MAP="$SRC/refine_spelling_map.py"
-MAKE_FASTTEXT_SLICES="$SRC/train_fastText_canonicalised_slices.py"
-
-EXTRACT_NEIGHBOURHOODS="$SRC/extract_neighbourhoods.py"
-
-# Fanning out on neighbours for conceptual meta-neighbourhood
-ANNOTATE_NEIGHBOR_ROLES="$SRC/annotate_neighbors_with_roles.py"
-BUILD_ROLE_PROFILES="$SRC/build_role_profiles_per_slice.py"
-
-VISUALISE="$SRC/semantic_drift_analysis.py"
+CREATE_TRAINING_FILES="$SRC/generate_training_files.py"
+TRAIN_SLICE_FASTTEXT="$SRC/train_slice_fasttext.py"
 
 # Default values
 PHASE="all"
@@ -58,51 +49,25 @@ pyright "$SRC"
 
 echo "# All checks passed"
 
+RUN=""
+
 # Run phase
 case "$PHASE" in
     1|i|ingest)
         echo "# Running ingestion of TEI XML"
-        "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
+        RUN="$INIT_AND_INGEST_XML"
         ;;
-    2|c|canon)
-        echo "# Building canonical map"
-        "$PYTHON" "$BUILD_SPELLNG_MAP" "$@"
+    2|f|training-files)
+        echo "# Create training slices"
+        RUN="$CREATE_TRAINING_FILES"
         ;;
-    3|sm|spelling)
-        echo "# Creating spelling map"
-        "$PYTHON" "$REFINE_SPELLING_MAP" "$@"
-        ;;
-    4|t|slices)
-        echo "# Running fastText slices training phase"
-        "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
-        ;;
-    5|n|Neighbours)
-        echo "# Neighbourhood extraction per slice"
-        "$PYTHON" "$EXTRACT_NEIGHBOURHOODS" "$@"
-        ;;
-    6|r|roles)
-        echo "# Annotating FAISS neighbours with conceptual roles"
-        "$PYTHON" "$ANNOTATE_NEIGHBOR_ROLES" "$@"
-        ;;
-    7|p|profiles)
-        echo "# Building role-conditioned neighbour profiles per slice"
-        "$PYTHON" "$BUILD_ROLE_PROFILES" "$@"
-        ;;
-    8|v|visual)
-        echo "# Run visualisations of pre-defined keywords"
-        "$PYTHON" "$VISUALISE" "$@"
-        ;;
-    all)
-        echo "# Running full pipeline"
-        "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
-        "$PYTHON" "$BUILD_SPELLNG_MAP" "$@"
-        "$PYTHON" "$REFINE_SPELLING_MAP" "$@"
-        "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
-        "$PYTHON" "$EXTRACT_NEIGHBOURHOODS" "$@"
-        "$PYTHON" "$ANNOTATE_NEIGHBOR_ROLES" "$@"
-        "$PYTHON" "$BUILD_ROLE_PROFILES" "$@"
-        "$PYTHON" "$VISUALISE" "$@"
+    3|t|train)
+        echo "# Training fastText on slices"
+        RUN="$TRAIN_SLICE_FASTTEXT"
         ;;
 esac
+
+echo "# Running $RUN"
+"$PYTHON" "$RUN" "$@"
 
 cd "$OUR_OLDPWD"

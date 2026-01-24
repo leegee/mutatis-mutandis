@@ -11,7 +11,7 @@ Multi-process streaming EEBO TEI XML ingestion pipeline
 
 To do:
 
-- re-introduce `rocessPoolExecutor`with `hunksize`
+- re-introduce `processPoolExecutor`with `hunksize`
 - re-introduce `xml`
 - re-introduce concurrent db cx
 
