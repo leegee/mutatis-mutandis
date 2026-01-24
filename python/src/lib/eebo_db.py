@@ -153,102 +153,10 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     token TEXT PRIMARY KEY,
                     vector FLOAT4[] NOT NULL
                 );
-
-                CREATE TABLE sentences (
-                    doc_id TEXT NOT NULL,
-                    sentence_id INTEGER NOT NULL,
-                    sentence_text_raw TEXT,
-                    sentence_text_norm TEXT,
-                    embedding DOUBLE PRECISION[],
-                    PRIMARY KEY (doc_id, sentence_id),
-                    FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
-                );
-
-                CREATE TABLE spelling_map (
-                    variant TEXT PRIMARY KEY,
-                    canonical TEXT NOT NULL,
-                    concept_type TEXT NOT NULL DEFAULT 'orthographic',
-                    role TEXT,
-                    CHECK (concept_type IN ('orthographic','derivational','exclude'))
-                );
-
-                CREATE TABLE neighbourhoods (
-                    slice_start INTEGER NOT NULL,
-                    slice_end INTEGER NOT NULL,
-                    query TEXT NOT NULL,
-                    neighbour TEXT NOT NULL,
-                    rank INTEGER NOT NULL,
-                    cosine DOUBLE PRECISION,
-                    PRIMARY KEY (slice_start, slice_end, query, rank)
-                );
-
-                CREATE TABLE ingest_runs (
-                    run_id SERIAL PRIMARY KEY,
-                    started_at TIMESTAMP DEFAULT now(),
-                    code_version TEXT,
-                    notes TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS canonical_centroids (
-                    canonical TEXT PRIMARY KEY,
-                    vector FLOAT4[] NOT NULL,
-                    weighting_scheme TEXT NOT NULL,
-                    source_model TEXT NOT NULL,
-                    faiss_index_id TEXT,
-                    created_at TIMESTAMPTZ DEFAULT now(),
-                    notes TEXT
-                );
-
             """)
 
     logger.info("Database schema created")
 
-
-def drop_chk_spelling_map_role() -> None:
-    logger.info("Dropping indexes on spelling_map.role")
-    with get_connection(application_name="drop_chk_spelling_map_role") as conn:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute("""
-                    DROP INDEX IF EXISTS drop_chk_spelling_map_role;
-                """)
-    logger.info("Dropped indexes on canonical_centroids")
-
-
-def create_chk_spelling_map_role() -> None:
-    logger.info("Creating  indexes on chk_spelling_map_role")
-    with get_connection(application_name="create_chk_spelling_map_role") as conn:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute("""
-                    ALTER TABLE spelling_map
-                        ADD CONSTRAINT chk_spelling_map_role
-                        CHECK (role IN ('synonymic','antithetical','normative','generalising','specifying','metaphorical','noise'));
-                """)
-    logger.info("Dropped indexes on chk_spelling_map_role")
-
-
-def drop_indexes_canonical_centroids() -> None:
-    logger.info("Dropping indexes on canonical_centroids")
-    with get_connection(application_name="drop_centroid_indexes") as conn:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute("""
-                    DROP INDEX IF EXISTS idx_centroids_faiss_index_id;
-                """)
-    logger.info("Dropped indexes on canonical_centroids")
-
-
-def create_indexes_canonical_centroids() -> None:
-    logger.info("Creating indexes on canonical_centroids")
-    with get_connection(application_name="create_centroid_indexes") as conn:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_centroids_faiss_index_id
-                    ON canonical_centroids(faiss_index_id);
-                """)
-    logger.info("Created indexes on canonical_centroids")
 
 
 def drop_token_indexes(conn: Connection) -> None:
@@ -307,3 +215,34 @@ def create_tokens_fk(conn: Connection) -> None:
                 ON DELETE CASCADE;
             """)
     logger.info("tokens.doc_id foreign key created")
+
+def drop_indexes_token_vectors() -> None:
+    """
+    Drop any indexes on token_vectors table.
+    Safe to call before bulk insertion.
+    """
+    logger.info("Dropping indexes on token_vectors if they exist")
+    with get_connection(application_name="drop_token_vectors_indexes") as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("DROP INDEX IF EXISTS idx_token_vectors_token;")
+    logger.info("Indexes on token_vectors dropped")
+
+
+def create_indexes_token_vectors() -> None:
+    """
+    Create indexes on token_vectors table.
+    Should be called after all embeddings are inserted.
+    """
+    logger.info("Creating indexes on token_vectors")
+    with get_connection(application_name="create_token_vectors_indexes") as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                # Primary key already exists on token, but we can add additional indexes if needed
+                # Example: if we want to index vector elements for certain operations
+                # For general use, just a primary key is sufficient for lookups
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_token_vectors_token
+                    ON token_vectors(token);
+                """)
+    logger.info("Indexes on token_vectors created")
