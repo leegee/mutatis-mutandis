@@ -216,6 +216,7 @@ def create_tokens_fk(conn: Connection) -> None:
             """)
     logger.info("tokens.doc_id foreign key created")
 
+
 def drop_indexes_token_vectors() -> None:
     """
     Drop any indexes on token_vectors table.
@@ -238,11 +239,7 @@ def create_indexes_token_vectors() -> None:
     with get_connection(application_name="create_token_vectors_indexes") as conn:
         with conn.transaction():
             with conn.cursor() as cur:
-                # Primary key already exists on token, but we can add additional indexes if needed
-                # Example: if we want to index vector elements for certain operations
-                # For general use, just a primary key is sufficient for lookups
                 cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_token_vectors_token
-                    ON token_vectors(token);
+                ALTER TABLE token_vectors ADD PRIMARY KEY (token);
                 """)
     logger.info("Indexes on token_vectors created")
