@@ -142,6 +142,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     doc_id TEXT NOT NULL,
                     token_idx INTEGER NOT NULL,
                     token TEXT NOT NULL,
+                    raw_token text,
                     sentence_id INTEGER,
                     canonical TEXT,
                     PRIMARY KEY (doc_id, token_idx),

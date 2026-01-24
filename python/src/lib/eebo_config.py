@@ -113,13 +113,30 @@ class CanonicalRule(TypedDict):
 CanonicalRules = Dict[str, CanonicalRule]
 
 # Canonical heads with per-head exclusion lists
+# liberty
+# authority
+# sovereignty
+# obedience
+# law
+# parliament
+# king
+# people
+# commonwealth
+# tyranny
+# conscience
+# religion
+# church
+# state
+# power
+# right
+# property
 KEYWORDS_TO_NORMALISE: CanonicalRules = {
+    "property": {
+        "allowed_variants": {},
+        "false_positives": {},
+    },
     "justice": {
         "allowed_variants": {
-            "unjustice",
-            "vnjustice",
-            "dinjustice",
-            "iujustice",
             "chiefjustice",
             "executejustice",
             "satisfiedjustice",
@@ -131,8 +148,7 @@ KEYWORDS_TO_NORMALISE: CanonicalRules = {
     },
     "injustice": {
         "allowed_variants": {
-            "dojustice",
-            "ofjustice",
+            "unjustice",
         },
         "false_positives": {
             "injury",

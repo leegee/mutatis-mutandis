@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-canonical_faiss_spelling_map.py
+refine_spelling_map.py
 Phase 3: Canonical expansion + diagnostics (reuses Phase 2 FAISS index)
 """
 

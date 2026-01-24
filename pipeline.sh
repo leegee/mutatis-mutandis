@@ -8,8 +8,8 @@ SRC="./src" # relative to pwd set above
 PYTHON="python"
 
 INIT_AND_INGEST_XML="$SRC/eebo_parse_tei.py"
-BUILD_CANONICAL_MAP="$SRC/build_canonical_map.py"
-CANONICAL_FAISS_SPELLING_MAP="$SRC/canonical_faiss_spelling_map.py"
+BUILD_SPELLNG_MAP="$SRC/build_spellng_map.py"
+REFINE_SPELLING_MAP="$SRC/refine_spelling_map.py"
 MAKE_FASTTEXT_SLICES="$SRC/train_fastText_canonicalised_slices.py"
 
 EXTRACT_NEIGHBOURHOODS="$SRC/extract_neighbourhoods.py"
@@ -66,11 +66,11 @@ case "$PHASE" in
         ;;
     2|c|canon)
         echo "# Building canonical map"
-        "$PYTHON" "$BUILD_CANONICAL_MAP" "$@"
+        "$PYTHON" "$BUILD_SPELLNG_MAP" "$@"
         ;;
     3|sm|spelling)
         echo "# Creating spelling map"
-        "$PYTHON" "$CANONICAL_FAISS_SPELLING_MAP" "$@"
+        "$PYTHON" "$REFINE_SPELLING_MAP" "$@"
         ;;
     4|t|slices)
         echo "# Running fastText slices training phase"
@@ -95,8 +95,8 @@ case "$PHASE" in
     all)
         echo "# Running full pipeline"
         "$PYTHON" "$INIT_AND_INGEST_XML" "$@"
-        "$PYTHON" "$BUILD_CANONICAL_MAP" "$@"
-        "$PYTHON" "$CANONICAL_FAISS_SPELLING_MAP" "$@"
+        "$PYTHON" "$BUILD_SPELLNG_MAP" "$@"
+        "$PYTHON" "$REFINE_SPELLING_MAP" "$@"
         "$PYTHON" "$MAKE_FASTTEXT_SLICES" "$@"
         "$PYTHON" "$EXTRACT_NEIGHBOURHOODS" "$@"
         "$PYTHON" "$ANNOTATE_NEIGHBOR_ROLES" "$@"

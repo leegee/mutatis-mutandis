@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+# Phase 2: build_spellng_map.py so searches are not clouded with orthological variants
+
 from __future__ import annotations
 from pathlib import Path
 import logging
