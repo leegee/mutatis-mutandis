@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OUR_OLDPWD=`pwd`
-cd python
-
 SRC="./src" # relative to pwd set above
 PYTHON="python"
+PHASE="help"
+OUR_OLDPWD=`pwd`
 
-INIT_AND_INGEST_XML="$SRC/eebo_parse_tei.py"
-CREATE_TRAINING_FILES="$SRC/generate_training_files.py"
-TRAIN_SLICE_FASTTEXT="$SRC/train_slice_fasttext.py"
-
-# Default values
-PHASE="all"
-
-# Parse arguments
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -33,6 +24,8 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+cd python
 
 # Restore positional arguments
 set -- "${POSITIONAL[@]}"
@@ -55,16 +48,21 @@ RUN=""
 case "$PHASE" in
     1|i|ingest)
         echo "# Running ingestion of TEI XML"
-        RUN="$INIT_AND_INGEST_XML"
+        RUN="$SRC/eebo_parse_tei.py"
         ;;
     2|f|training-files)
-        echo "# Create training slices"
-        RUN="$CREATE_TRAINING_FILES"
+        echo "# Create files of slices for training fastText"
+        RUN="$SRC/generate_training_files.py"
         ;;
-    3|t|train)
+    3|t|train-fasttext)
         echo "# Training fastText on slices"
-        RUN="$TRAIN_SLICE_FASTTEXT"
+        RUN="$SRC/train_slice_fasttext.py"
         ;;
+    4|v|gen-token-vectors)
+        echo "# Generate embeddings: token vectors"
+        RUN="$SRC/generate_token_embeddings.py"
+        ;;
+
 esac
 
 echo "# Running $RUN"
