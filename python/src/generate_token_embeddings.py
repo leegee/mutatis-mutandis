@@ -79,7 +79,7 @@ def deduplicate_token_vectors(conn):
     logger.info("Starting deduplication of token_vectors")
     with conn.transaction():
         with conn.cursor() as cur:
-            # 1. Create a temporary table with aggregated vectors
+            # Create a temporary table with aggregated vectors
             cur.execute(f"""
                 CREATE TEMP TABLE tmp_vectors AS
                 SELECT token, array_agg(vector) AS vectors
@@ -87,7 +87,7 @@ def deduplicate_token_vectors(conn):
                 GROUP BY token;
             """)
 
-            # 2. Replace original table with averaged vectors
+            # Replace original table with averaged vectors
             cur.execute(f"DROP TABLE {TOKEN_VECTORS_TABLE};")
             cur.execute(f"""
                 CREATE TABLE {TOKEN_VECTORS_TABLE} (
@@ -96,7 +96,7 @@ def deduplicate_token_vectors(conn):
                 );
             """)
 
-            # 3. Insert averaged embeddings
+            # Insert averaged embeddings
             cur.execute(f"""
                 INSERT INTO {TOKEN_VECTORS_TABLE} (token, vector)
                 SELECT token,
