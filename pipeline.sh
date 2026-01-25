@@ -66,9 +66,17 @@ case "$PHASE" in
         echo "# Generate concept timeseries"
         RUN="$SRC/build_concept_timeseries.py"
         ;;
-    6|p|plot)
+    6|f|faiss)
+        echo "# Create FAISS of fastText"
+        RUN="$SRC/build_faiss_slice_indexes.py"
+        ;;
+    7|p|plot)
         echo "# Plot centroid similiarity"
         RUN="$SRC/vis_centroid_similarity.py"
+        ;;
+    8|n|knn)
+        echo "# Plot centroid nearest neighbours"
+        RUN="$SRC/vis_centroid_similarity_neighbours.py"
         ;;
 
 esac
