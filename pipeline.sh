@@ -62,10 +62,10 @@ case "$PHASE" in
         echo "# Generate embeddings: token vectors"
         RUN="$SRC/generate_token_embeddings.py"
         ;;
-    5|c|can_spell)
-        echo "# Generate spelling map"
-        RUN="$SRC/build_canonical_map.py"
-        ;;
+    # 5|c|can_spell)
+    #     echo "# Generate spelling map"
+    #     RUN="$SRC/build_canonical_map.py"
+    #     ;;
 
 
 esac
