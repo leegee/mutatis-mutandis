@@ -117,7 +117,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     DROP TABLE IF EXISTS documents CASCADE;
                     DROP TABLE IF EXISTS tokens CASCADE;
                     DROP TABLE IF EXISTS token_vectors CASCADE;
-                    DROP TABLE IF EXISTS token_canonical_map CASCADE;
                 """)
 
             logger.info("Creating tables")
@@ -155,15 +154,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     PRIMARY KEY (token, slice_start, slice_end)
                 );
 
-                CREATE TABLE token_canonical_map (
-                    variant_token TEXT NOT NULL,              -- the word as it appears in text
-                    canonical_token TEXT NOT NULL,            -- the normalized form from CONCEPT_SETS
-                    slice_start INTEGER,                      -- start of slice
-                    slice_end INTEGER,                        -- end of slice
-                    cosine_similarity DOUBLE PRECISION,       -- similarity between variant and canonical embedding
-                    method TEXT NOT NULL DEFAULT 'semantic',  -- method used: 'semantic', 'orthographic', 'hybrid'...?
-                    PRIMARY KEY (variant_token, canonical_token, slice_start, slice_end)
-                );
 
             """)
 
@@ -228,35 +218,3 @@ def create_tokens_fk(conn: Connection) -> None:
             """)
     logger.info("tokens.doc_id foreign key created")
 
-
-def drop_indexes_token_canonical_map(conn):
-    """
-    Drop indexes and primary key on token_canonical_map table.
-    Safe to call before bulk insertion.
-    """
-    logger.info("Dropping indexes/primary key on token_canonical_map if they exist")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE IF EXISTS token_canonical_map
-                DROP CONSTRAINT IF EXISTS token_canonical_map_pkey;
-            """)
-
-            cur.execute("DROP INDEX IF EXISTS idx_token_canonical_map_canonical;")
-            cur.execute("DROP INDEX IF EXISTS idx_token_canonical_map_slice;")
-
-    logger.info("Indexes and primary key dropped from token_canonical_map")
-
-
-def create_indexes_token_canonical_map(conn):
-    logger.info("Creating indexes and primary key on token_canonical_map")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE token_canonical_map
-                ADD CONSTRAINT token_canonical_map_pkey
-                PRIMARY KEY (variant_token, canonical_token, slice_start, slice_end);
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_token_canonical_map_canonical ON token_canonical_map(canonical_token);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_token_canonical_map_slice ON token_canonical_map(slice_start, slice_end);")
-    logger.info("Indexes and PK created for token_canonical_map")
