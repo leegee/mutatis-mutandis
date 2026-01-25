@@ -114,12 +114,10 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
             if drop_existing:
                 logger.info("Dropping existing tables")
                 cur.execute("""
-                    DROP TABLE IF EXISTS neighbourhoods CASCADE;
-                    DROP TABLE IF EXISTS sentences CASCADE;
-                    DROP TABLE IF EXISTS tokens CASCADE;
-                    DROP TABLE IF EXISTS spelling_map CASCADE;
                     DROP TABLE IF EXISTS documents CASCADE;
-                    DROP TABLE IF EXISTS ingest_runs CASCADE;
+                    DROP TABLE IF EXISTS tokens CASCADE;
+                    DROP TABLE IF EXISTS token_vectors CASCADE;
+                    DROP TABLE IF EXISTS token_canonical_map CASCADE;
                 """)
 
             logger.info("Creating tables")
@@ -229,47 +227,6 @@ def create_tokens_fk(conn: Connection) -> None:
                 ON DELETE CASCADE;
             """)
     logger.info("tokens.doc_id foreign key created")
-
-
-def drop_indexes_token_vectors(conn) -> None:
-    """
-    Drop any indexes or PK on token_vectors table.
-    Safe to call before bulk insertion.
-    """
-    logger.info("Dropping indexes and primary key on token_vectors if they exist")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            # Drop the old PK
-            cur.execute("ALTER TABLE token_vectors DROP CONSTRAINT IF EXISTS token_vectors_pkey;")
-            # Drop any other indexes you may have
-            cur.execute("DROP INDEX IF EXISTS idx_token_vectors_token;")
-    logger.info("Indexes and primary key on token_vectors dropped")
-
-
-def create_indexes_token_vectors(conn) -> None:
-    """
-    Create indexes on token_vectors table.
-    Should be called after all embeddings are inserted.
-    """
-    logger.info("Creating indexes on token_vectors")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            # Only add PK if it doesn't exist
-            cur.execute("""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1
-                        FROM pg_constraint
-                        WHERE conname = 'token_vectors_pkey'
-                    ) THEN
-                        ALTER TABLE token_vectors
-                        ADD CONSTRAINT token_vectors_pkey PRIMARY KEY (token, slice_start, slice_end);
-                    END IF;
-                END
-                $$;
-            """)
-    logger.info("Indexes on token_vectors created")
 
 
 def drop_indexes_token_canonical_map(conn):

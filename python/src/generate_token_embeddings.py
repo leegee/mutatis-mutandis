@@ -21,16 +21,15 @@ import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 
 
-def generate_embeddings_for_model(model_path: Path):
+def generate_embeddings_per_model(model_path: Path) -> dict[str, np.ndarray]:
     """Load a fastText slice model and generate embeddings for all words in its vocabulary."""
     logger.info(f"Loading model {model_path}")
     model = fasttext.load_model(str(model_path))
 
     tokens = model.get_words()
-    embeddings = {}
+    embeddings: dict[str, np.ndarray] = {}
     for tok in tokens:
-        vec = model.get_word_vector(tok)
-        embeddings[tok] = vec.astype(np.float32)
+        embeddings[str(tok)] = model.get_word_vector(tok).astype(np.float32)
     logger.info(f"Generated embeddings for {len(tokens)} tokens in {model_path.name}")
     return embeddings
 
@@ -47,50 +46,13 @@ def store_embeddings(conn, embeddings: dict[str, np.ndarray], slice_start: int, 
                 batch = items[i:i+BATCH_SIZE]
                 args = [(tok, slice_start, slice_end, vec.tolist()) for tok, vec in batch]
                 cur.executemany(
-                    "INSERT INTO token_vectors (token, slice_start, slice_end, vector) VALUES (%s, %s, %s, %s);",
+                    """
+                    INSERT INTO token_vectors (token, slice_start, slice_end, vector)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (token, slice_start, slice_end) DO NOTHING
+                    """,
                     args
                 )
-
-
-def deduplicate_token_vectors(conn):
-    """
-    Deduplicate token_vectors table by averaging embeddings for duplicate tokens.
-    Replaces old table with deduplicated version ready for PK/index creation.
-    """
-    logger.info("Starting deduplication of token_vectors")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            # Create a temporary table with aggregated vectors
-            cur.execute("""
-                CREATE TEMP TABLE tmp_vectors AS
-                    SELECT token, array_agg(vector) AS vectors
-                    FROM token_vectors
-                    GROUP BY token;
-            """)
-
-            # Replace original table with averaged vectors
-            cur.execute("DROP TABLE token_vectors;")
-            cur.execute("""
-                CREATE TABLE token_vectors (
-                    token TEXT PRIMARY KEY,
-                    vector FLOAT4[] NOT NULL
-                );
-            """)
-
-            # Insert averaged embeddings
-            cur.execute("""
-                INSERT INTO token_vectors (token, vector)
-                SELECT token,
-                       ARRAY(
-                         SELECT avg(e)
-                         FROM unnest(vectors) WITH ORDINALITY AS t(e, idx)
-                         GROUP BY idx
-                         ORDER BY idx
-                       )::float4[]
-                FROM tmp_vectors;
-            """)
-
-    logger.info("Deduplication complete: token_vectors now contains unique tokens")
 
 
 def main():
@@ -103,30 +65,21 @@ def main():
     args = parser.parse_args()
 
     with eebo_db.get_connection() as conn:
-        # Drop the PK for speed.
-        eebo_db.drop_indexes_token_vectors(conn)
         with conn.transaction():
             with conn.cursor() as cur:
                 cur.execute("TRUNCATE token_vectors;")
 
         if not args.dedup_only:
-            # Iterate over slices and generate embeddings
             for start, end in config.SLICES:
                 model_file = config.FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
                 if not model_file.exists():
                     logger.warning(f"Model {model_file} missing, skipping")
                     continue
 
-                embeddings = generate_embeddings_for_model(model_file)
+                embeddings = generate_embeddings_per_model(model_file)
                 store_embeddings(conn, embeddings, start, end)
         else:
             logger.info("Skipping embedding generation due to --dedup-only flag")
-
-        # Deduplicate tokens to ensure PK/index can be created safely
-        deduplicate_token_vectors(conn)
-
-        # Create primary key/index
-        eebo_db.create_indexes_token_vectors(conn)
 
     logger.info("Token embeddings table ready with indexes/PK")
 
