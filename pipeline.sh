@@ -58,15 +58,18 @@ case "$PHASE" in
         echo "# Training fastText on slices"
         RUN="$SRC/train_slice_fasttext.py"
         ;;
-    4|v|gen-token-vectors)
+    4|v|token-vectors)
         echo "# Generate embeddings: token vectors"
         RUN="$SRC/generate_token_embeddings.py"
         ;;
-    # 5|c|can_spell)
-    #     echo "# Generate spelling map"
-    #     RUN="$SRC/build_canonical_map.py"
-    #     ;;
-
+    5|c|concept-timeseries)
+        echo "# Generate concept timeseries"
+        RUN="$SRC/build_concept_timeseries.py"
+        ;;
+    6|p|plot)
+        echo "# Plot centroid similiarity"
+        RUN="$SRC/vis_centroid_similarity.py"
+        ;;
 
 esac
 

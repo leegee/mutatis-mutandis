@@ -126,19 +126,19 @@ CanonicalRules = Dict[str, CanonicalRule]
 # property
 CONCEPT_SETS: CanonicalRules = {
     "LIBERTY": {
-        "forms": [
+        "forms": {
             "liberty", "libertie", "libertye", "liberte"
-        ],
-        "false_positives": [
+        },
+        "false_positives": {
             "libertine"
-        ]
+        }
     },
 
     "PROPERTY": {
-        "forms": [
+        "forms": {
             "property", "propertie", "propriety"
-        ],
-        "false_positives": []
+        },
+        "false_positives": set()
     }
 }
 
