@@ -248,23 +248,28 @@ def drop_indexes_token_vectors(conn) -> None:
 
 def create_indexes_token_vectors(conn) -> None:
     """
-    Create primary key and optional indexes on token_vectors table.
+    Create indexes on token_vectors table.
     Should be called after all embeddings are inserted.
     """
-    logger.info("Creating primary key and indexes on token_vectors")
+    logger.info("Creating indexes on token_vectors")
     with conn.transaction():
         with conn.cursor() as cur:
-            # New PK is token + slice_start + slice_end
+            # Only add PK if it doesn't exist
             cur.execute("""
-                ALTER TABLE token_vectors
-                ADD CONSTRAINT token_vectors_pkey PRIMARY KEY (token, slice_start, slice_end);
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'token_vectors_pkey'
+                    ) THEN
+                        ALTER TABLE token_vectors
+                        ADD CONSTRAINT token_vectors_pkey PRIMARY KEY (token, slice_start, slice_end);
+                    END IF;
+                END
+                $$;
             """)
-            # Optional: index on slice_start/end to speed up slice filtering
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_token_vectors_slice
-                ON token_vectors(slice_start, slice_end);
-            """)
-    logger.info("Primary key and indexes on token_vectors created")
+    logger.info("Indexes on token_vectors created")
 
 
 def drop_indexes_token_canonical_map(conn):
