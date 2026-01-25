@@ -47,7 +47,7 @@ def store_embeddings(conn, embeddings: dict[str, np.ndarray]):
                 batch = items[i:i+BATCH_SIZE]
                 args = [(tok, vec.tolist()) for tok, vec in batch]
                 cur.executemany(
-                    f"INSERT INTO token_vectors (token, vector) VALUES (%s, %s);",
+                    "INSERT INTO token_vectors (token, vector) VALUES (%s, %s);",
                     args
                 )
 

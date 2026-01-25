@@ -155,12 +155,12 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 );
 
                 CREATE TABLE token_canonical_map (
-                    variant_token TEXT NOT NULL,         -- the word as it appears in text
-                    canonical_token TEXT NOT NULL,       -- the normalized form from KEYWORDS_TO_NORMALISE
-                    slice_start INTEGER,                 -- start of slice
-                    slice_end INTEGER,                   -- end of slice
-                    cosine_similarity DOUBLE PRECISION,  -- similarity between variant and canonical embedding
-                    method TEXT,                         -- method used: 'semantic', 'orthographic', 'hybrid'...?
+                    variant_token TEXT NOT NULL,              -- the word as it appears in text
+                    canonical_token TEXT NOT NULL,            -- the normalized form from KEYWORDS_TO_NORMALISE
+                    slice_start INTEGER,                      -- start of slice
+                    slice_end INTEGER,                        -- end of slice
+                    cosine_similarity DOUBLE PRECISION,       -- similarity between variant and canonical embedding
+                    method TEXT NOT NULL DEFAULT 'semantic',  -- method used: 'semantic', 'orthographic', 'hybrid'...?
                     PRIMARY KEY (variant_token, canonical_token, slice_start, slice_end)
                 );
 
