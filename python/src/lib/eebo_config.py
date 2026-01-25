@@ -45,7 +45,6 @@ FASTTEXT_BATCH_SIZE = 50_000
 EMBED_BATCH_SIZE = 256
 INGEST_TOKEN_WINDOW_FALLBACK = 5  # around 5 tokens if sentence unavailable
 NUM_WORKERS = 4
-CANONICALISATION_BATCH_SIZE = 50_000
 
 STOPWORD_FILE = EEBO_SRC_DIR / "stopwords" / "english_basic.txt"
 TOP_K = 30
@@ -82,11 +81,6 @@ SLICES = [
     (1658, 1660),
     (1661, 1665),
 ]
-
-# Absorption class thresholds
-STRONG_MEAN = 0.80
-MODERATE_MEAN = 0.65
-MIN_SLICES_STRONG = 3
 
 """
 Canonical normalisation configuration.

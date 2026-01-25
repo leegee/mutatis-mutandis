@@ -153,6 +153,17 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     token TEXT PRIMARY KEY,
                     vector FLOAT4[] NOT NULL
                 );
+
+                CREATE TABLE token_canonical_map (
+                    variant_token TEXT NOT NULL,         -- the word as it appears in text
+                    canonical_token TEXT NOT NULL,       -- the normalized form from KEYWORDS_TO_NORMALISE
+                    slice_start INTEGER,                 -- start of slice
+                    slice_end INTEGER,                   -- end of slice
+                    cosine_similarity DOUBLE PRECISION,  -- similarity between variant and canonical embedding
+                    method TEXT,                         -- method used: 'semantic', 'orthographic', 'hybrid'...?
+                    PRIMARY KEY (variant_token, canonical_token, slice_start, slice_end)
+                );
+
             """)
 
     logger.info("Database schema created")
@@ -239,3 +250,24 @@ def create_indexes_token_vectors(conn) -> None:
         with conn.cursor() as cur:
             cur.execute(""" ALTER TABLE token_vectors ADD PRIMARY KEY (token); """)
     logger.info("Indexes on token_vectors created")
+
+def drop_indexes_token_canonical_map(conn):
+    logger.info("Dropping token_canonical_map indexes/PK")
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute("DROP TABLE IF EXISTS token_canonical_map CASCADE;")
+    logger.info("token_canonical_map table dropped")
+
+
+def create_indexes_token_canonical_map(conn):
+    logger.info("Creating indexes and primary key on token_canonical_map")
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE token_canonical_map
+                ADD CONSTRAINT token_canonical_map_pkey
+                PRIMARY KEY (variant_token, canonical_token, slice_start, slice_end);
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_token_canonical_map_canonical ON token_canonical_map(canonical_token);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_token_canonical_map_slice ON token_canonical_map(slice_start, slice_end);")
+    logger.info("Indexes and PK created for token_canonical_map")
