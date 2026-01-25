@@ -17,7 +17,7 @@ def load_wordlist(path):
     }
 
 
-queries = list(KEYWORDS_TO_NORMALISE.keys())
+queries = list(CONCEPT_SETS.keys())
 stopwords = load_wordlist(config.STOPWORD_FILE)
 
 print(f"[INFO] Loaded {len(queries)} query terms")

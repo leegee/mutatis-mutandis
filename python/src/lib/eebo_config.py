@@ -85,7 +85,7 @@ SLICES = [
 """
 Canonical normalisation configuration.
 
-KEYWORDS_TO_NORMALISE is now the SINGLE source of truth.
+CONCEPT_SETS is now the SINGLE source of truth.
 
 - dict keys: canonical heads (theory-driven)
 - dict values:
@@ -101,7 +101,7 @@ concepts are preserved through explicit constraints, positive and negative, on a
 
 """
 class CanonicalRule(TypedDict):
-    allowed_variants: Set[str]
+    forms: Set[str]
     false_positives: Set[str]
 
 CanonicalRules = Dict[str, CanonicalRule]
@@ -124,60 +124,21 @@ CanonicalRules = Dict[str, CanonicalRule]
 # power
 # right
 # property
-KEYWORDS_TO_NORMALISE: CanonicalRules = {
-    # "property": {
-    #     "allowed_variants": set(),
-    #     "false_positives": set(),
-    # },
-    # "justice": {
-    #     "allowed_variants": {
-    #         "chiefjustice",
-    #         "executejustice",
-    #         "satisfiedjustice",
-    #     },
-    #     "false_positives": {
-    #         "injury",
-    #         "injustice",
-    #     },
-    # },
-    # "injustice": {
-    #     "allowed_variants": {
-    #         "unjustice",
-    #     },
-    #     "false_positives": {
-    #         "injury",
-    #         "justice",
-    #     },
-    # },
-    "liberty": {
-        "allowed_variants": {
-            "afreedom",
-            "freeliberty",
-            "bufreedom",
-            "freedomship",
-        },
-        "false_positives": set(),
+CONCEPT_SETS: CanonicalRules = {
+    "LIBERTY": {
+        "forms": [
+            "liberty", "libertie", "libertye", "liberte"
+        ],
+        "false_positives": [
+            "libertine"
+        ]
     },
-    # "freedom": {
-    #     "allowed_variants": {
-    #         "liberty",
-    #         "afreedom",
-    #         "bufreedom",
-    #     },
-    #     "false_positives": set(),
-    # },
-    # "reasonable": {
-    #     "allowed_variants": {
-    #         "ureasonable",
-    #         "unreasonable",
-    #     },
-    #     "false_positives": set(),
-    # },
-    # "state": {
-    #     "allowed_variants": {
-    #         "estate",
-    #     },
-    #     "false_positives": set(),
-    # },
+
+    "PROPERTY": {
+        "forms": [
+            "property", "propertie", "propriety"
+        ],
+        "false_positives": []
+    }
 }
 
