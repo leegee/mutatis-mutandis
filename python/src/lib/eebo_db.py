@@ -150,8 +150,11 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 );
 
                 CREATE TABLE token_vectors (
-                    token TEXT PRIMARY KEY,
-                    vector FLOAT4[] NOT NULL
+                    token TEXT NOT NULL,
+                    slice_start INT NOT NULL,
+                    slice_end   INT NOT NULL,
+                    vector FLOAT4[] NOT NULL,
+                    PRIMARY KEY (token, slice_start, slice_end)
                 );
 
                 CREATE TABLE token_canonical_map (
@@ -230,26 +233,38 @@ def create_tokens_fk(conn: Connection) -> None:
 
 def drop_indexes_token_vectors(conn) -> None:
     """
-    Drop any indexes on token_vectors table.
+    Drop any indexes or PK on token_vectors table.
     Safe to call before bulk insertion.
     """
-    logger.info("Dropping indexes on token_vectors if they exist")
+    logger.info("Dropping indexes and primary key on token_vectors if they exist")
     with conn.transaction():
         with conn.cursor() as cur:
+            # Drop the old PK
+            cur.execute("ALTER TABLE token_vectors DROP CONSTRAINT IF EXISTS token_vectors_pkey;")
+            # Drop any other indexes you may have
             cur.execute("DROP INDEX IF EXISTS idx_token_vectors_token;")
-    logger.info("Indexes on token_vectors dropped")
+    logger.info("Indexes and primary key on token_vectors dropped")
 
 
 def create_indexes_token_vectors(conn) -> None:
     """
-    Create indexes on token_vectors table.
+    Create primary key and optional indexes on token_vectors table.
     Should be called after all embeddings are inserted.
     """
-    logger.info("Creating indexes on token_vectors")
+    logger.info("Creating primary key and indexes on token_vectors")
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute(""" ALTER TABLE token_vectors ADD PRIMARY KEY (token); """)
-    logger.info("Indexes on token_vectors created")
+            # New PK is token + slice_start + slice_end
+            cur.execute("""
+                ALTER TABLE token_vectors
+                ADD CONSTRAINT token_vectors_pkey PRIMARY KEY (token, slice_start, slice_end);
+            """)
+            # Optional: index on slice_start/end to speed up slice filtering
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_token_vectors_slice
+                ON token_vectors(slice_start, slice_end);
+            """)
+    logger.info("Primary key and indexes on token_vectors created")
 
 
 def drop_indexes_token_canonical_map(conn):

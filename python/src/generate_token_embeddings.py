@@ -35,19 +35,19 @@ def generate_embeddings_for_model(model_path: Path):
     return embeddings
 
 
-def store_embeddings(conn, embeddings: dict[str, np.ndarray]):
-    """Insert token embeddings into token_vectors table using batch insert."""
+def store_embeddings(conn, embeddings: dict[str, np.ndarray], slice_start: int, slice_end: int):
+    """Insert token embeddings into token_vectors table using batch insert, per slice."""
     BATCH_SIZE = 5000
     items = list(embeddings.items())
 
-    logger.info(f"Inserting {len(items)} token embeddings into DB")
+    logger.info(f"Inserting {len(items)} token embeddings for slice {slice_start}-{slice_end} into DB")
     with conn.transaction():
         with conn.cursor() as cur:
             for i in range(0, len(items), BATCH_SIZE):
                 batch = items[i:i+BATCH_SIZE]
-                args = [(tok, vec.tolist()) for tok, vec in batch]
+                args = [(tok, slice_start, slice_end, vec.tolist()) for tok, vec in batch]
                 cur.executemany(
-                    "INSERT INTO token_vectors (token, vector) VALUES (%s, %s);",
+                    "INSERT INTO token_vectors (token, slice_start, slice_end, vector) VALUES (%s, %s, %s, %s);",
                     args
                 )
 
@@ -103,10 +103,13 @@ def main():
     args = parser.parse_args()
 
     with eebo_db.get_connection() as conn:
-        if not args.dedup_only:
-            # Drop the PK for speed.
-            eebo_db.drop_indexes_token_vectors(conn)
+        # Drop the PK for speed.
+        eebo_db.drop_indexes_token_vectors(conn)
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE token_vectors;")
 
+        if not args.dedup_only:
             # Iterate over slices and generate embeddings
             for start, end in config.SLICES:
                 model_file = config.FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
@@ -115,10 +118,9 @@ def main():
                     continue
 
                 embeddings = generate_embeddings_for_model(model_file)
-                store_embeddings(conn, embeddings)
+                store_embeddings(conn, embeddings, start, end)
         else:
             logger.info("Skipping embedding generation due to --dedup-only flag")
-            eebo_db.drop_indexes_token_vectors(conn)
 
         # Deduplicate tokens to ensure PK/index can be created safely
         deduplicate_token_vectors(conn)
@@ -130,6 +132,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    with eebo_db.get_connection() as conn:
-        eebo_db.create_indexes_token_vectors(conn)
+    main()
