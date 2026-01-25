@@ -16,10 +16,19 @@ from pathlib import Path
 import argparse
 import fasttext
 import numpy as np
+from typing import Tuple
+
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 
+def slice_model_path(slice_range: Tuple[int, int]) -> Path:
+    """
+    Return the fastText model path for a given slice.
+    slice_range: (start_year, end_year)
+    """
+    start, end = slice_range
+    return config.FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
 
 def generate_embeddings_per_model(model_path: Path) -> dict[str, np.ndarray]:
     """Load a fastText slice model and generate embeddings for all words in its vocabulary."""
@@ -71,7 +80,7 @@ def main():
 
         if not args.dedup_only:
             for start, end in config.SLICES:
-                model_file = config.FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
+                model_file = slice_model_path((start, end))
                 if not model_file.exists():
                     logger.warning(f"Model {model_file} missing, skipping")
                     continue
