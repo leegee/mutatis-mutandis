@@ -251,12 +251,24 @@ def create_indexes_token_vectors(conn) -> None:
             cur.execute(""" ALTER TABLE token_vectors ADD PRIMARY KEY (token); """)
     logger.info("Indexes on token_vectors created")
 
+
 def drop_indexes_token_canonical_map(conn):
-    logger.info("Dropping token_canonical_map indexes/PK")
+    """
+    Drop indexes and primary key on token_canonical_map table.
+    Safe to call before bulk insertion.
+    """
+    logger.info("Dropping indexes/primary key on token_canonical_map if they exist")
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute("DROP TABLE IF EXISTS token_canonical_map CASCADE;")
-    logger.info("token_canonical_map table dropped")
+            cur.execute("""
+                ALTER TABLE IF EXISTS token_canonical_map
+                DROP CONSTRAINT IF EXISTS token_canonical_map_pkey;
+            """)
+
+            cur.execute("DROP INDEX IF EXISTS idx_token_canonical_map_canonical;")
+            cur.execute("DROP INDEX IF EXISTS idx_token_canonical_map_slice;")
+
+    logger.info("Indexes and primary key dropped from token_canonical_map")
 
 
 def create_indexes_token_canonical_map(conn):
