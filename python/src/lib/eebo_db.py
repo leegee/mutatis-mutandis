@@ -217,29 +217,25 @@ def create_tokens_fk(conn: Connection) -> None:
     logger.info("tokens.doc_id foreign key created")
 
 
-def drop_indexes_token_vectors() -> None:
+def drop_indexes_token_vectors(conn) -> None:
     """
     Drop any indexes on token_vectors table.
     Safe to call before bulk insertion.
     """
     logger.info("Dropping indexes on token_vectors if they exist")
-    with get_connection(application_name="drop_token_vectors_indexes") as conn:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute("DROP INDEX IF EXISTS idx_token_vectors_token;")
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute("DROP INDEX IF EXISTS idx_token_vectors_token;")
     logger.info("Indexes on token_vectors dropped")
 
 
-def create_indexes_token_vectors() -> None:
+def create_indexes_token_vectors(conn) -> None:
     """
     Create indexes on token_vectors table.
     Should be called after all embeddings are inserted.
     """
     logger.info("Creating indexes on token_vectors")
-    with get_connection(application_name="create_token_vectors_indexes") as conn:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute("""
-                ALTER TABLE token_vectors ADD PRIMARY KEY (token);
-                """)
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(""" ALTER TABLE token_vectors ADD PRIMARY KEY (token); """)
     logger.info("Indexes on token_vectors created")

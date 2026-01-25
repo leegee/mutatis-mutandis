@@ -20,25 +20,6 @@ import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 
-EMBEDDING_DIM = config.FASTTEXT_PARAMS["dim"]
-TOKEN_VECTORS_TABLE = "token_vectors"
-
-
-def init_token_vectors_table(conn):
-    """Create token_vectors table WITHOUT primary key/index for fast bulk insert."""
-    with conn.transaction():
-        with conn.cursor() as cur:
-            logger.info(f"Dropping existing table {TOKEN_VECTORS_TABLE} if exists")
-            cur.execute(f"DROP TABLE IF EXISTS {TOKEN_VECTORS_TABLE} CASCADE;")
-            logger.info(f"Creating table {TOKEN_VECTORS_TABLE} (no PK/index yet)")
-            cur.execute(f"""
-                CREATE TABLE {TOKEN_VECTORS_TABLE} (
-                    token TEXT,
-                    vector FLOAT4[] NOT NULL
-                );
-            """)
-    logger.info(f"Table {TOKEN_VECTORS_TABLE} ready for bulk insert")
-
 
 def generate_embeddings_for_model(model_path: Path):
     """Load a fastText slice model and generate embeddings for all words in its vocabulary."""
@@ -66,7 +47,7 @@ def store_embeddings(conn, embeddings: dict[str, np.ndarray]):
                 batch = items[i:i+BATCH_SIZE]
                 args = [(tok, vec.tolist()) for tok, vec in batch]
                 cur.executemany(
-                    f"INSERT INTO {TOKEN_VECTORS_TABLE} (token, vector) VALUES (%s, %s);",
+                    f"INSERT INTO token_vectors (token, vector) VALUES (%s, %s);",
                     args
                 )
 
@@ -80,25 +61,25 @@ def deduplicate_token_vectors(conn):
     with conn.transaction():
         with conn.cursor() as cur:
             # Create a temporary table with aggregated vectors
-            cur.execute(f"""
+            cur.execute("""
                 CREATE TEMP TABLE tmp_vectors AS
-                SELECT token, array_agg(vector) AS vectors
-                FROM {TOKEN_VECTORS_TABLE}
-                GROUP BY token;
+                    SELECT token, array_agg(vector) AS vectors
+                    FROM token_vectors
+                    GROUP BY token;
             """)
 
             # Replace original table with averaged vectors
-            cur.execute(f"DROP TABLE {TOKEN_VECTORS_TABLE};")
-            cur.execute(f"""
-                CREATE TABLE {TOKEN_VECTORS_TABLE} (
+            cur.execute("DROP TABLE token_vectors;")
+            cur.execute("""
+                CREATE TABLE token_vectors (
                     token TEXT PRIMARY KEY,
                     vector FLOAT4[] NOT NULL
                 );
             """)
 
             # Insert averaged embeddings
-            cur.execute(f"""
-                INSERT INTO {TOKEN_VECTORS_TABLE} (token, vector)
+            cur.execute("""
+                INSERT INTO token_vectors (token, vector)
                 SELECT token,
                        ARRAY(
                          SELECT avg(e)
@@ -123,8 +104,8 @@ def main():
 
     with eebo_db.get_connection() as conn:
         if not args.dedup_only:
-            # Create table WITHOUT PK/index for fast insertion
-            init_token_vectors_table(conn)
+            # Drop the PK for speed.
+            eebo_db.drop_indexes_token_vectors(conn)
 
             # Iterate over slices and generate embeddings
             for start, end in config.SLICES:
@@ -137,15 +118,18 @@ def main():
                 store_embeddings(conn, embeddings)
         else:
             logger.info("Skipping embedding generation due to --dedup-only flag")
+            eebo_db.drop_indexes_token_vectors(conn)
 
         # Deduplicate tokens to ensure PK/index can be created safely
         deduplicate_token_vectors(conn)
 
         # Create primary key/index
-        eebo_db.create_indexes_token_vectors()
+        eebo_db.create_indexes_token_vectors(conn)
 
     logger.info("Token embeddings table ready with indexes/PK")
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    with eebo_db.get_connection() as conn:
+        eebo_db.create_indexes_token_vectors(conn)
