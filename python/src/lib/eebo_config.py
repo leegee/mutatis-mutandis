@@ -3,6 +3,15 @@
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
+class FastTextParams(TypedDict):
+    model: str
+    dim: int
+    epoch: int
+    ws: int
+    minCount: int
+    thread: int
+    minn: int
+    maxn: int
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
@@ -33,9 +42,6 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 FAISS_INDEX_DIR = OUT_DIR / "faiss"
 FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
-FAISS_CANONICAL_INDEX_PATH = INDEXES_DIR / "canonical.faiss.bin"
-FAISS_CANONICAL_INDEX_PATH = FAISS_INDEX_DIR / "canonical.faiss.bin"
-
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 FASTTEXT_GLOBAL_MODEL_PATH = MODELS_DIR / "global_eebo.bin"
 FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextCanonSlice"
@@ -49,7 +55,7 @@ NUM_WORKERS = 4
 STOPWORD_FILE = EEBO_SRC_DIR / "stopwords" / "english_basic.txt"
 TOP_K = 30
 
-FASTTEXT_PARAMS = {
+FASTTEXT_PARAMS: FastTextParams = {
     "model": "skipgram",      # Skip-gram model
     "dim": 100,               # Word vector dimensionality - 200
     "epoch": 5,               # Number of epochs           - 10
@@ -127,10 +133,19 @@ CanonicalRules = Dict[str, CanonicalRule]
 CONCEPT_SETS: CanonicalRules = {
     "LIBERTY": {
         "forms": {
-            "liberty", "libertie", "libertye", "liberte"
+            "liberty", "libertie", "libertye", "liberte",
+            "libertyes", "libert", "liberties",
+            "liliberty", "libertv", "libertty", "lyliberty",
+            "libery", "libertly", "fulliberty", "lilibertyis",
+            "thliberties", "liberry", "libertyby",
+            "iberty", "libertle", "libertles", "libertys",
+            "iiberty", "iberties", "libety", "liberts",
+            "libertyliberty", "libertynow", "libertees",
+            "libertee", "libertes"
         },
         "false_positives": {
-            "libertine"
+            "libertine", "libertin", "libertins", "libertinage",
+            "libertind", "libertyin"
         }
     },
 
