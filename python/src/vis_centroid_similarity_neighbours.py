@@ -227,5 +227,17 @@ for i, slice_start in enumerate(slice_starts):
 #     for form, sims in form_sims.items():
 #         ax.plot(slice_starts, sims, marker="x", linestyle="--", color=FORM_COLOR, alpha=0.6, label=form)
 
+
+# --- Slice-to-slice drift ---
+# Compute differences between consecutive slices
+slice_drift = np.diff(similarities)  # length = len(similarities)-1
+slice_midpoints = [(slice_starts[i] + slice_starts[i+1]) / 2 for i in range(len(slice_starts)-1)]
+
+# Plot as magenta bars on secondary y-axis
+ax2 = ax.twinx()
+ax2.bar(slice_midpoints, slice_drift, width=3, color="magenta", alpha=0.5, label="Slice-to-slice drift")
+ax2.set_ylabel("Change in cosine similarity", fontsize=LABEL_FONT, color="magenta")
+ax2.tick_params(axis="y", labelsize=TICK_FONT, colors="magenta")
+
 plt.tight_layout()
 plt.show()
