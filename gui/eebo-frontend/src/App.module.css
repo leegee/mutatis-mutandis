@@ -1,0 +1,16 @@
+/* App.module.css */
+
+.masthead {
+    display: flex;
+    flex-direction: column;
+}
+
+.resultsViewer {
+    display: flex;
+    flex-direction: row;
+
+    .results,
+    .viewer {
+        width: 50%;
+    }
+}

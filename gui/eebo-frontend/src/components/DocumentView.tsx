@@ -12,6 +12,7 @@ export default function DocumentView(props: DocumentViewProps) {
     const [error, setError] = createSignal<string | null>(null);
 
     createEffect(() => {
+        console.log('props.docId', props.docId);
         const id = props.docId;
         if (!id) {
             setMyDocument(null);
@@ -21,10 +22,14 @@ export default function DocumentView(props: DocumentViewProps) {
         setLoading(true);
         setError(null);
 
+        console.log('Fetching doc', id);
         fetchDocument(id)
-            .then((doc) => setMyDocument(doc))
+            .then((doc) => {
+                setMyDocument(doc);
+                console.log('fetched', doc);
+            })
             .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
+            .finally(() => setLoading(false))
     });
 
     if (!props.docId) {
@@ -36,7 +41,7 @@ export default function DocumentView(props: DocumentViewProps) {
     }
 
     if (error()) {
-        return <div style={{ color: "red" }}>Error: {error()}</div>;
+        return <div>Error: {error()}</div>;
     }
 
     const doc = myDocument();

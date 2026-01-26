@@ -8,7 +8,9 @@ interface SearchResultsProps {
 export default function SearchResults(props: SearchResultsProps) {
     return (
         <div>
-            <h2>Results</h2>
+            {
+                props.results && props.results.length && <h2>Results</h2>
+            }
             <ul>
                 {props.results.map(hit => (
                     <li>

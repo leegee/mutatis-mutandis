@@ -1,6 +1,8 @@
 import { createSignal } from "solid-js";
 import type { Hit } from "../types";
 
+import styles from './SearchForm.module.css';
+
 interface SearchFormProps {
     onSearch: (hits: Hit[]) => void;
 }
@@ -36,7 +38,7 @@ export default function SearchForm(props: SearchFormProps) {
     };
 
     return (
-        <form onSubmit={doSearch}>
+        <form class={styles.form} onSubmit={doSearch}>
             <input placeholder="Text" value={query()} onInput={e => setQuery(e.target.value)} />
             <input placeholder="Author" value={author()} onInput={e => setAuthor(e.target.value)} />
             <input placeholder="Year" value={year()} onInput={e => setYear(e.target.value)} />
