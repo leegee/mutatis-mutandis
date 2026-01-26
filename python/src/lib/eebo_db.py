@@ -133,8 +133,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     source_date_raw TEXT,
                     token_count INTEGER,
                     slice_start INTEGER,
-                    slice_end INTEGER,
-                    tsv TSVECTOR
+                    slice_end INTEGER
                 );
 
                 CREATE TABLE tokens (
@@ -227,16 +226,6 @@ def create_tokens_fk(conn: Connection) -> None:
                 ADD CONSTRAINT tokens_doc_id_fkey FOREIGN KEY (doc_id)
                 REFERENCES documents(doc_id)
                 ON DELETE CASCADE;
-            """)
-
-            cur.execute("""
-                UPDATE documents d
-                SET tsv = to_tsvector('english', COALESCE(
-                    (SELECT string_agg(token, ' ') FROM tokens t WHERE t.doc_id = d.doc_id),
-                    ''
-                ));
-
-                CREATE INDEX idx_documents_tsv ON documents USING GIN(tsv);
             """)
 
     # UPDATE documents d
