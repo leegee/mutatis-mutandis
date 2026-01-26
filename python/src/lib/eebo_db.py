@@ -206,6 +206,38 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 ON tokens(sentence_id)
                 WHERE sentence_id IS NOT NULL;
             """)
+
+            logger.info("Creating materialised view")
+
+            cur.execute("""
+                CREATE MATERIALIZED VIEW document_search AS
+                WITH numbered_tokens AS (
+                    SELECT
+                        doc_id,
+                        token,
+                        (row_number() OVER (PARTITION BY doc_id ORDER BY token_idx) - 1) / 50000 AS block_idx
+                    FROM tokens
+                )
+                SELECT
+                    d.doc_id,
+                    d.title,
+                    d.author,
+                    d.pub_year,
+                    d.pub_place,
+                    d.publisher,
+                    nt.block_idx,
+                    to_tsvector('english', string_agg(nt.token, ' ')) AS tsv
+                FROM documents d
+                JOIN numbered_tokens nt ON nt.doc_id = d.doc_id
+                GROUP BY d.doc_id, nt.block_idx, d.title, d.author, d.pub_year, d.pub_place, d.publisher;
+            """)
+            logger.info("Created materialised view with block-level tsvectors")
+
+            logger.info("Creating GIN index on materialised view")
+            cur.execute("CREATE INDEX idx_document_search_tsv ON document_search USING GIN(tsv);")
+            logger.info("GIN index created")
+
+
     logger.info("Tiered token indexes created")
 
 

@@ -1,38 +1,49 @@
 # src/services/document_service.py
+
 from src.lib.eebo_db import get_connection
 
 def search_documents(q=None, author=None, year=None, place=None, title=None, limit=20, offset=0):
-    query = "SELECT d.doc_id, d.title, d.author, d.pub_year, d.pub_place FROM documents d"
-    count_query = "SELECT COUNT(*) FROM documents d"
     filters = []
     params = []
 
-    # Full-text search using tsvector + GIN
+    # Base query: search in block-level materialized view
+    query = """
+    SELECT doc_id, title, author, pub_year, pub_place, COUNT(*) AS block_count
+    FROM document_search
+    """
+    count_query = """
+    SELECT COUNT(DISTINCT doc_id)
+    FROM document_search
+    """
+
+    # Full-text search
     if q:
-        # This replaces the JOIN + LIKE search
-        filters.append("d.tsv @@ plainto_tsquery(%s)")
+        filters.append("tsv @@ plainto_tsquery(%s)")
         params.append(q)
 
-    # Other metadata filters
+    # Metadata filters
     if author:
-        filters.append("LOWER(d.author) LIKE %s")
+        filters.append("LOWER(author) LIKE %s")
         params.append(f"%{author.lower()}%")
     if year:
-        filters.append("d.pub_year = %s")
+        filters.append("pub_year = %s")
         params.append(year)
     if place:
-        filters.append("LOWER(d.pub_place) LIKE %s")
+        filters.append("LOWER(pub_place) LIKE %s")
         params.append(f"%{place.lower()}%")
     if title:
-        filters.append("LOWER(d.title) LIKE %s")
+        filters.append("LOWER(title) LIKE %s")
         params.append(f"%{title.lower()}%")
 
+    # Combine filters
     if filters:
         where_clause = " AND ".join(filters)
         query += " WHERE " + where_clause
         count_query += " WHERE " + where_clause
 
-    query += " ORDER BY d.pub_year, d.title LIMIT %s OFFSET %s"
+    # Group by doc_id to collapse multiple blocks into one document
+    query += " GROUP BY doc_id, title, author, pub_year, pub_place"
+    query += " ORDER BY pub_year, title LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
     with get_connection() as conn:
@@ -51,7 +62,8 @@ def search_documents(q=None, author=None, year=None, place=None, title=None, lim
             "title": r[1],
             "author": r[2],
             "year": r[3],
-            "place": r[4]
+            "place": r[4],
+            "matching_blocks": r[5]  # number of blocks matching the query
         }
     } for r in rows]
 
