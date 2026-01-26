@@ -18,4 +18,5 @@ scikit-learn-stubs
 Levenshtein
 faiss-cpu
 flask
+flask-cors
 waitress

@@ -1,57 +1,59 @@
 # src/services/document_service.py
 from src.lib.eebo_db import get_connection
 
-def search_documents(author=None, year=None, place=None, title=None, limit=20, offset=0):
-    """
-    Returns a list of documents matching search filters and total count.
-    """
-    query = "SELECT doc_id, title, author, pub_year, pub_place FROM documents"
+def search_documents(q=None, author=None, year=None, place=None, title=None, limit=20, offset=0):
+    query = "SELECT d.doc_id, d.title, d.author, d.pub_year, d.pub_place FROM documents d"
+    count_query = "SELECT COUNT(*) FROM documents d"
     filters = []
     params = []
 
+    # Full-text search using tsvector + GIN
+    if q:
+        # This replaces the JOIN + LIKE search
+        filters.append("d.tsv @@ plainto_tsquery(%s)")
+        params.append(q)
+
+    # Other metadata filters
     if author:
-        filters.append("LOWER(author) LIKE %s")
+        filters.append("LOWER(d.author) LIKE %s")
         params.append(f"%{author.lower()}%")
     if year:
-        filters.append("pub_year = %s")
+        filters.append("d.pub_year = %s")
         params.append(year)
     if place:
-        filters.append("LOWER(pub_place) LIKE %s")
+        filters.append("LOWER(d.pub_place) LIKE %s")
         params.append(f"%{place.lower()}%")
     if title:
-        filters.append("LOWER(title) LIKE %s")
+        filters.append("LOWER(d.title) LIKE %s")
         params.append(f"%{title.lower()}%")
 
     if filters:
-        query += " WHERE " + " OR ".join(filters)
+        where_clause = " AND ".join(filters)
+        query += " WHERE " + where_clause
+        count_query += " WHERE " + where_clause
 
-    query += " ORDER BY pub_year, title"
-    query += " LIMIT %s OFFSET %s"
+    query += " ORDER BY d.pub_year, d.title LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Execute main query
             cur.execute(query, params)
             rows = cur.fetchall()
 
-            # get total count ignoring limit/offset
-            count_query = "SELECT COUNT(*) FROM documents"
-            if filters:
-                count_query += " WHERE " + " AND ".join(filters)
+            # Execute count query
             cur.execute(count_query, params[:-2])
             total = cur.fetchone()[0]
 
-    hits = []
-    for row in rows:
-        hits.append({
-            "_id": row[0],
-            "_source": {
-                "title": row[1],
-                "author": row[2],
-                "year": row[3],
-                "place": row[4]
-            }
-        })
+    hits = [{
+        "_id": r[0],
+        "_source": {
+            "title": r[1],
+            "author": r[2],
+            "year": r[3],
+            "place": r[4]
+        }
+    } for r in rows]
 
     return {"total": total, "hits": hits}
 
