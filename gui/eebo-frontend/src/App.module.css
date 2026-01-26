@@ -1,16 +1,28 @@
 /* App.module.css */
 
+main {
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
 .masthead {
-    display: flex;
-    flex-direction: column;
+    text-align: center;
+    border-bottom: 1pt solid #ddd2;
 }
 
 .resultsViewer {
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 0;
+}
 
-    .results,
-    .viewer {
-        width: 50%;
-    }
+.results,
+.viewer {
+    overflow-y: auto;
+    min-height: 0;
+    padding: 1rem;
+}
+
+.results {
+    border-right: 1pt solid #ddd2;
 }

@@ -1,4 +1,4 @@
-import { createSignal, createEffect } from "solid-js";
+import { createSignal, createEffect, Show } from "solid-js";
 import { fetchDocument } from "../services/documentService";
 import type { MyDocument } from "../types";
 
@@ -12,8 +12,9 @@ export default function DocumentView(props: DocumentViewProps) {
     const [error, setError] = createSignal<string | null>(null);
 
     createEffect(() => {
-        console.log('props.docId', props.docId);
         const id = props.docId;
+        console.log("props.docId", id);
+
         if (!id) {
             setMyDocument(null);
             return;
@@ -22,44 +23,42 @@ export default function DocumentView(props: DocumentViewProps) {
         setLoading(true);
         setError(null);
 
-        console.log('Fetching doc', id);
+        console.log("Fetching doc", id);
         fetchDocument(id)
             .then((doc) => {
                 setMyDocument(doc);
-                console.log('fetched', doc);
+                console.log("fetched", doc);
             })
             .catch((err) => setError(err.message))
-            .finally(() => setLoading(false))
+            .finally(() => setLoading(false));
     });
 
-    if (!props.docId) {
-        return <div>Select a document to view</div>;
-    }
-
-    if (loading()) {
-        return <div>Loading document...</div>;
-    }
-
-    if (error()) {
-        return <div>Error: {error()}</div>;
-    }
-
-    const doc = myDocument();
-    if (!doc) return null;
-
-    const { _source } = doc;
-
     return (
-        <div>
-            <h2>{_source.title}</h2>
-            <p>
-                <strong>Author:</strong> {_source.author} <br />
-                <strong>Year:</strong> {_source.year} <br />
-                <strong>Place:</strong> {_source.place} <br />
-                <strong>Publisher:</strong> {_source.publisher}
-            </p>
-            <hr />
-            <div>{_source.text}</div>
-        </div>
+        <Show when={props.docId}>
+            <Show when={!loading()} fallback={<div>Loading document...</div>}>
+                <Show when={!error()} fallback={<div>Error: {error()}</div>}>
+                    <Show when={myDocument()}>
+                        {(doc) => {
+                            const { _source } = doc();
+                            return (
+                                <article>
+                                    <header>
+                                        <h2>{_source.title}</h2>
+                                    </header>
+                                    <p>
+                                        <strong>Author:</strong> {_source.author} <br />
+                                        <strong>Year:</strong> {_source.year} <br />
+                                        <strong>Place:</strong> {_source.place} <br />
+                                        <strong>Publisher:</strong> {_source.publisher}
+                                    </p>
+                                    <hr />
+                                    <div>{_source.text}</div>
+                                </article>
+                            );
+                        }}
+                    </Show>
+                </Show>
+            </Show>
+        </Show>
     );
 }
