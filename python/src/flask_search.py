@@ -83,6 +83,51 @@ def search_documents():
         "hits": hits
     })
 
+@app.route("/documents/<doc_id>", methods=["GET"])
+def get_document(doc_id: str):
+    """
+    Fetch a full document by ID.
+    Returns metadata + reconstructed text.
+    OpenSearch-style single-document fetch.
+    """
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+
+            # 1️⃣ Fetch metadata
+            cur.execute("""
+                SELECT doc_id, title, author, pub_year, pub_place, publisher
+                FROM documents
+                WHERE doc_id = %s
+            """, (doc_id,))
+            meta = cur.fetchone()
+
+            if not meta:
+                return jsonify({"error": "Document not found"}), 404
+
+            # 2️⃣ Fetch tokens in order
+            cur.execute("""
+                SELECT token
+                FROM tokens
+                WHERE doc_id = %s
+                ORDER BY token_idx
+            """, (doc_id,))
+            tokens = [row[0] for row in cur.fetchall()]
+
+    # Reconstruct surface text (simple join — can get fancier later)
+    text = " ".join(tokens)
+
+    return jsonify({
+        "_id": meta[0],
+        "_source": {
+            "title": meta[1],
+            "author": meta[2],
+            "year": meta[3],
+            "place": meta[4],
+            "publisher": meta[5],
+            "text": text
+        }
+    })
 
 if __name__ == "__main__":
     app.run(debug=True)
