@@ -1,36 +1,14 @@
-"""
-flask_search.py
+# src/services/document_service.py
+from src.lib.eebo_db import get_connection
 
-curl "http://127.0.0.1:5000/search?q=liberty&author=Milton&year=1640"
-"""
-
-from flask import Flask, request, jsonify
-from lib.eebo_db import get_connection
-from lib.eebo_logging import logger
-
-app = Flask(__name__)
-
-@app.route("/search", methods=["GET"])
-def search_documents():
+def search_documents(author=None, year=None, place=None, title=None, limit=20, offset=0):
     """
-    OpenSearch-style search endpoint:
-    /search?author=...&year=...&place=...&title=...
-    Returns JSON with "total" and "hits" array.
+    Returns a list of documents matching search filters and total count.
     """
-    # Extract query parameters
-    author = request.args.get("author")
-    year = request.args.get("year")
-    place = request.args.get("place")
-    title = request.args.get("title")
-    limit = int(request.args.get("size", 20))  # OpenSearch-style limit
-    offset = int(request.args.get("from", 0))  # pagination
-
-    # Base query
     query = "SELECT doc_id, title, author, pub_year, pub_place FROM documents"
     filters = []
     params = []
 
-    # Add filters based on params
     if author:
         filters.append("LOWER(author) LIKE %s")
         params.append(f"%{author.lower()}%")
@@ -47,22 +25,20 @@ def search_documents():
     if filters:
         query += " WHERE " + " OR ".join(filters)
 
-    # Add ordering and pagination
     query += " ORDER BY pub_year, title"
     query += " LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
-    # Execute query
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, params)
             rows = cur.fetchall()
 
-            # Get total hits ignoring pagination
+            # get total count ignoring limit/offset
             count_query = "SELECT COUNT(*) FROM documents"
             if filters:
                 count_query += " WHERE " + " AND ".join(filters)
-            cur.execute(count_query, params[:-2])  # exclude limit/offset
+            cur.execute(count_query, params[:-2])
             total = cur.fetchone()[0]
 
     hits = []
@@ -77,24 +53,15 @@ def search_documents():
             }
         })
 
-    return jsonify({
-        "took": 0,  # could add timing if needed
-        "total": total,
-        "hits": hits
-    })
+    return {"total": total, "hits": hits}
 
-@app.route("/documents/<doc_id>", methods=["GET"])
-def get_document(doc_id: str):
-    """
-    Fetch a full document by ID.
-    Returns metadata + reconstructed text.
-    OpenSearch-style single-document fetch.
-    """
 
+def get_document_by_id(doc_id: str):
+    """
+    Returns metadata + reconstructed text for a single document.
+    """
     with get_connection() as conn:
         with conn.cursor() as cur:
-
-            # 1️⃣ Fetch metadata
             cur.execute("""
                 SELECT doc_id, title, author, pub_year, pub_place, publisher
                 FROM documents
@@ -103,9 +70,8 @@ def get_document(doc_id: str):
             meta = cur.fetchone()
 
             if not meta:
-                return jsonify({"error": "Document not found"}), 404
+                return None
 
-            # 2️⃣ Fetch tokens in order
             cur.execute("""
                 SELECT token
                 FROM tokens
@@ -114,10 +80,8 @@ def get_document(doc_id: str):
             """, (doc_id,))
             tokens = [row[0] for row in cur.fetchall()]
 
-    # Reconstruct surface text (simple join — can get fancier later)
     text = " ".join(tokens)
-
-    return jsonify({
+    return {
         "_id": meta[0],
         "_source": {
             "title": meta[1],
@@ -127,7 +91,4 @@ def get_document(doc_id: str):
             "publisher": meta[5],
             "text": text
         }
-    })
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    }
