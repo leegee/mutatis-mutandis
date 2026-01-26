@@ -2,9 +2,10 @@
 """
 vis_centroid_similarity_neighbours.py
 
-Fetch centroids from DB, compute cosine similarity vs first slice,
-plot semantic drift, and show nearest neighbours around each centroid using per-slice FAISS indexes.
-Also tracks all acceptable forms of a concept and merges orthographic variants.
+Fetch centroids from DB, compute direct slice-to-slice cosine distance,
+plot semantic drift, and show nearest neighbours around each centroid
+using per-slice FAISS indexes. Also tracks all acceptable forms of a concept
+and merges orthographic variants.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics.pairwise import cosine_similarity
 import faiss
 
 import lib.eebo_db as eebo_db
@@ -64,35 +64,15 @@ for slice_start, centroid_obj in rows:
 
 centroids: np.ndarray = np.stack(centroids_list)  # shape: (num_slices, dim)
 
+# Normalize centroids
+centroids /= np.linalg.norm(centroids, axis=1, keepdims=True)
+
 # Initialize merged_centroids
 merged_centroids: List[np.ndarray] = []
-
-# Cosine similarity vs first slice
-anchor = centroids[0].reshape(1, -1)
-similarities = cosine_similarity(anchor, centroids).flatten()
 
 # Prepare plot
 plt.style.use("dark_background")
 fig, ax = plt.subplots(figsize=(FIG_WIDTH, FIG_HEIGHT))
-
-ax.plot(slice_starts, similarities, marker="o", color=MARKER_COLOR, linewidth=2)
-ax.set_title("Semantic Drift of 'LIBERTY'", fontsize=TITLE_FONT, fontweight="bold")
-ax.set_xlabel("Slice Start Year", fontsize=LABEL_FONT)
-ax.set_ylabel(f"Cosine Similarity to {slice_starts[0]}", fontsize=LABEL_FONT)
-ax.tick_params(axis="both", which="major", labelsize=TICK_FONT)
-ax.grid(True, alpha=0.3)
-
-# Highlight max drift
-min_idx = np.argmin(similarities)
-ax.annotate(
-    f"Max drift: {slice_starts[min_idx]}",
-    xy=(slice_starts[min_idx], similarities[min_idx]),
-    xytext=(slice_starts[min_idx] + 2, similarities[min_idx] - 0.05),
-    color=ANNOT_COLOR,
-    fontsize=LABEL_FONT,
-    fontweight="bold",
-    arrowprops=dict(facecolor=ANNOT_COLOR, arrowstyle="->"),
-)
 
 # Initialize neighbor and form tracking
 neighbor_sims_list: List[List[float]] = []
@@ -131,7 +111,6 @@ for i, slice_start in enumerate(slice_starts):
 
     # Normalize canonical vector
     canonical_vec = centroids[i].astype(np.float32)
-    canonical_vec /= np.linalg.norm(canonical_vec)
 
     # Merge orthographic variants
     merge_vecs = [canonical_vec]
@@ -168,13 +147,8 @@ for i, slice_start in enumerate(slice_starts):
     sims = distances[0].tolist()
     tokens = [vocab[idx] for idx in indices[0]]
 
-    # Predeclare lists once
-    filtered_tokens_list: List[str]
-    filtered_sims_list: List[float]
-
     # Exclude all merged forms from neighbor results
     filtered_tokens_sims = [(t, s) for t, s in zip(tokens, sims, strict=True) if t not in LIBERTY_FORMS]
-
     if filtered_tokens_sims:
         unzipped_tokens, unzipped_sims = zip(*filtered_tokens_sims, strict=True)
         filtered_tokens_list = list(unzipped_tokens[:TOP_K])
@@ -183,8 +157,6 @@ for i, slice_start in enumerate(slice_starts):
         filtered_tokens_list = []
         filtered_sims_list = []
 
-
-    # Append lists
     neighbor_labels_list.append(filtered_tokens_list)
     neighbor_sims_list.append(filtered_sims_list)
 
@@ -193,7 +165,6 @@ for i, slice_start in enumerate(slice_starts):
     for t, s in zip(filtered_tokens_list, filtered_sims_list, strict=True):
         print(f"    {t} ({s:.3f})")
     print()
-
 
     # Track per-form similarity against merged centroid
     for form in form_sims:
@@ -215,28 +186,27 @@ for i, slice_start in enumerate(slice_starts):
     else:
         slice_vecs_list.append(None)
 
-# # Plot neighbor connections
-# for i, (neighbor_sims, neighbor_labels) in enumerate(zip(neighbor_sims_list, neighbor_labels_list, strict=True)):
-#     for ns, label in zip(neighbor_sims, neighbor_labels,  strict=True):
-#         ax.plot([slice_starts[i], slice_starts[i]], [similarities[i], ns], color=NEIGHBOR_COLOR, alpha=0.6, linewidth=1)
-#         if SHOW_LABELS:
-#             ax.text(slice_starts[i] + 0.2, ns, label, color=NEIGHBOR_COLOR, fontsize=TICK_FONT, verticalalignment="center")
+# --- Slice-to-slice cosine distance ---
+slice_to_slice_distances: List[float] = []
 
-# # Plot per-form semantic drift
-# if SHOW_FORMS:
-#     for form, sims in form_sims.items():
-#         ax.plot(slice_starts, sims, marker="x", linestyle="--", color=FORM_COLOR, alpha=0.6, label=form)
+for i in range(len(merged_centroids) - 1):
+    cos_sim = float(np.dot(merged_centroids[i], merged_centroids[i+1]))
+    cos_dist = 1 - cos_sim
+    slice_to_slice_distances.append(cos_dist)
 
-
-# --- Slice-to-slice drift ---
-# Compute differences between consecutive slices
-slice_drift = np.diff(similarities)  # length = len(similarities)-1
 slice_midpoints = [(slice_starts[i] + slice_starts[i+1]) / 2 for i in range(len(slice_starts)-1)]
+
+# Slice-to-slice drift table
+print("\n=== Slice-to-slice semantic drift (cosine distance) ===\n")
+print(f"{'From':>6} -> {'To':>6} | {'CosineDist':>10}")
+print("-" * 30)
+for i in range(len(slice_to_slice_distances)):
+    print(f"{slice_starts[i]:>6} -> {slice_starts[i+1]:>6} | {slice_to_slice_distances[i]:>10.4f}")
 
 # Plot as magenta bars on secondary y-axis
 ax2 = ax.twinx()
-ax2.bar(slice_midpoints, slice_drift, width=3, color="magenta", alpha=0.5, label="Slice-to-slice drift")
-ax2.set_ylabel("Change in cosine similarity", fontsize=LABEL_FONT, color="magenta")
+ax2.bar(slice_midpoints, slice_to_slice_distances, width=3, color="magenta", alpha=0.5, label="Slice-to-slice drift")
+ax2.set_ylabel("Cosine distance to previous slice", fontsize=LABEL_FONT, color="magenta")
 ax2.tick_params(axis="y", labelsize=TICK_FONT, colors="magenta")
 
 plt.tight_layout()
