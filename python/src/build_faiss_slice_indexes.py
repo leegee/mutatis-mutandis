@@ -9,6 +9,7 @@ Each index is saved alongside a vocabulary file so indices → tokens can be res
 from __future__ import annotations
 from typing import Any, List, Tuple
 
+from pathlib import Path
 import numpy as np
 import faiss
 import fasttext
@@ -20,6 +21,23 @@ from generate_token_embeddings import slice_model_path
 
 EMB_DIM: int = int(config.FASTTEXT_PARAMS["dim"])
 
+
+def faiss_slice_path(slice_range: Tuple[int, int]) -> Path:
+    """
+    Return the faiss index path for a given slice.
+    slice_range: (start_year, end_year)
+    """
+    start, end = slice_range
+    return config.FAISS_INDEX_DIR / f"slice_{start}_{end}.faiss"
+
+
+def vocab_slice_path(slice_range: Tuple[int, int]) -> Path:
+    """
+    Return the faiss vocab path for a given slice.
+    slice_range: (start_year, end_year)
+    """
+    start, end = slice_range
+    return config.FAISS_INDEX_DIR / f"slice_{start}_{end}.vocab"
 
 def load_fasttext_model(slice_range: Tuple[int, int]) -> Any:
     """Load a fastText slice model"""
@@ -52,7 +70,8 @@ def build_index_for_slice(slice_range: Tuple[int, int]) -> None:
     index.add(vectors)
 
     # Save index
-    index_path = config.FAISS_INDEX_DIR / f"slice_{start}_{end}.faiss"
+    # index_path = config.FAISS_INDEX_DIR / f"slice_{start}_{end}.faiss"
+    index_path = faiss_slice_path((start, end))
     faiss.write_index(index, str(index_path))
 
     # Save vocab mapping
