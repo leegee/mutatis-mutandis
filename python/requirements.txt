@@ -17,3 +17,5 @@ types-tqdm
 scikit-learn-stubs
 Levenshtein
 faiss-cpu
+flask
+waitress
