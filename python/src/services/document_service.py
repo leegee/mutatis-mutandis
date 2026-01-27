@@ -1,5 +1,6 @@
 # src/services/document_service.py
 
+from typing import Optional, Dict, Any
 from src.lib.eebo_db import get_connection
 
 def search_documents(q=None, author=None, year=None, place=None, title=None, limit=20, offset=0):
@@ -54,7 +55,9 @@ def search_documents(q=None, author=None, year=None, place=None, title=None, lim
 
             # Execute count query
             cur.execute(count_query, params[:-2])
-            total = cur.fetchone()[0]
+            row = cur.fetchone()
+            assert row is not None  # Mypy
+            total = row[0]
 
     hits = [{
         "_id": r[0],
@@ -70,31 +73,36 @@ def search_documents(q=None, author=None, year=None, place=None, title=None, lim
     return {"total": total, "hits": hits}
 
 
-def get_document_by_id(doc_id: str):
+def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
     """
     Returns metadata + reconstructed text for a single document.
+
+    Returns None if no document is found.
     """
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Fetch document metadata
             cur.execute("""
                 SELECT doc_id, title, author, pub_year, pub_place, publisher
                 FROM documents
                 WHERE doc_id = %s
             """, (doc_id,))
-            meta = cur.fetchone()
+            meta: Optional[tuple[str, str, str, int, str, str]] = cur.fetchone()
 
-            if not meta:
+            if meta is None:
                 return None
 
+            # Fetch tokens
             cur.execute("""
                 SELECT token
                 FROM tokens
                 WHERE doc_id = %s
                 ORDER BY token_idx
             """, (doc_id,))
-            tokens = [row[0] for row in cur.fetchall()]
+            tokens: list[str] = [row[0] for row in cur.fetchall()]
 
     text = " ".join(tokens)
+
     return {
         "_id": meta[0],
         "_source": {
