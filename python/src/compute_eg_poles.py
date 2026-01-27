@@ -25,16 +25,16 @@ from build_faiss_slice_indexes import faiss_slice_path, vocab_slice_path
 
 nltk.download("stopwords")
 STOPWORDS = set(stopwords.words("english"))
-EEBO_EXTRA = {"s", "thou", "thee", "thy", "thine", "hath", "doth", "art", "ye", "v"}
+EEBO_EXTRA = {
+    "s", "thou", "thee", "thy", "thine", "hath", "doth", "art", "ye", "v",
+    "may", "shall", "upon", "us", "yet", "would", "one", "unto", "said", "de"
+}
 STOPWORDS.update(EEBO_EXTRA)
 
-
-# FAISS / slice parameters
-TOP_N_WORDS = 10
+TOP_N_WORDS = 15
 MERGE_SIM_THRESHOLD = 0.85
 LIBERTY_FORMS = config.CONCEPT_SETS["LIBERTY"]["forms"]
 
-# --- Fetch merged centroids from DB ---
 with eebo_db.get_connection() as conn:
     cur = conn.cursor()
     cur.execute(
@@ -60,7 +60,6 @@ for slice_start, centroid_obj in rows:
     slice_starts.append(slice_start)
     merged_centroids.append(centroid)
 
-# --- Prepare slice vectors and contexts ---
 slice_vecs_list: List[np.ndarray] = []
 slice_contexts: List[str] = []
 
