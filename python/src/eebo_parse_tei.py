@@ -122,11 +122,11 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
     pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
     place_elem = tree.find(".//HEADER//SOURCEDESC//PUBPLACE")
 
-    title = title_elem.text.strip() if title_elem is not None and title_elem.text else None
-    author = author_elem.text.strip() if author_elem is not None and author_elem.text else None
-    date_raw = date_elem.text.strip() if date_elem is not None and date_elem.text else None
-    publisher = pub_elem.text.strip() if pub_elem is not None and pub_elem.text else None
-    pub_place = place_elem.text.strip() if place_elem is not None and place_elem.text else None
+    title = re.sub(r'\W+', '', title_elem.text.strip()) if title_elem is not None and title_elem.text else None
+    author = re.sub(r'\W+', '', author_elem.text.strip()) if author_elem is not None and author_elem.text else None
+    date_raw = re.sub(r'\W+', '', date_elem.text.strip()) if date_elem is not None and date_elem.text else None
+    publisher = re.sub(r'\W+', '', pub_elem.text.strip()) if pub_elem is not None and pub_elem.text else None
+    pub_place = re.sub(r'\W+', '', place_elem.text.strip()) if place_elem is not None and place_elem.text else None
 
     slice_start, slice_end = assign_slice(date_raw)
 
