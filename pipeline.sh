@@ -80,7 +80,7 @@ case "$PHASE" in
         ;;
     9|p|poles)
         echo "# Compute conceptual poles"
-        RUN="$SRC/compute_conceptual_poles.py"
+        RUN="$SRC/compute_eg_poles.py"
         ;;
 esac
 

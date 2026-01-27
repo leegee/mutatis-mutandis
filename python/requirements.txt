@@ -20,3 +20,4 @@ faiss-cpu
 flask
 flask-cors
 waitress
+nltk
