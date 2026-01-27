@@ -48,7 +48,7 @@ def normalize_early_modern(text: str) -> str:
     text = re.sub(r"-\s*", " ", text)
     text = re.sub(r"\bv(?=[aeiou])", "u", text)
     text = re.sub(r"\bj(?=[aeiou])", "i", text)
-    text = re.sub(r"(?<=\w)[^\w\s](?=\w)", "", text)
+    text = re.sub(r"(?<=\w)[^\w\s](?=\w)", " ", text)
     text = re.sub(r"[^a-z\s]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
