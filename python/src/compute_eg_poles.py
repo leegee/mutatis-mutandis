@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import List
 import numpy as np
 import faiss
-
+import matplotlib.pyplot as plt
 import nltk
 from nltk.corpus import stopwords
 
@@ -32,6 +32,7 @@ EEBO_EXTRA = {
 STOPWORDS.update(EEBO_EXTRA)
 
 TOP_N_WORDS = 15
+TOP_N = TOP_N_WORDS
 MERGE_SIM_THRESHOLD = 0.85
 LIBERTY_FORMS = config.CONCEPT_SETS["LIBERTY"]["forms"]
 
@@ -126,3 +127,48 @@ for word, count in poles["positive_pole"]:
 print("\nNegative pole top words:")
 for word, count in poles["negative_pole"]:
     print(f"  {word}: {count}")
+
+
+
+pos_words_per_slice = []
+neg_words_per_slice = []
+
+for i, vec in enumerate(valid_vectors):
+    poles_slice = compute_conceptual_poles(
+        slice_vectors=vec.reshape(1, -1),
+        slice_contexts=[valid_contexts[i]],
+        top_n=TOP_N,
+        stopwords=STOPWORDS
+    )
+    pos_words_per_slice.append([w for w, _ in poles_slice["positive_pole"]])
+    neg_words_per_slice.append([w for w, _ in poles_slice["negative_pole"]])
+
+# Build a master word list
+all_words = list({w for slice_words in pos_words_per_slice + neg_words_per_slice for w in slice_words})
+word_to_idx = {w: i for i, w in enumerate(all_words)}
+
+# Convert slices to numeric arrays for plotting
+num_slices = len(pos_words_per_slice)
+pos_array = np.full((num_slices, len(all_words)), np.nan)
+neg_array = np.full((num_slices, len(all_words)), np.nan)
+
+for i, (pos_slice, neg_slice) in enumerate( zip(pos_words_per_slice, neg_words_per_slice, strict=True) ):
+    for rank, word in enumerate(pos_slice):
+        pos_array[i, word_to_idx[word]] = rank + 1  # rank 1 = top word
+    for rank, word in enumerate(neg_slice):
+        neg_array[i, word_to_idx[word]] = rank + 1
+
+# --- Plot ---
+fig, ax = plt.subplots(figsize=(14, 6))
+
+for word, idx in word_to_idx.items():
+    ax.plot(slice_starts[:num_slices], pos_array[:, idx], 'o-', label=f"{word} (pos)")
+    ax.plot(slice_starts[:num_slices], neg_array[:, idx], 'x--', label=f"{word} (neg)")
+
+ax.set_xlabel("Slice start year")
+ax.set_ylabel("Rank (1 = top word)")
+ax.set_title("Conceptual poles for LIBERTY across slices")
+ax.invert_yaxis()  # rank 1 at top
+ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+plt.tight_layout()
+plt.show()
