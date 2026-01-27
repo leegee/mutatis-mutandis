@@ -52,7 +52,7 @@ def extract_top_words(
     return freq.most_common(top_n)
 
 
-def compute_conceptual_poles(
+def compute_diachronic_poles(
     slice_vectors: NDArray[np.float32],
     slice_contexts: List[str],
     top_n: int = 10,
@@ -90,6 +90,6 @@ if __name__ == "__main__":
         "Early to bed and early to rise makes a man healthy, wealthy, and wise"
     ]
 
-    poles = compute_conceptual_poles(vectors, contexts, top_n=3)
+    poles = compute_diachronic_poles(vectors, contexts, top_n=3)
     print("Positive pole top words:", poles["positive_pole"])
     print("Negative pole top words:", poles["negative_pole"])
