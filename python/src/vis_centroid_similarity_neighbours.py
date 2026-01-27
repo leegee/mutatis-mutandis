@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import faiss
 
 import lib.eebo_db as eebo_db
-from lib import eebo_config as config
+import lib.eebo_config as config
 from build_faiss_slice_indexes import faiss_slice_path, vocab_slice_path
 
 # Plot settings
