@@ -1,5 +1,5 @@
 import { createSignal, createEffect, Show, Match, Switch } from "solid-js";
-import { documentURL, documentXmlURL, fetchDocumentJson, fetchDocumentXml } from "../services/documentService";
+import { documentXmlURL, fetchDocumentJson } from "../services/documentService";
 import type { MyDocument } from "../types";
 
 interface DocumentViewProps {
@@ -9,7 +9,6 @@ interface DocumentViewProps {
 export default function DocumentView(props: DocumentViewProps) {
     const [myDocument, setMyDocument] = createSignal<MyDocument | null>(null);
     const [format, setFormat] = createSignal<"json" | "xml">("json");
-    const [xmlContent, setXmlContent] = createSignal<string | null>(null);
     const [loading, setLoading] = createSignal(false);
     const [error, setError] = createSignal<string | null>(null);
 
@@ -19,7 +18,6 @@ export default function DocumentView(props: DocumentViewProps) {
 
         if (!id) {
             setMyDocument(null);
-            setXmlContent(null);
             return;
         }
 
@@ -30,7 +28,6 @@ export default function DocumentView(props: DocumentViewProps) {
             fetchDocumentJson(id)
                 .then((doc) => {
                     setMyDocument(doc);
-                    setXmlContent(null);
                 })
                 .catch((err) => setError(err.message))
                 .finally(() => setLoading(false));
@@ -38,47 +35,45 @@ export default function DocumentView(props: DocumentViewProps) {
     });
 
     return (
-        <Show when={props.docId}>
-            <Show when={!loading() || format() === 'xml'} fallback={<div>Loading document...</div>}>
+        <Show when={props.docId} fallback={<div>No document selected</div>}>
+            <Show when={!loading() || format() === "xml"} fallback={<div>Loading document...</div>}>
                 <Show when={!error()} fallback={<div>Error: {error()}</div>}>
-                    <Switch>
-                        <Match when={format() === 'xml'}>
-                            <iframe
-                                src={documentXmlURL(props.docId!)}
-                                style={{ width: "100%", height: "500px", border: "1px solid #ccc" }}
-                            ></iframe>
-                        </Match>
-                        <Match when={myDocument() && format() === 'json'}>
-                            {(doc) => {
-                                const { _source } = myDocument()!;
-                                return (
-                                    <article>
-                                        <header>
-                                            <p>
-                                                <Show when={format() === 'json'}>
-                                                    <button onClick={() => setFormat("xml")}>View XML</button>
-                                                </Show>
-                                                <Show when={format() === 'xml'}>
-                                                    <button onClick={() => setFormat("json")}>View Metadata</button>
-                                                </Show>
-                                            </p>
-                                            <h2>{_source.title}</h2>
-                                        </header>
-                                        <p>
-                                            <strong>Author:</strong> {_source.author} <br />
-                                            <strong>Year:</strong> {_source.year} <br />
-                                            <strong>Place:</strong> {_source.place} <br />
-                                            <strong>Publisher:</strong> {_source.publisher}
-                                        </p>
-                                        <hr />
-                                        <div>{_source.text}</div>
-                                    </article>
-                                );
-                            }}
-                        </Match>
-                    </Switch>
+                    <article>
+                        <header>
+                            <p>
+                                <strong>EEBO ID:</strong> {props.docId} <br />
+                                <strong>Author:</strong> {myDocument()?._source.author} <br />
+                                <strong>Year:</strong> {myDocument()?._source.year} <br />
+                                <strong>Place:</strong> {myDocument()?._source.place} <br />
+                                <strong>Publisher:</strong> {myDocument()?._source.publisher}
+                            </p>
+                            <p>
+                                <Show when={format() === "json"}>
+                                    <button onClick={() => setFormat("xml")}>View XML</button>
+                                </Show>
+                                <Show when={format() === "xml"}>
+                                    <button onClick={() => setFormat("json")}>View JSON</button>
+                                </Show>
+                            </p>
+                            <h3>{myDocument()?._source.title}</h3>
+                        </header>
+
+                        <hr />
+
+                        <Switch>
+                            <Match when={format() === "xml"}>
+                                <iframe
+                                    src={documentXmlURL(props.docId!)}
+                                    style={{ width: "100%", height: "60vh", border: "1px solid #ccc" }}
+                                ></iframe>
+                            </Match>
+                            <Match when={myDocument() && format() === "json"}>
+                                <div>{myDocument()?._source.text}</div>
+                            </Match>
+                        </Switch>
+                    </article>
                 </Show>
             </Show>
-        </Show >
+        </Show>
     );
 }
