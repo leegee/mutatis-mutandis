@@ -78,7 +78,10 @@ case "$PHASE" in
         echo "# Plot centroid nearest neighbours"
         RUN="$SRC/vis_centroid_similarity_neighbours.py"
         ;;
-
+    9|p|poles)
+        echo "# Compute conceptual poles"
+        RUN="$SRC/compute_conceptual_poles.py"
+        ;;
 esac
 
 echo "# Running $RUN"
