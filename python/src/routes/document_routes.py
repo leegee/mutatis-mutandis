@@ -1,12 +1,37 @@
 # src/routes/document_routes.py
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, send_file, abort
+from pathlib import Path
 from src.services.document_service import get_document_by_id
 
 documents_bp = Blueprint("documents_bp", __name__)
 
+XML_BASE_PATH = Path("s:/src/pamphlets/eebo_all/eebo_phase1/P4_XML_TCP/")
+
 @documents_bp.route("/documents/<doc_id>", methods=["GET"])
-def get_document(doc_id):
+def get_document_json(doc_id):
+    """
+    Returns JSON representation of a document.
+    """
     doc = get_document_by_id(doc_id)
     if not doc:
         return jsonify({"error": "Document not found"}), 404
+
     return jsonify(doc)
+
+
+@documents_bp.route("/documents/<doc_id>/xml", methods=["GET"])
+def get_document_xml(doc_id):
+    """
+    Returns XML file for a document, ready to be displayed in an <iframe>.
+    """
+    xml_path = XML_BASE_PATH / f"{doc_id}.P4.xml"
+
+    if not xml_path.exists():
+        print(f"No XML found at {xml_path}")
+        abort(404, description="XML document not found")
+
+    return send_file(
+        xml_path,
+        mimetype="application/xml",
+        as_attachment=False
+    )
