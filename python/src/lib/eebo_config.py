@@ -36,6 +36,8 @@ INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
+FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextSlices"
+
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -43,8 +45,7 @@ FAISS_INDEX_DIR = OUT_DIR / "faiss"
 FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
-FASTTEXT_GLOBAL_MODEL_PATH = MODELS_DIR / "global_eebo.bin"
-FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextCanonSlice"
+
 BATCH_DOCS = 100
 BATCH_TOKENS = 10000
 FASTTEXT_BATCH_SIZE = 50_000
@@ -55,15 +56,26 @@ NUM_WORKERS = 4
 STOPWORD_FILE = EEBO_SRC_DIR / "stopwords" / "english_basic.txt"
 TOP_K = 30
 
-FASTTEXT_PARAMS: FastTextParams = {
+QUICKIE_FASTTEXT_PARAMS: FastTextParams = {
     "model": "skipgram",      # Skip-gram model
     "dim": 100,               # Word vector dimensionality - 200
     "epoch": 5,               # Number of epochs           - 10
-    "ws": 5,                  # Context window size
+    "ws": 5,                  # Context window size        - 10
     "minCount": 1,            # Keep all words
     "thread": 6,              # Adjust to for this CPU
-    "minn": 2,                # Subword ngram min length
-    "maxn": 5,                # Subword ngram max length
+    "minn": 2,                # Subword ngram min length   - 3
+    "maxn": 5,                # Subword ngram max length   - 6
+}
+
+FASTTEXT_PARAMS: FastTextParams = {
+    "model": "skipgram",
+    "dim": 200,
+    "epoch": 10,
+    "ws": 7,
+    "minCount": 1,
+    "thread": 6,
+    "minn": 3,
+    "maxn": 6,
 }
 
 SLICES = [

@@ -27,7 +27,7 @@ WINDOW = 5
 LIBERTY_FORMS = config.CONCEPT_SETS["LIBERTY"]["forms"]
 FALSE_POSITIVES = config.CONCEPT_SETS["LIBERTY"]["false_positives"]
 
-# ---------------------------------------------------------------------
+
 def get_liberty_context_vectors(index, vocab: List[str]) -> Tuple[List[str], np.ndarray, Counter[str]]:
     token_to_idx = {token.lower(): i for i, token in enumerate(vocab)}
     context_tokens = []
@@ -62,7 +62,7 @@ def get_liberty_context_vectors(index, vocab: List[str]) -> Tuple[List[str], np.
 
     return context_tokens, np.stack(vectors).astype(np.float32), counts
 
-# ---------------------------------------------------------------------
+
 def compute_poles(word_vectors: np.ndarray, words: List[str], top_n=TOP_N_WORDS):
     centroid = word_vectors.mean(axis=0)
     X = word_vectors - centroid
@@ -85,7 +85,7 @@ def compute_poles(word_vectors: np.ndarray, words: List[str], top_n=TOP_N_WORDS)
         float(pca.explained_variance_ratio_[0])
     )
 
-# ---------------------------------------------------------------------
+
 all_words = []
 all_slices = []
 all_scores = []
@@ -120,7 +120,7 @@ for slice_range in config.SLICES:
         all_poles.append(pole_type)
         all_counts.append(counts[word])
 
-# ---------------------------------------------------------------------
+
 df = pd.DataFrame({
     "word": all_words,
     "slice_start": all_slices,

@@ -18,9 +18,7 @@ import lib.eebo_config as config
 from lib.eebo_logging import logger
 from generate_token_embeddings import slice_model_path
 
-
 EMB_DIM: int = int(config.FASTTEXT_PARAMS["dim"])
-
 
 def faiss_slice_path(slice_range: Tuple[int, int]) -> Path:
     """

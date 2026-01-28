@@ -47,44 +47,48 @@ RUN=""
 # Run phase
 case "$PHASE" in
     1|in|ingest)
-        echo "# Running ingestion of TEI XML"
+        echo "# Running corpus prep and ingestion"
         RUN="$SRC/eebo_parse_tei.py"
         ;;
-    2|f|training-files)
+    2a|training-files)
         echo "# Create files of slices for training fastText"
         RUN="$SRC/generate_training_files.py"
         ;;
-    3|t|train-fasttext)
-        echo "# Training fastText on slices"
+    2b|train-fasttext)
+        echo "# Training fastText on slices to create semantic space"
         RUN="$SRC/train_slice_fasttext.py"
         ;;
-    4|v|token-vectors)
-        echo "# Generate embeddings: token vectors"
-        RUN="$SRC/generate_token_embeddings.py"
-        ;;
-    5|c|concept-timeseries)
-        echo "# Generate concept timeseries"
-        RUN="$SRC/build_concept_timeseries.py"
-        ;;
-    6|f|faiss)
+    3|f|faiss)
         echo "# Create FAISS of fastText"
         RUN="$SRC/build_faiss_slice_indexes.py"
         ;;
-    7|p|plot)
+    4|v|token-vectors)
+        echo "# Materialise vectors/embeddings from token vectors"
+        RUN="$SRC/generate_token_embeddings.py"
+        ;;
+    5|c|concept-timeseries)
+        echo "# Generate concept model stats"
+        RUN="$SRC/build_concept_timeseries.py"
+        ;;
+    6|p|plot)
         echo "# Plot centroid similiarity"
         RUN="$SRC/vis_centroid_similarity.py"
         ;;
-    8|n|knn)
+    7|n|knn)
         echo "# Plot centroid nearest neighbours"
         RUN="$SRC/vis_centroid_similarity_neighbours.py"
         ;;
-    9|p|poles)
-        echo "# Compute conceptual poles"
+    8a|p|pca)
+        echo "# Compute PCA conceptual poles"
         RUN="$SRC/pca_compute_eg_poles.py"
         ;;
-    9b|i|int)
-        echo "# Interactive plot of Liberty"
+    8b|pcai|pcai)
+        echo "# Interactive plot of PCA Liberty"
         RUN="$SRC/pca_interactive_liberty_plot.py"
+        ;;
+    8c|u|umap)
+        echo "# Interactive UMAP plot of Liberty"
+        RUN="$SRC/umap_interactive_liberty_umap.py"
         ;;
 esac
 
