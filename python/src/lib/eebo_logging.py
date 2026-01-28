@@ -7,7 +7,6 @@ from logging.handlers import RotatingFileHandler
 import lib.eebo_config as config
 
 
-
 name = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_LEVEL = getattr(
     logging,

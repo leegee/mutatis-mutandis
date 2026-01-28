@@ -84,6 +84,11 @@ case "$PHASE" in
         ;;
 esac
 
+if [[ -z "$RUN" ]]; then
+    echo "! No phase selected or invalid phase: $PHASE"
+    exit 1
+fi
+
 echo "# Running $RUN"
 "$PYTHON" "$RUN" "$@"
 

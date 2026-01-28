@@ -1,6 +1,9 @@
 # src/lib/wordlist.py
 
 from typing import Set
+import nltk
+from nltk.corpus import stopwords
+
 import lib.eebo_config as config
 
 def load_wordlist() -> Set[str]:
@@ -21,3 +24,15 @@ def load_wordlist() -> Set[str]:
 
 
     return wordlist
+
+nltk.download("stopwords")
+STOPWORDS: Set[str] = set(stopwords.words("english"))
+STOPWORDS.update(load_wordlist())
+
+EEBO_EXTRA = {
+    "s", "thou", "thee", "thy", "thine", "hath", "doth", "art", "ye", "v",
+    "may", "shall", "upon", "us", "yet", "would", "one", "unto", "said",
+    "de", "c", "also", "do", "day", "bee", "be", "doe", "therefore"
+}
+STOPWORDS.update(EEBO_EXTRA)
+

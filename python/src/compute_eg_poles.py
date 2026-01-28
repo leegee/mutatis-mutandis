@@ -1,134 +1,165 @@
 #!/usr/bin/env python
 """
-compute_eg_poles.py
+compute_liberty_poles.py
 
-Compute synchronic conceptual poles for 'LIBERTY' per slice using FAISS indexes.
+Uses FAISS slice indexes and PCA to attempt to compute conceptual poles.
 
-Poles are derived from PCA over the slice vocabulary space,
-not from liberty centroids.
+Outputs HTML to `semantic_poles_liberty.html`
 """
 
 from __future__ import annotations
-from typing import List, Dict
+from typing import Any, List, Tuple
 import numpy as np
 import faiss
-import matplotlib.pyplot as plt
-import nltk
-from nltk.corpus import stopwords
+from sklearn.decomposition import PCA
+import pandas as pd
+from pathlib import Path
+from collections import Counter
 
 import lib.eebo_config as config
-from lib.compute_synchronic_poles import compute_synchronic_poles
 from build_faiss_slice_indexes import faiss_slice_path, vocab_slice_path
+from lib.eebo_logging import logger
+from lib.wordlist import STOPWORDS
 
-# --- Stopwords ---
-nltk.download("stopwords")
-STOPWORDS = set(stopwords.words("english"))
-EEBO_EXTRA = {
-    "s", "thou", "thee", "thy", "thine", "hath", "doth", "art", "ye", "v",
-    "may", "shall", "upon", "us", "yet", "would", "one", "unto", "said", "de",
-    "c", "also", "do", "day", "bee", "be", "doe", "therefore"
-}
-STOPWORDS.update(EEBO_EXTRA)
+TOP_N_WORDS = 15
+WINDOW = 5
+LIBERTY_FORMS = config.CONCEPT_SETS["LIBERTY"]["forms"]
+FALSE_POSITIVES = config.CONCEPT_SETS["LIBERTY"]["false_positives"]
 
-TOP_N_WORDS = 20
 
-# --- Prepare slices ---
-slice_starts: List[int] = []
-pos_words_per_slice: List[List[str]] = []
-neg_words_per_slice: List[List[str]] = []
+def get_liberty_context_vectors(index, vocab: List[str]) -> Tuple[List[str], np.ndarray, Counter[str]]:
+    """
+    Returns:
+        - list of context tokens (actual variant, not canonicalized)
+        - stacked vectors
+        - counts of each token in context
+    """
+    token_to_idx = {token.lower(): i for i, token in enumerate(vocab)}
+    context_tokens: List[str] = []
+    vectors: List[np.ndarray] = []
+    counts: Counter[str] = Counter()
 
-all_words_set = set()
+    for form in LIBERTY_FORMS:
+        idx = token_to_idx.get(form.lower())
+        if idx is None:
+            continue
+
+        start = max(idx - WINDOW, 0)
+        end = min(idx + WINDOW + 1, len(vocab))
+
+        for i in range(start, end):
+            token = vocab[i].strip()  # preserve original casing/variant
+            token_lc = token.lower()
+
+            if token_lc in STOPWORDS or token_lc in FALSE_POSITIVES:
+                continue
+
+            # No longer  canonicalized!
+            vec = index.reconstruct(i)
+            norm = np.linalg.norm(vec)
+            if norm > 0:
+                vec /= norm
+
+            vectors.append(vec)
+            context_tokens.append(token)
+            counts[token] += 1
+
+    if not vectors:
+        raise RuntimeError("No LIBERTY-context tokens found in slice")
+
+    return context_tokens, np.stack(vectors).astype(np.float32), counts
+
+
+
+def compute_poles(word_vectors: np.ndarray, words: List[str], top_n=TOP_N_WORDS):
+    centroid = word_vectors.mean(axis=0)
+    X = word_vectors - centroid
+
+    pca = PCA(n_components=1)
+    pca.fit(X)
+
+    pc1 = pca.components_[0]
+    pc1 /= np.linalg.norm(pc1)
+
+    scores = X @ pc1
+
+    top_idx = np.argsort(scores)[-top_n:][::-1]
+    bottom_idx = np.argsort(scores)[:top_n]
+
+    return (
+        [words[i] for i in top_idx],
+        [words[i] for i in bottom_idx],
+        float(pca.explained_variance_ratio_[0])
+    )
+
+
+results: List[Tuple[str, float, List[str], List[str], Counter[str]]] = []
 
 for slice_range in config.SLICES:
     index_path = faiss_slice_path(slice_range)
     vocab_path = vocab_slice_path(slice_range)
+
     if not index_path.exists() or not vocab_path.exists():
         continue
 
-    print(f"\n=== Slice {slice_range[0]}–{slice_range[1]} ===")
+    logger.debug(f"Slice {slice_range[0]}–{slice_range[1]} ===")
 
     index = faiss.read_index(str(index_path))
-    with open(vocab_path, "r", encoding="utf-8") as f:
-        vocab = [line.strip() for line in f]
+    vocab = [line.strip() for line in open(vocab_path, encoding="utf-8")]
 
-    # --- Build vector matrix for entire slice vocabulary ---
-    vecs = []
-    words = []
-
-    for i, token in enumerate(vocab):
-        if token in STOPWORDS:
-            continue
-        vec = index.reconstruct(i)
-        # discard frequency, keep semantic direction
-        vec /= np.linalg.norm(vec)
-        vecs.append(vec)
-        words.append(token)
-
-    if len(vecs) < 50:
-        print("Too few vectors in slice, skipping.")
+    words, vectors, counts = get_liberty_context_vectors(index, vocab)
+    if len(words) < 10:
         continue
 
-    vecs_array = np.stack(vecs).astype(np.float32)
+    pos_words, neg_words, var = compute_poles(vectors, words)
+    slice_label = f"{slice_range[0]}–{slice_range[1]}"
 
-    poles = compute_synchronic_poles(
-        word_vectors=vecs_array,
-        words=words,
-        top_n=TOP_N_WORDS,
-        stopwords=STOPWORDS
-    )
+    results.append((slice_label, var, pos_words, neg_words, counts))
 
-    pos_slice = [w for w, _ in poles["positive_pole"]]
-    neg_slice = [w for w, _ in poles["negative_pole"]]
 
-    print(f"Explained variance PC1: {poles['explained_variance']:.3f}")
+# HTML output
+columns: List[str] = ["Slice", "PC1 Var"] + [f"Rank {i+1}" for i in range(TOP_N_WORDS)]
+table_rows: List[List[Any]] = []
 
-    print("Positive pole:", pos_slice)
-    print("Negative pole:", neg_slice)
+for slice_label, var, pos_words, neg_words, counts in results:
+    row: List[Any] = [slice_label, f"{var:.3f}"]
 
-    slice_starts.append(slice_range[0])
-    pos_words_per_slice.append(pos_slice)
-    neg_words_per_slice.append(neg_slice)
+    for i in range(TOP_N_WORDS):
+        pos = pos_words[i] if i < len(pos_words) else ""
+        neg = neg_words[i] if i < len(neg_words) else ""
 
-    all_words_set.update(pos_slice + neg_slice)
+        # display actual counts
+        pos_count = counts.get(pos, 0) if pos else 0
+        neg_count = counts.get(neg, 0) if neg else 0
 
-if not slice_starts:
-    print("No valid slices found.")
-    exit(0)
+        cell_html = (
+            f'<span class="pos">{pos}&nbsp;({pos_count})</span><br>'
+            f'<span class="neg">{neg}&nbsp;({neg_count})</span>'
+        )
+        row.append(cell_html)
 
-# --- Build rank arrays for plotting ---
-all_words = sorted(all_words_set)
-word_to_idx: Dict[str, int] = {w: i for i, w in enumerate(all_words)}
+    table_rows.append(row)
 
-num_slices = len(slice_starts)
-pos_array = np.full((num_slices, len(all_words)), np.nan)
-neg_array = np.full((num_slices, len(all_words)), np.nan)
+df = pd.DataFrame(table_rows)
+df.columns = columns
+html_table = df.to_html(index=False, escape=False)
 
-for i, (pos_slice, neg_slice) in enumerate(zip(pos_words_per_slice, neg_words_per_slice, strict=True)):
-    for rank, word in enumerate(pos_slice):
-        pos_array[i, word_to_idx[word]] = rank + 1
-    for rank, word in enumerate(neg_slice):
-        neg_array[i, word_to_idx[word]] = rank + 1
+css = """
+<style>
+body { background:#111; color:#ddd; font-family:sans; font-size:12pt; }
+table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+th, td {
+    border: 1px solid #444;
+    padding: 1em;
+    vertical-align: top;
+    word-wrap: no-wrap;
+    white-space: no-wrap;
+}
+th { background:#222; }
+.pos { color:#7dd3fc; }
+.neg { color:#fca5a5; margin-top:0.3em; display:block; }
+</style>
+"""
 
-# --- Plot ---
-plt.style.use("dark_background")
-fig, ax = plt.subplots(figsize=(16, 8))
-
-cmap = plt.get_cmap("tab20")
-colors = cmap(np.linspace(0, 1, len(all_words)))
-
-for idx, word in enumerate(all_words):
-    color = colors[idx]
-
-    ax.plot(slice_starts, pos_array[:, idx], 'o-', color=color)
-    ax.text(slice_starts[-1] + 1, pos_array[-1, idx], f"{word} (+)", color=color, fontsize=10, va='center')
-
-    ax.plot(slice_starts, neg_array[:, idx], 'x--', color=color)
-    ax.text(slice_starts[-1] + 1, neg_array[-1, idx], f"{word} (-)", color=color, fontsize=10, va='center')
-
-ax.set_xlabel("Slice start year", fontsize=14)
-ax.set_ylabel("Rank (1 = strongest pole word)", fontsize=14)
-ax.set_title("Synchronic conceptual poles structuring LIBERTY per slice", fontsize=16)
-ax.invert_yaxis()
-
-plt.tight_layout()
-plt.show()
+Path("semantic_poles_liberty.html").write_text(css + html_table, encoding="utf-8")
+logger.info("Wrote semantic_poles_liberty.html")
