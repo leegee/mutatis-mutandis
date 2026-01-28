@@ -46,7 +46,7 @@ RUN=""
 
 # Run phase
 case "$PHASE" in
-    1|i|ingest)
+    1|in|ingest)
         echo "# Running ingestion of TEI XML"
         RUN="$SRC/eebo_parse_tei.py"
         ;;
@@ -80,7 +80,11 @@ case "$PHASE" in
         ;;
     9|p|poles)
         echo "# Compute conceptual poles"
-        RUN="$SRC/compute_eg_poles.py"
+        RUN="$SRC/pca_compute_eg_poles.py"
+        ;;
+    9b|i|int)
+        echo "# Interactive plot of Liberty"
+        RUN="$SRC/pca_interactive_liberty_plot.py"
         ;;
 esac
 

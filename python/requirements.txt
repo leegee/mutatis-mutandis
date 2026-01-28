@@ -21,3 +21,4 @@ flask
 flask-cors
 waitress
 nltk
+plotly
