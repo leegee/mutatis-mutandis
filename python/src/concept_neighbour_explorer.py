@@ -11,7 +11,9 @@ Outputs:
 
 from __future__ import annotations
 import json
-from typing import Dict, Any
+from typing import Any, Dict, List
+import time
+import numpy as np
 
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
@@ -21,7 +23,7 @@ from lib.faiss_slices import load_slice_index, get_vector
 TOP_K = 25
 SIM_THRESHOLD = 0.75
 CONTEXT_WINDOW = 8
-
+LOG_INTERVAL = 120
 
 # DB helpers
 def fetch_token_frequency(conn, token: str, slice_start: int, slice_end: int) -> int:
@@ -55,7 +57,7 @@ def fetch_documents_for_token(conn, token: str, slice_start: int, slice_end: int
         return [{"doc_id": r[0], "title": r[1]} for r in cur.fetchall()]
 
 
-def fetch_kwic_for_doc(conn, token: str, doc_id: str, limit: int = 3):
+def fetch_kwic_for_doc(conn, token: str, doc_id: str, limit: int = 3) -> list[Tuple[str, str, str]]:
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -156,6 +158,7 @@ def build_html(audit_data: Dict[str, Any]) -> str:
 def main():
     logger.info("Starting concept neighbour explorer")
 
+    last_log_time = time.time()
     audit: Dict[str, Any] = {}
 
     with eebo_db.get_connection() as conn:
@@ -165,36 +168,91 @@ def main():
             index, vocab = load_slice_index(slice_range)
             audit[slice_key] = {}
 
+            # CACHE ALL SEED VECTORS FOR THIS SLICE
+            seed_vectors: dict[str, np.ndarray] = {}
+            for _concept, cfg in config.CONCEPT_SETS.items():
+                for seed in cfg["forms"]:
+                    vec = get_vector(conn, seed, slice_start, slice_end)
+                    if vec is not None:
+                        seed_vectors[seed] = vec
+
             for concept, cfg in config.CONCEPT_SETS.items():
                 audit[slice_key][concept] = {}
 
                 for seed in cfg["forms"]:
-                    vec = get_vector(conn, seed, slice_start, slice_end)
+                    vec = seed_vectors.get(seed)
                     if vec is None:
                         continue
 
+                    now = time.time()
+                    if now - last_log_time > LOG_INTERVAL:
+                        logger.info(
+                            f"Processing slice {slice_key}, concept {concept}, seed {seed}"
+                        )
+                        last_log_time = now
+
+                    # FAISS SEARCH
                     D, Idx = index.search(vec.reshape(1, -1), TOP_K)
-                    neighbours = []
+                    top_neighbors = [
+                        (vocab[idx], float(sim))
+                        for sim, idx in zip(D[0], Idx[0], strict=True)
+                        if sim >= SIM_THRESHOLD and vocab[idx] != seed
+                    ]
 
-                    for sim, idx in zip(D[0], Idx[0], strict=True):
-                        token = vocab[idx]
-                        if sim < SIM_THRESHOLD or token == seed:
-                            continue
+                    if not top_neighbors:
+                        continue
 
-                        freq = fetch_token_frequency(conn, token, slice_start, slice_end)
-                        docs = fetch_documents_for_token(conn, token, slice_start, slice_end)
+                    # BATCH FETCH FREQUENCY
+                    tokens = [t for t, _ in top_neighbors]
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT token, COUNT(*)
+                            FROM pamphlet_tokens
+                            WHERE token = ANY(%s)
+                            AND slice_start = %s
+                            AND slice_end = %s
+                            GROUP BY token
+                            """,
+                            (tokens, slice_start, slice_end),
+                        )
+                        freq_map = {r[0]: r[1] for r in cur.fetchall()}
+
+                    # BATCH FETCH DOCUMENTS
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT DISTINCT token, doc_id, title
+                            FROM pamphlet_tokens
+                            WHERE token = ANY(%s)
+                            AND slice_start = %s
+                            AND slice_end = %s
+                            """,
+                            (tokens, slice_start, slice_end),
+                        )
+                        docs_map: dict[str, list[dict[str, str]]] = {}
+                        for token_, doc_id, title in cur.fetchall():
+                            docs_map.setdefault(token_, []).append({"doc_id": doc_id, "title": title})
+
+                    # FETCH KWIC PER TOKEN (PER DOC)
+                    neighbors_list = []
+                    for token, sim in top_neighbors:
+                        token_freq = freq_map.get(token, 0)
+
+                        # docs: list of dicts, each dict has "doc_id": str, "title": str, "kwic": list[tuple[str,str,str]]
+                        docs: List[Dict[str, Any]] = docs_map.get(token, [])
 
                         for d in docs:
                             d["kwic"] = fetch_kwic_for_doc(conn, token, d["doc_id"])
 
-                        neighbours.append({
+                        neighbors_list.append({
                             "token": token,
-                            "similarity": float(sim),
-                            "frequency": freq,
+                            "similarity": sim,
+                            "frequency": token_freq,
                             "documents": docs
                         })
 
-                    audit[slice_key][concept][seed] = neighbours
+                    audit[slice_key][concept][seed] = neighbors_list
 
     # Write JSON
     json_path = config.OUT_DIR / "concept_neighbour_audit.json"
