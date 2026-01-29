@@ -234,6 +234,8 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 FROM documents d
                 JOIN numbered_tokens nt ON nt.doc_id = d.doc_id
                 GROUP BY d.doc_id, nt.block_idx, d.title, d.author, d.pub_year, d.pub_place, d.publisher;
+
+                -- Upudate with: REFRESH MATERIALIZED VIEW document_search;
             """)
             logger.info("Created materialised view with block-level tsvectors")
 
@@ -314,3 +316,11 @@ def create_tokens_fk(conn: Connection) -> None:
 
     logger.info("tokens.doc_id foreign key created")
 
+
+def refresh_views(conn: Connection) -> None:
+    logger.info("Refreshing materialized views")
+    with conn.cursor() as cur:
+        for view in ["pamphlet_tokens", "pamphlet_corpus", "document_search"]:
+            logger.info(f"Refreshing {view}")
+            cur.execute(f"REFRESH MATERIALIZED VIEW {view};")
+    logger.info("All views refreshed")

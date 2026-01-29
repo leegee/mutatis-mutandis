@@ -398,6 +398,9 @@ def main() -> None:
         eebo_db.create_tiered_token_indexes(conn)
         conn.commit()
 
+    logger.info('Rebuilding views')
+    eebo_db.refresh_views(conn)
+
     logger.info('Done - all ingested, indexes restored')
 
 
