@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC="./src" # relative to pwd set above
+SRC="./src"
 PYTHON="python"
 PHASE="help"
-OUR_OLDPWD=`pwd`
+OUR_OLDPWD=$(pwd)
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
@@ -30,66 +30,61 @@ cd python
 # Restore positional arguments
 set -- "${POSITIONAL[@]}"
 
-RUN=""
+# Use an array to hold scripts for the selected phase
+RUN_SCRIPTS=()
 
-# Run phase
 case "$PHASE" in
     1|in|ingest)
         echo "# Running corpus prep and ingestion"
-        RUN="$SRC/eebo_parse_tei.py"
+        RUN_SCRIPTS+=("$SRC/eebo_parse_tei.py")
         ;;
     2|train)
-        echo "# Create files of slices for training fastText"
-        RUN="$SRC/generate_training_files.py && $PYTHON $SRC/train_slice_fasttext.py"
+        echo "# Phase 2: Create training files and train fastText"
+        RUN_SCRIPTS+=("$SRC/generate_training_files.py")
+        RUN_SCRIPTS+=("$SRC/train_slice_fasttext.py")
         ;;
     2a|training-files)
-        echo "# Create files of slices for training fastText"
-        RUN="$SRC/generate_training_files.py"
+        RUN_SCRIPTS+=("$SRC/generate_training_files.py")
         ;;
     2b|train-fasttext)
-        echo "# Training fastText on slices to create semantic space"
-        RUN="$SRC/train_slice_fasttext.py"
+        RUN_SCRIPTS+=("$SRC/train_slice_fasttext.py")
         ;;
     3|f|faiss)
-        echo "# Create FAISS of fastText"
-        RUN="$SRC/build_faiss_slice_indexes.py"
+        RUN_SCRIPTS+=("$SRC/build_faiss_slice_indexes.py")
         ;;
     4|v|token-vectors)
-        echo "# Materialise vectors/embeddings from token vectors"
-        RUN="$SRC/generate_token_embeddings.py"
+        RUN_SCRIPTS+=("$SRC/generate_token_embeddings.py")
         ;;
     5|c|concept-timeseries)
-        echo "# Generate concept model stats"
-        RUN="$SRC/build_concept_timeseries.py"
+        RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
         ;;
     6|p|plot)
-        echo "# Plot centroid similiarity"
-        RUN="$SRC/vis_centroid_similarity.py"
+        RUN_SCRIPTS+=("$SRC/vis_centroid_similarity.py")
         ;;
     7|n|knn)
-        echo "# Plot centroid nearest neighbours"
-        RUN="$SRC/vis_centroid_similarity_neighbours.py"
+        RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_neighbours.py")
         ;;
     8a|p|pca)
-        echo "# Compute PCA conceptual poles"
-        RUN="$SRC/pca_compute_eg_poles.py"
+        RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles.py")
         ;;
     8b|pcai|pcai)
-        echo "# Interactive plot of PCA Liberty"
-        RUN="$SRC/pca_interactive_liberty_plot.py"
+        RUN_SCRIPTS+=("$SRC/pca_interactive_liberty_plot.py")
         ;;
     8c|u|umap)
-        echo "# Interactive UMAP plot of Liberty"
-        RUN="$SRC/umap_interactive_liberty_umap.py"
+        RUN_SCRIPTS+=("$SRC/umap_interactive_liberty_umap.py")
+        ;;
+    *)
+        echo "! No phase selected or invalid phase: $PHASE"
+        cd "$OUR_OLDPWD"
+        exit 1
         ;;
 esac
 
-if [[ -z "$RUN" ]]; then
-    echo "! No phase selected or invalid phase: $PHASE"
+if [[ ${#RUN_SCRIPTS[@]} -eq 0 ]]; then
+    echo "! No scripts to run for phase: $PHASE"
+    cd "$OUR_OLDPWD"
     exit 1
 fi
-
-echo "# Shall run $RUN"
 
 echo "# Running Ruff"
 ruff check "$SRC"
@@ -102,7 +97,10 @@ pyright "$SRC"
 
 echo "# All checks passed"
 
-echo "# Running $RUN"
-"$PYTHON" "$RUN" "$@"
+# Execute each script in sequence
+for script in "${RUN_SCRIPTS[@]}"; do
+    echo "# Running $script"
+    "$PYTHON" "$script" "$@"
+done
 
 cd "$OUR_OLDPWD"
