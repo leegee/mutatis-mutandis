@@ -41,7 +41,7 @@ export default function DocumentView(props: DocumentViewProps) {
     });
 
     return (
-        <Show when={docId()} fallback={<div>No document selected</div>}>
+        <Show when={docId()}>
             <Show when={!loading() || format() === "xml"} fallback={<div>Loading document...</div>}>
                 <Show when={!error()} fallback={<div>Error: {error()}</div>}>
                     <article>
