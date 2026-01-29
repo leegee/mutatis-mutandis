@@ -18,6 +18,9 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 * [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
 * [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
 
+* https://dhq.digitalhumanities.org/
+* https://openhumanitiesdata.metajnl.com/
+* https://www.openlibhums.org/
 
 ## Restoring the Database
 
