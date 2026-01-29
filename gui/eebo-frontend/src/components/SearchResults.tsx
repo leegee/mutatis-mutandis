@@ -21,7 +21,7 @@ export default function SearchResults(props: SearchResultsProps) {
                                 props.onSelect(hit._id);
                             }}
                         >
-                            {hit._source.title} ({hit._source.author}, {hit._source.year})
+                            [{hit._id}] {hit._source.author || 'anon'} {hit._source.year}: {hit._source.title}
                         </a>
                     </li>
                 ))}

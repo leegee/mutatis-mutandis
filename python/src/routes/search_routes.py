@@ -6,6 +6,7 @@ search_bp = Blueprint("search_bp", __name__)
 
 @search_bp.route("/search", methods=["GET"])
 def search():
+    docId = request.args.get("docId")
     q = request.args.get("q")
     author = request.args.get("author")
     year = request.args.get("year")
@@ -15,10 +16,11 @@ def search():
     offset = int(request.args.get("from", 0))
 
     print("=== /search called ===")
-    print(f"Params -> q: {q}, author: {author}, year: {year}, place: {place}, title: {title}")
+    print(f"Params -> docId: {docId}, q: {q}, author: {author}, year: {year}, place: {place}, title: {title}")
     print(f"Limit: {limit}, Offset: {offset}")
 
     result = search_documents(
+        docId=docId,
         q=q,
         author=author,
         year=year,

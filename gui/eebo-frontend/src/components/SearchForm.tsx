@@ -8,6 +8,7 @@ interface SearchFormProps {
 }
 
 export default function SearchForm(props: SearchFormProps) {
+    const [docId, setDocId] = createSignal("");
     const [query, setQuery] = createSignal("");
     const [author, setAuthor] = createSignal("");
     const [year, setYear] = createSignal("");
@@ -17,6 +18,7 @@ export default function SearchForm(props: SearchFormProps) {
     const doSearch = async (e: Event) => {
         e.preventDefault();
         const params = new URLSearchParams({
+            docId: docId(),
             q: query(),
             author: author(),
             year: year(),
@@ -25,6 +27,7 @@ export default function SearchForm(props: SearchFormProps) {
         });
 
         console.log('Do search ', JSON.stringify({
+            docId: docId(),
             q: query(),
             author: author(),
             year: year(),
@@ -39,6 +42,7 @@ export default function SearchForm(props: SearchFormProps) {
 
     return (
         <form class={styles.form} onSubmit={doSearch}>
+            <input placeholder="ID" value={query()} onInput={e => setDocId(e.target.value)} />
             <input placeholder="Text" value={query()} onInput={e => setQuery(e.target.value)} />
             <input placeholder="Author" value={author()} onInput={e => setAuthor(e.target.value)} />
             <input placeholder="Year" value={year()} onInput={e => setYear(e.target.value)} />

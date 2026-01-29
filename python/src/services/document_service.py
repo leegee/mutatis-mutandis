@@ -3,7 +3,17 @@
 from typing import Optional, Dict, Any
 from src.lib.eebo_db import get_connection
 
-def search_documents(q=None, author=None, year=None, place=None, title=None, limit=20, offset=0):
+
+def search_documents(
+    docId=None,
+    q=None,
+    author=None,
+    year=None,
+    place=None,
+    title=None,
+    limit=20,
+    offset=0
+):
     filters = []
     params = []
 
@@ -17,21 +27,26 @@ def search_documents(q=None, author=None, year=None, place=None, title=None, lim
     FROM document_search
     """
 
-    # Full-text search
+    if docId:
+        filters.append("doc_id = %s")
+        params.append(docId)
+
     if q:
         filters.append("tsv @@ plainto_tsquery(%s)")
         params.append(q)
 
-    # Metadata filters
     if author:
         filters.append("LOWER(author) LIKE %s")
         params.append(f"%{author.lower()}%")
+
     if year:
         filters.append("pub_year = %s")
         params.append(year)
+
     if place:
         filters.append("LOWER(pub_place) LIKE %s")
         params.append(f"%{place.lower()}%")
+
     if title:
         filters.append("LOWER(title) LIKE %s")
         params.append(f"%{title.lower()}%")
@@ -45,18 +60,19 @@ def search_documents(q=None, author=None, year=None, place=None, title=None, lim
     # Group by doc_id to collapse multiple blocks into one document
     query += " GROUP BY doc_id, title, author, pub_year, pub_place"
     query += " ORDER BY pub_year, title LIMIT %s OFFSET %s"
-    params.extend([limit, offset])
+
+    params_with_paging = params + [limit, offset]
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Execute main query
-            cur.execute(query, params)
+            # Main query
+            cur.execute(query, params_with_paging)
             rows = cur.fetchall()
 
-            # Execute count query
-            cur.execute(count_query, params[:-2])
+            # Count query (no limit/offset)
+            cur.execute(count_query, params)
             row = cur.fetchone()
-            assert row is not None  # Mypy
+            assert row is not None
             total = row[0]
 
     hits = [{
@@ -66,7 +82,7 @@ def search_documents(q=None, author=None, year=None, place=None, title=None, lim
             "author": r[2],
             "year": r[3],
             "place": r[4],
-            "matching_blocks": r[5]  # number of blocks matching the query
+            "matching_blocks": r[5]
         }
     } for r in rows]
 
