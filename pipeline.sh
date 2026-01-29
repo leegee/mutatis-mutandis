@@ -38,6 +38,10 @@ case "$PHASE" in
         echo "# Running corpus prep and ingestion"
         RUN="$SRC/eebo_parse_tei.py"
         ;;
+    2|train)
+        echo "# Create files of slices for training fastText"
+        RUN="$SRC/generate_training_files.py && $PYTHON $SRC/train_slice_fasttext.py"
+        ;;
     2a|training-files)
         echo "# Create files of slices for training fastText"
         RUN="$SRC/generate_training_files.py"
