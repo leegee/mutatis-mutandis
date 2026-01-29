@@ -10,11 +10,11 @@ POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
-        --phase)
+        --phase|-p)
             PHASE="$2"
             shift 2
             ;;
-        --phase=*)
+        --phase=*|-p=*)
             PHASE="${key#*=}"
             shift
             ;;
@@ -78,6 +78,9 @@ case "$PHASE" in
         ;;
     9b|html)
         RUN_SCRIPTS+=("$SRC/knn_audit_html.py")
+        ;;
+    9c|kwic)
+        RUN_SCRIPTS+=("$SRC/kwic_neighbour_audit_html.py")
         ;;
     *)
         echo "! No phase selected or invalid phase: $PHASE"
