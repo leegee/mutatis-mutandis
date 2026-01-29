@@ -17,7 +17,7 @@ from pathlib import Path
 from collections import Counter
 
 import lib.eebo_config as config
-from build_faiss_slice_indexes import faiss_slice_path, vocab_slice_path
+from lib.faiss_slice_indexes import faiss_slice_path, vocab_slice_path
 from lib.eebo_logging import logger
 from lib.wordlist import STOPWORDS
 
