@@ -52,6 +52,8 @@ Building on Ryan Heuser’s work in diachronic distributional semantics, this pr
 
 Primary source: TEI-encoded EEBO-TCP Phase I/II
 
+Secondary sources: scans of pamphlets at the Lincoln College Sr Library, Bodleian.
+
 Metadata: date, genre, printer/place, political alignment (inferred where necessary)
 
 Scope: Pamphlets spanning 1600–1700, covering civil, religious, and legal debates
@@ -109,6 +111,10 @@ Core tools: fastText, FAISS, MacBERTh embeddings, Docker deployment
 Web interface: PWA for interactive search and visualisation
 
 Deliverables: orthological maps, canonical dictionaries, embeddings, corpus dump, reproducible analysis pipeline
+
+### 4.6 Note on Methodology
+
+Recent work in digital humanities highlights the interpretive nature of computational keyword extraction. Blanke and Papadopoulou (2025) demonstrate that the choice of algorithm—whether TF‑IDF, BERT‑based, or attention‑driven—significantly shapes which terms emerge as salient, particularly for historically and conceptually contested notions such as “security” and “freedom.” This underscores a key principle guiding our approach: semantic drift and keyword analysis are not purely objective processes but interpretive acts, dependent on model selection, parameterization, and normalization of orthographic variants. By carefully canonicalizing word forms and integrating computational embeddings with historical and conceptual context, our methodology mirrors these insights, producing more robust and transparent mappings of conceptual change over time.
 
 ## 5. Significance
 
