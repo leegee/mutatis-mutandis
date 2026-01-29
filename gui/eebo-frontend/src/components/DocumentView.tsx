@@ -7,13 +7,13 @@ interface DocumentViewProps {
 }
 
 export default function DocumentView(props: DocumentViewProps) {
-    // Make docId reactive
     const docId = createMemo(() => props.docId);
 
     const [myDocument, setMyDocument] = createSignal<MyDocument | null>(null);
     const [format, setFormat] = createSignal<"json" | "xml">("json");
     const [loading, setLoading] = createSignal(false);
     const [error, setError] = createSignal<string | null>(null);
+    const [xmlAvailable, setXmlAvailable] = createSignal<boolean | null>(null);
 
     // Fetch document whenever docId or format changes
     createEffect(() => {
@@ -22,6 +22,8 @@ export default function DocumentView(props: DocumentViewProps) {
 
         if (!id) {
             setMyDocument(null);
+            setError(null);
+            setXmlAvailable(null);
             return;
         }
 
@@ -30,11 +32,47 @@ export default function DocumentView(props: DocumentViewProps) {
 
         if (fmt === "json") {
             fetchDocumentJson(id)
-                .then((doc) => setMyDocument(doc))
-                .catch((err) => setError(err.message))
+                .then((doc) => {
+                    setMyDocument(doc);
+                })
+                .catch((err: any) => {
+                    if (err?.status === 404) {
+                        setError("Document not found.");
+                    } else if (err?.status >= 500) {
+                        setError("Server error while loading document.");
+                    } else {
+                        setError("Network error. Is the backend running?");
+                    }
+                    setMyDocument(null);
+                })
                 .finally(() => setLoading(false));
-        } else {
-            // If XML, clear JSON document (optional)
+        }
+
+        else if (fmt === "xml") {
+            setMyDocument(null);
+            setXmlAvailable(null);
+            setLoading(true);
+
+            fetch(documentXmlURL(id), { method: "HEAD" })
+                .then(res => {
+                    if (res.ok) {
+                        setXmlAvailable(true);
+                    } else if (res.status === 404) {
+                        setXmlAvailable(false);
+                        setError("XML version not available for this document.");
+                    } else {
+                        setXmlAvailable(false);
+                        setError("Failed to load XML document.");
+                    }
+                })
+                .catch(() => {
+                    setXmlAvailable(false);
+                    setError("Network error while checking XML.");
+                })
+                .finally(() => setLoading(false));
+        }
+
+        else {
             setMyDocument(null);
             setLoading(false);
         }
@@ -42,7 +80,7 @@ export default function DocumentView(props: DocumentViewProps) {
 
     return (
         <Show when={docId()}>
-            <Show when={!loading() || format() === "xml"} fallback={<div>Loading document...</div>}>
+            <Show when={!loading()} fallback={<div>Loading document...</div>}>
                 <Show when={!error()} fallback={<div>Error: {error()}</div>}>
                     <article>
                         <header>

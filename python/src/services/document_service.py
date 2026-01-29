@@ -1,7 +1,38 @@
 # src/services/document_service.py
 
+from pathlib import Path
 from typing import Optional, Dict, Any
 from src.lib.eebo_db import get_connection
+import src.lib.eebo_config as eebo_config
+
+XML_ROOT = eebo_config.XML_ROOT_DIR
+
+
+def get_xml_path(doc_id: str) -> Path:
+    """
+    Returns the expected XML file path for a document.
+    Adjust naming scheme if needed.
+    """
+    return XML_ROOT / f"{doc_id}.xml"
+
+
+def xml_exists(doc_id: str) -> bool:
+    """
+    Used by HEAD requests to quickly check if XML is available.
+    """
+    return get_xml_path(doc_id).exists()
+
+
+def get_document_xml(doc_id: str) -> Optional[bytes]:
+    """
+    Returns raw XML file bytes, or None if not found.
+    """
+    xml_path = get_xml_path(doc_id)
+
+    if not xml_path.exists():
+        return None
+
+    return xml_path.read_bytes()
 
 
 def search_documents(
