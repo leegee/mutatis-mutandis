@@ -30,18 +30,6 @@ cd python
 # Restore positional arguments
 set -- "${POSITIONAL[@]}"
 
-# Run checks
-echo "# Running Ruff"
-ruff check "$SRC"
-
-echo "# Running Mypy"
-mypy "$SRC"
-
-echo "# Running Pyright"
-pyright "$SRC"
-
-echo "# All checks passed"
-
 RUN=""
 
 # Run phase
@@ -96,6 +84,19 @@ if [[ -z "$RUN" ]]; then
     echo "! No phase selected or invalid phase: $PHASE"
     exit 1
 fi
+
+echo "# Shall run $RUN"
+
+echo "# Running Ruff"
+ruff check "$SRC"
+
+echo "# Running Mypy"
+mypy "$SRC"
+
+echo "# Running Pyright"
+pyright "$SRC"
+
+echo "# All checks passed"
 
 echo "# Running $RUN"
 "$PYTHON" "$RUN" "$@"
