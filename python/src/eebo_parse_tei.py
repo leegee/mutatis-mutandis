@@ -227,7 +227,7 @@ def ingest_xml_parallel(
 ) -> None:
     """Parse XML files in parallel and ingest documents + tokens safely with per-batch connections."""
 
-    xml_files = list(Path(config.INPUT_DIR).rglob("*.xml"))
+    xml_files = list(Path(config.XML_ROOT_DIR).rglob("*.xml"))
     if MAX_DOCS:
         xml_files = xml_files[:MAX_DOCS]
 
