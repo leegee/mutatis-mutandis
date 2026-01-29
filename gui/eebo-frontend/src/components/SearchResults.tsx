@@ -18,6 +18,7 @@ export default function SearchResults(props: SearchResultsProps) {
                             href="#"
                             onClick={(e) => {
                                 e.preventDefault();
+                                console.log('Selected', hit._id)
                                 props.onSelect(hit._id);
                             }}
                         >
