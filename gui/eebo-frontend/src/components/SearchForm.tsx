@@ -44,10 +44,10 @@ export default function SearchForm(props: SearchFormProps) {
         <form class={styles.form} onSubmit={doSearch}>
             <input placeholder="ID" value={query()} onInput={e => setDocId(e.target.value)} />
             <input placeholder="Text" value={query()} onInput={e => setQuery(e.target.value)} />
+            <input placeholder="Title" value={title()} onInput={e => setTitle(e.target.value)} />
             <input placeholder="Author" value={author()} onInput={e => setAuthor(e.target.value)} />
             <input placeholder="Year" value={year()} onInput={e => setYear(e.target.value)} />
             <input placeholder="Place" value={place()} onInput={e => setPlace(e.target.value)} />
-            <input placeholder="Title" value={title()} onInput={e => setTitle(e.target.value)} />
             <button onClick={doSearch}>Search</button>
         </form>
     );
