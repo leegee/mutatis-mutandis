@@ -96,6 +96,7 @@ def main():
                 ]
 
                 if not filtered:
+                    logger.debug(f"No valid tokens for {concept_name} in slice {start}-{end}")
                     continue
 
                 tokens, vectors = zip(*filtered, strict=True)
