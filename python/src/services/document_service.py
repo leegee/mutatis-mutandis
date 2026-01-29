@@ -100,7 +100,7 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
             # Fetch document metadata
             cur.execute("""
                 SELECT doc_id, title, author, pub_year, pub_place, publisher
-                FROM documents
+                FROM pamphlet_corpus
                 WHERE doc_id = %s
             """, (doc_id,))
             meta: Optional[tuple[str, str, str, int, str, str]] = cur.fetchone()
@@ -111,7 +111,7 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
             # Fetch tokens
             cur.execute("""
                 SELECT token
-                FROM tokens
+                FROM pamphlet_tokens
                 WHERE doc_id = %s
                 ORDER BY token_idx
             """, (doc_id,))

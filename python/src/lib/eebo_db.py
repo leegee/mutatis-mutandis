@@ -118,6 +118,10 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     DROP TABLE IF EXISTS tokens CASCADE;
                     DROP TABLE IF EXISTS token_vectors CASCADE;
                     DROP TABLE IF EXISTS concept_slice_stats;
+                    DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
+                    DROP INDEX IF EXISTS idx_pamphlet_corpus_docid;
+                    DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
+                    DROP INDEX IF EXISTS idx_pamphlet_tokens_docid_slice;
                 """)
 
             logger.info("Creating tables")
@@ -237,6 +241,50 @@ def create_tiered_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX idx_document_search_tsv ON document_search USING GIN(tsv);")
             logger.info("GIN index created")
 
+            cur.execute("""
+                -- Pamphlet-only document materialized view
+                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_corpus AS
+                SELECT *,
+                    CASE
+                        WHEN token_count <= 15000 THEN 'core'
+                        ELSE 'boundary'
+                    END AS corpus_zone
+                FROM documents
+                WHERE token_count BETWEEN 500 AND 20000
+                AND title !~* '(tragedy|comedy|farce|interlude|play)';
+
+                -- Index for fast joins
+                CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid
+                ON pamphlet_corpus(doc_id);
+
+                -- Refresh when ingesting new:
+                -- REFRESH MATERIALIZED VIEW pamphlet_corpus;
+
+                -- Slice-level tokens restricted to pamphlets
+                -- Slice-level tokens restricted to pamphlets
+                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_tokens AS
+                SELECT t.doc_id,
+                    t.token_idx,
+                    t.token,
+                    t.canonical,
+                    t.sentence_id,
+                    d.corpus_zone,
+                    d.pub_year,
+                    d.title,
+                    d.token_count,
+                    d.slice_start,
+                    d.slice_end
+                FROM tokens t
+                JOIN pamphlet_corpus d
+                ON t.doc_id = d.doc_id;
+
+                -- Index for performance on slice queries
+                CREATE INDEX IF NOT EXISTS idx_pamphlet_tokens_docid_slice
+                ON pamphlet_tokens(doc_id, slice_idx);
+
+                -- Refresh when new data ingested:
+                -- REFRESH MATERIALIZED VIEW pamphlet_tokens;
+            """)
 
     logger.info("Tiered token indexes created")
 

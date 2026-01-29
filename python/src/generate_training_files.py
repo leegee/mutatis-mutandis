@@ -25,7 +25,7 @@ def write_slice(conn, start: int, end: int) -> Path:
         cur.execute(
             """
             SELECT token
-            FROM tokens
+            FROM pamphlet_tokens
             WHERE slice_start = %s AND slice_end = %s
             ORDER BY doc_id, token_idx;
             """,
