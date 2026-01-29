@@ -1,7 +1,7 @@
 # src/routes/document_routes.py
-from flask import Blueprint, jsonify, send_file, abort
+from flask import Blueprint, jsonify, send_file, abort, request, Response
 
-from src.services.document_service import get_document_by_id, request, Response
+from src.services.document_service import get_document_by_id
 import src.lib.eebo_config as eebo_config
 
 documents_bp = Blueprint("documents_bp", __name__)
