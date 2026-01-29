@@ -1,9 +1,19 @@
 # lib/eebo_db.py
+
+"""
+eebo_db.py - EEBO database access
+
+Connections, schema (wip that should use .sql files), etc
+
+"""
+
 import psycopg
+from psycopg import sql
 from psycopg import Connection
 import time
 
 from lib.eebo_logging import logger
+
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
@@ -319,8 +329,12 @@ def create_tokens_fk(conn: Connection) -> None:
 
 def refresh_views(conn: Connection) -> None:
     logger.info("Refreshing materialized views")
-    with conn.cursor() as cur:
-        for view in ["pamphlet_tokens", "pamphlet_corpus", "document_search"]:
-            logger.info(f"Refreshing {view}")
-            cur.execute(f"REFRESH MATERIALIZED VIEW {view};")
+
+    with conn.transaction():
+        with conn.cursor() as cur:
+            for view in ["pamphlet_tokens", "pamphlet_corpus", "document_search"]:
+                logger.info(f"Refreshing {view}")
+                cur.execute(
+                    sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) )
+                )
     logger.info("All views refreshed")
