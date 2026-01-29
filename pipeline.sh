@@ -73,6 +73,12 @@ case "$PHASE" in
     8c|u|umap)
         RUN_SCRIPTS+=("$SRC/umap_interactive_liberty_umap.py")
         ;;
+    9a|k|knn)
+        RUN_SCRIPTS+=("$SRC/knn_audit.py")
+        ;;
+    9b|html)
+        RUN_SCRIPTS+=("$SRC/knn_audit_html.py")
+        ;;
     *)
         echo "! No phase selected or invalid phase: $PHASE"
         cd "$OUR_OLDPWD"
