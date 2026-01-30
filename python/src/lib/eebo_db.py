@@ -225,13 +225,15 @@ def create_tiered_token_indexes(conn: Connection) -> None:
 
             cur.execute("""
                 CREATE MATERIALIZED VIEW document_search AS
-                WITH numbered_tokens AS (
-                    SELECT
-                        doc_id,
-                        token,
-                        (row_number() OVER (PARTITION BY doc_id ORDER BY token_idx) - 1) / 50000 AS block_idx
-                    FROM tokens
-                )
+                    WITH numbered_tokens AS (
+                        SELECT
+                            t.doc_id,
+                            t.token,
+                            (row_number() OVER (PARTITION BY t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
+                        FROM tokens t
+                        JOIN pamphlet_corpus pc
+                        ON pc.doc_id = t.doc_id
+                    )
                 SELECT
                     d.doc_id,
                     d.title,
@@ -241,7 +243,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     d.publisher,
                     nt.block_idx,
                     to_tsvector('english', string_agg(nt.token, ' ')) AS tsv
-                FROM documents d
+                FROM pamphlet_corpus d
                 JOIN numbered_tokens nt ON nt.doc_id = d.doc_id
                 GROUP BY d.doc_id, nt.block_idx, d.title, d.author, d.pub_year, d.pub_place, d.publisher;
 
