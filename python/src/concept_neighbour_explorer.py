@@ -2,9 +2,10 @@
 """
 concept_neighbour_explorer.py
 
-Exploratory concept neighbour + KWIC audit.
+Exploratory concept neighbour & KWIC audit with canonicalisation.
 
 Each concept key is used as the probe (lowercased).
+Known forms of the concept are excluded from the neighbors.
 Outputs:
 - concept_neighbour_audit.json
 - concept_kwic_audit.html
@@ -21,14 +22,12 @@ import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 from lib.faiss_slices import load_slice_index, get_vector
 
-
-TOP_K = 120
+TOP_K = 100
 SIM_THRESHOLD = 0.7
-CONTEXT_WINDOW = 12
+CONTEXT_WINDOW = 8
 LOG_INTERVAL = 120
 
 
-# DB helpers
 def fetch_kwic_for_doc(
     conn,
     token: str,
@@ -73,7 +72,6 @@ def fetch_kwic_for_doc(
     return rows
 
 
-# HTML helpers
 def make_html_row(left, kw, right, sim, freq, title, url):
     return f"""
     <tr>
@@ -99,7 +97,7 @@ def build_html(audit_data: Dict[str, Any]) -> str:
     .left { text-align: right; color: #aaa; }
     .right { text-align: left; color: #aaa; }
     </style></head><body>
-    <h1>Concept Neighbour KWIC Audit (Exploratory)</h1>
+    <h1>Concept Neighbour KWIC Audit (Canonicalised)</h1>
     """]
 
     for slice_key, concepts in audit_data.items():
@@ -134,9 +132,8 @@ def build_html(audit_data: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-# Main
 def main():
-    logger.info("Starting concept neighbour explorer")
+    logger.info("Starting canonicalised concept neighbour explorer")
 
     last_log_time = time.time()
     audit: Dict[str, Any] = {}
@@ -149,6 +146,7 @@ def main():
             audit[slice_key] = {}
 
             for concept in config.CONCEPT_SETS.keys():
+                # --- canonical probe ---
                 seed = concept.lower()
                 vec = get_vector(conn, seed, slice_start, slice_end)
                 if vec is None:
@@ -160,17 +158,11 @@ def main():
                     logger.info(f"Processing slice {slice_key}, concept {concept}")
                     last_log_time = now
 
-                # FAISS search
+                # --- FAISS search ---
                 D, Idx = index.search(vec.reshape(1, -1), TOP_K)
+                top_neighbors = [(vocab[idx], float(sim)) for sim, idx in zip(D[0], Idx[0], strict=True)]
 
-                # Build initial top neighbours
-                top_neighbors = [
-                    (vocab[idx], float(sim))
-                    for sim, idx in zip(D[0], Idx[0], strict=True)
-                    if sim >= SIM_THRESHOLD and vocab[idx] != seed
-                ]
-
-                # Exclude known forms and false positives
+                # --- Filter known forms / false positives ---
                 known_forms = config.CONCEPT_SETS[concept].get("forms", set())
                 false_positives = config.CONCEPT_SETS[concept].get("false_positives", set())
                 top_neighbors = [
@@ -179,14 +171,11 @@ def main():
                     if token not in known_forms and token not in false_positives
                 ]
 
-                # Sort by similarity descending
-                top_neighbors.sort(key=lambda x: x[1], reverse=True)
-
                 if not top_neighbors:
                     audit[slice_key][concept] = {"probe": seed, "neighbours": []}
                     continue
 
-                # Batch fetch frequency
+                # --- Batch fetch frequency ---
                 tokens = [t for t, _ in top_neighbors]
                 with conn.cursor() as cur:
                     cur.execute(
@@ -202,7 +191,7 @@ def main():
                     )
                     freq_map = {r[0]: r[1] for r in cur.fetchall()}
 
-                # Batch fetch documents
+                # --- Batch fetch documents ---
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -218,7 +207,7 @@ def main():
                     for token_, doc_id, title in cur.fetchall():
                         docs_map.setdefault(token_, []).append({"doc_id": doc_id, "title": title})
 
-                # Fetch KWIC per token/doc
+                # --- Fetch KWIC per token/doc ---
                 neighbours_list: List[Dict[str, Any]] = []
                 for token, sim in top_neighbors:
                     token_freq = freq_map.get(token, 0)
@@ -237,13 +226,13 @@ def main():
                     "neighbours": neighbours_list
                 }
 
-    # Write JSON
+    # --- Write JSON ---
     json_path = config.OUT_DIR / "concept_neighbour_audit.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
     logger.info(f"Wrote {json_path}")
 
-    # Write HTML
+    # --- Write HTML ---
     html = build_html(audit)
     html_path = config.OUT_DIR / "concept_kwic_audit.html"
     html_path.write_text(html, encoding="utf-8")

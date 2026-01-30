@@ -166,6 +166,9 @@ CONCEPT_SETS: CanonicalRules = {
             "libertind", "libertyin", "liberality",  "libertinisme", "liberallity",
             "libertism", "libertines", "liberta",
             # "liberal", "liberall",
+            "libels", "libertates", "liberabit", "libero",
+            "liberto","liberabo","liberall","liberalytie","liberaui","liberally","liberates","liberalitie",
+            "libera", "deliberate", "liberando"
         }
     },
 
