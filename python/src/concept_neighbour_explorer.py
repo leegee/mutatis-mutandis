@@ -2,62 +2,39 @@
 """
 concept_neighbour_explorer.py
 
-Orthographic and scribal variants of the same lexeme (eg “liberty”),
+Exploratory concept neighbour + KWIC audit.
 
+Each concept key is used as the probe (lowercased).
 Outputs:
 - concept_neighbour_audit.json
 - concept_kwic_audit.html
 """
 
 from __future__ import annotations
+
 import json
-from typing import Any, Dict, List
 import time
-import numpy as np
+from typing import Any, Dict, List, Tuple
 
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 from lib.faiss_slices import load_slice_index, get_vector
 
-TOP_K = 25
-SIM_THRESHOLD = 0.75
+
+TOP_K = 100
+SIM_THRESHOLD = 0.7
 CONTEXT_WINDOW = 8
 LOG_INTERVAL = 120
 
+
 # DB helpers
-def fetch_token_frequency(conn, token: str, slice_start: int, slice_end: int) -> int:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM pamphlet_tokens
-            WHERE token = %s
-              AND slice_start = %s
-              AND slice_end = %s;
-            """,
-            (token, slice_start, slice_end),
-        )
-        return cur.fetchone()[0]
-
-
-def fetch_documents_for_token(conn, token: str, slice_start: int, slice_end: int, limit: int = 5):
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT DISTINCT doc_id, title
-            FROM pamphlet_tokens
-            WHERE token = %s
-              AND slice_start = %s
-              AND slice_end = %s
-            LIMIT %s;
-            """,
-            (token, slice_start, slice_end, limit),
-        )
-        return [{"doc_id": r[0], "title": r[1]} for r in cur.fetchall()]
-
-
-def fetch_kwic_for_doc(conn, token: str, doc_id: str, limit: int = 3) -> list[Tuple[str, str, str]]:
+def fetch_kwic_for_doc(
+    conn,
+    token: str,
+    doc_id: str,
+    limit: int = 3,
+) -> List[Tuple[str, str, str]]:
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -71,7 +48,8 @@ def fetch_kwic_for_doc(conn, token: str, doc_id: str, limit: int = 3) -> list[Tu
         )
         positions = [r[0] for r in cur.fetchall()]
 
-    rows = []
+    rows: List[Tuple[str, str, str]] = []
+
     for idx in positions:
         with conn.cursor() as cur:
             cur.execute(
@@ -89,12 +67,13 @@ def fetch_kwic_for_doc(conn, token: str, doc_id: str, limit: int = 3) -> list[Tu
         left = " ".join(tok for i, tok in context if i < idx)
         kw = next(tok for i, tok in context if i == idx)
         right = " ".join(tok for i, tok in context if i > idx)
+
         rows.append((left, kw, right))
 
     return rows
 
 
-# HTML
+# HTML helpers
 def make_html_row(left, kw, right, sim, freq, title, url):
     return f"""
     <tr>
@@ -115,47 +94,47 @@ def build_html(audit_data: Dict[str, Any]) -> str:
     body { font-family: monospace; background: black; color: #fffd }
     a { color: cyan }
     table { border-collapse: collapse; width: 100%; margin-bottom: 40px; }
-    td, th { border: 1px solid #ccc; padding: 4px; }
-    .kw { font-weight: bold; text-align: center; background: #ffe; }
-    .left { text-align: right; color: #666; }
-    .right { text-align: left; color: #666; }
+    td, th { border: 1px solid #444; padding: 4px; }
+    .kw { font-weight: bold; text-align: center; background: #ffe; color: black }
+    .left { text-align: right; color: #aaa; }
+    .right { text-align: left; color: #aaa; }
     </style></head><body>
-    <h1>Concept Neighbour KWIC Audit</h1>
+    <h1>Concept Neighbour KWIC Audit (Exploratory)</h1>
     """]
 
     for slice_key, concepts in audit_data.items():
         parts.append(f"<h2>Slice {slice_key}</h2>")
 
-        for concept, seeds in concepts.items():
-            parts.append(f"<h3>Concept: {concept}</h3>")
+        for concept, block in concepts.items():
+            seed = block["probe"]
+            parts.append(f"<h3>Concept: {concept} (probe: {seed})</h3>")
 
-            for seed, neighbours in seeds.items():
-                parts.append(f"<h4>Seed: {seed}</h4>")
-                parts.append("""
-                <table>
-                <tr>
-                    <th>Left</th><th>Keyword</th><th>Right</th>
-                    <th>Sim</th><th>Freq</th><th>Doc</th>
-                </tr>
-                """)
+            parts.append("""
+            <table>
+            <tr>
+                <th>Left</th><th>Keyword</th><th>Right</th>
+                <th>Sim</th><th>Freq</th><th>Doc</th>
+            </tr>
+            """)
 
-                for n in neighbours:
-                    for doc in n["documents"]:
-                        for left, kw, right in doc["kwic"]:
-                            url = f"{getattr(config, 'TEXT_BASE_URL', '')}{doc['doc_id']}"
-                            parts.append(make_html_row(
-                                left, kw, right,
-                                n["similarity"],
-                                n["frequency"],
-                                doc["title"],
-                                url
-                            ))
-                parts.append("</table>")
+            for n in block["neighbours"]:
+                for doc in n["documents"]:
+                    for left, kw, right in doc["kwic"]:
+                        url = f"{getattr(config, 'TEXT_BASE_URL', '')}{doc['doc_id']}"
+                        parts.append(make_html_row(
+                            left, kw, right,
+                            n["similarity"],
+                            n["frequency"],
+                            doc["title"],
+                            url
+                        ))
+            parts.append("</table>")
 
     parts.append("</body></html>")
     return "\n".join(parts)
 
 
+# Main
 def main():
     logger.info("Starting concept neighbour explorer")
 
@@ -169,91 +148,94 @@ def main():
             index, vocab = load_slice_index(slice_range)
             audit[slice_key] = {}
 
-            # CACHE ALL SEED VECTORS FOR THIS SLICE
-            seed_vectors: dict[str, np.ndarray] = {}
-            for _concept, cfg in config.CONCEPT_SETS.items():
-                for seed in cfg["forms"]:
-                    vec = get_vector(conn, seed, slice_start, slice_end)
-                    if vec is not None:
-                        seed_vectors[seed] = vec
+            for concept in config.CONCEPT_SETS.keys():
+                seed = concept.lower()
+                vec = get_vector(conn, seed, slice_start, slice_end)
+                if vec is None:
+                    logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
+                    continue
 
-            for concept, cfg in config.CONCEPT_SETS.items():
-                audit[slice_key][concept] = {}
+                now = time.time()
+                if now - last_log_time > LOG_INTERVAL:
+                    logger.info(f"Processing slice {slice_key}, concept {concept}")
+                    last_log_time = now
 
-                for seed in cfg["forms"]:
-                    vec = seed_vectors.get(seed)
-                    if vec is None:
-                        continue
+                # FAISS search
+                D, Idx = index.search(vec.reshape(1, -1), TOP_K)
 
-                    now = time.time()
-                    if now - last_log_time > LOG_INTERVAL:
-                        logger.info(
-                            f"Processing slice {slice_key}, concept {concept}, seed {seed}"
-                        )
-                        last_log_time = now
+                # Build initial top neighbours
+                top_neighbors = [
+                    (vocab[idx], float(sim))
+                    for sim, idx in zip(D[0], Idx[0], strict=True)
+                    if sim >= SIM_THRESHOLD and vocab[idx] != seed
+                ]
 
-                    # FAISS SEARCH
-                    D, Idx = index.search(vec.reshape(1, -1), TOP_K)
-                    top_neighbors = [
-                        (vocab[idx], float(sim))
-                        for sim, idx in zip(D[0], Idx[0], strict=True)
-                        if sim >= SIM_THRESHOLD and vocab[idx] != seed
-                    ]
+                # Exclude known forms and false positives
+                known_forms = config.CONCEPT_SETS[concept].get("forms", set())
+                false_positives = config.CONCEPT_SETS[concept].get("false_positives", set())
+                top_neighbors = [
+                    (token, sim)
+                    for token, sim in top_neighbors
+                    if token not in known_forms and token not in false_positives
+                ]
 
-                    if not top_neighbors:
-                        continue
+                # Sort by similarity descending
+                top_neighbors.sort(key=lambda x: x[1], reverse=True)
 
-                    # BATCH FETCH FREQUENCY
-                    tokens = [t for t, _ in top_neighbors]
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            SELECT token, COUNT(*)
-                            FROM pamphlet_tokens
-                            WHERE token = ANY(%s)
-                            AND slice_start = %s
-                            AND slice_end = %s
-                            GROUP BY token
-                            """,
-                            (tokens, slice_start, slice_end),
-                        )
-                        freq_map = {r[0]: r[1] for r in cur.fetchall()}
+                if not top_neighbors:
+                    audit[slice_key][concept] = {"probe": seed, "neighbours": []}
+                    continue
 
-                    # BATCH FETCH DOCUMENTS
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            SELECT DISTINCT token, doc_id, title
-                            FROM pamphlet_tokens
-                            WHERE token = ANY(%s)
-                            AND slice_start = %s
-                            AND slice_end = %s
-                            """,
-                            (tokens, slice_start, slice_end),
-                        )
-                        docs_map: dict[str, list[dict[str, str]]] = {}
-                        for token_, doc_id, title in cur.fetchall():
-                            docs_map.setdefault(token_, []).append({"doc_id": doc_id, "title": title})
+                # Batch fetch frequency
+                tokens = [t for t, _ in top_neighbors]
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT token, COUNT(*)
+                        FROM pamphlet_tokens
+                        WHERE token = ANY(%s)
+                        AND slice_start = %s
+                        AND slice_end = %s
+                        GROUP BY token
+                        """,
+                        (tokens, slice_start, slice_end),
+                    )
+                    freq_map = {r[0]: r[1] for r in cur.fetchall()}
 
-                    # FETCH KWIC PER TOKEN (PER DOC)
-                    neighbors_list = []
-                    for token, sim in top_neighbors:
-                        token_freq = freq_map.get(token, 0)
+                # Batch fetch documents
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT token, doc_id, title
+                        FROM pamphlet_tokens
+                        WHERE token = ANY(%s)
+                        AND slice_start = %s
+                        AND slice_end = %s
+                        """,
+                        (tokens, slice_start, slice_end),
+                    )
+                    docs_map: Dict[str, List[Dict[str, str]]] = {}
+                    for token_, doc_id, title in cur.fetchall():
+                        docs_map.setdefault(token_, []).append({"doc_id": doc_id, "title": title})
 
-                        # docs: list of dicts, each dict has "doc_id": str, "title": str, "kwic": list[tuple[str,str,str]]
-                        docs: List[Dict[str, Any]] = docs_map.get(token, [])
+                # Fetch KWIC per token/doc
+                neighbours_list: List[Dict[str, Any]] = []
+                for token, sim in top_neighbors:
+                    token_freq = freq_map.get(token, 0)
+                    docs: List[Dict[str, Any]] = docs_map.get(token, [])
+                    for d in docs:
+                        d["kwic"] = fetch_kwic_for_doc(conn, token, d["doc_id"])
+                    neighbours_list.append({
+                        "token": token,
+                        "similarity": sim,
+                        "frequency": token_freq,
+                        "documents": docs
+                    })
 
-                        for d in docs:
-                            d["kwic"] = fetch_kwic_for_doc(conn, token, d["doc_id"])
-
-                        neighbors_list.append({
-                            "token": token,
-                            "similarity": sim,
-                            "frequency": token_freq,
-                            "documents": docs
-                        })
-
-                    audit[slice_key][concept][seed] = neighbors_list
+                audit[slice_key][concept] = {
+                    "probe": seed,
+                    "neighbours": neighbours_list
+                }
 
     # Write JSON
     json_path = config.OUT_DIR / "concept_neighbour_audit.json"

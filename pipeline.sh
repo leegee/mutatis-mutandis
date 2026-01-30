@@ -73,7 +73,7 @@ case "$PHASE" in
     8c|u|umap)
         RUN_SCRIPTS+=("$SRC/umap_interactive_liberty_umap.py")
         ;;
-    9|kwic)
+    9|ex)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
         ;;
     *)
