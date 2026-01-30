@@ -22,9 +22,9 @@ from lib.eebo_logging import logger
 from lib.faiss_slices import load_slice_index, get_vector
 
 
-TOP_K = 100
+TOP_K = 120
 SIM_THRESHOLD = 0.7
-CONTEXT_WINDOW = 8
+CONTEXT_WINDOW = 12
 LOG_INTERVAL = 120
 
 
