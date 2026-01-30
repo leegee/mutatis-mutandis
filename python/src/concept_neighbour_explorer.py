@@ -2,7 +2,7 @@
 """
 concept_neighbour_explorer.py
 
-Unified concept neighbour audit + KWIC visualisation.
+Orthographic and scribal variants of the same lexeme (eg “liberty”),
 
 Outputs:
 - concept_neighbour_audit.json
@@ -112,7 +112,8 @@ def build_html(audit_data: Dict[str, Any]) -> str:
     parts = ["""
     <html><head>
     <style>
-    body { font-family: monospace; }
+    body { font-family: monospace; background: black; color: #fffd }
+    a { color: cyan }
     table { border-collapse: collapse; width: 100%; margin-bottom: 40px; }
     td, th { border: 1px solid #ccc; padding: 4px; }
     .kw { font-weight: bold; text-align: center; background: #ffe; }
@@ -258,11 +259,13 @@ def main():
     json_path = config.OUT_DIR / "concept_neighbour_audit.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
+    logger.info(f"Wrote {json_path}")
 
     # Write HTML
     html = build_html(audit)
     html_path = config.OUT_DIR / "concept_kwic_audit.html"
     html_path.write_text(html, encoding="utf-8")
+    logger.info(f"Wrote {html_path}")
 
     logger.info("Explorer complete.")
 
