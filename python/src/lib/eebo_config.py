@@ -16,6 +16,7 @@ class FastTextParams(TypedDict):
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
 XML_ROOT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
+TEXT_BASE_URL = 'http://localhost:5000/documents/'
 
 # Should use a dict for this:
 OUT_DIR = BASE_DIR / "out"
@@ -152,20 +153,29 @@ CONCEPT_SETS: CanonicalRules = {
             "thliberties", "liberry", "libertyby",
             "iberty", "libertle", "libertles", "libertys",
             "iiberty", "iberties", "libety", "liberts",
-            "libertyliberty", "libertynow", "libertees",
-            "libertee", "libertes"
+            "libertynow", "libertees", "libetty",
+            "libertee", "libertes", "lyberty",
+            "lberty", "libertis", "leberty",
+            # Keep for now then remove after re-ingestion which will normalise:
+            "aliberty", "liberti", "berty",
+            # Diagnostic only, remove later:
+            "libe", "liber",
         },
         "false_positives": {
-            "libertine", "libertin", "libertins", "libertinage",
-            "libertind", "libertyin", "liberality"
+            "libertine", "libertin", "libertins", "libertinage", "libertinism",
+            "libertind", "libertyin", "liberality",  "libertinisme", "liberallity",
+            "libertism", "libertines",
+            # "liberal", "liberall",
         }
     },
 
-    "PROPERTY": {
-        "forms": {
-            "property", "propertie", "propriety"
-        },
-        "false_positives": set()
-    }
+    # "PROPERTY": {
+    #     "forms": {
+    #         "property", "propertie", "propriety"
+    #     },
+    #     "false_positives": {
+    #         "properly"
+    #     }
+    # }
 }
 
