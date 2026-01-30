@@ -300,15 +300,15 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 -- REFRESH MATERIALIZED VIEW pamphlet_tokens;
             """)
 
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_pt_doc_tokenidx
-                ON pamphlet_tokens(doc_id, token_idx);
-            """)
+            # cur.execute("""
+            #     CREATE INDEX IF NOT EXISTS idx_pt_doc_tokenidx
+            #     ON pamphlet_tokens(doc_id, token_idx);
+            # """)
 
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_pt_doc_token_lower
-                ON pamphlet_tokens(doc_id, LOWER(token));
-            """)
+            # cur.execute("""
+            #     CREATE INDEX IF NOT EXISTS idx_pt_doc_token_lower
+            #     ON pamphlet_tokens(doc_id, LOWER(token));
+            # """)
 
     logger.info("Tiered token indexes created")
 
