@@ -157,7 +157,7 @@ CONCEPT_SETS: CanonicalRules = {
         },
         "false_positives": {
             "libertine", "libertin", "libertins", "libertinage",
-            "libertind", "libertyin"
+            "libertind", "libertyin", "liberality"
         }
     },
 
