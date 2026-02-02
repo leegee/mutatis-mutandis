@@ -156,19 +156,24 @@ CONCEPT_SETS: CanonicalRules = {
             "libertynow", "libertees", "libetty",
             "libertee", "libertes", "lyberty",
             "lberty", "libertis", "leberty",
+            "liberrie",
             # Keep for now then remove after re-ingestion which will normalise:
             "aliberty", "liberti", "berty",
+            # Need to pre-ingest fix "lib erty" etc
+            "libe",
             # Diagnostic only, remove later:
-            "libe", "liber",
+            # "liber",
         },
         "false_positives": {
             "libertine", "libertin", "libertins", "libertinage", "libertinism",
             "libertind", "libertyin", "liberality",  "libertinisme", "liberallity",
             "libertism", "libertines", "liberta",
             # "liberal", "liberall",
-            "libels", "libertates", "liberabit", "libero",
+            "libels",
+            "libertate", "libertates", "liberabit", "libero","deliberates", "deliberated",
             "liberto","liberabo","liberall","liberalytie","liberaui","liberally","liberates","liberalitie",
-            "libera", "deliberate", "liberando"
+            "libera", "deliberate", "liberando", "libya", "liberi", "liberior"
+
         }
     },
 
