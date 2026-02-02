@@ -225,15 +225,25 @@ def create_tiered_token_indexes(conn: Connection) -> None:
 
             cur.execute("""
                 CREATE MATERIALIZED VIEW document_search AS
-                    WITH numbered_tokens AS (
-                        SELECT
-                            t.doc_id,
-                            t.token,
-                            (row_number() OVER (PARTITION BY t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
-                        FROM tokens t
-                        JOIN pamphlet_corpus pc
-                        ON pc.doc_id = t.doc_id
-                    )
+                WITH numbered_tokens AS (
+                    SELECT
+                        t.doc_id,
+                        t.token,
+                        t.token_idx,
+                        (row_number() OVER (PARTITION BY t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
+                    FROM tokens t
+                    JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
+                ),
+
+                block_text AS (
+                    SELECT
+                        doc_id,
+                        block_idx,
+                        string_agg(token, ' ') AS text
+                    FROM numbered_tokens
+                    GROUP BY doc_id, block_idx
+                )
+
                 SELECT
                     d.doc_id,
                     d.title,
@@ -241,11 +251,11 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     d.pub_year,
                     d.pub_place,
                     d.publisher,
-                    nt.block_idx,
-                    to_tsvector('english', string_agg(nt.token, ' ')) AS tsv
+                    bt.block_idx,
+                    bt.text,
+                    to_tsvector('english', bt.text) AS tsv
                 FROM pamphlet_corpus d
-                JOIN numbered_tokens nt ON nt.doc_id = d.doc_id
-                GROUP BY d.doc_id, nt.block_idx, d.title, d.author, d.pub_year, d.pub_place, d.publisher;
+                JOIN block_text bt ON bt.doc_id = d.doc_id;
 
                 -- Upudate with: REFRESH MATERIALIZED VIEW document_search;
             """)
@@ -253,6 +263,10 @@ def create_tiered_token_indexes(conn: Connection) -> None:
 
             logger.info("Creating GIN index on materialised view")
             cur.execute("CREATE INDEX idx_document_search_tsv ON document_search USING GIN(tsv);")
+
+            logger.info("Creating index on materialised view doc_id")
+            cur.execute("CREATE INDEX idx_document_search_docid ON document_search(doc_id);")
+
             logger.info("GIN index created")
 
             cur.execute("""
@@ -292,12 +306,12 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 JOIN pamphlet_corpus d
                 ON t.doc_id = d.doc_id;
 
-                -- Index for performance on slice queries
-                CREATE INDEX IF NOT EXISTS idx_pamphlet_tokens_docid_slice
-                ON pamphlet_tokens(doc_id, slice_idx);
+                -- Index for performance on slice queries?
+                -- CREATE INDEX IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_idx);
 
-                -- Refresh when new data ingested:
-                -- REFRESH MATERIALIZED VIEW pamphlet_tokens;
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens (doc_id, token, token_idx);
+
+                REFRESH MATERIALIZED VIEW document_search;
             """)
 
             # cur.execute("""
