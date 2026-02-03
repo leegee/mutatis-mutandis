@@ -156,10 +156,13 @@ CONCEPT_SETS: CanonicalRules = {
             "libertynow", "libertees", "libetty",
             "libertee", "libertes", "lyberty",
             "lberty", "libertis", "leberty",
-            "liberrie",
+            "liberrie", "lliberty"
+
             # Keep for now then remove after re-ingestion which will normalise:
             "aliberty", "liberti", "berty",
             # Need to pre-ingest fix "lib erty" etc
+            "generalliberty",
+            "understandingliberty",
             "libe",
             # Diagnostic only, remove later:
             # "liber",

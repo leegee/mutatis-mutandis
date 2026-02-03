@@ -26,6 +26,8 @@ TOP_K = 100
 SIM_THRESHOLD = 0.7
 CONTEXT_WINDOW = 8
 LOG_INTERVAL = 120
+KWIC_MAX_LEFT = 40
+KWIC_MAX_RIGHT = 40
 
 
 def fetch_kwic_for_doc(
@@ -34,11 +36,15 @@ def fetch_kwic_for_doc(
     doc_id: str,
     limit: int = 3,
 ) -> List[Tuple[str, str, str]]:
+    """
+    Fetch KWIC contexts for a token in a document, restricted to the
+    pamphlet corpus.
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT token_idx
-            FROM tokens
+            FROM pamphlet_tokens
             WHERE doc_id = %s
               AND token = %s
             LIMIT %s;
@@ -49,24 +55,29 @@ def fetch_kwic_for_doc(
 
     rows: List[Tuple[str, str, str]] = []
 
+    if not positions:
+        return rows
+
+    min_idx = min(positions) - CONTEXT_WINDOW
+    max_idx = max(positions) + CONTEXT_WINDOW
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT token_idx, token
+            FROM pamphlet_tokens
+            WHERE doc_id = %s
+              AND token_idx BETWEEN %s AND %s
+            ORDER BY token_idx;
+            """,
+            (doc_id, min_idx, max_idx),
+        )
+        context_rows = cur.fetchall()
+
     for idx in positions:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT token_idx, token
-                FROM tokens
-                WHERE doc_id = %s
-                  AND token_idx BETWEEN %s AND %s
-                ORDER BY token_idx;
-                """,
-                (doc_id, idx - CONTEXT_WINDOW, idx + CONTEXT_WINDOW),
-            )
-            context = cur.fetchall()
-
-        left = " ".join(tok for i, tok in context if i < idx)
-        kw = next(tok for i, tok in context if i == idx)
-        right = " ".join(tok for i, tok in context if i > idx)
-
+        left = " ".join(tok for i, tok in context_rows if i < idx)
+        kw = next(tok for i, tok in context_rows if i == idx)
+        right = " ".join(tok for i, tok in context_rows if i > idx)
         rows.append((left, kw, right))
 
     return rows
@@ -75,9 +86,9 @@ def fetch_kwic_for_doc(
 def make_html_row(left, kw, right, sim, freq, title, url):
     return f"""
     <tr>
-        <td class="left">{left}</td>
+        <td class="left">{left[:KWIC_MAX_LEFT]}</td>
         <td class="kw">{kw}</td>
-        <td class="right">{right}</td>
+        <td class="right">{right[:KWIC_MAX_RIGHT]}</td>
         <td>{sim:.3f}</td>
         <td>{freq}</td>
         <td><a href="{url}" target="_blank">{title}</a></td>
@@ -146,7 +157,6 @@ def main():
             audit[slice_key] = {}
 
             for concept in config.CONCEPT_SETS.keys():
-                # --- canonical probe ---
                 seed = concept.lower()
                 vec = get_vector(conn, seed, slice_start, slice_end)
                 if vec is None:
@@ -158,11 +168,14 @@ def main():
                     logger.info(f"Processing slice {slice_key}, concept {concept}")
                     last_log_time = now
 
-                # --- FAISS search ---
+                # FAISS search
                 D, Idx = index.search(vec.reshape(1, -1), TOP_K)
-                top_neighbors = [(vocab[idx], float(sim)) for sim, idx in zip(D[0], Idx[0], strict=True)]
+                top_neighbors = [
+                    (vocab[idx], float(sim))
+                    for sim, idx in zip(D[0], Idx[0], strict=True)
+                    if idx != -1
+                ]
 
-                # --- Filter known forms / false positives ---
                 known_forms = config.CONCEPT_SETS[concept].get("forms", set())
                 false_positives = config.CONCEPT_SETS[concept].get("false_positives", set())
                 top_neighbors = [
@@ -175,7 +188,7 @@ def main():
                     audit[slice_key][concept] = {"probe": seed, "neighbours": []}
                     continue
 
-                # --- Batch fetch frequency ---
+                # Batch fetch frequency
                 tokens = [t for t, _ in top_neighbors]
                 with conn.cursor() as cur:
                     cur.execute(
@@ -191,7 +204,7 @@ def main():
                     )
                     freq_map = {r[0]: r[1] for r in cur.fetchall()}
 
-                # --- Batch fetch documents ---
+                # Batch fetch documents
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -207,7 +220,7 @@ def main():
                     for token_, doc_id, title in cur.fetchall():
                         docs_map.setdefault(token_, []).append({"doc_id": doc_id, "title": title})
 
-                # --- Fetch KWIC per token/doc ---
+                # Fetch KWIC
                 neighbours_list: List[Dict[str, Any]] = []
                 for token, sim in top_neighbors:
                     token_freq = freq_map.get(token, 0)
@@ -226,13 +239,13 @@ def main():
                     "neighbours": neighbours_list
                 }
 
-    # --- Write JSON ---
+    # Write JSON
     json_path = config.OUT_DIR / "concept_neighbour_audit.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
     logger.info(f"Wrote {json_path}")
 
-    # --- Write HTML ---
+    # Write HTML
     html = build_html(audit)
     html_path = config.OUT_DIR / "concept_kwic_audit.html"
     html_path.write_text(html, encoding="utf-8")

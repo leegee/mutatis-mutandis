@@ -1,366 +1,258 @@
-# lib/eebo_db.py
-
+#!/usr/bin/env python
 """
-eebo_db.py - EEBO database access
+concept_neighbour_explorer.py
 
-Connections, schema (wip that should use .sql files), etc
+Exploratory concept neighbour & KWIC audit with canonicalisation.
 
+Each concept key is used as the probe (lowercased).
+Known forms of the concept are excluded from the neighbors.
+Outputs:
+- concept_neighbour_audit.json
+- concept_kwic_audit.html
 """
 
-import psycopg
-from psycopg import sql
-from psycopg import Connection
+from __future__ import annotations
+
+import json
 import time
+from typing import Any, Dict, List, Tuple
 
+import lib.eebo_config as config
+import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
+from lib.faiss_slices import load_slice_index, get_vector
+
+TOP_K = 100
+SIM_THRESHOLD = 0.7
+CONTEXT_WINDOW = 8
+LOG_INTERVAL = 120
+KWIC_MAX_LEFT = 40
+KWIC_MAX_RIGHT = 40
 
 
-_DB_RETRIES = 3
-_DB_RETRY_DELAY = 5  # seconds
-
-
-def get_connection(
-    *,
-    connect_timeout: int = 5,
-    application_name: str = "eebo",
-) -> Connection:
+def fetch_kwic_for_doc(
+    conn,
+    token: str,
+    doc_id: str,
+    limit: int = 3,
+) -> List[Tuple[str, str, str]]:
     """
-    Create and return a PostgreSQL connection with autocommit disabled.
-    Callers should use `with conn.transaction():` or call `conn.commit()`.
-    Applies session-level tuning suitable for large bulk ingestion.
+    Fetch KWIC contexts for a token in a document, restricted to the
+    pamphlet corpus.
     """
-    last_exc: Exception | None = None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT token_idx
+            FROM pamphlet_tokens
+            WHERE doc_id = %s
+              AND token = %s
+            LIMIT %s;
+            """,
+            (doc_id, token, limit),
+        )
+        positions = [r[0] for r in cur.fetchall()]
 
-    for attempt in range(1, _DB_RETRIES + 1):
-        try:
-            conn = psycopg.connect(
-                dbname="eebo",
-                user="postgres",
-                host="localhost",
-                port=5432,
-                connect_timeout=connect_timeout,
-                application_name=application_name,
-            )
-            conn.autocommit = False
+    rows: List[Tuple[str, str, str]] = []
 
-            # Session-level tuning
-            with conn.cursor() as cur:
-                cur.execute("SET synchronous_commit = OFF;")
-                cur.execute("SET work_mem = '128MB';")
-                cur.execute("SET maintenance_work_mem = '1GB';")
-                cur.execute("SET temp_buffers = '32MB';")
+    if not positions:
+        return rows
 
-            return conn
+    min_idx = min(positions) - CONTEXT_WINDOW
+    max_idx = max(positions) + CONTEXT_WINDOW
 
-        except Exception as exc:
-            last_exc = exc
-            logger.warning(
-                f"PostgreSQL connection attempt {attempt}/{_DB_RETRIES} failed: {exc}"
-            )
-            if attempt < _DB_RETRIES:
-                time.sleep(_DB_RETRY_DELAY)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT token_idx, token
+            FROM pamphlet_tokens
+            WHERE doc_id = %s
+              AND token_idx BETWEEN %s AND %s
+            ORDER BY token_idx;
+            """,
+            (doc_id, min_idx, max_idx),
+        )
+        context_rows = cur.fetchall()
 
-    raise RuntimeError("Could not establish PostgreSQL connection") from last_exc
+    for idx in positions:
+        left = " ".join(tok for i, tok in context_rows if i < idx)
+        kw = next(tok for i, tok in context_rows if i == idx)
+        right = " ".join(tok for i, tok in context_rows if i > idx)
+        rows.append((left, kw, right))
+
+    return rows
 
 
-def get_autocommit_connection(
-    *,
-    connect_timeout: int = 5,
-    application_name: str = "eebo",
-) -> Connection:
+def make_html_row(left, kw, right, sim, freq, title, url):
+    return f"""
+    <tr>
+        <td class="left">{left[:KWIC_MAX_LEFT]}</td>
+        <td class="kw">{kw}</td>
+        <td class="right">{right[:KWIC_MAX_RIGHT]}</td>
+        <td>{sim:.3f}</td>
+        <td>{freq}</td>
+        <td><a href="{url}" target="_blank">{title}</a></td>
+    </tr>
     """
-    Get a fresh PostgreSQL connection in autocommit mode.
-    Safe for COPY / bulk insert operations.
-    Applies session-level tuning suitable for high-speed ingestion.
-    """
-    last_exc: Exception | None = None
-
-    for attempt in range(1, _DB_RETRIES + 1):
-        try:
-            conn = psycopg.connect(
-                dbname="eebo",
-                user="postgres",
-                host="localhost",
-                port=5432,
-                connect_timeout=connect_timeout,
-                application_name=application_name,
-                autocommit=True,  # enable immediately on connect
-            )
-
-            # Session-level tuning for bulk insert
-            with conn.cursor() as cur:
-                cur.execute("SET synchronous_commit = OFF;")
-                cur.execute("SET work_mem = '128MB';")
-                cur.execute("SET maintenance_work_mem = '1GB';")
-                cur.execute("SET temp_buffers = '32MB';")
-
-            return conn
-
-        except Exception as exc:
-            last_exc = exc
-            logger.warning(
-                f"PostgreSQL autocommit connection attempt {attempt}/{_DB_RETRIES} failed: {exc}"
-            )
-            if attempt < _DB_RETRIES:
-                time.sleep(_DB_RETRY_DELAY)
-
-    raise RuntimeError(
-        "Could not establish PostgreSQL autocommit connection"
-    ) from last_exc
 
 
+def build_html(audit_data: Dict[str, Any]) -> str:
+    parts = ["""
+    <html><head>
+    <style>
+    body { font-family: monospace; background: black; color: #fffd }
+    a { color: cyan }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 40px; }
+    td, th { border: 1px solid #444; padding: 4px; }
+    .kw { font-weight: bold; text-align: center; background: #ffe; color: black }
+    .left { text-align: right; color: #aaa; }
+    .right { text-align: left; color: #aaa; }
+    </style></head><body>
+    <h1>Concept Neighbour KWIC Audit (Canonicalised)</h1>
+    """]
 
-def init_db(conn: Connection, drop_existing: bool = True) -> None:
-    """
-    Initialise database schema.
-    If drop_existing=True, all existing tables are dropped first.
-    Intended for clean re-ingestion runs.
-    """
-    logger.info("Initialising database schema")
+    for slice_key, concepts in audit_data.items():
+        parts.append(f"<h2>Slice {slice_key}</h2>")
 
-    with conn.transaction():
-        with conn.cursor() as cur:
+        for concept, block in concepts.items():
+            seed = block["probe"]
+            parts.append(f"<h3>Concept: {concept} (probe: {seed})</h3>")
 
-            if drop_existing:
-                logger.info("Dropping existing tables")
-                cur.execute("""
-                    DROP TABLE IF EXISTS documents CASCADE;
-                    DROP TABLE IF EXISTS tokens CASCADE;
-                    DROP TABLE IF EXISTS token_vectors CASCADE;
-                    DROP TABLE IF EXISTS concept_slice_stats;
-                    DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
-                    DROP INDEX IF EXISTS idx_pamphlet_corpus_docid;
-                    DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
-                    DROP INDEX IF EXISTS idx_pamphlet_tokens_docid_slice;
-                """)
-
-            logger.info("Creating tables")
-            cur.execute("""
-                /* Core document metadata */
-                CREATE TABLE documents (
-                    doc_id TEXT PRIMARY KEY,
-                    title TEXT,
-                    author TEXT,
-                    pub_year INTEGER,
-                    publisher TEXT,
-                    pub_place TEXT,
-                    source_date_raw TEXT,
-                    token_count INTEGER,
-                    slice_start INTEGER,
-                    slice_end INTEGER
-                );
-
-                CREATE TABLE tokens (
-                    doc_id TEXT NOT NULL,
-                    token_idx INTEGER NOT NULL,
-                    token TEXT NOT NULL,
-                    raw_token text,
-                    sentence_id INTEGER,
-                    canonical TEXT,
-                    PRIMARY KEY (doc_id, token_idx),
-                    FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
-                );
-
-                CREATE TABLE token_vectors (
-                    token TEXT NOT NULL,
-                    slice_start INT NOT NULL,
-                    slice_end   INT NOT NULL,
-                    vector FLOAT4[] NOT NULL,
-                    PRIMARY KEY (token, slice_start, slice_end)
-                );
-
-                CREATE TABLE concept_slice_stats (
-                    concept_name TEXT,
-                    slice_start  INT,
-                    slice_end    INT,
-                    centroid     FLOAT4[] NOT NULL,
-                    variance     FLOAT4,        -- mean squared distance from centroid
-                    token_count  INT,
-                    forms_used   TEXT[],        -- which variants actually present
-                    PRIMARY KEY (concept_name, slice_start, slice_end)
-                );
-
+            parts.append("""
+            <table>
+            <tr>
+                <th>Left</th><th>Keyword</th><th>Right</th>
+                <th>Sim</th><th>Freq</th><th>Doc</th>
+            </tr>
             """)
 
-    logger.info("Database schema created")
+            for n in block["neighbours"]:
+                for doc in n["documents"]:
+                    for left, kw, right in doc["kwic"]:
+                        url = f"{getattr(config, 'TEXT_BASE_URL', '')}{doc['doc_id']}"
+                        parts.append(make_html_row(
+                            left, kw, right,
+                            n["similarity"],
+                            n["frequency"],
+                            doc["title"],
+                            url
+                        ))
+            parts.append("</table>")
+
+    parts.append("</body></html>")
+    return "\n".join(parts)
 
 
+def main():
+    logger.info("Starting canonicalised concept neighbour explorer")
 
-def drop_token_indexes(conn: Connection) -> None:
-    logger.info("Dropping token indexes")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("""
-                DROP INDEX IF EXISTS idx_tokens_token;
-                DROP INDEX IF EXISTS idx_tokens_doc;
-                DROP INDEX IF EXISTS idx_tokens_sentence;
-                DROP INDEX IF EXISTS idx_tokens_canonical;
-                DROP INDEX IF EXISTS idx_tokens_sentence_notnull;
-            """)
-    logger.info("Token indexes dropped")
+    last_log_time = time.time()
+    audit: Dict[str, Any] = {}
 
+    with eebo_db.get_connection() as conn:
+        for slice_range in config.SLICES:
+            slice_start, slice_end = slice_range
+            slice_key = f"{slice_start}_{slice_end}"
+            index, vocab = load_slice_index(slice_range)
+            audit[slice_key] = {}
 
-def create_token_indexes(conn: Connection) -> None:
-    logger.info("Creating basic token indexes")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(doc_id);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_sentence ON tokens(sentence_id);")
-    logger.info("Basic token indexes created")
+            for concept in config.CONCEPT_SETS.keys():
+                seed = concept.lower()
+                vec = get_vector(conn, seed, slice_start, slice_end)
+                if vec is None:
+                    logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
+                    continue
 
+                now = time.time()
+                if now - last_log_time > LOG_INTERVAL:
+                    logger.info(f"Processing slice {slice_key}, concept {concept}")
+                    last_log_time = now
 
-def create_tiered_token_indexes(conn: Connection) -> None:
-    logger.info("Creating tiered token indexes")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical ON tokens(canonical);")
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_tokens_sentence_notnull
-                ON tokens(sentence_id)
-                WHERE sentence_id IS NOT NULL;
-            """)
+                # FAISS search
+                D, Idx = index.search(vec.reshape(1, -1), TOP_K)
+                top_neighbors = [
+                    (vocab[idx], float(sim))
+                    for sim, idx in zip(D[0], Idx[0], strict=True)
+                    if idx != -1
+                ]
 
-            logger.info("Creating materialised view")
+                known_forms = config.CONCEPT_SETS[concept].get("forms", set())
+                false_positives = config.CONCEPT_SETS[concept].get("false_positives", set())
+                top_neighbors = [
+                    (token, sim)
+                    for token, sim in top_neighbors
+                    if token not in known_forms and token not in false_positives
+                ]
 
-            cur.execute("""
-                CREATE MATERIALIZED VIEW document_search AS
-                WITH numbered_tokens AS (
-                    SELECT
-                        t.doc_id,
-                        t.token,
-                        t.token_idx,
-                        (row_number() OVER (PARTITION BY t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
-                    FROM tokens t
-                    JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
-                ),
+                if not top_neighbors:
+                    audit[slice_key][concept] = {"probe": seed, "neighbours": []}
+                    continue
 
-                block_text AS (
-                    SELECT
-                        doc_id,
-                        block_idx,
-                        string_agg(token, ' ') AS text
-                    FROM numbered_tokens
-                    GROUP BY doc_id, block_idx
-                )
+                # Batch fetch frequency
+                tokens = [t for t, _ in top_neighbors]
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT token, COUNT(*)
+                        FROM pamphlet_tokens
+                        WHERE token = ANY(%s)
+                        AND slice_start = %s
+                        AND slice_end = %s
+                        GROUP BY token
+                        """,
+                        (tokens, slice_start, slice_end),
+                    )
+                    freq_map = {r[0]: r[1] for r in cur.fetchall()}
 
-                SELECT
-                    d.doc_id,
-                    d.title,
-                    d.author,
-                    d.pub_year,
-                    d.pub_place,
-                    d.publisher,
-                    bt.block_idx,
-                    bt.text,
-                    to_tsvector('english', bt.text) AS tsv
-                FROM pamphlet_corpus d
-                JOIN block_text bt ON bt.doc_id = d.doc_id;
+                # Batch fetch documents
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT token, doc_id, title
+                        FROM pamphlet_tokens
+                        WHERE token = ANY(%s)
+                        AND slice_start = %s
+                        AND slice_end = %s
+                        """,
+                        (tokens, slice_start, slice_end),
+                    )
+                    docs_map: Dict[str, List[Dict[str, str]]] = {}
+                    for token_, doc_id, title in cur.fetchall():
+                        docs_map.setdefault(token_, []).append({"doc_id": doc_id, "title": title})
 
-                -- Upudate with: REFRESH MATERIALIZED VIEW document_search;
-            """)
-            logger.info("Created materialised view with block-level tsvectors")
+                # Fetch KWIC
+                neighbours_list: List[Dict[str, Any]] = []
+                for token, sim in top_neighbors:
+                    token_freq = freq_map.get(token, 0)
+                    docs: List[Dict[str, Any]] = docs_map.get(token, [])
+                    for d in docs:
+                        d["kwic"] = fetch_kwic_for_doc(conn, token, d["doc_id"])
+                    neighbours_list.append({
+                        "token": token,
+                        "similarity": sim,
+                        "frequency": token_freq,
+                        "documents": docs
+                    })
 
-            logger.info("Creating GIN index on materialised view")
-            cur.execute("CREATE INDEX idx_document_search_tsv ON document_search USING GIN(tsv);")
+                audit[slice_key][concept] = {
+                    "probe": seed,
+                    "neighbours": neighbours_list
+                }
 
-            logger.info("Creating index on materialised view doc_id")
-            cur.execute("CREATE INDEX idx_document_search_docid ON document_search(doc_id);")
+    # Write JSON
+    json_path = config.OUT_DIR / "concept_neighbour_audit.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(audit, f, indent=2)
+    logger.info(f"Wrote {json_path}")
 
-            logger.info("GIN index created")
+    # Write HTML
+    html = build_html(audit)
+    html_path = config.OUT_DIR / "concept_kwic_audit.html"
+    html_path.write_text(html, encoding="utf-8")
+    logger.info(f"Wrote {html_path}")
 
-            cur.execute("""
-                -- Pamphlet-only document materialized view
-                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_corpus AS
-                SELECT *,
-                    CASE
-                        WHEN token_count <= 15000 THEN 'core'
-                        ELSE 'boundary'
-                    END AS corpus_zone
-                FROM documents
-                WHERE token_count BETWEEN 500 AND 20000
-                AND title !~* '(tragedy|comedy|farce|interlude|play)';
-
-                -- Index for fast joins
-                CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid
-                ON pamphlet_corpus(doc_id);
-
-                -- Refresh when ingesting new:
-                -- REFRESH MATERIALIZED VIEW pamphlet_corpus;
-
-                -- Slice-level tokens restricted to pamphlets
-                -- Slice-level tokens restricted to pamphlets
-                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_tokens AS
-                SELECT t.doc_id,
-                    t.token_idx,
-                    t.token,
-                    t.canonical,
-                    t.sentence_id,
-                    d.corpus_zone,
-                    d.pub_year,
-                    d.title,
-                    d.token_count,
-                    d.slice_start,
-                    d.slice_end
-                FROM tokens t
-                JOIN pamphlet_corpus d
-                ON t.doc_id = d.doc_id;
-
-                -- Index for performance on slice queries?
-                -- CREATE INDEX IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_idx);
-
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens (doc_id, token, token_idx);
-
-                REFRESH MATERIALIZED VIEW document_search;
-            """)
-
-            # cur.execute("""
-            #     CREATE INDEX IF NOT EXISTS idx_pt_doc_tokenidx
-            #     ON pamphlet_tokens(doc_id, token_idx);
-            # """)
-
-            # cur.execute("""
-            #     CREATE INDEX IF NOT EXISTS idx_pt_doc_token_lower
-            #     ON pamphlet_tokens(doc_id, LOWER(token));
-            # """)
-
-    logger.info("Tiered token indexes created")
+    logger.info("Explorer complete.")
 
 
-def drop_tokens_fk(conn: Connection) -> None:
-    logger.info("Dropping tokens.doc_id foreign key")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("ALTER TABLE tokens DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;")
-    logger.info("tokens.doc_id foreign key dropped")
-
-
-def create_tokens_fk(conn: Connection) -> None:
-    logger.info("Creating tokens.doc_id foreign key")
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("""
-                ALTER TABLE tokens
-                ADD CONSTRAINT tokens_doc_id_fkey FOREIGN KEY (doc_id)
-                REFERENCES documents(doc_id)
-                ON DELETE CASCADE;
-            """)
-
-    # UPDATE documents d
-    # SET tsv = to_tsvector('english', (SELECT string_agg(token, ' ') FROM tokens t WHERE t.doc_id = d.doc_id))
-    # WHERE d.doc_id = 'A00001';
-
-    logger.info("tokens.doc_id foreign key created")
-
-
-def refresh_views(conn: Connection) -> None:
-    logger.info("Refreshing materialized views")
-
-    with conn.transaction():
-        with conn.cursor() as cur:
-            for view in ["pamphlet_tokens", "pamphlet_corpus", "document_search"]:
-                logger.info(f"Refreshing {view}")
-                cur.execute(
-                    sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) )
-                )
-    logger.info("All views refreshed")
+if __name__ == "__main__":
+    main()
