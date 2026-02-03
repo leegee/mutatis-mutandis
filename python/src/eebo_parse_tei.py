@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-# eebo_parse_tei.py
 """
-Multi-process streaming EEBO TEI XML ingestion pipeline
+eebo_parse_tei.py - Multi-process streaming EEBO TEI XML ingestion pipeline
 
 - Multi-process XML parsing
 - Progressive streaming COPY into final tables
@@ -35,6 +34,7 @@ import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.eebo_logging import logger
+from lib.language_detect import set_document_languages
 
 MAX_DOCS: Optional[int] = None
 
@@ -405,6 +405,8 @@ def main() -> None:
         batch_docs=config.BATCH_DOCS,
         batch_tokens=config.BATCH_TOKENS
     )
+
+    set_document_languages()
 
     logger.info('All ingested, restoring indexes')
     with eebo_db.get_connection() as conn:

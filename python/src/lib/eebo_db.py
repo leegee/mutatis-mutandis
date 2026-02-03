@@ -147,7 +147,8 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     source_date_raw TEXT,
                     token_count INTEGER,
                     slice_start INTEGER,
-                    slice_end INTEGER
+                    slice_end INTEGER,
+                    lang CHAR(3) NOT NULL DEFAULT 'eng'
                 );
 
                 CREATE TABLE tokens (
@@ -206,7 +207,10 @@ def create_token_indexes(conn: Connection) -> None:
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(doc_id);")
+            cur.execute("CREATE INDEX idx_tokens_token_lower ON tokens (lower(token));")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_sentence ON tokens(sentence_id);")
+            cur.execute("CREATE INDEX idx_documents_lang ON documents(lang);")
+
     logger.info("Basic token indexes created")
 
 
@@ -222,6 +226,52 @@ def create_tiered_token_indexes(conn: Connection) -> None:
             """)
 
             logger.info("Creating materialised view")
+
+            cur.execute("""
+                -- Pamphlet-only document materialized view
+                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_corpus AS
+                SELECT *,
+                    CASE
+                        WHEN token_count <= 15000 THEN 'core'
+                        ELSE 'boundary'
+                    END AS corpus_zone
+                FROM documents
+                WHERE token_count BETWEEN 500 AND 20000
+                AND title !~* '(tragedy|comedy|farce|interlude|play)'
+                AND lang = 'eng';
+
+                -- Index for fast joins
+                CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid
+                ON pamphlet_corpus(doc_id);
+
+                -- Refresh when ingesting new:
+                -- REFRESH MATERIALIZED VIEW pamphlet_corpus;
+
+                -- Slice-level tokens restricted to pamphlets
+                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_tokens AS
+                SELECT t.doc_id,
+                    t.token_idx,
+                    t.token,
+                    t.canonical,
+                    t.sentence_id,
+                    d.corpus_zone,
+                    d.pub_year,
+                    d.title,
+                    d.token_count,
+                    d.slice_start,
+                    d.slice_end
+                FROM tokens t
+                JOIN pamphlet_corpus d
+                ON t.doc_id = d.doc_id;
+
+                -- Index for performance on slice queries?
+                -- CREATE INDEX IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_idx);
+
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens (doc_id, token, token_idx);
+
+                REFRESH MATERIALIZED VIEW document_search;
+            """)
+
 
             cur.execute("""
                 CREATE MATERIALIZED VIEW document_search AS
@@ -268,51 +318,6 @@ def create_tiered_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX idx_document_search_docid ON document_search(doc_id);")
 
             logger.info("GIN index created")
-
-            cur.execute("""
-                -- Pamphlet-only document materialized view
-                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_corpus AS
-                SELECT *,
-                    CASE
-                        WHEN token_count <= 15000 THEN 'core'
-                        ELSE 'boundary'
-                    END AS corpus_zone
-                FROM documents
-                WHERE token_count BETWEEN 500 AND 20000
-                AND title !~* '(tragedy|comedy|farce|interlude|play)';
-
-                -- Index for fast joins
-                CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid
-                ON pamphlet_corpus(doc_id);
-
-                -- Refresh when ingesting new:
-                -- REFRESH MATERIALIZED VIEW pamphlet_corpus;
-
-                -- Slice-level tokens restricted to pamphlets
-                -- Slice-level tokens restricted to pamphlets
-                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_tokens AS
-                SELECT t.doc_id,
-                    t.token_idx,
-                    t.token,
-                    t.canonical,
-                    t.sentence_id,
-                    d.corpus_zone,
-                    d.pub_year,
-                    d.title,
-                    d.token_count,
-                    d.slice_start,
-                    d.slice_end
-                FROM tokens t
-                JOIN pamphlet_corpus d
-                ON t.doc_id = d.doc_id;
-
-                -- Index for performance on slice queries?
-                -- CREATE INDEX IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_idx);
-
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens (doc_id, token, token_idx);
-
-                REFRESH MATERIALIZED VIEW document_search;
-            """)
 
             # cur.execute("""
             #     CREATE INDEX IF NOT EXISTS idx_pt_doc_tokenidx
