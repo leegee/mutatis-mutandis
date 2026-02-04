@@ -1,11 +1,11 @@
-import networkx as nx
+from typing import Dict, List
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from statistics import mean
-from typing import Dict, List
-
+import networkx as nx
 import matplotlib.pyplot as plt
+
 import lib.eebo_config as config
 
 INPUT_FILE = config.OUT_DIR / "concept_neighbour_audit.json"
@@ -106,61 +106,72 @@ plt.show()
 
 
 
-
-# Build network
+# Plot network
 
 G = nx.DiGraph()
 
+# Assign a column index for each slice (sorted)
+slice_names = sorted(summary_by_slice.keys())
+slice_to_col = {s: i for i, s in enumerate(slice_names)}
+
 for token, trajectory in token_trajectories.items():
     if all(entry["frequency"] >= MIN_FREQ for entry in trajectory):
-        # convert slices to mid-years
-        mid_years = [
-            int(entry["slice"].split("_")[0]) +
-            (int(entry["slice"].split("_")[1]) - int(entry["slice"].split("_")[0])) // 2
-            for entry in trajectory
-        ]
+        cols = [slice_to_col[entry["slice"]] for entry in trajectory]
         ranks = [entry["rank"] for entry in trajectory]
 
-        # add nodes and edges along trajectory
+        # add nodes and edges
         for i in range(len(trajectory)):
-            node_id = f"{token}_{mid_years[i]}"
-            G.add_node(node_id, label=token, year=mid_years[i], rank=ranks[i])
+            node_id = f"{token}_{cols[i]}"
+            G.add_node(node_id, label=token, col=cols[i], rank=ranks[i], slice=trajectory[i]["slice"])
             if i > 0:
-                prev_node_id = f"{token}_{mid_years[i-1]}"
+                prev_node_id = f"{token}_{cols[i-1]}"
                 G.add_edge(prev_node_id, node_id)
 
+# Determine max label length for spacing
+max_label_len = max(len(n.split("_")[0]) for n in G.nodes())
 
-# Position nodes using mid-year and rank
 
-pos = {node: (data["year"], -data["rank"]) for node, data in G.nodes(data=True)}
+# Position nodes
 
-plt.figure(figsize=(14, 8))
+# Build mapping from column index to nodes in that column
+col_to_nodes = defaultdict(list)
+for node_id, attrs in G.nodes(data=True):
+    col_to_nodes[attrs["col"]].append(node_id)  # attrs["col"] must be numeric
+
+pos = {}
+for col, nodes_in_col in col_to_nodes.items():  # col is numeric
+    n = len(nodes_in_col)
+    for i, node_id in enumerate(nodes_in_col):
+        offset = (i - (n - 1) / 2) * max_label_len * 0.25
+        pos[node_id] = (col + offset, -float(G.nodes[node_id]["rank"]))
+
+
+# Plot
+
+plt.figure(figsize=(max(12, len(slice_names) * 1.5), 6))  # wide figure for many slices
+
 nx.draw(
     G,
     pos,
     with_labels=False,
-    node_size=400,
-    node_color="skyblue",
-    # arrows=True,
-    # arrowstyle="-|>",
+    node_size=600,
+    node_color="#ddd", # invisible
+    edgecolors="#555", # invisible
 )
 
-# add token labels
-for _node_id, attrs in G.nodes(data=True):
-    year = float(attrs["year"])
-    rank = attrs["rank"]
-    label = str(attrs["label"])
-
+# Add token labels above nodes
+for node_id, (x, y) in pos.items():
     plt.text(
-        year,
-        float(-rank),   # invert for plotting
-        label,
+        x,
+        y , # over node
+        G.nodes[node_id]["label"],
         fontsize=9,
         ha="center",
-        va="bottom"
+        va="bottom",
+        bbox=dict(facecolor="white", edgecolor="none", pad=1)  # makes label more readable
     )
 
-plt.xlabel("Year (mid-slice)")
+plt.xlabel("Year slices")
 plt.ylabel("Neighbour rank (1 = highest frequency)")
 plt.title("Neighbour trajectories as network nodes")
 plt.grid(True)
