@@ -6,15 +6,26 @@ Exploratory concept neighbour & KWIC audit with canonicalisation.
 
 Each concept key is used as the probe (lowercased).
 Known forms of the concept are excluded from the neighbors.
+
+Hypothesis:
+
+Expectations prior to running:
+
+* In early EEBO slices: law constrains liberty (obedience, order).
+
+* In the constitutional crisis: law enables liberty (rights, protections).
+
+* In later slices: law stabilises liberty as something to be enjoyed or secured.
+
 Outputs:
-- concept_neighbour_audit.json
-- concept_kwic_audit.html
+
+* concept_neighbour_audit.json
+* concept_kwic_audit.html
 """
 
 from __future__ import annotations
 
 import json
-import time
 from typing import Any, Dict, List, Tuple
 
 import lib.eebo_config as config
@@ -22,10 +33,14 @@ import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 from lib.faiss_slices import load_slice_index, get_vector
 
+TARGET = 'LAW' # A key in config's CONCEPT_SETS
+
+json_path = config.OUT_DIR / f"concept_neighbour_audit_{TARGET.lower()}.json"
+html_path = config.OUT_DIR / f"concept_kwic_audit_{TARGET.lower()}.html"
+
 TOP_K = 100
 SIM_THRESHOLD = 0.7
 CONTEXT_WINDOW = 8
-LOG_INTERVAL = 120
 KWIC_MAX_LEFT = 40
 KWIC_MAX_RIGHT = 40
 
@@ -146,7 +161,6 @@ def build_html(audit_data: Dict[str, Any]) -> str:
 def main():
     logger.info("Starting canonicalised concept neighbour explorer")
 
-    last_log_time = time.time()
     audit: Dict[str, Any] = {}
 
     with eebo_db.get_connection() as conn:
@@ -157,16 +171,16 @@ def main():
             audit[slice_key] = {}
 
             for concept in config.CONCEPT_SETS.keys():
+                if concept != TARGET.upper():
+                    continue
+
                 seed = concept.lower()
                 vec = get_vector(conn, seed, slice_start, slice_end)
                 if vec is None:
                     logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
                     continue
 
-                now = time.time()
-                if now - last_log_time > LOG_INTERVAL:
-                    logger.info(f"Processing slice {slice_key}, concept {concept}")
-                    last_log_time = now
+                logger.info(f"Processing slice {slice_key}, concept {concept}")
 
                 # FAISS search
                 D, Idx = index.search(vec.reshape(1, -1), TOP_K)
@@ -240,14 +254,12 @@ def main():
                 }
 
     # Write JSON
-    json_path = config.OUT_DIR / "concept_neighbour_audit.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
     logger.info(f"Wrote {json_path}")
 
     # Write HTML
     html = build_html(audit)
-    html_path = config.OUT_DIR / "concept_kwic_audit.html"
     html_path.write_text(html, encoding="utf-8")
     logger.info(f"Wrote {html_path}")
 

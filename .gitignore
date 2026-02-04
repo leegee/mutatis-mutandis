@@ -31,9 +31,6 @@ texts/
 eebo-data/
 faiss-cache/
 
-docs/**/*.png
-docs/**/*.svg
-docs/output/*
 docs/uml/lib/plantuml*.jar
 
 __pycache__
