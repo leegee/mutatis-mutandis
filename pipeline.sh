@@ -76,6 +76,9 @@ case "$PHASE" in
     9|ex)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
         ;;
+    9b|rep)
+        RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer_plot.py")
+        ;;
     *)
         echo "! No phase selected or invalid phase: $PHASE"
         cd "$OUR_OLDPWD"
