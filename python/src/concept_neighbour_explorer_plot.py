@@ -7,10 +7,13 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 import lib.eebo_config as config
+from lib.eebo_logging import logger
 
 INPUT_FILE = config.OUT_DIR / "concept_neighbour_audit.json"
+SVG_FILE = INPUT_FILE.with_suffix(".svg")
 MIN_FREQ = 5
 MIN_SIM = 0.5
+GANTT_YEAR_SCALE = 0.3
 
 @dataclass
 class NeighbourStats:
@@ -65,10 +68,10 @@ for slice_name, probes in data.items():
 
 # Log summary
 for slice_name, neighbours in summary_by_slice.items():
-    print(f"\n## SLICE {slice_name} ##")
+    logger.info(f"\n## SLICE {slice_name} ##")
     for n in neighbours:
         if n["total_frequency"] >= MIN_FREQ:
-            print(
+            logger.info(
                 f"{n['token']:15} "
                 f"freq={n['total_frequency']:5} "
                 f"avg_sim={n['avg_similarity']:.3f} "
@@ -176,4 +179,79 @@ plt.ylabel("Neighbour rank (1 = highest frequency)")
 plt.title("Neighbour trajectories as network nodes")
 plt.grid(True)
 plt.tight_layout()
+plt.show()
+
+
+
+
+
+
+
+# Gantt chart
+
+
+# Prepare Gantt chart data
+slice_names = sorted(summary_by_slice.keys())
+slice_starts = [int(s.split("_")[0]) for s in slice_names]
+slice_ends = [int(s.split("_")[1]) for s in slice_names]
+slice_widths = [end - start + 1 for start, end in zip(slice_starts, slice_ends, strict=True)]
+
+tokens = sorted(token_trajectories.keys())
+num_tokens = len(tokens)
+
+# Build a mapping: token -> list of (start_year, width, is_present)
+gantt_data: Dict[str, List[tuple]] = defaultdict(list)
+
+for token in tokens:
+    trajectory_slices = {entry["slice"]: entry for entry in token_trajectories[token]}
+    for slice_name, start, width in zip(slice_names, slice_starts, slice_widths, strict=True):
+        if slice_name in trajectory_slices and trajectory_slices[slice_name]["frequency"] >= MIN_FREQ:
+            gantt_data[token].append((start, width, True))  # present
+        else:
+            gantt_data[token].append((start, width, False))  # absent
+
+
+# Plot Gantt chart
+fig, ax = plt.subplots(figsize=(max(24, len(slice_names) * 0.6), max(0.5*num_tokens, 6)))
+
+bar_height = 0.8
+
+for i, token in enumerate(tokens):
+    for start, width, present in gantt_data[token]:
+        scaled_start = start * GANTT_YEAR_SCALE
+        scaled_width = width * GANTT_YEAR_SCALE
+        if present:
+            ax.broken_barh(
+                [(scaled_start, scaled_width)],
+                (i - bar_height/2, bar_height),
+                facecolors='skyblue', edgecolors='black'
+            )
+        else:
+            # draw a thin gray line for missing slices
+            ax.broken_barh(
+                [(scaled_start, scaled_width)],
+                (i - bar_height/2, bar_height),
+                facecolors='none', edgecolors='lightgray', linestyle='dashed'
+            )
+
+# Y-axis labels = tokens
+ax.set_yticks(range(num_tokens))
+ax.set_yticklabels(tokens, fontsize=12)
+
+# X-axis = years
+ax.set_xlabel("Year", fontsize=14)
+ax.set_ylabel("Tokens", fontsize=14)
+ax.set_title("EEBO token trajectories in non-Latin shorter texts", fontsize=16)
+xticks = [int(s.split("_")[0]) for s in slice_names]
+ax.set_xticks([x * GANTT_YEAR_SCALE for x in xticks])
+ax.set_xticklabels([str(x) for x in xticks], fontsize=12)
+
+# grid for clarity
+ax.grid(True, axis='x', linestyle='--', alpha=0.5)
+
+plt.tight_layout()
+
+plt.savefig(SVG_FILE, format='svg')
+logger.info(f"Gantt chart SVG written to {SVG_FILE}")
+
 plt.show()
