@@ -1,3 +1,4 @@
+import networkx as nx
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -7,34 +8,23 @@ from typing import Dict, List
 import matplotlib.pyplot as plt
 import lib.eebo_config as config
 
-# --------------------------
-# Config
-# --------------------------
 INPUT_FILE = config.OUT_DIR / "concept_neighbour_audit.json"
 MIN_FREQ = 5
 MIN_SIM = 0.5
 
-# --------------------------
-# Dataclass
-# --------------------------
 @dataclass
 class NeighbourStats:
     similarities: List[float] = field(default_factory=list)
     total_frequency: int = 0
     occurrences: int = 0
 
-# --------------------------
-# Load data
-# --------------------------
 with open(INPUT_FILE, "r", encoding="utf-8") as f:
     data: Dict[str, Dict[str, Dict]] = json.load(f)
 
 summary_by_slice: Dict[str, List[Dict]] = {}
 token_trajectories: Dict[str, List[Dict]] = defaultdict(list)
 
-# --------------------------
 # Build summary per slice
-# --------------------------
 for slice_name, probes in data.items():
     neighbour_data: defaultdict[str, NeighbourStats] = defaultdict(NeighbourStats)
 
@@ -73,9 +63,7 @@ for slice_name, probes in data.items():
 
     summary_by_slice[slice_name] = slice_summary
 
-# --------------------------
 # Log summary
-# --------------------------
 for slice_name, neighbours in summary_by_slice.items():
     print(f"\n## SLICE {slice_name} ##")
     for n in neighbours:
@@ -87,9 +75,7 @@ for slice_name, neighbours in summary_by_slice.items():
                 f"seen={n['times_as_neighbour']}"
             )
 
-# --------------------------
 # Plot trajectories
-# --------------------------
 plt.figure(figsize=(12, 6))
 
 for token, trajectory in token_trajectories.items():
@@ -111,6 +97,72 @@ plt.xlabel("Year (mid-slice)")
 plt.ylabel("Neighbour rank (1 = highest frequency)")
 plt.title("Neighbour-rank trajectories")
 plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+
+
+# Build network
+
+G = nx.DiGraph()
+
+for token, trajectory in token_trajectories.items():
+    if all(entry["frequency"] >= MIN_FREQ for entry in trajectory):
+        # convert slices to mid-years
+        mid_years = [
+            int(entry["slice"].split("_")[0]) +
+            (int(entry["slice"].split("_")[1]) - int(entry["slice"].split("_")[0])) // 2
+            for entry in trajectory
+        ]
+        ranks = [entry["rank"] for entry in trajectory]
+
+        # add nodes and edges along trajectory
+        for i in range(len(trajectory)):
+            node_id = f"{token}_{mid_years[i]}"
+            G.add_node(node_id, label=token, year=mid_years[i], rank=ranks[i])
+            if i > 0:
+                prev_node_id = f"{token}_{mid_years[i-1]}"
+                G.add_edge(prev_node_id, node_id)
+
+
+# Position nodes using mid-year and rank
+
+pos = {node: (data["year"], -data["rank"]) for node, data in G.nodes(data=True)}
+
+plt.figure(figsize=(14, 8))
+nx.draw(
+    G,
+    pos,
+    with_labels=False,
+    node_size=400,
+    node_color="skyblue",
+    # arrows=True,
+    # arrowstyle="-|>",
+)
+
+# add token labels
+for _node_id, attrs in G.nodes(data=True):
+    year = float(attrs["year"])
+    rank = attrs["rank"]
+    label = str(attrs["label"])
+
+    plt.text(
+        year,
+        float(-rank),   # invert for plotting
+        label,
+        fontsize=9,
+        ha="center",
+        va="bottom"
+    )
+
+plt.xlabel("Year (mid-slice)")
+plt.ylabel("Neighbour rank (1 = highest frequency)")
+plt.title("Neighbour trajectories as network nodes")
 plt.grid(True)
 plt.tight_layout()
 plt.show()
