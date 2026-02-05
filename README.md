@@ -22,6 +22,19 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 * https://openhumanitiesdata.metajnl.com/
 * https://www.openlibhums.org/
 
+In addition to EEBO-TCP:
+
+| Resource                                              | Focus                           | Contains TEI/XML? | Best Use                           |
+| ----------------------------------------------------- | ------------------------------- | ----------------- | ---------------------------------- |
+| **Manuscript Pamphleteering in Early Stuart England** | 17th‑c manuscript pamphlets     | Yes               | Manuscript pamphlet transcriptions |
+| **MoEML Early Modern Broadsides**                     | 16–17th‑c broadsides            | Yes               | Printed sheets & broadsides        |
+| **EarlyPrint / aggregated XML**                       | Multi‑collection metadata + XML | Yes               | Indexed TEI + multi‑collections    |
+| **ECCO‑TCP**                                          | 18th‑c books & pamphlets        | Yes               | Later historical context           |
+| **Evans‑TCP**                                         | American imprints               | Yes               | Wider corpus coverage              |
+| **EBBA**                                              | 17th‑c ballads                  | Structured text   | Genre adjacent to pamphlets        |
+| **HathiTrust Extracted Dataset**                      | Broad public domain texts       | Bulk data         | Pre‑processing into TEI            |
+
+
 ## Restoring the Database
 
 Make sure the table space is on an SSD:
