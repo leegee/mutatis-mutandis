@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC="./src"
-PYTHON="python"
-PHASE="help"
-OUR_OLDPWD=$(pwd)
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+PYTHON_DIR="$SCRIPT_DIR/python"
+SRC="$PYTHON_DIR/src"
 
+PYTHON="${PYTHON:-python}"
+
+PHASE="help"
 POSITIONAL=()
+
 while [[ $# -gt 0 ]]; do
-    key="$1"
-    case $key in
+    case "$1" in
         --phase|-p)
+            [[ $# -ge 2 ]] || { echo "Missing value for $1"; exit 1; }
             PHASE="$2"
             shift 2
             ;;
         --phase=*|-p=*)
-            PHASE="${key#*=}"
+            PHASE="${1#*=}"
             shift
             ;;
         *)
@@ -25,21 +28,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-cd python
-
-# Restore positional arguments
+# Restore positional args
 set -- "${POSITIONAL[@]}"
 
-# Use an array to hold scripts for the selected phase
+pushd "$PYTHON_DIR" >/dev/null
+
 RUN_SCRIPTS=()
 
 case "$PHASE" in
+    help|-h|--help)
+        echo "Please view the source...sorry"
+        popd >/dev/null
+        exit 0
+        ;;
     1|in|ingest)
         echo "# Running corpus prep and ingestion"
         RUN_SCRIPTS+=("$SRC/eebo_parse_tei.py")
         ;;
     2|train)
-        echo "# Phase 2: Create training files and train fastText"
+        echo "# Phase 2: Training pipeline"
         RUN_SCRIPTS+=("$SRC/generate_training_files.py")
         RUN_SCRIPTS+=("$SRC/train_slice_fasttext.py")
         ;;
@@ -76,24 +83,34 @@ case "$PHASE" in
     exp)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
         ;;
-    exp-plot)
+    expp|exp-plot)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer_plot.py")
         ;;
-    u-cluster)
+    uc|usage-cluster)
         RUN_SCRIPTS+=("$SRC/usage_clusterer.py")
         ;;
+    uct|usage-cluster-tracker)
+        RUN_SCRIPTS+=("$SRC/usage_clusterer_tracker.py")
+        ;;
+    uctv|viz-usage-cluster)
+        RUN_SCRIPTS+=("$SRC/viz_usage_clusters.py")
+        ;;
     *)
-        echo "! No phase selected or invalid phase: $PHASE"
-        cd "$OUR_OLDPWD"
+        echo "! Invalid phase: $PHASE"
+        popd >/dev/null
         exit 1
         ;;
 esac
 
-if [[ ${#RUN_SCRIPTS[@]} -eq 0 ]]; then
-    echo "! No scripts to run for phase: $PHASE"
-    cd "$OUR_OLDPWD"
-    exit 1
-fi
+# Ensure scripts exist
+for script in "${RUN_SCRIPTS[@]}"; do
+    [[ -f "$script" ]] || { echo "Script not found: $script"; popd >/dev/null; exit 1; }
+done
+
+# Toolchain must exist (fail if missing)
+command -v ruff >/dev/null || { echo "ruff not installed"; popd >/dev/null; exit 1; }
+command -v mypy >/dev/null || { echo "mypy not installed"; popd >/dev/null; exit 1; }
+command -v pyright >/dev/null || { echo "pyright not installed"; popd >/dev/null; exit 1; }
 
 echo "# Running Ruff"
 ruff check "$SRC"
@@ -106,10 +123,10 @@ pyright "$SRC"
 
 echo "# All checks passed"
 
-# Execute each script in sequence
+# Execute scripts
 for script in "${RUN_SCRIPTS[@]}"; do
     echo "# Running $script"
     "$PYTHON" "$script" "$@"
 done
 
-cd "$OUR_OLDPWD"
+popd >/dev/null
