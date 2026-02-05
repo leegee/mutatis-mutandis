@@ -146,7 +146,8 @@ CanonicalRules = Dict[str, CanonicalRule]
 CONCEPT_SETS: CanonicalRules = {
     "PREROGATIVE": {
         "forms": {
-            "prerogative", "prerogatiue"
+            "prerogative", "prerogatiue",
+            "prerogatives", "prerogatiues",
         },
         "false_positives": set(),
     },
