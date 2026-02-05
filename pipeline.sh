@@ -92,8 +92,11 @@ case "$PHASE" in
     uct|usage-cluster-tracker)
         RUN_SCRIPTS+=("$SRC/usage_clusterer_tracker.py")
         ;;
-    uctv|viz-usage-cluster)
+    uctv|usage-cluster-viz)
         RUN_SCRIPTS+=("$SRC/viz_usage_clusters.py")
+        ;;
+    ucti|usage-cluster-int)
+        RUN_SCRIPTS+=("$SRC/viz_usage_clusters_interactive.py")
         ;;
     *)
         echo "! Invalid phase: $PHASE"
