@@ -24,3 +24,4 @@ nltk
 plotly
 umap-learn
 graphviz
+hdbscan

@@ -55,29 +55,32 @@ case "$PHASE" in
     4|v|token-vectors)
         RUN_SCRIPTS+=("$SRC/generate_token_embeddings.py")
         ;;
-    5|c|concept-timeseries)
+    concept-timeseries)
         RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
         ;;
-    6|p|plot)
+    plot-centroid-sim)
         RUN_SCRIPTS+=("$SRC/vis_centroid_similarity.py")
         ;;
-    7|n|knn)
+    plot-centroid-sim-knn)
         RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_neighbours.py")
         ;;
-    8a|p|pca)
+    pca-poles)
         RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles.py")
         ;;
-    8b|pcai|pcai)
+    pca-poles-interactive)
         RUN_SCRIPTS+=("$SRC/pca_interactive_liberty_plot.py")
         ;;
-    8c|u|umap)
+    umap-liberty)
         RUN_SCRIPTS+=("$SRC/umap_interactive_liberty_umap.py")
         ;;
-    9|ex)
+    exp)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
         ;;
-    9b|rep)
+    exp-plot)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer_plot.py")
+        ;;
+    u-cluster)
+        RUN_SCRIPTS+=("$SRC/usage_clusterer.py")
         ;;
     *)
         echo "! No phase selected or invalid phase: $PHASE"
