@@ -1,5 +1,4 @@
-
-* # BIBLIOGRAPHY
+# BIBLIOGRAPHY
 
 ## Parital Modus Operandi of the Bibliography
 
