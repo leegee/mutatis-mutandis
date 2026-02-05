@@ -8,7 +8,8 @@ If TARGET is None, runs over all concepts in config.CONCEPT_SETS.
 
 Outputs:
 
-* JSON file with cluster assignments for each slice and concept.
+* JSON file with cluster assignments and cluster mass statistics
+  per slice and concept.
 
 Requires: hdbscan, numpy
 """
@@ -47,7 +48,7 @@ def get_target_concepts() -> List[str]:
 
 
 def collect_vectors(concept: str) -> Dict[str, List[Dict[str, Any]]]:
-    """Collect neighbour vectors per slice for a given concept."""
+    """Collect neighbour vectors and metadata per slice for a given concept."""
     all_slices: Dict[str, List[Dict[str, Any]]] = {}
 
     with eebo_db.get_connection() as conn:
@@ -62,7 +63,6 @@ def collect_vectors(concept: str) -> Dict[str, List[Dict[str, Any]]]:
                 logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
                 continue
 
-            # FAISS search
             D, Idx = index.search(vec.reshape(1, -1), TOP_K)
             top_neighbors = [
                 (vocab[idx], float(sim))
@@ -79,20 +79,42 @@ def collect_vectors(concept: str) -> Dict[str, List[Dict[str, Any]]]:
                 if token not in known_forms and token not in false_positives
             ]
 
+            if not top_neighbors:
+                continue
+
+            tokens = [t for t, _ in top_neighbors]
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT token, COUNT(*)
+                    FROM pamphlet_tokens
+                    WHERE token = ANY(%s)
+                      AND slice_start = %s
+                      AND slice_end = %s
+                    GROUP BY token
+                    """,
+                    (tokens, slice_start, slice_end),
+                )
+                freq_map = {r[0]: r[1] for r in cur.fetchall()}
+
             for token, sim in top_neighbors:
                 token_vec = get_vector(conn, token, slice_start, slice_end)
-                if token_vec is not None:
-                    all_slices[slice_key].append({
-                        "token": token,
-                        "vector": token_vec,
-                        "sim": sim,
-                    })
+                if token_vec is None:
+                    continue
+
+                all_slices[slice_key].append({
+                    "token": token,
+                    "vector": token_vec,
+                    "sim": sim,
+                    "freq": freq_map.get(token, 0),
+                })
 
     return all_slices
 
 
 def cluster_slices(all_slices: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
-    """Cluster neighbours per slice using HDBSCAN."""
+    """Cluster neighbours per slice using HDBSCAN and compute cluster mass."""
     cluster_results: Dict[str, Any] = {}
 
     for slice_key, neighbours in all_slices.items():
@@ -101,26 +123,40 @@ def cluster_slices(all_slices: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any
             continue
 
         X = np.array([n["vector"] for n in neighbours])
-        tokens = [n["token"] for n in neighbours]
-
-        clusterer = hdbscan.HDBSCAN(
+        labels = hdbscan.HDBSCAN(
             min_cluster_size=3,
             metric="euclidean",
-        )
-        labels = clusterer.fit_predict(X)
+        ).fit_predict(X)
 
-        slice_clusters: Dict[int, List[str]] = defaultdict(list)
-        for token, label in zip(tokens, labels, strict=True):
-            slice_clusters[label].append(token)
+        clusters: Dict[int, Dict[str, Any]] = defaultdict(lambda: {
+            "tokens": [],
+            "mass_freq": 0,
+            "mass_sim": 0.0,
+            "mass_weighted": 0.0,
+            "token_count": 0,
+        })
 
-        cluster_results[slice_key] = slice_clusters
+        for n, label in zip(neighbours, labels, strict=True):
+            clusters[label]["tokens"].append(n["token"])
+            clusters[label]["mass_freq"] += n["freq"]
+            clusters[label]["mass_sim"] += n["sim"]
+            clusters[label]["mass_weighted"] += n["freq"] * n["sim"]
+            clusters[label]["token_count"] += 1
+
+        cluster_results[slice_key] = clusters
 
         logger.info(f"Slice {slice_key} clusters:")
-        for cid, toks in slice_clusters.items():
+        for cid, data in clusters.items():
             if cid == -1:
-                logger.info(f"  Outliers: {toks}")
+                logger.info(
+                    f"  Outliers: {data['token_count']} tokens, "
+                    f"weighted mass={data['mass_weighted']:.2f}"
+                )
             else:
-                logger.info(f"  Cluster {cid}: {toks}")
+                logger.info(
+                    f"  Cluster {cid}: {data['token_count']} tokens, "
+                    f"weighted mass={data['mass_weighted']:.2f}"
+                )
 
     return cluster_results
 
