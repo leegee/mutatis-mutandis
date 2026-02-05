@@ -144,11 +144,21 @@ CanonicalRules = Dict[str, CanonicalRule]
 # right
 # property
 CONCEPT_SETS: CanonicalRules = {
+    "PREROGATIVE": {
+        "forms": {
+            "prerogative", "prerogatiue"
+        },
+        "false_positives": set(),
+    },
     "LAW": {
         "forms": {
             "law", "laws", "lawe", "lawes",
         },
-        "false_positives": {"clawes", "claw", "flaw", "lawne"},
+        "false_positives": {
+            "clawes", "claw", "flaw", "lawne",
+            "thlaw", # welsh
+            "laz", "layt", "layen",
+            },
     },
     "LIBERTY": {
         "forms": {
