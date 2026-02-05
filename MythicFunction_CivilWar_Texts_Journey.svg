@@ -41,83 +41,83 @@
     <rect class="box" x="450" y="350" width="300" height="80" />
     <text class="title" x="600" y="372">Ordinary World</text>
     <text class="text" x="600" y="392">Personal rule of Charles I</text>
-    <text class="date" x="600" y="412">1629–1640 &middot; Proclamations &amp; sermons</text>
+    <text class="date" x="600" y="412">1629–1640 - Proclamations &amp; sermons</text>
 
     <!-- 2. Call to Adventure -->
     <line class="line" x1="600" y1="600" x2="790" y2="430" />
     <rect class="box" x="790" y="360" width="260" height="80" />
     <text class="title" x="920" y="382">Call to Adventure</text>
     <text class="text" x="920" y="402">Breakdown of royal authority</text>
-    <text class="date" x="920" y="422">1640–1642 &middot; Petitions &amp; pamphlets</text>
+    <text class="date" x="920" y="422">1640–1642 - Petitions &amp; pamphlets</text>
 
     <!-- 3. Refusal of the Call -->
     <line class="line" x1="600" y1="600" x2="930" y2="520" />
     <rect class="box" x="930" y="480" width="260" height="80" />
     <text class="title" x="1060" y="502">Refusal of the Call</text>
     <text class="text" x="1060" y="522">Attempts to preserve monarchy</text>
-    <text class="date" x="1060" y="542">1641–1642 &middot; Royal declarations</text>
+    <text class="date" x="1060" y="542">1641–1642 - Royal declarations</text>
 
     <!-- 4. Meeting the Mentor -->
     <line class="line" x1="600" y1="600" x2="960" y2="600" />
     <rect class="box" x="960" y="560" width="260" height="80" />
     <text class="title" x="1090" y="582">Meeting the Mentor</text>
     <text class="text" x="1090" y="602">Parliamentary ideology forms</text>
-    <text class="date" x="1090" y="622">1642–1644 &middot; Newsbooks</text>
+    <text class="date" x="1090" y="622">1642–1644 - Newsbooks</text>
 
     <!-- 5. Crossing the Threshold -->
     <line class="line" x1="600" y1="600" x2="930" y2="680" />
     <rect class="box" x="930" y="640" width="260" height="80" />
     <text class="title" x="1060" y="662">Crossing the Threshold</text>
     <text class="text" x="1060" y="682">Civil war becomes total</text>
-    <text class="date" x="1060" y="702">1643–1645 &middot; Ordinances</text>
+    <text class="date" x="1060" y="702">1643–1645 - Ordinances</text>
 
     <!-- 6. Tests, Allies, Enemies -->
     <line class="line" x1="600" y1="600" x2="790" y2="770" />
     <rect class="box" x="790" y="730" width="260" height="80" />
     <text class="title" x="920" y="752">Tests, Allies, Enemies</text>
     <text class="text" x="920" y="772">Factionalisation &amp; New Model Army</text>
-    <text class="date" x="920" y="792">1644–1647 &middot; Military tracts</text>
+    <text class="date" x="920" y="792">1644–1647 - Military tracts</text>
 
     <!-- 7. Approach to the Inmost Cave -->
     <line class="line" x1="600" y1="600" x2="600" y2="790" />
     <rect class="box" x="450" y="790" width="300" height="80" />
     <text class="title" x="600" y="812">Approach to the Inmost Cave</text>
     <text class="text" x="600" y="832">Trial of sovereignty itself</text>
-    <text class="date" x="600" y="852">1648 &middot; Army remonstrances</text>
+    <text class="date" x="600" y="852">1648 - Army remonstrances</text>
 
     <!-- 8. Ordeal -->
     <line class="line" x1="600" y1="600" x2="410" y2="770" />
     <rect class="box" x="150" y="730" width="260" height="80" />
     <text class="title" x="280" y="752">Ordeal</text>
     <text class="text" x="280" y="772">Regicide</text>
-    <text class="date" x="280" y="792">1649 &middot; Act establishing the High Court</text>
+    <text class="date" x="280" y="792">1649 - Act establishing the High Court</text>
 
     <!-- 9. Reward -->
     <line class="line" x1="600" y1="600" x2="270" y2="680" />
     <rect class="box" x="10" y="640" width="260" height="80" />
     <text class="title" x="140" y="662">Reward</text>
     <text class="text" x="140" y="682">Commonwealth proclaimed</text>
-    <text class="date" x="140" y="702">1649–1653 &middot; Acts &amp; proclamations</text>
+    <text class="date" x="140" y="702">1649–1653 - Acts &amp; proclamations</text>
 
     <!-- 10. Road Back -->
     <line class="line" x1="600" y1="600" x2="240" y2="600" />
     <rect class="box" x="10" y="560" width="260" height="80" />
     <text class="title" x="140" y="582">The Road Back</text>
     <text class="text" x="140" y="602">Restoration of monarchy</text>
-    <text class="date" x="140" y="622">1660 &middot; Declaration of Breda</text>
+    <text class="date" x="140" y="622">1660 - Declaration of Breda</text>
 
     <!-- 11. Resurrection -->
     <line class="line" x1="600" y1="600" x2="270" y2="520" />
     <rect class="box" x="10" y="480" width="260" height="80" />
     <text class="title" x="140" y="502">Resurrection</text>
     <text class="text" x="140" y="522">Crisis of absolutism returns</text>
-    <text class="date" x="140" y="542">1685–1688 &middot; Royal dispensations</text>
+    <text class="date" x="140" y="542">1685–1688 - Royal dispensations</text>
 
     <!-- 12. Return with the Elixir -->
     <line class="line" x1="600" y1="600" x2="410" y2="430" />
     <rect class="box" x="150" y="360" width="260" height="80" />
     <text class="title" x="280" y="382">Return with the Elixir</text>
     <text class="text" x="280" y="402">Constitutional settlement</text>
-    <text class="date" x="280" y="422">1689 &middot; Bill of Rights</text>
+    <text class="date" x="280" y="422">1689 - Bill of Rights</text>
 
 </svg>
