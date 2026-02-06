@@ -86,14 +86,14 @@ def sort_cluster_ids(ids: list[str]) -> list[str]:
     return sorted(ids, key=sort_key)
 
 
-def plot_interactive(df, concept, output_html):
+def plot_interactive_per_mass(df, concept):
+    """
+    Create an interactive heatmap per mass type for a given concept.
+    Each mass type gets its own HTML file and color scale.
+    """
     subset = df[df["Concept"] == concept]
-
     MASS_MODES = ["count", "freq", "sim", "weighted"]
-    pivots = {}
-    hover_texts = {}
 
-    #  matrices for every mass definition
     for mode in MASS_MODES:
         pivot = subset.pivot(index="Cluster", columns="Slice", values=f"Mass_{mode}").fillna(0)
         hover = subset.pivot(index="Cluster", columns="Slice", values="Tokens").fillna("")
@@ -105,64 +105,34 @@ def plot_interactive(df, concept, output_html):
         pivot = pivot.reindex(sorted(pivot.columns), axis=1)
         hover = hover.reindex(sorted(hover.columns), axis=1)
 
-        pivots[mode] = pivot
-        hover_texts[mode] = hover
+        fig = px.imshow(
+            pivot.values,
+            x=pivot.columns,
+            y=pivot.index,
+            aspect="auto",
+            labels=dict(
+                x="Slice",
+                y="Cluster ID",
+                color=f"Cluster mass ({mode})"
+            ),
+            zmin=pivot.values.min(),
+            zmax=pivot.values.max()
+        )
 
-    initial_mode = "weighted"
-
-    fig = px.imshow(
-        pivots[initial_mode].values,
-        x=pivots[initial_mode].columns,
-        y=pivots[initial_mode].index,
-        aspect="auto",
-        labels=dict(
-            x="Slice",
-            y="Cluster ID",
-            color=f"Cluster mass ({initial_mode})",
-        ),
-    )
-
-    fig.update_traces(
-        customdata=hover_texts[initial_mode].values,
-        hovertemplate=(
-            "Cluster ID: %{y}<br>"
-            "Slice: %{x}<br>"
-            f"Mass ({initial_mode}): %{{z}}<br>"
-            "<br><b>Tokens</b><br>%{customdata}"
-        ),
-    )
-
-    # dropdown to swap mass mode
-    fig.update_layout(
-        title=f"Cluster mass of '{concept}' ({initial_mode})",
-        updatemenus=[
-            dict(
-                buttons=[
-                    dict(
-                        label=mode,
-                        method="update",
-                        args=[
-                            {
-                                "z": [pivots[mode].values],
-                                "customdata": [hover_texts[mode].values],
-                            },
-                            {
-                                "coloraxis.colorbar.title": f"Cluster mass ({mode})",
-                                "title": f"Cluster mass of '{concept}' ({mode})",
-                            },
-                        ],
-                    )
-                    for mode in MASS_MODES
-                ],
-                direction="down",
-                showactive=True,
-                x=1.02,
-                y=1.0,
+        fig.update_traces(
+            customdata=hover.values,
+            hovertemplate=(
+                "Cluster ID: %{y}<br>"
+                "Slice: %{x}<br>"
+                f"Mass ({mode}): %{{z}}<br>"
+                "<br><b>Tokens</b><br>%{customdata}"
             )
-        ],
-    )
+        )
 
-    fig.write_html(output_html)
+        # write HTML per mass mode
+        out_file = config.OUT_DIR / f"cluster_mass_interactive_{concept.lower().replace(' ', '_')}_{mode}.html"
+        fig.write_html(out_file)
+        logger.info(f"Saved interactive plot for concept '{concept}' mass '{mode}' to {out_file}")
 
 
 def main():
@@ -170,10 +140,8 @@ def main():
     logger.info(f"Loaded {len(df)} cluster entries from {IN_FILE}")
 
     for concept in df["Concept"].unique():
-        output_html = concept_outfile(concept)
-        logger.info(f"Generating interactive plot for concept '{concept}' -> {output_html}")
-
-        plot_interactive(df, concept, output_html)
+        logger.info(f"Generating interactive plots for concept '{concept}'")
+        plot_interactive_per_mass(df, concept)
 
     logger.info("All interactive plots generated.")
 
