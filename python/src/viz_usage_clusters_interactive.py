@@ -53,19 +53,17 @@ def load_data(json_path):
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    for slice_key, concepts in data.items():
-        for concept, clusters in concepts.items():
+    for concept, slices in data.items():            # top-level keys are concepts
+        for slice_key, clusters in slices.items(): # slices / time periods
             for cluster_id, cluster_data in clusters.items():
-                masses = cluster_data.get("mass", {})
+                masses = cluster_data.get("masses", {})
                 tokens = cluster_data.get("tokens", [])
 
                 rows.append({
                     "Slice": slice_key,
                     "Concept": concept,
                     "Cluster": str(cluster_id),
-                    "Tokens": ", ".join(tokens),
-
-                    # 🔹 all mass modes
+                    "Tokens": format_tokens(tokens),
                     "Mass_count": masses.get("count", 0),
                     "Mass_freq": masses.get("freq", 0),
                     "Mass_sim": masses.get("sim", 0),
@@ -97,17 +95,18 @@ def plot_interactive(df, concept, output_html):
 
     #  matrices for every mass definition
     for mode in MASS_MODES:
-        pivots[mode] = (
-            subset
-            .pivot(index="Cluster", columns="Slice", values=f"Mass_{mode}")
-            .fillna(0)
-        )
+        pivot = subset.pivot(index="Cluster", columns="Slice", values=f"Mass_{mode}").fillna(0)
+        hover = subset.pivot(index="Cluster", columns="Slice", values="Tokens").fillna("")
 
-        hover_texts[mode] = (
-            subset
-            .pivot(index="Cluster", columns="Slice", values="Tokens")
-            .fillna("")
-        )
+        # sort clusters and slices
+        ordered_clusters = sort_cluster_ids(list(pivot.index))
+        pivot = pivot.reindex(ordered_clusters)
+        hover = hover.reindex(ordered_clusters)
+        pivot = pivot.reindex(sorted(pivot.columns), axis=1)
+        hover = hover.reindex(sorted(hover.columns), axis=1)
+
+        pivots[mode] = pivot
+        hover_texts[mode] = hover
 
     initial_mode = "weighted"
 

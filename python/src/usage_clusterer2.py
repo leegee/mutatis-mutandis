@@ -1,240 +1,169 @@
 #!/usr/bin/env python
 """
-usage_cluster2.py
+viz_usage_clusters_interactive.py
 
-Cluster diachronic neighbours of concepts using HDBSCAN and compute
-configurable notions of cluster "mass".
+Interactive cluster mass heatmap with hover-over lexemes.
 
-This script subsumes:
-- usage_clusterer.py (weighted semantic mass)
-- usage_cluster_tracker.py (token-count tracking)
-
-Mass is treated as an explicit modelling choice.
-
-Outputs:
-* JSON with cluster assignments and per-cluster mass metrics per slice.
+Input is the output of `usage_cluster2.py`.
 """
 
 from __future__ import annotations
+from pathlib import Path
+from typing import Optional
 
 import json
-from collections import defaultdict
-from typing import Any, Dict, List, Optional, Callable
-
-import hdbscan
-import numpy as np
-
-import lib.eebo_config as config
-import lib.eebo_db as eebo_db
+import pandas as pd
+import plotly.express as px
 from lib.eebo_logging import logger
-from lib.faiss_slices import load_slice_index, get_vector
+import lib.eebo_config as config
 
-TARGET: Optional[str] = None  # set to 'LAW' to restrict
+TARGET: Optional[str] = None  # Set to a concept or None for all
 
-TOP_K = 100
-SIM_THRESHOLD = 0.7
-
-# Tracker mode: ["count"]
-# Clusterer mode: ["count", "freq", "sim", "weighted"]
+# Mass modes available in your JSON
 MASS_MODES = ["count", "freq", "sim", "weighted"]
 
 if TARGET:
-    OUT_FILE = config.OUT_DIR / f"usage_clusters_{TARGET.lower()}.json"
+    IN_FILE = config.OUT_DIR / f"usage_clusters_{TARGET.lower()}.json"
 else:
-    OUT_FILE = config.OUT_DIR / "usage_clusters_all_concepts.json"
-
-# Types
-Neighbour = Dict[str, Any]
-MassFn = Callable[[List[Neighbour]], float]
-
-#
-# Mass functions
-#
-def mass_token_count(ns: List[Neighbour]) -> int:
-    return len(ns)
-
-def mass_freq(ns: List[Neighbour]) -> int:
-    return sum(n.get("freq", 0) or 0 for n in ns)
-
-def mass_sim(ns: List[Neighbour]) -> float:
-    return sum(n["sim"] for n in ns)
-
-def mass_weighted(ns: List[Neighbour]) -> float:
-    return sum((n.get("freq", 0) or 0) * n["sim"] for n in ns)
-
-MASS_FUNCTIONS: Dict[str, MassFn] = {
-    "count": mass_token_count,
-    "freq": mass_freq,
-    "sim": mass_sim,
-    "weighted": mass_weighted,
-}
+    IN_FILE = config.OUT_DIR / "usage_clusters_all_concepts.json"
 
 
-def collect_vectors(
-    concept: str,
-    *,
-    include_freq: bool = True
-) -> Dict[str, List[Neighbour]]:
-    """
-    Collect neighbour vectors (and optional frequencies) per slice.
-    """
-    all_slices: Dict[str, List[Neighbour]] = {}
+def concept_outfile(concept: str) -> Path:
+    slug = concept.lower().replace(" ", "_")
+    return config.OUT_DIR / f"cluster_mass_interactive_{slug}.html"
 
-    with eebo_db.get_connection() as conn:
-        for slice_start, slice_end in config.SLICES:
-            slice_key = f"{slice_start}_{slice_end}"
-            all_slices[slice_key] = []
 
-            index, vocab = load_slice_index((slice_start, slice_end))
+def format_tokens(tokens: list[str], per_line: int = 5) -> str:
+    """Pretty-print tokens for hover text."""
+    lines = [", ".join(tokens[i:i + per_line]) for i in range(0, len(tokens), per_line)]
+    return "<br>".join(lines)
 
-            seed = concept.lower()
-            seed_vec = get_vector(conn, seed, slice_start, slice_end)
-            if seed_vec is None:
-                logger.warning(f"No vector for '{seed}' in slice {slice_key}")
-                continue
 
-            D, Idx = index.search(seed_vec.reshape(1, -1), TOP_K)
-            top_neighbors = [
-                (vocab[idx], float(sim))
-                for sim, idx in zip(D[0], Idx[0], strict=True)
-                if idx != -1
-            ]
+def load_data(json_path: Path) -> pd.DataFrame:
+    """Load JSON output into a long-format DataFrame with separate mass columns."""
+    rows = []
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-            known_forms = config.CONCEPT_SETS[concept].get("forms", set())
-            false_positives = config.CONCEPT_SETS[concept].get("false_positives", set())
-
-            top_neighbors = [
-                (t, s)
-                for t, s in top_neighbors
-                if t not in known_forms and t not in false_positives
-            ]
-
-            if not top_neighbors:
-                continue
-
-            freq_map: Dict[str, int] = {}
-            if include_freq:
-                tokens = [t for t, _ in top_neighbors]
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT token, COUNT(*)
-                        FROM pamphlet_tokens
-                        WHERE token = ANY(%s)
-                          AND slice_start = %s
-                          AND slice_end = %s
-                        GROUP BY token
-                        """,
-                        (tokens, slice_start, slice_end),
-                    )
-                    freq_map = {r[0]: r[1] for r in cur.fetchall()}
-
-            for token, sim in top_neighbors:
-                vec = get_vector(conn, token, slice_start, slice_end)
-                if vec is None:
-                    continue
-
-                all_slices[slice_key].append({
-                    "token": token,
-                    "vector": vec,
-                    "sim": sim,
-                    "freq": freq_map.get(token) if include_freq else None,
+    for concept, slices in data.items():
+        for slice_key, clusters in slices.items():
+            for cluster_id, cluster_data in clusters.items():
+                tokens = cluster_data.get("tokens", [])
+                masses = cluster_data.get("masses", {})
+                rows.append({
+                    "Concept": concept,
+                    "Slice": slice_key,
+                    "Cluster": str(cluster_id),
+                    "Tokens": format_tokens(tokens),
+                    "Mass_count": masses.get("count", 0),
+                    "Mass_freq": masses.get("freq", 0),
+                    "Mass_sim": masses.get("sim", 0),
+                    "Mass_weighted": masses.get("weighted", 0),
                 })
-
-    return all_slices
-
-
-def cluster_slice(neighbours: List[Neighbour]) -> np.ndarray:
-    X = np.array([n["vector"] for n in neighbours])
-    return hdbscan.HDBSCAN(
-        min_cluster_size=3,
-        metric="euclidean",
-    ).fit_predict(X)
-
-def assemble_clusters(
-    neighbours: List[Neighbour],
-    labels: np.ndarray,
-    mass_modes: List[str],
-) -> Dict[int, Dict[str, Any]]:
-    clusters: Dict[int, List[Neighbour]] = defaultdict(list)
-
-    for n, label in zip(neighbours, labels, strict=True):
-        clusters[label].append(n)
-
-    out: Dict[int, Dict[str, Any]] = {}
-
-    for cid, members in clusters.items():
-        out[cid] = {
-            "tokens": [n["token"] for n in members],
-            "masses": {
-                mode: MASS_FUNCTIONS[mode](members)
-                for mode in mass_modes
-            },
-        }
-
-    return out
-
-def cluster_slices(
-    all_slices: Dict[str, List[Neighbour]],
-    *,
-    mass_modes: List[str],
-) -> Dict[str, Any]:
-
-    results: Dict[str, Any] = {}
-
-    for slice_key, neighbours in all_slices.items():
-        if not neighbours:
-            results[slice_key] = {}
-            continue
-
-        labels = cluster_slice(neighbours)
-        clusters = assemble_clusters(neighbours, labels, mass_modes)
-        results[slice_key] = clusters
-
-        logger.info(f"Slice {slice_key} clusters:")
-        for cid, data in clusters.items():
-            mass_str = ", ".join(
-                f"{k}={v:.2f}" if isinstance(v, float) else f"{k}={v}"
-                for k, v in data["masses"].items()
-            )
-            if cid == -1:
-                logger.info(f"  Outliers ({mass_str})")
-            else:
-                logger.info(f"  Cluster {cid} ({mass_str})")
-
-    return results
+    df = pd.DataFrame(rows)
+    return df
 
 
-def convert_keys(obj: Any) -> Any:
-    if isinstance(obj, dict):
-        return {str(k): convert_keys(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [convert_keys(v) for v in obj]
-    return obj
+def sort_cluster_ids(ids: list[str]) -> list[str]:
+    """Sort cluster IDs numerically, keeping '-1' (outliers) first."""
+    def sort_key(cid: str):
+        if cid == "-1":
+            return (-1, -1)
+        try:
+            return (0, int(cid))
+        except ValueError:
+            return (1, cid)
+    return sorted(ids, key=sort_key)
+
+
+def plot_interactive(df: pd.DataFrame, concept: str, output_html: Path):
+    subset = df[df["Concept"] == concept]
+
+    # Pivot tables for each mass mode
+    pivots = {}
+    hover_texts = {}
+    for mode in MASS_MODES:
+        pivots[mode] = subset.pivot_table(
+            index="Cluster",
+            columns="Slice",
+            values=f"Mass_{mode}",
+            aggfunc="first"
+        ).fillna(0).astype(float)
+
+        hover_texts[mode] = subset.pivot_table(
+            index="Cluster",
+            columns="Slice",
+            values="Tokens",
+            aggfunc="first"
+        ).fillna("")
+
+        # Order clusters consistently
+        pivots[mode] = pivots[mode].reindex(sort_cluster_ids(list(pivots[mode].index)))
+        hover_texts[mode] = hover_texts[mode].reindex(sort_cluster_ids(list(hover_texts[mode].index)))
+
+        # Order slices chronologically
+        pivots[mode] = pivots[mode].reindex(sorted(pivots[mode].columns), axis=1)
+        hover_texts[mode] = hover_texts[mode].reindex(sorted(hover_texts[mode].columns), axis=1)
+
+    # Initial mode to display
+    initial_mode = "weighted"
+
+    fig = px.imshow(
+        pivots[initial_mode].values,
+        x=pivots[initial_mode].columns,
+        y=pivots[initial_mode].index,
+        aspect="auto",
+        color_continuous_scale="YlGnBu",
+        labels=dict(x="Slice", y="Cluster ID", color=f"Cluster mass ({initial_mode})"),
+    )
+
+    fig.update_traces(
+        customdata=hover_texts[initial_mode].values,
+        hovertemplate=(
+            "Cluster ID: %{y}<br>"
+            "Slice: %{x}<br>"
+            f"Mass ({initial_mode}): %{{z}}<br>"
+            "<br><b>Tokens</b><br>%{customdata}"
+        )
+    )
+
+    # Dropdown to switch mass mode
+    fig.update_layout(
+        title=f"Cluster mass of '{concept}' ({initial_mode})",
+        updatemenus=[dict(
+            buttons=[
+                dict(
+                    label=mode,
+                    method="update",
+                    args=[
+                        {"z": [pivots[mode].values], "customdata": [hover_texts[mode].values]},
+                        {"coloraxis.colorbar.title": f"Cluster mass ({mode})",
+                         "title": f"Cluster mass of '{concept}' ({mode})"}
+                    ],
+                ) for mode in MASS_MODES
+            ],
+            direction="down",
+            showactive=True,
+            x=1.02,
+            y=1.0,
+        )]
+    )
+
+    fig.write_html(output_html)
+    logger.info(f"Saved interactive plot for {concept} to {output_html}")
 
 
 def main():
-    concepts = [TARGET] if TARGET else list(config.CONCEPT_SETS.keys())
-    logger.info(f"Starting usage clustering for concepts: {concepts}")
+    df = load_data(IN_FILE)
+    logger.info(f"Loaded {len(df)} cluster entries from {IN_FILE}")
 
-    all_results: Dict[str, Any] = {}
+    for concept in df["Concept"].unique():
+        output_html = concept_outfile(concept)
+        logger.info(f"Generating interactive plot for concept '{concept}' -> {output_html}")
+        plot_interactive(df, concept, output_html)
 
-    for concept in concepts:
-        logger.info(f"Processing concept '{concept}'")
-        all_slices = collect_vectors(
-            concept,
-            include_freq=("freq" in MASS_MODES or "weighted" in MASS_MODES),
-        )
-        cluster_results = cluster_slices(
-            all_slices,
-            mass_modes=MASS_MODES,
-        )
-        all_results[concept] = cluster_results
+    logger.info("All interactive plots generated.")
 
-    with open(OUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(convert_keys(all_results), f, indent=2)
-
-    logger.info(f"Wrote merged cluster results to {OUT_FILE}")
 
 if __name__ == "__main__":
     main()
