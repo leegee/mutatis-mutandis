@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """
-viz_usage_clusters_interactive.py - Interactive cluster mass heatmap with hover-over lexemes.
+viz_usage_clusters_interactive.py
 
-See `viz_usage_clusters.py`
+Interactive cluster mass heatmap with hover-over lexemes.
 
+Input is the output of `usage_cluster_merged.py`.
 """
 
 from __future__ import annotations
@@ -14,25 +15,32 @@ from typing import Optional
 import json
 import pandas as pd
 import plotly.express as px
-import lib.eebo_config as config
 
-# Set to None to visualise all concepts
+import lib.eebo_config as config
+from lib.eebo_logging import logger
+
+
 TARGET: Optional[str] = None
+
+# Which mass definition to visualise:
+# "count", "freq", "sim", "weighted"
+MASS_MODE = "weighted"
 
 if TARGET:
     IN_FILE = config.OUT_DIR / f"usage_clusters_{TARGET.lower()}.json"
 else:
     IN_FILE = config.OUT_DIR / "usage_clusters_all_concepts.json"
 
-OUT_FILE = config.OUT_DIR / "cluster_mass_interactive.html"
+OUT_FILE = config.OUT_DIR / f"cluster_mass_interactive_{MASS_MODE}.html"
 
 
 def concept_outfile(concept: str) -> Path:
     slug = concept.lower().replace(" ", "_")
-    return config.OUT_DIR / f"cluster_mass_interactive_{slug}.html"
+    return config.OUT_DIR / f"cluster_mass_interactive_{slug}_{MASS_MODE}.html"
 
 
 def format_tokens(tokens: list[str], per_line: int = 5) -> str:
+    """Pretty-print tokens for hover text."""
     lines = [
         ", ".join(tokens[i:i + per_line])
         for i in range(0, len(tokens), per_line)
@@ -40,95 +48,135 @@ def format_tokens(tokens: list[str], per_line: int = 5) -> str:
     return "<br>".join(lines)
 
 
-def load_data(in_file: Path) -> pd.DataFrame:
-    """Load cluster JSON into a long-format DataFrame using cluster_mass and lexemes."""
-    with open(in_file, "r", encoding="utf-8") as f:
+def load_data(json_path):
+    rows = []
+    with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    rows = []
-    for concept, slices in data.items():
-        for slice_key, slice_data in slices.items():
-            clusters = slice_data.get("clusters", {})
-            cluster_mass = slice_data.get("cluster_mass", {})
-            for cluster_id, tokens in clusters.items():
-                mass = cluster_mass.get(cluster_id, len(tokens))
-                rows.append(
-                    {
-                        "Slice": slice_key,
-                        "Concept": concept,
-                        "Cluster": cluster_id,
-                        "Tokens": format_tokens(tokens),
-                        "Mass": mass,
-                    }
-                )
-    df = pd.DataFrame(rows)
-    return df
+    for slice_key, concepts in data.items():
+        for concept, clusters in concepts.items():
+            for cluster_id, cluster_data in clusters.items():
+                masses = cluster_data.get("mass", {})
+                tokens = cluster_data.get("tokens", [])
+
+                rows.append({
+                    "Slice": slice_key,
+                    "Concept": concept,
+                    "Cluster": str(cluster_id),
+                    "Tokens": ", ".join(tokens),
+
+                    # 🔹 all mass modes
+                    "Mass_count": masses.get("count", 0),
+                    "Mass_freq": masses.get("freq", 0),
+                    "Mass_sim": masses.get("sim", 0),
+                    "Mass_weighted": masses.get("weighted", 0),
+                })
+
+    return pd.DataFrame(rows)
 
 
 def sort_cluster_ids(ids: list[str]) -> list[str]:
+    """Sort cluster IDs numerically, keeping '-1' (outliers) first."""
     def sort_key(cid: str):
         if cid == "-1":
-            return (-1, -1)   # outliers first
+            return (-1, -1)
         try:
             return (0, int(cid))
         except ValueError:
-            return (1, cid)  # fallback lexical
+            return (1, cid)
+
     return sorted(ids, key=sort_key)
 
 
-def plot_interactive(df: pd.DataFrame):
-    """Create an interactive heatmap with hover showing tokens."""
-    concepts = df["Concept"].unique() if TARGET is None else [TARGET]
+def plot_interactive(df, concept, output_html):
+    subset = df[df["Concept"] == concept]
 
-    for concept in concepts:
-        subset = df[df["Concept"] == concept]
+    MASS_MODES = ["count", "freq", "sim", "weighted"]
+    pivots = {}
+    hover_texts = {}
 
-        pivot = subset.pivot(index="Cluster", columns="Slice", values="Mass").fillna(0)
-        hover_text = subset.pivot(index="Cluster", columns="Slice", values="Tokens").fillna("")
-
-        # Ensure string cluster IDs
-        pivot.index = pivot.index.astype(str)
-        hover_text.index = hover_text.index.astype(str)
-
-        # Order clusters safely
-        ordered_clusters = sort_cluster_ids(list(pivot.index))
-        pivot = pivot.reindex(ordered_clusters)
-        hover_text = hover_text.reindex(ordered_clusters)
-
-        fig = px.imshow(
-            pivot.values,
-            labels=dict(x="Slice", y="Cluster", color="Mass"),
-            x=pivot.columns,
-            y=pivot.index,
-            text_auto=True,
-            aspect="auto",
+    #  matrices for every mass definition
+    for mode in MASS_MODES:
+        pivots[mode] = (
+            subset
+            .pivot(index="Cluster", columns="Slice", values=f"Mass_{mode}")
+            .fillna(0)
         )
 
-        fig.update_traces(
-            hovertemplate=(
-                "Cluster ID: %{y}<br>"
-                "Slice: %{x}<br>"
-                "Mass: %{z}<br>"
-                "Tokens: %{customdata}"
-            ),
-            customdata=hover_text.values,
+        hover_texts[mode] = (
+            subset
+            .pivot(index="Cluster", columns="Slice", values="Tokens")
+            .fillna("")
         )
 
-        fig.update_layout(
-            title=f"Cluster Mass of '{concept}'",
-            xaxis_title="Slice",
-            yaxis_title="Cluster ID",
-        )
+    initial_mode = "weighted"
 
-        out_filepath = concept_outfile(concept)
-        fig.write_html(out_filepath)
-        print(f"Saved interactive figure for {concept} to {out_filepath}")
+    fig = px.imshow(
+        pivots[initial_mode].values,
+        x=pivots[initial_mode].columns,
+        y=pivots[initial_mode].index,
+        aspect="auto",
+        labels=dict(
+            x="Slice",
+            y="Cluster ID",
+            color=f"Cluster mass ({initial_mode})",
+        ),
+    )
+
+    fig.update_traces(
+        customdata=hover_texts[initial_mode].values,
+        hovertemplate=(
+            "Cluster ID: %{y}<br>"
+            "Slice: %{x}<br>"
+            f"Mass ({initial_mode}): %{{z}}<br>"
+            "<br><b>Tokens</b><br>%{customdata}"
+        ),
+    )
+
+    # dropdown to swap mass mode
+    fig.update_layout(
+        title=f"Cluster mass of '{concept}' ({initial_mode})",
+        updatemenus=[
+            dict(
+                buttons=[
+                    dict(
+                        label=mode,
+                        method="update",
+                        args=[
+                            {
+                                "z": [pivots[mode].values],
+                                "customdata": [hover_texts[mode].values],
+                            },
+                            {
+                                "coloraxis.colorbar.title": f"Cluster mass ({mode})",
+                                "title": f"Cluster mass of '{concept}' ({mode})",
+                            },
+                        ],
+                    )
+                    for mode in MASS_MODES
+                ],
+                direction="down",
+                showactive=True,
+                x=1.02,
+                y=1.0,
+            )
+        ],
+    )
+
+    fig.write_html(output_html)
 
 
 def main():
     df = load_data(IN_FILE)
-    print(f"Loaded {len(df)} cluster entries from {IN_FILE}")
-    plot_interactive(df)
+    logger.info(f"Loaded {len(df)} cluster entries from {IN_FILE}")
+
+    for concept in df["Concept"].unique():
+        output_html = concept_outfile(concept)
+        logger.info(f"Generating interactive plot for concept '{concept}' -> {output_html}")
+
+        plot_interactive(df, concept, output_html)
+
+    logger.info("All interactive plots generated.")
 
 
 if __name__ == "__main__":

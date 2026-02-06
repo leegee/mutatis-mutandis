@@ -87,10 +87,7 @@ case "$PHASE" in
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer_plot.py")
         ;;
     uc|usage-cluster)
-        RUN_SCRIPTS+=("$SRC/usage_clusterer.py")
-        ;;
-    uct|usage-cluster-tracker)
-        RUN_SCRIPTS+=("$SRC/usage_clusterer_tracker.py")
+        RUN_SCRIPTS+=("$SRC/usage_clusterer2.py")
         ;;
     uctv|usage-cluster-viz)
         RUN_SCRIPTS+=("$SRC/viz_usage_clusters.py")
