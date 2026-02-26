@@ -34,6 +34,7 @@ faiss-cache/
 docs/uml/lib/plantuml*.jar
 
 __pycache__
+python/venv_spacy/
 python/macberth_env/
 python/test_output/
 python/src/macberth_pipe.egg-info/

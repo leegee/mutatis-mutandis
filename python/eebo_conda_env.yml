@@ -1,0 +1,38 @@
+name: eebo
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy>=1.23,<2.0
+  - spacy=3.6.*
+  - faiss-cpu
+  - graphviz
+  - pip
+  - pip:
+      - transformers
+      - datasets
+      - tqdm
+      - beautifulsoup4
+      - xmltodict
+      - fasttext-wheel
+      - matplotlib
+      - seaborn
+      - psycopg
+      - pyright
+      - mypy
+      - ruff
+      - lxml
+      - psycopg-binary
+      - types-tqdm
+      - scikit-learn-stubs
+      - Levenshtein
+      - flask
+      - flask-cors
+      - waitress
+      - nltk
+      - plotly
+      - umap-learn
+      - hdbscan
+      - dash
+      - https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.6.0/en_core_web_sm-3.6.0-py3-none-any.whl --no-deps
+
