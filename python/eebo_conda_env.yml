@@ -8,6 +8,7 @@ dependencies:
   - faiss-cpu
   - graphviz
   - pip
+  - networkx
   - pip:
       - transformers
       - datasets
