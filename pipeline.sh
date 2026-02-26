@@ -92,6 +92,12 @@ case "$PHASE" in
     ucv|usage-cluster-viz)
         RUN_SCRIPTS+=("$SRC/viz_usage_clusters_interactive.py")
         ;;
+    ucs|usage-cluster-sankey)
+        RUN_SCRIPTS+=("$SRC/viz_usage_clusters_sankey.py")
+        ;;
+    a|align)
+        RUN_SCRIPTS+=("$SRC/align.py")
+        ;;
     *)
         echo "! Invalid phase: $PHASE"
         popd >/dev/null

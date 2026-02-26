@@ -38,6 +38,12 @@ MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextSlices"
+FASTTEXT_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+ALIGNMENT_ANCHORS_FILE = INDEXES_DIR / "anchors_stable.json"
+
+ALIGNED_VECTORS_DIR = INDEXES_DIR / "aligned_vectors"
+ALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
