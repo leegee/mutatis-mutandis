@@ -18,7 +18,7 @@ import lib.eebo_config as config
 from lib.eebo_anchor_builder import get_anchors
 
 from train_slice_fasttext import slice_model_path
-from generate_token_embeddings import generate_embeddings_per_model
+from lib.eebo_embeddings import generate_embeddings_per_model
 
 
 def aligned_vectors_path(slice_id: str) -> Path:

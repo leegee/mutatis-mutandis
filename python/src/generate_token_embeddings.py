@@ -19,8 +19,13 @@ import numpy as np
 
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
-from train_slice_fasttext import slice_model_path
 from lib.eebo_logging import logger
+from train_slice_fasttext import slice_model_path
+from align import load_aligned_vectors
+
+
+USE_ALIGNED_FASTTEXT_VECTORS = True
+
 
 def generate_embeddings_per_model(model_path: Path) -> dict[str, np.ndarray]:
     """Load a fastText slice model and generate embeddings for all words in its vocabulary."""
@@ -72,12 +77,21 @@ def main():
 
         if not args.dedup_only:
             for start, end in config.SLICES:
-                model_file = slice_model_path((start, end))
-                if not model_file.exists():
-                    logger.warning(f"Model {model_file} missing, skipping")
-                    continue
+                if USE_ALIGNED_FASTTEXT_VECTORS:
+                    slice_id = f"{start}-{end}"
+                    try:
+                        embeddings = load_aligned_vectors(slice_id)
+                    except FileNotFoundError:
+                        logger.warning(f"Aligned vectors for slice {slice_id} missing, skipping")
+                        continue
+                else:
+                    model_file = slice_model_path((start, end))
+                    if not model_file.exists():
+                        logger.warning(f"Model {model_file} missing, skipping")
+                        continue
+                    embeddings = generate_embeddings_per_model(model_file)
 
-                embeddings = generate_embeddings_per_model(model_file)
+                # Insert embeddings regardless of source
                 store_embeddings(conn, embeddings, start, end)
         else:
             logger.info("Skipping embedding generation due to --dedup-only flag")
