@@ -9,6 +9,7 @@ EEBO Slice Embedding Alignment Pipeline (Reference Slice)
 
 import os
 import json
+from pathlib import Path
 import numpy as np
 from scipy.linalg import orthogonal_procrustes
 
@@ -18,6 +19,33 @@ from lib.eebo_anchor_builder import get_anchors
 
 from train_slice_fasttext import slice_model_path
 from generate_token_embeddings import generate_embeddings_per_model
+
+
+def aligned_vectors_path(slice_id: str) -> Path:
+    """
+    Return the full path to the aligned vectors JSON for a given slice.
+    """
+    return config.ALIGNED_VECTORS_DIR / f"{slice_id}.json"
+
+
+def save_aligned_vectors(slice_id, aligned_vectors):
+    path = aligned_vectors_path(slice_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    out = {w: vec.tolist() for w, vec in aligned_vectors.items()}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=2)
+
+
+def load_aligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
+    path = aligned_vectors_path(slice_id)
+    if not path.exists():
+        raise FileNotFoundError(f"Aligned vectors for slice {slice_id} not found at {path}")
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return {token: np.array(vec, dtype=np.float32) for token, vec in data.items()}
+
 
 def load_fasttext_vectors(slice_id: str) -> dict[str, np.ndarray]:
     """
@@ -38,14 +66,6 @@ def load_fasttext_vectors(slice_id: str) -> dict[str, np.ndarray]:
 
     embeddings = generate_embeddings_per_model(model_file)
     return embeddings
-
-
-def save_aligned_vectors(slice_id, aligned_vectors):
-    path = config.ALIGNED_VECTORS_DIR / f"{slice_id}.json"
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    out = {w: vec.tolist() for w, vec in aligned_vectors.items()}
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=2)
 
 
 def orthogonal_procrustes_align(source_vectors, target_vectors, anchor_words):
@@ -90,27 +110,13 @@ def align_to_reference(reference_slice_id):
     return aligned_embeddings
 
 
-def load_aligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
-    """
-    Load previously saved aligned vectors for a given slice.
-
-    Args:
-        slice_id (str): e.g., "1625-1629"
-
-    Returns:
-        dict: token -> np.ndarray aligned vector
-    """
-    path = config.ALIGNED_VECTORS_DIR / f"{slice_id}.json"
-    if not path.exists():
-        raise FileNotFoundError(f"Aligned vectors for slice {slice_id} not found at {path}")
-
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Convert all vectors back to NumPy arrays
-    return {token: np.array(vec, dtype=np.float32) for token, vec in data.items()}
-
-
 if __name__ == "__main__":
     reference_slice_id = "1625-1629"
-    aligned_embeddings = align_to_reference(reference_slice_id)
+    path = aligned_vectors_path(reference_slice_id)
+
+    if path.exists():
+        logger.info(f"Loading existing aligned vectors for reference slice {reference_slice_id}")
+        aligned_embeddings = {reference_slice_id: load_aligned_vectors(reference_slice_id)}
+    else:
+        # Align all slices and save
+        aligned_embeddings = align_to_reference(reference_slice_id)

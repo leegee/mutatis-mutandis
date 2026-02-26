@@ -6,6 +6,7 @@ Train slice-specific fastText models on the plain text files generated
 by generate_training_files.py.
 """
 
+from typing import Tuple
 from pathlib import Path
 import fasttext
 
@@ -20,7 +21,7 @@ def slice_model_path(slice_range: Tuple[int, int]) -> Path:
     slice_range: (start_year, end_year)
     """
     start, end = slice_range
-    return config.FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
+    return FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
 
 
 def train_slice(slice_file: Path, start: int, end: int) -> Path:

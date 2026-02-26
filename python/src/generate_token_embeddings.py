@@ -16,10 +16,10 @@ from pathlib import Path
 import argparse
 import fasttext
 import numpy as np
-from typing import Tuple
 
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
+from train_slice_fasttext import slice_model_path
 from lib.eebo_logging import logger
 
 def generate_embeddings_per_model(model_path: Path) -> dict[str, np.ndarray]:
