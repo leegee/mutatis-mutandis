@@ -115,7 +115,7 @@ if __name__ == "__main__":
     path = aligned_vectors_path(reference_slice_id)
 
     if path.exists():
-        logger.info(f"Loading existing aligned vectors for reference slice {reference_slice_id}")
+        logger.info(f"Loading existing aligned vectors for reference slice {reference_slice_id} from {path}")
         aligned_embeddings = {reference_slice_id: load_aligned_vectors(reference_slice_id)}
     else:
         # Align all slices and save

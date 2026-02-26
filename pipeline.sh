@@ -49,6 +49,7 @@ case "$PHASE" in
         echo "# Phase 2: Training pipeline"
         RUN_SCRIPTS+=("$SRC/generate_training_files.py")
         RUN_SCRIPTS+=("$SRC/train_slice_fasttext.py")
+        RUN_SCRIPTS+=("$SRC/align.py")
         ;;
     2a|training-files)
         RUN_SCRIPTS+=("$SRC/generate_training_files.py")
@@ -56,26 +57,29 @@ case "$PHASE" in
     2b|train-fasttext)
         RUN_SCRIPTS+=("$SRC/train_slice_fasttext.py")
         ;;
+    2c|align)
+        RUN_SCRIPTS+=("$SRC/align.py")
+        ;;
     3|f|faiss)
         RUN_SCRIPTS+=("$SRC/build_faiss_slice_indexes.py")
         ;;
     4|v|token-vectors)
         RUN_SCRIPTS+=("$SRC/generate_token_embeddings.py")
         ;;
-    a|align)
-        RUN_SCRIPTS+=("$SRC/align.py")
-        ;;
     concept-timeseries)
         RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
         ;;
     plot-centroid-sim)
-        RUN_SCRIPTS+=("$SRC/vis_centroid_similarity.py")
+        # RUN_SCRIPTS+=("$SRC/vis_centroid_similarity.py")
+        RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_aligned.py")
         ;;
     plot-centroid-sim-knn)
-        RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_neighbours.py")
+        # RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_neighbours.py")
+        RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_neighbours_aligned.py")
         ;;
     pca-poles)
-        RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles.py")
+        # RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles.py")
+        RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles_aligned.py")
         ;;
     pca-poles-interactive)
         RUN_SCRIPTS+=("$SRC/pca_interactive_liberty_plot.py")

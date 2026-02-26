@@ -15,7 +15,8 @@ import fasttext
 
 import lib.eebo_config as config
 from lib.eebo_logging import logger
-from generate_token_embeddings import slice_model_path
+from generate_token_embeddings import slice_model_path, generate_embeddings_per_model
+
 
 EMB_DIM: int = int(config.FASTTEXT_PARAMS["dim"])
 
@@ -31,7 +32,10 @@ def vocab_slice_path(slice_range: Tuple[int, int]) -> Path:
     return config.FAISS_INDEX_DIR / f"slice_{start}_{end}.vocab"
 
 
+#
 # FastText
+#
+
 def load_fasttext_model(slice_range: Tuple[int, int]) -> Any:
     model_file = slice_model_path(slice_range)
     logger.info(f"Loading fastText model for slice {slice_range}: {model_file}")
@@ -66,23 +70,21 @@ def get_vector(conn, token: str, slice_start: int, slice_end: int) -> np.ndarray
 # Build FAISS index
 def build_index_for_slice(slice_range: Tuple[int, int]) -> None:
     start, end = slice_range
-    model = load_fasttext_model(slice_range)
+    model_file = slice_model_path(slice_range)
+    embeddings = generate_embeddings_per_model(model_file)  # DRY
 
-    words: List[str] = model.get_words()
-    vectors: np.ndarray = np.empty((len(words), EMB_DIM), dtype=np.float32)
-
-    for i, w in enumerate(words):
-        vectors[i] = np.asarray(model.get_word_vector(w), dtype=np.float32)
+    words = list(embeddings.keys())
+    vectors = np.stack([embeddings[w] for w in words])  # shape: (num_words, dim)
 
     # Normalize for cosine similarity
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     norms[norms == 0.0] = 1.0
     vectors = vectors / norms
 
-    index: Any = faiss.IndexFlatIP(EMB_DIM)  # treat as Any for type checkers
+    index: Any = faiss.IndexFlatIP(EMB_DIM)
     index.add(vectors)
 
-    # Save
+    # Save index + vocab
     faiss.write_index(index, str(faiss_slice_path(slice_range)))
     with open(vocab_slice_path(slice_range), "w", encoding="utf-8") as f:
         f.write("\n".join(words))
