@@ -69,7 +69,7 @@ case "$PHASE" in
     concept-timeseries)
         RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
         ;;
-    plot-centroid-sim)
+    ps|plot-centroid-sim)
         # RUN_SCRIPTS+=("$SRC/vis_centroid_similarity.py")
         RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_aligned.py")
         ;;

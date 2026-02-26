@@ -16,7 +16,9 @@ import fasttext
 import lib.eebo_config as config
 from lib.eebo_logging import logger
 from generate_token_embeddings import slice_model_path, generate_embeddings_per_model
+from align import load_aligned_vectors
 
+USE_ALIGNED_FASTTEXT_VECTORS = True
 
 EMB_DIM: int = int(config.FASTTEXT_PARAMS["dim"])
 
@@ -70,8 +72,12 @@ def get_vector(conn, token: str, slice_start: int, slice_end: int) -> np.ndarray
 # Build FAISS index
 def build_index_for_slice(slice_range: Tuple[int, int]) -> None:
     start, end = slice_range
-    model_file = slice_model_path(slice_range)
-    embeddings = generate_embeddings_per_model(model_file)  # DRY
+    if USE_ALIGNED_FASTTEXT_VECTORS:
+        slice_id = f"{slice_range[0]}-{slice_range[1]}"
+        embeddings = load_aligned_vectors(slice_id)
+    else:
+        model_file = slice_model_path(slice_range)
+        embeddings = generate_embeddings_per_model(model_file)
 
     words = list(embeddings.keys())
     vectors = np.stack([embeddings[w] for w in words])  # shape: (num_words, dim)
