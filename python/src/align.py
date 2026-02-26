@@ -16,8 +16,8 @@ from lib.eebo_logging import logger
 import lib.eebo_config as config
 from lib.eebo_anchor_builder import get_anchors
 
-from generate_token_embeddings import slice_model_path, generate_embeddings_per_model
-
+from train_slice_fasttext import slice_model_path
+from generate_token_embeddings import generate_embeddings_per_model
 
 def load_fasttext_vectors(slice_id: str) -> dict[str, np.ndarray]:
     """
@@ -90,27 +90,27 @@ def align_to_reference(reference_slice_id):
     return aligned_embeddings
 
 
-def load_fasttext_aligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
+def load_aligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
     """
-    Load aligned fastText vectors for a given slice from JSON.
+    Load previously saved aligned vectors for a given slice.
 
     Args:
-        slice_id: e.g. "1625-1629"
+        slice_id (str): e.g., "1625-1629"
 
     Returns:
-        dict: token -> np.ndarray vector
+        dict: token -> np.ndarray aligned vector
     """
-    path = onfig.ALIGNED_VECTORS_DIR / f"{slice_id}.json"
+    path = config.ALIGNED_VECTORS_DIR / f"{slice_id}.json"
     if not path.exists():
         raise FileNotFoundError(f"Aligned vectors for slice {slice_id} not found at {path}")
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    return {w: np.array(v, dtype=np.float32) for w, v in data.items()}
+    # Convert all vectors back to NumPy arrays
+    return {token: np.array(vec, dtype=np.float32) for token, vec in data.items()}
 
 
 if __name__ == "__main__":
-    # Pick the slice that will be the reference
     reference_slice_id = "1625-1629"
     aligned_embeddings = align_to_reference(reference_slice_id)

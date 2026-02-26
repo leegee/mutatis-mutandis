@@ -62,6 +62,9 @@ case "$PHASE" in
     4|v|token-vectors)
         RUN_SCRIPTS+=("$SRC/generate_token_embeddings.py")
         ;;
+    a|align)
+        RUN_SCRIPTS+=("$SRC/align.py")
+        ;;
     concept-timeseries)
         RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
         ;;
@@ -94,9 +97,6 @@ case "$PHASE" in
         ;;
     ucs|usage-cluster-sankey)
         RUN_SCRIPTS+=("$SRC/viz_usage_clusters_sankey.py")
-        ;;
-    a|align)
-        RUN_SCRIPTS+=("$SRC/align.py")
         ;;
     *)
         echo "! Invalid phase: $PHASE"
