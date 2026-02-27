@@ -200,7 +200,49 @@ CONCEPT_SETS: CanonicalRules = {
             "liberto","liberabo","liberall","liberalytie","liberaui","liberally","liberates","liberalitie",
             "libera", "deliberate", "liberando", "libya", "liberi", "liberior"
 
+        },
+    },
+
+
+    "DIVINE": {
+        "forms": {
+            "god", "divine", "heaven", "heavens", "eternal", "grace", "providence",
+            "sacred", "holy", "lord", "almighty", "creator", "eternity"
+        },
+        "false_positives": {
+            "godly", "good", "goods", "gold", "glad"  # common OCR/orthographic traps
         }
+    },
+    "TEMPORAL": {
+        "forms": {
+            "state", "civil", "political", "temporal", "commonwealth",
+            "kingdom", "government", "authority", "prince", "realm"
+        },
+        "false_positives": {
+            "statue", "station", "temple"  # OCR/spelling false positives
+        }
+    },
+
+
+ "KING": {
+        "forms": {"king", "kings", "kinges", "monarch", "sovereign"},
+        "false_positives": {"kin", "kine", "sink", "sing"}
+    },
+    "PARLIAMENT": {
+        "forms": {"parliament", "parliment", "parliaments"},
+        "false_positives": {"parliamentary", "parlour"}
+    },
+    "OBEDIENCE": {
+        "forms": {"obedience", "obedient", "obedienc", "obey"},
+        "false_positives": {"obscene", "obeyed", "obed"}
+    },
+    "PEOPLE": {
+        "forms": {"people", "peoples", "peple", "populace", "subjects"},
+        "false_positives": {"peep", "peeps", "pepla"}
+    },
+    "COMMONWEALTH": {
+        "forms": {"commonwealth", "common-wealth", "common weal"},
+        "false_positives": {"common", "wealth"}
     },
 
     # "PROPERTY": {
