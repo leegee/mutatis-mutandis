@@ -87,10 +87,14 @@ case "$PHASE" in
     umap-liberty)
         RUN_SCRIPTS+=("$SRC/umap_interactive_liberty_umap.py")
         ;;
-    exp)
+    exp|concept-explorer)
+        RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
+        RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer_plot.py")
+        ;;
+    exp1)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
         ;;
-    expp|exp-plot)
+    exp2|exp-plot)
         RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer_plot.py")
         ;;
     uc|usage-cluster)

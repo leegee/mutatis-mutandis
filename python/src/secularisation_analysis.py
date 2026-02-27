@@ -10,8 +10,9 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cosine
+from pathlib import Path
 
-from lib.eebo_config import SLICES, CONCEPT_SETS, ALIGNED_VECTORS_DIR
+from lib.eebo_config import OUT_DIR, SLICES, CONCEPT_SETS, ALIGNED_VECTORS_DIR
 
 # Minimum frequency threshold to include a form in centroid
 MIN_FREQ = 5
@@ -112,7 +113,7 @@ def compute_trajectories():
     return trajectories
 
 
-def plot_trajectories(trajectories, save_path: str = config.OUT_DIR / "secularisation_trajectories.png"):
+def plot_trajectories(trajectories, save_path: Path = OUT_DIR / "secularisation_trajectories.png"):
     """
     Plot and save trajectories of canonical concepts along the DIVINE → TEMPORAL axis.
     - High-resolution PNG (2160x1215 px)
@@ -152,7 +153,7 @@ def plot_trajectories(trajectories, save_path: str = config.OUT_DIR / "secularis
         )
 
     plt.xlabel("Slice start year")
-    plt.ylabel("Projection onto DIVINE → TEMPORAL axis")
+    plt.ylabel("DIVINE - TEMPORAL")
     plt.title("Secularisation Trajectories of Canonical Heads")
     plt.grid(True)
     plt.legend(loc='upper left', bbox_to_anchor=(1.0, 1.0))  # legend outside plot

@@ -27,13 +27,16 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Tuple
+import numpy as np
 
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 from lib.eebo_logging import logger
 from lib.faiss_slices import load_slice_index, get_vector
+from align import load_aligned_vectors
 
 TARGET = 'LAW' # A key in config's CONCEPT_SETS
+USE_ALIGNED_VECTORS = True
 
 json_path = config.OUT_DIR / f"concept_neighbour_audit_{TARGET.lower()}.json"
 html_path = config.OUT_DIR / f"concept_kwic_audit_{TARGET.lower()}.html"
@@ -158,6 +161,7 @@ def build_html(audit_data: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+
 def main():
     logger.info("Starting canonicalised concept neighbour explorer")
 
@@ -167,22 +171,47 @@ def main():
         for slice_range in config.SLICES:
             slice_start, slice_end = slice_range
             slice_key = f"{slice_start}_{slice_end}"
+
+            # Load FAISS index and vocab
             index, vocab = load_slice_index(slice_range)
             audit[slice_key] = {}
+
+            # Preload aligned vectors if requested
+            aligned_vectors: dict[str, np.ndarray] | None = None
+            if USE_ALIGNED_VECTORS:
+                try:
+                    aligned_vectors = load_aligned_vectors(f"{slice_start}-{slice_end}")
+                    logger.info(f"Loaded aligned vectors for slice {slice_key}")
+                except FileNotFoundError:
+                    logger.warning(f"No aligned vectors for slice {slice_key}, falling back to FAISS")
+                    aligned_vectors = None
 
             for concept in config.CONCEPT_SETS.keys():
                 if concept != TARGET.upper():
                     continue
 
                 seed = concept.lower()
-                vec = get_vector(conn, seed, slice_start, slice_end)
-                if vec is None:
-                    logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
-                    continue
+
+                # --- Get probe vector ---
+                if USE_ALIGNED_VECTORS and aligned_vectors is not None:
+                    vec = aligned_vectors.get(seed)
+                    if vec is None:
+                        logger.warning(f"No aligned vector for probe '{seed}' in slice {slice_key}")
+                        continue
+                else:
+                    vec = get_vector(conn, seed, slice_start, slice_end)
+                    if vec is None:
+                        logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
+                        continue
+
+                # Normalize
+                norm = np.linalg.norm(vec)
+                if norm > 0:
+                    vec = vec / norm
 
                 logger.info(f"Processing slice {slice_key}, concept {concept}")
 
-                # FAISS search
+                # --- FAISS search ---
                 D, Idx = index.search(vec.reshape(1, -1), TOP_K)
                 top_neighbors = [
                     (vocab[idx], float(sim))
@@ -190,6 +219,7 @@ def main():
                     if idx != -1
                 ]
 
+                # Exclude known forms / false positives
                 known_forms = config.CONCEPT_SETS[concept].get("forms", set())
                 false_positives = config.CONCEPT_SETS[concept].get("false_positives", set())
                 top_neighbors = [
@@ -202,7 +232,7 @@ def main():
                     audit[slice_key][concept] = {"probe": seed, "neighbours": []}
                     continue
 
-                # Batch fetch frequency
+                # --- Batch frequency lookup ---
                 tokens = [t for t, _ in top_neighbors]
                 with conn.cursor() as cur:
                     cur.execute(
@@ -218,7 +248,7 @@ def main():
                     )
                     freq_map = {r[0]: r[1] for r in cur.fetchall()}
 
-                # Batch fetch documents
+                # --- Batch document lookup ---
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -234,7 +264,7 @@ def main():
                     for token_, doc_id, title in cur.fetchall():
                         docs_map.setdefault(token_, []).append({"doc_id": doc_id, "title": title})
 
-                # Fetch KWIC
+                # --- Fetch KWIC ---
                 neighbours_list: List[Dict[str, Any]] = []
                 for token, sim in top_neighbors:
                     token_freq = freq_map.get(token, 0)
@@ -253,18 +283,17 @@ def main():
                     "neighbours": neighbours_list
                 }
 
-    # Write JSON
+    # --- Write JSON ---
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
     logger.info(f"Wrote {json_path}")
 
-    # Write HTML
+    # --- Write HTML ---
     html = build_html(audit)
     html_path.write_text(html, encoding="utf-8")
     logger.info(f"Wrote {html_path}")
 
     logger.info("Explorer complete.")
-
 
 if __name__ == "__main__":
     main()

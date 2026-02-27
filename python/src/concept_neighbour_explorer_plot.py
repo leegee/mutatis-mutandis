@@ -6,10 +6,10 @@ from statistics import mean
 import networkx as nx
 import matplotlib.pyplot as plt
 
-import lib.eebo_config as config
 from lib.eebo_logging import logger
+from concept_neighbour_explorer import json_path
 
-INPUT_FILE = config.OUT_DIR / "concept_neighbour_audit.json"
+INPUT_FILE = json_path
 SVG_FILE = INPUT_FILE.with_suffix(".svg")
 MIN_FREQ = 5
 MIN_SIM = 0.5
