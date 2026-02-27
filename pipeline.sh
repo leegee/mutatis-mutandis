@@ -66,7 +66,7 @@ case "$PHASE" in
     4|v|token-vectors)
         RUN_SCRIPTS+=("$SRC/generate_token_embeddings.py")
         ;;
-    concept-timeseries)
+    cts|concept-timeseries)
         RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
         ;;
     ps|plot-centroid-sim)
@@ -81,7 +81,7 @@ case "$PHASE" in
         # RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles.py")
         RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles_aligned.py")
         ;;
-    pca-poles-interactive)
+    pcai|pca-poles-interactive)
         RUN_SCRIPTS+=("$SRC/pca_interactive_liberty_plot.py")
         ;;
     umap-liberty)

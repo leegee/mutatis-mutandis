@@ -98,3 +98,9 @@ Clean up:
 ## CPU-Bound
 
 For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup so fastText over MacBERTh.
+
+## Notes
+
+Aligned diachornic vectors naturally detect semantic drift.
+
+The reconfiguration of Koselleckian poles is structural shift so requires imposed axis.
