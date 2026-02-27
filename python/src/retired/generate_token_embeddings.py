@@ -16,6 +16,7 @@ from pathlib import Path
 import argparse
 import fasttext
 import numpy as np
+from eebo_embeddings import generate_embeddings_per_model
 
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
@@ -25,20 +26,6 @@ from align import load_aligned_vectors
 
 
 USE_ALIGNED_FASTTEXT_VECTORS = True
-
-
-def generate_embeddings_per_model(model_path: Path) -> dict[str, np.ndarray]:
-    """Load a fastText slice model and generate embeddings for all words in its vocabulary."""
-    logger.info(f"Loading model {model_path}")
-    model = fasttext.load_model(str(model_path))
-
-    tokens = model.get_words()
-    embeddings: dict[str, np.ndarray] = {}
-    for tok in tokens:
-        embeddings[str(tok)] = model.get_word_vector(tok).astype(np.float32)
-    logger.info(f"Generated embeddings for {len(tokens)} tokens in {model_path.name}")
-    return embeddings
-
 
 def store_embeddings(conn, embeddings: dict[str, np.ndarray], slice_start: int, slice_end: int):
     """Insert token embeddings into token_vectors table using batch insert, per slice."""

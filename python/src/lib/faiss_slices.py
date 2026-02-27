@@ -70,42 +70,6 @@ def get_vector(conn, token: str, slice_start: int, slice_end: int) -> np.ndarray
     return vec / norm if norm != 0 else vec
 
 
-# Build FAISS index
-def build_index_for_slice(slice_range: Tuple[int, int]) -> None:
-    start, end = slice_range
-    if USE_ALIGNED_FASTTEXT_VECTORS:
-        slice_id = f"{slice_range[0]}-{slice_range[1]}"
-        embeddings = load_aligned_vectors(slice_id)
-    else:
-        model_file = slice_model_path(slice_range)
-        embeddings = generate_embeddings_per_model(model_file)
-
-    words = list(embeddings.keys())
-    vectors = np.stack([embeddings[w] for w in words])  # shape: (num_words, dim)
-
-    # Normalize for cosine similarity
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    norms[norms == 0.0] = 1.0
-    vectors = vectors / norms
-
-    index: Any = faiss.IndexFlatIP(EMB_DIM)
-    index.add(vectors)
-
-    # Save index + vocab
-    faiss.write_index(index, str(faiss_slice_path(slice_range)))
-    with open(vocab_slice_path(slice_range), "w", encoding="utf-8") as f:
-        f.write("\n".join(words))
-
-    logger.info(f"Saved FAISS index and vocab for slice {slice_range}")
-
-
-def build_all_slices() -> None:
-    logger.info("Building FAISS indexes for all slices")
-    for slice_range in config.SLICES:
-        build_index_for_slice(slice_range)
-    logger.info("All FAISS indexes built")
-
-
 # Load FAISS index + vocab
 def load_slice_index(slice_range: Tuple[int, int]) -> tuple[Any, List[str]]:
     """Load FAISS index and corresponding vocabulary"""
@@ -125,7 +89,3 @@ def knn_search(index: Any, vocab: List[str], query_vec: np.ndarray, top_k: int =
     results = [(vocab[idx], float(sim)) for idx, sim in zip(Idx[0], D[0], strict=True)]
     return results
 
-
-if __name__ == "__main__":
-    # Script mode: build all slices
-    build_all_slices()
