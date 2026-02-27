@@ -112,7 +112,7 @@ def compute_trajectories():
     return trajectories
 
 
-def plot_trajectories(trajectories, save_path: str = "secularisation_trajectories.png"):
+def plot_trajectories(trajectories, save_path: str = config.OUT_DIR / "secularisation_trajectories.png"):
     """
     Plot and save trajectories of canonical concepts along the DIVINE → TEMPORAL axis.
     - High-resolution PNG (2160x1215 px)
@@ -140,7 +140,6 @@ def plot_trajectories(trajectories, save_path: str = "secularisation_trajectorie
         linestyle = linestyles[i % len(linestyles)]
         linewidth = 3 if head in highlights else 1.5
         alpha = 1.0 if head in highlights else 0.6
-
         plt.plot(
             [start for start, _ in SLICES],
             jittered,
