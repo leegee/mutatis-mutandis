@@ -210,7 +210,7 @@ CONCEPT_SETS: CanonicalRules = {
             "sacred", "holy", "lord", "almighty", "creator", "eternity"
         },
         "false_positives": {
-            "godly", "good", "goods", "gold", "glad"  # common OCR/orthographic traps
+            "godly", "good", "goods", "gold", "glad"
         }
     },
     "TEMPORAL": {
@@ -219,12 +219,13 @@ CONCEPT_SETS: CanonicalRules = {
             "kingdom", "government", "authority", "prince", "realm"
         },
         "false_positives": {
-            "statue", "station", "temple"  # OCR/spelling false positives
+            "statue", "station", "temple"
         }
     },
 
 
- "KING": {
+    # Rough political/legal
+    "KING": {
         "forms": {"king", "kings", "kinges", "monarch", "sovereign"},
         "false_positives": {"kin", "kine", "sink", "sing"}
     },
@@ -243,6 +244,16 @@ CONCEPT_SETS: CanonicalRules = {
     "COMMONWEALTH": {
         "forms": {"commonwealth", "common-wealth", "common weal"},
         "false_positives": {"common", "wealth"}
+    },
+
+    # Rough theology
+    "CHURCH": {
+        "forms": {"church", "churches", "clergy", "ecclesia", "congregation"},
+        "false_positives": {"churchyard", "churchman"}
+    },
+    "RELIGION": {
+        "forms": {"religion", "religions", "faith", "doctrine", "creed"},
+        "false_positives": {"religious", "religionist"}
     },
 
     # "PROPERTY": {

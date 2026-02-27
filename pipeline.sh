@@ -102,6 +102,9 @@ case "$PHASE" in
     ucs|usage-cluster-sankey)
         RUN_SCRIPTS+=("$SRC/viz_usage_clusters_sankey.py")
         ;;
+    sa|secularisation_analysis)
+        RUN_SCRIPTS+=("$SRC/secularisation_analysis.py")
+        ;;
     *)
         echo "! Invalid phase: $PHASE"
         popd >/dev/null
