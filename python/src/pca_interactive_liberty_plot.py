@@ -18,7 +18,6 @@ import numpy as np
 import faiss
 from sklearn.decomposition import PCA
 import pandas as pd
-from pathlib import Path
 from collections import Counter
 
 import plotly.express as px
