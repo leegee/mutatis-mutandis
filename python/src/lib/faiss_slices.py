@@ -15,9 +15,7 @@ import fasttext
 
 import lib.eebo_config as config
 from lib.eebo_logging import logger
-from lib.eebo_embeddings import generate_embeddings_per_model
 from generate_token_embeddings import slice_model_path
-from align import load_aligned_vectors
 
 USE_ALIGNED_FASTTEXT_VECTORS = True
 

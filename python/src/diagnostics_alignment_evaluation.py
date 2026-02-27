@@ -8,16 +8,10 @@ Evaluate whether orthogonal alignment improves:
 
 from __future__ import annotations
 import numpy as np
-from typing import Dict, List, Tuple
-from pathlib import Path
 
 import lib.eebo_config as config
 from lib.faiss_slices import load_slice_index, knn_search
 from align import load_fasttext_vectors, load_aligned_vectors
-
-# -------------------------
-# Config
-# -------------------------
 
 REFERENCE_SLICE = "1625-1629"
 PROBE_WORD = "liberty"

@@ -11,7 +11,7 @@ from typing import Optional
 
 import numpy as np
 
-from lib.eebo_config import SLICES, SLICES_DIR, FASTTEXT_PARAMS, FAISS_INDEX_DIR
+from lib.eebo_config import SLICES, SLICES_DIR
 from lib.eebo_logging import logger
 from lib.eebo_embeddings import generate_embeddings_per_model
 from align import load_aligned_vectors, align_to_reference

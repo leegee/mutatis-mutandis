@@ -12,9 +12,7 @@ CLI arg `--dedup-only`: skip slice embedding generation and just deduplicate
 existing token_vectors table to remove duplicates and safely create PK/index.
 """
 
-from pathlib import Path
 import argparse
-import fasttext
 import numpy as np
 from eebo_embeddings import generate_embeddings_per_model
 
