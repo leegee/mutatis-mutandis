@@ -1,6 +1,11 @@
 # _Mutatis Mutandis_
 
-# Abstract: About This Project
+## Code Synopsis
+
+    conda activate eebo
+    ./pipeline --help
+
+## Abstract: About This Project
 
 * [Abstract](./ABSTRACT.md)
 * [Concise abstract](./ABSTRACT_concise.md)
