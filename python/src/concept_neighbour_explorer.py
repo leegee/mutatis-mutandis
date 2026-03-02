@@ -2,44 +2,26 @@
 """
 concept_neighbour_explorer.py
 
-Exploratory concept neighbour & KWIC audit with canonicalisation.
+Exploratory concept neighbour & KWIC audit using vectors from slice_embedding_pipeline.
 
-Each concept key is used as the probe (lowercased).
-Known forms of the concept are excluded from the neighbors.
-
-Hypothesis:
-
-Expectations prior to running:
-
-* In early EEBO slices: law constrains liberty (obedience, order).
-
-* In the constitutional crisis: law enables liberty (rights, protections).
-
-* In later slices: law stabilises liberty as something to be enjoyed or secured.
-
-Outputs:
-
-* concept_neighbour_audit.json
-* concept_kwic_audit.html
+Defaults to aligned vectors (USE_ALIGNED_VECTORS=True).
 """
 
 from __future__ import annotations
-
+import os
 import json
 from typing import Any, Dict, List, Tuple
 import numpy as np
 
-import lib.eebo_config as config
-import lib.eebo_db as eebo_db
+from lib.eebo_config import SLICES, CONCEPT_SETS, OUT_DIR
+from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
-from lib.faiss_slices import load_slice_index, get_vector
-from align import load_aligned_vectors
+from lib.faiss_slices import load_slice_index
+from slice_embedding_pipeline import load_aligned_vectors, load_unaligned_vectors, faiss_slice_path, vocab_slice_path
 
-TARGET = 'LAW' # A key in config's CONCEPT_SETS
-USE_ALIGNED_VECTORS = True
-
-json_path = config.OUT_DIR / f"concept_neighbour_audit_{TARGET.lower()}.json"
-html_path = config.OUT_DIR / f"concept_kwic_audit_{TARGET.lower()}.html"
+# --- Config ---
+TARGET = 'LAW'  # Only audit this concept
+USE_ALIGNED_VECTORS = os.environ.get("USE_ALIGNED_FASTTEXT_VECTORS", "1") == "1"
 
 TOP_K = 100
 SIM_THRESHOLD = 0.7
@@ -47,32 +29,20 @@ CONTEXT_WINDOW = 8
 KWIC_MAX_LEFT = 40
 KWIC_MAX_RIGHT = 40
 
+json_path = OUT_DIR / f"concept_neighbour_audit_{TARGET.lower()}.json"
+html_path = OUT_DIR / f"concept_kwic_audit_{TARGET.lower()}.html"
 
-def fetch_kwic_for_doc(
-    conn,
-    token: str,
-    doc_id: str,
-    limit: int = 3,
-) -> List[Tuple[str, str, str]]:
-    """
-    Fetch KWIC contexts for a token in a document, restricted to the
-    pamphlet corpus.
-    """
+# --- Helper functions ---
+
+def fetch_kwic_for_doc(conn, token: str, doc_id: str, limit: int = 3) -> List[Tuple[str, str, str]]:
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT token_idx
-            FROM pamphlet_tokens
-            WHERE doc_id = %s
-              AND token = %s
-            LIMIT %s;
-            """,
-            (doc_id, token, limit),
+            "SELECT token_idx FROM pamphlet_tokens WHERE doc_id = %s AND token = %s LIMIT %s",
+            (doc_id, token, limit)
         )
         positions = [r[0] for r in cur.fetchall()]
 
     rows: List[Tuple[str, str, str]] = []
-
     if not positions:
         return rows
 
@@ -84,9 +54,8 @@ def fetch_kwic_for_doc(
             """
             SELECT token_idx, token
             FROM pamphlet_tokens
-            WHERE doc_id = %s
-              AND token_idx BETWEEN %s AND %s
-            ORDER BY token_idx;
+            WHERE doc_id = %s AND token_idx BETWEEN %s AND %s
+            ORDER BY token_idx
             """,
             (doc_id, min_idx, max_idx),
         )
@@ -100,7 +69,6 @@ def fetch_kwic_for_doc(
 
     return rows
 
-
 def make_html_row(left, kw, right, sim, freq, title, url):
     return f"""
     <tr>
@@ -112,7 +80,6 @@ def make_html_row(left, kw, right, sim, freq, title, url):
         <td><a href="{url}" target="_blank">{title}</a></td>
     </tr>
     """
-
 
 def build_html(audit_data: Dict[str, Any]) -> str:
     parts = ["""
@@ -131,23 +98,15 @@ def build_html(audit_data: Dict[str, Any]) -> str:
 
     for slice_key, concepts in audit_data.items():
         parts.append(f"<h2>Slice {slice_key}</h2>")
-
         for concept, block in concepts.items():
             seed = block["probe"]
             parts.append(f"<h3>Concept: {concept} (probe: {seed})</h3>")
-
-            parts.append("""
-            <table>
-            <tr>
-                <th>Left</th><th>Keyword</th><th>Right</th>
-                <th>Sim</th><th>Freq</th><th>Doc</th>
-            </tr>
-            """)
+            parts.append("<table><tr><th>Left</th><th>Keyword</th><th>Right</th><th>Sim</th><th>Freq</th><th>Doc</th></tr>")
 
             for n in block["neighbours"]:
                 for doc in n["documents"]:
                     for left, kw, right in doc["kwic"]:
-                        url = f"{getattr(config, 'TEXT_BASE_URL', '')}{doc['doc_id']}"
+                        url = f"{getattr(OUT_DIR, 'TEXT_BASE_URL', '')}{doc['doc_id']}"
                         parts.append(make_html_row(
                             left, kw, right,
                             n["similarity"],
@@ -161,55 +120,42 @@ def build_html(audit_data: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-
+# --- Main loop ---
 def main():
-    logger.info("Starting canonicalised concept neighbour explorer")
-
+    logger.info("Starting concept neighbour explorer (aligned=%s)", USE_ALIGNED_VECTORS)
     audit: Dict[str, Any] = {}
 
-    with eebo_db.get_connection() as conn:
-        for slice_range in config.SLICES:
+    with get_connection() as conn:
+        for slice_range in SLICES:
             slice_start, slice_end = slice_range
             slice_key = f"{slice_start}_{slice_end}"
 
-            # Load FAISS index and vocab
-            index, vocab = load_slice_index(slice_range)
+            # Load FAISS index & vocab
+            index, vocab = load_slice_index(slice_range, use_aligned=USE_ALIGNED_VECTORS)
+
+            # Load vectors from pipeline file
+            slice_id = f"{slice_start}-{slice_end}"
+            try:
+                if USE_ALIGNED_VECTORS:
+                    vectors = load_aligned_vectors(slice_id)
+                else:
+                    vectors = load_unaligned_vectors(slice_id)
+            except FileNotFoundError:
+                logger.warning(f"No vectors for slice {slice_id}, skipping")
+                continue
+
             audit[slice_key] = {}
-
-            # Preload aligned vectors if requested
-            aligned_vectors: dict[str, np.ndarray] | None = None
-            if USE_ALIGNED_VECTORS:
-                try:
-                    aligned_vectors = load_aligned_vectors(f"{slice_start}-{slice_end}")
-                    logger.info(f"Loaded aligned vectors for slice {slice_key}")
-                except FileNotFoundError:
-                    logger.warning(f"No aligned vectors for slice {slice_key}, falling back to FAISS")
-                    aligned_vectors = None
-
-            for concept in config.CONCEPT_SETS.keys():
+            for concept, meta in CONCEPT_SETS.items():
                 if concept != TARGET.upper():
                     continue
 
                 seed = concept.lower()
+                vec = vectors.get(seed)
+                if vec is None:
+                    logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
+                    continue
 
-                # --- Get probe vector ---
-                if USE_ALIGNED_VECTORS and aligned_vectors is not None:
-                    vec = aligned_vectors.get(seed)
-                    if vec is None:
-                        logger.warning(f"No aligned vector for probe '{seed}' in slice {slice_key}")
-                        continue
-                else:
-                    vec = get_vector(conn, seed, slice_start, slice_end)
-                    if vec is None:
-                        logger.warning(f"No vector for probe '{seed}' in slice {slice_key}")
-                        continue
-
-                # Normalize
-                norm = np.linalg.norm(vec)
-                if norm > 0:
-                    vec = vec / norm
-
-                logger.info(f"Processing slice {slice_key}, concept {concept}")
+                vec = vec / np.linalg.norm(vec)
 
                 # --- FAISS search ---
                 D, Idx = index.search(vec.reshape(1, -1), TOP_K)
@@ -219,46 +165,29 @@ def main():
                     if idx != -1
                 ]
 
-                # Exclude known forms / false positives
-                known_forms = config.CONCEPT_SETS[concept].get("forms", set())
-                false_positives = config.CONCEPT_SETS[concept].get("false_positives", set())
-                top_neighbors = [
-                    (token, sim)
-                    for token, sim in top_neighbors
-                    if token not in known_forms and token not in false_positives
-                ]
+                # Exclude known forms
+                known_forms = meta.get("forms", set())
+                false_positives = meta.get("false_positives", set())
+                top_neighbors = [(tok, sim) for tok, sim in top_neighbors if tok not in known_forms and tok not in false_positives]
 
                 if not top_neighbors:
                     audit[slice_key][concept] = {"probe": seed, "neighbours": []}
                     continue
 
-                # --- Batch frequency lookup ---
                 tokens = [t for t, _ in top_neighbors]
+                # --- Frequency lookup ---
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
-                        SELECT token, COUNT(*)
-                        FROM pamphlet_tokens
-                        WHERE token = ANY(%s)
-                        AND slice_start = %s
-                        AND slice_end = %s
-                        GROUP BY token
-                        """,
-                        (tokens, slice_start, slice_end),
+                        "SELECT token, COUNT(*) FROM pamphlet_tokens WHERE token = ANY(%s) AND slice_start = %s AND slice_end = %s GROUP BY token",
+                        (tokens, slice_start, slice_end)
                     )
                     freq_map = {r[0]: r[1] for r in cur.fetchall()}
 
-                # --- Batch document lookup ---
+                # --- Document lookup ---
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
-                        SELECT DISTINCT token, doc_id, title
-                        FROM pamphlet_tokens
-                        WHERE token = ANY(%s)
-                        AND slice_start = %s
-                        AND slice_end = %s
-                        """,
-                        (tokens, slice_start, slice_end),
+                        "SELECT DISTINCT token, doc_id, title FROM pamphlet_tokens WHERE token = ANY(%s) AND slice_start = %s AND slice_end = %s",
+                        (tokens, slice_start, slice_end)
                     )
                     docs_map: Dict[str, List[Dict[str, str]]] = {}
                     for token_, doc_id, title in cur.fetchall():
@@ -278,22 +207,18 @@ def main():
                         "documents": docs
                     })
 
-                audit[slice_key][concept] = {
-                    "probe": seed,
-                    "neighbours": neighbours_list
-                }
+                audit[slice_key][concept] = {"probe": seed, "neighbours": neighbours_list}
 
-    # --- Write JSON ---
+    # --- Write outputs ---
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
     logger.info(f"Wrote {json_path}")
 
-    # --- Write HTML ---
     html = build_html(audit)
     html_path.write_text(html, encoding="utf-8")
     logger.info(f"Wrote {html_path}")
-
     logger.info("Explorer complete.")
+
 
 if __name__ == "__main__":
     main()

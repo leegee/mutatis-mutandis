@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from typing import Dict, List
 import json
 from collections import defaultdict
