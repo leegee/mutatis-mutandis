@@ -53,6 +53,10 @@ case "$PHASE" in
         RUN_SCRIPTS+=("$SRC/slice_embedding_pipeline.py")
         RUN_ENVS+=("USE_ALIGNED_FASTTEXT_VECTORS=1")
         ;;
+    diag)
+        RUN_SCRIPTS+=("$SRC/diagnostics_alignment_evaluation.py");
+        RUN_ENVS+=("")
+        ;;
     cts|concept-timeseries)
         RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
         RUN_ENVS+=("")
