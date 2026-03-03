@@ -82,7 +82,7 @@ case "$PHASE" in
         RUN_ENVS+=("")
         ;;
     exp|concept-explorer)
-        RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py" "$SRC/concept_neighbour_explorer_plot.py")
+        RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
         RUN_ENVS+=("" "")
         ;;
     uc|usage-cluster)
