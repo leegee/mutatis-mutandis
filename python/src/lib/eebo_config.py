@@ -25,10 +25,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 TMP_DIR = OUT_DIR / "tmp"
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-PLAIN_DIR = OUT_DIR / "plain"
-PLAIN_DIR.mkdir(parents=True, exist_ok=True)
-
-SLICES_DIR = OUT_DIR / "slices"
+SLICES_DIR = OUT_DIR / "slices-raw-text"
 SLICES_DIR.mkdir(parents=True, exist_ok=True)
 
 INDEXES_DIR = OUT_DIR / "indexes"
@@ -42,14 +39,13 @@ FASTTEXT_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 ALIGNMENT_ANCHORS_FILE = INDEXES_DIR / "anchors_stable.json"
 
+UNALIGNED_VECTORS_DIR = INDEXES_DIR / "unaligned_vectors"
+UNALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
 ALIGNED_VECTORS_DIR = INDEXES_DIR / "aligned_vectors"
 ALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-FAISS_INDEX_DIR = OUT_DIR / "faiss"
-FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 
