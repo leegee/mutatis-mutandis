@@ -45,7 +45,11 @@ case "$PHASE" in
         RUN_SCRIPTS+=("$SRC/eebo_parse_tei.py")
         RUN_ENVS+=("")
         ;;
-    2|train)
+    2|pretrain)
+        RUN_SCRIPTS+=("$SRC/generate_training_files.py")
+        RUN_ENVS+=("")
+        ;;
+    3|train)
         # Unaligned run
         RUN_SCRIPTS+=("$SRC/slice_embedding_pipeline.py")
         RUN_ENVS+=("USE_ALIGNED_FASTTEXT_VECTORS=0")
