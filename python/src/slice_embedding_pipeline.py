@@ -6,7 +6,8 @@ Generate token embeddings per slice (aligned or unaligned) and build FAISS index
 
 - Embeddings: train or load fastText models per slice, or compute aligned embeddings
 - FAISS indices: stored per slice in separate subdirs for aligned vs unaligned
-- Respects env var USE_ALIGNED_FASTTEXT_VECTORS and CLI flag --aligned
+- Provides methods to add and search the index
+- Env var `USE_ALIGNED_FASTTEXT_VECTORS` and flag `--aligned`
 """
 
 from __future__ import annotations
