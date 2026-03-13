@@ -18,6 +18,8 @@ EEBO_SRC_DIR = Path(__file__).resolve().parent
 XML_ROOT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 TEXT_BASE_URL = 'http://localhost:5000/documents/'
 
+EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
+
 # Should use a dict for this:
 OUT_DIR = BASE_DIR / "out"
 OUT_DIR.mkdir(parents=True, exist_ok=True)

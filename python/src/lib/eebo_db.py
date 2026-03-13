@@ -8,8 +8,7 @@ Connections, schema (wip that should use .sql files), etc
 """
 
 import psycopg
-from psycopg import sql
-from psycopg import Connection
+from psycopg import sql, Connection
 import time
 
 from lib.eebo_logging import logger

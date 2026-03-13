@@ -62,16 +62,20 @@ import os
 from pathlib import Path
 from typing import Callable, cast
 
-import nltk
-from nltk.tokenize import sent_tokenize
 import fasttext
 import faiss
 import numpy as np
 from scipy.linalg import orthogonal_procrustes
 import torch
 from collections import defaultdict
-from transformers import AutoTokenizer, AutoModel
+from transformers import (
+    AutoTokenizer,
+    AutoModelForMaskedLM,
+    PreTrainedTokenizerBase,
+    PreTrainedModel
+)
 
+from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import (
     FASTTEXT_PARAMS,
@@ -83,10 +87,14 @@ from lib.eebo_config import (
     MACBERTH_FINE_TUNED_DIR
 )
 from lib.eebo_anchor_builder import get_anchors
+from lib.eebo_sentences import stream_slice_sentences
 
 
-nltk.download('punkt')
+# nltk.download('punkt')
 
+# Cache
+TOKENIZER: PreTrainedTokenizerBase | None = None
+MODEL: PreTrainedModel | None = None
 
 # Paths
 
@@ -117,6 +125,30 @@ def vocab_slice_path(slice_range: tuple[int,int], aligned: bool) -> Path:
     return base_dir / f"slice_{start}_{end}.vocab"
 
 
+# MB Model loader
+def get_macberth_model() -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
+    global TOKENIZER, MODEL
+
+    if TOKENIZER is None or MODEL is None:
+        logger.info("Loading MacBERTh model...")
+        tokenizer = AutoTokenizer.from_pretrained(EEBO_MODEL_NAME)
+        model = AutoModelForMaskedLM.from_pretrained(EEBO_MODEL_NAME)
+
+        if has_fine_tuned_weights(MACBERTH_FINE_TUNED_DIR):
+            logger.info("Loading fine-tuned MacBERTh weights...")
+            state_dict = torch.load(
+                MACBERTH_FINE_TUNED_DIR / "pytorch_model.bin",
+                map_location="cpu"
+            )
+            state_dict = {k: v for k, v in state_dict.items() if not k.startswith("classifier")}
+            model.load_state_dict(state_dict, strict=False)
+
+        model.eval()
+        TOKENIZER = tokenizer
+        MODEL = model
+
+    assert TOKENIZER is not None and MODEL is not None
+    return TOKENIZER, MODEL
 
 # Internal IO
 
@@ -172,6 +204,7 @@ def load_unaligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
 def generate_embeddings_per_slice(
     slice_range: tuple[int, int],
     backend: str = "fasttext",
+    force: bool = False
 ) -> dict[str, np.ndarray]:
     """
     Generate token embeddings for a given slice.
@@ -191,22 +224,22 @@ def generate_embeddings_per_slice(
         Mapping from token -> vector (float32)
     """
     if backend.lower() == "fasttext":
-        return _generate_fasttext_embeddings(slice_range)
+        return _generate_fasttext_embeddings(slice_range, force)
     elif backend.lower() == "macberth":
-        return _generate_macberth_embeddings(slice_range)
+        return _generate_macberth_embeddings(slice_range, force)
     else:
         raise ValueError(f"Unknown embedding backend: {backend}")
 
 
 # fastText backend
-def _generate_fasttext_embeddings(slice_range: tuple[int, int]) -> dict[str, np.ndarray]:
+def _generate_fasttext_embeddings(slice_range: tuple[int, int], force:bool = False) -> dict[str, np.ndarray]:
     model_file = slice_model_path(slice_range)
     slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
 
     if not slice_file.exists():
         raise FileNotFoundError(f"Training corpus missing for slice {slice_range}: {slice_file}")
 
-    if not model_file.exists():
+    if force or not model_file.exists():
         logger.info(f"Training fastText model for slice {slice_range} → {model_file}")
         model = fasttext.train_unsupervised(input=str(slice_file), **FASTTEXT_PARAMS)
         model.save_model(str(model_file))
@@ -221,65 +254,135 @@ def has_fine_tuned_weights(ft_dir: Path) -> bool:
 
 
 # MacBERTh backend
-def _generate_macberth_embeddings(slice_range: tuple[int,int]) -> dict[str, np.ndarray]:
-    """
-    Compute contextual embeddings per token for a slice using a transformer model.
-    Returns {token -> vector}.
-    """
-    slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
-    if not slice_file.exists():
-        raise FileNotFoundError(f"Slice file missing for MacBERTh embeddings: {slice_file}")
-
+def _generate_macberth_embeddings(
+    slice_range: tuple[int, int],
+    force: bool = False,
+    batch_size: int = 32
+) -> dict[str, np.ndarray]:
     embeddings_accum = defaultdict(list)
 
-    tokenizer = AutoTokenizer.from_pretrained(EEBO_MODEL_NAME)
-    model = AutoModel.from_pretrained(EEBO_MODEL_NAME)
+    tokenizer, model = get_macberth_model()
 
-    if has_fine_tuned_weights(MACBERTH_FINE_TUNED_DIR):
-        logger.info("Loading fine-tuned MacBERTh weights for embeddings...")
-        state_dict = torch.load(MACBERTH_FINE_TUNED_DIR / "pytorch_model.bin", map_location="cpu")
-        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("classifier")}
-        model.load_state_dict(state_dict, strict=False)
-
-    model.eval()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
+    cast(torch.nn.Module, model).to(device)
 
-    # Load text
-    with open(slice_file, "r", encoding="utf-8") as f:
-        text = f.read()
+    conn = get_connection()
 
-    sentences = sent_tokenize(text)
+    logger.info("Streaming sentences from DB for slice %d-%d",
+                slice_range[0], slice_range[1])
+
+    sentence_stream = stream_slice_sentences(conn, slice_range)
+
+    sentence_count = 0
+    batch: list[str] = []
 
     with torch.no_grad():
-        for sent in sentences:
-            inputs = tokenizer(sent, return_tensors="pt", truncation=True, max_length=512)
-            inputs = {k:v.to(device) for k,v in inputs.items()}
+
+        for sent in sentence_stream:
+
+            batch.append(sent)
+
+            if len(batch) < batch_size:
+                continue
+
+            sentence_count += len(batch)
+
+            inputs = tokenizer(
+                batch,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=512
+            )
+
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+
             outputs = model(**inputs)
-            # outputs.last_hidden_state shape: (1, seq_len, hidden_size)
-            hidden_states = outputs.last_hidden_state.squeeze(0)  # (seq_len, hidden_size)
 
-            # Map subword tokens back to original words
-            tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"].squeeze(0))
-            word_buffer: list[str] = []
-            vec_buffer: list[np.ndarray] = []
+            hidden_states = outputs.last_hidden_state.cpu().numpy()
+            input_ids = inputs["input_ids"].cpu()
 
-            for t, vec in zip(tokens, hidden_states, strict=True):
-                if t.startswith("##"):
-                    word_buffer[-1] += t[2:]
-                    vec_buffer[-1] += vec.cpu().numpy()
+            for b_idx in range(len(batch)):
+
+                tokens = tokenizer.convert_ids_to_tokens(input_ids[b_idx])
+
+                word_buffer: list[str] = []
+                vec_buffer: list[np.ndarray] = []
+
+                for t, vec in zip(tokens, hidden_states[b_idx], strict=True):
+
+                    if t.startswith("▁"):
+                        word_buffer.append(t[1:])
+                        vec_buffer.append(vec)
+                    else:
+                        if word_buffer:
+                            word_buffer[-1] += t
+                            vec_buffer[-1] += vec
+
+                for w, v in zip(word_buffer, vec_buffer, strict=True):
+                    embeddings_accum[w].append(v)
+
+            if sentence_count % 5000 == 0:
+                logger.info("Processed %d sentences", sentence_count)
+
+            batch.clear()
+
+    # process final partial batch
+    if batch:
+
+        inputs = tokenizer(
+            batch,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=512
+        )
+
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+        outputs = model(**inputs)
+
+        hidden_states = outputs.last_hidden_state.cpu().numpy()
+        input_ids = inputs["input_ids"].cpu()
+
+        for b_idx in range(len(batch)):
+
+            tokens = tokenizer.convert_ids_to_tokens(input_ids[b_idx])
+
+            word_buffer = []
+            vec_buffer  = []
+
+            for t, vec in zip(tokens, hidden_states[b_idx], strict=True):
+
+                if t.startswith("▁"):
+                    word_buffer.append(t[1:])
+                    vec_buffer.append(vec)
                 else:
-                    word_buffer.append(t)
-                    vec_buffer.append(vec.cpu().numpy())
+                    if word_buffer:
+                        word_buffer[-1] += t
+                        vec_buffer[-1] += vec
 
             for w, v in zip(word_buffer, vec_buffer, strict=True):
                 embeddings_accum[w].append(v)
 
-    # Average all vectors for each token
-    final_embeddings = {tok: np.mean(np.stack(vlist, axis=0), axis=0).astype(np.float32)
-                        for tok, vlist in embeddings_accum.items()}
+        sentence_count += len(batch)
+
+    conn.close()
+
+    logger.info("Total sentences processed: %d", sentence_count)
+
+    logger.info("Averaging embeddings for %d tokens", len(embeddings_accum))
+
+    final_embeddings = {
+        tok: np.mean(np.stack(vlist, axis=0), axis=0).astype(np.float32)
+        for tok, vlist in embeddings_accum.items()
+    }
+
+    logger.info("Generated embeddings for slice %d-%d",
+                slice_range[0], slice_range[1])
 
     return final_embeddings
+
 
 # Alignment
 
@@ -307,32 +410,48 @@ def add_to_faiss_index(index: faiss.Index, vectors: np.ndarray) -> None:
     add_fn(vectors)
 
 
-def build_index_for_slice(slice_range: tuple[int,int], backend = "fasttext", use_aligned: bool = False) -> None:
+def build_index_for_slice(
+    slice_range: tuple[int,int],
+    backend="fasttext",
+    use_aligned: bool = False,
+    force: bool = False
+) -> None:
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
-    logger.info(f"Processing slice {slice_id} (aligned={use_aligned})")
+    logger.info(f"Processing slice {slice_id} (aligned={use_aligned}, force={force})")
 
+    # Determine paths
+    index_path = faiss_slice_path(slice_range, use_aligned)
+    vocab_path = vocab_slice_path(slice_range, use_aligned)
+
+    # Load or regenerate embeddings
     if use_aligned:
-        embeddings = load_aligned_vectors(slice_id)
+        if force or not aligned_vectors_path(slice_id).exists():
+            embeddings = generate_embeddings_per_slice(slice_range, backend, force)
+            save_aligned_vectors(slice_id, embeddings)
+        else:
+            embeddings = load_aligned_vectors(slice_id)
     else:
-        try:
-            embeddings = load_unaligned_vectors(slice_id)
-        except FileNotFoundError:
-            embeddings = generate_embeddings_per_slice(slice_range, backend)
+        if force or not unaligned_vectors_path(slice_id).exists():
+            embeddings = generate_embeddings_per_slice(slice_range, backend, force)
             save_unaligned_vectors(slice_id, embeddings)
+        else:
+            embeddings = load_unaligned_vectors(slice_id)
 
     words = list(embeddings.keys())
     if not words:
         logger.warning(f"No embeddings for slice {slice_id}, skipping")
         return
 
+    # Build FAISS index
     vectors = np.stack([embeddings[w] for w in words])
     vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
     dim = vectors.shape[1]
     index = faiss.IndexFlatIP(dim)
     add_to_faiss_index(index, vectors)
 
-    faiss.write_index(index, str(faiss_slice_path(slice_range, use_aligned)))
-    with open(vocab_slice_path(slice_range, use_aligned), "w", encoding="utf-8") as f:
+    # Save index and vocab (overwrite if force=True)
+    faiss.write_index(index, str(index_path))
+    with open(vocab_path, "w", encoding="utf-8") as f:
         f.write("\n".join(words))
     logger.info(f"Saved FAISS index and vocab for slice {slice_id}")
 
@@ -344,7 +463,7 @@ def search_index(index: faiss.Index, query: np.ndarray, k: int) -> tuple[np.ndar
 
 # Orchestration
 
-def build_all_slices(use_aligned: bool = False, backend = "fasttext") -> None:
+def build_all_slices(use_aligned: bool = False, force: bool = False, backend = "fasttext") -> None:
     logger.info("Building slices (aligned=%s)", use_aligned)
 
     # Stage 1: produce & save unaligned
@@ -358,12 +477,12 @@ def build_all_slices(use_aligned: bool = False, backend = "fasttext") -> None:
             vectors = load_unaligned_vectors(slice_id)
             logger.info("Loaded unaligned vectors for %s", slice_id)
         except FileNotFoundError:
-            vectors = generate_embeddings_per_slice(span, backend)
+            vectors = generate_embeddings_per_slice(span, backend, force)
             save_unaligned_vectors(slice_id, vectors)
             logger.info("Generated unaligned vectors for %s", slice_id)
 
         unaligned_cache[slice_id] = vectors
-        build_index_for_slice(span, backend=backend, use_aligned=False)
+        build_index_for_slice(span, backend=backend, use_aligned=False, force=force)
 
     if not use_aligned:
         logger.info("Unaligned build complete.")
@@ -393,7 +512,7 @@ def build_all_slices(use_aligned: bool = False, backend = "fasttext") -> None:
             )
 
         save_aligned_vectors(slice_id, aligned_vectors)
-        build_index_for_slice(span, backend=backend, use_aligned=True)
+        build_index_for_slice(span, backend=backend, use_aligned=True, force=force)
         logger.info("Aligned and indexed %s", slice_id)
 
     logger.info("Aligned build complete.")
@@ -402,11 +521,18 @@ def build_all_slices(use_aligned: bool = False, backend = "fasttext") -> None:
 def main():
     parser = argparse.ArgumentParser(description="Generate embeddings and FAISS indexes per slice")
     parser.add_argument("--aligned", action="store_true", help="Use aligned slice embeddings")
+    parser.add_argument("--force", action="store_true", help="Force regeneration of embeddings and indexes")
+
     args = parser.parse_args()
     env_aligned = os.environ.get("USE_ALIGNED_FASTTEXT_VECTORS", "").lower()
     use_aligned = args.aligned or env_aligned in {"1", "true", "yes"}
+
+    env_force = os.environ.get("FORCE", "").lower()
+    use_force = args.force or env_force in {"1", "true", "yes"}
+
     logger.info(f"Starting slice pipeline (aligned={use_aligned})")
-    build_all_slices(use_aligned=use_aligned, backend='macberth') # fasttext
+
+    build_all_slices(use_aligned=use_aligned, backend='macberth', force=use_force) # fasttext
 
 
 if __name__ == "__main__":
