@@ -10,7 +10,7 @@ Merged Concept Neighbour Explorer & Trajectory Visualizer
 
 from __future__ import annotations
 import json
-from typing import Any, Dict, List, Tuple, TypedDict
+from typing import Any, Dict, List,  TypedDict
 from collections import defaultdict
 from dataclasses import dataclass, field
 from statistics import mean
@@ -24,6 +24,7 @@ import faiss
 from slice_embedding_pipeline import load_aligned_vectors, search_index, add_to_faiss_index
 from lib.eebo_logging import logger
 from lib.eebo_config import SLICES, CONCEPT_SETS, OUT_DIR, TEXT_BASE_URL
+from lib.eebo_db import get_connection
 
 TOP_K = 5
 
@@ -37,9 +38,53 @@ GANTT_YEAR_SCALE = 0.3
 
 json_path = OUT_DIR / f"concept_neighbour_audit_{TARGET.lower()}.json"
 
-# KWIC function (mocked: replace with DB query in real use)
-def fetch_kwic_for_doc(token: str, doc_id: str) -> List[Tuple[str, str, str]]:
-    return [(f"left of {token}", token, f"right of {token}")]
+def fetch_kwic_for_token_in_slice(token: str, slice_start: int, slice_end: int) -> List[Dict[str, Any]]:
+    """Return KWICs for all docs in slice containing `token`."""
+    token_lower = token.lower()
+    results = []
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Get documents in this slice that contain the token
+            cur.execute("""
+                SELECT DISTINCT d.doc_id, d.title
+                FROM pamphlet_tokens t
+                JOIN pamphlet_corpus d ON t.doc_id = d.doc_id
+                WHERE t.token = %s AND d.slice_start = %s AND d.slice_end = %s
+            """, (token_lower, slice_start, slice_end))
+
+            docs = cur.fetchall()
+            for doc_id, title in docs:
+                # fetch KWIC window
+                cur.execute("""
+                    SELECT token_idx, token
+                    FROM pamphlet_tokens
+                    WHERE doc_id = %s
+                    AND token = %s
+                    ORDER BY token_idx
+                """, (doc_id, token_lower))
+                positions = [r[0] for r in cur.fetchall()]
+
+                kwic_list = []
+                for idx in positions:
+                    left_idx = max(0, idx - KWIC_MAX_LEFT)
+                    right_idx = idx + KWIC_MAX_RIGHT
+                    cur.execute("""
+                        SELECT token
+                        FROM pamphlet_tokens
+                        WHERE doc_id = %s AND token_idx BETWEEN %s AND %s
+                        ORDER BY token_idx
+                    """, (doc_id, left_idx, right_idx))
+                    window = [r[0] for r in cur.fetchall()]
+                    left = " ".join(window[:idx - left_idx]) if idx - left_idx > 0 else ""
+                    kw = window[idx - left_idx] if idx - left_idx < len(window) else token
+                    right = " ".join(window[idx - left_idx + 1:]) if idx - left_idx + 1 < len(window) else ""
+                    kwic_list.append((left, kw, right))
+
+                results.append({"doc_id": doc_id, "title": title, "kwic": kwic_list})
+
+    return results
+
 
 def make_html_row(left, kw, right, sim, freq, title, url):
     left_q = escape(left[-KWIC_MAX_LEFT:])
@@ -142,9 +187,16 @@ def main():
                 if sim < SIM_THRESHOLD:
                     continue
 
-                freq = np.random.randint(MIN_FREQ, MIN_FREQ + 10)
-                docs = [{"doc_id": f"doc_{token}_{slice_id}", "title": f"Title {token}", "kwic": fetch_kwic_for_doc(token, f"doc_{token}_{slice_id}")}]
-                neighbours_list.append({"token": token, "similarity": float(sim), "frequency": freq, "documents": docs})
+                docs = fetch_kwic_for_token_in_slice(token, slice_range[0], slice_range[1])
+                freq = sum(len(d["kwic"]) for d in docs)
+                if freq < MIN_FREQ:
+                    continue
+                neighbours_list.append({
+                    "token": token,
+                    "similarity": float(sim),
+                    "frequency": freq,
+                    "documents": docs
+                })
 
             audit[slice_id][concept] = {"probe": seed, "neighbours": neighbours_list}
 

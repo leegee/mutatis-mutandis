@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.distance import cosine
 from pathlib import Path
 
-from lib.eebo_config import OUT_DIR, SLICES, CONCEPT_SETS, ALIGNED_VECTORS_DIR
+from lib.eebo_config import OUT_DIR, SLICES, CONCEPT_SETS, FASTTEXT_ALIGNED_VECTORS_DIR
 
 # Minimum frequency threshold to include a form in centroid
 MIN_FREQ = 5
@@ -21,11 +21,11 @@ MIN_FREQ = 5
 def load_slice_vectors(slice_start, slice_end):
     """
     Load aligned FastText vectors for a slice.
-    Assumes JSON file: ALIGNED_VECTORS_DIR / f"{slice_start}_{slice_end}.json"
+    Assumes JSON file: FASTTEXT_ALIGNED_VECTORS_DIR / f"{slice_start}_{slice_end}.json"
     Format: { word: [float, float, ...] }
     Todo: move path to a func
     """
-    path = ALIGNED_VECTORS_DIR / f"{slice_start}-{slice_end}.json"
+    path = FASTTEXT_ALIGNED_VECTORS_DIR / f"{slice_start}-{slice_end}.json"
     with open(path, "r", encoding="utf-8") as f:
         vectors = json.load(f)
     # Convert lists to numpy arrays

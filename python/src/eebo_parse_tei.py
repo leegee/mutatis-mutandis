@@ -34,7 +34,7 @@ import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.eebo_logging import logger
-from lib.language_detect import set_document_languages
+from lib.set_lang import set_document_languages
 
 MAX_DOCS: Optional[int] = None
 

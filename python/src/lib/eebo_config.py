@@ -37,17 +37,27 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextSlices"
 FASTTEXT_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+MACBERTH_FINE_TUNED_DIR = MODELS_DIR / "macberth" / "finetuned"
+
 ALIGNMENT_ANCHORS_FILE = INDEXES_DIR / "anchors_stable.json"
 
-UNALIGNED_VECTORS_DIR = INDEXES_DIR / "unaligned_vectors"
-UNALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
-ALIGNED_VECTORS_DIR = INDEXES_DIR / "aligned_vectors"
-ALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
+FASTTEXT_UNALIGNED_VECTORS_DIR = INDEXES_DIR / "fasttext" /  "unaligned_vectors"
+FASTTEXT_UNALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
+
+MACBERTH_UNALIGNED_VECTORS_DIR = INDEXES_DIR / "macberth" / "unaligned_vectors"
+MACBERTH_UNALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
+
+FASTTEXT_ALIGNED_VECTORS_DIR = INDEXES_DIR / "fasttext" / "aligned_vectors"
+FASTTEXT_ALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
+
+MACBERTH_ALIGNED_VECTORS_DIR = INDEXES_DIR / "macberth" / "aligned_vectors"
+MACBERTH_ALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
+MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
 BATCH_DOCS = 100
 BATCH_TOKENS = 10000

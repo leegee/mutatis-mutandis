@@ -28,13 +28,13 @@ Generate token embeddings per slice (aligned or unaligned) and build FAISS index
             │
             V
     Unaligned vectors (slice_1625_1629.npz)
-    * Stored in UNALIGNED_VECTORS_DIR
+    * Stored in FASTTEXT_UNALIGNED_VECTORS_DIR
     * Used to build:
         - FAISS index (unaligned)
             │
             V
     FAISS index (slice_1625_1629.faiss, unaligned)
-    * Stored in UNALIGNED_VECTORS_DIR
+    * Stored in FASTTEXT_UNALIGNED_VECTORS_DIR
     * Queries raw vectors
     * Vocabulary mapping stored in slice_1625_1629.vocab
             │
@@ -46,11 +46,11 @@ Generate token embeddings per slice (aligned or unaligned) and build FAISS index
             │
             V
     Aligned vectors (slice_1625_1629.npz)
-    * Stored in ALIGNED_VECTORS_DIR
+    * Stored in FASTTEXT_ALIGNED_VECTORS_DIR
             │
             V
     FAISS index (slice_1625_1629.faiss, aligned)
-    * Stored in ALIGNED_VECTORS_DIR
+    * Stored in FASTTEXT_ALIGNED_VECTORS_DIR
     * Queries aligned vectors
     * Vocabulary mapping shared with unaligned (terms unchanged)
 
@@ -62,27 +62,40 @@ import os
 from pathlib import Path
 from typing import Callable, cast
 
+import nltk
+from nltk.tokenize import sent_tokenize
 import fasttext
-import numpy as np
 import faiss
+import numpy as np
 from scipy.linalg import orthogonal_procrustes
+import torch
+from collections import defaultdict
+from transformers import AutoTokenizer, AutoModel
 
 from lib.eebo_logging import logger
 from lib.eebo_config import (
-    FASTTEXT_SLICE_MODEL_DIR, SLICES, SLICES_DIR,
-    UNALIGNED_VECTORS_DIR, ALIGNED_VECTORS_DIR, FASTTEXT_PARAMS
+    FASTTEXT_PARAMS,
+    FASTTEXT_SLICE_MODEL_DIR,
+    SLICES, SLICES_DIR,
+    FASTTEXT_UNALIGNED_VECTORS_DIR,
+    FASTTEXT_ALIGNED_VECTORS_DIR,
+    EEBO_MODEL_NAME,
+    MACBERTH_FINE_TUNED_DIR
 )
 from lib.eebo_anchor_builder import get_anchors
+
+
+nltk.download('punkt')
 
 
 # Paths
 
 def unaligned_vectors_path(slice_id: str) -> Path:
-    return UNALIGNED_VECTORS_DIR / f"{slice_id}.npz"
+    return FASTTEXT_UNALIGNED_VECTORS_DIR / f"{slice_id}.npz"
 
 
 def aligned_vectors_path(slice_id: str) -> Path:
-    return ALIGNED_VECTORS_DIR / f"{slice_id}.npz"
+    return FASTTEXT_ALIGNED_VECTORS_DIR / f"{slice_id}.npz"
 
 
 def slice_model_path(slice_range: tuple[int,int]) -> Path:
@@ -91,14 +104,14 @@ def slice_model_path(slice_range: tuple[int,int]) -> Path:
 
 
 def faiss_slice_path(slice_range: tuple[int,int], aligned: bool) -> Path:
-    base_dir = (ALIGNED_VECTORS_DIR if aligned else UNALIGNED_VECTORS_DIR)
+    base_dir = (FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR)
     base_dir.mkdir(parents=True, exist_ok=True)
     start, end = slice_range
     return base_dir / f"slice_{start}_{end}.faiss"
 
 
 def vocab_slice_path(slice_range: tuple[int,int], aligned: bool) -> Path:
-    base_dir = (ALIGNED_VECTORS_DIR if aligned else UNALIGNED_VECTORS_DIR)
+    base_dir = (FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR)
     base_dir.mkdir(parents=True, exist_ok=True)
     start, end = slice_range
     return base_dir / f"slice_{start}_{end}.vocab"
@@ -143,19 +156,130 @@ def load_unaligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
 
 # Embeddings
 
-def generate_embeddings_per_model(slice_range: tuple[int,int]) -> dict[str, np.ndarray]:
+# def generate_embeddings_per_slice(slice_range: tuple[int,int]) -> dict[str, np.ndarray]:
+#     model_file = slice_model_path(slice_range)
+#     if not model_file.exists():
+#         slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
+#         if not slice_file.exists():
+#             raise FileNotFoundError(f"Training corpus missing for slice {slice_range}: {slice_file}")
+#         logger.info(f"Training fastText model for slice {slice_range} → {model_file}")
+#         model = fasttext.train_unsupervised(input=str(slice_file), **FASTTEXT_PARAMS)
+#         model.save_model(str(model_file))
+#     else:
+#         model = fasttext.load_model(str(model_file))
+#     return {str(tok): model.get_word_vector(tok).astype(np.float32) for tok in model.get_words()}
+
+def generate_embeddings_per_slice(
+    slice_range: tuple[int, int],
+    backend: str = "fasttext",
+) -> dict[str, np.ndarray]:
+    """
+    Generate token embeddings for a given slice.
+
+    Parameters
+    ----------
+    slice_range : tuple[int, int]
+        Start and end years of the slice.
+    backend : str
+        Which embedding model to use. Currently supports:
+        - "fasttext" : slice-trained fastText embeddings
+        - "macberth" : placeholder for contextual BERT-style embeddings
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Mapping from token -> vector (float32)
+    """
+    if backend.lower() == "fasttext":
+        return _generate_fasttext_embeddings(slice_range)
+    elif backend.lower() == "macberth":
+        return _generate_macberth_embeddings(slice_range)
+    else:
+        raise ValueError(f"Unknown embedding backend: {backend}")
+
+
+# fastText backend
+def _generate_fasttext_embeddings(slice_range: tuple[int, int]) -> dict[str, np.ndarray]:
     model_file = slice_model_path(slice_range)
+    slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
+
+    if not slice_file.exists():
+        raise FileNotFoundError(f"Training corpus missing for slice {slice_range}: {slice_file}")
+
     if not model_file.exists():
-        slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
-        if not slice_file.exists():
-            raise FileNotFoundError(f"Training corpus missing for slice {slice_range}: {slice_file}")
         logger.info(f"Training fastText model for slice {slice_range} → {model_file}")
         model = fasttext.train_unsupervised(input=str(slice_file), **FASTTEXT_PARAMS)
         model.save_model(str(model_file))
     else:
         model = fasttext.load_model(str(model_file))
+
     return {str(tok): model.get_word_vector(tok).astype(np.float32) for tok in model.get_words()}
 
+
+def has_fine_tuned_weights(ft_dir: Path) -> bool:
+    return all((ft_dir / f).exists() for f in ["pytorch_model.bin", "config.json"])
+
+
+# MacBERTh backend
+def _generate_macberth_embeddings(slice_range: tuple[int,int]) -> dict[str, np.ndarray]:
+    """
+    Compute contextual embeddings per token for a slice using a transformer model.
+    Returns {token -> vector}.
+    """
+    slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
+    if not slice_file.exists():
+        raise FileNotFoundError(f"Slice file missing for MacBERTh embeddings: {slice_file}")
+
+    embeddings_accum = defaultdict(list)
+
+    tokenizer = AutoTokenizer.from_pretrained(EEBO_MODEL_NAME)
+    model = AutoModel.from_pretrained(EEBO_MODEL_NAME)
+
+    if has_fine_tuned_weights(MACBERTH_FINE_TUNED_DIR):
+        logger.info("Loading fine-tuned MacBERTh weights for embeddings...")
+        state_dict = torch.load(MACBERTH_FINE_TUNED_DIR / "pytorch_model.bin", map_location="cpu")
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("classifier")}
+        model.load_state_dict(state_dict, strict=False)
+
+    model.eval()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+
+    # Load text
+    with open(slice_file, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    sentences = sent_tokenize(text)
+
+    with torch.no_grad():
+        for sent in sentences:
+            inputs = tokenizer(sent, return_tensors="pt", truncation=True, max_length=512)
+            inputs = {k:v.to(device) for k,v in inputs.items()}
+            outputs = model(**inputs)
+            # outputs.last_hidden_state shape: (1, seq_len, hidden_size)
+            hidden_states = outputs.last_hidden_state.squeeze(0)  # (seq_len, hidden_size)
+
+            # Map subword tokens back to original words
+            tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"].squeeze(0))
+            word_buffer: list[str] = []
+            vec_buffer: list[np.ndarray] = []
+
+            for t, vec in zip(tokens, hidden_states, strict=True):
+                if t.startswith("##"):
+                    word_buffer[-1] += t[2:]
+                    vec_buffer[-1] += vec.cpu().numpy()
+                else:
+                    word_buffer.append(t)
+                    vec_buffer.append(vec.cpu().numpy())
+
+            for w, v in zip(word_buffer, vec_buffer, strict=True):
+                embeddings_accum[w].append(v)
+
+    # Average all vectors for each token
+    final_embeddings = {tok: np.mean(np.stack(vlist, axis=0), axis=0).astype(np.float32)
+                        for tok, vlist in embeddings_accum.items()}
+
+    return final_embeddings
 
 # Alignment
 
@@ -183,7 +307,7 @@ def add_to_faiss_index(index: faiss.Index, vectors: np.ndarray) -> None:
     add_fn(vectors)
 
 
-def build_index_for_slice(slice_range: tuple[int,int], use_aligned: bool = False) -> None:
+def build_index_for_slice(slice_range: tuple[int,int], backend = "fasttext", use_aligned: bool = False) -> None:
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
     logger.info(f"Processing slice {slice_id} (aligned={use_aligned})")
 
@@ -193,7 +317,7 @@ def build_index_for_slice(slice_range: tuple[int,int], use_aligned: bool = False
         try:
             embeddings = load_unaligned_vectors(slice_id)
         except FileNotFoundError:
-            embeddings = generate_embeddings_per_model(slice_range)
+            embeddings = generate_embeddings_per_slice(slice_range, backend)
             save_unaligned_vectors(slice_id, embeddings)
 
     words = list(embeddings.keys())
@@ -220,7 +344,7 @@ def search_index(index: faiss.Index, query: np.ndarray, k: int) -> tuple[np.ndar
 
 # Orchestration
 
-def build_all_slices(use_aligned: bool = False) -> None:
+def build_all_slices(use_aligned: bool = False, backend = "fasttext") -> None:
     logger.info("Building slices (aligned=%s)", use_aligned)
 
     # Stage 1: produce & save unaligned
@@ -234,12 +358,12 @@ def build_all_slices(use_aligned: bool = False) -> None:
             vectors = load_unaligned_vectors(slice_id)
             logger.info("Loaded unaligned vectors for %s", slice_id)
         except FileNotFoundError:
-            vectors = generate_embeddings_per_model(span)
+            vectors = generate_embeddings_per_slice(span, backend)
             save_unaligned_vectors(slice_id, vectors)
             logger.info("Generated unaligned vectors for %s", slice_id)
 
         unaligned_cache[slice_id] = vectors
-        build_index_for_slice(span, use_aligned=False)
+        build_index_for_slice(span, backend=backend, use_aligned=False)
 
     if not use_aligned:
         logger.info("Unaligned build complete.")
@@ -269,7 +393,7 @@ def build_all_slices(use_aligned: bool = False) -> None:
             )
 
         save_aligned_vectors(slice_id, aligned_vectors)
-        build_index_for_slice(span, use_aligned=True)
+        build_index_for_slice(span, backend=backend, use_aligned=True)
         logger.info("Aligned and indexed %s", slice_id)
 
     logger.info("Aligned build complete.")
@@ -282,7 +406,7 @@ def main():
     env_aligned = os.environ.get("USE_ALIGNED_FASTTEXT_VECTORS", "").lower()
     use_aligned = args.aligned or env_aligned in {"1", "true", "yes"}
     logger.info(f"Starting slice pipeline (aligned={use_aligned})")
-    build_all_slices(use_aligned=use_aligned)
+    build_all_slices(use_aligned=use_aligned, backend='macberth') # fasttext
 
 
 if __name__ == "__main__":
