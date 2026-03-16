@@ -282,9 +282,10 @@ def _accumulate_tokens(tokenizer, input_ids, hidden_states, embeddings_accum):
         vec_buffer: list[np.ndarray] = []
 
         for t, vec in zip(tokens, hidden_states[b_idx], strict=True):
-            if t in {"[CLS]", "[SEP]", "[PAD]"}:
+            if t.startswith("[") and t.endswith("]"):
                 continue
 
+            # WordPiece
             if t.startswith("##"):
                 if word_buffer:
                     word_buffer[-1] += t[2:]
