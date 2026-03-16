@@ -132,8 +132,6 @@ def get_macberth_model() -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
     if TOKENIZER is None or MODEL is None:
         logger.info("Loading MacBERTh model...")
         tokenizer = AutoTokenizer.from_pretrained(EEBO_MODEL_NAME)
-        print(type(tokenizer))
-        raise RuntimeError("stop")
         model = AutoModelForMaskedLM.from_pretrained(EEBO_MODEL_NAME)
 
         if has_fine_tuned_weights(MACBERTH_FINE_TUNED_DIR):
