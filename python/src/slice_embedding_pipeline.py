@@ -301,7 +301,7 @@ def _accumulate_tokens(tokenizer, input_ids, hidden_states, embeddings_accum):
 def _generate_macberth_embeddings(
     slice_range: tuple[int, int],
     force: bool = False,
-    batch_size: int = 32
+    batch_size: int = 128
 ) -> dict[str, np.ndarray]:
 
     embeddings_accum: DefaultDict[str, list[np.ndarray]] = defaultdict(list)
@@ -333,7 +333,7 @@ def _generate_macberth_embeddings(
 
             sentence_count += len(batch)
 
-            if sentence_count % 5000 == 0:
+            if sentence_count % 500 == 0:
                 logger.info("Processed %d sentences", sentence_count)
 
             batch.clear()
