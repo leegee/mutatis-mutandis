@@ -60,14 +60,14 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Callable, cast
+from typing import Callable, cast, DefaultDict
+from collections import defaultdict
 
 import fasttext
 import faiss
 import numpy as np
 from scipy.linalg import orthogonal_procrustes
 import torch
-from collections import defaultdict
 from transformers import (
     AutoTokenizer,
     AutoModelForMaskedLM,
@@ -132,6 +132,8 @@ def get_macberth_model() -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
     if TOKENIZER is None or MODEL is None:
         logger.info("Loading MacBERTh model...")
         tokenizer = AutoTokenizer.from_pretrained(EEBO_MODEL_NAME)
+        print(type(tokenizer))
+        raise RuntimeError("stop")
         model = AutoModelForMaskedLM.from_pretrained(EEBO_MODEL_NAME)
 
         if has_fine_tuned_weights(MACBERTH_FINE_TUNED_DIR):
@@ -254,12 +256,56 @@ def has_fine_tuned_weights(ft_dir: Path) -> bool:
 
 
 # MacBERTh backend
+def _forward_batch(model, tokenizer, batch, device):
+    inputs = tokenizer(
+        batch,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=512
+    )
+
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+    outputs = model(**inputs, output_hidden_states=True)
+
+    hidden_states = outputs.hidden_states[-1].cpu().numpy()
+    input_ids = inputs["input_ids"].cpu()
+
+    return hidden_states, input_ids
+
+
+def _accumulate_tokens(tokenizer, input_ids, hidden_states, embeddings_accum):
+    for b_idx in range(len(input_ids)):
+
+        tokens = tokenizer.convert_ids_to_tokens(input_ids[b_idx])
+
+        word_buffer: list[str] = []
+        vec_buffer: list[np.ndarray] = []
+
+        for t, vec in zip(tokens, hidden_states[b_idx], strict=True):
+            if t in {"[CLS]", "[SEP]", "[PAD]"}:
+                continue
+
+            if t.startswith("##"):
+                if word_buffer:
+                    word_buffer[-1] += t[2:]
+                    vec_buffer[-1] += vec
+            else:
+                word_buffer.append(t)
+                vec_buffer.append(vec)
+
+        for w, v in zip(word_buffer, vec_buffer, strict=True):
+            embeddings_accum[w].append(v)
+
+
 def _generate_macberth_embeddings(
     slice_range: tuple[int, int],
     force: bool = False,
     batch_size: int = 32
 ) -> dict[str, np.ndarray]:
-    embeddings_accum = defaultdict(list)
+
+    embeddings_accum: DefaultDict[str, list[np.ndarray]] = defaultdict(list)
 
     tokenizer, model = get_macberth_model()
 
@@ -267,122 +313,61 @@ def _generate_macberth_embeddings(
     cast(torch.nn.Module, model).to(device)
 
     conn = get_connection()
-
-    logger.info("Streaming sentences from DB for slice %d-%d",
-                slice_range[0], slice_range[1])
-
+    logger.info( "Streaming sentences from DB for slice %d-%d", slice_range[0], slice_range[1] )
     sentence_stream = stream_slice_sentences(conn, slice_range)
 
     sentence_count = 0
     batch: list[str] = []
 
     with torch.no_grad():
-
         for sent in sentence_stream:
-
             batch.append(sent)
 
             if len(batch) < batch_size:
                 continue
 
-            sentence_count += len(batch)
-
-            inputs = tokenizer(
-                batch,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=512
+            hidden_states, input_ids = _forward_batch(
+                model, tokenizer, batch, device
             )
 
-            inputs = {k: v.to(device) for k, v in inputs.items()}
+            _accumulate_tokens( tokenizer, input_ids, hidden_states, embeddings_accum )
 
-            outputs = model(**inputs)
-
-            hidden_states = outputs.last_hidden_state.cpu().numpy()
-            input_ids = inputs["input_ids"].cpu()
-
-            for b_idx in range(len(batch)):
-
-                tokens = tokenizer.convert_ids_to_tokens(input_ids[b_idx])
-
-                word_buffer: list[str] = []
-                vec_buffer: list[np.ndarray] = []
-
-                for t, vec in zip(tokens, hidden_states[b_idx], strict=True):
-
-                    if t.startswith("▁"):
-                        word_buffer.append(t[1:])
-                        vec_buffer.append(vec)
-                    else:
-                        if word_buffer:
-                            word_buffer[-1] += t
-                            vec_buffer[-1] += vec
-
-                for w, v in zip(word_buffer, vec_buffer, strict=True):
-                    embeddings_accum[w].append(v)
+            sentence_count += len(batch)
 
             if sentence_count % 5000 == 0:
                 logger.info("Processed %d sentences", sentence_count)
 
             batch.clear()
 
-    # process final partial batch
-    if batch:
+        if batch:
+            hidden_states, input_ids = _forward_batch(
+                model, tokenizer, batch, device
+            )
 
-        inputs = tokenizer(
-            batch,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=512
-        )
+            _accumulate_tokens(
+                tokenizer,
+                input_ids,
+                hidden_states,
+                embeddings_accum
+            )
 
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-
-        outputs = model(**inputs)
-
-        hidden_states = outputs.last_hidden_state.cpu().numpy()
-        input_ids = inputs["input_ids"].cpu()
-
-        for b_idx in range(len(batch)):
-
-            tokens = tokenizer.convert_ids_to_tokens(input_ids[b_idx])
-
-            word_buffer = []
-            vec_buffer  = []
-
-            for t, vec in zip(tokens, hidden_states[b_idx], strict=True):
-
-                if t.startswith("▁"):
-                    word_buffer.append(t[1:])
-                    vec_buffer.append(vec)
-                else:
-                    if word_buffer:
-                        word_buffer[-1] += t
-                        vec_buffer[-1] += vec
-
-            for w, v in zip(word_buffer, vec_buffer, strict=True):
-                embeddings_accum[w].append(v)
-
-        sentence_count += len(batch)
+            sentence_count += len(batch)
 
     conn.close()
 
     logger.info("Total sentences processed: %d", sentence_count)
-
-    logger.info("Averaging embeddings for %d tokens", len(embeddings_accum))
+    logger.info(
+        "Averaging embeddings for %d tokens",
+        len(embeddings_accum)
+    )
 
     final_embeddings = {
         tok: np.mean(np.stack(vlist, axis=0), axis=0).astype(np.float32)
         for tok, vlist in embeddings_accum.items()
     }
 
-    logger.info("Generated embeddings for slice %d-%d",
-                slice_range[0], slice_range[1])
-
+    logger.info( "Generated embeddings for slice %d-%d", slice_range[0], slice_range[1] )
     return final_embeddings
-
 
 # Alignment
 
