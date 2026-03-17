@@ -39,6 +39,9 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextSlices"
 FASTTEXT_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+MACBERTH_SLICE_MODEL_DIR = MODELS_DIR / "macberth" / "slices"
+MACBERTH_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
 MACBERTH_FINE_TUNED_DIR = MODELS_DIR / "macberth" / "finetuned"
 
 ALIGNMENT_ANCHORS_FILE = INDEXES_DIR / "anchors_stable.json"

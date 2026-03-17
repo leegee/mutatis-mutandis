@@ -26,8 +26,9 @@ from lib.eebo_logging import logger
 from lib.eebo_config import SLICES, CONCEPT_SETS, OUT_DIR, TEXT_BASE_URL
 from lib.eebo_db import get_connection
 
-TOP_K = 5
 
+TOP_K = 5
+BACKEND='fasttext'
 TARGET = "LIBERTY"
 KWIC_MAX_LEFT = 40
 KWIC_MAX_RIGHT = 40
@@ -156,7 +157,7 @@ def main():
         logger.info(f"Processing slice {slice_id}")
 
         # Load aligned embeddings
-        vectors = load_aligned_vectors(f"{slice_range[0]}-{slice_range[1]}")
+        vectors = load_aligned_vectors(f"{slice_range[0]}-{slice_range[1]}", BACKEND)
         words = list(vectors.keys())
         dim = next(iter(vectors.values())).shape[0]
 

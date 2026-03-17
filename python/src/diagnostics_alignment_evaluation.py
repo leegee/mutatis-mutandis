@@ -20,7 +20,7 @@ from slice_embedding_pipeline import (
 from lib.eebo_config import SLICES
 from lib.eebo_logging import logger
 
-
+BACKEND='fasttext'
 REFERENCE_SLICE = "1625-1629"
 PROBE_WORD = "liberty"
 TOP_K = 50
@@ -61,8 +61,8 @@ def pca_pc1(vectors: np.ndarray) -> np.ndarray:
 def evaluate_anchor_stability() -> None:
     logger.info("\n=== PART 1: Cross-Slice Anchor Stability ===\n")
 
-    ref_raw = load_unaligned_vectors(REFERENCE_SLICE)
-    ref_aligned = load_aligned_vectors(REFERENCE_SLICE)
+    ref_raw = load_unaligned_vectors(REFERENCE_SLICE, BACKEND)
+    ref_aligned = load_aligned_vectors(REFERENCE_SLICE, BACKEND)
 
     def collect(anchor_list: list[str]):
         raw_scores: list[float] = []
@@ -73,8 +73,8 @@ def evaluate_anchor_stability() -> None:
             if slice_id == REFERENCE_SLICE:
                 continue
 
-            raw_vectors = load_unaligned_vectors(slice_id)
-            aligned_vectors = load_aligned_vectors(slice_id)
+            raw_vectors = load_unaligned_vectors(slice_id, BACKEND)
+            aligned_vectors = load_aligned_vectors(slice_id, BACKEND)
 
             for word in anchor_list:
                 if word in raw_vectors and word in ref_raw:
@@ -120,9 +120,9 @@ def evaluate_pc1_stability(use_aligned: bool) -> None:
         logger.info(f"Processing slice {slice_id}")
 
         vectors_dict = (
-            load_aligned_vectors(slice_id)
+            load_aligned_vectors(slice_id, BACKEND)
             if use_aligned
-            else load_unaligned_vectors(slice_id)
+            else load_unaligned_vectors(slice_id, BACKEND)
         )
 
         if PROBE_WORD not in vectors_dict:

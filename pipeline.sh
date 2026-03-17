@@ -50,12 +50,14 @@ case "$PHASE" in
         RUN_ENVS+=("")
         ;;
     3|train)
-        # Unaligned run
-        RUN_SCRIPTS+=("$SRC/slice_embedding_pipeline.py")
-        RUN_ENVS+=("USE_ALIGNED_FASTTEXT_VECTORS=0")
-        # Aligned run
+        # RUN_SCRIPTS+=("$SRC/slice_embedding_pipeline.py")
+        # RUN_ENVS+=("USE_ALIGNED_FASTTEXT_VECTORS=1")
         RUN_SCRIPTS+=("$SRC/slice_embedding_pipeline.py")
         RUN_ENVS+=("USE_ALIGNED_FASTTEXT_VECTORS=1")
+        ;;
+    4|mbtest)
+        RUN_SCRIPTS+=("$SRC/mb_test.py")
+        RUN_ENVS+=("")
         ;;
     diag)
         RUN_SCRIPTS+=("$SRC/diagnostics_alignment_evaluation.py");

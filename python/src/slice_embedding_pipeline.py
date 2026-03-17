@@ -60,7 +60,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Callable, cast, DefaultDict
+from typing import Callable, cast, DefaultDict, Dict
 from collections import defaultdict
 
 import fasttext
@@ -78,9 +78,12 @@ from transformers import (
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import (
+    SLICES,
+    SLICES_DIR,
     FASTTEXT_PARAMS,
     FASTTEXT_SLICE_MODEL_DIR,
-    SLICES, SLICES_DIR,
+    MACBERTH_SLICE_MODEL_DIR,
+    MACBERTH_ALIGNED_VECTORS_DIR,
     FASTTEXT_UNALIGNED_VECTORS_DIR,
     FASTTEXT_ALIGNED_VECTORS_DIR,
     EEBO_MODEL_NAME,
@@ -98,28 +101,82 @@ MODEL: PreTrainedModel | None = None
 
 # Paths
 
-def unaligned_vectors_path(slice_id: str) -> Path:
-    return FASTTEXT_UNALIGNED_VECTORS_DIR / f"{slice_id}.npz"
+def unaligned_vectors_path(slice_id: str, backend: str) -> Path:
+    if backend.lower() == "macberth":
+        raise NotImplementedError('Macberth cannot be unaligned')
+    else:
+        base = FASTTEXT_UNALIGNED_VECTORS_DIR
+    return base / f"{slice_id}.npz"
 
 
-def aligned_vectors_path(slice_id: str) -> Path:
-    return FASTTEXT_ALIGNED_VECTORS_DIR / f"{slice_id}.npz"
+def aligned_vectors_path(slice_id: str, backend: str) -> Path:
+    if backend.lower() == "macberth":
+        base = MACBERTH_ALIGNED_VECTORS_DIR
+    else:
+        base = FASTTEXT_ALIGNED_VECTORS_DIR
+    return base / f"{slice_id}.npz"
 
 
-def slice_model_path(slice_range: tuple[int,int]) -> Path:
+def slice_model_path(slice_range: tuple[int,int], backend: str) -> Path:
     start, end = slice_range
-    return FASTTEXT_SLICE_MODEL_DIR / f"slice_{start}_{end}.bin"
+    if backend.lower() == "macberth":
+        base = MACBERTH_SLICE_MODEL_DIR
+    else:
+        base = FASTTEXT_SLICE_MODEL_DIR
+    return base / f"slice_{start}_{end}.bin"
 
 
-def faiss_slice_path(slice_range: tuple[int,int], aligned: bool) -> Path:
-    base_dir = (FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR)
+def load_macberth_vectors(slice_id: str) -> Dict[str, np.ndarray]:
+    """
+    Load MacBERTh embeddings for a given slice.
+
+    Returns:
+        dict[token -> vector]
+    """
+    path = aligned_vectors_path(slice_id, "macberth")
+
+    if not path.exists():
+        raise FileNotFoundError(f"MacBERTh vectors not found: {path}")
+
+    data = np.load(path, allow_pickle=True)
+
+    embeddings = {
+        k.removeprefix("tok_"): data[k].astype(np.float32)
+        for k in data
+    }
+
+    return embeddings
+
+
+def faiss_slice_path(slice_range: tuple[int,int], aligned: bool, backend: str) -> Path:
+    """Return the path to the FAISS index for a slice, backend-aware."""
+    backend = backend.lower()
+    if backend == "fasttext":
+        base_dir = FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR
+    elif backend == "macberth":
+        if not aligned:
+            raise NotImplementedError('Macberth cannot be unaligned')
+        base_dir = MACBERTH_ALIGNED_VECTORS_DIR
+    else:
+        raise NotImplementedError(f"Unknown backend: {backend}")
+
     base_dir.mkdir(parents=True, exist_ok=True)
     start, end = slice_range
     return base_dir / f"slice_{start}_{end}.faiss"
 
 
-def vocab_slice_path(slice_range: tuple[int,int], aligned: bool) -> Path:
-    base_dir = (FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR)
+def vocab_slice_path(slice_range: tuple[int,int], aligned: bool, backend: str) -> Path:
+    """Return the path to the vocabulary file for a slice, backend-aware."""
+    backend = backend.lower()
+    if backend == "fasttext":
+        base_dir = FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR
+    elif backend == "macberth":
+        if not aligned:
+            raise NotImplementedError('Macberth cannot be aligned')
+        base_dir = MACBERTH_ALIGNED_VECTORS_DIR
+    else:
+        raise ValueError(f"Unknown backend: {backend}")
+
     base_dir.mkdir(parents=True, exist_ok=True)
     start, end = slice_range
     return base_dir / f"slice_{start}_{end}.vocab"
@@ -150,60 +207,51 @@ def get_macberth_model() -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
     assert TOKENIZER is not None and MODEL is not None
     return TOKENIZER, MODEL
 
+
 # Internal IO
 
 def _save_vectors(path: Path, embeddings: dict[str, np.ndarray]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Prefix keys to avoid NumPy argument collision
-    safe_dict = {f"tok_{k}": v for k, v in embeddings.items()}
-    np.savez_compressed(path, **safe_dict)
+    tokens = list(embeddings.keys())
+    vectors = np.stack(list(embeddings.values())).astype(np.float32)
+    np.savez_compressed(path, tokens=tokens, vectors=vectors)
 
 
 def _load_vectors(path: Path) -> dict[str, np.ndarray]:
     if not path.exists():
         raise FileNotFoundError(f"Vectors missing: {path}")
-    with np.load(path) as data:
-        return {
-            k.removeprefix("tok_"): data[k].astype(np.float32)
-            for k in data
-        }
+
+    data = np.load(path, allow_pickle=True)
+
+    tokens = data["tokens"]
+    vectors = data["vectors"]
+
+    return {tok: vectors[i] for i, tok in enumerate(tokens)}
+
 
 # Public IO
 
-def save_aligned_vectors(slice_id: str, embeddings: dict[str, np.ndarray]) -> None:
-    _save_vectors(aligned_vectors_path(slice_id), embeddings)
+def save_aligned_vectors(slice_id: str, embeddings: dict[str, np.ndarray], backend: str) -> None:
+    _save_vectors(aligned_vectors_path(slice_id, backend), embeddings)
 
 
-def load_aligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
-    return _load_vectors(aligned_vectors_path(slice_id))
+def load_aligned_vectors(slice_id: str, backend: str) -> dict[str, np.ndarray]:
+    return _load_vectors(aligned_vectors_path(slice_id, backend))
 
 
-def save_unaligned_vectors(slice_id: str, embeddings: dict[str, np.ndarray]) -> None:
-    _save_vectors(unaligned_vectors_path(slice_id), embeddings)
+def save_unaligned_vectors(slice_id: str, embeddings: dict[str, np.ndarray], backend: str) -> None:
+    _save_vectors(unaligned_vectors_path(slice_id, backend), embeddings)
 
 
-def load_unaligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
-    return _load_vectors(unaligned_vectors_path(slice_id))
+def load_unaligned_vectors(slice_id: str, backend: str) -> dict[str, np.ndarray]:
+    return _load_vectors(unaligned_vectors_path(slice_id, backend))
 
 
 # Embeddings
 
-# def generate_embeddings_per_slice(slice_range: tuple[int,int]) -> dict[str, np.ndarray]:
-#     model_file = slice_model_path(slice_range)
-#     if not model_file.exists():
-#         slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
-#         if not slice_file.exists():
-#             raise FileNotFoundError(f"Training corpus missing for slice {slice_range}: {slice_file}")
-#         logger.info(f"Training fastText model for slice {slice_range} → {model_file}")
-#         model = fasttext.train_unsupervised(input=str(slice_file), **FASTTEXT_PARAMS)
-#         model.save_model(str(model_file))
-#     else:
-#         model = fasttext.load_model(str(model_file))
-#     return {str(tok): model.get_word_vector(tok).astype(np.float32) for tok in model.get_words()}
-
 def generate_embeddings_per_slice(
     slice_range: tuple[int, int],
-    backend: str = "fasttext",
+    backend: str,
     force: bool = False
 ) -> dict[str, np.ndarray]:
     """
@@ -233,7 +281,7 @@ def generate_embeddings_per_slice(
 
 # fastText backend
 def _generate_fasttext_embeddings(slice_range: tuple[int, int], force:bool = False) -> dict[str, np.ndarray]:
-    model_file = slice_model_path(slice_range)
+    model_file = slice_model_path(slice_range, 'fasttext')
     slice_file = SLICES_DIR / f"{slice_range[0]}-{slice_range[1]}.txt"
 
     if not slice_file.exists():
@@ -396,7 +444,7 @@ def add_to_faiss_index(index: faiss.Index, vectors: np.ndarray) -> None:
 
 def build_index_for_slice(
     slice_range: tuple[int,int],
-    backend="fasttext",
+    backend="macberth",
     use_aligned: bool = False,
     force: bool = False
 ) -> None:
@@ -404,36 +452,36 @@ def build_index_for_slice(
     logger.info(f"Processing slice {slice_id} (aligned={use_aligned}, force={force})")
 
     # Determine paths
-    index_path = faiss_slice_path(slice_range, use_aligned)
-    vocab_path = vocab_slice_path(slice_range, use_aligned)
+    index_path = faiss_slice_path(slice_range, use_aligned, backend)
+    vocab_path = vocab_slice_path(slice_range, use_aligned, backend)
 
     # Load or regenerate embeddings
     if use_aligned:
-        if force or not aligned_vectors_path(slice_id).exists():
+        if force or not aligned_vectors_path(slice_id, backend).exists():
             embeddings = generate_embeddings_per_slice(slice_range, backend, force)
-            save_aligned_vectors(slice_id, embeddings)
+            save_aligned_vectors(slice_id, embeddings, backend)
         else:
-            embeddings = load_aligned_vectors(slice_id)
+            embeddings = load_aligned_vectors(slice_id, backend)
     else:
-        if force or not unaligned_vectors_path(slice_id).exists():
+        if force or not unaligned_vectors_path(slice_id, backend).exists():
             embeddings = generate_embeddings_per_slice(slice_range, backend, force)
-            save_unaligned_vectors(slice_id, embeddings)
+            save_unaligned_vectors(slice_id, embeddings, backend)
         else:
-            embeddings = load_unaligned_vectors(slice_id)
+            embeddings = load_unaligned_vectors(slice_id, backend)
 
     words = list(embeddings.keys())
     if not words:
         logger.warning(f"No embeddings for slice {slice_id}, skipping")
         return
 
-    # Build FAISS index
+    logger.info(f"Buiding FAISS index for slice {slice_id}")
     vectors = np.stack([embeddings[w] for w in words])
     vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
     dim = vectors.shape[1]
     index = faiss.IndexFlatIP(dim)
     add_to_faiss_index(index, vectors)
 
-    # Save index and vocab (overwrite if force=True)
+    logger.info(f"Saving FAISS index and vocab for slice {slice_id}")
     faiss.write_index(index, str(index_path))
     with open(vocab_path, "w", encoding="utf-8") as f:
         f.write("\n".join(words))
@@ -447,7 +495,7 @@ def search_index(index: faiss.Index, query: np.ndarray, k: int) -> tuple[np.ndar
 
 # Orchestration
 
-def build_all_slices(use_aligned: bool = False, force: bool = False, backend = "fasttext") -> None:
+def build_all_slices(backend: str, use_aligned: bool = False, force: bool = False) -> None:
     logger.info("Building slices (aligned=%s)", use_aligned)
 
     # Stage 1: produce & save unaligned
@@ -458,11 +506,11 @@ def build_all_slices(use_aligned: bool = False, force: bool = False, backend = "
         span = (start, end)
 
         try:
-            vectors = load_unaligned_vectors(slice_id)
+            vectors = load_unaligned_vectors(slice_id, backend)
             logger.info("Loaded unaligned vectors for %s", slice_id)
         except FileNotFoundError:
             vectors = generate_embeddings_per_slice(span, backend, force)
-            save_unaligned_vectors(slice_id, vectors)
+            save_unaligned_vectors(slice_id, vectors, backend)
             logger.info("Generated unaligned vectors for %s", slice_id)
 
         unaligned_cache[slice_id] = vectors
@@ -495,7 +543,7 @@ def build_all_slices(use_aligned: bool = False, force: bool = False, backend = "
                 ref_anchors,
             )
 
-        save_aligned_vectors(slice_id, aligned_vectors)
+        save_aligned_vectors(slice_id, aligned_vectors, backend)
         build_index_for_slice(span, backend=backend, use_aligned=True, force=force)
         logger.info("Aligned and indexed %s", slice_id)
 
@@ -516,7 +564,7 @@ def main():
 
     logger.info(f"Starting slice pipeline (aligned={use_aligned})")
 
-    build_all_slices(use_aligned=use_aligned, backend='macberth', force=use_force) # fasttext
+    build_all_slices(backend='macberth', use_aligned=use_aligned, force=use_force)
 
 
 if __name__ == "__main__":
