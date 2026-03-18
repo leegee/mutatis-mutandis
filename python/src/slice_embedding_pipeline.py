@@ -60,7 +60,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Callable, cast, DefaultDict, Dict
+from typing import Callable, cast, DefaultDict
 from collections import defaultdict
 
 import fasttext
@@ -103,7 +103,7 @@ MODEL: PreTrainedModel | None = None
 
 def unaligned_vectors_path(slice_id: str, backend: str) -> Path:
     if backend.lower() == "macberth":
-        raise NotImplementedError('Macberth cannot be unaligned')
+        base = MACBERTH_ALIGNED_VECTORS_DIR
     else:
         base = FASTTEXT_UNALIGNED_VECTORS_DIR
     return base / f"{slice_id}.npz"
@@ -126,9 +126,10 @@ def slice_model_path(slice_range: tuple[int,int], backend: str) -> Path:
     return base / f"slice_{start}_{end}.bin"
 
 
-def load_macberth_vectors(slice_id: str) -> Dict[str, np.ndarray]:
+
+def load_macberth_vectors(slice_id: str) -> dict[str, np.ndarray]:
     """
-    Load MacBERTh embeddings for a given slice.
+    Load MacBERTh embeddings for a given slice (new 2D format).
 
     Returns:
         dict[token -> vector]
@@ -139,13 +140,13 @@ def load_macberth_vectors(slice_id: str) -> Dict[str, np.ndarray]:
         raise FileNotFoundError(f"MacBERTh vectors not found: {path}")
 
     data = np.load(path, allow_pickle=True)
+    tokens = data["tokens"]
+    vectors = data["vectors"]
 
-    embeddings = {
-        k.removeprefix("tok_"): data[k].astype(np.float32)
-        for k in data
-    }
+    if len(tokens) != len(vectors):
+        raise ValueError(f"Mismatch in tokens vs vectors: {len(tokens)} vs {len(vectors)}")
 
-    return embeddings
+    return {tok: vectors[i] for i, tok in enumerate(tokens)}
 
 
 def faiss_slice_path(slice_range: tuple[int,int], aligned: bool, backend: str) -> Path:
@@ -154,8 +155,6 @@ def faiss_slice_path(slice_range: tuple[int,int], aligned: bool, backend: str) -
     if backend == "fasttext":
         base_dir = FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR
     elif backend == "macberth":
-        if not aligned:
-            raise NotImplementedError('Macberth cannot be unaligned')
         base_dir = MACBERTH_ALIGNED_VECTORS_DIR
     else:
         raise NotImplementedError(f"Unknown backend: {backend}")
@@ -171,8 +170,6 @@ def vocab_slice_path(slice_range: tuple[int,int], aligned: bool, backend: str) -
     if backend == "fasttext":
         base_dir = FASTTEXT_ALIGNED_VECTORS_DIR if aligned else FASTTEXT_UNALIGNED_VECTORS_DIR
     elif backend == "macberth":
-        if not aligned:
-            raise NotImplementedError('Macberth cannot be aligned')
         base_dir = MACBERTH_ALIGNED_VECTORS_DIR
     else:
         raise ValueError(f"Unknown backend: {backend}")
@@ -321,29 +318,34 @@ def _forward_batch(model, tokenizer, batch, device):
     return hidden_states, input_ids
 
 
-def _accumulate_tokens(tokenizer, input_ids, hidden_states, embeddings_accum):
-    for b_idx in range(len(input_ids)):
-
+def _accumulate_tokens(tokenizer, input_ids, hidden_states, embeddings_accum, original_sentences):
+    """
+    Accumulate embeddings per original word in the sentence, not merged multi-word tokens.
+    """
+    for b_idx, sent in enumerate(original_sentences):
+        words = sent.split()  # split sentence into words
         tokens = tokenizer.convert_ids_to_tokens(input_ids[b_idx])
+        idx = 0  # position in tokens
 
-        word_buffer: list[str] = []
-        vec_buffer: list[np.ndarray] = []
+        for word in words:
+            subword_vecs = []
+            # Collect subwords for this word
+            while idx < len(tokens):
+                t = tokens[idx]
+                if t.startswith("##"):
+                    subword_vecs.append(hidden_states[b_idx, idx])
+                    idx += 1
+                else:
+                    if subword_vecs:
+                        break  # next word
+                    else:
+                        subword_vecs.append(hidden_states[b_idx, idx])
+                        idx += 1
+                        break
 
-        for t, vec in zip(tokens, hidden_states[b_idx], strict=True):
-            if t.startswith("[") and t.endswith("]"):
-                continue
-
-            # WordPiece
-            if t.startswith("##"):
-                if word_buffer:
-                    word_buffer[-1] += t[2:]
-                    vec_buffer[-1] += vec
-            else:
-                word_buffer.append(t)
-                vec_buffer.append(vec)
-
-        for w, v in zip(word_buffer, vec_buffer, strict=True):
-            embeddings_accum[w].append(v)
+            # Average vector of subwords for this word
+            vec = np.mean(np.stack(subword_vecs, axis=0), axis=0)
+            embeddings_accum[word].append(vec)
 
 
 def _generate_macberth_embeddings(
@@ -479,6 +481,12 @@ def build_index_for_slice(
     vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
     dim = vectors.shape[1]
     index = faiss.IndexFlatIP(dim)
+
+
+    vectors = np.stack([embeddings[w] for w in words])
+    print("vectors type:", vectors.dtype, "shape:", vectors.shape)
+
+
     add_to_faiss_index(index, vectors)
 
     logger.info(f"Saving FAISS index and vocab for slice {slice_id}")
