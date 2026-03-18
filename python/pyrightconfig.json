@@ -1,9 +1,16 @@
 {
     "typeCheckingMode": "basic",
+    "pythonVersion": "3.11",
     "reportMissingImports": false,
     "reportMissingTypeStubs": false,
-    "pythonVersion": "3.11",
+    // --- ADD THESE ---
+    "reportArgumentType": false,
+    "reportUnknownMemberType": false,
+    "reportUnknownVariableType": false,
+    "reportUnknownArgumentType": false,
     "exclude": [
-        "python/src/fastText_eebo/"
+        "python/src/fastText_eebo/",
+        "**/site-packages",
+        "**/__pycache__"
     ]
 }

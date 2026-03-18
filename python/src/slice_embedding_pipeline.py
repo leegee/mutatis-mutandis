@@ -60,7 +60,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Callable, cast, DefaultDict
+from typing import Callable, cast, DefaultDict, List, Dict, Tuple, Optional
 from collections import defaultdict
 
 import fasttext
@@ -93,14 +93,11 @@ from lib.eebo_anchor_builder import get_anchors
 from lib.eebo_sentences import stream_slice_sentences
 
 
-# nltk.download('punkt')
-
 # Cache
-TOKENIZER: PreTrainedTokenizerBase | None = None
-MODEL: PreTrainedModel | None = None
+TOKENIZER: Optional[PreTrainedTokenizerBase] = None
+MODEL: Optional[PreTrainedModel] = None
 
 # Paths
-
 def unaligned_vectors_path(slice_id: str, backend: str) -> Path:
     if backend.lower() == "macberth":
         base = MACBERTH_ALIGNED_VECTORS_DIR
@@ -299,124 +296,138 @@ def has_fine_tuned_weights(ft_dir: Path) -> bool:
 
 
 # MacBERTh backend
-def _forward_batch(model, tokenizer, batch, device):
-    inputs = tokenizer(
+def _forward_batch(
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+    batch: list[str],
+    device: str
+):
+    # Add return_offsets_mapping=True
+    batch_encoding = tokenizer(
         batch,
         return_tensors="pt",
         padding=True,
         truncation=True,
-        max_length=512
+        max_length=512,
+        return_offsets_mapping=True
     )
 
-    inputs = {k: v.to(device) for k, v in inputs.items()}
+    inputs = {k: v.to(device) for k, v in batch_encoding.items() if k != "offset_mapping"}
 
     outputs = model(**inputs, output_hidden_states=True)
-
     hidden_states = outputs.hidden_states[-1].cpu().numpy()
-    input_ids = inputs["input_ids"].cpu()
 
-    return hidden_states, input_ids
+    return hidden_states, batch_encoding
 
 
-def _accumulate_tokens(tokenizer, input_ids, hidden_states, embeddings_accum, original_sentences):
+def _accumulate_tokens(
+    tokenizer: PreTrainedTokenizerBase,
+    batch_encoding,  # tokenizer(...) output with offsets
+    hidden_states: np.ndarray,
+    embeddings_accum: DefaultDict[str, List[np.ndarray]],
+    sentences: List[str]
+) -> None:
     """
-    Accumulate embeddings per original word in the sentence, not merged multi-word tokens.
+    Accumulate embeddings per *true text span* using offset mappings.
     """
-    for b_idx, sent in enumerate(original_sentences):
-        words = sent.split()  # split sentence into words
-        tokens = tokenizer.convert_ids_to_tokens(input_ids[b_idx])
-        idx = 0  # position in tokens
 
-        for word in words:
-            subword_vecs = []
-            # Collect subwords for this word
-            while idx < len(tokens):
-                t = tokens[idx]
-                if t.startswith("##"):
-                    subword_vecs.append(hidden_states[b_idx, idx])
-                    idx += 1
-                else:
-                    if subword_vecs:
-                        break  # next word
-                    else:
-                        subword_vecs.append(hidden_states[b_idx, idx])
-                        idx += 1
-                        break
+    input_ids = batch_encoding["input_ids"]
+    offsets = batch_encoding["offset_mapping"]
 
-            # Average vector of subwords for this word
-            vec = np.mean(np.stack(subword_vecs, axis=0), axis=0)
-            embeddings_accum[word].append(vec)
+    for b_idx, sent in enumerate(sentences):
+        token_ids = input_ids[b_idx].tolist()
+        token_offsets = offsets[b_idx].tolist()
+        tokens = tokenizer.convert_ids_to_tokens(token_ids)
+
+        current_word = ""
+        current_vecs: List[np.ndarray] = []
+        last_end = None
+
+        for idx, (_tok, (start, end)) in enumerate(zip(tokens, token_offsets, strict=True)):
+            # Skip special tokens ([CLS], [SEP], etc.)
+            if start == end:
+                continue
+
+            piece = sent[start:end]
+
+            # Detect word boundary
+            if last_end is not None and start != last_end:
+                # finalize previous word
+                if current_word and current_vecs:
+                    vec = np.mean(np.stack(current_vecs, axis=0), axis=0)
+                    embeddings_accum[current_word].append(vec)
+
+                # reset
+                current_word = ""
+                current_vecs = []
+
+            current_word += piece
+            current_vecs.append(hidden_states[b_idx, idx])
+            last_end = end
+
+        # flush last word
+        if current_word and current_vecs:
+            vec = np.mean(np.stack(current_vecs, axis=0), axis=0)
+            embeddings_accum[current_word].append(vec)
 
 
 def _generate_macberth_embeddings(
-    slice_range: tuple[int, int],
+    slice_range: Tuple[int, int],
     force: bool = False,
     batch_size: int = 128
-) -> dict[str, np.ndarray]:
+) -> Dict[str, np.ndarray]:
 
-    embeddings_accum: DefaultDict[str, list[np.ndarray]] = defaultdict(list)
+    # Accumulate embeddings per token
+    embeddings_accum: DefaultDict[str, List[np.ndarray]] = defaultdict(list)
 
-    tokenizer, model = get_macberth_model()
+    # Load model + tokenizer
+    tokenizer: PreTrainedTokenizerBase
+    model: PreTrainedModel
 
+    tokenizer, model = get_macberth_model()  # model inferred as PreTrainedModel
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    cast(torch.nn.Module, model).to(device)
+    model.to(device)  # don't reassign
+    model.eval()
 
+    # stream sentences
     conn = get_connection()
-    logger.info( "Streaming sentences from DB for slice %d-%d", slice_range[0], slice_range[1] )
     sentence_stream = stream_slice_sentences(conn, slice_range)
-
     sentence_count = 0
-    batch: list[str] = []
+    batch: List[str] = []
 
     with torch.no_grad():
         for sent in sentence_stream:
             batch.append(sent)
-
             if len(batch) < batch_size:
                 continue
 
-            hidden_states, input_ids = _forward_batch(
-                model, tokenizer, batch, device
-            )
-
-            _accumulate_tokens( tokenizer, input_ids, hidden_states, embeddings_accum )
-
+            hidden_states, batch_encoding = _forward_batch(model, tokenizer, batch, device)
+            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, batch)
             sentence_count += len(batch)
-
             if sentence_count % 500 == 0:
                 logger.info("Processed %d sentences", sentence_count)
-
             batch.clear()
 
+        # Process left overs
         if batch:
-            hidden_states, input_ids = _forward_batch(
-                model, tokenizer, batch, device
-            )
-
-            _accumulate_tokens(
-                tokenizer,
-                input_ids,
-                hidden_states,
-                embeddings_accum
-            )
-
+            hidden_states, batch_encoding = _forward_batch(model, tokenizer, batch, device)
+            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, batch)
             sentence_count += len(batch)
 
     conn.close()
 
     logger.info("Total sentences processed: %d", sentence_count)
-    logger.info(
-        "Averaging embeddings for %d tokens",
-        len(embeddings_accum)
-    )
+    logger.info("Averaging embeddings for %d tokens", len(embeddings_accum))
 
-    final_embeddings = {
+    # Average embeddings per token
+    final_embeddings: Dict[str, np.ndarray] = {
         tok: np.mean(np.stack(vlist, axis=0), axis=0).astype(np.float32)
         for tok, vlist in embeddings_accum.items()
     }
 
-    logger.info( "Generated embeddings for slice %d-%d", slice_range[0], slice_range[1] )
+    logger.info("Generated embeddings for slice %d-%d", slice_range[0], slice_range[1])
     return final_embeddings
+
 
 # Alignment
 
@@ -496,7 +507,7 @@ def build_index_for_slice(
     logger.info(f"Saved FAISS index and vocab for slice {slice_id}")
 
 
-def search_index(index: faiss.Index, query: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+def search_faiss(index: faiss.Index, query: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     search_fn = cast(Callable[[np.ndarray, int], tuple[np.ndarray, np.ndarray]], index.search)
     return search_fn(query, k)
 
@@ -506,7 +517,7 @@ def search_index(index: faiss.Index, query: np.ndarray, k: int) -> tuple[np.ndar
 def build_all_slices(backend: str, use_aligned: bool = False, force: bool = False) -> None:
     logger.info("Building slices (aligned=%s)", use_aligned)
 
-    # Stage 1: produce & save unaligned
+    # produce amd save unaligned
     unaligned_cache: dict[str, dict[str, np.ndarray]] = {}
 
     for start, end in SLICES:
@@ -528,7 +539,7 @@ def build_all_slices(backend: str, use_aligned: bool = False, force: bool = Fals
         logger.info("Unaligned build complete.")
         return
 
-    # Stage 2: align slices to center slice
+    # align slices to center slice
     mid_index = len(SLICES) // 2
     reference_span = SLICES[mid_index]
     reference_id = f"{reference_span[0]}-{reference_span[1]}"
@@ -570,9 +581,10 @@ def main():
     env_force = os.environ.get("FORCE", "").lower()
     use_force = args.force or env_force in {"1", "true", "yes"}
 
-    logger.info(f"Starting slice pipeline (aligned={use_aligned})")
+    logger.info(f"Starting slice pipeline (forced={use_force}, aligned={use_aligned})")
 
-    build_all_slices(backend='macberth', use_aligned=use_aligned, force=use_force)
+    # build_all_slices(backend='macberth', use_aligned=use_aligned, force=use_force)
+    build_all_slices(backend='macberth', use_aligned=True, force=True)
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import faiss
 
-from slice_embedding_pipeline import load_aligned_vectors, search_index, add_to_faiss_index
+from slice_embedding_pipeline import load_aligned_vectors, search_faiss, add_to_faiss_index
 from lib.eebo_logging import logger
 from lib.eebo_config import SLICES, CONCEPT_SETS, OUT_DIR, TEXT_BASE_URL
 from lib.eebo_db import get_connection
@@ -176,7 +176,7 @@ def main():
                 logger.warning(f"No vector for concept {seed} in slice {slice_id}")
                 continue
             seed_vec = vectors[seed] / np.linalg.norm(vectors[seed])
-            D, _I = search_index(index, seed_vec.reshape(1, -1), TOP_K)
+            D, _I = search_faiss(index, seed_vec.reshape(1, -1), TOP_K)
 
             neighbours_list = []
             for sim, idx in zip(D[0], _I[0], strict=True):

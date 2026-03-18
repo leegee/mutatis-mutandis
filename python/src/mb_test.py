@@ -1,85 +1,97 @@
+#!/usr/bin/env python3
+
+import time
+from pathlib import Path
+import numpy as np
+import faiss
+
 from slice_embedding_pipeline import (
-    SLICES,
+    load_unaligned_vectors,
     faiss_slice_path,
     vocab_slice_path,
-    load_aligned_vectors,
-    load_unaligned_vectors,
-    load_macberth_vectors,
 )
-import faiss
-import numpy as np
 
-def search_token_across_slices(
-    query: str,
-    top_k: int = 10,
-    aligned: bool = True,
-    backend: str = "macberth"
-):
-    """
-    Search for a token or phrase across all slices.
-
-    Parameters
-    ----------
-    query : str
-        The token or phrase to search.
-    top_k : int
-        Number of top matches to return.
-    aligned : bool
-        Whether to use aligned embeddings (comparable across slices).
-    backend : str
-        "fasttext" or "macberth" embeddings.
-
-    Returns
-    -------
-    list of tuples: [(slice_range, token, score), ...] sorted by descending similarity
-    """
-    all_results = []
-
-    # Loop over slices
-    for slice_range in SLICES:
-        slice_id = f"{slice_range[0]}-{slice_range[1]}"
-
-        # Load embeddings
-        if backend == "fasttext":
-            embeddings = (
-                load_aligned_vectors(slice_id, 'macberth')
-                if aligned
-                else load_unaligned_vectors(slice_id, 'macberth')
-            )
-
-        elif backend == "macberth":
-            embeddings = load_macberth_vectors(slice_id)
-
-        else:
-            raise ValueError(f"Unknown backend: {backend}")
-
-        # Compute query vector
-        tokens = [t for t in query.split() if t in embeddings]
-        if not tokens:
-            continue
-
-        query_vec = np.mean([embeddings[t] for t in tokens], axis=0)
-        query_vec = query_vec / np.linalg.norm(query_vec)
-        query_vec = np.expand_dims(query_vec.astype(np.float32), axis=0)
-
-        # Load FAISS index
-        index = faiss.read_index(str(faiss_slice_path(slice_range, aligned, 'macberth')))
-
-        # Search
-        D, Index = index.search(query_vec, top_k)
-
-        # Map indices to tokens
-        vocab = open(vocab_slice_path(slice_range, aligned, 'macberth'), encoding="utf-8").read().splitlines()
-        results = [(slice_range, vocab[i], D[0][idx]) for idx, i in enumerate(Index[0]) if i >= 0]
-        all_results.extend(results)
-
-    # Sort across all slices
-    all_results.sort(key=lambda x: -x[2])
-    return all_results[:top_k]
+SLICE = (1625, 1629)
+SLICE_ID = f"{SLICE[0]}-{SLICE[1]}"
+BACKEND = "macberth"
+ALIGNED = False
 
 
-# Example usage
+def wait_for_file(path: Path, label: str, poll=5):
+    print(f"[WAIT] Waiting for {label}: {path}")
+    while not path.exists():
+        time.sleep(poll)
+    print(f"[OK] Found {label}")
+
+
+def load_vocab(path: Path):
+    with open(path, encoding="utf-8") as f:
+        return f.read().splitlines()
+
+
+def build_word_index(words):
+    return {w: i for i, w in enumerate(words)}
+
+
+def normalize(v):
+    return v / np.linalg.norm(v)
+
+
+def query(index, embeddings, words, word_to_idx, word, k=10):
+    if word not in embeddings:
+        print(f"[MISS] '{word}' not in embeddings")
+        return
+
+    vec = normalize(embeddings[word]).astype("float32").reshape(1, -1)
+    D, _I = index.search(vec, k)
+
+    print(f"\nQuery: {word}")
+    for rank, idx in enumerate(_I[0]):
+        print(f"{rank:2d}  {words[idx]:20s}  {D[0][rank]:.4f}")
+
+
+def main():
+    print(f"[INFO] Testing slice {SLICE_ID}")
+
+    index_path = faiss_slice_path(SLICE, ALIGNED, BACKEND)
+    vocab_path = vocab_slice_path(SLICE, ALIGNED, BACKEND)
+
+    # Wait until ingestion produces outputs
+    wait_for_file(index_path, "FAISS index")
+    wait_for_file(vocab_path, "vocab")
+
+    print("[INFO] Loading embeddings...")
+    embeddings = load_unaligned_vectors(SLICE_ID, BACKEND)
+
+    print("[INFO] Loading FAISS index...")
+    index = faiss.read_index(str(index_path))
+
+    print("[INFO] Loading vocab...")
+    words = load_vocab(vocab_path)
+    word_to_idx = build_word_index(words)
+
+    # --- Basic checks ---
+    print("\n[CHECK] Embedding stats")
+    vecs = np.stack(list(embeddings.values()))
+    norms = np.linalg.norm(vecs, axis=1)
+
+    print(f"Vocab size: {len(embeddings)}")
+    print(f"Vector dim: {vecs.shape[1]}")
+    print(f"Norms: min={norms.min():.4f}, max={norms.max():.4f}, mean={norms.mean():.4f}")
+
+    # --- Sample tokens ---
+    print("\n[CHECK] Sample tokens:")
+    for w in list(embeddings.keys())[:20]:
+        print(" ", w)
+
+    # --- Queries ---
+    test_words = ["god", "king", "church", "man", "love"]
+
+    for w in test_words:
+        query(index, embeddings, words, word_to_idx, w)
+
+    print("\n[DONE] Test complete.")
+
+
 if __name__ == "__main__":
-    top_matches = search_token_across_slices("king", top_k=15, aligned=True, backend='macberth')
-    for s, tok, score in top_matches:
-        print(f"Slice {s}: {tok} ({score:.3f})")
+    main()
