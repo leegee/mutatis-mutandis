@@ -5,7 +5,7 @@ def stream_slice_sentences(
     conn: Connection,
     slice_range: tuple[int, int],
     window: int = 64
-) -> Iterator[str]:
+) -> Iterator[tuple[int, str]]:
 
     slice_start, slice_end = slice_range
 
@@ -20,7 +20,7 @@ def stream_slice_sentences(
         WHERE slice_start = %(slice_start)s
           AND slice_end   = %(slice_end)s
     )
-    SELECT STRING_AGG(token, ' ' ORDER BY token_idx)
+    SELECT doc_id, STRING_AGG(token, ' ' ORDER BY token_idx)
     FROM numbered
     GROUP BY doc_id, window_id
     ORDER BY doc_id, window_id;
@@ -32,5 +32,6 @@ def stream_slice_sentences(
             "slice_start": slice_start,
             "slice_end": slice_end
         })
-        for row in cur:
-            yield row[0]
+        for doc_id, sentence in cur:
+            yield doc_id, sentence
+

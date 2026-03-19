@@ -64,6 +64,8 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
+FAISS_ID_TO_EEBO_DOC_ID = INDEXES_DIR / 'index_to_doc_id.json'
+
 BATCH_DOCS = 100
 BATCH_TOKENS = 10000
 FASTTEXT_BATCH_SIZE = 50_000

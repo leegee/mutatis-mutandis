@@ -60,7 +60,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Callable, cast, DefaultDict, List, Dict, Tuple, Optional
+from typing import Callable, cast, DefaultDict, List, Dict, Tuple, Optional, Union
 from collections import defaultdict
 
 import fasttext
@@ -70,6 +70,7 @@ from scipy.linalg import orthogonal_procrustes
 import torch
 from transformers import (
     AutoTokenizer,
+    BatchEncoding,
     AutoModelForMaskedLM,
     PreTrainedTokenizerBase,
     PreTrainedModel
@@ -91,11 +92,16 @@ from lib.eebo_config import (
 )
 from lib.eebo_anchor_builder import get_anchors
 from lib.eebo_sentences import stream_slice_sentences
+from lib.eebo_id_map import EEBOIDMap
 
 
 # Cache
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
+
+id_map = EEBOIDMap()
+id_map.load()
+
 
 # Paths
 def unaligned_vectors_path(slice_id: str, backend: str) -> Path:
@@ -244,31 +250,40 @@ def load_unaligned_vectors(slice_id: str, backend: str) -> dict[str, np.ndarray]
 # Embeddings
 
 def generate_embeddings_per_slice(
-    slice_range: tuple[int, int],
-    backend: str,
-    force: bool = False
-) -> dict[str, np.ndarray]:
+    slice_range: tuple[int,int],
+    backend: str = "macberth",
+    force: bool = False,
+    reference_slice_id: str | None = None
+) -> tuple[dict[str, np.ndarray], DefaultDict[str, list[str]]]:
     """
-    Generate token embeddings for a given slice.
+    Generate token embeddings for a given slice. Optionally align using anchors from a reference slice.
 
-    Parameters
-    ----------
-    slice_range : tuple[int, int]
-        Start and end years of the slice.
-    backend : str
-        Which embedding model to use. Currently supports:
-        - "fasttext" : slice-trained fastText embeddings
-        - "macberth" : placeholder for contextual BERT-style embeddings
-
-    Returns
-    -------
-    dict[str, np.ndarray]
-        Mapping from token -> vector (float32)
+    Returns:
+        embeddings: dict[token -> vector]
+        doc_ids_accum: mapping token -> list of doc_ids
     """
+    slice_id = f"{slice_range[0]}-{slice_range[1]}"
+
     if backend.lower() == "fasttext":
-        return _generate_fasttext_embeddings(slice_range, force)
+        embeddings = _generate_fasttext_embeddings(slice_range, force)
+        doc_ids_accum: DefaultDict[str, list[str]] = defaultdict(list)
+        # If reference_slice_id is provided, apply orthogonal alignment
+        if reference_slice_id:
+            anchors = get_anchors()
+            _, embeddings = orthogonal_procrustes_align(embeddings, load_aligned_vectors(reference_slice_id, backend), anchors)
+        return embeddings, doc_ids_accum
+
     elif backend.lower() == "macberth":
-        return _generate_macberth_embeddings(slice_range, force)
+        embeddings, doc_ids_accum = _generate_macberth_embeddings(slice_range, force)
+
+        if reference_slice_id:
+            logger.info(f"Aligning slice {slice_id} to reference slice {reference_slice_id}")
+            ref_embeddings = load_aligned_vectors(reference_slice_id, backend)
+            anchors = get_anchors()
+            _, embeddings = orthogonal_procrustes_align(embeddings, ref_embeddings, anchors)
+
+        return embeddings, doc_ids_accum
+
     else:
         raise ValueError(f"Unknown embedding backend: {backend}")
 
@@ -301,8 +316,7 @@ def _forward_batch(
     tokenizer: PreTrainedTokenizerBase,
     batch: list[str],
     device: str
-):
-    # Add return_offsets_mapping=True
+) -> Tuple[np.ndarray, BatchEncoding]:
     batch_encoding = tokenizer(
         batch,
         return_tensors="pt",
@@ -325,16 +339,17 @@ def _accumulate_tokens(
     batch_encoding,  # tokenizer(...) output with offsets
     hidden_states: np.ndarray,
     embeddings_accum: DefaultDict[str, List[np.ndarray]],
-    sentences: List[str]
+    doc_ids_accum: DefaultDict[str, List[str]],
+    sentences: List[Tuple[str,str]]
 ) -> None:
     """
-    Accumulate embeddings per *true text span* using offset mappings.
+    Accumulate embeddings per *true text span* and track doc IDs for FAISS.
+    Uses strict=True for zip to ensure token/offset alignment.
     """
-
     input_ids = batch_encoding["input_ids"]
     offsets = batch_encoding["offset_mapping"]
 
-    for b_idx, sent in enumerate(sentences):
+    for b_idx, (doc_id, sent) in enumerate(sentences):
         token_ids = input_ids[b_idx].tolist()
         token_offsets = offsets[b_idx].tolist()
         tokens = tokenizer.convert_ids_to_tokens(token_ids)
@@ -343,21 +358,22 @@ def _accumulate_tokens(
         current_vecs: List[np.ndarray] = []
         last_end = None
 
+        if len(tokens) != len(token_offsets):
+            raise ValueError(f"Mismatch: {len(tokens)} tokens vs {len(token_offsets)} offsets")
+
+        # Strict zip ensures no length mismatch silently passes
         for idx, (_tok, (start, end)) in enumerate(zip(tokens, token_offsets, strict=True)):
-            # Skip special tokens ([CLS], [SEP], etc.)
             if start == end:
                 continue
 
             piece = sent[start:end]
 
-            # Detect word boundary
+            # New word boundary
             if last_end is not None and start != last_end:
-                # finalize previous word
                 if current_word and current_vecs:
                     vec = np.mean(np.stack(current_vecs, axis=0), axis=0)
                     embeddings_accum[current_word].append(vec)
-
-                # reset
+                    doc_ids_accum[current_word].append(doc_id)
                 current_word = ""
                 current_vecs = []
 
@@ -365,53 +381,57 @@ def _accumulate_tokens(
             current_vecs.append(hidden_states[b_idx, idx])
             last_end = end
 
-        # flush last word
+        # Flush last word
         if current_word and current_vecs:
             vec = np.mean(np.stack(current_vecs, axis=0), axis=0)
             embeddings_accum[current_word].append(vec)
+            doc_ids_accum[current_word].append(doc_id)
+
 
 
 def _generate_macberth_embeddings(
     slice_range: Tuple[int, int],
     force: bool = False,
     batch_size: int = 128
-) -> Dict[str, np.ndarray]:
+) -> Tuple[Dict[str, np.ndarray], DefaultDict[str, List[str]]]:
 
     # Accumulate embeddings per token
     embeddings_accum: DefaultDict[str, List[np.ndarray]] = defaultdict(list)
+    doc_ids_accum: DefaultDict[str, List[str]] = defaultdict(list)
 
     # Load model + tokenizer
-    tokenizer: PreTrainedTokenizerBase
-    model: PreTrainedModel
-
-    tokenizer, model = get_macberth_model()  # model inferred as PreTrainedModel
+    tokenizer, model = get_macberth_model()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)  # don't reassign
+    model.to(device)
     model.eval()
 
-    # stream sentences
+    # Stream sentences from DB
     conn = get_connection()
-    sentence_stream = stream_slice_sentences(conn, slice_range)
+    sentence_stream = stream_slice_sentences(conn, slice_range)  # yields (doc_id, sentence)
     sentence_count = 0
-    batch: List[str] = []
+    batch: List[Tuple[str, str]] = []
 
     with torch.no_grad():
-        for sent in sentence_stream:
-            batch.append(sent)
+        for sent_tuple in sentence_stream:  # sent_tuple = (doc_id, sentence)
+            batch.append(sent_tuple)
             if len(batch) < batch_size:
                 continue
 
-            hidden_states, batch_encoding = _forward_batch(model, tokenizer, batch, device)
-            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, batch)
+            hidden_states, batch_encoding = _forward_batch(
+                model, tokenizer, [s for _, s in batch], device
+            )
+            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, doc_ids_accum, batch)
             sentence_count += len(batch)
             if sentence_count % 500 == 0:
                 logger.info("Processed %d sentences", sentence_count)
             batch.clear()
 
-        # Process left overs
+        # Process leftovers
         if batch:
-            hidden_states, batch_encoding = _forward_batch(model, tokenizer, batch, device)
-            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, batch)
+            hidden_states, batch_encoding = _forward_batch(
+                model, tokenizer, [s for _, s in batch], device
+            )
+            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, doc_ids_accum, batch)
             sentence_count += len(batch)
 
     conn.close()
@@ -419,19 +439,18 @@ def _generate_macberth_embeddings(
     logger.info("Total sentences processed: %d", sentence_count)
     logger.info("Averaging embeddings for %d tokens", len(embeddings_accum))
 
-    # Average embeddings per token
-    final_embeddings: Dict[str, np.ndarray] = {
-        tok: np.mean(np.stack(vlist, axis=0), axis=0).astype(np.float32)
-        for tok, vlist in embeddings_accum.items()
-    }
+    # Convert lists to single embeddings (mean)
+    final_embeddings: Dict[str, np.ndarray] = {}
+    for token, vecs in embeddings_accum.items():
+        if isinstance(vecs, list) and vecs and isinstance(vecs[0], np.ndarray):
+            final_embeddings[token] = np.mean(np.stack(vecs, axis=0), axis=0).astype(np.float32)
 
     logger.info("Generated embeddings for slice %d-%d", slice_range[0], slice_range[1])
-    return final_embeddings
+    return final_embeddings, doc_ids_accum
 
 
 # Alignment
 
-# Probably easier to outsource this
 def orthogonal_procrustes_align(source_vectors, target_vectors, anchor_words):
     common = [w for w in anchor_words if w in source_vectors and w in target_vectors]
     if not common:
@@ -440,139 +459,155 @@ def orthogonal_procrustes_align(source_vectors, target_vectors, anchor_words):
     X = np.stack([source_vectors[w] for w in common])
     Y = np.stack([target_vectors[w] for w in common])
     R, _ = orthogonal_procrustes(X, Y)
-    aligned = {w: vec @ R for w, vec in source_vectors.items()}
-    # Normalize aligned vectors
-    aligned = {k: v / np.linalg.norm(v) for k, v in aligned.items()}
-    return R, aligned
+
+    # Apply rotation
+    aligned_vectors = {k: vec @ R for k, vec in source_vectors.items()}
+
+    # Normalize
+    aligned_vectors = {k: v / (np.linalg.norm(v) + 1e-10) for k, v in aligned_vectors.items()}
+
+    return R, aligned_vectors
 
 
 # Public FAISS
 
-def add_to_faiss_index(index: faiss.Index, vectors: np.ndarray) -> None:
+# def add_to_faiss_index(index: faiss.Index, vectors: np.ndarray) -> None:
+#     vectors = np.ascontiguousarray(vectors, dtype=np.float32)
+#     # cafeful of mypy
+#     add_fn = cast(Callable[[np.ndarray], None], index.add)
+#     add_fn(vectors)
+
+def add_to_faiss_index(
+    index: faiss.Index,
+    vectors: np.ndarray,
+    vector_ids: Optional[Union[np.ndarray, list[int]]] = None
+) -> None:
+    """
+    Add vectors to a FAISS index, optionally with explicit IDs (e.g., doc_id).
+
+    Parameters
+    ----------
+    index : faiss.Index
+        FAISS index (should be wrapped in IndexIDMap if using IDs)
+    vectors : np.ndarray
+        2D array of shape (num_vectors, dim)
+    vector_ids : np.ndarray or list[int], optional
+        IDs for each vector (e.g., doc_id). Must match vectors.shape[0]
+    """
     vectors = np.ascontiguousarray(vectors, dtype=np.float32)
-    # cafeful of mypy
-    add_fn = cast(Callable[[np.ndarray], None], index.add)
-    add_fn(vectors)
+
+    if vector_ids is not None:
+        if not isinstance(index, faiss.IndexIDMap):
+            index = faiss.IndexIDMap(index)
+        ids = np.array(vector_ids, dtype=np.int64)
+        if len(ids) != vectors.shape[0]:
+            raise ValueError("Length of vector_ids must match number of vectors")
+        add_with_ids_fn = cast(Callable[[np.ndarray, np.ndarray], None], index.add_with_ids)
+        add_with_ids_fn(vectors, ids)
+    else:
+        add_fn = cast(Callable[[np.ndarray], None], index.add)
+        add_fn(vectors)
 
 
 def build_index_for_slice(
     slice_range: tuple[int,int],
-    backend="macberth",
+    backend: str = "macberth",
     use_aligned: bool = False,
-    force: bool = False
+    force: bool = False,
+    reference_slice_id: str | None = None
 ) -> None:
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
     logger.info(f"Processing slice {slice_id} (aligned={use_aligned}, force={force})")
 
-    # Determine paths
+    # Paths
     index_path = faiss_slice_path(slice_range, use_aligned, backend)
     vocab_path = vocab_slice_path(slice_range, use_aligned, backend)
+    vectors_path = aligned_vectors_path(slice_id, backend) if use_aligned else unaligned_vectors_path(slice_id, backend)
 
-    # Load or regenerate embeddings
-    if use_aligned:
-        if force or not aligned_vectors_path(slice_id, backend).exists():
-            embeddings = generate_embeddings_per_slice(slice_range, backend, force)
+    # Load or generate embeddings + doc_ids
+    if force or not vectors_path.exists():
+        embeddings, doc_ids_accum = generate_embeddings_per_slice(
+            slice_range,
+            backend,
+            force,
+            reference_slice_id=reference_slice_id
+        )
+        if use_aligned:
             save_aligned_vectors(slice_id, embeddings, backend)
         else:
-            embeddings = load_aligned_vectors(slice_id, backend)
-    else:
-        if force or not unaligned_vectors_path(slice_id, backend).exists():
-            embeddings = generate_embeddings_per_slice(slice_range, backend, force)
             save_unaligned_vectors(slice_id, embeddings, backend)
+    else:
+        if use_aligned:
+            embeddings = load_aligned_vectors(slice_id, backend)
         else:
             embeddings = load_unaligned_vectors(slice_id, backend)
+        doc_ids_accum = defaultdict(list)
 
     words = list(embeddings.keys())
     if not words:
-        logger.warning(f"No embeddings for slice {slice_id}, skipping")
+        logger.warning(f"No embeddings for slice {slice_id}, skipping index build")
         return
 
-    logger.info(f"Buiding FAISS index for slice {slice_id}")
-    vectors = np.stack([embeddings[w] for w in words])
-    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+    # Flatten embeddings and assign numeric IDs
+    all_vectors = []
+    all_ids = []
+
+    for word in words:
+        vecs_list = embeddings[word] if isinstance(embeddings[word], list) else [embeddings[word]]
+        doc_ids_list = doc_ids_accum[word] if word in doc_ids_accum else list(range(len(vecs_list)))
+        for vec, doc_id in zip(vecs_list, doc_ids_list, strict=True):
+            all_vectors.append(vec)
+            all_ids.append(id_map.get_numeric_id(doc_id))
+
+    vectors = np.stack(all_vectors).astype(np.float32)
+    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)  # normalize
+    vector_ids = np.array(all_ids, dtype=np.int64)
+
+    # Build FAISS index
     dim = vectors.shape[1]
-    index = faiss.IndexFlatIP(dim)
+    base_index = faiss.IndexFlatIP(dim)
+    index = faiss.IndexIDMap(base_index)
+    add_to_faiss_index(index, vectors, vector_ids)
 
-
-    vectors = np.stack([embeddings[w] for w in words])
-    print("vectors type:", vectors.dtype, "shape:", vectors.shape)
-
-
-    add_to_faiss_index(index, vectors)
-
-    logger.info(f"Saving FAISS index and vocab for slice {slice_id}")
+    # Save FAISS index
+    index_path.parent.mkdir(parents=True, exist_ok=True)
     faiss.write_index(index, str(index_path))
+    logger.info(f"Saved FAISS index at {index_path}")
+
+    # Save vocab
     with open(vocab_path, "w", encoding="utf-8") as f:
         f.write("\n".join(words))
-    logger.info(f"Saved FAISS index and vocab for slice {slice_id}")
+    logger.info(f"Saved vocab at {vocab_path}")
+
+    id_map.save()
+    logger.info("Saved EEBO ID map")
+    logger.info("FAISS build complete.")
 
 
-def search_faiss(index: faiss.Index, query: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
-    search_fn = cast(Callable[[np.ndarray, int], tuple[np.ndarray, np.ndarray]], index.search)
-    return search_fn(query, k)
-
-
-# Orchestration
-
-def build_all_slices(backend: str, use_aligned: bool = False, force: bool = False) -> None:
-    logger.info("Building slices (aligned=%s)", use_aligned)
-
-    # produce amd save unaligned
-    unaligned_cache: dict[str, dict[str, np.ndarray]] = {}
-
+def build_all_slices(
+    backend: str = "macberth",
+    use_aligned: bool = False,
+    force: bool = False,
+    reference_slice_id: str | None = None
+) -> None:
+    """
+    Build FAISS indexes for all slices, optionally aligned to a reference slice.
+    """
     for start, end in SLICES:
-        slice_id = f"{start}-{end}"
-        span = (start, end)
-
-        try:
-            vectors = load_unaligned_vectors(slice_id, backend)
-            logger.info("Loaded unaligned vectors for %s", slice_id)
-        except FileNotFoundError:
-            vectors = generate_embeddings_per_slice(span, backend, force)
-            save_unaligned_vectors(slice_id, vectors, backend)
-            logger.info("Generated unaligned vectors for %s", slice_id)
-
-        unaligned_cache[slice_id] = vectors
-        build_index_for_slice(span, backend=backend, use_aligned=False, force=force)
-
-    if not use_aligned:
-        logger.info("Unaligned build complete.")
-        return
-
-    # align slices to center slice
-    mid_index = len(SLICES) // 2
-    reference_span = SLICES[mid_index]
-    reference_id = f"{reference_span[0]}-{reference_span[1]}"
-    ref_vectors = unaligned_cache[reference_id]
-
-    anchors_dict = get_anchors()
-    ref_anchors = anchors_dict[reference_id]["anchors"]
-
-    for start, end in SLICES:
-        slice_id = f"{start}-{end}"
-        span = (start, end)
-
-        if slice_id == reference_id:
-            aligned_vectors = ref_vectors
-        else:
-            raw_vectors = unaligned_cache[slice_id]
-            _, aligned_vectors = orthogonal_procrustes_align(
-                raw_vectors,
-                ref_vectors,
-                ref_anchors,
-            )
-
-        save_aligned_vectors(slice_id, aligned_vectors, backend)
-        build_index_for_slice(span, backend=backend, use_aligned=True, force=force)
-        logger.info("Aligned and indexed %s", slice_id)
-
-    logger.info("Aligned build complete.")
+        build_index_for_slice(
+            slice_range=(start, end),
+            backend=backend,
+            use_aligned=use_aligned,
+            force=force,
+            reference_slice_id=reference_slice_id
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate embeddings and FAISS indexes per slice")
     parser.add_argument("--aligned", action="store_true", help="Use aligned slice embeddings")
     parser.add_argument("--force", action="store_true", help="Force regeneration of embeddings and indexes")
+    parser.add_argument("--reference-slice", type=str, default=None, help="Reference slice ID for anchor alignment (e.g., '1625-1629')")
 
     args = parser.parse_args()
     env_aligned = os.environ.get("USE_ALIGNED_FASTTEXT_VECTORS", "").lower()
@@ -581,11 +616,25 @@ def main():
     env_force = os.environ.get("FORCE", "").lower()
     use_force = args.force or env_force in {"1", "true", "yes"}
 
-    logger.info(f"Starting slice pipeline (forced={use_force}, aligned={use_aligned})")
+    env_backend = os.environ.get("BACKEND", "").lower()
+    use_backend = args.backend or "macberth"
 
-    # build_all_slices(backend='macberth', use_aligned=use_aligned, force=use_force)
-    build_all_slices(backend='macberth', use_aligned=True, force=True)
+    start, end = SLICES[len(SLICES)//2]  # middle slice
+    reference_slice_id = args.reference_slice or f"{start}-{end}"
 
+
+    use_backend="macberth"
+    use_force=True
+    use_aligned=True
+
+    logger.info(f"Starting slice pipeline (force={use_force}, aligned={use_aligned}, reference={reference_slice_id})")
+
+    build_all_slices(
+        backend='macberth',
+        use_aligned=use_aligned,
+        force=use_force,
+        reference_slice_id=reference_slice_id
+    )
 
 if __name__ == "__main__":
     main()
