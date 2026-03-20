@@ -33,10 +33,11 @@ def get_connection(
     for attempt in range(1, _DB_RETRIES + 1):
         try:
             conn = psycopg.connect(
-                dbname="eebo",
-                user="postgres",
-                host="localhost",
-                port=5432,
+                dbname=os.environ["PGDATABASE", "eebo"],
+                user=os.environ["PGUSER", "postgres"],
+                password=os.environ["PGPASSWORD"],
+                host=os.environ["PGHOST", "localhost"],
+                port=os.environ.get("PGPORT", 5432),
                 connect_timeout=connect_timeout,
                 application_name=application_name,
             )
@@ -77,10 +78,11 @@ def get_autocommit_connection(
     for attempt in range(1, _DB_RETRIES + 1):
         try:
             conn = psycopg.connect(
-                dbname="eebo",
-                user="postgres",
-                host="localhost",
-                port=5432,
+                dbname=os.environ["PGDATABASE", "eebo"],
+                user=os.environ["PGUSER", "postgres"],
+                password=os.environ["PGPASSWORD"],
+                host=os.environ["PGHOST", "localhost"],
+                port=os.environ.get("PGPORT", 5432),
                 connect_timeout=connect_timeout,
                 application_name=application_name,
                 autocommit=True,  # enable immediately on connect
