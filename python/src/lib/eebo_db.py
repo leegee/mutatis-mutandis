@@ -43,6 +43,7 @@ def get_connection(
                 password=password,
                 host=host,
                 port=port,
+                sslmode="disable",
                 connect_timeout=connect_timeout,
                 application_name=application_name,
             )
@@ -88,6 +89,7 @@ def get_autocommit_connection(
                 password=password,
                 host=host,
                 port=port,
+                sslmode="disable",
                 connect_timeout=connect_timeout,
                 application_name=application_name,
                 autocommit=True,  # enable immediately on connect
