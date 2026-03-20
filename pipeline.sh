@@ -53,7 +53,7 @@ case "$PHASE" in
         # RUN_SCRIPTS+=("$SRC/slice_embedding_pipeline.py")
         # RUN_ENVS+=("USE_ALIGNED_FASTTEXT_VECTORS=1")
         RUN_SCRIPTS+=("$SRC/slice_embedding_pipeline.py")
-        RUN_ENVS+=("USE_ALIGNED_FASTTEXT_VECTORS=1")
+        RUN_ENVS+=("FORCE=1")
         ;;
     4|mbtest)
         RUN_SCRIPTS+=("$SRC/mb_test.py")
