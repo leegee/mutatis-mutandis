@@ -202,10 +202,10 @@ def generate_embeddings_per_slice(
     model.to(DEVICE)
     model.eval()
 
-    logger.info(f"Connecting to DB")
+    logger.info("Connecting to DB")
     conn = get_connection()
 
-    logger.info(f"Connected to DB, streaming sentences")
+    logger.info("Connected to DB, streaming sentences")
     sentence_stream = stream_slice_sentences(conn, slice_range)
     batch: list[tuple[str,str]] = []
     sentence_count = 0
