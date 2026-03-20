@@ -23,7 +23,7 @@ EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
 
 COLAB_MODE = importlib.util.find_spec("google.colab") is not None
 
-# OUT_DIR = _BASE_DIR / "out"
+# Could use env var
 OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else _BASE_DIR / "out"
 print(f"OUT_DIR = {OUT_DIR}")
 

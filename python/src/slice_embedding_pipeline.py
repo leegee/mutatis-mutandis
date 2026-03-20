@@ -12,7 +12,6 @@ This version drops fastText
 from __future__ import annotations
 import argparse
 import os
-import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Tuple, Optional, Union, Callable, cast
@@ -25,6 +24,7 @@ from transformers import AutoTokenizer, AutoModelForMaskedLM, PreTrainedTokenize
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import (
+    COLAB_MODE,
     SLICES,
     MACBERTH_ALIGNED_VECTORS_DIR,
     MACBERTH_SLICE_MODEL_DIR,
@@ -34,7 +34,6 @@ from lib.eebo_config import (
 from lib.eebo_sentences import stream_slice_sentences
 from lib.eebo_id_map import EEBOIDMap
 
-COLAB_MODE: bool = False
 DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
@@ -331,8 +330,6 @@ def main():
 
     env_force = os.environ.get("FORCE", "").lower()
     use_force = args.force or env_force in {"1", "true", "yes"}
-
-    COLAB_MODE = "google.colab" in sys.modules # or args.colab or os.environ.get("COLAB", "").lower() in {"1", "true", "yes"}
 
     if COLAB_MODE:
         logger.info("Running in Google Colab mode")
