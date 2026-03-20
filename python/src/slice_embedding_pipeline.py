@@ -321,14 +321,18 @@ def build_all_slices(force: bool = False) -> None:
 
 
 def main():
-    global DEVICE, COLAB_MODE
+    global DEVICE
 
-    parser = argparse.ArgumentParser(description="Generate per-slice MacBERTh embeddings and FAISS indexes")
-    parser.add_argument("--force", action="store_true")
-    args = parser.parse_args()
+    if not COLAB_MODE:
+        parser = argparse.ArgumentParser(description="Generate per-slice MacBERTh embeddings and FAISS indexes")
+        parser.add_argument("--force", action="store_true")
+        args = parser.parse_args()
+        cli_force = args.force
+    else:
+        cli_force = False
 
     env_force = os.environ.get("EEBO_FORCE_OVERWRITE", "").lower()
-    use_force = args.force or env_force in {"1", "true", "yes"}
+    use_force = cli_force or env_force in {"1", "true", "yes"}
 
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info(f"Using device: {DEVICE}")
