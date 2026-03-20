@@ -115,6 +115,7 @@ def get_macberth_model(shared_only: bool = True) -> tuple[PreTrainedTokenizerBas
         if shared_only:
             TOKENIZER, MODEL = tokenizer, model
     assert TOKENIZER is not None and MODEL is not None
+    logger.info("Got MacBERTh shared")
     return TOKENIZER, MODEL
 
 
@@ -195,12 +196,16 @@ def generate_embeddings_per_slice(
         logger.info(f"Saving per-slice MacBERTh model to {slice_model_dir}")
         shared_model.save_pretrained(slice_model_dir)
         tokenizer.save_pretrained(slice_model_dir)
+        logger.info(f"Saved to {slice_model_dir}")
 
     model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
     model.to(DEVICE)
     model.eval()
 
+    logger.info(f"Connecting to DB")
     conn = get_connection()
+
+    logger.info(f"Connected to DB, streaming sentences")
     sentence_stream = stream_slice_sentences(conn, slice_range)
     batch: list[tuple[str,str]] = []
     sentence_count = 0
@@ -213,7 +218,7 @@ def generate_embeddings_per_slice(
             hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch])
             _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, doc_ids_accum, batch)
             sentence_count += len(batch)
-            if sentence_count % 500 == 0:
+            if sentence_count % 100 == 0:
                 logger.info("Processed %d sentences", sentence_count)
             batch.clear()
 
