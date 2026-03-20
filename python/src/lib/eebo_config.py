@@ -1,6 +1,5 @@
 # lib/eebo_config.py
 
-import importlib.util
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
@@ -21,7 +20,11 @@ TEXT_BASE_URL = 'http://localhost:5000/documents/'
 
 EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
 
-COLAB_MODE = importlib.util.find_spec("google.colab") is not None
+try:
+    import google.colab  # noqa: F401
+    COLAB_MODE = True
+except ModuleNotFoundError:
+    COLAB_MODE = False
 
 # Could use env var
 OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else _BASE_DIR / "out"
