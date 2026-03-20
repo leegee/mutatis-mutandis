@@ -7,6 +7,7 @@ Connections, schema (wip that should use .sql files), etc
 
 """
 
+import os
 import psycopg
 from psycopg import sql, Connection
 import time
