@@ -12,6 +12,24 @@
 
     conda list --export > requirements.txt
 
+## Colab
+
+Don't forget: `macberth_pg_secrets.json` on Google Drive's root dir with:
+
+```json
+{
+    "host": "host",
+    "port": "5432",
+    "database": "dbname",
+    "user": "username",
+    "password": "passowrd"
+}
+```
+
+And probably locally:
+
+    ngrok tcp 5432
+
 ## Abstract: About This Project
 
 * [Abstract](./ABSTRACT.md)
