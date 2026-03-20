@@ -33,6 +33,8 @@ from lib.eebo_config import (
 from lib.eebo_sentences import stream_slice_sentences
 from lib.eebo_id_map import EEBOIDMap
 
+COLAB_MODE: bool = False
+DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
 
@@ -115,7 +117,7 @@ def get_macberth_model(shared_only: bool = True) -> tuple[PreTrainedTokenizerBas
     return TOKENIZER, MODEL
 
 
-def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, batch: list[str], device: str) -> Tuple[np.ndarray, BatchEncoding]:
+def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, batch: list[str]) -> Tuple[np.ndarray, BatchEncoding]:
     batch_encoding = tokenizer(
         batch,
         return_tensors="pt",
@@ -124,11 +126,10 @@ def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, b
         max_length=512,
         return_offsets_mapping=True
     )
-    inputs = {k: v.to(device) for k, v in batch_encoding.items() if k != "offset_mapping"}
+    inputs = {k: v.to(DEVICE) for k, v in batch_encoding.items() if k != "offset_mapping"}
     outputs = model(**inputs, output_hidden_states=True)
     hidden_states = outputs.hidden_states[-1].cpu().numpy()
     return hidden_states, batch_encoding
-
 
 
 def _accumulate_tokens(
@@ -173,12 +174,19 @@ def _accumulate_tokens(
 
 
 
-def generate_embeddings_per_slice(slice_range: Tuple[int,int], force: bool = False, batch_size: int = 128) -> Tuple[Dict[str,np.ndarray], DefaultDict[str,List[str]]]:
+def generate_embeddings_per_slice(
+    slice_range: Tuple[int,int],
+    force: bool = False,
+    batch_size: int = 128  # default
+) -> Tuple[Dict[str,np.ndarray], DefaultDict[str,List[str]]]:
+
+    if COLAB_MODE and DEVICE == "cuda":
+        batch_size = min(batch_size, 64)
+
     embeddings_accum: DefaultDict[str, list[np.ndarray]] = defaultdict(list)
     doc_ids_accum: DefaultDict[str, list[str]] = defaultdict(list)
 
     tokenizer, shared_model = get_macberth_model(shared_only=True)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Copy shared model to per-slice folder (for semantic drift tracking)
     slice_model_dir = slice_model_path(slice_range)
@@ -188,7 +196,7 @@ def generate_embeddings_per_slice(slice_range: Tuple[int,int], force: bool = Fal
         tokenizer.save_pretrained(slice_model_dir)
 
     model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
-    model.to(device)
+    model.to(DEVICE)
     model.eval()
 
     conn = get_connection()
@@ -201,7 +209,7 @@ def generate_embeddings_per_slice(slice_range: Tuple[int,int], force: bool = Fal
             batch.append(sent_tuple)
             if len(batch) < batch_size:
                 continue
-            hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch], device)
+            hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch])
             _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, doc_ids_accum, batch)
             sentence_count += len(batch)
             if sentence_count % 500 == 0:
@@ -209,7 +217,7 @@ def generate_embeddings_per_slice(slice_range: Tuple[int,int], force: bool = Fal
             batch.clear()
 
         if batch:
-            hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch], device)
+            hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch])
             _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, doc_ids_accum, batch)
             sentence_count += len(batch)
 
@@ -308,14 +316,36 @@ def build_all_slices(force: bool = False) -> None:
 
 
 def main():
+    global DEVICE, COLAB_MODE
+
     parser = argparse.ArgumentParser(description="Generate per-slice MacBERTh embeddings and FAISS indexes")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--colab", action="store_true", help="Run in Google Colab mode (Drive paths + GPU)")
     args = parser.parse_args()
 
     env_force = os.environ.get("FORCE", "").lower()
     use_force = args.force or env_force in {"1", "true", "yes"}
 
-    logger.info(f"Starting slice pipeline (force={use_force})")
+    COLAB_MODE = args.colab or os.environ.get("COLAB", "").lower() in {"1", "true", "yes"}
+
+    if COLAB_MODE:
+        logger.info("Running in Google Colab mode")
+        from google.colab import drive
+        drive.mount('/content/drive', force_remount=True)
+
+        # Redirect all paths to Drive
+        global MACBERTH_ALIGNED_VECTORS_DIR, MACBERTH_SLICE_MODEL_DIR, MACBERTH_FINE_TUNED_DIR
+        MACBERTH_ALIGNED_VECTORS_DIR = Path("/content/drive/MyDrive/macberth_vectors")
+        MACBERTH_SLICE_MODEL_DIR = Path("/content/drive/MyDrive/macberth_models")
+        MACBERTH_FINE_TUNED_DIR = Path("/content/drive/MyDrive/macberth_finetuned")
+
+        for p in [MACBERTH_ALIGNED_VECTORS_DIR, MACBERTH_SLICE_MODEL_DIR, MACBERTH_FINE_TUNED_DIR]:
+            p.mkdir(parents=True, exist_ok=True)
+
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(f"Using device: {DEVICE}")
+
+    logger.info(f"Starting slice pipeline (force={use_force}, colab={COLAB_MODE})")
     build_all_slices(force=use_force)
 
 

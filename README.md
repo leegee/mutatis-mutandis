@@ -1,5 +1,8 @@
 # _Mutatis Mutandis_
 
+    git@github.com:leegee/mutatis-mutandis.git
+    https://github.com/leegee/mutatis-mutandis.git
+
 ## Code Synopsis
 
     conda activate eebo
