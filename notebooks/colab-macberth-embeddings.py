@@ -39,6 +39,7 @@
 # Colab notebook to act as ./pipline.sh -p train
 # and generate from MacBERTh embeddings on Google Drive
 #
+
 import subprocess
 import json
 import os
@@ -90,13 +91,16 @@ print(f"Postgres target: {os.environ['PGHOST']}:{os.environ['PGPORT']}")
 # Run the generation pipeline
 pipeline_script = src_dir / "slice_embedding_pipeline.py"
 try:
-    # Capture stdout and stderr to get more detailed error messages
+    # Run with -u for unbuffered output to see real-time logs
     result = subprocess.run(
-        ["python", str(pipeline_script), "--force"],
+        ["python", "-u", str(pipeline_script), "--force"],
         check=True,
-        # capture_output=True,
+        # capture_output=True, # Keep commented to stream output directly
         text=True # Decode stdout/stderr as text
     )
+    # If capture_output is False (default), result.stdout/stderr will be None
+    # The output would have streamed directly.
+    # These print statements are only relevant if capture_output=True was used.
     print(result.stdout)
     print(result.stderr)
 except subprocess.CalledProcessError as e:
