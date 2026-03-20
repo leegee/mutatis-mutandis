@@ -50,7 +50,10 @@ os.environ["PGPASSWORD"] = creds["password"]
 
 print(f"Postgres target: {os.environ['PGHOST']}:{os.environ['PGPORT']}")
 
-# Update paths for Colab
+# Define persistent Drive output folder
+MACBERTH_OUTPUT_DIR = Path("/content/drive/MyDrive/macberth_output")
+
+# Update paths for Colab to persist output in Drive
 import lib.eebo_config as cfg
 
 cfg.MACBERTH_ALIGNED_VECTORS_DIR = MACBERTH_OUTPUT_DIR / "aligned_vectors"
@@ -68,7 +71,7 @@ try:
     result = subprocess.run(
         ["python", str(pipeline_script), "--force"],
         check=True,
-        capture_output=True,
+        # capture_output=True,
         text=True # Decode stdout/stderr as text
     )
     print(result.stdout)
