@@ -325,25 +325,10 @@ def main():
 
     parser = argparse.ArgumentParser(description="Generate per-slice MacBERTh embeddings and FAISS indexes")
     parser.add_argument("--force", action="store_true")
-    # parser.add_argument("--colab", action="store_true", help="Run in Google Colab mode (Drive paths + GPU)")
     args = parser.parse_args()
 
     env_force = os.environ.get("FORCE", "").lower()
     use_force = args.force or env_force in {"1", "true", "yes"}
-
-    if COLAB_MODE:
-        logger.info("Running in Google Colab mode")
-        from google.colab import drive
-        drive.mount('/content/drive', force_remount=True)
-
-        # Redirect all paths to Drive
-        global MACBERTH_ALIGNED_VECTORS_DIR, MACBERTH_SLICE_MODEL_DIR, MACBERTH_FINE_TUNED_DIR
-        MACBERTH_ALIGNED_VECTORS_DIR = Path("/content/drive/MyDrive/macberth_vectors")
-        MACBERTH_SLICE_MODEL_DIR = Path("/content/drive/MyDrive/macberth_models")
-        MACBERTH_FINE_TUNED_DIR = Path("/content/drive/MyDrive/macberth_finetuned")
-
-        for p in [MACBERTH_ALIGNED_VECTORS_DIR, MACBERTH_SLICE_MODEL_DIR, MACBERTH_FINE_TUNED_DIR]:
-            p.mkdir(parents=True, exist_ok=True)
 
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info(f"Using device: {DEVICE}")
