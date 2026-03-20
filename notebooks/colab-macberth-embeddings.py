@@ -50,20 +50,6 @@ os.environ["PGPASSWORD"] = creds["password"]
 
 print(f"Postgres target: {os.environ['PGHOST']}:{os.environ['PGPORT']}")
 
-# Define persistent Drive output folder
-MACBERTH_OUTPUT_DIR = Path("/content/drive/MyDrive/macberth_output")
-
-# Update paths for Colab to persist output in Drive
-import lib.eebo_config as cfg
-
-cfg.MACBERTH_ALIGNED_VECTORS_DIR = MACBERTH_OUTPUT_DIR / "aligned_vectors"
-cfg.MACBERTH_SLICE_MODEL_DIR = MACBERTH_OUTPUT_DIR / "slices"
-cfg.MACBERTH_FINE_TUNED_DIR = MACBERTH_OUTPUT_DIR / "finetuned"
-
-# Make sure directories exist
-for p in [cfg.MACBERTH_ALIGNED_VECTORS_DIR, cfg.MACBERTH_SLICE_MODEL_DIR, cfg.MACBERTH_FINE_TUNED_DIR]:
-    p.mkdir(parents=True, exist_ok=True)
-
 # Run the generation pipeline
 pipeline_script = src_dir / "slice_embedding_pipeline.py"
 try:

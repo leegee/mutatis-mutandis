@@ -1,5 +1,6 @@
 # lib/eebo_config.py
 
+import importlib.util
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
@@ -13,15 +14,19 @@ class FastTextParams(TypedDict):
     minn: int
     maxn: int
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+_BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
-XML_ROOT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
+XML_ROOT_DIR = _BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 TEXT_BASE_URL = 'http://localhost:5000/documents/'
 
 EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
 
-# Should use a dict for this:
-OUT_DIR = BASE_DIR / "out"
+COLAB_MODE = importlib.util.find_spec("google.colab") is not None
+
+# OUT_DIR = _BASE_DIR / "out"
+OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else _BASE_DIR / "out"
+print(f"OUT_DIR = {OUT_DIR}")
+
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TMP_DIR = OUT_DIR / "tmp"
