@@ -7,6 +7,7 @@ Outputs one file per slice into SLICES_DIR, ready for fastText training.
 """
 
 from pathlib import Path
+
 from lib.eebo_config import SLICES, SLICES_DIR
 from lib.eebo_db import get_connection
 

@@ -15,6 +15,7 @@ import os
 import json
 from collections import Counter
 import spacy
+
 import lib.eebo_config as config
 
 MIN_FREQ = 50  # minimum frequency per slice

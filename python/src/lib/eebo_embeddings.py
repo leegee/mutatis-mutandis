@@ -2,6 +2,7 @@
 from pathlib import Path
 import fasttext
 import numpy as np
+
 from lib.eebo_logging import logger
 
 def generate_embeddings_per_model(model_path: Path) -> dict[str, np.ndarray]:
