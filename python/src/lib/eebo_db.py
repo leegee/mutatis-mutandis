@@ -17,7 +17,11 @@ from lib.eebo_logging import logger
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
-
+dbname = os.environ.get("PGDATABASE", "eebo")
+host = os.environ.get("PGHOST", "localhost")
+user = os.environ.get("PGUSER", "postgres")
+password = os.environ.get("PGPASSWORD")
+port = os.environ.get("PGPORT", 5432)
 
 def get_connection(
     *,
@@ -34,11 +38,11 @@ def get_connection(
     for attempt in range(1, _DB_RETRIES + 1):
         try:
             conn = psycopg.connect(
-                dbname=os.environ["PGDATABASE", "eebo"],
-                user=os.environ["PGUSER", "postgres"],
-                password=os.environ["PGPASSWORD"],
-                host=os.environ["PGHOST", "localhost"],
-                port=os.environ.get("PGPORT", 5432),
+                dbname=dbname,
+                user=user,
+                password=password,
+                host=host,
+                port=port,
                 connect_timeout=connect_timeout,
                 application_name=application_name,
             )
@@ -79,11 +83,11 @@ def get_autocommit_connection(
     for attempt in range(1, _DB_RETRIES + 1):
         try:
             conn = psycopg.connect(
-                dbname=os.environ["PGDATABASE", "eebo"],
-                user=os.environ["PGUSER", "postgres"],
-                password=os.environ["PGPASSWORD"],
-                host=os.environ["PGHOST", "localhost"],
-                port=os.environ.get("PGPORT", 5432),
+                dbname=dbname,
+                user=user,
+                password=password,
+                host=host,
+                port=port,
                 connect_timeout=connect_timeout,
                 application_name=application_name,
                 autocommit=True,  # enable immediately on connect
