@@ -8,6 +8,10 @@
     conda activate eebo
     ./pipeline --help
 
+## Deps list
+
+    conda list --export > requirements.txt
+
 ## Abstract: About This Project
 
 * [Abstract](./ABSTRACT.md)
