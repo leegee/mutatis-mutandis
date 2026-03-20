@@ -41,8 +41,9 @@
 #
 
 import subprocess
-import json
+import sys
 import os
+import json
 from pathlib import Path
 from google.colab import drive
 
@@ -88,25 +89,37 @@ os.environ["PGPASSWORD"] = creds["password"]
 
 print(f"Postgres target: {os.environ['PGHOST']}:{os.environ['PGPORT']}")
 
-# Run the generation pipeline
-pipeline_script = src_dir / "slice_embedding_pipeline.py"
-try:
-    # Run with -u for unbuffered output to see real-time logs
-    result = subprocess.run(
-        ["python", "-u", str(pipeline_script), "--force"],
-        check=True,
-        # capture_output=True, # Keep commented to stream output directly
-        text=True # Decode stdout/stderr as text
-    )
-    # If capture_output is False (default), result.stdout/stderr will be None
-    # The output would have streamed directly.
-    # These print statements are only relevant if capture_output=True was used.
-    print(result.stdout)
-    print(result.stderr)
-except subprocess.CalledProcessError as e:
-    print(f"Pipeline script failed with exit code {e.returncode}")
-    print("--- Standard Output ---")
-    print(e.stdout)
-    print("--- Standard Error ---")
-    print(e.stderr)
-    raise # Re-raise the exception to mark the cell as failed
+
+# Add to path
+sys.path.append(str(python_dir / "src"))
+from slice_embedding_pipeline import main
+
+os.environ["EEBO_FORCE_OVERWRITE"] = "1"  # or "true"
+
+
+# Call the pipeline directly
+main()
+
+
+# # Run the generation pipeline
+# pipeline_script = src_dir / "slice_embedding_pipeline.py"
+# try:
+#     # Run with -u for unbuffered output to see real-time logs
+#     result = subprocess.run(
+#         ["python", "-u", str(pipeline_script), "--force"],
+#         check=True,
+#         stdout=sys.stdout,
+#         stderr=sys.stderr
+#     )
+#     # If capture_output is False (default), result.stdout/stderr will be None
+#     # The output would have streamed directly.
+#     # These print statements are only relevant if capture_output=True was used.
+#     print(result.stdout)
+#     print(result.stderr)
+# except subprocess.CalledProcessError as e:
+#     print(f"Pipeline script failed with exit code {e.returncode}")
+#     print("--- Standard Output ---")
+#     print(e.stdout)
+#     print("--- Standard Error ---")
+#     print(e.stderr)
+#     raise # Re-raise the exception to mark the cell as failed

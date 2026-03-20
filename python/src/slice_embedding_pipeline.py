@@ -327,7 +327,7 @@ def main():
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
-    env_force = os.environ.get("FORCE", "").lower()
+    env_force = os.environ.get("EEBO_FORCE_OVERWRITE", "").lower()
     use_force = args.force or env_force in {"1", "true", "yes"}
 
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
