@@ -320,13 +320,13 @@ def main():
 
     parser = argparse.ArgumentParser(description="Generate per-slice MacBERTh embeddings and FAISS indexes")
     parser.add_argument("--force", action="store_true")
-    parser.add_argument("--colab", action="store_true", help="Run in Google Colab mode (Drive paths + GPU)")
+    # parser.add_argument("--colab", action="store_true", help="Run in Google Colab mode (Drive paths + GPU)")
     args = parser.parse_args()
 
     env_force = os.environ.get("FORCE", "").lower()
     use_force = args.force or env_force in {"1", "true", "yes"}
 
-    COLAB_MODE = args.colab or os.environ.get("COLAB", "").lower() in {"1", "true", "yes"}
+    COLAB_MODE = "google.colab" in sys.modules # or args.colab or os.environ.get("COLAB", "").lower() in {"1", "true", "yes"}
 
     if COLAB_MODE:
         logger.info("Running in Google Colab mode")
