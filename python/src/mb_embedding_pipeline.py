@@ -12,7 +12,7 @@ import argparse
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import DefaultDict,  List, Tuple, Optional, Union, Callable, cast
+from typing import DefaultDict, Tuple, Optional, Union
 
 import faiss
 import numpy as np
@@ -38,7 +38,6 @@ MODEL: Optional[PreTrainedModel] = None
 
 id_map = EEBOIDMap()
 id_map.load()
-
 
 
 def slice_model_path(slice_range: tuple[int,int]) -> Path:
@@ -96,40 +95,16 @@ def save_vectors(
     )
 
 
-def load_vectors(slice_id: str) -> tuple[dict[str, list[np.ndarray]], dict[str, list[str]]]:
-    path = aligned_vectors_path(slice_id)
-    if not path.exists():
-        raise FileNotFoundError(f"Vectors missing: {path}")
-
-    data = np.load(path, allow_pickle=True)
-    tokens = data["tokens"]
-    vectors = data["vectors"]
-    doc_ids = data["doc_ids"]
-
-    embeddings: DefaultDict[str, list[np.ndarray]] = defaultdict(list)
-    doc_map: DefaultDict[str, list[str]] = defaultdict(list)
-
-    for tok, vec, doc_id in zip(tokens, vectors, doc_ids, strict=True):
-        embeddings[str(tok)].append(vec)
-        doc_map[str(tok)].append(str(doc_id))
-
-    return embeddings, doc_map
-
-
-def has_fine_tuned_weights(ft_dir: Path) -> bool:
-    return all((ft_dir / f).exists() for f in ["pytorch_model.bin", "config.json"])
-
-
 def get_macberth_model(shared_only: bool = True) -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
-    """Load shared MacBERTh model (or per-slice later)"""
     global TOKENIZER, MODEL
     if TOKENIZER is None or MODEL is None:
         logger.info("Loading MacBERTh shared model...")
         tokenizer = AutoTokenizer.from_pretrained(EEBO_MODEL_NAME)
         model = AutoModelForMaskedLM.from_pretrained(EEBO_MODEL_NAME)
-        if has_fine_tuned_weights(MACBERTH_FINE_TUNED_DIR):
+        ft_dir = MACBERTH_FINE_TUNED_DIR
+        if all((ft_dir / f).exists() for f in ["pytorch_model.bin", "config.json"]):
             logger.info("Loading fine-tuned shared weights...")
-            state_dict = torch.load(MACBERTH_FINE_TUNED_DIR / "pytorch_model.bin", map_location="cpu")
+            state_dict = torch.load(ft_dir / "pytorch_model.bin", map_location="cpu")
             state_dict = {k: v for k, v in state_dict.items() if not k.startswith("classifier")}
             model.load_state_dict(state_dict, strict=False)
         model.eval()
@@ -155,62 +130,46 @@ def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, b
     return hidden_states, batch_encoding
 
 
-def _accumulate_tokens(
-    tokenizer: PreTrainedTokenizerBase,
-    batch_encoding,
-    hidden_states: np.ndarray,
-    embeddings_accum: DefaultDict[str, list[np.ndarray]],
-    doc_ids_accum: DefaultDict[str, list[str]],
-    sentences: list[tuple[str, str]]
-) -> None:
-    input_ids = batch_encoding["input_ids"]
-    offsets = batch_encoding["offset_mapping"]
+def add_to_faiss_index(
+    index: faiss.Index,
+    vectors: np.ndarray,
+    vector_ids: Optional[Union[np.ndarray, list[int]]] = None
+) -> faiss.Index:
+    """
+    Add vectors to a FAISS index, optionally with explicit IDs.
+    Returns the possibly wrapped index (IndexIDMap if needed).
+    """
+    vectors = np.ascontiguousarray(vectors, dtype=np.float32)
 
-    for b_idx, (doc_id, sent) in enumerate(sentences):
-        token_ids = input_ids[b_idx].tolist()
-        token_offsets = offsets[b_idx].tolist()
-        tokens = tokenizer.convert_ids_to_tokens(token_ids)
+    if vector_ids is not None:
+        ids = np.array(vector_ids, dtype=np.int64)
+        if len(ids) != vectors.shape[0]:
+            raise ValueError("Length of vector_ids must match number of vectors")
+        if not isinstance(index, faiss.IndexIDMap):
+            index = faiss.IndexIDMap(index)
+        index.add_with_ids(vectors, ids)
+    else:
+        index.add(vectors)
 
-        if len(tokens) != len(token_offsets):
-            raise ValueError(f"Mismatch: {len(tokens)} tokens vs {len(token_offsets)} offsets")
-
-        current_word, current_vecs, last_end = "", [], None
-
-        for idx, (_tok, (start, end)) in enumerate(zip(tokens, token_offsets, strict=True)):
-            if start == end:
-                continue
-            piece = sent[start:end]
-            if last_end is not None and start != last_end:
-                if current_word and current_vecs:
-                    vec = np.mean(np.stack(current_vecs), axis=0)
-                    embeddings_accum[current_word].append(vec)
-                    doc_ids_accum[current_word].append(doc_id)
-                current_word, current_vecs = "", []
-            current_word += piece
-            current_vecs.append(hidden_states[b_idx, idx])
-            last_end = end
-
-        if current_word and current_vecs:
-            vec = np.mean(np.stack(current_vecs), axis=0)
-            embeddings_accum[current_word].append(vec)
-            doc_ids_accum[current_word].append(doc_id)
+    return index
 
 
-def generate_embeddings_per_slice(
+def generate_and_index_slice(
     slice_range: Tuple[int,int],
     force: bool = False,
-    batch_size: int = 128
-) -> Tuple[DefaultDict[str, List[np.ndarray]], DefaultDict[str, List[str]]]:
+    batch_size: int = 128,
+    save_occurrence_vectors: bool = True
+) -> None:
+    slice_id = f"{slice_range[0]}-{slice_range[1]}"
+    logger.info(f"Generating & indexing slice {slice_id} (force={force})")
 
-    if COLAB_MODE and DEVICE == "cuda":
-        batch_size = min(batch_size, 64)
+    index_path = faiss_slice_path(slice_range)
+    vocab_path = vocab_slice_path(slice_range)
+    vectors_path = aligned_vectors_path(slice_id)
 
-    embeddings_accum: DefaultDict[str, list[np.ndarray]] = defaultdict(list)
-    doc_ids_accum: DefaultDict[str, list[str]] = defaultdict(list)
+    sentence_count = 0
 
     tokenizer, shared_model = get_macberth_model(shared_only=True)
-
-    # Copy shared model to per-slice folder (for semantic drift tracking)
     slice_model_dir = slice_model_path(slice_range)
     if force or not any(slice_model_dir.iterdir()):
         logger.info(f"Saving per-slice MacBERTh model to {slice_model_dir}")
@@ -222,105 +181,20 @@ def generate_embeddings_per_slice(
     model.to(DEVICE)
     model.eval()
 
-    logger.info("Connecting to DB")
-    conn = get_connection()
-
-    logger.info("Connected to DB, streaming sentences")
-    sentence_stream = stream_slice_sentences(conn, slice_range)
-    batch: list[tuple[str,str]] = []
-    sentence_count = 0
-
-    with torch.no_grad():
-        for sent_tuple in sentence_stream:
-            batch.append(sent_tuple)
-            if len(batch) < batch_size:
-                continue
-            hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch])
-            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, doc_ids_accum, batch)
-            sentence_count += len(batch)
-            if sentence_count % 100 == 0:
-                logger.info("Processed %d sentences", sentence_count)
-            batch.clear()
-
-        if batch:
-            hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch])
-            _accumulate_tokens(tokenizer, batch_encoding, hidden_states, embeddings_accum, doc_ids_accum, batch)
-            sentence_count += len(batch)
-
-    conn.close()
-    logger.info("Total sentences processed: %d", sentence_count)
-    logger.info("Averaging embeddings for %d tokens", len(embeddings_accum))
-    return embeddings_accum, doc_ids_accum
-
-
-def add_to_faiss_index(
-    index: faiss.Index,
-    vectors: np.ndarray,
-    vector_ids: Optional[Union[np.ndarray, list[int]]] = None
-) -> None:
-    """
-    Add vectors to a FAISS index, optionally with explicit IDs (e.g., doc_id).
-    """
-    vectors = np.ascontiguousarray(vectors, dtype=np.float32)
-
-    if vector_ids is not None:
-        if not isinstance(index, faiss.IndexIDMap):
-            index = faiss.IndexIDMap(index)
-        ids = np.array(vector_ids, dtype=np.int64)
-        if len(ids) != vectors.shape[0]:
-            raise ValueError("Length of vector_ids must match number of vectors")
-        add_with_ids_fn = cast(Callable[[np.ndarray, np.ndarray], None], index.add_with_ids)
-        add_with_ids_fn(vectors, ids)
-    else:
-        add_fn = cast(Callable[[np.ndarray], None], index.add)
-        add_fn(vectors)
-
-
-def generate_and_index_slice(
-    slice_range: Tuple[int,int],
-    force: bool = False,
-    batch_size: int = 128,
-    save_occurrence_vectors: bool = True
-) -> None:
-    """
-    Stream sentences from DB, compute per-token embeddings, and:
-      - stream vectors into FAISS index immediately
-      - optionally save occurrence-level vectors in .npz
-    """
-    slice_id = f"{slice_range[0]}-{slice_range[1]}"
-    logger.info(f"Generating & indexing slice {slice_id} (force={force})")
-
-    index_path = faiss_slice_path(slice_range)
-    vocab_path = vocab_slice_path(slice_range)
-    vectors_path = aligned_vectors_path(slice_id)
-
-    # Load shared and slice models
-    tokenizer, shared_model = get_macberth_model(shared_only=True)
-    slice_model_dir = slice_model_path(slice_range)
-    model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
-    model.to(DEVICE)
-    model.eval()
-
     dim = model.config.hidden_size
-    base_index = faiss.IndexFlatIP(dim)
-    index = faiss.IndexIDMap(base_index)
+    index: faiss.Index = faiss.IndexIDMap(faiss.IndexFlatIP(dim))
 
     seen_words: set[str] = set()
-    embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = None
-    doc_ids_accum: Optional[DefaultDict[str, list[str]]] = None
-    if save_occurrence_vectors:
-        assert embeddings_accum is not None and doc_ids_accum is not None
-        embeddings_accum = defaultdict(list)
-        doc_ids_accum = defaultdict(list)
+    embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = defaultdict(list) if save_occurrence_vectors else None
+    doc_ids_accum: Optional[DefaultDict[str, list[str]]] = defaultdict(list) if save_occurrence_vectors else None
 
-    # Connect to DB
     conn = get_connection()
     sentence_stream = stream_slice_sentences(conn, slice_range)
 
     if COLAB_MODE and DEVICE == "cuda":
         batch_size = min(batch_size, 64)
 
-    batch: list[tuple[str,str]] = []
+    batch: list[Tuple[str,str]] = []
     with torch.no_grad():
         for doc_id, sent in sentence_stream:
             batch.append((doc_id, sent))
@@ -343,17 +217,11 @@ def generate_and_index_slice(
                         if current_word and current_vecs:
                             vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
                             vec /= max(np.linalg.norm(vec), 1e-12)
-
-                            # Stream into FAISS
-                            index.add_with_ids(
-                                vec.reshape(1, -1),
-                                np.array([id_map.get_numeric_id(f"{slice_id}_{current_word}_{doc_id}")], dtype=np.int64)
-                            )
+                            vector_id = id_map.get_numeric_id(f"{slice_id}_{current_word}_{doc_id}")
+                            index = add_to_faiss_index(index, vec.reshape(1, -1), [vector_id])
                             seen_words.add(current_word)
 
-                            # Optional occurrence-level save
-                            if save_occurrence_vectors:
-                                assert embeddings_accum is not None and doc_ids_accum is not None
+                            if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
                                 embeddings_accum[current_word].append(vec)
                                 doc_ids_accum[current_word].append(doc_id)
 
@@ -366,36 +234,34 @@ def generate_and_index_slice(
                 if current_word and current_vecs:
                     vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
                     vec /= max(np.linalg.norm(vec), 1e-12)
-                    index.add_with_ids(
-                        vec.reshape(1, -1),
-                        np.array([id_map.get_numeric_id(f"{slice_id}_{current_word}_{doc_id}")], dtype=np.int64)
-                    )
+                    vector_id = id_map.get_numeric_id(f"{slice_id}_{current_word}_{doc_id}")
+                    index = add_to_faiss_index(index, vec.reshape(1, -1), [vector_id])
                     seen_words.add(current_word)
 
-                    if save_occurrence_vectors:
-                        assert embeddings_accum is not None and doc_ids_accum is not None
+                    if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
                         embeddings_accum[current_word].append(vec)
                         doc_ids_accum[current_word].append(doc_id)
+
+            sentence_count += len(batch)
+            if sentence_count % 5000 < len(batch):
+                faiss.write_index(index, str(index_path))
+                logger.info("Checkpoint saved at %d sentences", sentence_count)
 
             batch.clear()
 
     conn.close()
 
-    # Save FAISS index
     faiss.write_index(index, str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
 
-    # Save vocab
     with open(vocab_path, "w", encoding="utf-8") as f:
         f.write("\n".join(sorted(seen_words)))
     logger.info(f"Saved vocab at {vocab_path}")
 
-    # Save occurrence-level vectors if requested
     if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
         save_vectors(slice_id, embeddings_accum, doc_ids_accum)
         logger.info(f"Saved occurrence-level vectors at {vectors_path}")
 
-    # Save ID map
     id_map.save()
     logger.info("Saved EEBO ID map")
     logger.info("Slice streaming & FAISS build complete.")
@@ -404,7 +270,6 @@ def generate_and_index_slice(
 def build_all_slices(force: bool = False) -> None:
     for start, end in SLICES:
         generate_and_index_slice((start, end), force=force, save_occurrence_vectors=True)
-
 
 
 def main():
