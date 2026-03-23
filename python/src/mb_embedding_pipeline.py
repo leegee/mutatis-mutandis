@@ -66,14 +66,34 @@ def vocab_slice_path(slice_range: tuple[int,int]) -> Path:
     return path
 
 
-
-def save_vectors(slice_id: str, embeddings: dict[str, np.ndarray]) -> None:
+def save_vectors(
+    slice_id: str,
+    embeddings: dict[str, list[np.ndarray]],
+    doc_ids: dict[str, list[str]]
+) -> None:
     path = aligned_vectors_path(slice_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tokens = list(embeddings.keys())
-    vectors = np.stack(list(embeddings.values())).astype(np.float32)
-    np.savez_compressed(path, tokens=tokens, vectors=vectors)
 
+    flat_tokens: list[str] = []
+    flat_vectors: list[np.ndarray] = []
+    flat_doc_ids: list[str] = []
+
+    for token, vecs in embeddings.items():
+        ids = doc_ids.get(token)
+        if ids is None or len(ids) != len(vecs):
+            raise ValueError(f"doc_ids mismatch for token {token}")
+
+        for v, d in zip(vecs, ids, strict=True):
+            flat_tokens.append(token)
+            flat_vectors.append(v.astype(np.float32))
+            flat_doc_ids.append(d)
+
+    np.savez_compressed(
+        path,
+        tokens=np.array(flat_tokens, dtype=object),
+        vectors=np.stack(flat_vectors),
+        doc_ids=np.array(flat_doc_ids, dtype=object),
+    )
 
 def load_vectors(slice_id: str) -> dict[str, np.ndarray]:
     path = aligned_vectors_path(slice_id)
