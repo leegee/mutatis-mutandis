@@ -6,6 +6,9 @@ from logging.handlers import RotatingFileHandler
 
 import lib.eebo_config as config
 
+def _in_colab():
+    return "COLAB_GPU" in os.environ or "COLAB_RELEASE_TAG" in os.environ
+
 name = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_LEVEL = getattr(logging, name, logging.INFO)
 
@@ -25,10 +28,7 @@ if not logger.handlers:
     logger.addHandler(ch)
 
     # Attempt file logging only if not in Colab
-    try:
-        import google.colab  # noqa: F401
-        logger.info("Running in Colab — file logging disabled")
-    except ImportError:
+    if not _in_colab():
         # Determine log directory and file
         log_dir = getattr(config, "LOG_DIR", config.OUT_DIR)
         log_dir.mkdir(parents=True, exist_ok=True)
