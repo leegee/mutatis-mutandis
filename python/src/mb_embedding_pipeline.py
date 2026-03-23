@@ -220,9 +220,7 @@ def generate_embeddings_per_slice(
     logger.info("Total sentences processed: %d", sentence_count)
     logger.info("Averaging embeddings for %d tokens", len(embeddings_accum))
 
-    final_embeddings: Dict[str,np.ndarray] = {}
-    for token, vecs in embeddings_accum.items():
-        final_embeddings[token] = np.mean(np.stack(vecs, axis=0), axis=0).astype(np.float32)
+    # Do not collapse embeddings.
 
     return final_embeddings, doc_ids_accum
 
