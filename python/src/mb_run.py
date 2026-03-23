@@ -2,7 +2,7 @@
 #     SLICES,
 #     faiss_slice_path,
 #     vocab_slice_path,
-#     load_aligned_vectors,
+#     load_vectors,
 #     load_unaligned_vectors,
 #     load_macberth_vectors,
 # )
@@ -42,7 +42,7 @@
 #         # Load embeddings
 #         if backend == "fasttext":
 #             embeddings = (
-#                 load_aligned_vectors(slice_id, 'macberth')
+#                 load_vectors(slice_id, 'macberth')
 #                 if aligned
 #                 else load_unaligned_vectors(slice_id, 'macberth')
 #             )

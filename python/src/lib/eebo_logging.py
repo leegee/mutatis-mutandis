@@ -46,7 +46,7 @@ if not logger.handlers:
     # Console handler
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(LOG_LEVEL)
-    ch.flush = sys.stdout.flush
+    # ch.flush = sys.stdout.flush
     ch.setFormatter(logging.Formatter(
         "[%(levelname)s] %(message)s"
     ))

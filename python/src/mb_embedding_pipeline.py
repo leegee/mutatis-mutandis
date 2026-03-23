@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 """
-slice_embedding_pipeline.py
+mb_embedding_pipeline.py
 
 Generate token embeddings per slice (MacBERTh per-slice models) and build FAISS indexes.
 - MacBERTh: embeddings per slice
 - FAISS: always loads saved embeddings, flattens, normalizes, builds index
-
-This version drops fastText
 """
 
 from __future__ import annotations
@@ -89,7 +87,7 @@ def save_aligned_vectors(slice_id: str, embeddings: dict[str, np.ndarray]) -> No
     _save_vectors(aligned_vectors_path(slice_id), embeddings)
 
 
-def load_aligned_vectors(slice_id: str) -> dict[str, np.ndarray]:
+def load_vectors(slice_id: str) -> dict[str, np.ndarray]:
     return _load_vectors(aligned_vectors_path(slice_id))
 
 
@@ -270,11 +268,12 @@ def build_index_for_slice(slice_range: Tuple[int,int], force: bool = False) -> N
     vocab_path = vocab_slice_path(slice_range)
     vectors_path = aligned_vectors_path(slice_id)
 
+    # Generate embeddings if needed
     if force or not vectors_path.exists():
         embeddings, doc_ids_accum = generate_embeddings_per_slice(slice_range, force)
         save_aligned_vectors(slice_id, embeddings)
     else:
-        embeddings = load_aligned_vectors(slice_id)
+        embeddings = load_vectors(slice_id)
         doc_ids_accum = defaultdict(list)
 
     words = list(embeddings.keys())
@@ -282,25 +281,34 @@ def build_index_for_slice(slice_range: Tuple[int,int], force: bool = False) -> N
         logger.warning(f"No embeddings for slice {slice_id}, skipping FAISS build")
         return
 
-    all_vectors, all_ids = [], []
+    # Flatten embeddings and assign numeric doc IDs
+    all_vectors: List[np.ndarray] = []
+    all_ids: List[int] = []
+
     for word in words:
         vecs_list = embeddings[word] if isinstance(embeddings[word], list) else [embeddings[word]]
-        doc_ids_list = doc_ids_accum[word] if word in doc_ids_accum else list(range(len(vecs_list)))
-        if len(vecs_list) != len(doc_ids_list):
-            doc_ids_list = list(range(len(vecs_list)))
+        doc_ids_list = doc_ids_accum.get(word)
+
+        if doc_ids_list is None or len(doc_ids_list) != len(vecs_list):
+            # fallback: generate placeholder doc IDs
+            doc_ids_list = [f"{slice_id}_{word}_{i}" for i in range(len(vecs_list))]
+
         for vec, doc_id in zip(vecs_list, doc_ids_list, strict=True):
             all_vectors.append(vec)
-            all_ids.append(id_map.get_numeric_id(doc_id))
+            all_ids.append(id_map.get_numeric_id(doc_id))  # numeric ID per actual doc
 
+    # Stack vectors and normalize
     vectors = np.stack(all_vectors).astype(np.float32)
     vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
     vector_ids = np.array(all_ids, dtype=np.int64)
 
+    # Build FAISS index
     dim = vectors.shape[1]
     base_index = faiss.IndexFlatIP(dim)
     index = faiss.IndexIDMap(base_index)
     add_to_faiss_index(index, vectors, vector_ids)
 
+    # Save index and vocab
     faiss.write_index(index, str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
 
@@ -308,10 +316,10 @@ def build_index_for_slice(slice_range: Tuple[int,int], force: bool = False) -> N
         f.write("\n".join(words))
     logger.info(f"Saved vocab at {vocab_path}")
 
+    # Save EEBOIDMap
     id_map.save()
     logger.info("Saved EEBO ID map")
     logger.info("FAISS build complete.")
-
 
 
 def build_all_slices(force: bool = False) -> None:
