@@ -44,6 +44,8 @@ creds_path = Path("/content/drive/MyDrive/macberth_pg_secrets.json")
 with open(creds_path) as f:
     creds = json.load(f)
 
+print(f"PG host: {creds["host"]} : {creds["port"]}")
+
 os.environ["PGHOST"] = creds["host"]
 os.environ["PGPORT"] = creds.get("port")
 os.environ["PGDATABASE"] = creds["database"]
