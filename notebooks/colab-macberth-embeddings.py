@@ -55,7 +55,7 @@ print(f"Postgres target: {os.environ['PGHOST']}:{os.environ['PGPORT']}")
 
 # Add to path
 sys.path.append(str(python_dir / "src"))
-from slice_embedding_pipeline import main
+from mb_embedding_pipeline import main
 
 os.environ["EEBO_FORCE_OVERWRITE"] = "1"  # or "true"
 
