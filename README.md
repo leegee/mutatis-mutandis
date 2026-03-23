@@ -14,6 +14,8 @@
 
 ## Colab
 
+    ngrok tcp 5432
+
 Don't forget: `macberth_pg_secrets.json` on Google Drive's root dir with:
 
 ```json
@@ -25,10 +27,6 @@ Don't forget: `macberth_pg_secrets.json` on Google Drive's root dir with:
     "password": "passowrd"
 }
 ```
-
-And probably locally:
-
-    ngrok tcp 5432
 
 ## Abstract: About This Project
 
