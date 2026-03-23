@@ -12,7 +12,7 @@ import argparse
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Tuple, Optional, Union, Callable, cast
+from typing import DefaultDict,  List, Tuple, Optional, Union, Callable, cast
 
 import faiss
 import numpy as np
@@ -200,7 +200,7 @@ def generate_embeddings_per_slice(
     slice_range: Tuple[int,int],
     force: bool = False,
     batch_size: int = 128
-) -> Tuple[Dict[str,np.ndarray], DefaultDict[str,List[str]]]:
+) -> Tuple[DefaultDict[str, List[np.ndarray]], DefaultDict[str, List[str]]]:
 
     if COLAB_MODE and DEVICE == "cuda":
         batch_size = min(batch_size, 64)
@@ -250,10 +250,7 @@ def generate_embeddings_per_slice(
     conn.close()
     logger.info("Total sentences processed: %d", sentence_count)
     logger.info("Averaging embeddings for %d tokens", len(embeddings_accum))
-
-    # Do not collapse embeddings.
-
-    return final_embeddings, doc_ids_accum
+    return embeddings_accum, doc_ids_accum
 
 
 def add_to_faiss_index(
@@ -279,71 +276,134 @@ def add_to_faiss_index(
         add_fn(vectors)
 
 
-def build_index_for_slice(slice_range: Tuple[int,int], force: bool = False) -> None:
+def generate_and_index_slice(
+    slice_range: Tuple[int,int],
+    force: bool = False,
+    batch_size: int = 128,
+    save_occurrence_vectors: bool = True
+) -> None:
+    """
+    Stream sentences from DB, compute per-token embeddings, and:
+      - stream vectors into FAISS index immediately
+      - optionally save occurrence-level vectors in .npz
+    """
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
-    logger.info(f"Processing slice {slice_id} (force={force})")
+    logger.info(f"Generating & indexing slice {slice_id} (force={force})")
 
     index_path = faiss_slice_path(slice_range)
     vocab_path = vocab_slice_path(slice_range)
     vectors_path = aligned_vectors_path(slice_id)
 
-    # Generate embeddings if needed
-    if force or not vectors_path.exists():
-        embeddings, doc_ids_accum = generate_embeddings_per_slice(slice_range, force)
-        save_vectors(slice_id, embeddings, doc_ids_accum)
-    else:
-        embeddings = load_vectors(slice_id)
-        doc_ids_accum = defaultdict(list)
+    # Load shared and slice models
+    tokenizer, shared_model = get_macberth_model(shared_only=True)
+    slice_model_dir = slice_model_path(slice_range)
+    model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
+    model.to(DEVICE)
+    model.eval()
 
-    words = list(embeddings.keys())
-    if not words:
-        logger.warning(f"No embeddings for slice {slice_id}, skipping FAISS build")
-        return
-
-    # Flatten embeddings and assign numeric doc IDs
-    all_vectors: List[np.ndarray] = []
-    all_ids: List[int] = []
-
-    for word in words:
-        vecs_list = embeddings[word] if isinstance(embeddings[word], list) else [embeddings[word]]
-        doc_ids_list = doc_ids_accum.get(word)
-
-        if doc_ids_list is None or len(doc_ids_list) != len(vecs_list):
-            # fallback: generate placeholder doc IDs
-            doc_ids_list = [f"{slice_id}_{word}_{i}" for i in range(len(vecs_list))]
-
-        for vec, doc_id in zip(vecs_list, doc_ids_list, strict=True):
-            all_vectors.append(vec)
-            all_ids.append(id_map.get_numeric_id(doc_id))  # numeric ID per actual doc
-
-    # Stack vectors and normalize
-    vectors = np.stack(all_vectors).astype(np.float32)
-    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
-    vector_ids = np.array(all_ids, dtype=np.int64)
-
-    # Build FAISS index
-    dim = vectors.shape[1]
+    dim = model.config.hidden_size
     base_index = faiss.IndexFlatIP(dim)
     index = faiss.IndexIDMap(base_index)
-    add_to_faiss_index(index, vectors, vector_ids)
 
-    # Save index and vocab
+    seen_words: set[str] = set()
+    embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = None
+    doc_ids_accum: Optional[DefaultDict[str, list[str]]] = None
+    if save_occurrence_vectors:
+        assert embeddings_accum is not None and doc_ids_accum is not None
+        embeddings_accum = defaultdict(list)
+        doc_ids_accum = defaultdict(list)
+
+    # Connect to DB
+    conn = get_connection()
+    sentence_stream = stream_slice_sentences(conn, slice_range)
+
+    if COLAB_MODE and DEVICE == "cuda":
+        batch_size = min(batch_size, 64)
+
+    batch: list[tuple[str,str]] = []
+    with torch.no_grad():
+        for doc_id, sent in sentence_stream:
+            batch.append((doc_id, sent))
+            if len(batch) < batch_size:
+                continue
+
+            hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch])
+
+            for b_idx, (doc_id, sent) in enumerate(batch):
+                input_ids = batch_encoding["input_ids"][b_idx]
+                offsets = batch_encoding["offset_mapping"][b_idx]
+                tokens = tokenizer.convert_ids_to_tokens(input_ids)
+
+                current_word, current_vecs, last_end = "", [], None
+                for idx, (_tok, (start, end)) in enumerate(zip(tokens, offsets, strict=True)):
+                    if start == end:
+                        continue
+                    piece = sent[start:end]
+                    if last_end is not None and start != last_end:
+                        if current_word and current_vecs:
+                            vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
+                            vec /= max(np.linalg.norm(vec), 1e-12)
+
+                            # Stream into FAISS
+                            index.add_with_ids(
+                                vec.reshape(1, -1),
+                                np.array([id_map.get_numeric_id(f"{slice_id}_{current_word}_{doc_id}")], dtype=np.int64)
+                            )
+                            seen_words.add(current_word)
+
+                            # Optional occurrence-level save
+                            if save_occurrence_vectors:
+                                assert embeddings_accum is not None and doc_ids_accum is not None
+                                embeddings_accum[current_word].append(vec)
+                                doc_ids_accum[current_word].append(doc_id)
+
+                        current_word, current_vecs = "", []
+
+                    current_word += piece
+                    current_vecs.append(hidden_states[b_idx, idx])
+                    last_end = end
+
+                if current_word and current_vecs:
+                    vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
+                    vec /= max(np.linalg.norm(vec), 1e-12)
+                    index.add_with_ids(
+                        vec.reshape(1, -1),
+                        np.array([id_map.get_numeric_id(f"{slice_id}_{current_word}_{doc_id}")], dtype=np.int64)
+                    )
+                    seen_words.add(current_word)
+
+                    if save_occurrence_vectors:
+                        assert embeddings_accum is not None and doc_ids_accum is not None
+                        embeddings_accum[current_word].append(vec)
+                        doc_ids_accum[current_word].append(doc_id)
+
+            batch.clear()
+
+    conn.close()
+
+    # Save FAISS index
     faiss.write_index(index, str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
 
+    # Save vocab
     with open(vocab_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(words))
+        f.write("\n".join(sorted(seen_words)))
     logger.info(f"Saved vocab at {vocab_path}")
 
-    # Save EEBOIDMap
+    # Save occurrence-level vectors if requested
+    if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
+        save_vectors(slice_id, embeddings_accum, doc_ids_accum)
+        logger.info(f"Saved occurrence-level vectors at {vectors_path}")
+
+    # Save ID map
     id_map.save()
     logger.info("Saved EEBO ID map")
-    logger.info("FAISS build complete.")
+    logger.info("Slice streaming & FAISS build complete.")
 
 
 def build_all_slices(force: bool = False) -> None:
     for start, end in SLICES:
-        build_index_for_slice((start, end), force)
+        generate_and_index_slice((start, end), force=force, save_occurrence_vectors=True)
 
 
 
