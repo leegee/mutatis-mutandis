@@ -24,7 +24,7 @@ from lib.eebo_logging import logger
 from lib.eebo_config import (
     COLAB_MODE,
     SLICES,
-    MACBERTH_ALIGNED_VECTORS_DIR,
+    MACBERTH_VECTORS_DIR,
     MACBERTH_SLICE_MODEL_DIR,
     EEBO_MODEL_NAME,
     MACBERTH_FINE_TUNED_DIR
@@ -49,47 +49,40 @@ def slice_model_path(slice_range: tuple[int,int]) -> Path:
 
 
 def aligned_vectors_path(slice_id: str) -> Path:
-    return MACBERTH_ALIGNED_VECTORS_DIR / f"{slice_id}.npz"
+    return MACBERTH_VECTORS_DIR / f"{slice_id}.npz"
 
 
 def faiss_slice_path(slice_range: tuple[int,int]) -> Path:
     start, end = slice_range
-    path = MACBERTH_ALIGNED_VECTORS_DIR / f"slice_{start}_{end}.faiss"
+    path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.faiss"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def vocab_slice_path(slice_range: tuple[int,int]) -> Path:
     start, end = slice_range
-    path = MACBERTH_ALIGNED_VECTORS_DIR / f"slice_{start}_{end}.vocab"
+    path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.vocab"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
 
-def _save_vectors(path: Path, embeddings: dict[str, np.ndarray]) -> None:
+def save_vectors(slice_id: str, embeddings: dict[str, np.ndarray]) -> None:
+    path = aligned_vectors_path(slice_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     tokens = list(embeddings.keys())
     vectors = np.stack(list(embeddings.values())).astype(np.float32)
     np.savez_compressed(path, tokens=tokens, vectors=vectors)
 
 
-def _load_vectors(path: Path) -> dict[str, np.ndarray]:
+def load_vectors(slice_id: str) -> dict[str, np.ndarray]:
+    path = aligned_vectors_path(slice_id)
     if not path.exists():
         raise FileNotFoundError(f"Vectors missing: {path}")
     data = np.load(path, allow_pickle=True)
     tokens = data["tokens"]
     vectors = data["vectors"]
     return {tok: vectors[i] for i, tok in enumerate(tokens)}
-
-
-def save_aligned_vectors(slice_id: str, embeddings: dict[str, np.ndarray]) -> None:
-    _save_vectors(aligned_vectors_path(slice_id), embeddings)
-
-
-def load_vectors(slice_id: str) -> dict[str, np.ndarray]:
-    return _load_vectors(aligned_vectors_path(slice_id))
-
 
 
 def has_fine_tuned_weights(ft_dir: Path) -> bool:
@@ -172,11 +165,10 @@ def _accumulate_tokens(
             doc_ids_accum[current_word].append(doc_id)
 
 
-
 def generate_embeddings_per_slice(
     slice_range: Tuple[int,int],
     force: bool = False,
-    batch_size: int = 128  # default
+    batch_size: int = 128
 ) -> Tuple[Dict[str,np.ndarray], DefaultDict[str,List[str]]]:
 
     if COLAB_MODE and DEVICE == "cuda":
@@ -235,7 +227,6 @@ def generate_embeddings_per_slice(
     return final_embeddings, doc_ids_accum
 
 
-
 def add_to_faiss_index(
     index: faiss.Index,
     vectors: np.ndarray,
@@ -259,7 +250,6 @@ def add_to_faiss_index(
         add_fn(vectors)
 
 
-
 def build_index_for_slice(slice_range: Tuple[int,int], force: bool = False) -> None:
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
     logger.info(f"Processing slice {slice_id} (force={force})")
@@ -271,7 +261,7 @@ def build_index_for_slice(slice_range: Tuple[int,int], force: bool = False) -> N
     # Generate embeddings if needed
     if force or not vectors_path.exists():
         embeddings, doc_ids_accum = generate_embeddings_per_slice(slice_range, force)
-        save_aligned_vectors(slice_id, embeddings)
+        save_vectors(slice_id, embeddings)
     else:
         embeddings = load_vectors(slice_id)
         doc_ids_accum = defaultdict(list)
