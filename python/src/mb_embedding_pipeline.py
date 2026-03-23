@@ -290,7 +290,7 @@ def build_index_for_slice(slice_range: Tuple[int,int], force: bool = False) -> N
     # Generate embeddings if needed
     if force or not vectors_path.exists():
         embeddings, doc_ids_accum = generate_embeddings_per_slice(slice_range, force)
-        save_vectors(slice_id, embeddings)
+        save_vectors(slice_id, embeddings, doc_ids_accum)
     else:
         embeddings = load_vectors(slice_id)
         doc_ids_accum = defaultdict(list)
