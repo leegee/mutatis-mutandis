@@ -95,14 +95,25 @@ def save_vectors(
         doc_ids=np.array(flat_doc_ids, dtype=object),
     )
 
-def load_vectors(slice_id: str) -> dict[str, np.ndarray]:
+
+def load_vectors(slice_id: str) -> tuple[dict[str, list[np.ndarray]], dict[str, list[str]]]:
     path = aligned_vectors_path(slice_id)
     if not path.exists():
         raise FileNotFoundError(f"Vectors missing: {path}")
+
     data = np.load(path, allow_pickle=True)
     tokens = data["tokens"]
     vectors = data["vectors"]
-    return {tok: vectors[i] for i, tok in enumerate(tokens)}
+    doc_ids = data["doc_ids"]
+
+    embeddings: DefaultDict[str, list[np.ndarray]] = defaultdict(list)
+    doc_map: DefaultDict[str, list[str]] = defaultdict(list)
+
+    for tok, vec, doc_id in zip(tokens, vectors, doc_ids, strict=True):
+        embeddings[str(tok)].append(vec)
+        doc_map[str(tok)].append(str(doc_id))
+
+    return embeddings, doc_map
 
 
 def has_fine_tuned_weights(ft_dir: Path) -> bool:
