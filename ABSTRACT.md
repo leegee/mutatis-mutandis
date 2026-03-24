@@ -156,6 +156,8 @@ Williams, R. (1976). Keywords: A Vocabulary of Culture and Society.
 
 Skinner, Q. (1969). Meaning and Understanding in the History of Ideas.
 
+See [./BIBLIOGRAPHY.md](./BIBLIOGRAPHY.md)
+
 ## 9. Expected Outputs
 
 PhD Thesis: integrating computational analysis with close reading of conceptual poles
