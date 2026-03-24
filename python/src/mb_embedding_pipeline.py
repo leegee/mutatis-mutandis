@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 from typing import DefaultDict, Tuple, Optional,  cast, Any, Mapping
+import gc
 from psycopg import Connection
 from dataclasses import dataclass
 import numpy as np
@@ -271,6 +272,10 @@ def process_batch(
         )
     batch.clear()
 
+    if DEVICE == "cuda":
+        torch.cuda.empty_cache()
+    gc.collect()
+
 
 def process_slice(
     conn: Connection,
@@ -333,6 +338,11 @@ def process_slice(
     id_map.save()
     logger.info("Saved EEBO ID map")
     logger.info("Slice streaming & FAISS build complete.")
+
+    del model, tokenizer, index, embeddings_accum, doc_ids_accum
+    gc.collect()
+    if DEVICE == "cuda":
+        torch.cuda.empty_cache()
 
 
 def build_all_slices() -> None:
