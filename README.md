@@ -14,7 +14,7 @@
 
 ## Colab
 
-Update `macberth_pg_secrets.json` on Google Drive's root dir with the host/port output from `ngrok tcp 5432`.
+Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/port output from `ngrok tcp 5432`.
 
 Don't forget to restart the Colab session when the IP changes.
 

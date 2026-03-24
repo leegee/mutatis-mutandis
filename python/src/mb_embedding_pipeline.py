@@ -154,20 +154,18 @@ def add_to_faiss_index(
     return index
 
 
-def generate_and_index_slice(
+def process_slice(
     slice_range: Tuple[int,int],
     force: bool = False,
     batch_size: int = 128,
     save_occurrence_vectors: bool = True
 ) -> None:
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
-    logger.info(f"Generating & indexing slice {slice_id} (force={force})")
+    logger.info(f"Processing slice {slice_id} (force={force})")
 
     index_path = faiss_slice_path(slice_range)
     vocab_path = vocab_slice_path(slice_range)
     vectors_path = aligned_vectors_path(slice_id)
-
-    sentence_count = 0
 
     tokenizer, shared_model = get_macberth_model(shared_only=True)
     slice_model_dir = slice_model_path(slice_range)
@@ -242,11 +240,6 @@ def generate_and_index_slice(
                         embeddings_accum[current_word].append(vec)
                         doc_ids_accum[current_word].append(doc_id)
 
-            sentence_count += len(batch)
-            if sentence_count % 5000 < len(batch):
-                faiss.write_index(index, str(index_path))
-                logger.info("Checkpoint saved at %d sentences", sentence_count)
-
             batch.clear()
 
     conn.close()
@@ -269,7 +262,7 @@ def generate_and_index_slice(
 
 def build_all_slices(force: bool = False) -> None:
     for start, end in SLICES:
-        generate_and_index_slice((start, end), force=force, save_occurrence_vectors=True)
+        process_slice((start, end), force=force, save_occurrence_vectors=True)
 
 
 def main():
