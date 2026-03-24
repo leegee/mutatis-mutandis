@@ -311,7 +311,7 @@ def process_slice(
     sentence_stream = stream_slice_sentences(conn, slice_range)
 
     if COLAB_MODE and DEVICE == "cuda":
-        batch_size = min(batch_size, 64)
+        batch_size = min(batch_size, 32)
 
     batch: list[Tuple[str,str]] = []
     with torch.no_grad():
