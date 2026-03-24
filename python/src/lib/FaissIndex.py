@@ -1,11 +1,17 @@
 import faiss
 import numpy as np
-from typing import Optional, Sequence, Tuple, cast
+from typing import Optional, Sequence, Tuple, cast, Protocol
+
+
+class _FaissIndexProto(Protocol):
+    def add(self, x: np.ndarray) -> None: ...
+    def add_with_ids(self, x: np.ndarray, xids: np.ndarray) -> None: ...
+    def search(self, x: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]: ...
 
 
 class FaissIndex:
     def __init__(self, dim: int) -> None:
-        self._index: faiss.Index = faiss.IndexFlatIP(dim)
+        self._index = cast(_FaissIndexProto, faiss.IndexFlatIP(dim))
         self._id_mode: bool = False
 
     def add(self, vectors: np.ndarray, ids: Optional[Sequence[int]] = None) -> None:
@@ -17,32 +23,28 @@ class FaissIndex:
                 raise ValueError("ids must match number of vectors")
 
             if not self._id_mode:
-                self._index = faiss.IndexIDMap(self._index)
+                self._index = cast(
+                    _FaissIndexProto,
+                    faiss.IndexIDMap(cast(faiss.Index, self._index)),
+                )
                 self._id_mode = True
 
-            idx = cast(faiss.IndexIDMap, self._index)
-            idx.add_with_ids(x=vectors, xids=ids_arr, n=vectors.shape[0])
+            self._index.add_with_ids(vectors, ids_arr)
 
         else:
-            base = cast(faiss.Index, self._index)
-            base.add(x=vectors, n=vectors.shape[0])
+            self._index.add(vectors)
 
     def search(self, queries: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
         queries = np.ascontiguousarray(queries, dtype=np.float32)
-        idx = cast(faiss.Index, self._index)
-
-        distances = np.empty((queries.shape[0], k), dtype=np.float32)
-        labels = np.empty((queries.shape[0], k), dtype=np.int64)
-        idx.search(x=queries, k=k, n=k, distances=distances, labels=labels)
+        labels, distances = self._index.search(queries, k)
         return labels, distances
 
     def save(self, path: str) -> None:
-        faiss.write_index(self._index, path)
+        faiss.write_index(cast(faiss.Index, self._index), path)
 
     @classmethod
     def load(cls, path: str) -> "FaissIndex":
         obj = cls.__new__(cls)
-        obj._index = faiss.read_index(path)
+        obj._index = cast(_FaissIndexProto, faiss.read_index(path))
         obj._id_mode = isinstance(obj._index, faiss.IndexIDMap)
         return obj
-
