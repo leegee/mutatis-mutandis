@@ -113,3 +113,5 @@ Sinfield, A. (1992). Faultlines: Cultural Materialism and the Politics of Interp
 Williams, R. (1976). Keywords: A Vocabulary of Culture and Society.
 
 Skinner, Q. (1969). Meaning and Understanding in the History of Ideas.
+
+See [./BIBLIOGRAPHY.md](./BIBLIOGRAPHY.md)
