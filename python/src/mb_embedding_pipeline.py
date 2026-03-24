@@ -215,7 +215,9 @@ def process_slice(
                         if current_word and current_vecs:
                             vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
                             vec /= max(np.linalg.norm(vec), 1e-12)
-                            vector_id = id_map.get_numeric_id(f"{slice_id}_{current_word}_{doc_id}")
+                            vector_id = id_map.get_numeric_id(
+                                f"{slice_id}_{doc_id}_{start}_{end}"
+                            )
                             index = add_to_faiss_index(index, vec.reshape(1, -1), [vector_id])
                             seen_words.add(current_word)
 
