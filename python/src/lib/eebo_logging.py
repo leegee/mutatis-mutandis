@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 
 import lib.eebo_config as config
 
-def _in_colab():
+def _in_colab() -> bool:
     return "COLAB_GPU" in os.environ or "COLAB_RELEASE_TAG" in os.environ
 
 name = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -20,10 +20,15 @@ logger.propagate = False  # avoid double logging via root
 # Avoid duplicate handlers if imported multiple times
 if not logger.handlers:
 
+    # Subclass StreamHandler to ensure flush works cleanly with mypy
+    class StdoutHandler(logging.StreamHandler):
+        def flush(self) -> None:
+            sys.stdout.flush()
+            super().flush()
+
     # Console handler (always enabled)
-    ch = logging.StreamHandler(sys.stdout)
+    ch = StdoutHandler(sys.stdout)
     ch.setLevel(LOG_LEVEL)
-    ch.flush = sys.stdout.flush
     ch.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     logger.addHandler(ch)
 
@@ -47,3 +52,4 @@ if not logger.handlers:
             "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
         ))
         logger.addHandler(fh)
+
