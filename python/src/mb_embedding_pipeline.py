@@ -10,10 +10,9 @@ Generate token embeddings per slice (MacBERTh per-slice models) and build FAISS 
 from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
-from typing import DefaultDict, Tuple, Optional, Union
+from typing import DefaultDict, Tuple, Optional,  cast, Any, Mapping
 from psycopg import Connection
-
-import faiss
+from dataclasses import dataclass
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM, PreTrainedTokenizerBase, PreTrainedModel, BatchEncoding
@@ -30,6 +29,7 @@ from lib.eebo_config import (
 )
 from lib.eebo_sentences import stream_slice_sentences
 from lib.eebo_id_map import EEBOIDMap
+from lib.FaissIndex import FaissIndex
 
 DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
@@ -129,28 +129,34 @@ def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, b
     return hidden_states, batch_encoding
 
 
-def add_to_faiss_index(
-    index: faiss.Index,
-    vectors: np.ndarray,
-    vector_ids: Optional[Union[np.ndarray, list[int]]] = None
-) -> faiss.Index:
-    """
-    Add vectors to a FAISS index, optionally with explicit IDs.
-    Returns the possibly wrapped index (IndexIDMap if needed).
-    """
-    vectors = np.ascontiguousarray(vectors, dtype=np.float32)
+@dataclass
+class WordVector:
+    word: str
+    vector: np.ndarray
+    vector_id: int
 
-    if vector_ids is not None:
-        ids = np.array(vector_ids, dtype=np.int64)
-        if len(ids) != vectors.shape[0]:
-            raise ValueError("Length of vector_ids must match number of vectors")
-        if not isinstance(index, faiss.IndexIDMap):
-            index = faiss.IndexIDMap(index)
-        index.add_with_ids(vectors, ids)
-    else:
-        index.add(vectors)
 
-    return index
+def _flush_word(
+    current_word: str,
+    current_vecs: list[np.ndarray],
+    slice_id: str,
+    doc_id: str,
+    word_start: int,
+    last_end: int
+) -> Optional[WordVector]:
+    """Compute the normalized vector for a word, return WordVector or None if invalid."""
+    if not current_word or not current_vecs or word_start is None or last_end is None:
+        return None
+
+    vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
+    norm = np.linalg.norm(vec)
+    if norm < 1e-12:
+        return None
+    vec /= norm
+
+    vector_id = id_map.get_numeric_id(f"{slice_id}_{doc_id}_{word_start}_{last_end}")
+
+    return WordVector(word=current_word, vector=vec, vector_id=vector_id)
 
 
 def process_sentence(
@@ -160,23 +166,26 @@ def process_sentence(
     b_idx: int,
     slice_id: str,
     doc_id: str,
-    index: faiss.Index,
+    index: FaissIndex,
     seen_words: set[str],
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[DefaultDict[str, list[str]]],
     save_occurrence_vectors: bool
 ) -> None:
-    input_ids = batch_encoding["input_ids"][b_idx]
-    offsets = batch_encoding["offset_mapping"][b_idx]
+    enc = cast(Mapping[str, Any], batch_encoding)
+
+    input_ids = enc["input_ids"][b_idx]
+    offsets = enc["offset_mapping"][b_idx]
 
     assert TOKENIZER is not None
-    tokenizer_tokens = TOKENIZER.convert_ids_to_tokens(input_ids)
+    tokenizer_tokens = TOKENIZER.convert_ids_to_tokens(input_ids.tolist())
 
-    current_word, current_vecs, last_end = "", [], None
-    word_start = None
+    current_word: str = ""
+    current_vecs: list[np.ndarray] = []
+    last_end: Optional[int] = None
+    word_start: Optional[int] = None
 
     for idx, (_tok, (start, end)) in enumerate(zip(tokenizer_tokens, offsets, strict=True)):
-
         if start == end:
             continue
 
@@ -185,41 +194,31 @@ def process_sentence(
 
         piece = sent[start:end]
 
-        if last_end is not None and start != last_end:
-            if current_word and current_vecs:
-                vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
-                vec /= max(np.linalg.norm(vec), 1e-12)
-
-                vector_id = id_map.get_numeric_id(f"{slice_id}_{doc_id}_{word_start}_{last_end}")
-
-                add_to_faiss_index(index, vec.reshape(1, -1), [vector_id])
-                seen_words.add(current_word)
-
+        # flush previous word if there is a gap
+        if last_end is not None and start != last_end and word_start is not None:
+            wv = _flush_word(current_word, current_vecs, slice_id, doc_id, word_start, last_end)
+            if wv:
+                index.add(wv.vector.reshape(1, -1), [wv.vector_id])
+                seen_words.add(wv.word)
                 if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
-                    embeddings_accum[current_word].append(vec)
-                    doc_ids_accum[current_word].append(doc_id)
-
-            # reset state
+                    embeddings_accum[wv.word].append(wv.vector)
+                    doc_ids_accum[wv.word].append(doc_id)
             current_word, current_vecs = "", []
-            word_start = None
+            word_start = start  # start new word at current piece
 
         current_word += piece
         current_vecs.append(hidden_states[b_idx, idx])
         last_end = end
 
-    # process any leftover word at end of sentence
-    if current_word and current_vecs:
-        vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
-        vec /= max(np.linalg.norm(vec), 1e-12)
-
-        vector_id = id_map.get_numeric_id(f"{slice_id}_{doc_id}_{word_start}_{last_end}")
-
-        add_to_faiss_index(index, vec.reshape(1, -1), [vector_id])
-        seen_words.add(current_word)
-
-        if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
-            embeddings_accum[current_word].append(vec)
-            doc_ids_accum[current_word].append(doc_id)
+    # flush any leftover word at end of sentence
+    if word_start is not None and last_end is not None:
+        wv = _flush_word(current_word, current_vecs, slice_id, doc_id, word_start, last_end)
+        if wv:
+            index.add(wv.vector.reshape(1, -1), [wv.vector_id])
+            seen_words.add(wv.word)
+            if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
+                embeddings_accum[wv.word].append(wv.vector)
+                doc_ids_accum[wv.word].append(doc_id)
 
 
 def process_batch(
@@ -227,7 +226,7 @@ def process_batch(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
     slice_id: str,
-    index: faiss.Index,
+    index: FaissIndex,
     seen_words: set[str],
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[DefaultDict[str, list[str]]],
@@ -281,7 +280,7 @@ def process_slice(
     model.eval()
 
     dim = model.config.hidden_size
-    index: faiss.Index = faiss.IndexIDMap(faiss.IndexFlatIP(dim))
+    index = FaissIndex(dim)
 
     seen_words: set[str] = set()
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = defaultdict(list) if save_occurrence_vectors else None
@@ -304,7 +303,7 @@ def process_slice(
         process_batch(batch, model, tokenizer, slice_id, index, seen_words,
                       embeddings_accum, doc_ids_accum, save_occurrence_vectors)
 
-    faiss.write_index(index, str(index_path))
+    index.save(str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
 
     with open(vocab_path, "w", encoding="utf-8") as f:

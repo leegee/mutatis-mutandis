@@ -3,7 +3,6 @@
     "pythonVersion": "3.11",
     "reportMissingImports": false,
     "reportMissingTypeStubs": false,
-    // --- ADD THESE ---
     "reportArgumentType": false,
     "reportUnknownMemberType": false,
     "reportUnknownVariableType": false,
