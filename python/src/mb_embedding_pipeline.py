@@ -45,18 +45,21 @@ def slice_model_path(slice_range: tuple[int,int]) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
 
+
 def vectors_path(slice_id: str) -> Path:
     return MACBERTH_VECTORS_DIR / f"{slice_id}.npz"
 
-def vocab_slice_path(slice_range: tuple[int,int]) -> Path:
-    start, end = slice_range
-    path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.vocab"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
 
 def faiss_slice_path(slice_range: tuple[int,int]) -> Path:
     start, end = slice_range
     path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.faiss"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def vocab_slice_path(slice_range: tuple[int,int]) -> Path:
+    start, end = slice_range
+    path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.vocab"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -76,6 +79,7 @@ def load_vectors(slice_id: str) -> dict[str, list[np.ndarray]]:
         result.setdefault(token, []).append(vec.astype(np.float32))
 
     return result
+
 
 def save_vectors(
     slice_id: str,
@@ -105,6 +109,7 @@ def save_vectors(
         vectors=np.stack(flat_vectors),
         doc_ids=np.array(flat_doc_ids, dtype=object),
     )
+    logger.info(f"Saved occurrence-level vectors at {path}")
 
 
 def get_macberth_model(shared_only: bool = True) -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
@@ -278,7 +283,6 @@ def process_slice(
 
     index_path = faiss_slice_path(slice_range)
     vocab_path = vocab_slice_path(slice_range)
-    vectors_path = vectors_path(slice_id)
 
     tokenizer, shared_model = get_macberth_model(shared_only=True)
     slice_model_dir = slice_model_path(slice_range)
@@ -309,10 +313,12 @@ def process_slice(
         for doc_id, sent in sentence_stream:
             batch.append((doc_id, sent))
             if len(batch) >= batch_size:
-                process_batch(batch, model, tokenizer, slice_id, index, seen_words, embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+                process_batch(batch, model, tokenizer, slice_id, index, seen_words,
+                              embeddings_accum, doc_ids_accum, save_occurrence_vectors)
 
         # process any leftover sentences
-        process_batch(batch, model, tokenizer, slice_id, index, seen_words, embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+        process_batch(batch, model, tokenizer, slice_id, index, seen_words,
+                      embeddings_accum, doc_ids_accum, save_occurrence_vectors)
 
     index.save(str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
@@ -323,7 +329,6 @@ def process_slice(
 
     if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
         save_vectors(slice_id, embeddings_accum, doc_ids_accum)
-        logger.info(f"Saved occurrence-level vectors at {vectors_path}")
 
     id_map.save()
     logger.info("Saved EEBO ID map")
