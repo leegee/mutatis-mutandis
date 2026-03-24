@@ -64,6 +64,23 @@ def vocab_slice_path(slice_range: tuple[int,int]) -> Path:
     return path
 
 
+def load_vectors(slice_id: str) -> dict[str, list[np.ndarray]]:
+    """
+    Load occurrence-level vectors saved with save_vectors.
+    Returns dict mapping token -> list of vectors (all occurrences).
+    """
+    path = aligned_vectors_path(slice_id)
+    data = np.load(path, allow_pickle=True)
+    tokens = data["tokens"]
+    vectors = data["vectors"]
+
+    result: dict[str, list[np.ndarray]] = {}
+    for token, vec in zip(tokens, vectors, strict=True):
+        result.setdefault(token, []).append(vec.astype(np.float32))
+
+    return result
+
+
 def save_vectors(
     slice_id: str,
     embeddings: dict[str, list[np.ndarray]],
