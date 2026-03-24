@@ -12,7 +12,7 @@ The methodology combines:
 
 * TEI-encoded corpora (EEBO-TCP Phase I) with rich metadata
 
-* Dynamic fastText embeddings aligned across temporal slices
+* Dynamic fastText embeddings aligned across temporal slices, MacBERTh embeddings per slice
 
 * FAISS-based retrieval and graph-based visualisation
 
@@ -74,7 +74,7 @@ Example poles:
 
 Track semantic trajectories
 
-Dynamic fastText embeddings per temporal slice
+Dynamic aligned fastText/MacBERTh embeddings per temporal slice
 
 Orthogonal Procrustes alignment across slices for global vector consistency
 
