@@ -32,8 +32,8 @@ class FaissIndex:
 
     def search(self, queries: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
         queries = np.ascontiguousarray(queries, dtype=np.float32)
-        labels, distances = self._index.search(queries, k)
-        return labels, distances
+        distances, indices = self._index.search(queries, k)
+        return distances, indices
 
     def save(self, path: str) -> None:
         faiss.write_index(cast(faiss.Index, self._index), path)
