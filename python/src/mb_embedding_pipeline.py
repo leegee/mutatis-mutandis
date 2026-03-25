@@ -59,6 +59,7 @@ from lib.eebo_config import (
 )
 from lib.eebo_sentences import stream_slice_sentences
 from lib.FaissIndex import FaissIndex
+from lib.TokenFaissIndex import TokenFaissIndex
 
 DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
@@ -219,6 +220,51 @@ def _flush_word(
     return WordVector(word=current_word, vector=vec, vector_id=vector_id, doc_id=doc_id)
 
 
+def build_token_level_index(
+    token_vectors_accum: DefaultDict[str, List[np.ndarray]],
+    slice_range: tuple[int, int]
+) -> None:
+    """
+    Compute mean vectors per token from accumulated occurrence vectors
+    and build a token-level FAISS index for semantic search.
+
+    Args:
+        token_vectors_accum: Dict mapping token -> list of occurrence vectors
+        slice_range: The slice being processed (start, end)
+    """
+    if not token_vectors_accum:
+        logger.warning("No token vectors accumulated; skipping token-level FAISS build")
+        return
+
+    # Sort tokens for stable ordering
+    tokens_ordered = sorted(token_vectors_accum.keys())
+    mean_vectors = []
+
+    for token in tokens_ordered:
+        vecs = token_vectors_accum[token]
+        mean_vec = np.mean(np.stack(vecs), axis=0)
+        norm = np.linalg.norm(mean_vec)
+        if norm < 1e-12:
+            continue
+        mean_vec /= norm
+        mean_vectors.append(mean_vec)
+
+    if not mean_vectors:
+        logger.warning("No valid mean vectors found; skipping token-level FAISS build")
+        return
+
+    mean_vectors_np = np.stack(mean_vectors)
+
+    # Build TokenFaissIndex
+    token_index = TokenFaissIndex(mean_vectors_np.shape[1])
+    token_index.add(mean_vectors_np)
+
+    # Save
+    token_index_path = MACBERTH_VECTORS_DIR / f"slice_{slice_range[0]}_{slice_range[1]}.token.faiss"
+    token_index.save(str(token_index_path))
+    logger.info(f"Saved token-level FAISS index at {token_index_path}")
+
+
 def process_sentence(
     doc_id: str,
     sent: str,
@@ -227,10 +273,10 @@ def process_sentence(
     b_idx: int,
     token_occurrence_ids: list[int],
     index: FaissIndex,
-    seen_words: set[str],
     embeddings_accum: Optional[dict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[dict[str, list[str]]],
-    save_occurrence_vectors: bool
+    save_occurrence_vectors: bool,
+    token_vectors_accum: DefaultDict[str, List[np.ndarray]],
 ) -> None:
     """
     Process a single sentence: tokenize, compute word embeddings, add to FAISS index.
@@ -258,10 +304,12 @@ def process_sentence(
         if not wv:
             return
         index.add(wv.vector.reshape(1, -1), [wv.vector_id])
-        seen_words.add(wv.word)
         if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
             embeddings_accum[wv.word].append(wv.vector)
             doc_ids_accum[wv.word].append(wv.doc_id)
+        # Add to token-level accumulator for mean
+        token_vectors_accum[word].append(wv.vector)
+
 
     for idx, (_tok, (start, end)) in enumerate(zip(tokenizer_tokens, offsets, strict=True)):
         if start == end:
@@ -277,7 +325,9 @@ def process_sentence(
 
         # Flush if next token is a gap
         if idx + 1 < len(offsets) and offsets[idx + 1][0] != end:
-            vector_id = current_ids[0] if current_ids else -1  # fallback if missing
+            if not current_ids:
+                return  # skip this word entirely
+            vector_id = current_ids[0]
             _handle_word_flush(current_word, current_vecs, vector_id)
             current_word, current_vecs, current_ids = "", [], []
 
@@ -291,10 +341,10 @@ def process_batch(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
     index: FaissIndex,
-    seen_words: set[str],
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[DefaultDict[str, list[str]]],
-    save_occurrence_vectors: bool
+    save_occurrence_vectors: bool,
+    token_vectors_accum: DefaultDict[str, List[np.ndarray]]
 ) -> None:
     """
     Process a batch of sentences through the model and update FAISS index.
@@ -315,10 +365,10 @@ def process_batch(
             b_idx=b_idx,
             token_occurrence_ids=item.token_occurrence_ids,
             index=index,
-            seen_words=seen_words,
             embeddings_accum=embeddings_accum,
             doc_ids_accum=doc_ids_accum,
-            save_occurrence_vectors=save_occurrence_vectors
+            save_occurrence_vectors=save_occurrence_vectors,
+            token_vectors_accum=token_vectors_accum
         )
 
     batch.clear()
@@ -333,7 +383,7 @@ def process_slice(
     conn: Connection,
     slice_range: tuple[int, int],
     batch_size: int = 128,
-    save_occurrence_vectors: bool = True
+    save_occurrence_vectors: bool = False
 ) -> None:
     """
     Process a slice of documents: generate word embeddings and build FAISS index.
@@ -356,7 +406,7 @@ def process_slice(
 
     dim = model.config.hidden_size
     index = FaissIndex(dim)
-    seen_words: set[str] = set()
+    token_vectors_accum: DefaultDict[str, List[np.ndarray]] = defaultdict(list)
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = defaultdict(list) if save_occurrence_vectors else None
     doc_ids_accum: Optional[DefaultDict[str, list[str]]] = defaultdict(list) if save_occurrence_vectors else None
 
@@ -380,21 +430,19 @@ def process_slice(
             processed_count += 1
 
             if len(batch) >= batch_size:
-                process_batch(batch, model, tokenizer, index, seen_words, embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+                process_batch(batch, model, tokenizer, index, embeddings_accum, doc_ids_accum, save_occurrence_vectors, token_vectors_accum  )
                 if processed_count % log_every == 0:
                     logger.info(f"Processed {processed_count} sentences")
 
         # process any remaining
         if batch:
-            process_batch(batch, model, tokenizer, index, seen_words, embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+            process_batch(batch, model, tokenizer, index, embeddings_accum, doc_ids_accum, save_occurrence_vectors, token_vectors_accum  )
             logger.info(f"Processed {processed_count} sentences (final)")
 
     index.save(str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
 
-    with open(vocab_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(sorted(seen_words)))
-    logger.info(f"Saved vocab at {vocab_path}")
+    build_token_level_index(token_vectors_accum, slice_range)
 
     if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
         save_vectors(slice_id, embeddings_accum, doc_ids_accum)
