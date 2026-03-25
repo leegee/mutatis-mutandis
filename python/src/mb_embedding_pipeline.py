@@ -10,7 +10,7 @@ Generate token embeddings per slice (MacBERTh per-slice models) and build FAISS 
 from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
-from typing import DefaultDict, Tuple, Optional, List
+from typing import DefaultDict, Tuple, Optional, List, cast
 import gc
 from psycopg import Connection
 from dataclasses import dataclass
@@ -35,6 +35,19 @@ DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
 
+
+@dataclass
+class SentenceBatchItem:
+    doc_id: str                             # pamphlet_tokens.doc_id
+    sentence: str
+    token_occurrence_ids: List[int]         # pamphlet_tokens.token_occurrence_id
+
+@dataclass
+class WordVector:
+    word: str
+    vector: np.ndarray
+    vector_id: int # pamphlet_tokens.token_occurrence_id
+    doc_id: str    # pamphlet_tokens.doc_id
 
 def slice_model_path(slice_range: tuple[int,int]) -> Path:
     start, end = slice_range
@@ -148,14 +161,6 @@ def _forward_batch(
     return hidden_states, batch_encoding
 
 
-@dataclass
-class WordVector:
-    word: str
-    vector: np.ndarray
-    vector_id: int # pamphlet_tokens.token_occurrence_id
-    doc_id: str    # pamphlet_tokens.doc_id
-
-
 def _flush_word(
     current_word: str,
     current_vecs: List[np.ndarray],
@@ -203,8 +208,12 @@ def process_sentence(
     Uses token_occurrence_id from DB for vector IDs.
     """
 
-    tokenizer_tokens = batch_encoding["input_ids"][b_idx].tolist()
-    offsets = batch_encoding["offset_mapping"][b_idx]
+    # Extract tensors explicitly for type checker
+    input_ids = cast(torch.Tensor, batch_encoding["input_ids"])
+    offset_mapping = cast(torch.Tensor, batch_encoding["offset_mapping"])
+
+    tokenizer_tokens = input_ids[b_idx].tolist()
+    offsets = offset_mapping[b_idx].tolist()  # If offsets are a tensor; else leave as-is
 
     current_word: str = ""
     current_vecs: list[np.ndarray] = []
@@ -245,7 +254,7 @@ def process_sentence(
 
 
 def process_batch(
-    batch: list[tuple[str, str, list[int]]],  # (doc_id, sentence, token_occurrence_ids)
+    batch: list[SentenceBatchItem],
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
     index: FaissIndex,
@@ -261,17 +270,17 @@ def process_batch(
     if not batch:
         return
 
-    sentences = [s for _, s, _ in batch]
+    sentences = [item.sentence for item in batch]
     hidden_states, batch_encoding = _forward_batch(model, tokenizer, sentences)
 
-    for b_idx, (doc_id, sent, token_occurrence_ids) in enumerate(batch):
+    for b_idx, item in enumerate(batch):
         process_sentence(
-            doc_id=doc_id,
-            sent=sent,
+            doc_id=item.doc_id,
+            sent=item.sentence,
             hidden_states=hidden_states,
             batch_encoding=batch_encoding,
             b_idx=b_idx,
-            token_occurrence_ids=token_occurrence_ids,
+            token_occurrence_ids=item.token_occurrence_ids,
             index=index,
             seen_words=seen_words,
             embeddings_accum=embeddings_accum,
@@ -324,13 +333,17 @@ def process_slice(
     if COLAB_MODE and DEVICE == "cuda":
         batch_size = min(batch_size, 32)
 
-    batch: list[tuple[str, str, list[int]]] = []
+    batch: list[SentenceBatchItem] = []
     processed_count = 0
     log_every = 10000
 
     with torch.no_grad():
         for doc_id, sent, token_occurrence_ids in sentence_stream:
-            batch.append((doc_id, sent, token_occurrence_ids))
+            batch.append(SentenceBatchItem(
+                doc_id=doc_id,
+                sentence=sent,
+                token_occurrence_ids=token_occurrence_ids
+            ))
             processed_count += 1
 
             if len(batch) >= batch_size:
