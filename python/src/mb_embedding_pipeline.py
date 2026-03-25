@@ -188,9 +188,9 @@ def _flush_word(
 def process_sentence(
     sent: str,
     hidden_states: np.ndarray,
-    batch_encoding,
+    batch_encoding: BatchEncoding,
     b_idx: int,
-    token_occurrence_ids: List[int],
+    token_occurrence_ids: list[int],
     index: FaissIndex,
     seen_words: set[str],
     embeddings_accum: Optional[dict[str, list[np.ndarray]]],
@@ -201,12 +201,23 @@ def process_sentence(
     Process a single sentence: tokenize, compute word embeddings, add to FAISS index.
     Uses token_occurrence_id from DB for vector IDs.
     """
+
     tokenizer_tokens = batch_encoding["input_ids"][b_idx].tolist()
     offsets = batch_encoding["offset_mapping"][b_idx]
 
     current_word: str = ""
-    current_vecs: List[np.ndarray] = []
-    current_ids: List[int] = []
+    current_vecs: list[np.ndarray] = []
+    current_ids: list[int] = []
+
+    def _handle_word_flush( word: str, vecs: list[np.ndarray], vector_id: int, doc_id: str ) -> None:
+        wv = _flush_word(word, vecs, vector_id, doc_id)
+        if not wv:
+            return
+        index.add(wv.vector.reshape(1, -1), [wv.vector_id])
+        seen_words.add(wv.word)
+        if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
+            embeddings_accum[wv.word].append(wv.vector)
+            doc_ids_accum[wv.word].append(wv.doc_id)
 
     for idx, (_tok, (start, end)) in enumerate(zip(tokenizer_tokens, offsets, strict=True)):
         if start == end:
@@ -217,31 +228,14 @@ def process_sentence(
         current_vecs.append(hidden_states[b_idx, idx])
         current_ids.append(token_occurrence_ids[idx])
 
-        # Flush if next token is a gap or end of sentence
-        if idx + 1 < len(offsets):
-            next_start = offsets[idx + 1][0]
-            if next_start != end:
-                # Take the first token_occurrence_id for this word
-                vector_id = current_ids[0]
-                wv = _flush_word(current_word, current_vecs, vector_id)
-                if wv:
-                    index.add(wv.vector.reshape(1, -1), [wv.vector_id])
-                    seen_words.add(wv.word)
-                    if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
-                        embeddings_accum[wv.word].append(wv.vector)
-                        doc_ids_accum[wv.word].append(wv.doc_id)
-                current_word, current_vecs, current_ids = "", [], []
+        # Flush if next token is a gap
+        if idx + 1 < len(offsets) and offsets[idx + 1][0] != end:
+            _handle_word_flush(current_word, current_vecs, current_ids[0], batch[b_idx][0] if isinstance(batch, list) else "")
+            current_word, current_vecs, current_ids = "", [], []
 
-    # Flush any leftover word
+    # Flush any leftover word at sentence end
     if current_word and current_ids:
-        vector_id = current_ids[0]
-        wv = _flush_word(current_word, current_vecs, vector_id)
-        if wv:
-            index.add(wv.vector.reshape(1, -1), [wv.vector_id])
-            seen_words.add(wv.word)
-            if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
-                embeddings_accum[wv.word].append(wv.vector)
-                doc_ids_accum[wv.word].append(wv.doc_id)
+        _handle_word_flush(current_word, current_vecs, current_ids[0], batch[b_idx][0] if isinstance(batch, list) else "")
 
 
 def process_batch(
