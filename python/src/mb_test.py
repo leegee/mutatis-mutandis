@@ -44,7 +44,8 @@ def build_mean_vectors(embeddings_occ: dict[str, list[np.ndarray]]) -> dict[str,
     return result
 
 
-def query(index: FaissIndex, embeddings: Dict[str, np.ndarray], words: list[str], word: str, k: int = 10) -> None:
+
+def query(index: FaissIndex, embeddings: dict[str, np.ndarray], word_to_id: dict[str, int], id_to_word: dict[int,str], word: str, k: int = 10):
     if word not in embeddings:
         print(f"[MISS] '{word}' not in embeddings")
         return
@@ -54,8 +55,11 @@ def query(index: FaissIndex, embeddings: Dict[str, np.ndarray], words: list[str]
     distances, indices = index.search(query_vec, k)
 
     for rank, numeric_id in enumerate(indices[0]):
-        doc_id_val = id_map.index_to_doc_id[numeric_id] if 0 <= numeric_id < len(id_map.index_to_doc_id) else None
-        print(f"{rank}: {words[numeric_id]} (doc {doc_id_val})  score={distances[0][rank]:.4f}")
+        if numeric_id == -1:
+            continue
+        token = id_to_word.get(numeric_id, f"<unknown-{numeric_id}>")
+        doc_id_val = id_map.index_to_doc_id.get(numeric_id, "<unknown-doc>")
+        print(f"{rank}: {token} (doc {doc_id_val})  score={distances[0][rank]:.4f}")
 
 
 def main() -> None:

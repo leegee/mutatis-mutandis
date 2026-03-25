@@ -139,7 +139,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
                     DROP INDEX IF EXISTS idx_pamphlet_corpus_docid;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
-                    DROP INDEX IF EXISTS idx_pamphlet_tokens_docid_slice;
                 """)
 
             logger.info("Creating tables")
@@ -256,8 +255,10 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 -- REFRESH MATERIALIZED VIEW pamphlet_corpus;
 
                 -- Slice-level tokens restricted to pamphlets
-                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_tokens AS
-                SELECT t.doc_id,
+                CREATE MATERIALIZED VIEW pamphlet_tokens AS
+                SELECT
+                    hashtext(t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
+                    t.doc_id,
                     t.token_idx,
                     t.token,
                     t.canonical,
@@ -269,13 +270,12 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     d.slice_start,
                     d.slice_end
                 FROM tokens t
-                JOIN pamphlet_corpus d
-                ON t.doc_id = d.doc_id;
+                JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
 
                 -- Index for performance on slice queries?
-                -- CREATE INDEX IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_idx);
-
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens (doc_id, token, token_idx);
+                CREATE INDEX CONCURRENTLY idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_start);
+                CREATE INDEX CONCURRENTLY idx_pt_doc_token_idx ON pamphlet_tokens (doc_id, token, token_idx);
+                -- Not used: CREATE UNIQUE INDEX CONCURRENTLY idx_pamphlet_tokens_occurrence_id ON pamphlet_tokens(token_occurrence_id);
 
                 REFRESH MATERIALIZED VIEW document_search;
             """)

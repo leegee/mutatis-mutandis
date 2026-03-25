@@ -2,35 +2,31 @@ import faiss
 import numpy as np
 from typing import Optional, Sequence, Tuple, cast, Protocol
 
-
 class _FaissIndexProto(Protocol):
     def add(self, x: np.ndarray) -> None: ...
     def add_with_ids(self, x: np.ndarray, xids: np.ndarray) -> None: ...
     def search(self, x: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]: ...
 
-
 class FaissIndex:
-    def __init__(self, dim: int) -> None:
+    """
+    Simple FAISS wrapper using numeric IDs (`pamphlet_tokens.token_occurrence_id`).
+    FAISS itself only needs numeric IDs. Token/doc lookup should be done
+    externally (e.g., via the database).
+    """
+    def __init__(self, dim: int):
         self._index = cast(_FaissIndexProto, faiss.IndexFlatIP(dim))
         self._id_mode: bool = False
 
     def add(self, vectors: np.ndarray, ids: Optional[Sequence[int]] = None) -> None:
         vectors = np.ascontiguousarray(vectors, dtype=np.float32)
-
         if ids is not None:
             ids_arr = np.ascontiguousarray(ids, dtype=np.int64)
             if ids_arr.shape[0] != vectors.shape[0]:
                 raise ValueError("ids must match number of vectors")
-
             if not self._id_mode:
-                self._index = cast(
-                    _FaissIndexProto,
-                    faiss.IndexIDMap(cast(faiss.Index, self._index)),
-                )
+                self._index = cast(_FaissIndexProto, faiss.IndexIDMap(cast(faiss.Index, self._index)))
                 self._id_mode = True
-
             self._index.add_with_ids(vectors, ids_arr)
-
         else:
             self._index.add(vectors)
 

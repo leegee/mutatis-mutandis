@@ -29,15 +29,11 @@ from lib.eebo_config import (
     MACBERTH_FINE_TUNED_DIR
 )
 from lib.eebo_sentences import stream_slice_sentences
-from lib.eebo_id_map import EEBOIDMap
 from lib.FaissIndex import FaissIndex
 
 DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
-
-id_map = EEBOIDMap()
-id_map.load()
 
 
 def slice_model_path(slice_range: tuple[int,int]) -> Path:
@@ -152,28 +148,33 @@ def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, b
 class WordVector:
     word: str
     vector: np.ndarray
-    vector_id: int
+    vector_id: int # ie pamphlet_tokens.token_occurrence_id
 
 
 def _flush_word(
     current_word: str,
-    current_vecs: list[np.ndarray],
-    slice_id: str,
-    doc_id: str,
-    word_start: int,
-    last_end: int
+    current_vecs: List[np.ndarray],
+    vector_id: int
 ) -> Optional[WordVector]:
-    """Compute the normalized vector for a word, return WordVector or None if invalid."""
-    if not current_word or not current_vecs or word_start is None or last_end is None:
+    """
+    Compute the normalized vector for a word occurrence and return a WordVector.
+    vector_id is taken directly from DB token_occurrence_id.
+    """
+    if not current_word or not current_vecs:
         return None
 
+    # Compute the mean vector across all subword embeddings for this word
     vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
+
+    # Compute vector norm for normalization
     norm = np.linalg.norm(vec)
+
+    # Skip if the vector is effectively zero to avoid invalid embeddings
     if norm < 1e-12:
         return None
-    vec /= norm
 
-    vector_id = id_map.get_numeric_id(f"{slice_id}_{doc_id}_{word_start}_{last_end}")
+    # Normalize vector to unit length (L2 normalization)
+    vec /= norm
 
     return WordVector(word=current_word, vector=vec, vector_id=vector_id)
 
@@ -181,97 +182,98 @@ def _flush_word(
 def process_sentence(
     sent: str,
     hidden_states: np.ndarray,
-    batch_encoding: BatchEncoding,
+    batch_encoding,
     b_idx: int,
-    slice_id: str,
-    doc_id: str,
+    token_occurrence_ids: List[int],
     index: FaissIndex,
     seen_words: set[str],
-    embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]],
-    doc_ids_accum: Optional[DefaultDict[str, list[str]]],
+    embeddings_accum: Optional[dict[str, list[np.ndarray]]],
+    doc_ids_accum: Optional[dict[str, list[str]]],
     save_occurrence_vectors: bool
 ) -> None:
-    enc = cast(Mapping[str, Any], batch_encoding)
-
-    input_ids = enc["input_ids"][b_idx]
-    offsets = enc["offset_mapping"][b_idx]
-
-    assert TOKENIZER is not None
-    tokenizer_tokens = TOKENIZER.convert_ids_to_tokens(input_ids.tolist())
+    """
+    Process a single sentence: tokenize, compute word embeddings, add to FAISS index.
+    Uses token_occurrence_id from DB for vector IDs.
+    """
+    tokenizer_tokens = batch_encoding["input_ids"][b_idx].tolist()
+    offsets = batch_encoding["offset_mapping"][b_idx]
 
     current_word: str = ""
-    current_vecs: list[np.ndarray] = []
-    last_end: Optional[int] = None
-    word_start: Optional[int] = None
+    current_vecs: List[np.ndarray] = []
+    current_ids: List[int] = []
 
     for idx, (_tok, (start, end)) in enumerate(zip(tokenizer_tokens, offsets, strict=True)):
         if start == end:
             continue
 
-        if word_start is None:
-            word_start = start
-
         piece = sent[start:end]
-
-        # flush previous word if there is a gap
-        if last_end is not None and start != last_end and word_start is not None:
-            wv = _flush_word(current_word, current_vecs, slice_id, doc_id, word_start, last_end)
-            if wv:
-                index.add(wv.vector.reshape(1, -1), [wv.vector_id])
-                seen_words.add(wv.word)
-                if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
-                    embeddings_accum[wv.word].append(wv.vector)
-                    doc_ids_accum[wv.word].append(doc_id)
-            current_word, current_vecs = "", []
-            word_start = start  # start new word at current piece
-
         current_word += piece
         current_vecs.append(hidden_states[b_idx, idx])
-        last_end = end
+        current_ids.append(token_occurrence_ids[idx])
 
-    # flush any leftover word at end of sentence
-    if word_start is not None and last_end is not None:
-        wv = _flush_word(current_word, current_vecs, slice_id, doc_id, word_start, last_end)
+        # Flush if next token is a gap or end of sentence
+        if idx + 1 < len(offsets):
+            next_start = offsets[idx + 1][0]
+            if next_start != end:
+                # Take the first token_occurrence_id for this word
+                vector_id = current_ids[0]
+                wv = _flush_word(current_word, current_vecs, vector_id)
+                if wv:
+                    index.add(wv.vector.reshape(1, -1), [wv.vector_id])
+                    seen_words.add(wv.word)
+                    if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
+                        embeddings_accum[wv.word].append(wv.vector)
+                        doc_ids_accum[wv.word].append(str(vector_id >> 32))  # doc_id
+                current_word, current_vecs, current_ids = "", [], []
+
+    # Flush any leftover word
+    if current_word and current_ids:
+        vector_id = current_ids[0]
+        wv = _flush_word(current_word, current_vecs, vector_id)
         if wv:
             index.add(wv.vector.reshape(1, -1), [wv.vector_id])
             seen_words.add(wv.word)
             if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
                 embeddings_accum[wv.word].append(wv.vector)
-                doc_ids_accum[wv.word].append(doc_id)
+                doc_ids_accum[wv.word].append(str(vector_id >> 32))  # doc_id
 
 
 def process_batch(
-    batch: list[Tuple[str,str]],
+    batch: list[tuple[str, str, list[int]]],  # now includes token_occurrence_ids per sentence
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
-    slice_id: str,
     index: FaissIndex,
     seen_words: set[str],
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[DefaultDict[str, list[str]]],
     save_occurrence_vectors: bool
 ) -> None:
-    """Process a batch of sentences through the model and update FAISS index."""
+    """
+    Process a batch of sentences through the model and update FAISS index.
+    Each batch element is (doc_id, sentence, token_occurrence_ids)
+    """
     if not batch:
         return
 
-    hidden_states, batch_encoding = _forward_batch(model, tokenizer, [s for _, s in batch])
-    for b_idx, (doc_id, sent) in enumerate(batch):
+    # Extract sentences
+    sentences = [s for _, s, _ in batch]
+    hidden_states, batch_encoding = _forward_batch(model, tokenizer, sentences)
+
+    for b_idx, (_, sent, token_occurrence_ids) in enumerate(batch):
         process_sentence(
             sent=sent,
             hidden_states=hidden_states,
             batch_encoding=batch_encoding,
             b_idx=b_idx,
-            slice_id=slice_id,
-            doc_id=doc_id,
+            token_occurrence_ids=token_occurrence_ids,
             index=index,
             seen_words=seen_words,
             embeddings_accum=embeddings_accum,
             doc_ids_accum=doc_ids_accum,
             save_occurrence_vectors=save_occurrence_vectors
         )
-    batch.clear()
 
+    batch.clear()
     if DEVICE == "cuda":
         torch.cuda.empty_cache()
     gc.collect()
@@ -279,13 +281,14 @@ def process_batch(
 
 def process_slice(
     conn: Connection,
-    slice_range: Tuple[int,int],
+    slice_range: tuple[int, int],
     batch_size: int = 128,
     save_occurrence_vectors: bool = True
 ) -> None:
+    """
+    Process a slice of documents: generate word embeddings and build FAISS index.
+    """
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
-    logger.info(f"Processing slice {slice_id}")
-
     index_path = faiss_slice_path(slice_range)
     vocab_path = vocab_slice_path(slice_range)
 
@@ -303,27 +306,34 @@ def process_slice(
 
     dim = model.config.hidden_size
     index = FaissIndex(dim)
-
     seen_words: set[str] = set()
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = defaultdict(list) if save_occurrence_vectors else None
     doc_ids_accum: Optional[DefaultDict[str, list[str]]] = defaultdict(list) if save_occurrence_vectors else None
 
+    # stream_slice_sentences now yields: doc_id, sentence, token_occurrence_ids
     sentence_stream = stream_slice_sentences(conn, slice_range)
 
     if COLAB_MODE and DEVICE == "cuda":
         batch_size = min(batch_size, 32)
 
-    batch: list[Tuple[str,str]] = []
-    with torch.no_grad():
-        for doc_id, sent in sentence_stream:
-            batch.append((doc_id, sent))
-            if len(batch) >= batch_size:
-                process_batch(batch, model, tokenizer, slice_id, index, seen_words,
-                              embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+    batch: list[tuple[str, str, list[int]]] = []
+    processed_count = 0
+    log_every = 10000
 
-        # process any leftover sentences
-        process_batch(batch, model, tokenizer, slice_id, index, seen_words,
-                      embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+    with torch.no_grad():
+        for doc_id, sent, token_occurrence_ids in sentence_stream:
+            batch.append((doc_id, sent, token_occurrence_ids))
+            processed_count += 1
+
+            if len(batch) >= batch_size:
+                process_batch(batch, model, tokenizer, index, seen_words, embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+                if processed_count % log_every == 0:
+                    logger.info(f"Processed {processed_count} sentences")
+
+        # process any remaining
+        if batch:
+            process_batch(batch, model, tokenizer, index, seen_words, embeddings_accum, doc_ids_accum, save_occurrence_vectors)
+            logger.info(f"Processed {processed_count} sentences (final)")
 
     index.save(str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
@@ -335,8 +345,6 @@ def process_slice(
     if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
         save_vectors(slice_id, embeddings_accum, doc_ids_accum)
 
-    id_map.save()
-    logger.info("Saved EEBO ID map")
     logger.info("Slice streaming & FAISS build complete.")
 
     del model, tokenizer, index, embeddings_accum, doc_ids_accum

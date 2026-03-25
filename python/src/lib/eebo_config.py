@@ -136,7 +136,7 @@ CONCEPT_SETS is now the SINGLE source of truth.
     - false_positives: forms that must never be normalised to this head, even if
       they are close in spelling or embedding space.
 
-Normalisation is restricted to orthographic- and boundary-level variation characteristic
+For FT, normalisation is restricted to orthographic- and boundary-level variation characteristic
 of early modern print and OCR, including the collapse of whitespace between function words
 and lexical heads (eg `ofjustice`). These forms are treated as recoverable tokenisation
 artefacts rather than distinct lexical items. Semantic distinctions between canonical
