@@ -276,8 +276,6 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 CREATE INDEX CONCURRENTLY idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_start);
                 CREATE INDEX CONCURRENTLY idx_pt_doc_token_idx ON pamphlet_tokens (doc_id, token, token_idx);
                 -- Not used: CREATE UNIQUE INDEX CONCURRENTLY idx_pamphlet_tokens_occurrence_id ON pamphlet_tokens(token_occurrence_id);
-
-                REFRESH MATERIALIZED VIEW document_search;
             """)
 
 
