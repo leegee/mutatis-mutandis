@@ -127,6 +127,7 @@ class WordVector:
     vector_id: int # pamphlet_tokens.token_occurrence_id
     doc_id: str    # pamphlet_tokens.doc_id
 
+
 def slice_model_path(slice_range: tuple[int,int]) -> Path:
     start, end = slice_range
     path = MACBERTH_SLICE_MODEL_DIR / f"slice_{start}_{end}"
@@ -136,6 +137,10 @@ def slice_model_path(slice_range: tuple[int,int]) -> Path:
 
 def vectors_path(slice_id: str) -> Path:
     return MACBERTH_VECTORS_DIR / f"{slice_id}.npz"
+
+
+def token_list_path(start: int, end: int) -> Path:
+    return MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.tokens.txt"
 
 
 def faiss_slice_path(slice_range: tuple[int,int]) -> Path:
@@ -150,6 +155,19 @@ def vocab_slice_path(slice_range: tuple[int,int]) -> Path:
     path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.vocab"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def load_token_list(path: Path) -> list[str]:
+    """
+    Remember once loaded, check the length:
+        assert len(tokens) == index.ntotal
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        return [line.rstrip("\n") for line in f]
+
+
+def load_token_list_for_slice(slice_range: tuple[int, int]) -> list[str]:
+    return load_token_list(token_list_path(*slice_range))
 
 
 def load_vectors(slice_id: str) -> dict[str, list[np.ndarray]]:
@@ -285,8 +303,15 @@ def build_token_level_index(
         return
 
     # Sort tokens for stable ordering
-    tokens_ordered = sorted(token_vectors_accum.keys())
     mean_vectors = []
+    tokens_ordered = sorted(token_vectors_accum.keys())
+
+    # save token list
+    tokenlist_path =  token_list_path(slice_range[0], slice_range[1])
+    with open(tokenlist_path, "w", encoding="utf-8") as f:
+        for token in tokens_ordered:
+            f.write(token + "\n")
+    logger.info(f"Wrote token list to {tokenlist_path}")
 
     for token in tokens_ordered:
         vecs = token_vectors_accum[token]
