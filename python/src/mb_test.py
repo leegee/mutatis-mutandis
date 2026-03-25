@@ -3,7 +3,6 @@
 import time
 from pathlib import Path
 import numpy as np
-from typing import Dict
 
 from mb_embedding_pipeline import (
     load_vectors,

@@ -10,7 +10,7 @@ Generate token embeddings per slice (MacBERTh per-slice models) and build FAISS 
 from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
-from typing import DefaultDict, Tuple, Optional
+from typing import DefaultDict, Tuple, Optional, List
 import gc
 from psycopg import Connection
 from dataclasses import dataclass
@@ -186,6 +186,7 @@ def _flush_word(
 
 
 def process_sentence(
+    doc_id: str,
     sent: str,
     hidden_states: np.ndarray,
     batch_encoding: BatchEncoding,
@@ -209,7 +210,12 @@ def process_sentence(
     current_vecs: list[np.ndarray] = []
     current_ids: list[int] = []
 
-    def _handle_word_flush( word: str, vecs: list[np.ndarray], vector_id: int, doc_id: str ) -> None:
+    # helper to flush a word occurrence
+    def _handle_word_flush(
+        word: str,
+        vecs: list[np.ndarray],
+        vector_id: int
+    ) -> None:
         wv = _flush_word(word, vecs, vector_id, doc_id)
         if not wv:
             return
@@ -230,12 +236,12 @@ def process_sentence(
 
         # Flush if next token is a gap
         if idx + 1 < len(offsets) and offsets[idx + 1][0] != end:
-            _handle_word_flush(current_word, current_vecs, current_ids[0], batch[b_idx][0] if isinstance(batch, list) else "")
+            _handle_word_flush(current_word, current_vecs, current_ids[0])
             current_word, current_vecs, current_ids = "", [], []
 
     # Flush any leftover word at sentence end
     if current_word and current_ids:
-        _handle_word_flush(current_word, current_vecs, current_ids[0], batch[b_idx][0] if isinstance(batch, list) else "")
+        _handle_word_flush(current_word, current_vecs, current_ids[0])
 
 
 def process_batch(
