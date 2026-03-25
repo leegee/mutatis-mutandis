@@ -10,7 +10,7 @@ Generate token embeddings per slice (MacBERTh per-slice models) and build FAISS 
 from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
-from typing import DefaultDict, Tuple, Optional,  cast, Any, Mapping
+from typing import DefaultDict, Tuple, Optional
 import gc
 from psycopg import Connection
 from dataclasses import dataclass
@@ -129,7 +129,11 @@ def get_macberth_model(shared_only: bool = True) -> tuple[PreTrainedTokenizerBas
     return TOKENIZER, MODEL
 
 
-def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, batch: list[str]) -> Tuple[np.ndarray, BatchEncoding]:
+def _forward_batch(
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+    batch: list[str]
+) -> Tuple[np.ndarray, BatchEncoding]:
     batch_encoding = tokenizer(
         batch,
         return_tensors="pt",
