@@ -148,17 +148,19 @@ def _forward_batch(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, b
 class WordVector:
     word: str
     vector: np.ndarray
-    vector_id: int # ie pamphlet_tokens.token_occurrence_id
+    vector_id: int # pamphlet_tokens.token_occurrence_id
+    doc_id: str    # pamphlet_tokens.doc_id
 
 
 def _flush_word(
     current_word: str,
     current_vecs: List[np.ndarray],
-    vector_id: int
+    vector_id: int,
+    doc_id: str,
 ) -> Optional[WordVector]:
     """
     Compute the normalized vector for a word occurrence and return a WordVector.
-    vector_id is taken directly from DB token_occurrence_id.
+    vector_id and doc_id are DB token_occurrence_id and doc_id.
     """
     if not current_word or not current_vecs:
         return None
@@ -176,7 +178,7 @@ def _flush_word(
     # Normalize vector to unit length (L2 normalization)
     vec /= norm
 
-    return WordVector(word=current_word, vector=vec, vector_id=vector_id)
+    return WordVector(word=current_word, vector=vec, vector_id=vector_id, doc_id=doc_id)
 
 
 def process_sentence(
@@ -223,7 +225,7 @@ def process_sentence(
                     seen_words.add(wv.word)
                     if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
                         embeddings_accum[wv.word].append(wv.vector)
-                        doc_ids_accum[wv.word].append(str(vector_id >> 32))  # doc_id
+                        doc_ids_accum[wv.word].append(wv.doc_id)
                 current_word, current_vecs, current_ids = "", [], []
 
     # Flush any leftover word
@@ -235,7 +237,7 @@ def process_sentence(
             seen_words.add(wv.word)
             if save_occurrence_vectors and embeddings_accum is not None and doc_ids_accum is not None:
                 embeddings_accum[wv.word].append(wv.vector)
-                doc_ids_accum[wv.word].append(str(vector_id >> 32))  # doc_id
+                doc_ids_accum[wv.word].append(wv.doc_id)
 
 
 def process_batch(
