@@ -245,7 +245,7 @@ def process_sentence(
 
 
 def process_batch(
-    batch: list[tuple[str, str, list[int]]],  # now includes token_occurrence_ids per sentence
+    batch: list[tuple[str, str, list[int]]],  # (doc_id, sentence, token_occurrence_ids)
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
     index: FaissIndex,
@@ -261,12 +261,12 @@ def process_batch(
     if not batch:
         return
 
-    # Extract sentences
     sentences = [s for _, s, _ in batch]
     hidden_states, batch_encoding = _forward_batch(model, tokenizer, sentences)
 
-    for b_idx, (_, sent, token_occurrence_ids) in enumerate(batch):
+    for b_idx, (doc_id, sent, token_occurrence_ids) in enumerate(batch):
         process_sentence(
+            doc_id=doc_id,
             sent=sent,
             hidden_states=hidden_states,
             batch_encoding=batch_encoding,
@@ -280,6 +280,8 @@ def process_batch(
         )
 
     batch.clear()
+
+    # Clean up memory
     if DEVICE == "cuda":
         torch.cuda.empty_cache()
     gc.collect()
