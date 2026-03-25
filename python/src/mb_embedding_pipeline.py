@@ -2,9 +2,38 @@
 """
 mb_embedding_pipeline.py
 
-Generate token embeddings per slice (MacBERTh per-slice models) and build FAISS indexes.
-- MacBERTh: embeddings per slice
-- FAISS: always loads saved embeddings, flattens, normalizes, builds index
+Pipeline for generating token-level embeddings and FAISS indexes from EEBO
+Early Modern English text slices using MacBERTh models.
+
+This module provides functions to:
+
+1. Load or save occurrence-level word embeddings per document slice.
+2. Compute normalized word embeddings from MacBERTh model hidden states.
+3. Build per-slice FAISS indexes for fast similarity search.
+4. Maintain a vocabulary of words seen per slice.
+5. Handle batch processing and memory management for large text corpora.
+6. Function locally or on Colab GPU
+
+Key Concepts:
+
+- WordVector: A dataclass representing a single word occurrence embedding,
+  including token string, normalized vector, token occurrence ID, and document ID.
+- SentenceBatchItem: A dataclass representing a sentence to process,
+  containing its doc_id, the sentence text, and the token_occurrence_ids.
+- FAISS Index: Approximate nearest neighbor index storing word embeddings for
+  efficient similarity search across all occurrences in a slice.
+
+Workflow:
+
+1. Load or initialize the shared MacBERTh model (optionally with fine-tuned
+   weights) for contextual embeddings.
+2. Stream sentences from the database for a given slice range.
+3. Tokenize each sentence and compute embeddings for each token.
+4. Aggregate subword embeddings into word-level embeddings.
+5. Normalize embeddings and add them to a per-slice FAISS index.
+6. Optionally save occurrence-level vectors for downstream analyses.
+7. Persist the FAISS index and slice vocabulary to disk for later retrieval.
+
 """
 
 from __future__ import annotations
@@ -241,11 +270,15 @@ def process_sentence(
         piece = sent[start:end]
         current_word += piece
         current_vecs.append(hidden_states[b_idx, idx])
-        current_ids.append(token_occurrence_ids[idx])
+
+        # Append only if token_occurrence_ids has this idx
+        if idx < len(token_occurrence_ids):
+            current_ids.append(token_occurrence_ids[idx])
 
         # Flush if next token is a gap
         if idx + 1 < len(offsets) and offsets[idx + 1][0] != end:
-            _handle_word_flush(current_word, current_vecs, current_ids[0])
+            vector_id = current_ids[0] if current_ids else -1  # fallback if missing
+            _handle_word_flush(current_word, current_vecs, vector_id)
             current_word, current_vecs, current_ids = "", [], []
 
     # Flush any leftover word at sentence end
