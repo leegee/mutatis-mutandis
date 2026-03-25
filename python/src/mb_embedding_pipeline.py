@@ -2,37 +2,83 @@
 """
 mb_embedding_pipeline.py
 
-Pipeline for generating token-level embeddings and FAISS indexes from EEBO
+Pipeline for generating contextual word embeddings and FAISS indexes from EEBO
 Early Modern English text slices using MacBERTh models.
+
+This module supports both occurrence-level and token-level representations:
+
+- Occurrence-level: every word occurrence is embedded and indexed with its
+  token_occurrence_id, enabling full traceability back to the database.
+- Token-level: mean embeddings are computed per token across all occurrences
+  within a slice, enabling semantic similarity and drift analysis.
 
 This module provides functions to:
 
-1. Load or save occurrence-level word embeddings per document slice.
-2. Compute normalized word embeddings from MacBERTh model hidden states.
-3. Build per-slice FAISS indexes for fast similarity search.
-4. Maintain a vocabulary of words seen per slice.
-5. Handle batch processing and memory management for large text corpora.
-6. Function locally or on Colab GPU
+1. Stream tokenized sentences and aligned token_occurrence_ids from the database.
+2. Compute normalized word embeddings from MacBERTh hidden states.
+3. Build occurrence-level FAISS indexes keyed by token_occurrence_id.
+4. Accumulate per-token embeddings and compute mean vectors.
+5. Build token-level FAISS indexes (no IDs; index position defines token identity).
+6. Optionally persist occurrence-level embeddings for reuse.
+7. Handle batch processing and memory management for large corpora.
+8. Run efficiently on CPU or GPU (including Colab environments).
 
 Key Concepts:
 
-- WordVector: A dataclass representing a single word occurrence embedding,
-  including token string, normalized vector, token occurrence ID, and document ID.
-- SentenceBatchItem: A dataclass representing a sentence to process,
-  containing its doc_id, the sentence text, and the token_occurrence_ids.
-- FAISS Index: Approximate nearest neighbor index storing word embeddings for
-  efficient similarity search across all occurrences in a slice.
+- WordVector:
+  Represents a single word occurrence embedding, including:
+    - word string
+    - normalized vector
+    - token_occurrence_id (DB primary key)
+    - doc_id
+
+- SentenceBatchItem:
+  Represents a unit of processing:
+    - doc_id
+    - raw sentence text
+    - aligned token_occurrence_ids
+
+- Occurrence-level FAISS index:
+  Stores one vector per token occurrence.
+  IDs correspond to token_occurrence_id, enabling direct lookup in the database.
+  This index supports traceability and retrieval of exact textual contexts.
+
+- Token-level FAISS index:
+  Stores one mean vector per token (per slice), computed across all occurrences.
+  No explicit IDs are stored; index position corresponds to token ordering.
+  This index supports semantic similarity, clustering, and drift analysis.
+
+Design Notes:
+
+- The database is the authoritative source for token metadata.
+  Occurrence-level FAISS results are resolved via token_occurrence_id-to-DB lookup.
+
+- The system separates two analytical layers:
+    - Occurrence-level (evidence, context, traceability)
+    - Token-level (abstraction, semantics, drift)
+
+- Token-level FAISS requires an external mapping (e.g. ordered token list)
+  if reconstruction of token strings from index positions is needed.
+
+- Occurrence-level vector persistence is optional and intended for:
+    - offline analysis
+    - reproducibility
+    - rebuilding indexes without recomputation
 
 Workflow:
 
-1. Load or initialize the shared MacBERTh model (optionally with fine-tuned
-   weights) for contextual embeddings.
-2. Stream sentences from the database for a given slice range.
-3. Tokenize each sentence and compute embeddings for each token.
-4. Aggregate subword embeddings into word-level embeddings.
-5. Normalize embeddings and add them to a per-slice FAISS index.
-6. Optionally save occurrence-level vectors for downstream analyses.
-7. Persist the FAISS index and slice vocabulary to disk for later retrieval.
+1. Load or initialize the shared MacBERTh model (optionally with fine-tuned weights).
+2. Stream sentences and token_occurrence_ids from the database for a slice.
+3. Tokenize each sentence and compute contextual embeddings.
+4. Aggregate subword embeddings into word-level vectors.
+5. Normalize vectors and:
+    - add to occurrence-level FAISS (with token_occurrence_id)
+    - accumulate per-token vectors for later averaging
+6. After the slice:
+    - save occurrence-level FAISS index
+    - compute mean vectors per token
+    - build and save token-level FAISS index
+7. Optionally persist occurrence-level vectors for reuse.
 
 """
 
