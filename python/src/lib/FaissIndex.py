@@ -1,3 +1,4 @@
+from pathlib import Path
 import faiss
 import numpy as np
 from typing import Optional, Sequence, Tuple, cast, Protocol
@@ -40,6 +41,8 @@ class FaissIndex:
 
     @classmethod
     def load(cls, path: str) -> "FaissIndex":
+        if not Path(path).is_file():
+            raise FileNotFoundError(f"Index file not found: {path}")
         obj = cls.__new__(cls)
         obj._index = cast(_FaissIndexProto, faiss.read_index(path))
         obj._id_mode = isinstance(obj._index, faiss.IndexIDMap)

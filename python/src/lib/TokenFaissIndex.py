@@ -1,3 +1,4 @@
+from pathlib import Path
 import faiss
 import numpy as np
 from typing import Tuple, Protocol, cast
@@ -84,6 +85,8 @@ class TokenFaissIndex:
         Returns:
             TokenFaissIndex instance wrapping the loaded FAISS index
         """
+        if not Path(path).exists():
+            raise FileNotFoundError(f"Index file not found: {path}")
         obj = cls.__new__(cls)
         obj._index = cast(_FaissIndexProto, faiss.read_index(path))
         return obj

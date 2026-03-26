@@ -108,7 +108,7 @@ from lib.eebo_sentences import stream_slice_sentences
 from lib.FaissIndex import FaissIndex
 from lib.TokenFaissIndex import TokenFaissIndex
 
-SAVE_OCCURRENCE_VECTORS = os.getenv("SAVE_OCCURRENCE_VECTORS", "0") == "1"
+SAVE_OCCURRENCE_VECTORS = os.getenv("SAVE_OCCURRENCE_VECTORS", "1") == "1"
 DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
@@ -447,6 +447,76 @@ def process_batch(
     if DEVICE == "cuda":
         torch.cuda.empty_cache()
     gc.collect()
+
+
+
+def load_model_for_slice(start: int, end: int) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
+    """
+    Load the MacBERTh model for a given slice (start, end).
+
+    Args:
+        start: start year of slice
+        end: end year of slice
+
+    Returns:
+        Tuple of (model, tokenizer) for the slice
+    """
+    slice_model_dir = MACBERTH_SLICE_MODEL_DIR / f"slice_{start}_{end}"
+
+    if not slice_model_dir.exists():
+        # fallback to shared model
+        logger.warning(f"No slice-specific model found for {start}-{end}; using shared model")
+        tokenizer, model = get_macberth_model(shared_only=True)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(slice_model_dir)
+        model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
+        logger.info(f"Loaded slice-specific MacBERTh model for {start}-{end}")
+
+    model.to(DEVICE)
+    model.eval()
+    return model, tokenizer
+
+
+def embed_word(word: str, start: int, end: int) -> np.ndarray:
+    """
+    Embed a single word in the context of a slice model.
+
+    Args:
+        word: string to embed
+        start: slice start
+        end: slice end
+
+    Returns:
+        Normalized embedding vector as np.ndarray (1D)
+    """
+    model, tokenizer = load_model_for_slice(start, end)
+
+    # tokenize the word
+    tokens = tokenizer([word], return_tensors="pt", padding=True, truncation=True)
+
+    # forward pass
+    with torch.no_grad():
+        outputs = model(**tokens)
+        # mean over token embeddings
+        vec = outputs.last_hidden_state.mean(dim=1).squeeze(0).cpu().numpy()
+
+    # normalize for cosine similarity
+    return normalize(vec)
+
+
+def embed_query(texts: list[str], start: int, end: int) -> np.ndarray:
+    """
+    Embed multiple words/phrases at once. Returns a 2D array (n_texts, dim).
+
+    Args:
+        texts: list of strings to embed
+        start: slice start
+        end: slice end
+
+    Returns:
+        2D numpy array of normalized embeddings
+    """
+    return np.stack([embed_word(t, start, end) for t in texts])
 
 
 def process_slice(
