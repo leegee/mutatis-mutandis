@@ -134,8 +134,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 cur.execute("""
                     DROP TABLE IF EXISTS documents CASCADE;
                     DROP TABLE IF EXISTS tokens CASCADE;
-                    DROP TABLE IF EXISTS token_vectors CASCADE;
-                    DROP TABLE IF EXISTS concept_slice_stats;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
                     DROP INDEX IF EXISTS idx_pamphlet_corpus_docid;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
@@ -168,26 +166,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     PRIMARY KEY (doc_id, token_idx),
                     FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
                 );
-
-                CREATE TABLE token_vectors (
-                    token TEXT NOT NULL,
-                    slice_start INT NOT NULL,
-                    slice_end   INT NOT NULL,
-                    vector FLOAT4[] NOT NULL,
-                    PRIMARY KEY (token, slice_start, slice_end)
-                );
-
-                CREATE TABLE concept_slice_stats (
-                    concept_name TEXT,
-                    slice_start  INT,
-                    slice_end    INT,
-                    centroid     FLOAT4[] NOT NULL,
-                    variance     FLOAT4,        -- mean squared distance from centroid
-                    token_count  INT,
-                    forms_used   TEXT[],        -- which variants actually present
-                    PRIMARY KEY (concept_name, slice_start, slice_end)
-                );
-
             """)
 
     logger.info("Database schema created")
