@@ -1,84 +1,10 @@
 #!/usr/bin/env python
+
 """
 mb_embedding_pipeline.py
 
-Pipeline for generating contextual word embeddings and FAISS indexes from EEBO
-Early Modern English text slices using MacBERTh models.
-
-This module supports both occurrence-level and token-level representations:
-
-- Occurrence-level: every word occurrence is embedded and indexed with its
-  token_occurrence_id, enabling full traceability back to the database.
-- Token-level: mean embeddings are computed per token across all occurrences
-  within a slice, enabling semantic similarity and drift analysis.
-
-This module provides functions to:
-
-1. Stream tokenized sentences and aligned token_occurrence_ids from the database.
-2. Compute normalized word embeddings from MacBERTh hidden states.
-3. Build occurrence-level FAISS indexes keyed by token_occurrence_id.
-4. Accumulate per-token embeddings and compute mean vectors.
-5. Build token-level FAISS indexes (no IDs; index position defines token identity).
-6. Optionally persist occurrence-level embeddings for reuse.
-7. Handle batch processing and memory management for large corpora.
-8. Run efficiently on CPU or GPU (including Colab environments).
-
-Key Concepts:
-
-- WordVector:
-  Represents a single word occurrence embedding, including:
-    - word string
-    - normalized vector
-    - token_occurrence_id (DB primary key)
-    - doc_id
-
-- SentenceBatchItem:
-  Represents a unit of processing:
-    - doc_id
-    - raw sentence text
-    - aligned token_occurrence_ids
-
-- Occurrence-level FAISS index:
-  Stores one vector per token occurrence.
-  IDs correspond to token_occurrence_id, enabling direct lookup in the database.
-  This index supports traceability and retrieval of exact textual contexts.
-
-- Token-level FAISS index:
-  Stores one mean vector per token (per slice), computed across all occurrences.
-  No explicit IDs are stored; index position corresponds to token ordering.
-  This index supports semantic similarity, clustering, and drift analysis.
-
-Design Notes:
-
-- The database is the authoritative source for token metadata.
-  Occurrence-level FAISS results are resolved via token_occurrence_id-to-DB lookup.
-
-- The system separates two analytical layers:
-    - Occurrence-level (evidence, context, traceability)
-    - Token-level (abstraction, semantics, drift)
-
-- Token-level FAISS requires an external mapping (e.g. ordered token list)
-  if reconstruction of token strings from index positions is needed.
-
-- Occurrence-level vector persistence is optional and intended for:
-    - offline analysis
-    - reproducibility
-    - rebuilding indexes without recomputation
-
-Workflow:
-
-1. Load or initialize the shared MacBERTh model (optionally with fine-tuned weights).
-2. Stream sentences and token_occurrence_ids from the database for a slice.
-3. Tokenize each sentence and compute contextual embeddings.
-4. Aggregate subword embeddings into word-level vectors.
-5. Normalize vectors and:
-    - add to occurrence-level FAISS (with token_occurrence_id)
-    - accumulate per-token vectors for later averaging
-6. After the slice:
-    - save occurrence-level FAISS index
-    - compute mean vectors per token
-    - build and save token-level FAISS index
-7. Optionally persist occurrence-level vectors for reuse.
+Every vector in the system corresponds to exactly one token occurrence.
+No vector represents an aggregate unless explicitly constructed outside the index.
 
 """
 
@@ -105,13 +31,13 @@ from lib.eebo_config import (
     MACBERTH_FINE_TUNED_DIR
 )
 from lib.eebo_sentences import stream_slice_sentences
-from lib.FaissIndex import FaissIndex
-from lib.TokenFaissIndex import TokenFaissIndex
+from lib.FaissIndex import FaissIndex as OccurrenceFaissIndex
 
 SAVE_OCCURRENCE_VECTORS = os.getenv("SAVE_OCCURRENCE_VECTORS", "1") == "1"
 DEVICE: str
 TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
+_DEVICE: Optional[str] = None
 
 
 @dataclass
@@ -122,10 +48,19 @@ class SentenceBatchItem:
 
 @dataclass
 class WordVector:
-    word: str
+    word: str        # derived from tokenizer; not canonical (DB is source of truth)
     vector: np.ndarray
-    vector_id: int # pamphlet_tokens.token_occurrence_id
-    doc_id: str    # pamphlet_tokens.doc_id
+    vector_id: int  # pamphlet_tokens.token_occurrence_id
+    doc_id: str     # pamphlet_tokens.doc_id
+
+
+
+def get_device() -> str:
+    global _DEVICE
+    if _DEVICE is None:
+        import torch
+        _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    return _DEVICE
 
 
 def slice_model_path(slice_range: tuple[int,int]) -> Path:
@@ -139,10 +74,6 @@ def vectors_path(slice_id: str) -> Path:
     return MACBERTH_VECTORS_DIR / f"{slice_id}.npz"
 
 
-def token_list_path(start: int, end: int) -> Path:
-    return MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.tokens.txt"
-
-
 def faiss_slice_path(slice_range: tuple[int,int]) -> Path:
     start, end = slice_range
     path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.faiss"
@@ -150,24 +81,17 @@ def faiss_slice_path(slice_range: tuple[int,int]) -> Path:
     return path
 
 
-def vocab_slice_path(slice_range: tuple[int,int]) -> Path:
-    start, end = slice_range
-    path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.vocab"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def load_token_list(path: Path) -> list[str]:
+def normalize_or_none(v: np.ndarray) -> Optional[np.ndarray]:
     """
-    Remember once loaded, check the length:
-        assert len(tokens) == index.ntotal
+    Normalize vector or return None if near-zero.
+
+    This is the canonical entry point for all vectors entering FAISS space.
     """
-    with open(path, "r", encoding="utf-8") as f:
-        return [line.rstrip("\n") for line in f]
-
-
-def load_token_list_for_slice(slice_range: tuple[int, int]) -> list[str]:
-    return load_token_list(token_list_path(*slice_range))
+    v = v.astype(np.float32, copy=False)
+    norm = np.linalg.norm(v)
+    if norm < 1e-12:
+        return None
+    return v / norm
 
 
 def load_vectors(slice_id: str) -> dict[str, list[np.ndarray]]:
@@ -251,7 +175,7 @@ def _forward_batch(
         max_length=512,
         return_offsets_mapping=True
     )
-    inputs = {k: v.to(DEVICE) for k, v in batch_encoding.items() if k != "offset_mapping"}
+    inputs = {k: v.to(get_device()) for k, v in batch_encoding.items() if k != "offset_mapping"}
     outputs = model(**inputs, output_hidden_states=True)
     hidden_states = outputs.hidden_states[-1].cpu().numpy()
     return hidden_states, batch_encoding
@@ -269,109 +193,57 @@ def _flush_word(
     """
     if not current_word or not current_vecs:
         return None
-
-    # Compute the mean vector across all subword embeddings for this word
-    vec = np.mean(np.stack(current_vecs), axis=0).astype(np.float32)
-
-    # Compute vector norm for normalization
-    norm = np.linalg.norm(vec)
-
-    # Skip if the vector is effectively zero to avoid invalid embeddings
-    if norm < 1e-12:
+    vec = normalize_or_none(np.mean(np.stack(current_vecs), axis=0))
+    if vec is None:
         return None
-
-    # Normalize vector to unit length (L2 normalization)
-    vec /= norm
-
     return WordVector(word=current_word, vector=vec, vector_id=vector_id, doc_id=doc_id)
 
 
-def build_token_level_index(
-    token_vectors_accum: DefaultDict[str, List[np.ndarray]],
-    slice_range: tuple[int, int]
-) -> None:
-    """
-    Compute mean vectors per token from accumulated occurrence vectors
-    and build a token-level FAISS index for semantic search.
-
-    Args:
-        token_vectors_accum: Dict mapping token -> list of occurrence vectors
-        slice_range: The slice being processed (start, end)
-    """
-    if not token_vectors_accum:
-        logger.warning("No token vectors accumulated; skipping token-level FAISS build")
-        return
-
-    # Sort tokens for stable ordering
-    mean_vectors = []
-    tokens_ordered = sorted(token_vectors_accum.keys())
-
-    # save token list
-    tokenlist_path =  token_list_path(slice_range[0], slice_range[1])
-    with open(tokenlist_path, "w", encoding="utf-8") as f:
-        for token in tokens_ordered:
-            f.write(token + "\n")
-    logger.info(f"Wrote token list to {tokenlist_path}")
-
-    for token in tokens_ordered:
-        vecs = token_vectors_accum[token]
-        mean_vec = np.mean(np.stack(vecs), axis=0)
-        norm = np.linalg.norm(mean_vec)
-        if norm < 1e-12:
-            continue
-        mean_vec /= norm
-        mean_vectors.append(mean_vec)
-
-    if not mean_vectors:
-        logger.warning("No valid mean vectors found; skipping token-level FAISS build")
-        return
-
-    mean_vectors_np = np.stack(mean_vectors)
-
-    # Build TokenFaissIndex
-    token_index = TokenFaissIndex(mean_vectors_np.shape[1])
-    token_index.add(mean_vectors_np)
-
-    # Save
-    token_index_path = MACBERTH_VECTORS_DIR / f"slice_{slice_range[0]}_{slice_range[1]}.token.faiss"
-    token_index.save(str(token_index_path))
-    logger.info(f"Saved token-level FAISS index at {token_index_path}")
-
-
 def process_sentence(
+    tokenizer: PreTrainedTokenizerBase,
     doc_id: str,
     sent: str,
     hidden_states: np.ndarray,
     batch_encoding: BatchEncoding,
     batch_index: int,
     token_occurrence_ids: list[int],
-    index: FaissIndex,
+    index: OccurrenceFaissIndex,
     embeddings_accum: Optional[dict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[dict[str, list[str]]],
-    token_vectors_accum: DefaultDict[str, List[np.ndarray]],
 ) -> None:
     """
     Process a single sentence: tokenize, compute word embeddings, add to FAISS index.
-    Uses token_occurrence_id from DB for vector IDs.
+    Uses token_occurrence_id from DB for vector IDs (one per word).
+    Aggregates subword embeddings per word.
     """
 
-    # Extract tensors explicitly for type checker
+    # Extract tensors
     input_ids = cast(torch.Tensor, batch_encoding["input_ids"])
     offset_mapping = cast(torch.Tensor, batch_encoding["offset_mapping"])
 
     tokenizer_tokens = input_ids[batch_index].tolist()
-    offsets = offset_mapping[batch_index].tolist()  # If offsets are a tensor; else leave as-is
+    offsets = offset_mapping[batch_index].tolist()
+
+    # if batch_index == 0:
+    #     debug_sentence_alignment(
+    #         sent,
+    #         tokenizer_tokens,
+    #         offsets,
+    #         token_occurrence_ids,
+    #         hidden_states,
+    #         batch_index,
+    #         tokenizer
+    #     )
 
     current_word: str = ""
     current_vecs: list[np.ndarray] = []
-    current_ids: list[int] = []
 
-    # helper to flush a word occurrence
-    def _handle_word_flush(
-        word: str,
-        vecs: list[np.ndarray],
-        vector_id: int
-    ) -> None:
+    word_idx = 0  # index into token_occurrence_ids
+
+    # Helper to flush a word occurrence to FAISS and accumulators
+    def _add_word_to_faiss_and_accumulators(word: str, vecs: list[np.ndarray], vector_id: int) -> None:
+        if not vecs:
+            return
         wv = _flush_word(word, vecs, vector_id, doc_id)
         if not wv:
             return
@@ -379,48 +251,42 @@ def process_sentence(
         if SAVE_OCCURRENCE_VECTORS and embeddings_accum is not None and doc_ids_accum is not None:
             embeddings_accum[wv.word].append(wv.vector)
             doc_ids_accum[wv.word].append(wv.doc_id)
-        # Add to token-level accumulator for mean
-        token_vectors_accum[word].append(wv.vector)
-
 
     for idx, (_tok, (start, end)) in enumerate(zip(tokenizer_tokens, offsets, strict=True)):
         if start == end:
-            continue
+            continue  # skip special tokens
 
-        piece = sent[start:end]
-        current_word += piece
+        current_word += sent[start:end]
         current_vecs.append(hidden_states[batch_index, idx])
 
-        # Append only if token_occurrence_ids has this idx
-        if idx < len(token_occurrence_ids):
-            current_ids.append(token_occurrence_ids[idx])
+        # If next token starts a new word (gap in offsets), flush current word
+        next_is_gap = (idx + 1 < len(offsets)) and (offsets[idx + 1][0] != end)
+        if next_is_gap:
+            if word_idx >= len(token_occurrence_ids):
+                raise ValueError(
+                    f"Word index {word_idx} exceeds token_occurrence_ids length {len(token_occurrence_ids)}"
+                )
+            _add_word_to_faiss_and_accumulators(current_word, current_vecs, token_occurrence_ids[word_idx])
+            current_word, current_vecs = "", []
+            word_idx += 1
 
-        # Flush if next token is a gap
-        if idx + 1 < len(offsets) and offsets[idx + 1][0] != end:
-            if not current_ids:
-                return  # skip this word entirely
-            vector_id = current_ids[0]
-            _handle_word_flush(current_word, current_vecs, vector_id)
-            current_word, current_vecs, current_ids = "", [], []
-
-    # Flush any leftover word at sentence end
-    if current_word and current_ids:
-        _handle_word_flush(current_word, current_vecs, current_ids[0])
+    # Flush any remaining word at sentence end
+    if current_word and current_vecs and word_idx < len(token_occurrence_ids):
+        _add_word_to_faiss_and_accumulators(current_word, current_vecs, token_occurrence_ids[word_idx])
 
 
 def process_batch(
-    batch: list[SentenceBatchItem],
+    batch: list,
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
-    index: FaissIndex,
+    index: OccurrenceFaissIndex,
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[DefaultDict[str, list[str]]],
-    token_vectors_accum: DefaultDict[str, List[np.ndarray]]
 ) -> None:
     """
     Process a batch of sentences through the model and update FAISS index.
-    Each batch element is (doc_id, sentence, token_occurrence_ids)
     """
+
     if not batch:
         return
 
@@ -429,6 +295,7 @@ def process_batch(
 
     for batch_index, item in enumerate(batch):
         process_sentence(
+            tokenizer=tokenizer,
             doc_id=item.doc_id,
             sent=item.sentence,
             hidden_states=hidden_states,
@@ -438,17 +305,14 @@ def process_batch(
             index=index,
             embeddings_accum=embeddings_accum,
             doc_ids_accum=doc_ids_accum,
-            token_vectors_accum=token_vectors_accum
         )
 
     batch.clear()
 
-    # Clean up memory
-    if DEVICE == "cuda":
+    # Clean up
+    if get_device() == "cuda":
         torch.cuda.empty_cache()
     gc.collect()
-
-
 
 def load_model_for_slice(start: int, end: int) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
     """
@@ -464,44 +328,64 @@ def load_model_for_slice(start: int, end: int) -> tuple[PreTrainedModel, PreTrai
     slice_model_dir = MACBERTH_SLICE_MODEL_DIR / f"slice_{start}_{end}"
 
     if not slice_model_dir.exists():
-        # fallback to shared model
-        logger.warning(f"No slice-specific model found for {start}-{end}; using shared model")
-        tokenizer, model = get_macberth_model(shared_only=True)
-    else:
-        tokenizer = AutoTokenizer.from_pretrained(slice_model_dir)
-        model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
-        logger.info(f"Loaded slice-specific MacBERTh model for {start}-{end}")
+        raise FileNotFoundError(f"Slice-specific model directory not found: {slice_model_dir}")
 
-    model.to(DEVICE)
+    tokenizer = AutoTokenizer.from_pretrained(slice_model_dir)
+    model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
+    logger.info(f"Loaded slice-specific MacBERTh model for {start}-{end}")
+
+    model.to(get_device())
     model.eval()
     return model, tokenizer
 
 
-def embed_word(word: str, start: int, end: int) -> np.ndarray:
+def embed_word_with_model(
+    word: str,
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+) -> np.ndarray:
     """
-    Embed a single word in the context of a slice model.
+    Embed a single word using a provided model/tokenizer.
 
-    Args:
-        word: string to embed
-        start: slice start
-        end: slice end
+    Assumes model is already on the correct DEVICE and in eval() mode.
 
     Returns:
-        Normalized embedding vector as np.ndarray (1D)
+        L2-normalized embedding vector (1D np.ndarray)
     """
-    model, tokenizer = load_model_for_slice(start, end)
+    inputs = tokenizer(
+        [word],
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=512,
+    )
 
-    # tokenize the word
-    tokens = tokenizer([word], return_tensors="pt", padding=True, truncation=True)
+    inputs = {k: v.to(get_device()) for k, v in inputs.items()}
 
-    # forward pass
     with torch.no_grad():
-        outputs = model(**tokens)
-        # mean over token embeddings
-        vec = outputs.last_hidden_state.mean(dim=1).squeeze(0).cpu().numpy()
+        outputs = model(**inputs, output_hidden_states=True)
+        hidden = outputs.hidden_states[-1]  # (1, seq_len, dim)
 
-    # normalize for cosine similarity
-    return normalize(vec)
+        attention_mask = inputs["attention_mask"]  # (1, seq_len)
+
+        # zero out padding tokens
+        masked_hidden = hidden * attention_mask.unsqueeze(-1)
+
+        # mean over real tokens only
+        token_counts = attention_mask.sum(dim=1, keepdim=True)
+        vec = masked_hidden.sum(dim=1) / token_counts
+
+        vec = vec.squeeze(0).cpu().numpy().astype(np.float32)
+
+    normed = normalize_or_none(vec)
+    if normed is None:
+        raise ValueError(f"Zero or invalid embedding for word: '{word}'")
+    return normed
+
+
+def embed_word(word: str, start: int, end: int) -> np.ndarray:
+    model, tokenizer = load_model_for_slice(start, end)
+    return embed_word_with_model(word, model, tokenizer)
 
 
 def embed_query(texts: list[str], start: int, end: int) -> np.ndarray:
@@ -540,18 +424,17 @@ def process_slice(
     logger.info(f"Saved to {slice_model_dir}")
 
     model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
-    model.to(DEVICE)
+    model.to(get_device())
     model.eval()
 
     dim = model.config.hidden_size
-    index = FaissIndex(dim)
-    token_vectors_accum: DefaultDict[str, List[np.ndarray]] = defaultdict(list)
+    index = OccurrenceFaissIndex(dim)
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = defaultdict(list) if SAVE_OCCURRENCE_VECTORS else None
     doc_ids_accum: Optional[DefaultDict[str, list[str]]] = defaultdict(list) if SAVE_OCCURRENCE_VECTORS else None
 
     sentence_stream = stream_slice_sentences(conn, slice_range)
 
-    if COLAB_MODE and DEVICE == "cuda":
+    if COLAB_MODE and get_device() == "cuda":
         batch_size = min(batch_size, 32)
 
     batch: list[SentenceBatchItem] = []
@@ -567,19 +450,17 @@ def process_slice(
             processed_count += 1
 
             if len(batch) >= batch_size:
-                process_batch(batch, model, tokenizer, index, embeddings_accum, doc_ids_accum, token_vectors_accum  )
+                process_batch(batch, model, tokenizer, index, embeddings_accum, doc_ids_accum )
                 if processed_count % log_every == 0:
                     logger.info(f"Processed {processed_count} sentences")
 
         # process any remaining
         if batch:
-            process_batch(batch, model, tokenizer, index, embeddings_accum, doc_ids_accum, token_vectors_accum  )
+            process_batch(batch, model, tokenizer, index, embeddings_accum, doc_ids_accum )
             logger.info(f"Processed {processed_count} sentences (final)")
 
     index.save(str(index_path))
     logger.info(f"Saved FAISS index at {index_path}")
-
-    build_token_level_index(token_vectors_accum, slice_range)
 
     if SAVE_OCCURRENCE_VECTORS and embeddings_accum is not None and doc_ids_accum is not None:
         save_vectors(slice_id, embeddings_accum, doc_ids_accum)
@@ -588,7 +469,7 @@ def process_slice(
 
     del model, tokenizer, index, embeddings_accum, doc_ids_accum
     gc.collect()
-    if DEVICE == "cuda":
+    if get_device() == "cuda":
         torch.cuda.empty_cache()
 
 
@@ -599,10 +480,33 @@ def build_all_slices() -> None:
     conn.close()
 
 
+
+def debug_sentence_alignment(
+    sent: str,
+    tokenizer_tokens: list[int],
+    offsets: list[tuple[int, int]],
+    token_occurrence_ids: list[int],
+    hidden_states: np.ndarray,
+    batch_index: int,
+    tokenizer: PreTrainedTokenizerBase
+) -> None:
+    print("\n=== DEBUG SENTENCE ===")
+    print(f"TEXT: {sent}")
+    print(f"len(token_occurrence_ids): {len(token_occurrence_ids)}")
+    print(f"len(tokenizer_tokens): {len(tokenizer_tokens)}")
+    print()
+
+    decoded_tokens = tokenizer.convert_ids_to_tokens(tokenizer_tokens)
+
+    for idx, (tok, (start, end)) in enumerate(zip(decoded_tokens, offsets, strict=True)):
+        piece = sent[start:end] if start != end else ""
+        occ_id = token_occurrence_ids[idx] if idx < len(token_occurrence_ids) else None
+
+        print(f"{idx:03d} | tok={tok:>12} | span=({start:>3},{end:>3}) | text='{piece}' | occ_id={occ_id}")
+
+
 def main():
-    global DEVICE
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info(f"Using device: {DEVICE}")
+    logger.info(f"Using device: {get_device()}")
 
     logger.info(f"Starting slice pipeline (colab={COLAB_MODE})")
     build_all_slices()

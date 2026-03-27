@@ -8,18 +8,17 @@ Minimal sanity test for occurrence-level and token-level FAISS indexes.
 """
 
 from pathlib import Path
-import numpy as np
 
 from lib.FaissIndex import FaissIndex
 from lib.TokenFaissIndex import TokenFaissIndex
 from mb_embedding_pipeline import (
     faiss_slice_path,
     token_list_path,
-    load_vectors,
-    embed_word
+    load_model_for_slice,
+    embed_word_with_model
 )
 
-SLICE = (1625, 1629)
+SLICE = (1642, 1642)
 SLICE_ID = f"{SLICE[0]}-{SLICE[1]}"
 
 
@@ -66,7 +65,9 @@ def main() -> None:
     # print(f"[INFO] Vocab size: {len(embeddings_mean)}")
 
     # test queries
-    test_words = ["god", "king", "church", "man"]
+    test_words = ["god", "king", "church", "man", "sword", "ship", "bread", "horse"]
+
+    model, tokenizer = load_model_for_slice(SLICE[0], SLICE[1])
 
     for word in test_words:
         print(f"\n=== {word} ===")
@@ -75,7 +76,7 @@ def main() -> None:
         #     print("[MISS]")
         #     continue
 
-        q = embed_word(word, SLICE_ID[0], SLICE_ID[1]).reshape(1, -1)
+        q = embed_word_with_model(word, model, tokenizer).reshape(1, -1)
 
         # occurrence-level
         d_occ, i_occ = occ_index.search(q, k=5)
