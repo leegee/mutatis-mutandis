@@ -1,3 +1,4 @@
+from pathlib import Path
 from lib.eebo_config import (
     MACBERTH_VECTORS_DIR,
     MACBERTH_SLICE_MODEL_DIR,
