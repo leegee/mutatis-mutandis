@@ -161,7 +161,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     token_idx INTEGER NOT NULL,
                     token TEXT NOT NULL,
                     raw_token text,
-                    sentence_id INTEGER,
                     canonical TEXT,
                     PRIMARY KEY (doc_id, token_idx),
                     FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
@@ -193,7 +192,6 @@ def create_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(doc_id);")
             cur.execute("CREATE INDEX idx_tokens_token_lower ON tokens (lower(token));")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_sentence ON tokens(sentence_id);")
             cur.execute("CREATE INDEX idx_documents_lang ON documents(lang);")
 
     logger.info("Basic token indexes created")
@@ -204,11 +202,6 @@ def create_tiered_token_indexes(conn: Connection) -> None:
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical ON tokens(canonical);")
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_tokens_sentence_notnull
-                ON tokens(sentence_id)
-                WHERE sentence_id IS NOT NULL;
-            """)
 
             logger.info("Creating materialised view")
 
@@ -232,7 +225,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 -- Refresh when ingesting new:
                 -- REFRESH MATERIALIZED VIEW pamphlet_corpus;
 
-                -- Slice-level tokens restricted to pamphlets
+                -- Slice-level tokens restricted to pamphlets: hastext is apparently NOT collision proof TODO replace
                 CREATE MATERIALIZED VIEW pamphlet_tokens AS
                 SELECT
                     hashtext(t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
@@ -240,7 +233,6 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     t.token_idx,
                     t.token,
                     t.canonical,
-                    t.sentence_id,
                     d.corpus_zone,
                     d.pub_year,
                     d.title,
