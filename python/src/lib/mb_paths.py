@@ -1,3 +1,7 @@
+from lib.eebo_config import (
+    MACBERTH_VECTORS_DIR,
+    MACBERTH_SLICE_MODEL_DIR,
+)
 
 def slice_model_path(slice_range: tuple[int,int]) -> Path:
     start, end = slice_range

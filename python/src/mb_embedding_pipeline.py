@@ -25,7 +25,6 @@ from lib.eebo_logging import logger
 from lib.eebo_config import (
     COLAB_MODE,
     SLICES,
-    MACBERTH_VECTORS_DIR,
     MACBERTH_SLICE_MODEL_DIR,
     EEBO_MODEL_NAME,
     MACBERTH_FINE_TUNED_DIR
