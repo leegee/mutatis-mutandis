@@ -10,7 +10,6 @@ No vector represents an aggregate unless explicitly constructed outside the inde
 
 from __future__ import annotations
 from collections import defaultdict
-from pathlib import Path
 from typing import DefaultDict, Tuple, Optional, List, cast
 import os
 import gc
@@ -29,7 +28,7 @@ from lib.eebo_config import (
     EEBO_MODEL_NAME,
     MACBERTH_FINE_TUNED_DIR
 )
-from lib.slice_model_path import slice_model_path, vectors_path, faiss_slice_path
+from lib.mb_paths import slice_model_path, vectors_path, faiss_slice_path
 from lib.eebo_sentences import stream_slice_sentences
 from lib.FaissIndex import FaissIndex as OccurrenceFaissIndex
 
