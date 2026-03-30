@@ -30,6 +30,7 @@ from lib.eebo_config import (
     EEBO_MODEL_NAME,
     MACBERTH_FINE_TUNED_DIR
 )
+from lib.slice_model_path import slice_model_path, vectors_path, faiss_slice_path
 from lib.eebo_sentences import stream_slice_sentences
 from lib.FaissIndex import FaissIndex as OccurrenceFaissIndex
 
@@ -61,24 +62,6 @@ def get_device() -> str:
         import torch
         _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     return _DEVICE
-
-
-def slice_model_path(slice_range: tuple[int,int]) -> Path:
-    start, end = slice_range
-    path = MACBERTH_SLICE_MODEL_DIR / f"slice_{start}_{end}"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def vectors_path(slice_id: str) -> Path:
-    return MACBERTH_VECTORS_DIR / f"{slice_id}.npz"
-
-
-def faiss_slice_path(slice_range: tuple[int,int]) -> Path:
-    start, end = slice_range
-    path = MACBERTH_VECTORS_DIR / f"slice_{start}_{end}.faiss"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def normalize_or_none(v: np.ndarray) -> Optional[np.ndarray]:
