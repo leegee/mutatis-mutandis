@@ -3,8 +3,30 @@
 """
 mb_embedding_pipeline.py
 
-Every vector in the system corresponds to exactly one token occurrence.
-No vector represents an aggregate unless explicitly constructed outside the index.
+Pipeline for generating and managing occurrence-level word embeddings
+from Early Modern English pamphlets (EEBO corpus) using MacBERTh models.
+
+Key Features:
+---------------
+- Each vector corresponds to a single token occurrence in the corpus.
+  No vector represents an aggregate unless explicitly constructed outside
+  the FAISS index.
+- Supports both shared MacBERTh models and slice-specific fine-tuned models
+  for different historical periods ('slices').
+- Aggregates subword embeddings per word using mean pooling.
+- Stores embeddings in a FAISS index for efficient similarity search.
+- Optionally saves occurrence-level vectors and associated document IDs
+  for downstream processing or analysis.
+
+Workflow:
+----------
+1. Load or initialize MacBERTh model (shared or slice-specific).
+2. Stream sentences from the EEBO database, obtaining token occurrence IDs.
+3. Tokenize and forward sentences through the model to extract hidden states.
+4. Aggregate subword vectors per word occurrence.
+5. Normalize vectors and insert into a FAISS index keyed by token_occurrence_id.
+6. Optionally accumulate embeddings and doc_ids for persistent storage.
+7. Save FAISS index and vectors per slice.
 
 """
 
@@ -313,7 +335,7 @@ def load_model_for_slice(start: int, end: int) -> tuple[PreTrainedModel, PreTrai
 
     tokenizer = AutoTokenizer.from_pretrained(slice_model_dir)
     model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
-    logger.info(f"Loaded slice-specific MacBERTh model for {start}-{end}")
+    logger.info(f"Loaded slice-specific MacBERTh model for {start}-{end} from {slice_model_dir} - {model.config._name_or_path}")
 
     model.to(get_device())
     model.eval()
@@ -397,14 +419,15 @@ def process_slice(
     index_path = faiss_slice_path(slice_range)
 
     tokenizer, shared_model = get_macberth_model(shared_only=True)
-    slice_model_dir = slice_model_path(slice_range)
+    # slice_model_dir = slice_model_path(slice_range)
+    #
+    # logger.info(f"Saving per-slice MacBERTh model to {slice_model_dir}")
+    # shared_model.save_pretrained(slice_model_dir)
+    # tokenizer.save_pretrained(slice_model_dir)
+    # logger.info(f"Saved to {slice_model_dir}")
+    #
+    # model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
 
-    logger.info(f"Saving per-slice MacBERTh model to {slice_model_dir}")
-    shared_model.save_pretrained(slice_model_dir)
-    tokenizer.save_pretrained(slice_model_dir)
-    logger.info(f"Saved to {slice_model_dir}")
-
-    model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
     model.to(get_device())
     model.eval()
 
