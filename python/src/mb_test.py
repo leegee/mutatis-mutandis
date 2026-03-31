@@ -1,101 +1,113 @@
-#!/usr/bin/env python3
-"""
-Minimal sanity test for occurrence-level and token-level FAISS indexes.
+#!/usr/bin/env python
 
-- Uses wrapper classes only (no direct faiss usage)
-- Runs on first slice only
-- Confirms both indexes load and return results
-"""
+import numpy as np
+import matplotlib.pyplot as plt
 
-from pathlib import Path
-
-from lib.FaissIndex import FaissIndex
-from lib.TokenFaissIndex import TokenFaissIndex
-from mb_embedding_pipeline import (
-    faiss_slice_path,
-    token_list_path,
-    load_model_for_slice,
-    embed_word_with_model
-)
-
-SLICE = (1642, 1642)
-SLICE_ID = f"{SLICE[0]}-{SLICE[1]}"
+from mb_embedding_pipeline import load_vectors
+from lib.eebo_config import CONCEPT_SETS
+from lib.eebo_logging import logger
 
 
-def load_token_list(path: Path) -> list[str]:
-    with open(path, "r", encoding="utf-8") as f:
-        return [line.rstrip("\n") for line in f]
+SLICES = [
+    (1625, 1629),
+    (1630, 1634),
+    (1635, 1639),
+    (1640, 1640),
+    (1641, 1641),
+    (1642, 1642),
+    (1643, 1643),
+    (1644, 1644),
+    (1645, 1645),
+    (1646, 1646),
+    (1647, 1647),
+    (1648, 1648),
+    (1649, 1649),
+    (1650, 1650),
+    (1651, 1651),
+    (1652, 1654),
+    (1655, 1657),
+]
 
 
-def main() -> None:
-    print(f"[INFO] Testing slice {SLICE_ID}")
+def cosine(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-    # paths
-    occ_index_path = faiss_slice_path(SLICE)
-    token_index_path = occ_index_path.with_name(
-        f"slice_{SLICE[0]}_{SLICE[1]}.token.faiss"
-    )
-    token_list_file = token_list_path(SLICE[0], SLICE[1])
 
-    # load indexes via wrappers
-    print("[INFO] Loading occurrence-level index...")
-    occ_index = FaissIndex.load(str(occ_index_path))
+def compute_centroid(slice_id, token):
+    data = load_vectors(slice_id)
+    vecs = data.get(token, [])
 
-    print("[INFO] Loading token-level index...")
-    token_index = TokenFaissIndex.load(str(token_index_path))
+    if not vecs:
+        logger.debug(f"[{slice_id}] token='{token}' → no occurrences")
+        return None
 
-    print("[INFO] Loading token list...")
-    tokens_ordered = load_token_list(token_list_file)
+    logger.debug(f"[{slice_id}] token='{token}' → n={len(vecs)}")
 
-    # invariant check
-    if len(tokens_ordered) != token_index.ntotal:
-        raise ValueError(
-            f"Token list ({len(tokens_ordered)}) != index size ({token_index.ntotal})"
+    return np.mean(np.stack(vecs), axis=0)
+
+
+def compute_drift_series(token):
+    centroids = []
+    slice_years = []
+
+    for start, end in SLICES:
+        sid = f"{start}-{end}"
+        c = compute_centroid(sid, token)
+
+        if c is not None:
+            centroids.append(c)
+            slice_years.append(start)
+
+    if len(centroids) < 2:
+        logger.warning(f"token='{token}' insufficient data for drift (n={len(centroids)})")
+        return [], []
+
+    drifts = []
+    drift_x = []
+
+    for i in range(1, len(centroids)):
+        d = 1 - cosine(centroids[i], centroids[i - 1])
+        drifts.append(d)
+        drift_x.append(slice_years[i])
+
+        logger.debug(
+            f"token='{token}' drift {slice_years[i-1]}→{slice_years[i]} = {d:.4f}"
         )
 
-    # load embeddings (for query vectors only)
-    # print("[INFO] Loading embeddings...")
-    # embeddings_occ = load_vectors(SLICE_ID)
-    #
-    # embeddings_mean = {
-    #     tok: np.mean(np.stack(vecs), axis=0).astype(np.float32)
-    #     for tok, vecs in embeddings_occ.items()
-    # }
-    #
-    # print(f"[INFO] Vocab size: {len(embeddings_mean)}")
+    logger.info(
+        f"token='{token}' computed drift series (points={len(drifts)})"
+    )
 
-    # test queries
-    test_words = ["god", "king", "church", "man", "sword", "ship", "bread", "horse"]
+    return drift_x, drifts
 
-    model, tokenizer = load_model_for_slice(SLICE[0], SLICE[1])
 
-    for word in test_words:
-        print(f"\n=== {word} ===")
+def main():
+    logger.info("Starting drift computation (canonical tokens only)")
 
-        # if word not in embeddings_mean:
-        #     print("[MISS]")
-        #     continue
+    plt.figure(figsize=(12, 6))
 
-        q = embed_word_with_model(word, model, tokenizer).reshape(1, -1)
+    for concept in CONCEPT_SETS.keys():
+        token = concept.lower()
+        logger.info(f"Processing concept='{concept}' token='{token}'")
 
-        # occurrence-level
-        d_occ, i_occ = occ_index.search(q, k=5)
-        print("[occurrence]")
-        for rank, idx in enumerate(i_occ[0]):
-            if idx == -1:
-                continue
-            print(f"{rank}: id={idx} score={d_occ[0][rank]:.4f}")
+        x, y = compute_drift_series(token)
 
-        # token-level
-        d_tok, i_tok = token_index.search(q, k=5)
-        print("[token]")
-        for rank, idx in enumerate(i_tok[0]):
-            if idx == -1:
-                continue
-            token = tokens_ordered[idx]
-            print(f"{rank}: {token} score={d_tok[0][rank]:.4f}")
+        if not y:
+            logger.warning(f"Skipping concept='{concept}' (no drift data)")
+            continue
 
-    print("\n[DONE]")
+        plt.plot(x, y, marker='o', label=concept)
+
+    plt.xlabel("Year (start of slice)")
+    plt.ylabel("Drift (1 - cosine)")
+    plt.title("Per-slice Drift (Canonical Tokens Only)")
+    plt.legend()
+    plt.tight_layout()
+
+    logger.info("Rendering plot")
+    plt.show()
+
+    logger.info("Done")
 
 
 if __name__ == "__main__":
