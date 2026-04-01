@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+import json
+import time
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 from mb_embedding_pipeline import load_vectors
-from lib.eebo_config import CONCEPT_SETS
+from lib.eebo_config import CONCEPT_SETS, OUT_DIR
 from lib.eebo_logging import logger
 from lib.FaissIndex import FaissIndex
 from lib.mb_paths import faiss_slice_path
@@ -24,93 +27,162 @@ SLICES = [
     (1646, 1646),
     (1647, 1647),
     (1648, 1648),
-    (1649, 1649),
-    (1650, 1650),
-    (1651, 1651),
-    (1652, 1654),
-    (1655, 1657),
-    (1658, 1660),
-    # (1661, 1665),
 ]
 
+K_NEIGHBORS = 5
 
-K_NEIGHBORS = 5  # Number of semantic neighbors to retrieve
+
+# invariant: one FAISS index per slice; safe to reuse across tokens
+_FAISS_CACHE: dict[tuple[int, int], FaissIndex] = {}
+
+
+def get_faiss_index(slice_range: tuple[int, int]) -> FaissIndex:
+    if slice_range in _FAISS_CACHE:
+        logger.info(f"[{slice_range}] FAISS cache hit")
+        return _FAISS_CACHE[slice_range]
+
+    start, end = slice_range
+    sid = f"{start}-{end}"
+    path = str(faiss_slice_path(slice_range))
+
+    logger.info(f"[{sid}] loading FAISS index from disk: {path}")
+    t0 = time.time()
+
+    index = FaissIndex.load(path)
+
+    logger.info(
+        f"[{sid}] FAISS index loaded in {time.time() - t0:.2f}s (cached)"
+    )
+
+    _FAISS_CACHE[slice_range] = index
+    return index
+
+
+def warm_faiss_cache():
+    logger.info("Warming FAISS cache for all slices")
+    for slice_range in SLICES:
+        get_faiss_index(slice_range)
+    logger.info(f"FAISS cache warm: {len(_FAISS_CACHE)} indexes loaded")
+
 
 def cosine(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-def compute_centroid(slice_id, token):
+
+def compute_centroid(slice_id: str, token: str):
+    t0 = time.time()
+
     data = load_vectors(slice_id)
     vecs = data.get(token, [])
 
     if not vecs:
-        logger.debug(f"[{slice_id}] token='{token}' → no occurrences")
+        logger.info(f"[{slice_id}] token='{token}' → no occurrences")
         return None, []
 
-    logger.debug(f"[{slice_id}] token='{token}' → n={len(vecs)}")
-    return np.mean(np.stack(vecs), axis=0), vecs
+    centroid = np.mean(np.stack(vecs), axis=0)
 
-def get_neighbors(conn: psycopg.Connection, index: FaissIndex, vecs: list[np.ndarray]):
-    if not vecs:
+    logger.info(
+        f"[{slice_id}] token='{token}' → n={len(vecs)} "
+        f"(centroid computed in {time.time() - t0:.2f}s)"
+    )
+    return centroid, vecs
+
+
+def slice_neighbors(conn: psycopg.Connection, index: FaissIndex, centroid_vec: np.ndarray, slice_id: str):
+    t0 = time.time()
+
+    distances, neighbor_ids = index.search(
+        centroid_vec.reshape(1, -1),
+        k=K_NEIGHBORS + 1
+    )
+
+    neighbor_ids = neighbor_ids[0][1:]
+    distances = distances[0][1:]
+
+    if len(neighbor_ids) == 0:
+        logger.warning(f"[{slice_id}] no neighbors returned from FAISS")
         return []
 
-    vecs_arr = np.stack(vecs).astype(np.float32)
-    distances, neighbor_ids = index.search(vecs_arr, k=K_NEIGHBORS + 1)  # +1 for self
+    logger.info(
+        f"[{slice_id}] FAISS returned {len(neighbor_ids)} neighbors "
+        f"in {time.time() - t0:.2f}s"
+    )
 
-    all_neighbors = []
-
-    # Flatten and deduplicate neighbor IDs for one DB query
-    neighbor_ids_flat = np.unique(neighbor_ids.flatten())
-    neighbor_ids_flat = neighbor_ids_flat[neighbor_ids_flat != -1]  # FAISS uses -1 for missing
-
-    if len(neighbor_ids_flat) == 0:
-        return [[] for _ in vecs]
+    t1 = time.time()
 
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT token_occurrence_id, token, canonical, doc_id, pub_year
+            SELECT token, canonical, doc_id, pub_year
             FROM pamphlet_tokens
             WHERE token_occurrence_id = ANY(%s)
-        """, (neighbor_ids_flat.tolist(),))
+        """, (neighbor_ids.tolist(),))
         rows = cur.fetchall()
 
-    id_to_info = {row[0]: row[1:] for row in rows}
+    logger.info(
+        f"[{slice_id}] DB lookup returned {len(rows)} rows "
+        f"in {time.time() - t1:.2f}s"
+    )
 
-    # Build neighbor lists per occurrence, skipping self
-    for i in range(len(vecs)):
-        occ_neighbors = []
-        for dist, nid in zip(distances[i], neighbor_ids[i]):
-            if nid == -1 or nid == -1:  # skip missing
-                continue
-            if nid in id_to_info:
-                tkn, can, doc, year = id_to_info[nid]
-                occ_neighbors.append(((tkn, can, doc, year), dist))
-        # remove self-match (assumes first entry is self)
-        occ_neighbors = [n for n in occ_neighbors if n[0][2] != -1]  # crude filter; refine if needed
-        all_neighbors.append(occ_neighbors[:K_NEIGHBORS])
+    # invariant: rows and distances must align positionally
+    if len(rows) != len(distances):
+        logger.error(
+            f"[{slice_id}] mismatch rows={len(rows)} distances={len(distances)}"
+        )
 
-    return all_neighbors
+    agg = defaultdict(lambda: {"freq": 0, "sim_sum": 0.0})
 
-def compute_drift_series(token, conn: psycopg.Connection):
+    for row, dist in zip(rows, distances):
+        tkn, can, doc, year = row
+        key = (tkn, can)
+        agg[key]["freq"] += 1
+        agg[key]["sim_sum"] += float(dist)
+
+    top_neighbors = []
+    for (tkn, can), info in agg.items():
+        mean_sim = info["sim_sum"] / info["freq"]
+        top_neighbors.append({
+            "token": tkn,
+            "canonical": can,
+            "freq": info["freq"],
+            "mean_sim": mean_sim,
+        })
+
+    top_neighbors.sort(key=lambda x: x["mean_sim"], reverse=True)
+
+    logger.info(
+        f"[{slice_id}] aggregated to {len(top_neighbors)} unique neighbors "
+        f"(total time {time.time() - t0:.2f}s)"
+    )
+
+    return top_neighbors[:K_NEIGHBORS]
+
+
+def compute_drift_and_neighbors(token: str, conn: psycopg.Connection):
     centroids = []
     slice_years = []
-    slice_neighbors = []
+    neighbors_per_slice = []
 
-    for start, end in SLICES:
+    for i, (start, end) in enumerate(SLICES):
         sid = f"{start}-{end}"
+        logger.info(f"[{sid}] ({i+1}/{len(SLICES)}) starting slice")
+
         centroid, vecs = compute_centroid(sid, token)
 
-        if centroid is not None:
-            centroids.append(centroid)
-            slice_years.append(start)
+        if centroid is None:
+            continue
 
-            # Load FAISS index for this slice
-            index = FaissIndex.load(str(faiss_slice_path((start, end))))
-            neighbors = get_neighbors(conn, index, vecs)
-            slice_neighbors.append(neighbors)
+        centroids.append(centroid)
+        slice_years.append(start)
+
+        index = get_faiss_index((start, end))
+
+        top_neighbors = slice_neighbors(conn, index, centroid, sid)
+        neighbors_per_slice.append(top_neighbors)
 
     if len(centroids) < 2:
-        logger.warning(f"token='{token}' insufficient data for drift (n={len(centroids)})")
+        logger.warning(
+            f"token='{token}' insufficient data for drift (n={len(centroids)})"
+        )
         return [], [], []
 
     drifts = []
@@ -118,48 +190,82 @@ def compute_drift_series(token, conn: psycopg.Connection):
 
     for i in range(1, len(centroids)):
         d = 1 - cosine(centroids[i], centroids[i - 1])
-        drifts.append(d)
+        drifts.append(float(d))
         drift_x.append(slice_years[i])
 
-        logger.debug(f"token='{token}' drift {slice_years[i-1]}→{slice_years[i]} = {d:.4f}")
+        logger.info(
+            f"token='{token}' drift {slice_years[i-1]}→{slice_years[i]} = {d:.4f}"
+        )
 
-    logger.info(f"token='{token}' computed drift series (points={len(drifts)})")
-    return drift_x, drifts, slice_neighbors
+    return drift_x, drifts, neighbors_per_slice
+
 
 def main():
-    logger.info("Starting drift + neighbor computation (canonical tokens only)")
+    logger.info("Starting Heuser-style drift + neighbors computation")
+
+    t_global = time.time()
+
     conn = get_connection()
     plt.figure(figsize=(12, 6))
 
-    # terms = CONCEPT_SETS.keys()
-    terms = ['liberty']
+    # optional: front-load I/O cost and eliminate runtime stalls
+    warm_faiss_cache()
+
+    terms = ['king']
+
+    results = {}
 
     for concept in terms:
         token = concept.lower()
         logger.info(f"Processing concept='{concept}' token='{token}'")
 
-        x, y, neighbors = compute_drift_series(token, conn)
+        t0 = time.time()
+
+        x, y, neighbors_per_slice = compute_drift_and_neighbors(token, conn)
 
         if not y:
             logger.warning(f"Skipping concept='{concept}' (no drift data)")
             continue
 
-        # Log neighbors for first slice as a test
-        if neighbors and len(neighbors) > 0:
-            for occ_neighbors in neighbors[0]:  # first slice
-                for (tkn, can, doc, year), dist in occ_neighbors:
-                    logger.info(f"Neighbor='{tkn}' (canonical='{can}'), doc={doc}, year={year}, sim={dist:.4f}")
+        results[token] = {
+            "years": x,
+            "drift": y,
+            "neighbors": neighbors_per_slice,
+        }
+
+        logger.info(
+            f"concept='{concept}' completed in {time.time() - t0:.2f}s"
+        )
+
+        for year, top_neighbors in zip(x, neighbors_per_slice[1:]):
+            logger.info(f"[{token}] slice {year} top neighbors:")
+            for n in top_neighbors:
+                logger.info(
+                    f"  {n['token']} (canonical={n['canonical']}) "
+                    f"freq={n['freq']} mean_sim={n['mean_sim']:.4f}"
+                )
 
         plt.plot(x, y, marker='o', label=concept)
 
+    out_path = OUT_DIR / "drift_neighbors.json"
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+
+    logger.info(f"Saved dataset → {out_path}")
+
     plt.xlabel("Year (start of slice)")
     plt.ylabel("Drift (1 - cosine)")
-    plt.title("Per-slice Drift + Semantic Neighbors")
+    plt.title("Heuser-style Token Drift + Top Semantic Neighbors")
     plt.legend()
     plt.tight_layout()
+
     logger.info("Rendering plot")
     plt.show()
-    logger.info("Done")
+
+    logger.info(
+        f"Done (total runtime {time.time() - t_global:.2f}s)"
+    )
+
 
 if __name__ == "__main__":
     main()
