@@ -60,3 +60,4 @@ python/umap_liberty_interactive.html
 docs/output/exploration/concept_neighbour_audit_*.json
 python/src_ff_exp
 macberth_pg_secrets.json
+python/drift_neighbors.json
