@@ -122,3 +122,138 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 Aligned diachornic vectors naturally detect semantic drift.
 
 The reconfiguration of Koselleckian poles is structural shift so requires imposed axis.
+
+## To Do
+
+### 1. Replace KMeans with HDBSCAN
+
+* Drop forced `k`
+* Let clusters emerge from the data
+* Treat noise points explicitly
+
+```python
+clusterer = hdbscan.HDBSCAN(min_cluster_size=10)
+labels = clusterer.fit_predict(vecs)
+```
+
+### 2. Redefine drift to allow *sense birth/death*
+
+Current:
+
+* every cluster is forced to match a previous one
+
+Change:
+
+* introduce a distance threshold ε
+
+  * no match → **new sense (birth)**
+  * unmatched previous → **sense death**
+
+Track:
+
+* births per slice
+* deaths per slice
+* surviving senses
+
+### 3. Promote JSD to primary signal
+
+* Treat `js_divergence` as the main drift measure
+* Use cluster drift as supporting evidence
+
+Plot together:
+
+* JSD
+* entropy
+* cluster count
+
+Distributional change is more stable than centroid movement.
+
+### 4. Fix neighbor distribution bias
+
+Problem:
+
+* high-frequency tokens dominate
+
+Options:
+
+* downweight by global frequency
+* or compute something like:
+
+  ```
+  p(neighbor | token) / p(neighbor overall)
+  ```
+
+Otherwise results reflect corpus frequency, not semantics.
+
+### 5. Stabilize neighbor sampling
+
+* Revisit:
+
+  * `K_NEIGHBORS * 5`
+  * similarity threshold `0.6`
+* Consider:
+
+  * fixed top-k without threshold, or
+  * adaptive threshold per slice
+
+Current sampling introduces inconsistent noise.
+
+### 6. Handle small-n slices more carefully
+
+Current:
+
+* `< 8` → mean vector
+
+Better:
+
+* mark as “insufficient data”
+* or skip slice in drift calculation
+
+Small samples create fake stability or noise.
+
+## **Lower priority (interpretability / research payoff)**
+
+### 7. Track cluster statistics over time
+
+For each slice:
+
+* number of clusters
+* cluster sizes
+* proportion of noise (if using HDBSCAN)
+
+Gives a direct handle on polysemy evolution.
+
+### 8. Surface top neighbors per slice
+
+From:
+
+```python
+Counter(neighbor_tokens)
+```
+
+Extract:
+
+* top N neighbors per slice
+* deltas between slices
+
+### 9. Inspect drift spikes qualitatively
+
+For large changes:
+
+* look at:
+
+  * neighbors
+  * clusters
+  * source documents
+
+Validates that signals correspond to real semantic shifts.
+
+### 10. Add alignment sanity check
+
+* compare:
+
+  * intra-slice similarity vs cross-slice similarity
+
+Detect whether model fine-tuning is introducing artificial drift.
+
+
