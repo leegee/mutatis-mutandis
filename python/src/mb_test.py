@@ -5,8 +5,8 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict, Counter
-import json
 from pathlib import Path
+from sklearn.cluster import KMeans
 
 from mb_embedding_pipeline import load_vectors
 from lib.eebo_logging import logger
@@ -15,6 +15,7 @@ from lib.mb_paths import faiss_slice_path
 from lib.eebo_db import get_connection
 from lib.eebo_config import OUT_DIR
 import psycopg
+import hdbscan
 
 SLICES = [
     (1625, 1629),
@@ -33,7 +34,6 @@ SLICES = [
 
 K_NEIGHBORS = 5
 
-
 # FAISS cache
 _FAISS_CACHE: dict[tuple[int, int], FaissIndex] = {}
 
@@ -45,25 +45,20 @@ def get_faiss_index(slice_range: tuple[int, int]) -> FaissIndex:
         return _FAISS_CACHE[slice_range]
 
     start, end = slice_range
-    sid = f"{start}-{end}"
     path = str(faiss_slice_path(slice_range))
-
-    logger.info(f"[{sid}] loading FAISS index from disk: {path}")
+    logger.info(f"[{start}-{end}] loading FAISS index from disk: {path}")
     t0 = time.time()
 
     index = FaissIndex.load(path)
-
-    logger.info(f"[{sid}] FAISS loaded in {time.time() - t0:.2f}s (cached)")
+    logger.info(f"[{start}-{end}] FAISS loaded in {time.time() - t0:.2f}s (cached)")
     _FAISS_CACHE[slice_range] = index
     return index
 
-
-# ID lookup cache - might save time when running many queries
+# ID lookup cache
 _ID_CACHE: dict[int, tuple[str, str | None, str, int]] = {}
 
 def save_id_cache():
     with _CACHE_FILE.open("w", encoding="utf-8") as f:
-        # Convert keys to str for JSON
         json.dump({str(k): v for k, v in _ID_CACHE.items()}, f)
     logger.info(f"Saved ID cache to {_CACHE_FILE} ({len(_ID_CACHE)} entries)")
 
@@ -73,7 +68,6 @@ def load_id_cache():
         return
     with _CACHE_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
-        # Convert keys back to int
         _ID_CACHE.update({int(k): tuple(v) for k, v in data.items()})
     logger.info(f"Loaded ID cache from {_CACHE_FILE} ({len(_ID_CACHE)} entries)")
 
@@ -86,8 +80,6 @@ def lookup_token_occurrences(conn: psycopg.Connection, ids: list[int]):
 
     if missing:
         logger.info(f"[lookup] cache miss: {len(missing)}/{len(ids)} ids")
-
-        t_db = time.time()
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT token_occurrence_id, token, canonical, doc_id, pub_year
@@ -95,32 +87,14 @@ def lookup_token_occurrences(conn: psycopg.Connection, ids: list[int]):
                 WHERE token_occurrence_id = ANY(%s)
             """, (missing,))
             rows = cur.fetchall()
-
         for occ_id, token, canonical, doc_id, year in rows:
             _ID_CACHE[occ_id] = (token, canonical, doc_id, year)
+        logger.info(f"[lookup] fetched {len(rows)} rows in {time.time() - t0:.2f}s (cache size={len(_ID_CACHE)})")
 
-        logger.info(
-            f"[lookup] fetched {len(rows)} rows in {time.time() - t_db:.2f}s "
-            f"(cache size={len(_ID_CACHE)})"
-        )
+    return [_ID_CACHE[i] for i in ids if i in _ID_CACHE]
 
-        if len(rows) != len(missing):
-            logger.warning(
-                f"[lookup] DB returned {len(rows)} rows for {len(missing)} ids"
-            )
-    else:
-        logger.info(f"[lookup] cache hit: {len(ids)} ids")
-
-    result = [_ID_CACHE[i] for i in ids if i in _ID_CACHE]
-
-    logger.info(f"[lookup] total {time.time() - t0:.2f}s")
-    return result
-
-
-# Metrics
 def cosine(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
 
 def entropy_from_tokens(tokens: list[str]) -> float:
     counts = Counter(tokens)
@@ -129,7 +103,6 @@ def entropy_from_tokens(tokens: list[str]) -> float:
         return 0.0
     p = np.array(list(counts.values()), dtype=float) / total
     return float(-np.sum(p * np.log(p)))
-
 
 def js_divergence(p_counts: Counter, q_counts: Counter) -> float:
     vocab = set(p_counts) | set(q_counts)
@@ -143,159 +116,139 @@ def js_divergence(p_counts: Counter, q_counts: Counter) -> float:
     q /= q.sum()
     m = 0.5 * (p + q)
 
-    def kl(a, b):
-        mask = a > 0
-        return np.sum(a[mask] * np.log(a[mask] / b[mask]))
+    mask_p = p > 0
+    mask_q = q > 0
+    kl = lambda a, b, mask: np.sum(a[mask] * np.log(a[mask] / b[mask]))
+    return float(0.5 * kl(p, m, mask_p) + 0.5 * kl(q, m, mask_q))
 
-    return float(0.5 * kl(p, m) + 0.5 * kl(q, m))
-
-
-def compute_centroid(slice_id: str, token: str):
+def compute_clusters(slice_id: str, token: str):
     data = load_vectors(slice_id)
     vecs = data.get(token, [])
-
     if not vecs:
-        logger.info(f"[{slice_id}] token='{token}' - no occurrences")
-        return None, []
+        return [], []
 
-    centroid = np.mean(np.stack(vecs), axis=0)
-    logger.info(f"[{slice_id}] token='{token}' n={len(vecs)}")
-    return centroid, vecs
+    vecs = np.array(vecs, dtype=np.float32)
 
+    # already normalized upstream — do NOT renormalize
 
-def slice_neighbors(conn, index, centroid_vec, slice_id):
-    distances, neighbor_ids = index.search(
-        centroid_vec.reshape(1, -1),
-        k=K_NEIGHBORS + 1
-    )
+    n = len(vecs)
 
-    neighbor_ids = neighbor_ids[0][1:]
-    distances = distances[0][1:]
+    # small-n fallback
+    if n < 8:
+        return [np.mean(vecs, axis=0)], vecs
 
-    rows = lookup_token_occurrences(conn, neighbor_ids.tolist())
+    # heuristic: 2–3 senses max
+    k = min(3, max(2, n // 100))  # grows slowly with data
 
-    tokens = []
-    agg = defaultdict(lambda: {"freq": 0, "sim_sum": 0.0})
+    kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
+    labels = kmeans.fit_predict(vecs)
 
-    for (tkn, can, doc, year), dist in zip(rows, distances):
-        tokens.append(tkn)
-        key = (tkn, can)
-        agg[key]["freq"] += 1
-        agg[key]["sim_sum"] += float(dist)
+    clusters = []
+    for i in range(k):
+        members = vecs[labels == i]
+        if len(members) == 0:
+            continue
+        clusters.append(np.mean(members, axis=0))
 
-    top_neighbors = []
-    for (tkn, can), info in agg.items():
-        top_neighbors.append({
-            "token": tkn,
-            "canonical": can,
-            "freq": info["freq"],
-            "mean_sim": info["sim_sum"] / info["freq"],
-        })
-
-    top_neighbors.sort(key=lambda x: x["mean_sim"], reverse=True)
-
-    return top_neighbors[:K_NEIGHBORS], tokens
+    return clusters, vecs
 
 
-def compute_drift_and_neighbors(token: str, conn):
-    centroids = []
+def compute_drift_and_neighbors_clustered(token: str, conn):
     slice_years = []
-    neighbors_per_slice = []
+    clusters_per_slice = []
     entropy_per_slice = []
     token_dists = []
 
-    for (start, end) in SLICES:
+    for start, end in SLICES:
         sid = f"{start}-{end}"
+        index = get_faiss_index((start, end))
+        cluster_centroids, vecs = compute_clusters(sid, token)
 
-        centroid, _ = compute_centroid(sid, token)
-        if centroid is None:
+        if not cluster_centroids:
+            logger.info(f"[{sid}] token='{token}' clusters=0 entropy=0.0")
             continue
 
-        centroids.append(centroid)
         slice_years.append(start)
+        clusters_per_slice.append(cluster_centroids)
 
-        index = get_faiss_index((start, end))
-        top_neighbors, tokens = slice_neighbors(conn, index, centroid, sid)
+        # local neighborhoods
+        neighbor_tokens = []
+        for vec in vecs:
+            distances, neighbor_ids = index.search(vec.reshape(1, -1), K_NEIGHBORS * 5)
+            rows = lookup_token_occurrences(conn, neighbor_ids[0].tolist())
+            for (tkn, can, doc, year), sim in zip(rows, distances[0]):
+                if sim < 0.6 or tkn == token:
+                    continue
+                neighbor_tokens.append(tkn)
 
-        neighbors_per_slice.append(top_neighbors)
-
-        # spread
-        ent = entropy_from_tokens(tokens)
+        ent = entropy_from_tokens(neighbor_tokens)
         entropy_per_slice.append(ent)
+        token_dists.append(Counter(neighbor_tokens))
 
-        token_dists.append(Counter(tokens))
+        logger.info(f"[{sid}] clusters={len(cluster_centroids)} entropy={ent:.4f}")
 
-        logger.info(f"[{sid}] entropy={ent:.4f}")
-
-    if len(centroids) < 2:
+    if len(clusters_per_slice) < 2:
         return [], [], [], [], []
 
-    drifts = []
     drift_x = []
+    drifts = []
     jsd = []
 
-    for i in range(1, len(centroids)):
-        d = 1 - cosine(centroids[i], centroids[i - 1])
-        drifts.append(float(d))
+    for i in range(1, len(clusters_per_slice)):
+        # match clusters across slices by nearest neighbors
+        prev = clusters_per_slice[i - 1]
+        curr = clusters_per_slice[i]
+
+        # compute drift as average nearest-cluster distance
+        distances = [min([1 - cosine(c, p) for p in prev]) for c in curr]
+        drift_val = float(np.mean(distances))
+        drifts.append(drift_val)
         drift_x.append(slice_years[i])
 
         j = js_divergence(token_dists[i - 1], token_dists[i])
         jsd.append(j)
+        logger.info(f"drift {slice_years[i-1]}->{slice_years[i]}={drift_val:.4f} jsd={j:.4f}")
 
-        logger.info(
-            f"drift {slice_years[i-1]} to {slice_years[i]}={d:.4f} "
-            f"jsd={j:.4f}"
-        )
-
-    return drift_x, drifts, neighbors_per_slice, entropy_per_slice, jsd
-
+    return drift_x, drifts, clusters_per_slice, entropy_per_slice, jsd
 
 def main():
-    logger.info("Starting drift + neighborhood analysis")
-
+    logger.info("Starting cluster-aware drift + neighborhood analysis")
     load_id_cache()
-
     conn = get_connection()
     plt.figure(figsize=(12, 6))
 
-    terms = ['king']
+    terms = ['liberty']
     results = {}
 
     for concept in terms:
         token = concept.lower()
         logger.info(f"Processing '{token}'")
-
-        x, drift, neighbors, entropy_vals, jsd_vals = \
-            compute_drift_and_neighbors(token, conn)
-
+        x, drift, clusters, entropy_vals, jsd_vals = compute_drift_and_neighbors_clustered(token, conn)
         if not drift:
             continue
 
         save_id_cache()
-
         results[token] = {
             "years": x,
             "drift": drift,
             "entropy": entropy_vals,
             "js_divergence": jsd_vals,
-            "neighbors": neighbors,
+            "clusters": [[c.tolist() for c in slice_clusters] for slice_clusters in clusters]
         }
 
         plt.plot(x, drift, marker='o', label=f"{token} drift")
 
-    out_path = OUT_DIR / "drift_neighbors.json"
+    out_path = OUT_DIR / "drift_neighbors_clustered.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
-
     logger.info(f"Saved dataset to {out_path}")
 
     plt.xlabel("Year")
     plt.ylabel("Drift")
-    plt.title("Semantic Drift + Distributional Change")
+    plt.title("Cluster-aware Semantic Drift + Distributional Change")
     plt.legend()
     plt.tight_layout()
     plt.show()
-
 
 if __name__ == "__main__":
     main()
