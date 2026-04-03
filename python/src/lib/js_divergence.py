@@ -1,3 +1,17 @@
+"""
+lib.js_divergence.py - Jensen-Shannon Divergence
+
+A method for measuring the similarity or difference between two probability distributions.
+
+Unlike some other measures like Kullback-Leibler (KL) divergence, JSD is symmetric
+and always produces a finite value, which makes it more stable and interpretable.
+
+0: The distributions are identical.
+Higher value: The distributions are more different.
+
+"""
+
+import numpy as np
 
 def js_divergence(p_counts, q_counts):
     vocab = set(p_counts) | set(q_counts)
