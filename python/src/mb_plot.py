@@ -1,64 +1,76 @@
 #!/usr/bin/env python
 import json
-import matplotlib.pyplot as plt
-import numpy as np
+from pathlib import Path
+import plotly.graph_objects as go
+import plotly.express as px
+from lib.eebo_config import OUT_DIR
 from mb_test import OUT_PATH
 
-DATA_FILE = OUT_PATH
+def load_data(path):
+    if not path.exists():
+        raise FileNotFoundError(f"Data file not found: {path}")
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data
 
-with open(DATA_FILE, "r", encoding="utf-8") as f:
-    data = json.load(f)
+def create_interactive_plot(data):
+    fig = go.Figure()
 
-if not isinstance(data, dict):
-    raise ValueError("Expected JSON to be a dict keyed by token")
+    for token, token_data in data.items():
+        slices = token_data.get("slices", [])
+        if not slices:
+            continue
 
-# Iterate over tokens in the dataset
-for token, token_data in data.items():
-    slices_data = token_data.get("slices")
-    transitions = token_data.get("phase_transitions", {})
+        years = [s["year"] for s in slices]
+        drift = [s.get("drift", 0) for s in slices]
+        jsd = [s.get("js_divergence", 0) for s in slices]
+        births = [s.get("births", 0) for s in slices]
+        top_neighbors = [", ".join(f"{w}:{c}" for w, c in s.get("top_neighbors", [])[:5]) for s in slices]
 
-    if not slices_data:
-        print(f"No slices for {token}, skipping")
-        continue
+        # Drift line
+        fig.add_trace(go.Scatter(
+            x=years,
+            y=drift,
+            mode='lines+markers',
+            name=f"{token} drift",
+            line=dict(width=2),
+            hovertemplate=(
+                f"<b>{token}</b><br>"
+                "Year: %{x}<br>"
+                "Drift: %{y:.4f}<br>"
+                "JSD: %{customdata[0]:.4f}<br>"
+                "Births: %{customdata[1]}<br>"
+                "Top neighbors: %{customdata[2]}"
+            ),
+            customdata=list(zip(jsd, births, top_neighbors))
+        ))
 
-    # Extract main time series
-    years = [s["year"] for s in slices_data]
-    drift = [s["drift"] for s in slices_data]
-    jsd = [s["js_divergence"] for s in slices_data]
-    births = [s["births"] for s in slices_data]
+        # Phase transitions markers
+        pt_data = token_data.get("phase_transitions", {}).get("major", [])
+        for pt in pt_data:
+            fig.add_vline(
+                x=pt["year"],
+                line=dict(color='red', width=2, dash='dash'),
+                annotation_text=f"{token} MAJOR PHASE @ {pt['year']}",
+                annotation_position="top right"
+            )
 
-    plt.figure(figsize=(14, 6))
-    plt.plot(years, drift, label="Drift", marker="o")
-    plt.plot(years, jsd, label="JSD", marker="x")
-    plt.plot(years, births, label="Births", marker="^")
-
-    # Plot major transitions
-    for t in transitions.get("major", []):
-        plt.axvline(x=t["year"], color="red", linestyle="--", alpha=0.7)
-        plt.text(
-            t["year"], max(max(drift), max(jsd)) * 1.05,
-            f"MAJOR {t['year']}", rotation=90, color="red", verticalalignment="bottom"
+    fig.update_layout(
+        title="Semantic Drift, JSD, and Phase Transitions",
+        xaxis_title="Year",
+        yaxis_title="Drift",
+        hovermode="closest",
+        template="plotly_dark",
+        hoverlabel=dict(
+            font_size=16,
         )
+    )
 
-    # Plot minor transitions
-    for t in transitions.get("minor", []):
-        plt.axvline(x=t["year"], color="orange", linestyle=":", alpha=0.7)
-        plt.text(
-            t["year"], max(max(drift), max(jsd)) * 1.05,
-            f"MINOR {t['year']}", rotation=90, color="orange", verticalalignment="bottom"
-        )
+    fig.show()
 
-    # Plot single-doc spikes
-    for t in transitions.get("single_doc_spikes", []):
-        plt.axvline(x=t["year"], color="green", linestyle="-.", alpha=0.7)
-        plt.text(
-            t["year"], max(max(drift), max(jsd)) * 1.05,
-            f"SINGLE {t['year']}", rotation=90, color="green", verticalalignment="bottom"
-        )
+def main():
+    data = load_data(OUT_PATH)
+    create_interactive_plot(data)
 
-    plt.title(f"Semantic drift and phase transitions for '{token}'")
-    plt.xlabel("Year")
-    plt.ylabel("Value")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+if __name__ == "__main__":
+    main()
