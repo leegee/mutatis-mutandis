@@ -172,13 +172,33 @@ def match_clusters(prev_clusters, curr_clusters, threshold=0.25):
     return matches, deaths
 
 
-def detect_phase_transitions(slices_data):
-    if len(slices_data) < 3:
-        return []
+def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold=10, single_doc_ratio=0.5):
+    """
+    Detects both major and minor semantic phase transitions in slices_data.
 
+    Args:
+        slices_data: list of dicts, each with keys:
+            'year', 'cluster_sizes', 'drift', 'js_divergence', 'births', 'deaths', 'top_docs'
+        min_tokens: minimum tokens per slice to consider reliable
+        minor_cluster_threshold: cluster size below which a cluster may trigger a minor shift
+        single_doc_ratio: fraction of top-doc tokens that marks a potential single-doc spike
+
+    Returns:
+        dict with keys:
+            'major': list of major transitions
+            'minor': list of minor / subtle shifts
+            'single_doc_spikes': list of potential artefacts
+    """
+    if len(slices_data) < 3:
+        return {"major": [], "minor": [], "single_doc_spikes": []}
+
+    token_counts = np.array([sum(s["cluster_sizes"]) if s["cluster_sizes"] else 0 for s in slices_data])
     drifts = np.array([s["drift"] for s in slices_data[1:]])
     jsd = np.array([s["js_divergence"] for s in slices_data[1:]])
     births = np.array([s["births"] for s in slices_data[1:]])
+    deaths = np.array([s["deaths"] for s in slices_data[1:]])
+
+    valid = token_counts[1:] >= min_tokens
 
     def zscore(x):
         if np.std(x) == 0:
@@ -191,20 +211,54 @@ def detect_phase_transitions(slices_data):
 
     score = drift_z + jsd_z + 0.5 * births_z
 
-    transitions = []
+    major, minor, single_doc_spikes = [], [], []
 
     for i, s in enumerate(score):
+        if not valid[i]:
+            continue
+
+        slice_data = slices_data[i + 1]
+
+        # Detect major transitions
         if s > 1.5 and drift_z[i] > 0.5 and jsd_z[i] > 0.5:
-            transitions.append({
-                "year": slices_data[i + 1]["year"],
+            major.append({
+                "year": slice_data["year"],
                 "score": float(s),
-                "drift": slices_data[i + 1]["drift"],
-                "js_divergence": slices_data[i + 1]["js_divergence"],
-                "births": slices_data[i + 1]["births"],
-                "deaths": slices_data[i + 1]["deaths"]
+                "drift": slice_data["drift"],
+                "js_divergence": slice_data["js_divergence"],
+                "births": slice_data["births"],
+                "deaths": slice_data["deaths"],
+                "token_count": int(token_counts[i + 1])
             })
 
-    return transitions
+        # Detect minor transitions: small cluster birth/death
+        if slice_data["births"] > 0 or slice_data["deaths"] > 0:
+            small_clusters = [c for c in slice_data["cluster_sizes"] if c <= minor_cluster_threshold]
+            if small_clusters:
+                minor.append({
+                    "year": slice_data["year"],
+                    "small_cluster_count": len(small_clusters),
+                    "births": slice_data["births"],
+                    "deaths": slice_data["deaths"],
+                    "token_count": int(token_counts[i + 1])
+                })
+
+        # Detect single-doc spikes
+        if "top_docs" in slice_data and slice_data["top_docs"]:
+            top_doc_count = slice_data["top_docs"][0][1]  # most common doc
+            if top_doc_count / token_counts[i + 1] > single_doc_ratio:
+                single_doc_spikes.append({
+                    "year": slice_data["year"],
+                    "top_doc": slice_data["top_docs"][0][0],
+                    "top_doc_count": top_doc_count,
+                    "token_count": int(token_counts[i + 1])
+                })
+
+    return {
+        "major": major,
+        "minor": minor,
+        "single_doc_spikes": single_doc_spikes
+    }
 
 
 def compute_drift_and_neighbors_clustered(token, conn):
@@ -223,10 +277,15 @@ def compute_drift_and_neighbors_clustered(token, conn):
             continue
 
         neighbor_tokens = []
+        doc_ids = []
 
-        for vec in vecs:
+        for i, vec in enumerate(vecs):
             distances, neighbor_ids = index.search(vec.reshape(1, -1), K_NEIGHBORS * 5)
             rows = lookup_token_occurrences(conn, neighbor_ids[0].tolist())
+
+            # sample only first N vectors to avoid explosion
+            if i < 10:
+                doc_ids.extend([doc for (_, _, doc, _) in rows])
 
             for (tkn, can, doc, year), sim in zip(rows, distances[0]):
                 if sim < 0.6 or tkn == token:
@@ -242,6 +301,12 @@ def compute_drift_and_neighbors_clustered(token, conn):
             f"entropy={entropy_from_tokens(neighbor_tokens):.4f} "
             f"neighbors={len(neighbor_tokens)}"
         )
+
+        if doc_ids:
+            logger.info(
+                f"[{sid}] top_docs="
+                + ", ".join(f"{d}:{c}" for d, c in Counter(doc_ids).most_common(5))
+            )
 
         logger.info(
             f"[{sid}] top_neighbors="
