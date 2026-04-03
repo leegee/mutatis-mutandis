@@ -29,6 +29,10 @@ import re
 import sys
 import tempfile
 import unicodedata
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
+from itertools import islice
+from psycopg import sql
+import xml.etree.ElementTree as etree
 
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
@@ -116,8 +120,6 @@ def filter_existing_docs(doc_batch):
 
 def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[int, str]]]]:
     """Parse a single XML file and return doc metadata + token list."""
-    import xml.etree.ElementTree as etree
-
     try:
         tree = etree.parse(str(xml_path))
     except Exception as exc:
@@ -210,8 +212,6 @@ def stream_copy(table: str, columns: list[str], rows):
 
     logger.info(f"Streaming {len(rows)} rows into {table}")
 
-    from psycopg import sql
-
     with eebo_db.get_autocommit_connection() as conn:
         stmt = sql.SQL(
             "COPY {table} ({fields}) FROM STDIN WITH (FORMAT text, DELIMITER E'\t', NULL '\\N')"
@@ -236,75 +236,40 @@ def stream_copy(table: str, columns: list[str], rows):
 
 
 def ingest_xml_parallel(
+    xml_dir: Path = config.XML_ROOT_DIR,
     max_workers: int = 4,
     batch_docs: int = config.BATCH_DOCS,
     batch_tokens: int = config.BATCH_TOKENS
 ) -> None:
-    """Parse XML files in parallel and ingest documents + tokens safely with per-batch connections."""
+    """Stream XML parsing + incremental DB ingestion with bounded memory."""
 
-    xml_files = list(Path(config.XML_ROOT_DIR).rglob("*.xml"))
+    xml_iter = Path(xml_dir).rglob("*.xml")
     if MAX_DOCS:
-        xml_files = xml_files[:MAX_DOCS]
+        xml_iter = islice(xml_iter, MAX_DOCS)
 
-    if not xml_files:
-        logger.warning("No XML files found for ingestion")
-        return
+    logger.info("Starting streaming ingestion")
 
-    logger.info(f"Starting ingestion of {len(xml_files)} XML files")
-
-    # Step 1: parse XML in parallel
-    results = []
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_file_to_temp, p): p for p in xml_files}
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Processing XML"):
-            xml_path = futures[future]
-            try:
-                result = future.result()
-            except Exception as exc:
-                logger.error(f"XML worker failed for {xml_path.name}: {exc}")
-                continue
-            if result:
-                results.append(result)
-
-    logger.info(f"Parsing complete. {len(results)} documents ready for DB insert")
-
-    # Step 2: write documents and tokens in batches
     doc_batch: list[list[Any]] = []
     token_batch: list[list[Any]] = []
-    inserted_doc_ids: set[str] = set()  # track docs actually inserted
+    inserted_doc_ids: set[str] = set()
 
-    for doc_meta, token_file, token_count in tqdm(results, desc="Writing to DB"):
-        doc_id = doc_meta["doc_id"]
+    # bound number of in-flight tasks to avoid memory blowup
+    max_in_flight = max_workers * 2
 
-        # Prepare doc batch
-        doc_batch.append([
-            doc_id,
-            doc_meta["title"],
-            doc_meta["author"],
-            extract_year(doc_meta["source_date_raw"]),
-            doc_meta["publisher"],
-            doc_meta["pub_place"],
-            doc_meta["source_date_raw"],
-            token_count,
-            doc_meta["slice_start"],
-            doc_meta["slice_end"],
-        ])
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = set()
 
-        # Read tokens into batch
-        with open(token_file, "r") as f:
-            for line in f:
-                token_batch.append(line.strip().split("\t"))
+        def flush_docs():
+            nonlocal doc_batch, inserted_doc_ids
+            if not doc_batch:
+                return
 
-        os.remove(token_file)
+            filtered = filter_existing_docs(doc_batch)
+            if filtered:
+                new_ids = {doc[0] for doc in filtered}
+                inserted_doc_ids.update(new_ids)
 
-        # Flush document batch if full
-        if len(doc_batch) >= batch_docs:
-            doc_batch = filter_existing_docs(doc_batch)
-            if doc_batch:
-                new_doc_ids = {doc[0] for doc in doc_batch}
-                inserted_doc_ids.update(new_doc_ids)
-
-                logger.info(f"Flushing {len(doc_batch)} documents")
+                logger.info(f"Flushing {len(filtered)} documents")
                 stream_copy(
                     "documents",
                     [
@@ -312,52 +277,86 @@ def ingest_xml_parallel(
                         "publisher", "pub_place", "source_date_raw",
                         "token_count", "slice_start", "slice_end"
                     ],
-                    doc_batch
+                    filtered
                 )
-                doc_batch.clear()
-
-            # Flush token batch if it got large
-            if len(token_batch) >= batch_tokens:
-                token_batch = [t for t in token_batch if t[0] in inserted_doc_ids]
-                if token_batch:
-                    logger.info(f"Flushing {len(token_batch)} tokens")
-                    stream_copy(
-                        "tokens",
-                        ["doc_id", "token_idx", "token"],
-                        token_batch
-                    )
-                    token_batch.clear()
-
-    # Final flush of remaining documents
-    if doc_batch:
-        doc_batch = filter_existing_docs(doc_batch)
-        if doc_batch:
-            new_doc_ids = {doc[0] for doc in doc_batch}
-            inserted_doc_ids.update(new_doc_ids)
-
-            logger.info(f"Final flush of {len(doc_batch)} documents")
-            stream_copy(
-                "documents",
-                [
-                    "doc_id", "title", "author", "pub_year",
-                    "publisher", "pub_place", "source_date_raw",
-                    "token_count", "slice_start", "slice_end"
-                ],
-                doc_batch
-            )
             doc_batch.clear()
 
-    # Final flush of remaining tokens
-    if token_batch:
-        token_batch = [t for t in token_batch if t[0] in inserted_doc_ids]
-        if token_batch:
-            logger.info(f"Final flush of {len(token_batch)} tokens")
-            stream_copy(
-                "tokens",
-                ["doc_id", "token_idx", "token"],
-                token_batch
-            )
+        def flush_tokens():
+            nonlocal token_batch
+            if not token_batch:
+                return
+
+            filtered = [t for t in token_batch if t[0] in inserted_doc_ids]
+            if filtered:
+                logger.info(f"Flushing {len(filtered)} tokens")
+                stream_copy(
+                    "tokens",
+                    ["doc_id", "token_idx", "token"],
+                    filtered
+                )
             token_batch.clear()
+
+        def handle_result(result):
+            if not result:
+                return
+
+            doc_meta, token_file, token_count = result
+            doc_id = doc_meta["doc_id"]
+
+            doc_batch.append([
+                doc_id,
+                doc_meta["title"],
+                doc_meta["author"],
+                extract_year(doc_meta["source_date_raw"]),
+                doc_meta["publisher"],
+                doc_meta["pub_place"],
+                doc_meta["source_date_raw"],
+                token_count,
+                doc_meta["slice_start"],
+                doc_meta["slice_end"],
+            ])
+
+            with open(token_file, "r") as f:
+                for line in f:
+                    token_batch.append(line.strip().split("\t"))
+
+            os.remove(token_file)
+
+        # prime the pipeline
+        try:
+            for _ in range(max_in_flight):
+                futures.add(executor.submit(process_file_to_temp, next(xml_iter)))
+        except StopIteration:
+            pass
+
+        while futures:
+            done, futures = wait(futures, return_when=FIRST_COMPLETED)
+
+            for fut in done:
+                try:
+                    result = fut.result()
+                except Exception as exc:
+                    logger.error(f"Worker failed: {exc}")
+                    continue
+
+                handle_result(result)
+
+                # refill pipeline
+                try:
+                    futures.add(executor.submit(process_file_to_temp, next(xml_iter)))
+                except StopIteration:
+                    pass
+
+            # flush docs first so tokens have valid FK targets
+            if len(doc_batch) >= batch_docs:
+                flush_docs()
+
+            if len(token_batch) >= batch_tokens:
+                flush_tokens()
+
+        # final flush
+        flush_docs()
+        flush_tokens()
 
     logger.info("XML ingestion complete")
 
@@ -401,6 +400,7 @@ def main() -> None:
     logger.info(f"Processing max {MAX_DOCS if MAX_DOCS else 'all'} documents")
 
     ingest_xml_parallel(
+        xml_dir=BASE_DIR / "eebo_all" / "eebo_phase2" / "P4_XML_TCP_Ph2",
         max_workers=config.NUM_WORKERS,
         batch_docs=config.BATCH_DOCS,
         batch_tokens=config.BATCH_TOKENS
