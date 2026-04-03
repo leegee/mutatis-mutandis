@@ -13,9 +13,9 @@ class FastTextParams(TypedDict):
     minn: int
     maxn: int
 
-_BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
-XML_ROOT_DIR = _BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
+XML_ROOT_DIR = BASE_DIR / "eebo_all" / "eebo_phase1" / "P4_XML_TCP"
 TEXT_BASE_URL = 'http://localhost:5000/documents/'
 
 EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
@@ -27,7 +27,7 @@ except ModuleNotFoundError:
     COLAB_MODE = False
 
 # Could use env var
-OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else _BASE_DIR / "out"
+OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else BASE_DIR / "out"
 print(f"OUT_DIR = {OUT_DIR}")
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
