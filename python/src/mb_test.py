@@ -12,11 +12,13 @@ from lib.eebo_logging import logger
 from lib.FaissIndex import FaissIndex
 from lib.mb_paths import faiss_slice_path
 from lib.eebo_db import get_connection
-from lib.eebo_config import OUT_DIR
+from lib.eebo_config import OUT_DIR, CONCEPT_SETS
 import psycopg
 import hdbscan
 
 MIN_TOKENS = 30
+
+OUT_PATH = OUT_DIR / "drift_neighbors_micro_senses_slices.json"
 
 SLICES = [
     (1625, 1629),
@@ -43,7 +45,7 @@ _ID_CACHE = {}
 
 def get_faiss_index(slice_range):
     if slice_range in _FAISS_CACHE:
-        logger.info(f"[{slice_range}] FAISS cache hit")
+        logger.debug(f"[{slice_range}] FAISS cache hit")
         return _FAISS_CACHE[slice_range]
 
     path = str(faiss_slice_path(slice_range))
@@ -362,13 +364,51 @@ def compute_drift_and_neighbors_clustered(token, conn):
     return slices_data
 
 
+def log_phase_transitions(token, transitions, logger):
+    """
+    Log detected phase transitions for a token in a structured timeline format.
+
+    Parameters:
+    - token (str): the token being analyzed
+    - transitions (dict): output from detect_phase_transitions()
+    - logger: logging.Logger instance
+    """
+    if not transitions:
+        logger.info(f"[{token}] No phase transitions detected.")
+        return
+
+    # Major transitions
+    for t in transitions.get("major", []):
+        logger.info(
+            f"[{token}] MAJOR PHASE SHIFT @ {t['year']} "
+            f"(score={t['score']:.2f}, drift={t['drift']:.4f}, "
+            f"jsd={t['js_divergence']:.4f}, births={t['births']}, deaths={t['deaths']})"
+        )
+
+    # Minor transitions
+    for t in transitions.get("minor", []):
+        logger.info(
+            f"[{token}] MINOR SHIFT @ {t['year']} "
+            f"(score={t['score']:.2f}, small_clusters={t['small_cluster_count']}, "
+            f"births={t['births']}, deaths={t['deaths']})"
+        )
+
+    # Single-doc spikes
+    for t in transitions.get("single_doc_spikes", []):
+        logger.info(
+            f"[{token}] SINGLE-DOC SPIKE @ {t['year']} "
+            f"(top_doc={t['top_doc']}, count={t['top_doc_count']}, "
+            f"cluster_size={t['cluster_size']})"
+        )
+
+
 def main():
     logger.info("Starting cluster-aware drift + phase transition detection")
 
     load_id_cache()
     conn = get_connection()
 
-    terms = ['liberty', 'freedom']
+    terms = CONCEPT_SETS.keys() # ['liberty', 'freedom']
     results = {}
 
     for concept in terms:
@@ -382,14 +422,7 @@ def main():
 
         transitions = detect_phase_transitions(slices_data)
 
-        logger.info(f"[{token}] detected {len(transitions)} phase transitions")
-
-        for t in transitions:
-            logger.info(
-                f"[{token}] PHASE SHIFT @ {t['year']} "
-                f"(score={t['score']:.2f}, drift={t['drift']:.4f}, "
-                f"jsd={t['js_divergence']:.4f}, births={t['births']})"
-            )
+        log_phase_transitions(token, transitions, logger)
 
         results[token] = {
             "slices": slices_data,
@@ -398,11 +431,10 @@ def main():
 
     save_id_cache()
 
-    out_path = OUT_DIR / "drift_neighbors_micro_senses_slices.json"
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
-    logger.info(f"Saved dataset to {out_path}")
+    logger.info(f"Saved dataset to {OUT_PATH}")
 
 
 if __name__ == "__main__":
