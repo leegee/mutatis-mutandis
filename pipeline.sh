@@ -51,7 +51,7 @@ case "$PHASE" in
         ;;
     3|train)
         RUN_SCRIPTS+=("$SRC/mb_embedding_pipeline.py")
-        RUN_ENVS+=("FORCE=1")
+        RUN_ENVS+=("")
         ;;
     4|mbtest)
         RUN_SCRIPTS+=("$SRC/mb_test.py")
