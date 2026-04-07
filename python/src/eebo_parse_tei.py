@@ -18,7 +18,7 @@ To do:
 
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Iterator
 import argparse
 import csv
 import io
@@ -241,7 +241,7 @@ def ingest_xml_parallel(
 ) -> None:
     """Stream XML parsing + incremental DB ingestion with bounded memory."""
 
-    xml_iter = Path(xml_dir).rglob("*.xml")
+    xml_iter:  Iterator[Path] = Path(xml_dir).rglob("*.xml")
     if MAX_DOCS:
         xml_iter = islice(xml_iter, MAX_DOCS)
 

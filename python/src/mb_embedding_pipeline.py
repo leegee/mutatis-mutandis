@@ -432,9 +432,10 @@ def process_slice(
     #
     # model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
 
-    model = shared_model
+    model: PreTrainedModel = shared_model
 
-    model.to(get_device())
+    device = torch.device(get_device())
+    model.to(device)
     model.eval()
 
     dim = model.config.hidden_size
