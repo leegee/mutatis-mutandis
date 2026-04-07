@@ -4,7 +4,7 @@ import json
 import time
 import numpy as np
 from collections import Counter
-from pathlib import Path
+import hdbscan
 
 from mb_embedding_pipeline import load_vectors
 from lib.js_divergence import js_divergence
@@ -13,8 +13,7 @@ from lib.FaissIndex import FaissIndex
 from lib.mb_paths import faiss_slice_path
 from lib.eebo_db import get_connection
 from lib.eebo_config import OUT_DIR, CONCEPT_SETS
-import psycopg
-import hdbscan
+from lib.wordlist import STOPWORDS
 
 MIN_TOKENS = 30
 
@@ -198,7 +197,7 @@ def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold
     drifts = np.array([s["drift"] for s in slices_data[1:]])
     jsd = np.array([s["js_divergence"] for s in slices_data[1:]])
     births = np.array([s["births"] for s in slices_data[1:]])
-    deaths = np.array([s["deaths"] for s in slices_data[1:]])
+    # deaths = np.array([s["deaths"] for s in slices_data[1:]])
 
     valid = token_counts[1:] >= min_tokens
 
@@ -210,6 +209,7 @@ def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold
     drift_z = zscore(drifts)
     jsd_z = zscore(jsd)
     births_z = zscore(births)
+    # deaths_z = zscore(deaths)
 
     score = drift_z + jsd_z + 0.5 * births_z
 
@@ -253,6 +253,7 @@ def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold
                     "year": slice_data["year"],
                     "top_doc": slice_data["top_docs"][0][0],
                     "top_doc_count": top_doc_count,
+                    "cluster_size": slice_data["cluster_sizes"][0] if slice_data["cluster_sizes"] else 0,
                     "token_count": int(token_counts[i + 1])
                 })
 
@@ -289,11 +290,12 @@ def compute_drift_and_neighbors_clustered(token, conn):
             if i < 10:
                 doc_ids.extend([doc for (_, _, doc, _) in rows])
 
-            for (tkn, can, doc, year), sim in zip(rows, distances[0]):
+            for (tkn, _can, _doc, _year), sim in zip(rows, distances[0], strict=True):
                 if sim < 0.6 or tkn == token:
                     continue
                 neighbor_tokens.append(tkn)
 
+        neighbor_tokens = [t for t in neighbor_tokens if t.lower() not in STOPWORDS]
         counts = Counter(neighbor_tokens)
         top_neighbors = counts.most_common(TOP_K_NEIGHBORS)
 
@@ -323,6 +325,7 @@ def compute_drift_and_neighbors_clustered(token, conn):
             "cluster_sizes": cluster_sizes,
             "entropy": ent,
             "top_neighbors": top_neighbors,
+            "top_docs": Counter(doc_ids).most_common(5) if doc_ids else [],
             "drift": 0.0,
             "births": 0,
             "deaths": 0,

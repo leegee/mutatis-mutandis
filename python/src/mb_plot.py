@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 import json
-from pathlib import Path
 import plotly.graph_objects as go
-import plotly.express as px
-from lib.eebo_config import OUT_DIR
 from mb_test import OUT_PATH
 
 def load_data(path):
@@ -42,7 +39,7 @@ def create_interactive_plot(data):
                 "Births: %{customdata[1]}<br>"
                 "Top neighbors: %{customdata[2]}"
             ),
-            customdata=list(zip(jsd, births, top_neighbors))
+            customdata=list(zip(jsd, births, top_neighbors, strict=True))
         ))
 
         # Phase transitions markers
