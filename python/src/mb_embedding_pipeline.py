@@ -50,8 +50,8 @@ from lib.eebo_config import (
     EEBO_MODEL_NAME,
     MACBERTH_FINE_TUNED_DIR
 )
-from lib.mb_paths import slice_model_path, vectors_path, faiss_slice_path
-from lib.eebo_sentences import stream_slice_sentences
+from lib.mb_paths import vectors_path, faiss_slice_path
+from lib.eebo_sentences import stream_contexts_within_model_limit
 from lib.FaissIndex import FaissIndex as OccurrenceFaissIndex
 
 SAVE_OCCURRENCE_VECTORS = os.getenv("SAVE_OCCURRENCE_VECTORS", "1") == "1"
@@ -178,6 +178,10 @@ def _forward_batch(
         max_length=512,
         return_offsets_mapping=True
     )
+
+    if batch_encoding["input_ids"].shape[1] >= tokenizer.model_max_length:
+        raise ValueError("stream_contexts_within_model_limit violated: truncation occurred")
+
     inputs = {k: v.to(get_device()) for k, v in batch_encoding.items() if k != "offset_mapping"}
     outputs = model(**inputs, output_hidden_states=True)
     hidden_states = outputs.hidden_states[-1].cpu().numpy()
@@ -428,6 +432,8 @@ def process_slice(
     #
     # model = AutoModelForMaskedLM.from_pretrained(slice_model_dir)
 
+    model = shared_model
+
     model.to(get_device())
     model.eval()
 
@@ -436,7 +442,8 @@ def process_slice(
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = defaultdict(list) if SAVE_OCCURRENCE_VECTORS else None
     doc_ids_accum: Optional[DefaultDict[str, list[str]]] = defaultdict(list) if SAVE_OCCURRENCE_VECTORS else None
 
-    sentence_stream = stream_slice_sentences(conn, slice_range)
+    # sentence_stream = stream_slice_sentences(conn, slice_range)
+    sentence_stream = stream_contexts_within_model_limit(conn, slice_range, tokenizer)
 
     if COLAB_MODE and get_device() == "cuda":
         batch_size = min(batch_size, 32)
