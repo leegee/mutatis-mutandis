@@ -406,6 +406,7 @@ def log_phase_transitions(token, transitions, logger):
 
 
 def main():
+    start = time.time()
     logger.info("Starting cluster-aware drift + phase transition detection")
 
     load_id_cache()
@@ -434,9 +435,10 @@ def main():
 
     save_id_cache()
 
+    logger.info(f"Elapsed time: {time.time() - start:.3f} seconds")
+
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
-
     logger.info(f"Saved dataset to {OUT_PATH}")
 
 
