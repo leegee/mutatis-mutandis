@@ -41,23 +41,31 @@ from lib.set_lang import set_document_languages
 MAX_DOCS: Optional[int] = None
 
 
-def normalize_early_modern(text: str) -> str:
+def normalize_early_modern_preserve_punct(text: str) -> str:
+    """
+    Normalize Early Modern text while preserving punctuation tokens
+    like . , ; : ! ? ' " - ( )
+    """
     text = text.lower()
     text = re.sub(r"(\w)[’‘ʼ′´](\w)", r"\1'\2", text)
     text = text.replace("ſ", "s")
     text = unicodedata.normalize("NFKD", text)
     text = text.encode("ascii", "ignore").decode("ascii")
 
-    # Normalise print variants
+    # Normalize print variants
     text = re.sub(r"-\s*", " ", text)
     text = re.sub(r"\bv(?=[aeiou])", "u", text)
     text = re.sub(r"\bj(?=[aeiou])", "i", text)
     text = re.sub(r"tv\b", "ty", text)
-    text = re.sub(r"(?<=\w)[^\w\s](?=\w)", " ", text)
-    text = re.sub(r"[^a-z\s]", " ", text)
+
+    # Preserve punctuation we care about: replace any other non-word/non-space char with space
+    allowed_punct = r"\.\,\;\:\!\?\'\"\-\(\)"
+    text = re.sub(f"[^{allowed_punct}a-z\s]", " ", text)
+
+    # Collapse whitespace
     text = re.sub(r"\s+", " ", text)
 
-    # Restore OCR artifacts to obvous intentions:
+    # Restore OCR artifacts to obvious intentions
     text = re.sub(r"\bliberti\s+s\b", "liberties", text)
     text = re.sub(r"\bliber\s+ies\b", "liberties", text)
     text = re.sub(r"\blibe\s+ty\b", "liberty", text)
@@ -65,8 +73,6 @@ def normalize_early_modern(text: str) -> str:
     text = re.sub(r"\bl\s+berty\b", "liberty", text)
     text = re.sub(r"\bberty\b", "liberty", text)
     text = re.sub(r"\blibe\s+y\b", "liberty", text)
-    # text = re.sub(r"\bliber\s+s\b", "libers", text)
-    # text = re.sub(r"\bliber\s+ely\b", "liberely", text)
 
     return text.strip()
 
