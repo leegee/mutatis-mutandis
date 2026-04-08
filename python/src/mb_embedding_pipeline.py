@@ -202,6 +202,7 @@ def _flush_word(
         return None
     vec = normalize_or_none(np.mean(np.stack(current_vecs), axis=0))
     if vec is None:
+        logger.debug(f"Skipping zero vector for word '{current_word}' in doc {doc_id}")
         return None
     return WordVector(word=current_word, vector=vec, vector_id=vector_id, doc_id=doc_id)
 
@@ -421,6 +422,8 @@ def process_slice(
     log_every = 1000
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
     index_path = faiss_slice_path(slice_range)
+
+    logger.info(f"Processing slice {slice_range[0]}-{slice_range[1]} with batch size {batch_size}")
 
     tokenizer, shared_model = get_macberth_model(shared_only=True)
     # slice_model_dir = slice_model_path(slice_range)

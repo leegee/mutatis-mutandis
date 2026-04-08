@@ -54,9 +54,16 @@ def stream_contexts_within_model_limit(
 
     Guarantees no truncation during embedding and preserves
     1:1 alignment between token_occurrence_ids and emitted vectors.
+
+    Implementation note:
+        Tracks subword length incrementally instead of re-tokenizing
+        the full buffer each step. Uses a cache because EEBO tokens
+        are highly repetitive.
     """
 
     max_tokens = tokenizer.model_max_length - safety_margin
+    special_tokens = tokenizer.num_special_tokens_to_add(pair=False)
+
     slice_start, slice_end = slice_range
 
     query = """
@@ -74,14 +81,34 @@ def stream_contexts_within_model_limit(
         current_doc = None
         buffer_tokens: List[str] = []
         buffer_ids: List[int] = []
+        current_len = 0  # subword length of buffer
+
+        # cache: token -> subword length
+        token_len_cache: dict[str, int] = {}
+
+        def token_subword_len(tok: str) -> int:
+            cached = token_len_cache.get(tok)
+            if cached is not None:
+                return cached
+
+            ids = tokenizer(
+                tok,
+                add_special_tokens=False,
+                return_attention_mask=False,
+            )["input_ids"]
+
+            length = len(ids)
+            token_len_cache[tok] = length
+            return length
 
         def flush():
-            nonlocal buffer_tokens, buffer_ids
+            nonlocal buffer_tokens, buffer_ids, current_len
             if not buffer_tokens:
                 return None
             result = (current_doc, " ".join(buffer_tokens), buffer_ids.copy())
             buffer_tokens.clear()
             buffer_ids.clear()
+            current_len = 0
             return result
 
         for doc_id, token, occ_id in cur:
@@ -95,28 +122,28 @@ def stream_contexts_within_model_limit(
                     yield result
                 current_doc = doc_id
 
-            # try adding token
-            trial_tokens = buffer_tokens + [token]
-            trial_text = " ".join(trial_tokens)
+            tok_len = token_subword_len(token)
 
-            enc = tokenizer(
-                trial_text,
-                add_special_tokens=True,
-                truncation=False,
-                return_length=True,
-            )
+            if tok_len + special_tokens > max_tokens:
+                logger.warning(
+                    f"Single token exceeds model limit: doc_id={doc_id}, "
+                    f"occ_id={occ_id}, token='{token[:50]}...', subword_len={tok_len}"
+                )
 
-            if enc["length"][0] > max_tokens:
-                # flush current buffer
+            # check if adding this token would overflow
+            if current_len + tok_len + special_tokens > max_tokens:
                 result = flush()
                 if result:
                     yield result
-                # start new buffer with current token
+
+                # start new buffer
                 buffer_tokens = [token]
                 buffer_ids = [occ_id]
+                current_len = tok_len
             else:
                 buffer_tokens.append(token)
                 buffer_ids.append(occ_id)
+                current_len += tok_len
 
         # final flush
         result = flush()
