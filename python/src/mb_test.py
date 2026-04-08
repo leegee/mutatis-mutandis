@@ -14,25 +14,12 @@ from lib.mb_paths import faiss_slice_path
 from lib.eebo_db import get_connection
 from lib.eebo_config import OUT_DIR, CONCEPT_SETS
 from lib.wordlist import STOPWORDS
+from lib.eebo_config import SLICES
 
 MIN_TOKENS = 30
 
 OUT_PATH = OUT_DIR / "drift_neighbors_micro_senses_slices.json"
 
-SLICES = [
-    (1625, 1629),
-    (1630, 1634),
-    (1635, 1639),
-    (1640, 1640),
-    (1641, 1641),
-    (1642, 1642),
-    (1643, 1643),
-    (1644, 1644),
-    (1645, 1645),
-    (1646, 1646),
-    (1647, 1647),
-    (1648, 1648),
-]
 
 K_NEIGHBORS = 5
 TOP_K_NEIGHBORS = 15
@@ -239,6 +226,7 @@ def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold
             if small_clusters:
                 minor.append({
                     "year": slice_data["year"],
+                    "score": float(s),
                     "small_cluster_count": len(small_clusters),
                     "births": slice_data["births"],
                     "deaths": slice_data["deaths"],
@@ -287,7 +275,6 @@ def compute_drift_and_neighbors_clustered(token, conn):
             distances, neighbor_ids = index.search(vec.reshape(1, -1), K_NEIGHBORS * 5)
             rows = lookup_token_occurrences(conn, neighbor_ids[0].tolist())
 
-            # sample only first N vectors to avoid explosion
             if i < 10:
                 doc_ids.extend([doc for (_, _, doc, _) in rows])
 
@@ -297,24 +284,61 @@ def compute_drift_and_neighbors_clustered(token, conn):
                 neighbor_tokens.append(tkn)
                 neighbor_sims.append(sim)
 
-        # Filter stopwords
-        filtered = [(t, s) for t, s in zip(neighbor_tokens, neighbor_sims) if t.lower() not in STOPWORDS]
+        # --- FILTER STOPWORDS ---
+        filtered = [
+            (t, s)
+            for t, s in zip(neighbor_tokens, neighbor_sims)
+            if t.lower() not in STOPWORDS
+        ]
 
-        # Aggregate counts and average similarity
-        counts = Counter(t for t, _ in filtered)
-        sim_sums = {}
+        # --- DEDUPLICATE + AGGREGATE ---
+        from collections import defaultdict
+
+        neighbor_map = defaultdict(lambda: {"count": 0, "sim_sum": 0.0})
+
         for t, s in filtered:
-            sim_sums[t] = sim_sums.get(t, 0.0) + s
+            neighbor_map[t]["count"] += 1
+            neighbor_map[t]["sim_sum"] += s
 
-        top_neighbors = []
-        for t, c in counts.most_common(TOP_K_NEIGHBORS):
-            top_neighbors.append({
+        # --- BUILD DISTRIBUTION (for JSD) ---
+        curr_counts = Counter({t: v["count"] for t, v in neighbor_map.items()})
+
+        # --- BUILD TOP NEIGHBORS ---
+        top_neighbors = [
+            {
                 "token": t,
-                "count": c,
-                "similarity": float(sim_sums[t] / c)
-            })
+                "count": v["count"],
+                "similarity": float(v["sim_sum"] / v["count"])
+            }
+            for t, v in neighbor_map.items()
+        ]
 
+        # sort by similarity (semantic proximity)
+        top_neighbors.sort(key=lambda x: -x["similarity"])
+        top_neighbors = top_neighbors[:TOP_K_NEIGHBORS]
+
+        # --- ENTROPY ---
         ent = entropy_from_tokens([t for t, _ in filtered])
+
+        logger.info(
+            f"[{sid}] token='{token}' "
+            f"clusters={len(cluster_centroids)} sizes={cluster_sizes} "
+            f"entropy={ent:.4f} neighbors={len(filtered)} unique={len(neighbor_map)}"
+        )
+
+        if doc_ids:
+            logger.info(
+                f"[{sid}] top_docs="
+                + ", ".join(f"{d}:{c}" for d, c in Counter(doc_ids).most_common(5))
+            )
+
+        logger.info(
+            f"[{sid}] top_neighbors="
+            + ", ".join(
+                f"{n['token']}:{n['count']}"
+                for n in top_neighbors[:8]
+            )
+        )
 
         slice_entry = {
             "year": start,
@@ -329,6 +353,7 @@ def compute_drift_and_neighbors_clustered(token, conn):
             "js_divergence": 0.0
         }
 
+        # --- DRIFT + JSD ---
         if prev_clusters:
             matches, deaths = match_clusters(prev_clusters, cluster_centroids)
 
@@ -336,7 +361,6 @@ def compute_drift_and_neighbors_clustered(token, conn):
             drift_val = float(np.mean(movements)) if movements else 1.0
             births = sum(1 for p, c, d in matches if p is None)
 
-            curr_counts = counts
             j = js_divergence(prev_neighbor_counts, curr_counts)
 
             logger.info(
@@ -352,10 +376,7 @@ def compute_drift_and_neighbors_clustered(token, conn):
                 "js_divergence": j
             })
 
-            prev_neighbor_counts = curr_counts
-        else:
-            prev_neighbor_counts = counts
-
+        prev_neighbor_counts = curr_counts
         prev_clusters = cluster_centroids
         prev_year = start
 
@@ -389,7 +410,7 @@ def log_phase_transitions(token, transitions, logger):
     for t in transitions.get("minor", []):
         logger.info(
             f"[{token}] MINOR SHIFT @ {t['year']} "
-            f"(score={t['score']:.2f}, small_clusters={t['small_cluster_count']}, "
+            f"(small_clusters={t['small_cluster_count']}, "
             f"births={t['births']}, deaths={t['deaths']})"
         )
 
