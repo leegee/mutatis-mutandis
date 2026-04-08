@@ -406,7 +406,7 @@ def main() -> None:
     logger.info(f"Processing max {MAX_DOCS if MAX_DOCS else 'all'} documents")
 
     ingest_xml_parallel(
-        xml_dir=config.BASE_DIR / "eebo_all" / "eebo_phase2" / "P4_XML_TCP_Ph2",
+        xml_dir=config.BASE_DIR / "eebo_all",
         max_workers=config.NUM_WORKERS,
         batch_docs=config.BATCH_DOCS,
         batch_tokens=config.BATCH_TOKENS
