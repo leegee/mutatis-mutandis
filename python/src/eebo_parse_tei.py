@@ -385,8 +385,13 @@ def main() -> None:
         "--create",
         action="store_true",
         help="Re-create the DB losing all data"
-
     )
+    parser.add_argument(
+        "--justindex",
+        action="store_true",
+        help="Do not ingest, just index"
+    )
+
     args = parser.parse_args()
 
     global MAX_DOCS
@@ -396,7 +401,6 @@ def main() -> None:
     INGEST_ALL = args.create or False
 
     with eebo_db.get_connection() as conn:
-
         if args.create:
             confirm = input( "WARNING: This will DESTROY the current database and re-create it. Type YES to proceed: " )
             if confirm != "YES":
@@ -405,7 +409,6 @@ def main() -> None:
             logger.info('Initialising DB')
             eebo_db.init_db(conn)
             logger.info('DB initialised')
-
         eebo_db.drop_token_indexes(conn)
         eebo_db.drop_tokens_fk(conn)
         conn.commit()
@@ -413,24 +416,25 @@ def main() -> None:
     logger.info('DB initialised, ingesting XML')
     logger.info(f"Processing max {MAX_DOCS if MAX_DOCS else 'all'} documents")
 
-    ingest_xml_parallel(
-        xml_dir=config.BASE_DIR / "eebo_all",
-        max_workers=config.NUM_WORKERS,
-        batch_docs=config.BATCH_DOCS,
-        batch_tokens=config.BATCH_TOKENS
-    )
-
-    set_document_languages()
+    if not args.justindex:
+        ingest_xml_parallel(
+            xml_dir=config.BASE_DIR / "eebo_all",
+            max_workers=config.NUM_WORKERS,
+            batch_docs=config.BATCH_DOCS,
+            batch_tokens=config.BATCH_TOKENS
+        )
+        set_document_languages()
 
     logger.info('All ingested, restoring indexes')
     with eebo_db.get_connection() as conn:
+        conn.commit()
         eebo_db.create_tokens_fk(conn)
         eebo_db.create_token_indexes(conn)
         eebo_db.create_tiered_token_indexes(conn)
         conn.commit()
 
-    logger.info('Rebuilding views')
-    eebo_db.refresh_views(conn)
+        logger.info('Rebuilding views')
+        eebo_db.refresh_views(conn)
 
     logger.info('Done - all ingested, indexes restored')
 
