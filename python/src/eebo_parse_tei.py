@@ -39,6 +39,8 @@ from lib.eebo_logging import logger
 from lib.set_lang import set_document_languages
 
 MAX_DOCS: Optional[int] = None
+INGEST_ALL = True
+ALLOWED_PUNCT = r"\.\,\;\:\!\?\'\"\-\(\)"
 
 
 def normalize_early_modern(text: str) -> str:
@@ -59,8 +61,7 @@ def normalize_early_modern(text: str) -> str:
     text = re.sub(r"tv\b", "ty", text)
 
     # Preserve punctuation we care about: replace any other non-word/non-space char with space
-    allowed_punct = r"\.\,\;\:\!\?\'\"\-\(\)"
-    text = re.sub(f"[^{allowed_punct}a-z\\s]", " ", text)
+    text = re.sub(rf"[^{ALLOWED_PUNCT}a-z\s]", " ", text)
 
     # Collapse whitespace
     text = re.sub(r"\s+", " ", text)
@@ -270,7 +271,10 @@ def ingest_xml_parallel(
             if not doc_batch:
                 return
 
-            filtered = filter_existing_docs(doc_batch)
+            if not INGEST_ALL:
+                filtered = filter_existing_docs(doc_batch)
+            else:
+                filtered = doc_batch
             if filtered:
                 new_ids = {doc[0] for doc in filtered}
                 inserted_doc_ids.update(new_ids)
@@ -381,11 +385,15 @@ def main() -> None:
         "--create",
         action="store_true",
         help="Re-create the DB losing all data"
+
     )
     args = parser.parse_args()
 
     global MAX_DOCS
     MAX_DOCS = args.limit
+
+    global INGEST_ALL
+    INGEST_ALL = args.create or False
 
     with eebo_db.get_connection() as conn:
 
