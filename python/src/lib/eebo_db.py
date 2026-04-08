@@ -197,14 +197,119 @@ def create_token_indexes(conn: Connection) -> None:
     logger.info("Basic token indexes created")
 
 
+
 def create_tiered_token_indexes(conn: Connection) -> None:
+    logger.info("Creating tiered token indexes")
+
+    # Create non-concurrent indexes and materialized views inside a transaction
+    with conn.transaction():
+        with conn.cursor() as cur:
+            # Index for canonical tokens
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical ON tokens(canonical);")
+
+            # Materialized view for pamphlet_corpus
+            logger.info("Creating materialised view pamphlet_corpus")
+            cur.execute("""
+                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_corpus AS
+                SELECT *,
+                    CASE
+                        WHEN token_count <= 15000 THEN 'core'
+                        ELSE 'boundary'
+                    END AS corpus_zone
+                FROM documents
+                WHERE token_count BETWEEN 500 AND 20000
+                AND title !~* '(tragedy|comedy|farce|interlude|play)'
+                AND lang = 'eng';
+            """)
+
+            # Index for fast joins (non-concurrent)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(doc_id);")
+
+            # Materialized view for pamphlet_tokens
+            logger.info("Creating materialised view pamphlet_tokens")
+            cur.execute("""
+                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_tokens AS
+                SELECT
+                    hashtext(t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
+                    t.doc_id,
+                    t.token_idx,
+                    t.token,
+                    t.canonical,
+                    d.corpus_zone,
+                    d.pub_year,
+                    d.title,
+                    d.token_count,
+                    d.slice_start,
+                    d.slice_end
+                FROM tokens t
+                JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
+            """)
+
+            # Materialized view for document_search
+            logger.info("Creating materialised view document_search")
+            cur.execute("""
+                CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
+                WITH numbered_tokens AS (
+                    SELECT
+                        t.doc_id,
+                        t.token,
+                        t.token_idx,
+                        (row_number() OVER (PARTITION BY t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
+                    FROM tokens t
+                    JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
+                ),
+                block_text AS (
+                    SELECT
+                        doc_id,
+                        block_idx,
+                        string_agg(token, ' ') AS text
+                    FROM numbered_tokens
+                    GROUP BY doc_id, block_idx
+                )
+                SELECT
+                    d.doc_id,
+                    d.title,
+                    d.author,
+                    d.pub_year,
+                    d.pub_place,
+                    d.publisher,
+                    bt.block_idx,
+                    bt.text,
+                    to_tsvector('english', bt.text) AS tsv
+                FROM pamphlet_corpus d
+                JOIN block_text bt ON bt.doc_id = d.doc_id;
+            """)
+
+            # GIN index can stay in transaction
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(doc_id);")
+
+    # Create CONCURRENT indexes outside transaction
+    logger.info("Creating CONCURRENT indexes")
+    # autocommit must be True to allow CONCURRENTLY
+    autocommit = conn.autocommit
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_occurrence_id ON pamphlet_tokens(token_occurrence_id);")
+            cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_start);")
+            cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(doc_id, token, token_idx);")
+    finally:
+        conn.autocommit = autocommit
+
+    logger.info("Tiered token indexes created")
+
+
+def old_create_tiered_token_indexes(conn: Connection) -> None:
     logger.info("Creating tiered token indexes")
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical ON tokens(canonical);")
+        conn.commit()
 
-            logger.info("Creating materialised view")
+        logger.info("Creating materialised view")
 
+        with conn.cursor() as cur:
             cur.execute("""
                 -- Pamphlet-only document materialized view
                 CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_corpus AS
