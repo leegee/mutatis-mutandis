@@ -51,7 +51,7 @@ from lib.eebo_config import (
     MACBERTH_FINE_TUNED_DIR
 )
 from lib.mb_paths import vectors_path, faiss_slice_path
-from lib.eebo_sentences import stream_contexts_within_model_limit
+from lib.eebo_sentences import stream_sentences_within_model_limit
 from lib.FaissIndex import FaissIndex as OccurrenceFaissIndex
 
 SAVE_OCCURRENCE_VECTORS = os.getenv("SAVE_OCCURRENCE_VECTORS", "1") == "1"
@@ -180,7 +180,7 @@ def _forward_batch(
     )
 
     if batch_encoding["input_ids"].shape[1] >= tokenizer.model_max_length:
-        raise ValueError("stream_contexts_within_model_limit violated: truncation occurred")
+        raise ValueError("stream_sentences_within_model_limit violated: truncation occurred")
 
     inputs = {k: v.to(get_device()) for k, v in batch_encoding.items() if k != "offset_mapping"}
     outputs = model(**inputs, output_hidden_states=True)
@@ -447,7 +447,7 @@ def process_slice(
     doc_ids_accum: Optional[DefaultDict[str, list[str]]] = defaultdict(list) if SAVE_OCCURRENCE_VECTORS else None
 
     # sentence_stream = stream_slice_sentences(conn, slice_range)
-    sentence_stream = stream_contexts_within_model_limit(conn, slice_range, tokenizer)
+    sentence_stream = stream_sentences_within_model_limit(conn, slice_range, tokenizer)
 
     if COLAB_MODE and get_device() == "cuda":
         batch_size = min(batch_size, 32)
