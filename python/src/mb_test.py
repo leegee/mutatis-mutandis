@@ -280,6 +280,7 @@ def compute_drift_and_neighbors_clustered(token, conn):
             continue
 
         neighbor_tokens = []
+        neighbor_sims = []
         doc_ids = []
 
         for i, vec in enumerate(vecs):
@@ -294,30 +295,26 @@ def compute_drift_and_neighbors_clustered(token, conn):
                 if sim < 0.6 or tkn == token:
                     continue
                 neighbor_tokens.append(tkn)
+                neighbor_sims.append(sim)
 
-        neighbor_tokens = [t for t in neighbor_tokens if t.lower() not in STOPWORDS]
-        counts = Counter(neighbor_tokens)
-        top_neighbors = counts.most_common(TOP_K_NEIGHBORS)
+        # Filter stopwords
+        filtered = [(t, s) for t, s in zip(neighbor_tokens, neighbor_sims) if t.lower() not in STOPWORDS]
 
-        logger.info(
-            f"[{sid}] token='{token}' "
-            f"clusters={len(cluster_centroids)} sizes={cluster_sizes} "
-            f"entropy={entropy_from_tokens(neighbor_tokens):.4f} "
-            f"neighbors={len(neighbor_tokens)}"
-        )
+        # Aggregate counts and average similarity
+        counts = Counter(t for t, _ in filtered)
+        sim_sums = {}
+        for t, s in filtered:
+            sim_sums[t] = sim_sums.get(t, 0.0) + s
 
-        if doc_ids:
-            logger.info(
-                f"[{sid}] top_docs="
-                + ", ".join(f"{d}:{c}" for d, c in Counter(doc_ids).most_common(5))
-            )
+        top_neighbors = []
+        for t, c in counts.most_common(TOP_K_NEIGHBORS):
+            top_neighbors.append({
+                "token": t,
+                "count": c,
+                "similarity": float(sim_sums[t] / c)
+            })
 
-        logger.info(
-            f"[{sid}] top_neighbors="
-            + ", ".join(f"{w}:{c}" for w, c in top_neighbors[:8])
-        )
-
-        ent = entropy_from_tokens(neighbor_tokens)
+        ent = entropy_from_tokens([t for t, _ in filtered])
 
         slice_entry = {
             "year": start,
