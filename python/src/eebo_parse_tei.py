@@ -41,7 +41,7 @@ from lib.set_lang import set_document_languages
 MAX_DOCS: Optional[int] = None
 
 
-def normalize_early_modern_preserve_punct(text: str) -> str:
+def normalize_early_modern(text: str) -> str:
     """
     Normalize Early Modern text while preserving punctuation tokens
     like . , ; : ! ? ' " - ( )
@@ -60,7 +60,7 @@ def normalize_early_modern_preserve_punct(text: str) -> str:
 
     # Preserve punctuation we care about: replace any other non-word/non-space char with space
     allowed_punct = r"\.\,\;\:\!\?\'\"\-\(\)"
-    text = re.sub(f"[^{allowed_punct}a-z\s]", " ", text)
+    text = re.sub(f"[^{allowed_punct}a-z\\s]", " ", text)
 
     # Collapse whitespace
     text = re.sub(r"\s+", " ", text)
