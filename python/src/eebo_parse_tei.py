@@ -173,7 +173,9 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
         )
         return None
 
-    tokens = normalized.split()
+    # tokens = normalized.split() # Without punctuation
+    tokens = re.findall(r"\w+|[^\w\s]", normalized) # with punctuation
+
     token_rows = [(i, tok) for i, tok in enumerate(tokens)]
 
     doc_meta = {
