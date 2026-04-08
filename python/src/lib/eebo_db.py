@@ -13,7 +13,7 @@ from psycopg import sql, Connection
 import time
 
 from lib.eebo_logging import logger
-
+import lib.eebo_config as config
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
@@ -201,6 +201,8 @@ def create_token_indexes(conn: Connection) -> None:
 def create_tiered_token_indexes(conn: Connection) -> None:
     logger.info("Creating tiered token indexes")
 
+    earliest, latest = min(s[0] for s in config.SLICES), max(s[1] for s in config.SLICES)
+
     # Create non-concurrent indexes and materialized views inside a transaction
     with conn.transaction():
         with conn.cursor() as cur:
@@ -209,7 +211,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
 
             # Materialized view for pamphlet_corpus
             logger.info("Creating materialised view pamphlet_corpus")
-            cur.execute("""
+            cur.execute(f"""
                 CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_corpus AS
                 SELECT *,
                     CASE
@@ -217,7 +219,9 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                         ELSE 'boundary'
                     END AS corpus_zone
                 FROM documents
-                WHERE token_count BETWEEN 500 AND 20000
+                WHERE token_count BETWEEN 200 AND 20000
+                AND pub_year >= {earliest}
+                AND pub_year <= {latest}
                 AND title !~* '(tragedy|comedy|farce|interlude|play)'
                 AND lang = 'eng';
             """)

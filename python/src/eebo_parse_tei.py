@@ -85,17 +85,30 @@ def extract_year(date_raw: str | None) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 
-def assign_slice(date_raw: str | None) -> tuple[int | None, int | None]:
+def extract_year_and_slice(date_raw: str | None) -> tuple[int | None, int | None, int | None]:
+    """
+    Extracts publication year and corresponding slice.
+
+    Returns:
+        slice_start, slice_end, pub_year
+    """
     if not date_raw:
-        return None, None
+        return None, None, None
+
+    # Look for a 4-digit year
     m = re.search(r"\b(\d{4})\b", date_raw)
     if not m:
-        return None, None
-    year = int(m.group(1))
+        return None, None, None
+
+    pub_year = int(m.group(1))
+
+    slice_start = slice_end = None
     for start, end in config.SLICES:
-        if start <= year <= end:
-            return start, end
-    return None, None
+        if start <= pub_year <= end:
+            slice_start, slice_end = start, end
+            break
+
+    return slice_start, slice_end, pub_year
 
 
 def filter_existing_docs(doc_batch):
@@ -140,9 +153,9 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
 
     title_elem = tree.find(".//HEADER//TITLESTMT/TITLE")
     author_elem = tree.find(".//HEADER//TITLESTMT/AUTHOR")
-    date_elem = tree.find(".//HEADER//SOURCEDESC//DATE")
     pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
     place_elem = tree.find(".//HEADER//SOURCEDESC//PUBPLACE")
+    date_elem = tree.find(".//HEADER//SOURCEDESC//DATE")
 
     title = title_elem.text.strip() if title_elem is not None and title_elem.text else None
     author = author_elem.text.strip() if author_elem is not None and author_elem.text else None
@@ -150,7 +163,7 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
     publisher = pub_elem.text.strip() if pub_elem is not None and pub_elem.text else None
     pub_place = place_elem.text.strip() if place_elem is not None and place_elem.text else None
 
-    slice_start, slice_end = assign_slice(date_raw)
+    slice_start, slice_end, pub_year = extract_year_and_slice(date_raw)
 
     body_elems = tree.findall(".//EEBO//TEXT//BODY")
     if not body_elems:
@@ -185,6 +198,7 @@ def process_file(xml_path: Path) -> Optional[tuple[dict[str, Any], list[tuple[in
         "author": author,
         "publisher": publisher,
         "pub_place": pub_place,
+        "pub_year": pub_year,
         "source_date_raw": date_raw,
         "slice_start": slice_start,
         "slice_end": slice_end,
