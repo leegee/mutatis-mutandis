@@ -57,6 +57,10 @@ case "$PHASE" in
         RUN_SCRIPTS+=("$SRC/mb_test.py")
         RUN_ENVS+=("")
         ;;
+    5|plot)
+        RUN_SCRIPTS+=("$SRC/mb_plot.py")
+        RUN_ENVS+=("")
+        ;;
     # diag)
     #     RUN_SCRIPTS+=("$SRC/diagnostics_alignment_evaluation.py");
     #     RUN_ENVS+=("")
