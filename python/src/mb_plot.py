@@ -121,49 +121,62 @@ def create_neighbor_figure(token, neighbors, year, base_color):
         return go.Figure()
 
     slices = data[token].get("slices", [])
-    slice_for_year = next((s for s in slices if s["year"]==year), slices[-1])
+    slice_for_year = next((s for s in slices if s["year"] == year), slices[-1])
     drift_mag = slice_for_year.get("drift", 0.0)
 
-    drift_scale = 0.5 + 2.0*drift_mag
+    drift_scale = 0.5 + 2.0 * drift_mag
 
     G = nx.Graph()
     G.add_node(token)
     for n in neighbors:
         t = n.get("token")
-        sim = n.get("similarity",0)
+        sim = n.get("similarity", 0)
+        count = n.get("count", 1)  # add count
         if t:
-            G.add_edge(token, t, weight=1-sim)
+            G.add_edge(token, t, weight=1 - sim)
+            G.nodes[t]['count'] = count
+            G.nodes[t]['sim'] = sim
 
     pos = nx.spring_layout(G, weight='weight', seed=42)
 
+    # Scale peripheral nodes by drift
     cx, cy = pos[token]
     for n in pos:
         if n != token:
-            dx, dy = pos[n][0]-cx, pos[n][1]-cy
-            pos[n] = (cx + dx*drift_scale, cy + dy*drift_scale)
+            dx, dy = pos[n][0] - cx, pos[n][1] - cy
+            pos[n] = (cx + dx * drift_scale, cy + dy * drift_scale)
 
+    # Edge traces
     edge_x, edge_y = [], []
-    for u,v in G.edges():
+    for u, v in G.edges():
         x0, y0 = pos[u]
         x1, y1 = pos[v]
-        edge_x += [x0,x1,None]
-        edge_y += [y0,y1,None]
+        edge_x += [x0, x1, None]
+        edge_y += [y0, y1, None]
 
+    # Node traces
     node_x, node_y, sizes, labels = [], [], [], []
     for n in G.nodes():
         x, y = pos[n]
         node_x.append(x)
         node_y.append(y)
-        if n==token:
+        if n == token:
             sizes.append(CENTER_FONT_SIZE)
             labels.append(f"{n} (drift={drift_mag:.2f})")
         else:
-            w = G[token][n]['weight']
-            sizes.append(12 + 18*(1-w))
-            labels.append(f"{n} (sim={1-w:.2f})")
+            sim = G.nodes[n].get('sim', 0)
+            count = G.nodes[n].get('count', 1)
+            sizes.append(12 + 18 * sim)  # size scaled by similarity
+            labels.append(f"{n} (sim={sim:.2f}, count={count})")
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=edge_x, y=edge_y, mode='lines', hoverinfo='none', showlegend=False))
+    fig.add_trace(go.Scatter(
+        x=edge_x, y=edge_y,
+        mode='lines',
+        hoverinfo='none',
+        showlegend=False,
+        line=dict(color='white', width=1)
+    ))
     fig.add_trace(go.Scatter(
         x=node_x, y=node_y,
         mode='markers',
@@ -175,9 +188,9 @@ def create_neighbor_figure(token, neighbors, year, base_color):
     fig.add_trace(go.Scatter(
         x=node_x, y=node_y,
         mode='text',
-        text=labels,
+        text=[n for n in G.nodes()],
         textposition='top center',
-        textfont=dict(size=[CENTER_FONT_SIZE]+[12]*(len(labels)-1)),
+        textfont=dict(size=[CENTER_FONT_SIZE] + [12] * (len(labels) - 1)),
         hoverinfo='none',
         showlegend=False
     ))
