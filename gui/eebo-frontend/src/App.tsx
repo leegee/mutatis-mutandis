@@ -1,4 +1,4 @@
-import { createSignal, onMount } from "solid-js";
+import { createSignal, onMount, Show } from "solid-js";
 
 // import EeboSearch from "./components/EeboSearch";
 import DriftChart from "./components/DriftChart";
@@ -17,7 +17,7 @@ export default function App() {
   });
 
   return (
-    <>
+    <Show when={data()} fallback={<p>Loading</p>}>
       <DriftChart
         data={data()}
         hovered={hovered}
@@ -32,6 +32,6 @@ export default function App() {
         drift={selected().token ? data()[selected().token].slices.find(s => s.year === selected().year)?.drift || 0 : 0}
         color={selected().color}
       />
-    </>
+    </Show>
   )
 }
