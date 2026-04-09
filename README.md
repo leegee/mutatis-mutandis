@@ -257,3 +257,7 @@ Validates that signals correspond to real semantic shifts.
 Detect whether model fine-tuning is introducing artificial drift.
 
 
+## WIP
+
+Port dash/plotly to Solid/d3 feeding on `mb_test.py` (to be renamed)
+
