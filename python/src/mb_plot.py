@@ -212,12 +212,13 @@ app.layout = html.Div([
     ]),
 
     html.Section([
-        html.Label("Select token:"),
-        dcc.Dropdown(
-            id='token-dropdown',
-            options=[{"label":t,"value":t} for t in sorted(tokens)],
-            value=tokens[0] if tokens else None
-        ),
+        html.Label(["Select token:",
+            dcc.Dropdown(
+                id='token-dropdown',
+                options=[{"label":t,"value":t} for t in sorted(tokens)],
+                value=tokens[0] if tokens else None
+            ),
+        ]),
         html.Label("Select year:"),
         dcc.Slider(
             id='year-slider',
@@ -227,8 +228,8 @@ app.layout = html.Div([
             marks={y:str(y) for y in all_years},
             value=min(all_years)
         ),
+        html.Button("Start/Stop Animation", id='anim-button'),
         dcc.Graph(id='neighbor-graph'),
-        html.Button("Start/Stop Animation", id='anim-button')
     ]),
 
     dcc.Store(id='selected-point', data={'token': None, 'year': None}),
