@@ -17,9 +17,9 @@ HOVER_FONT_SIZE = 48
 CENTER_FONT_SIZE = 32
 
 HIGH_CONTRAST_COLORS = [
-    "#FF0000", "#00FF00", "#0000FF",
-    "#FFFF00", "#FF00FF",
-    "#00FFFF", "#FFA500", "#800080", "#008000", "#0000AA",
+    "#FF3333", "#33FF33", "#3333FF",
+    "#FFFF33", "#FF33FF",
+    "#33FFFF", "#FFA533", "#800080", "#338000", "#3333AA",
     "#FFC0CB", "#808000"
 ]
 
@@ -39,8 +39,8 @@ data = load_data(OUT_PATH)
 tokens = list(data.keys())
 all_years = sorted({s["year"] for t in data.values() for s in t.get("slices", [])})
 
-# ---------------- MAIN FIGURE -----------------
-def create_main_dashboard_figure(data, normalize=False, highlight_year=None):
+
+def create_main_dashboard_figure(data, normalize=False, highlight_year=None, base_color="#225"):
     title_suffix = " (Normalized)" if normalize else " (Raw)"
     fig = make_subplots(
         rows=2, cols=1,
@@ -68,7 +68,7 @@ def create_main_dashboard_figure(data, normalize=False, highlight_year=None):
             mode='lines+markers',
             name=token,
             legendgroup=token,
-            customdata=[token] * len(years),
+            customdata=[{"token": token, "color": color}] * len(years),
             marker=dict(color=color)
         ), row=1, col=1)
 
@@ -77,7 +77,7 @@ def create_main_dashboard_figure(data, normalize=False, highlight_year=None):
             mode='lines+markers',
             name=token,
             legendgroup=token,
-            customdata=[token] * len(years),
+            customdata=[{"token": token, "color": color}] * len(years),
             line=dict(dash='dot'),
             marker=dict(color=color),
             showlegend=False
@@ -116,7 +116,7 @@ def create_main_dashboard_figure(data, normalize=False, highlight_year=None):
     return fig
 
 
-def create_neighbor_figure(token, neighbors, year=None):
+def create_neighbor_figure(token, neighbors, year, base_color):
     if not neighbors:
         return go.Figure()
 
@@ -167,7 +167,7 @@ def create_neighbor_figure(token, neighbors, year=None):
     fig.add_trace(go.Scatter(
         x=node_x, y=node_y,
         mode='markers',
-        marker=dict(size=sizes, color='cyan', line=dict(width=1, color='white')),
+        marker=dict(size=sizes, color=base_color, line=dict(width=1, color='white')),
         hoverinfo='text',
         text=labels,
         showlegend=False
@@ -261,15 +261,19 @@ def update_selected_point(clickData, dropdown_value, slider_year, current):
     if trigger == 'main-dashboard' and clickData:
         point = clickData['points'][0]
 
-        token = point.get('customdata')
         year = point.get('x')
+
+        cd = point.get('customdata') or {}
+        token = cd.get('token')
+        color = cd.get('color')
 
         if token is None:
             return current
 
         return {
             'token': token,
-            'year': year if year is not None else current['year']
+            'year': year if year is not None else current['year'],
+            'color': color
         }
 
     elif trigger == 'token-dropdown' and dropdown_value:
@@ -310,6 +314,7 @@ def update_neighbors(selected_point, n_intervals, anim_state):
 
     token = selected_point["token"]
     year = selected_point["year"]
+    color = selected_point.get("color", "#222")
 
     if anim_state and n_intervals:
         i = all_years.index(year)
@@ -327,7 +332,7 @@ def update_neighbors(selected_point, n_intervals, anim_state):
         for n in neighbors if isinstance(n, dict)
     ]
 
-    return create_neighbor_figure(token, neighbors, year)
+    return create_neighbor_figure(token, neighbors, year, color)
 
 
 @app.callback(
