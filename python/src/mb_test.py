@@ -346,6 +346,7 @@ def compute_drift_and_neighbors_clustered(token, conn):
             "cluster_sizes": cluster_sizes,
             "entropy": ent,
             "top_neighbors": top_neighbors,
+            "token_count": int(sum(cluster_sizes)) if cluster_sizes else 0,
             "top_docs": Counter(doc_ids).most_common(5) if doc_ids else [],
             "drift": 0.0,
             "births": 0,
