@@ -1,0 +1,28 @@
+/* EeboSearch.module.css */
+
+main {
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+.masthead {
+    text-align: center;
+    border-bottom: 1pt solid #ddd2;
+}
+
+.resultsViewer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 0;
+}
+
+.results,
+.viewer {
+    overflow-y: auto;
+    min-height: 0;
+    padding: 1rem;
+}
+
+.results {
+    border-right: 1pt solid #ddd2;
+}

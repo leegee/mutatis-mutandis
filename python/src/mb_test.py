@@ -217,7 +217,7 @@ def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold
                 "js_divergence": slice_data["js_divergence"],
                 "births": slice_data["births"],
                 "deaths": slice_data["deaths"],
-                "token_count": int(token_counts[i + 1])
+                "count": int(token_counts[i + 1])
             })
 
         # Detect minor transitions: small cluster birth/death
@@ -230,7 +230,7 @@ def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold
                     "small_cluster_count": len(small_clusters),
                     "births": slice_data["births"],
                     "deaths": slice_data["deaths"],
-                    "token_count": int(token_counts[i + 1])
+                    "count": int(token_counts[i + 1])
                 })
 
         # Detect single-doc spikes
@@ -242,7 +242,7 @@ def detect_phase_transitions(slices_data, min_tokens=30, minor_cluster_threshold
                     "top_doc": slice_data["top_docs"][0][0],
                     "top_doc_count": top_doc_count,
                     "cluster_size": slice_data["cluster_sizes"][0] if slice_data["cluster_sizes"] else 0,
-                    "token_count": int(token_counts[i + 1])
+                    "count": int(token_counts[i + 1])
                 })
 
     return {
@@ -346,7 +346,7 @@ def compute_drift_and_neighbors_clustered(token, conn):
             "cluster_sizes": cluster_sizes,
             "entropy": ent,
             "top_neighbors": top_neighbors,
-            "token_count": int(sum(cluster_sizes)) if cluster_sizes else 0,
+            "count": int(sum(cluster_sizes)) if cluster_sizes else 0,
             "top_docs": Counter(doc_ids).most_common(5) if doc_ids else [],
             "drift": 0.0,
             "births": 0,

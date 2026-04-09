@@ -15,6 +15,7 @@ from lib.eebo_logging import logger
 
 HOVER_FONT_SIZE = 48
 CENTER_FONT_SIZE = 32
+PLOT_FONT_SIZE = 18
 
 HIGH_CONTRAST_COLORS = [
     "#FF3333", "#33FF33", "#3333FF",
@@ -38,7 +39,6 @@ def normalize_series(series):
 data = load_data(OUT_PATH)
 tokens = list(data.keys())
 all_years = sorted({s["year"] for t in data.values() for s in t.get("slices", [])})
-
 
 def create_main_dashboard_figure(data, normalize=False, highlight_year=None, base_color="#225"):
     title_suffix = " (Normalized)" if normalize else " (Raw)"
@@ -117,36 +117,49 @@ def create_main_dashboard_figure(data, normalize=False, highlight_year=None, bas
 
 
 def create_neighbor_figure(token, neighbors, year, base_color):
+    """
+    Create a Plotly figure showing the neighbors of a given token.
+
+    Args:
+        token (str): The central token.
+        neighbors (list of dict): Each dict has 'token', 'similarity', 'count'.
+        year (int): Year of the slice.
+        base_color (str): Base color to use for neighbor nodes.
+
+    Returns:
+        go.Figure: Plotly figure of the neighbor graph.
+    """
     if not neighbors:
         return go.Figure()
 
     slices = data[token].get("slices", [])
-    slice_for_year = next((s for s in slices if s["year"] == year), slices[-1])
+    slice_for_year = next((s for s in slices if s["year"]==year), slices[-1])
     drift_mag = slice_for_year.get("drift", 0.0)
 
-    drift_scale = 0.5 + 2.0 * drift_mag
+    drift_scale = 0.5 + 2.0 * drift_mag  # exaggerate neighbors if drift is large
 
+    # Build graph
     G = nx.Graph()
-    G.add_node(token)
+    G.add_node(token, sim=1.0, count=1)  # central token
     for n in neighbors:
         t = n.get("token")
         sim = n.get("similarity", 0)
-        count = n.get("count", 1)  # add count
+        count = n.get("count", 1)
         if t:
-            G.add_edge(token, t, weight=1 - sim)
-            G.nodes[t]['count'] = count
-            G.nodes[t]['sim'] = sim
+            G.add_node(t, sim=sim, count=count)
+            G.add_edge(token, t, weight=1-sim)
 
+    # Layout
     pos = nx.spring_layout(G, weight='weight', seed=42)
 
-    # Scale peripheral nodes by drift
+    # Scale neighbors by drift
     cx, cy = pos[token]
     for n in pos:
         if n != token:
-            dx, dy = pos[n][0] - cx, pos[n][1] - cy
-            pos[n] = (cx + dx * drift_scale, cy + dy * drift_scale)
+            dx, dy = pos[n][0]-cx, pos[n][1]-cy
+            pos[n] = (cx + dx*drift_scale, cy + dy*drift_scale)
 
-    # Edge traces
+    # Extract edges
     edge_x, edge_y = [], []
     for u, v in G.edges():
         x0, y0 = pos[u]
@@ -154,43 +167,49 @@ def create_neighbor_figure(token, neighbors, year, base_color):
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
 
-    # Node traces
-    node_x, node_y, sizes, labels = [], [], [], []
+    # Extract nodes
+    node_x, node_y, sizes, labels, tips = [], [], [], [], []
     for n in G.nodes():
         x, y = pos[n]
         node_x.append(x)
         node_y.append(y)
-        if n == token:
-            sizes.append(CENTER_FONT_SIZE)
-            labels.append(f"{n} (drift={drift_mag:.2f})")
-        else:
-            sim = G.nodes[n].get('sim', 0)
-            count = G.nodes[n].get('count', 1)
-            sizes.append(12 + 18 * sim)  # size scaled by similarity
-            labels.append(f"{n} (sim={sim:.2f}, count={count})")
+        sim = G.nodes[n].get('sim', 0)
+        count = G.nodes[n].get('count', 1)
 
+        if n == token:
+            sizes.append(CENTER_FONT_SIZE)  # central token big
+            # labels.append(f"{n} (drift={drift_mag:.2f})")
+            labels.append(f"{n}")
+            tips.append(f"{n} (drift={drift_mag:.2f})")
+        else:
+            w = G[token][n]['weight']
+            size = 12 + 18*(1-w) + math.log1p(count)*4  # similarity + count
+            sizes.append(size)
+            # labels.append(f"{n} (sim={sim:.2f}, count={count})")
+            labels.append(f"{n}")
+            tips.append(f"{n} (sim={sim:.2f}, count={count})")
+
+    # Build figure
     fig = go.Figure()
+    # Edges
     fig.add_trace(go.Scatter(
-        x=edge_x, y=edge_y,
-        mode='lines',
-        hoverinfo='none',
-        showlegend=False,
-        line=dict(color='white', width=1)
+        x=edge_x, y=edge_y, mode='lines', hoverinfo='none', showlegend=False,
+        line=dict(color='gray', width=1)
     ))
+    # Nodes
     fig.add_trace(go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers',
+        x=node_x, y=node_y, mode='markers',
         marker=dict(size=sizes, color=base_color, line=dict(width=1, color='white')),
+        text=tips,
         hoverinfo='text',
-        text=labels,
         showlegend=False
     ))
+    # Node labels on plot
     fig.add_trace(go.Scatter(
-        x=node_x, y=node_y,
-        mode='text',
-        text=[n for n in G.nodes()],
-        textposition='top center',
-        textfont=dict(size=[CENTER_FONT_SIZE] + [12] * (len(labels) - 1)),
+        x=node_x, y=node_y, mode='text',
+        text=labels,
+        textposition='middle center',
+        textfont=dict(size=[ CENTER_FONT_SIZE ] + [PLOT_FONT_SIZE] * (len(labels)-1 )),
         hoverinfo='none',
         showlegend=False
     ))
@@ -205,9 +224,11 @@ def create_neighbor_figure(token, neighbors, year, base_color):
         hoverlabel=dict(font=dict(size=HOVER_FONT_SIZE)),
         uirevision="constant"
     )
+
     return fig
 
 
+# Dash app
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
@@ -250,7 +271,6 @@ app.layout = html.Div([
     dcc.Interval(id='animate-interval', interval=1000, n_intervals=0, disabled=True)
 ])
 
-
 @app.callback(
     Output('selected-point', 'data'),
     Input('main-dashboard', 'clickData'),
@@ -274,36 +294,21 @@ def update_selected_point(clickData, dropdown_value, slider_year, current):
 
     if trigger == 'main-dashboard' and clickData:
         point = clickData['points'][0]
-
         year = point.get('x')
-
         cd = point.get('customdata') or {}
         token = cd.get('token')
         color = cd.get('color')
-
         if token is None:
             return current
-
-        return {
-            'token': token,
-            'year': year if year is not None else current['year'],
-            'color': color
-        }
+        return {'token': token, 'year': year if year is not None else current['year'], 'color': color}
 
     elif trigger == 'token-dropdown' and dropdown_value:
-        return {
-            'token': dropdown_value,
-            'year': current['year']
-        }
+        return {'token': dropdown_value, 'year': current['year']}
 
     elif trigger == 'year-slider':
-        return {
-            'token': current['token'],
-            'year': slider_year
-        }
+        return {'token': current['token'], 'year': slider_year}
 
     return current
-
 
 @app.callback(
     Output('main-dashboard', 'figure'),
@@ -314,7 +319,6 @@ def update_main(normalize_mode, highlight_year):
     logger.info(f"[DASH update_main] {normalize_mode} year={highlight_year}")
     normalize = normalize_mode=="norm"
     return create_main_dashboard_figure(data, normalize=normalize, highlight_year=highlight_year)
-
 
 @app.callback(
     Output('neighbor-graph', 'figure'),
@@ -341,13 +345,15 @@ def update_neighbors(selected_point, n_intervals, anim_state):
     s = next((x for x in slices if x["year"] == year), slices[-1])
     neighbors = s.get("top_neighbors", [])
 
+
     neighbors = [
-        {"token": n.get("token"), "similarity": n.get("similarity", 0)}
+        {"token": n.get("token"), "similarity": n.get("similarity", 0), "count": n.get("count", -2)}
         for n in neighbors if isinstance(n, dict)
     ]
 
-    return create_neighbor_figure(token, neighbors, year, color)
+    logger.info(f"[DASH update_neighbours] neighbors={neighbors}")
 
+    return create_neighbor_figure(token, neighbors, year, color)
 
 @app.callback(
     Output('animation-state', 'data'),
@@ -365,7 +371,6 @@ def control_animation(n_clicks, clickData, state):
     if trigger=='anim-button':
         return not state, state
     return state, not state
-
 
 if __name__=="__main__":
     app.run(debug=True)

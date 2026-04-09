@@ -1,29 +1,37 @@
-import { createSignal } from "solid-js";
-import SearchForm from "./components/SearchForm";
-import SearchResults from "./components/SearchResults";
-import DocumentView from "./components/DocumentView";
+import { createSignal, onMount } from "solid-js";
 
-import styles from './App.module.css';
+// import EeboSearch from "./components/EeboSearch";
+import DriftChart from "./components/DriftChart";
+import NeighborGraph from "./components/NeighborGraph";
+import type { Dataset, Selection } from "./types";
+import { fetchTokenClusters } from "./services/tokenClustersService";
 
 export default function App() {
-  const [results, setResults] = createSignal([]);
-  const [selectedDoc, setSelectedDoc] = createSignal(null);
+  const [data, setData] = createSignal<Dataset>();
+  const [hovered, setHovered] = createSignal<Selection | null>(null);
+  const [selected, setSelected] = createSignal<Selection>({ token: null, year: null, color: "#222" });
+
+  onMount(async () => {
+    const json = await fetchTokenClusters("drift_neighbors_micro_senses_slices.json"); // See python/src/mb_test.py `OUT_PATH`
+    setData(json);
+  });
 
   return (
-    <main>
-      <section class={styles.masthead}>
-        <h1>EEBO Search</h1>
-        <SearchForm onSearch={setResults} />
-      </section>
+    <>
+      <DriftChart
+        data={data()}
+        hovered={hovered}
+        setHovered={setHovered}
+        selected={selected}
+        setSelected={setSelected}
+      />
 
-      <section class={styles.resultsViewer}>
-        <div class={styles.results}>
-          <SearchResults results={results()} onSelect={setSelectedDoc} />
-        </div>
-        <div class={styles.viewer}>
-          <DocumentView docId={selectedDoc()} />
-        </div>
-      </section>
-    </main >
-  );
+      <NeighborGraph
+        token={selected().token}
+        neighbors={selected().token ? data()[selected().token].slices.find(s => s.year === selected().year)?.top_neighbors || [] : []}
+        drift={selected().token ? data()[selected().token].slices.find(s => s.year === selected().year)?.drift || 0 : 0}
+        color={selected().color}
+      />
+    </>
+  )
 }
