@@ -341,7 +341,8 @@ def compute_drift_and_neighbors_clustered(token, conn):
         )
 
         slice_entry = {
-            "year": start,
+            "slice_start": start,
+            "slice_end": end,
             "n_clusters": len(cluster_centroids),
             "cluster_sizes": cluster_sizes,
             "entropy": ent,
