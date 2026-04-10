@@ -1,9 +1,9 @@
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect } from "solid-js";
 import * as d3 from "d3";
 import type { SliceView } from "../types";
 
 type Props = {
-    slice: SliceView | undefined;
+    slice: SliceView;
 };
 
 export default function DriftChart(props: Props) {

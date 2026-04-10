@@ -1,4 +1,4 @@
-import { onMount, createEffect } from "solid-js";
+import { createEffect } from "solid-js";
 import * as d3 from "d3";
 import type { SliceView } from "../types";
 

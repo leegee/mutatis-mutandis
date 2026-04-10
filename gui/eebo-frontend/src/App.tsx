@@ -155,8 +155,8 @@ export default function App() {
     <main>
       {sliceView() && (
         <>
-          <DriftChart slice={sliceView()} />
-          <NeighborGraph slice={sliceView()} />
+          <DriftChart slice={sliceView()!} />
+          <NeighborGraph slice={sliceView()!} />
         </>
       )}
     </main>
