@@ -1,6 +1,6 @@
 import {
-    createMemo,
     type Component,
+    createMemo,
     For,
     onMount,
     onCleanup
@@ -167,6 +167,16 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
                     dy={4}
                 >
                     {props.slice.token}
+                </text>
+                <text
+                    class={styles.ngCenterTextSmall}
+                    x="50%"
+                    y="50%"
+                    dy={30}
+                >
+                    {props.slice.slice_start}
+                    -
+                    {props.slice.slice_end}
                 </text>
             </g>
 

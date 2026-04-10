@@ -1,6 +1,6 @@
 import 'beercss';
-import { createMemo, createEffect, onCleanup, onMount } from "solid-js";
-import { data, eeboStore, setEeboStore } from "./stores/Eebo.store";
+import { createMemo, } from "solid-js";
+import { data, eeboStore } from "./stores/Eebo.store";
 
 import NeighborGraph from "./components/NeighborGraph";
 import DriftChart from "./components/DriftChart";
@@ -9,39 +9,7 @@ import type { SlicePoint } from "./types"
 import { buildSliceView } from "./models/buildSliceView";
 
 export default function App() {
-  onMount(() => {
-    const handler = (e: Event) => {
-      const ev = e as CustomEvent<{
-        term: string;
-        year: number;
-        color: string;
-        x: number;
-        y: number;
-      }>;
-
-      const { term, year, color, x, y } = ev.detail;
-
-      console.log('heard', { term, year, color, x, y })
-      setEeboStore("selected", {
-        token: term,
-        slice_start: year,
-        slice_end: year,
-        color
-      });
-
-      setEeboStore("overlay", (prev) => ({
-        open: !(prev.open && prev.x === x && prev.y === y),
-        x,
-        y
-      }));
-    };
-
-    window.addEventListener("neighbourhood:open", handler);
-
-    onCleanup(() => {
-      window.removeEventListener("neighbourhood:open", handler);
-    });
-  });
+  const overlay = () => eeboStore.overlay;
 
   const series = createMemo(() => {
     const d = data();
@@ -60,7 +28,6 @@ export default function App() {
     return out;
   });
 
-
   const sliceView = createMemo(() => {
     const dataset = data();
     const token = eeboStore.selected.token;
@@ -78,25 +45,6 @@ export default function App() {
     return buildSliceView(token, slice, dataset);
   });
 
-
-  createEffect(() => {
-    const d = data();
-    if (!d) return;
-
-    if (eeboStore.selected.token && eeboStore.selected.slice_start != null) return;
-
-    const firstToken = Object.keys(d).sort()[0];
-    const firstSlice = d[firstToken].slices[0];
-
-    setEeboStore("selected", {
-      token: firstToken,
-      slice_start: firstSlice.slice_start,
-      slice_end: firstSlice.slice_end ?? firstSlice.slice_start,
-      color: "#000"
-    });
-  });
-
-  const overlay = () => eeboStore.overlay;
 
   return (
     <main style={{ position: "relative" }}>
@@ -131,8 +79,8 @@ export default function App() {
         >
           <NeighborGraph
             slice={sliceView()!}
-            width={300}
-            height={300}
+            width={1000}
+            height={1000}
           />
         </div>
       )}
