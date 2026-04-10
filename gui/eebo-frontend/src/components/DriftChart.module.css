@@ -13,6 +13,8 @@
     stroke-width: var(--drift-stroke-width);
 }
 
+.driftPointsLayer {}
+
 .driftPoint {
     fill: var(--primary, );
     cursor: pointer;

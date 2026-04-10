@@ -3,6 +3,9 @@ import * as d3 from "d3";
 import type { SlicePoint } from "../types";
 import styles from "./DriftChart.module.css";
 
+const POINT_RADIUS = 7;
+const STROKE_WIDTH = 2;
+
 const MARGIN = {
     top: 10,
     right: 20,
@@ -34,6 +37,8 @@ export default function DriftChart(props: {
     const [history, setHistory] = createSignal<HistoryEntry[]>([]);
     const [visibleTerms, setVisibleTerms] = createSignal<Set<string>>(new Set());
 
+    const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
+
     const pushHistory = (entry: HistoryEntry) => {
         setHistory(prev => [...prev, entry].slice(-25));
     };
@@ -45,8 +50,6 @@ export default function DriftChart(props: {
             return next;
         });
     };
-
-    const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
 
     onMount(() => {
         if (!ref) return;
@@ -66,30 +69,36 @@ export default function DriftChart(props: {
     const height = () => props.height ?? size().height;
 
     createEffect(() => {
-        setVisibleTerms(new Set(Object.keys(props.series ?? {})));
+        const keys = Object.keys(props.series ?? {});
+        setVisibleTerms(prev => prev.size ? prev : new Set(keys));
     });
 
     createEffect(() => {
         const seriesMap = props.series;
         const w = width();
         const h = height();
+
         if (!seriesMap || !ref || w === 0 || h === 0) return;
 
         const svg = d3.select(ref);
 
+        // ---------------- CLEAN SLATE EVERY RENDER ----------------
+        svg.selectAll("*").remove();
+
         const termNames = Object.keys(seriesMap);
         const visibleTermsArr = termNames.filter(t => visibleTerms().has(t));
 
-        const allPoints = visibleTermsArr.flatMap(term =>
+        const visiblePoints = visibleTermsArr.flatMap(term =>
             seriesMap[term].map(p => ({ ...p, term }))
         );
 
+        // ---------------- SCALES ----------------
         const x = d3.scaleLinear()
-            .domain(d3.extent(allPoints, d => d.slice_start) as [number, number])
+            .domain(d3.extent(visiblePoints, d => d.slice_start) as [number, number])
             .range([MARGIN.left, w - MARGIN.right]);
 
         const y = d3.scaleLinear()
-            .domain(d3.extent(allPoints, d => d.drift) as [number, number])
+            .domain(d3.extent(visiblePoints, d => d.drift) as [number, number])
             .nice()
             .range([h - MARGIN.bottom, MARGIN.top]);
 
@@ -99,81 +108,70 @@ export default function DriftChart(props: {
             .curve(d3.curveMonotoneX);
 
         // ---------------- LINES ----------------
-        const paths = svg.selectAll<SVGPathElement, string>("path.term-line")
-            .data(visibleTermsArr, d => d);
+        const linesLayer = svg.append("g").attr("class", styles.driftTermLine);
 
-        paths.enter()
+        linesLayer.selectAll("path")
+            .data(visibleTermsArr)
+            .enter()
             .append("path")
-            .attr("class", styles.driftTermLine)
-            .merge(paths as any)
             .attr("fill", "none")
+            .attr("stroke-width", STROKE_WIDTH)
             .attr("stroke", d => color(d) as string)
-            .attr("d", d => line(seriesMap[d]))
-            .attr("opacity", 1);
+            .attr("d", d => line(seriesMap[d]));
 
-        paths.exit().remove();
+        // ---------------- POINTS ----------------
+        const pointsLayer = svg.append("g").attr("class", styles.driftPointsLayer);
 
-        // ---------------- POINTS (visual only) ----------------
-        const points = svg.selectAll<SVGCircleElement, any>("circle.drift-point")
-            .data(allPoints, d => `${d.term}-${d.slice_start}`);
-
-        points.enter()
-            .append("circle")
-            .attr("class", "drift-point")
-            .attr("r", 10)
-            .attr("opacity", 0.7)
-            .attr("fill", d => color(d.term) as string)
-            .style("pointer-events", "none")
-            .merge(points as any)
-            .attr("cx", d => x(d.slice_start))
-            .attr("cy", d => y(d.drift));
-
-        points.exit().remove();
-
-        // ---------------- DATA FOR INTERACTION ----------------
-        const pts = allPoints.map(d => ({
+        const pts = visiblePoints.map(d => ({
             ...d,
             sx: x(d.slice_start),
             sy: y(d.drift)
         }));
 
+        pointsLayer.selectAll("circle")
+            .data(pts)
+            .enter()
+            .append("circle")
+            .attr("r", POINT_RADIUS)
+            .attr("fill", d => color(d.term) as string)
+            .attr("cx", d => d.sx)
+            .attr("cy", d => d.sy);
+
+        // ---------------- INTERACTION ----------------
         const delaunay = d3.Delaunay.from(
             pts,
             d => d.sx,
             d => d.sy
         );
 
-        // ---------------- SAFE HIT LAYER (FIX) ----------------
-        const hitLayer = svg.selectAll<SVGRectElement, any>("rect.hit-layer")
-            .data([0]);
-
-        hitLayer.enter()
-            .append("rect")
-            .attr("class", "hit-layer")
-            .merge(hitLayer as any)
-            .attr("x", 0)
-            .attr("y", 0)
+        const interactionLayer = svg.append("rect")
             .attr("width", w)
             .attr("height", h)
-            .style("fill", "transparent")
-            .style("pointer-events", "all")
+            .attr("fill", "transparent")
+            .style("pointer-events", "all");
+
+        interactionLayer
             .on("mousemove", (event) => {
                 const [mx, my] = d3.pointer(event);
 
                 const i = delaunay.find(mx, my);
                 const d = pts[i];
+
                 if (!d) return setTooltip(null);
 
-                setTooltip({ x: mx, y: my, data: d });
+                setTooltip({
+                    x: mx,
+                    y: my,
+                    data: d
+                });
             })
-            .on("mouseleave", () => {
-                setTooltip(null);
-            })
+            .on("mouseleave", () => setTooltip(null))
             .on("click", (event) => {
                 const [mx, my] = d3.pointer(event);
 
                 const i = delaunay.find(mx, my);
                 const d = pts[i];
+
                 if (!d) return;
 
                 props.onSelectSlice?.(d.slice_start);
