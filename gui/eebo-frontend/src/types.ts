@@ -26,19 +26,69 @@ export interface Hit {
 
 // todo move to a new file
 
-export type Neighbor = { token: string; similarity: number; count: number };
-export type Slice = { year: number; drift: number; js_divergence: number; top_neighbors: Neighbor[] };
-export type TokenData = { slices: Slice[]; phase_transitions?: any };
-export type Dataset = { [token: string]: TokenData };
+export type Neighbor = {
+    token: string;
+    similarity: number;
+    count: number
+};
 
-export type Selection = { token: string | null; year: number | null; color: string };
+export type Slice = {
+    slice_start: number;
+    slice_end: number;
 
-export type DriftChartProps = {
-    data: Dataset | undefined;
-    hovered: () => Selection | null;
-    setHovered: (s: Selection | null) => void;
-    selected: () => Selection;
-    setSelected: (s: Selection) => void;
+    n_clusters: number;
+    cluster_sizes: number[];
+
+    entropy: number;
+
+    top_neighbors: Neighbor[];
+
+    count: number;
+    top_docs: [string, number][];
+
+    drift: number;
+    births: number;
+    deaths: number;
+    js_divergence: number;
+};
+
+export type TokenData = {
+    slices: Slice[];
+    phase_transitions?: any
+};
+
+export type Dataset = {
+    [token: string]: TokenData
+};
+
+export type SliceHistoryPoint = {
+    t: number;
+    drift: number;
+    d1: number;
+    d2: number;
+};
+
+export type SliceView = {
+    token: string;
+    slice_start: number;
+    slice_end: number;
+
+    neighbors: Neighbor[];
+    drift: number;
+    normalizedDrift: number;
+
+    rank: Map<string, number>;
+
+    // 🔥 NEW
+    history: SliceHistoryPoint[];
+    transitions: number[];
+};
+
+export type Selection = {
+    token: string | null;
+    slice_start: number | null;
+    slice_end: number | null;
+    color: string | null;
 };
 
 export type NeighborGraphProps = {
