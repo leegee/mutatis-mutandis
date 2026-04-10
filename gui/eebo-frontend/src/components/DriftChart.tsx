@@ -2,8 +2,11 @@ import { createEffect } from "solid-js";
 import * as d3 from "d3";
 import type { SliceView } from "../types";
 
+const POINT_RADIUS = 7;
+
 type Props = {
     slice: SliceView;
+    onSelectSlice?: (t: number) => void;
 };
 
 export default function DriftChart(props: Props) {
@@ -49,15 +52,33 @@ export default function DriftChart(props: Props) {
             .y(d => y(d.drift))
             .curve(d3.curveMonotoneX);
 
+        // const points =
+        svg
+            .selectAll<SVGCircleElement, Point>(".point")
+            .each(d => console.log("datum:", d))
+            .data(data)
+            .enter()
+            .append("circle")
+            .attr("class", "point")
+            .attr("cx", d => x(d.t))
+            .attr("cy", d => y(d.drift))
+            .attr("r", POINT_RADIUS)
+            .attr("fill", "#444")
+            .style("cursor", "pointer")
+            .on("click", (_, d) => {
+                console.log("[DriftChart] select slice", d.t);
+                props.onSelectSlice?.(d.t);
+            });
+
         svg
             .append("path")
             .datum(data)
             .attr("fill", "none")
             .attr("stroke", "black")
-            .attr("stroke-width", 1.5)
+            .attr("stroke-width", 2.5)
             .attr("d", line);
 
-        // 🔥 transitions (from d2 spikes)
+        // transitions (from d2 spikes)
         svg
             .selectAll(".shock")
             .data(slice.transitions ?? [])

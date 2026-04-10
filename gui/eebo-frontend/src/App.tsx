@@ -155,7 +155,29 @@ export default function App() {
     <main>
       {sliceView() && (
         <>
-          <DriftChart slice={sliceView()!} />
+          <DriftChart
+            slice={sliceView()!}
+            onSelectSlice={(t) => {
+              const dataset = data();
+              const token = store.selected.token;
+
+              if (!dataset || !token) return;
+
+              const slice = dataset[token].slices.find(
+                s => s.slice_start === t
+              );
+
+              if (!slice) return;
+
+              setEeboStore("selected", {
+                token,
+                slice_start: slice.slice_start,
+                slice_end: slice.slice_end ?? slice.slice_start,
+                color: "#000"
+              });
+            }}
+          />
+
           <NeighborGraph slice={sliceView()!} />
         </>
       )}
