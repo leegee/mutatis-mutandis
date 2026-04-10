@@ -1,0 +1,25 @@
+.ngCenter {
+    fill: #dddd;
+}
+
+.ngCenterText {
+    fill: white;
+    font-weight: 900;
+    stroke: black;
+    stroke-width: 1px;
+    text-transform: uppercase;
+    text-anchor: middle;
+    font-size: 120%;
+}
+
+.ngPoint {
+    fill: var(--tertiary);
+    opacity: 0.85;
+}
+
+.ngPointText {
+    fill: var(--on-surface, white);
+    font-size: 12pt;
+    pointer-events: none;
+    text-anchor: middle;
+}

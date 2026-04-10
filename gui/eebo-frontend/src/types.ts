@@ -79,7 +79,6 @@ export type SliceView = {
 
     rank: Map<string, number>;
 
-    // 🔥 NEW
     history: SliceHistoryPoint[];
     transitions: number[];
 };
@@ -91,9 +90,3 @@ export type Selection = {
     color: string | null;
 };
 
-export type NeighborGraphProps = {
-    token: string | null;
-    neighbors: Neighbor[];
-    drift: number;
-    color: string;
-};

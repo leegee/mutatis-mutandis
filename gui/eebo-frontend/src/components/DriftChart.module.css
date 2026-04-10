@@ -1,0 +1,28 @@
+:root {
+    --drift-stroke-width: 3pt;
+    --drift-clr: navy;
+}
+
+.driftPath {
+    fill: none;
+    stroke: var(--drift-clr);
+    stroke-width: var(--drift-stroke-width);
+}
+
+.driftPoint {
+    fill: var(--primary, );
+    cursor: pointer;
+
+}
+
+.driftShock {
+    stroke: orange;
+    stroke-dasharray: 4 2;
+}
+
+.driftInspector {
+    fill: var(--on-surface);
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+}

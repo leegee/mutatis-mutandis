@@ -1,146 +1,124 @@
-import { createEffect } from "solid-js";
-import * as d3 from "d3";
+import { createMemo, type Component } from "solid-js";
 import type { SliceView } from "../types";
+import styles from './NeighborGraph.module.css';
 
-type GraphNode = d3.SimulationNodeDatum & {
-    id: string;
-    similarity: number;
-    rank: number;
-};
+type Neighbor = SliceView["neighbors"][number];
 
-type GraphLink = d3.SimulationLinkDatum<GraphNode> & {
-    weight: number;
-};
-
-type Props = {
+export type NeighborGraphProps = {
     slice: SliceView;
+    width: number;
+    height: number;
 };
 
-export default function NeighborGraph(props: Props) {
-    let svgRef: SVGSVGElement | undefined;
+type PositionedNeighbor = Neighbor & {
+    x: number;
+    y: number;
+};
 
-    // re-run when slice changes
-    createEffect(() => {
-        const slice = props.slice;
-        if (!slice || !svgRef) return;
 
-        console.log("[NeighborGraph] render", {
-            token: slice.token,
-            neighbors: slice.neighbors.length,
-            drift: slice.drift
-        });
+function radialLayout(
+    cx: number,
+    cy: number,
+    neighbors: Neighbor[]
+): PositionedNeighbor[] {
+    const n = neighbors.length || 1;
 
-        const width = 800;
-        const height = 600;
+    const maxRadius = Math.min(cx, cy) * 0.9;
+    const minRadius = maxRadius * 0.15;
 
-        const svg = d3.select(svgRef);
-        svg.selectAll("*").remove(); // clear previous render
+    return neighbors.map((d, i) => {
+        const sim = d.similarity ?? 0;
 
-        // --- nodes ---
-        const nodes: GraphNode[] = slice.neighbors.map((n) => ({
-            id: n.token,
-            similarity: n.similarity,
-            rank: slice.rank.get(n.token) ?? 0
-        }));
+        // normalize similarity (tune if needed)
+        const simScaled = (sim - 0.6) / 0.4;
+        const clamped = Math.max(0, Math.min(1, simScaled));
 
-        // include central token
-        nodes.push({
-            id: slice.token,
-            similarity: 1,
-            rank: -1
-        });
+        const spread = 1 - Math.pow(clamped, 2);
 
-        // --- links ---
-        const links: GraphLink[] = slice.neighbors.map((n) => ({
-            source: slice.token,
-            target: n.token,
-            weight: 1 - n.similarity
-        }));
+        const countWeight = Math.log1p(d.count ?? 1) / 4;
 
-        // --- simulation ---
-        const simulation = d3
-            .forceSimulation<GraphNode>(nodes)
-            .force(
-                "link",
-                d3
-                    .forceLink<GraphNode, GraphLink>(links)
-                    .id((d) => d.id)
-                    .distance((d) => 60 + d.weight * 180)
-            )
-            .force(
-                "charge",
-                d3.forceManyBody<GraphNode>().strength((d) =>
-                    d.id === slice.token ? -300 : -120
-                )
-            )
-            .force("center", d3.forceCenter(width / 2, height / 2));
+        const radius = Math.max(
+            minRadius,
+            maxRadius * spread * (1 + countWeight)
+        );
 
-        // --- links render ---
-        const link = svg
-            .selectAll("line")
-            .data(links)
-            .join("line")
-            .attr("stroke", "#999")
-            .attr("stroke-opacity", 0.6);
+        const angle =
+            (i / n) * 2 * Math.PI +
+            ((d.count ?? 0) % 7) * 0.03;
 
-        // --- nodes render ---
-        const node = svg
-            .selectAll("circle")
-            .data(nodes)
-            .join("circle")
-            .attr("r", (d) => (d.id === slice.token ? 10 : 6))
-            .attr("fill", (d) => {
-                if (d.id === slice.token) return "#000";
+        return {
+            ...d,
+            x: cx + Math.cos(angle) * radius,
+            y: cy + Math.sin(angle) * radius
+        };
+    });
+}
 
-                // drift-aware coloring
-                return d3.interpolateTurbo(slice.normalizedDrift);
-            });
+function nodeSize(n: Neighbor): number {
+    return (
+        10 +
+        18 * (1 - (n.similarity ?? 0)) +
+        Math.log1p(n.count ?? 1) * 4
+    );
+}
 
-        // --- labels ---
-        const labels = svg
-            .selectAll("text")
-            .data(nodes)
-            .join("text")
-            .text((d) => d.id)
-            .attr("font-size", 10)
-            .attr("dx", 8)
-            .attr("dy", "0.35em");
-
-        // --- drag (fixed typing) ---
-        const drag = d3
-            .drag<Element, GraphNode>()
-            .on("start", (event, d) => {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            })
-            .on("drag", (event, d) => {
-                d.fx = event.x;
-                d.fy = event.y;
-            })
-            .on("end", (event, d) => {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            });
-
-        node.call(drag as any);
-
-        // --- tick ---
-        simulation.on("tick", () => {
-            link
-                .attr("x1", (d: any) => d.source.x ?? 0)
-                .attr("y1", (d: any) => d.source.y ?? 0)
-                .attr("x2", (d: any) => d.target.x ?? 0)
-                .attr("y2", (d: any) => d.target.y ?? 0);
-
-            node.attr("cx", (d) => d.x ?? 0).attr("cy", (d) => d.y ?? 0);
-
-            labels
-                .attr("x", (d) => d.x ?? 0)
-                .attr("y", (d) => d.y ?? 0);
-        });
+const NeighborGraph: Component<NeighborGraphProps> = (props) => {
+    const neighbors = createMemo<Neighbor[]>(() => {
+        return props.slice.neighbors ?? [];
     });
 
-    return <svg ref={(el) => (svgRef = el)} width={800} height={600} />;
-}
+    const layout = createMemo<PositionedNeighbor[]>(() => {
+        const cx = props.width / 2;
+        const cy = props.height / 2;
+
+        return radialLayout(cx, cy, neighbors());
+    });
+
+    const center = createMemo(() => ({
+        x: props.width / 2,
+        y: props.height / 2
+    }));
+
+    return (
+        <svg width={props.width} height={props.height}>
+            {/* center token */}
+            <g>
+                <circle
+                    class={styles.ngCenter}
+                    cx={center().x}
+                    cy={center().y}
+                    r={16}
+                />
+                <text
+                    class={styles.ngCenterText}
+                    x="50%" y="50%"
+                    dy={4}
+                >
+                    {props.slice.token}
+                </text>
+            </g>
+
+            {/* neighbors */}
+            {layout().map((n) => (
+                <g>
+                    <circle
+                        class={styles.ngPoint}
+                        cx={n.x}
+                        cy={n.y}
+                        r={nodeSize(n)}
+                    />
+                    <text
+                        class={styles.ngPointText}
+                        x={n.x}
+                        y={n.y}
+                        dy={4}
+                    >
+                        {n.token}
+                    </text>
+                </g>
+            ))}
+        </svg>
+    );
+};
+
+export default NeighborGraph;
