@@ -67,10 +67,9 @@
     font-size: 0.8em !important;
 }
 
-
 .dimmed {
     opacity: 0.25;
-    transition: opacity 4440ms ease-in-out;
+    transition: opacity 222ms ease-in-out;
 }
 
 
