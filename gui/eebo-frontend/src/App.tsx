@@ -3,11 +3,29 @@ import { data, eeboStore, setEeboStore } from "./stores/Eebo.store";
 
 import NeighborGraph from "./components/NeighborGraph";
 import DriftChart from "./components/DriftChart";
+import type { SlicePoint } from "./types"
 
 import { buildSliceView } from "./models/buildSliceView";
 
 export default function App() {
   const store = eeboStore;
+
+  const series = createMemo(() => {
+    const d = data();
+    if (!d) return;
+
+    const out: Record<string, SlicePoint[]> = {};
+
+    for (const token of Object.keys(d)) {
+      out[token] = d[token].slices.map(s => ({
+        slice_start: s.slice_start,
+        slice_end: s.slice_end,
+        drift: s.drift
+      }));
+    }
+
+    return out;
+  });
 
   const sliceView = createMemo(() => {
     const dataset = data();
@@ -47,12 +65,9 @@ export default function App() {
     <main>
       {sliceView() && (
         <>
-          <div style={{
-            "width": "100%",
-            "height": "45%"
-          }}>
+          <div style={{ width: "100%", height: "45%" }}>
             <DriftChart
-              slice={sliceView()!}
+              series={series()!}
               onSelectSlice={(t) => {
                 const dataset = data();
                 const token = store.selected.token;
@@ -74,7 +89,11 @@ export default function App() {
             />
           </div>
 
-          <NeighborGraph slice={sliceView()!} width={700} height={600} />
+          <NeighborGraph
+            slice={sliceView()!}
+            width={700}
+            height={600}
+          />
         </>
       )}
     </main>

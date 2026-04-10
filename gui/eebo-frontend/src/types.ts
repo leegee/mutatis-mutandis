@@ -26,10 +26,17 @@ export interface Hit {
 
 // todo move to a new file
 
+export type SlicePoint = {
+    slice_start: number;
+    slice_end: number;
+    drift: number;
+    transitions?: number[];
+};
+
 export type Neighbor = {
     token: string;
     similarity: number;
-    count: number
+    count: number;
 };
 
 export type Slice = {
@@ -54,11 +61,11 @@ export type Slice = {
 
 export type TokenData = {
     slices: Slice[];
-    phase_transitions?: any
+    phase_transitions?: any;
 };
 
 export type Dataset = {
-    [token: string]: TokenData
+    [token: string]: TokenData;
 };
 
 export type SliceHistoryPoint = {
@@ -89,4 +96,3 @@ export type Selection = {
     slice_end: number | null;
     color: string | null;
 };
-

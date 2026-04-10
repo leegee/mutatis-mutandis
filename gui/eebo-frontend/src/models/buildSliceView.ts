@@ -15,7 +15,6 @@ export function buildSliceView(
     );
 
     const history = buildSliceHistory(tokenData.slices);
-
     const transitions = detectTransitions(history);
 
     const drift = slice.drift ?? 0;

@@ -3,6 +3,10 @@
     --drift-clr: navy;
 }
 
+.distChartWrapper {
+    background-color: transparent;
+}
+
 .driftPath {
     fill: none;
     stroke: var(--drift-clr);
@@ -15,6 +19,12 @@
 
 }
 
+.driftTermLine {
+    fill: none;
+    stroke-width: 8;
+    opacity: 90%;
+}
+
 .driftShock {
     stroke: orange;
     stroke-dasharray: 4 2;
@@ -25,4 +35,17 @@
     font-size: 12px;
     pointer-events: none;
     opacity: 0;
+}
+
+.tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: monospace;
+    z-index: 10;
+    white-space: nowrap;
 }
