@@ -50,40 +50,27 @@ export default function App() {
     <main style={{ position: "relative" }}>
 
       <article style={{ width: "100%", height: "90%" }}>
-        <DriftChart
-          series={series()!}
-          onSelectSlice={
-            () => { }
-            // (term: string, slice_start: number) => {
-            // const dataset = data();
-            // if (!dataset || !eeboStore.selected.token) return;
-            // const slice = dataset[eeboStore.selected.token].slices.find(
-            //   s => s.slice_start === Number(slice_start)
-            // );
-            // if (!slice) return;
-            // console.log('[App] selected in store:', term, "=", eeboStore.selected.token, slice)
-            // }
-          }
-        />
-      </article>
 
-      {overlay().open && sliceView() && (
-        <div
-          style={{
-            position: "absolute",
-            left: `${overlay().x}px`,
-            top: `${overlay().y}px`,
-            transform: "translate(-50%, -50%)",
-            "pointer-events": "none"
-          }}
-        >
-          <NeighborGraph
-            slice={sliceView()!}
-            width={1000}
-            height={1000}
-          />
-        </div>
-      )}
+        <DriftChart series={series()!} />
+
+        {overlay().open && sliceView() && (
+          <aside
+            style={{
+              position: "absolute",
+              left: `${overlay().x}px`,
+              top: `${overlay().y}px`,
+              transform: "translate(-50%, -50%)",
+              "pointer-events": "none"
+            }}
+          >
+            <NeighborGraph
+              slice={sliceView()!}
+              width={1000}
+              height={1000}
+            />
+          </aside>
+        )}
+      </article>
 
     </main>
   );
