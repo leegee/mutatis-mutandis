@@ -57,3 +57,13 @@
     z-index: 10;
     white-space: nowrap;
 }
+
+.driftLegend {
+    label {
+        margin-right: 0.6em;
+    }
+
+    [type=checkbox] {
+        margin-right: 0.3em;
+    }
+}

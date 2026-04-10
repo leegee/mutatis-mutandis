@@ -196,7 +196,7 @@ export default function DriftChart(props: {
         <div class={styles.distChartWrapper} style={{ width: "100%", height: "100%" }}>
 
             {/* LEGEND */}
-            <div class={styles.legend}>
+            <div class={styles.driftLegend}>
                 {Object.keys(props.series ?? {}).map(term => (
                     <label>
                         <input
