@@ -24,7 +24,7 @@ function radialLayout(
     const n = neighbors.length || 1;
 
     const maxRadius = Math.min(cx, cy) * 0.9;
-    const minRadius = maxRadius * 0.15;
+    const minRadius = maxRadius * 0.3;
 
     return neighbors.map((d, i) => {
         const sim = d.similarity ?? 0;
@@ -37,10 +37,9 @@ function radialLayout(
 
         const countWeight = Math.log1p(d.count ?? 1) / 4;
 
-        const radius = Math.max(
-            minRadius,
-            maxRadius * spread * (1 + countWeight)
-        );
+        const radius =
+            minRadius +
+            (maxRadius - minRadius) * spread * (1 + countWeight);
 
         const angle =
             (i / n) * 2 * Math.PI +
