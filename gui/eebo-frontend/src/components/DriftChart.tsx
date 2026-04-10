@@ -185,10 +185,10 @@ export default function DriftChart(props: {
                     })
                 );
 
-                pushHistory({
-                    term: d.term,
-                    year: d.slice_start
-                });
+                // pushHistory({
+                //     term: d.term,
+                //     year: d.slice_start
+                // });
             });
     });
 
