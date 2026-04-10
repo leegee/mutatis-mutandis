@@ -45,7 +45,7 @@
     opacity: 0;
 }
 
-.tooltip {
+.driftTooltip {
     position: absolute;
     pointer-events: none;
     background: rgba(0, 0, 0, 0.85);
@@ -56,6 +56,12 @@
     font-family: monospace;
     z-index: 10;
     white-space: nowrap;
+    padding: 1em;
+
+    h6 {
+        opacity: 0.4;
+        font-weight: 900;
+    }
 }
 
 .driftLegend {

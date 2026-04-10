@@ -1,8 +1,8 @@
 import { createEffect, createSignal, onMount, onCleanup } from "solid-js";
 import * as d3 from "d3";
-import type { EventNeighbourhoodOpen, SlicePoint } from "../types";
-import styles from "./DriftChart.module.css";
+import type { SlicePoint } from "../types";
 import { eeboStore, setEeboStore } from "../stores/Eebo.store";
+import styles from "./DriftChart.module.css";
 
 const POINT_RADIUS = 7;
 const STROKE_WIDTH = 2;
@@ -20,11 +20,6 @@ type TooltipState = {
     data: any | null;
 } | null;
 
-// type HistoryEntry = {
-//     term: string;
-//     year: number;
-// };
-
 export default function DriftChart(props: {
     series: Record<string, SlicePoint[]>;
     width?: number;
@@ -35,14 +30,10 @@ export default function DriftChart(props: {
 
     const [size, setSize] = createSignal({ width: 0, height: 0 });
     const [tooltip, setTooltip] = createSignal<TooltipState>(null);
-    // const [history, setHistory] = createSignal<HistoryEntry[]>([]);
     const [visibleTerms, setVisibleTerms] = createSignal<Set<string>>(new Set());
-
+    const width = () => props.width ?? size().width;
+    const height = () => props.height ?? size().height;
     const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
-
-    // const pushHistory = (entry: HistoryEntry) => {
-    //     setHistory(prev => [...prev, entry].slice(-25));
-    // };
 
     const toggleTerm = (term: string) => {
         setVisibleTerms(prev => {
@@ -65,9 +56,6 @@ export default function DriftChart(props: {
         observer.observe(ref);
         onCleanup(() => observer.disconnect());
     });
-
-    const width = () => props.width ?? size().width;
-    const height = () => props.height ?? size().height;
 
     createEffect(() => {
         const keys = Object.keys(props.series ?? {});
@@ -235,27 +223,20 @@ export default function DriftChart(props: {
                 </div>
             </header>
 
-            {/* HISTORY */}
-            {/* <div class={styles.history}>
-                {history().map((h, i) => (
-                    <div>{i}: {h.term} @ {h.year}</div>
-                ))}
-            </div> */}
-
             {/* TOOLTIP */}
             {
                 tooltip() && (
-                    <div
-                        class={styles.tooltip}
+                    <aside
+                        class={styles.driftTooltip}
                         style={{
                             left: `${tooltip()!.x + 10}px`,
                             top: `${tooltip()!.y + 10}px`
                         }}
                     >
-                        <div><b>{tooltip()!.data.term}</b></div>
-                        <div>year: {tooltip()!.data.slice_start}</div>
-                        <div>drift: {tooltip()!.data.drift}</div>
-                    </div>
+                        <h6 class="bottom-margin">{tooltip()!.data.term}</h6>
+                        <div>Year: {tooltip()!.data.slice_start}</div>
+                        <div>Drift: {tooltip()!.data.drift}</div>
+                    </aside>
                 )
             }
 
