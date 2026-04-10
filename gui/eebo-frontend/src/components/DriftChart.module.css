@@ -25,6 +25,12 @@
     opacity: 90%;
 }
 
+.driftVoronoi {
+    fill: transparent;
+    pointer-events: all;
+
+}
+
 .driftShock {
     stroke: orange;
     stroke-dasharray: 4 2;

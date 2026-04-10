@@ -65,7 +65,7 @@ export default function App() {
     <main>
       {sliceView() && (
         <>
-          <div style={{ width: "100%", height: "45%" }}>
+          <div style={{ width: "100%", height: "66%" }}>
             <DriftChart
               series={series()!}
               onSelectSlice={(t) => {
@@ -91,8 +91,8 @@ export default function App() {
 
           <NeighborGraph
             slice={sliceView()!}
-            width={700}
-            height={600}
+            width={500}
+            height={400}
           />
         </>
       )}
