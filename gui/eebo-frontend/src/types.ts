@@ -97,3 +97,11 @@ export type Selection = {
     color: string | null;
 };
 
+export type EventNeighbourhoodOpen = {
+    token: string;
+    slice_start: number;
+    slice_end: number;
+    color: string;
+    x: number;
+    y: number;
+}

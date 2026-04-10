@@ -13,7 +13,7 @@
 }
 
 .ngPoint {
-    fill: var(--tertiary);
+    /* fill: var(--tertiary); */
     opacity: 0.85;
 }
 

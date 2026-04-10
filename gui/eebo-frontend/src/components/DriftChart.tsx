@@ -1,7 +1,8 @@
 import { createEffect, createSignal, onMount, onCleanup } from "solid-js";
 import * as d3 from "d3";
-import type { SlicePoint } from "../types";
+import type { EventNeighbourhoodOpen, SlicePoint } from "../types";
 import styles from "./DriftChart.module.css";
+import { eeboStore, setEeboStore } from "../stores/Eebo.store";
 
 const POINT_RADIUS = 7;
 const STROKE_WIDTH = 2;
@@ -19,29 +20,29 @@ type TooltipState = {
     data: any | null;
 } | null;
 
-type HistoryEntry = {
-    term: string;
-    year: number;
-};
+// type HistoryEntry = {
+//     term: string;
+//     year: number;
+// };
 
 export default function DriftChart(props: {
     series: Record<string, SlicePoint[]>;
     width?: number;
     height?: number;
-    onSelectSlice?: (t: number) => void;
+    onSelectSlice?: (term: string, slice_start: number) => void;
 }) {
     let ref: SVGSVGElement | undefined;
 
     const [size, setSize] = createSignal({ width: 0, height: 0 });
     const [tooltip, setTooltip] = createSignal<TooltipState>(null);
-    const [history, setHistory] = createSignal<HistoryEntry[]>([]);
+    // const [history, setHistory] = createSignal<HistoryEntry[]>([]);
     const [visibleTerms, setVisibleTerms] = createSignal<Set<string>>(new Set());
 
     const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
 
-    const pushHistory = (entry: HistoryEntry) => {
-        setHistory(prev => [...prev, entry].slice(-25));
-    };
+    // const pushHistory = (entry: HistoryEntry) => {
+    //     setHistory(prev => [...prev, entry].slice(-25));
+    // };
 
     const toggleTerm = (term: string) => {
         setVisibleTerms(prev => {
@@ -82,7 +83,7 @@ export default function DriftChart(props: {
 
         const svg = d3.select(ref);
 
-        // ---------------- CLEAN SLATE EVERY RENDER ----------------
+        // CLEAN SLATE EVERY RENDER
         svg.selectAll("*").remove();
 
         const termNames = Object.keys(seriesMap);
@@ -92,7 +93,7 @@ export default function DriftChart(props: {
             seriesMap[term].map(p => ({ ...p, term }))
         );
 
-        // ---------------- SCALES ----------------
+        // SCALES
         const x = d3.scaleLinear()
             .domain(d3.extent(visiblePoints, d => d.slice_start) as [number, number])
             .range([MARGIN.left, w - MARGIN.right]);
@@ -100,14 +101,17 @@ export default function DriftChart(props: {
         const y = d3.scaleLinear()
             .domain(d3.extent(visiblePoints, d => d.drift) as [number, number])
             .nice()
-            .range([h - MARGIN.bottom, MARGIN.top]);
+            .range([
+                h - MARGIN.bottom - (POINT_RADIUS * 2),
+                MARGIN.top + (POINT_RADIUS * 2)
+            ]);
 
         const line = d3.line<SlicePoint>()
             .x(d => x(d.slice_start))
             .y(d => y(d.drift))
             .curve(d3.curveMonotoneX);
 
-        // ---------------- LINES ----------------
+        // LINES
         const linesLayer = svg.append("g").attr("class", styles.driftTermLine);
 
         linesLayer.selectAll("path")
@@ -119,7 +123,7 @@ export default function DriftChart(props: {
             .attr("stroke", d => color(d) as string)
             .attr("d", d => line(seriesMap[d]));
 
-        // ---------------- POINTS ----------------
+        // POINTS
         const pointsLayer = svg.append("g").attr("class", styles.driftPointsLayer);
 
         const pts = visiblePoints.map(d => ({
@@ -137,7 +141,7 @@ export default function DriftChart(props: {
             .attr("cx", d => d.sx)
             .attr("cy", d => d.sy);
 
-        // ---------------- INTERACTION ----------------
+        // INTERACTION
         const delaunay = d3.Delaunay.from(
             pts,
             d => d.sx,
@@ -167,23 +171,31 @@ export default function DriftChart(props: {
             })
             .on("mouseleave", () => setTooltip(null))
             .on("click", (event) => {
-                const [mx, my] = d3.pointer(event);
+                if (eeboStore.overlay.open) {
+                    setEeboStore('overlay', { open: false });
+                    console.log('Hid overlay');
+                    return;
+                }
 
+                const [mx, my] = d3.pointer(event);
+                if (!ref) return;
+                const rect = ref.getBoundingClientRect();
                 const i = delaunay.find(mx, my);
                 const d = pts[i];
-
+                console.log('[DriftChart] click found d', d.term, d.slice_start)
                 if (!d) return;
-
-                props.onSelectSlice?.(d.slice_start);
-
-                window.dispatchEvent(
-                    new CustomEvent("neighbourhood:open", {
-                        detail: {
-                            term: d.term,
-                            year: d.slice_start
-                        }
-                    })
-                );
+                setEeboStore("selected", {
+                    token: d.term,
+                    slice_start: d.slice_start,
+                    slice_end: d.slice_end ?? d.slice_start,
+                    color: color(d.term) as string,
+                });
+                setEeboStore('overlay', {
+                    x: rect.left + mx,
+                    y: rect.top + my,
+                    open: true,
+                });
+                props.onSelectSlice?.(d.term, Number(d.slice_start));
 
                 // pushHistory({
                 //     term: d.term,
@@ -193,50 +205,64 @@ export default function DriftChart(props: {
     });
 
     return (
-        <div class={styles.distChartWrapper} style={{ width: "100%", height: "100%" }}>
+        <article
+            classList={{
+                [styles.distChartWrapper]: true,
+                [styles.dimmed]: eeboStore.overlay.open,
+                [styles.disabled]: eeboStore.overlay.open
+            }}
+            style={{ width: "100%", height: "100%" }}
+        >
 
             {/* LEGEND */}
-            <div class={styles.driftLegend}>
-                {Object.keys(props.series ?? {}).map(term => (
-                    <label>
-                        <input
-                            type="checkbox"
-                            checked={visibleTerms().has(term)}
-                            onChange={() => toggleTerm(term)}
-                        />
-                        <span style={{ color: color(term) }}>
-                            {term}
-                        </span>
-                    </label>
-                ))}
-            </div>
+            <header class={'responsive surface-container-high border ' + styles.driftLegend}>
+                <div class="field middle-align">
+                    <nav class="wrap padding middle-align">
+                        {Object.keys(props.series ?? {}).map(term => (
+                            <button class="chip">
+                                <label class="checkbox small">
+                                    <input type="checkbox"
+                                        checked={visibleTerms().has(term)}
+                                        onChange={() => toggleTerm(term)}
+                                    />
+                                    <span style={{ color: color(term) }} class={styles.driftLegendItem}>
+                                        {term}
+                                    </span>
+                                </label>
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+            </header>
 
             {/* HISTORY */}
-            <div class={styles.history}>
+            {/* <div class={styles.history}>
                 {history().map((h, i) => (
                     <div>{i}: {h.term} @ {h.year}</div>
                 ))}
-            </div>
+            </div> */}
 
             {/* TOOLTIP */}
-            {tooltip() && (
-                <div
-                    class={styles.tooltip}
-                    style={{
-                        left: `${tooltip()!.x + 10}px`,
-                        top: `${tooltip()!.y + 10}px`
-                    }}
-                >
-                    <div><b>{tooltip()!.data.term}</b></div>
-                    <div>year: {tooltip()!.data.slice_start}</div>
-                    <div>drift: {tooltip()!.data.drift}</div>
-                </div>
-            )}
+            {
+                tooltip() && (
+                    <div
+                        class={styles.tooltip}
+                        style={{
+                            left: `${tooltip()!.x + 10}px`,
+                            top: `${tooltip()!.y + 10}px`
+                        }}
+                    >
+                        <div><b>{tooltip()!.data.term}</b></div>
+                        <div>year: {tooltip()!.data.slice_start}</div>
+                        <div>drift: {tooltip()!.data.drift}</div>
+                    </div>
+                )
+            }
 
             <svg
                 ref={el => (ref = el)}
                 style={{ width: "100%", height: "100%" }}
             />
-        </div>
+        </article >
     );
 }

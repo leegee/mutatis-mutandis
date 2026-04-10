@@ -18,7 +18,12 @@ const [eeboStore, setEeboStore] = createStore({
         slice_start: null,
         slice_end: null,
         color: null,
-    } as Selection
+    } as Selection,
+    overlay: {
+        open: false,
+        x: 0,
+        y: 0
+    }
 });
 
 export { eeboStore, setEeboStore };

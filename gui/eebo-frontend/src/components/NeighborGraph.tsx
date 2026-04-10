@@ -1,6 +1,18 @@
-import { createMemo, type Component } from "solid-js";
-import type { SliceView } from "../types";
-import styles from './NeighborGraph.module.css';
+import {
+    createMemo,
+    type Component,
+    For,
+    onMount,
+    onCleanup
+} from "solid-js";
+
+import type {
+    EventNeighbourhoodOpen,
+    SliceView
+} from "../types";
+
+import styles from "./NeighborGraph.module.css";
+import { eeboStore, setEeboStore } from "../stores/Eebo.store";
 
 type Neighbor = SliceView["neighbors"][number];
 
@@ -15,7 +27,6 @@ type PositionedNeighbor = Neighbor & {
     y: number;
 };
 
-
 function radialLayout(
     cx: number,
     cy: number,
@@ -29,7 +40,6 @@ function radialLayout(
     return neighbors.map((d, i) => {
         const sim = d.similarity ?? 0;
 
-        // normalize similarity (tune if needed)
         const simScaled = (sim - 0.6) / 0.4;
         const clamped = Math.max(0, Math.min(1, simScaled));
 
@@ -39,11 +49,13 @@ function radialLayout(
 
         const radius =
             minRadius +
-            (maxRadius - minRadius) * spread * (1 + countWeight);
+            (maxRadius - minRadius) *
+            spread *
+            (1 + countWeight);
 
         const angle =
             (i / n) * 2 * Math.PI +
-            ((d.count ?? 0) % 7) * 0.03;
+            ((d.count ?? 0) % 7) * 0.08;
 
         return {
             ...d,
@@ -62,7 +74,7 @@ function nodeSize(n: Neighbor): number {
 }
 
 const NeighborGraph: Component<NeighborGraphProps> = (props) => {
-    const neighbors = createMemo<Neighbor[]>(() => {
+    const neighbors = createMemo(() => {
         return props.slice.neighbors ?? [];
     });
 
@@ -70,7 +82,13 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
         const cx = props.width / 2;
         const cy = props.height / 2;
 
-        return radialLayout(cx, cy, neighbors());
+        const sorted = [...neighbors()].sort(
+            (a, b) =>
+                (b.similarity ?? 0) -
+                (a.similarity ?? 0)
+        );
+
+        return radialLayout(cx, cy, sorted);
     });
 
     const center = createMemo(() => ({
@@ -78,19 +96,74 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
         y: props.height / 2
     }));
 
+    onMount(() => {
+        const handler = (e: Event) => {
+            const ev =
+                e as CustomEvent<EventNeighbourhoodOpen>;
+
+            const {
+                token,
+                slice_start,
+                slice_end,
+                color,
+                x,
+                y
+            } = ev.detail;
+
+            if (!token || slice_start == null) return;
+
+            // selected state
+            setEeboStore("selected", {
+                token,
+                slice_start,
+                slice_end: slice_end ?? slice_start,
+                color
+            });
+
+            // overlay state (toggle if same point)
+            setEeboStore("overlay", (prev) => ({
+                open:
+                    !prev.open ||
+                    prev.x !== x ||
+                    prev.y !== y,
+                x,
+                y
+            }));
+        };
+
+        window.addEventListener(
+            "neighbourhood:open",
+            handler
+        );
+
+        onCleanup(() => {
+            window.removeEventListener(
+                "neighbourhood:open",
+                handler
+            );
+        });
+    });
+
     return (
-        <svg width={props.width} height={props.height}>
+        <svg
+            width={props.width}
+            height={props.height}
+        >
             {/* center token */}
             <g>
                 <circle
                     class={styles.ngCenter}
+                    fill={
+                        eeboStore.selected.color || "red"
+                    }
                     cx={center().x}
                     cy={center().y}
                     r={16}
                 />
                 <text
                     class={styles.ngCenterText}
-                    x="50%" y="50%"
+                    x="50%"
+                    y="50%"
                     dy={4}
                 >
                     {props.slice.token}
@@ -98,24 +171,29 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
             </g>
 
             {/* neighbors */}
-            {layout().map((n) => (
-                <g>
-                    <circle
-                        class={styles.ngPoint}
-                        cx={n.x}
-                        cy={n.y}
-                        r={nodeSize(n)}
-                    />
-                    <text
-                        class={styles.ngPointText}
-                        x={n.x}
-                        y={n.y}
-                        dy={4}
-                    >
-                        {n.token}
-                    </text>
-                </g>
-            ))}
+            <For each={layout()}>
+                {(n) => (
+                    <g>
+                        <circle
+                            class={styles.ngPoint}
+                            fill={
+                                eeboStore.selected.color!
+                            }
+                            cx={n.x}
+                            cy={n.y}
+                            r={nodeSize(n)}
+                        />
+                        <text
+                            class={styles.ngPointText}
+                            x={n.x}
+                            y={n.y}
+                            dy={4}
+                        >
+                            {n.token}
+                        </text>
+                    </g>
+                )}
+            </For>
         </svg>
     );
 };

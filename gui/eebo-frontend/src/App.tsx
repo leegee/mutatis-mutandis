@@ -1,4 +1,5 @@
-import { createMemo, createEffect } from "solid-js";
+import 'beercss';
+import { createMemo, createEffect, onCleanup, onMount } from "solid-js";
 import { data, eeboStore, setEeboStore } from "./stores/Eebo.store";
 
 import NeighborGraph from "./components/NeighborGraph";
@@ -8,7 +9,39 @@ import type { SlicePoint } from "./types"
 import { buildSliceView } from "./models/buildSliceView";
 
 export default function App() {
-  const store = eeboStore;
+  onMount(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{
+        term: string;
+        year: number;
+        color: string;
+        x: number;
+        y: number;
+      }>;
+
+      const { term, year, color, x, y } = ev.detail;
+
+      console.log('heard', { term, year, color, x, y })
+      setEeboStore("selected", {
+        token: term,
+        slice_start: year,
+        slice_end: year,
+        color
+      });
+
+      setEeboStore("overlay", (prev) => ({
+        open: !(prev.open && prev.x === x && prev.y === y),
+        x,
+        y
+      }));
+    };
+
+    window.addEventListener("neighbourhood:open", handler);
+
+    onCleanup(() => {
+      window.removeEventListener("neighbourhood:open", handler);
+    });
+  });
 
   const series = createMemo(() => {
     const d = data();
@@ -27,28 +60,30 @@ export default function App() {
     return out;
   });
 
+
   const sliceView = createMemo(() => {
     const dataset = data();
-    const sel = store.selected;
+    const token = eeboStore.selected.token;
+    const sliceStart = eeboStore.selected.slice_start;
 
-    if (!dataset || !sel.token || sel.slice_start == null) return;
+    if (!dataset || !token || sliceStart == null) return;
 
-    const tokenData = dataset[sel.token];
+    const tokenData = dataset[token];
     const slice = tokenData.slices.find(
-      s => s.slice_start === sel.slice_start
+      s => s.slice_start === sliceStart
     );
 
     if (!slice) return;
 
-    return buildSliceView(sel.token, slice, dataset);
+    return buildSliceView(token, slice, dataset);
   });
+
 
   createEffect(() => {
     const d = data();
     if (!d) return;
 
-    const sel = store.selected;
-    if (sel.token && sel.slice_start != null) return;
+    if (eeboStore.selected.token && eeboStore.selected.slice_start != null) return;
 
     const firstToken = Object.keys(d).sort()[0];
     const firstSlice = d[firstToken].slices[0];
@@ -61,41 +96,47 @@ export default function App() {
     });
   });
 
+  const overlay = () => eeboStore.overlay;
+
   return (
-    <main>
-      {sliceView() && (
-        <>
-          <div style={{ width: "100%", height: "66%" }}>
-            <DriftChart
-              series={series()!}
-              onSelectSlice={(t) => {
-                const dataset = data();
-                const token = store.selected.token;
-                if (!dataset || !token) return;
+    <main style={{ position: "relative" }}>
 
-                const slice = dataset[token].slices.find(
-                  s => s.slice_start === t
-                );
+      <article style={{ width: "100%", height: "90%" }}>
+        <DriftChart
+          series={series()!}
+          onSelectSlice={
+            () => { }
+            // (term: string, slice_start: number) => {
+            // const dataset = data();
+            // if (!dataset || !eeboStore.selected.token) return;
+            // const slice = dataset[eeboStore.selected.token].slices.find(
+            //   s => s.slice_start === Number(slice_start)
+            // );
+            // if (!slice) return;
+            // console.log('[App] selected in store:', term, "=", eeboStore.selected.token, slice)
+            // }
+          }
+        />
+      </article>
 
-                if (!slice) return;
-
-                setEeboStore("selected", {
-                  token,
-                  slice_start: slice.slice_start,
-                  slice_end: slice.slice_end ?? slice.slice_start,
-                  color: "#000"
-                });
-              }}
-            />
-          </div>
-
+      {overlay().open && sliceView() && (
+        <div
+          style={{
+            position: "absolute",
+            left: `${overlay().x}px`,
+            top: `${overlay().y}px`,
+            transform: "translate(-50%, -50%)",
+            "pointer-events": "none"
+          }}
+        >
           <NeighborGraph
             slice={sliceView()!}
-            width={500}
-            height={400}
+            width={300}
+            height={300}
           />
-        </>
+        </div>
       )}
+
     </main>
   );
 }

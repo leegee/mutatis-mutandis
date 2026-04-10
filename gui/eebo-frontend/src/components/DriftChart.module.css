@@ -59,11 +59,21 @@
 }
 
 .driftLegend {
-    label {
-        margin-right: 0.6em;
-    }
+    border-color: var(--surface-dim, red) !important;
+}
 
-    [type=checkbox] {
-        margin-right: 0.3em;
-    }
+.driftLegendItem {
+    text-transform: uppercase;
+    font-size: 0.8em !important;
+}
+
+
+.dimmed {
+    opacity: 0.25;
+    transition: opacity 4440ms ease-in-out;
+}
+
+
+.disabled {
+    pointer-events: none;
 }
