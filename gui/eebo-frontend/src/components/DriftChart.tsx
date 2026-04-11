@@ -144,6 +144,7 @@ export default function DriftChart(props: {
 
         interactionLayer
             .on("mousemove", (event) => {
+                if (eeboStore.overlay.open) return;
                 const [mx, my] = d3.pointer(event);
 
                 const i = delaunay.find(mx, my);
@@ -172,6 +173,7 @@ export default function DriftChart(props: {
                 const d = pts[i];
                 console.log('[DriftChart] click found d', d.term, d.slice_start)
                 if (!d) return;
+                setTooltip(null);
                 setEeboStore("selected", {
                     token: d.term,
                     slice_start: d.slice_start,
