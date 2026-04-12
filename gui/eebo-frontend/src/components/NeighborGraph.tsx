@@ -1,18 +1,8 @@
-import {
-    type Component,
-    createMemo,
-    For,
-    onMount,
-    onCleanup
-} from "solid-js";
+import { type Component, createMemo, For, onMount, onCleanup } from "solid-js";
 
-import type {
-    EventNeighbourhoodOpen,
-    SliceView
-} from "../types";
-
+import type { EventNeighbourhoodOpen, SliceView } from "../types";
+import { eeboStore, setEeboStore, toggleOverlay } from "../stores/Eebo.store";
 import styles from "./NeighborGraph.module.css";
-import { eeboStore, setEeboStore } from "../stores/Eebo.store";
 
 type Neighbor = SliceView["neighbors"][number];
 
@@ -34,30 +24,19 @@ function radialLayout(
 ): PositionedNeighbor[] {
     const n = neighbors.length || 1;
 
-    const maxRadius = Math.min(cx, cy) * 0.9;
+    const maxRadius = Math.min(cx, cy);;
     const minRadius = maxRadius * 0.3;
 
     return neighbors.map((d, i) => {
         const sim = d.similarity ?? 0;
-
         const simScaled = (sim - 0.6) / 0.4;
         const clamped = Math.max(0, Math.min(1, simScaled));
-
         const spread = 1 - Math.pow(clamped, 2);
-
         const countWeight = Math.log1p(d.count ?? 1) / 4;
-
-        const radius =
-            minRadius +
+        const radius = minRadius +
             (maxRadius - minRadius) *
-            spread *
-            (1 + countWeight);
-
-        const angle =
-            (i / n) * 2 * Math.PI +
-            ((d.count ?? 0) % 7) * 0.08;
-
-        // console.log('xxx', d)
+            spread * (1 + countWeight);
+        const angle = (i / n) * 2 * Math.PI + ((d.count ?? 0) % 7) * 0.08;
 
         return {
             ...d,
@@ -80,23 +59,20 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
         return props.slice.neighbors ?? [];
     });
 
-    const layout = createMemo<PositionedNeighbor[]>(() => {
-        const cx = props.width / 2;
-        const cy = props.height / 2;
-
-        const sorted = [...neighbors()].sort(
-            (a, b) =>
-                (b.similarity ?? 0) -
-                (a.similarity ?? 0)
-        );
-
-        return radialLayout(cx, cy, sorted);
-    });
-
     const center = createMemo(() => ({
         x: props.width / 2,
         y: props.height / 2
     }));
+
+    const layout = createMemo<PositionedNeighbor[]>(() => {
+        const c = center();
+
+        const sorted = [...neighbors()].sort(
+            (a, b) => (b.similarity ?? 0) - (a.similarity ?? 0)
+        );
+
+        return radialLayout(c.x, c.y, sorted);
+    });
 
     onMount(() => {
         const handler = (e: Event) => {
@@ -122,15 +98,7 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
                 color
             });
 
-            // overlay state (toggle if same point)
-            setEeboStore("overlay", (prev) => ({
-                open:
-                    !prev.open ||
-                    prev.x !== x ||
-                    prev.y !== y,
-                x,
-                y
-            }));
+            toggleOverlay(x, y);
         };
 
         window.addEventListener(

@@ -1,6 +1,6 @@
 import 'beercss';
 import { createMemo, } from "solid-js";
-import { data, eeboStore } from "./stores/Eebo.store";
+import { data, eeboStore, OVERLAY_SIZE } from "./stores/Eebo.store";
 
 import NeighborGraph from "./components/NeighborGraph";
 import DriftChart from "./components/DriftChart";
@@ -9,8 +9,6 @@ import type { SlicePoint } from "./types"
 import { buildSliceView } from "./models/buildSliceView";
 
 export default function App() {
-  const overlay = () => eeboStore.overlay;
-
   const series = createMemo(() => {
     const d = data();
     if (!d) return;
@@ -47,26 +45,24 @@ export default function App() {
 
 
   return (
-    <main style={{ position: "relative" }}>
-
+    <main>
       <article style={{ width: "100%", height: "90%" }}>
 
         <DriftChart series={series()!} />
 
-        {overlay().open && sliceView() && (
+        {eeboStore._overlay.open && sliceView() && (
           <aside
             style={{
-              position: "absolute",
-              left: `${overlay().x}px`,
-              top: `${overlay().y}px`,
-              transform: "translate(-50%, -50%)",
+              position: "fixed",
+              left: `${eeboStore._overlay.x}px`,
+              top: `${eeboStore._overlay.y}px`,
               "pointer-events": "none"
             }}
           >
             <NeighborGraph
               slice={sliceView()!}
-              width={1000}
-              height={1000}
+              width={OVERLAY_SIZE.width}
+              height={OVERLAY_SIZE.height}
             />
           </aside>
         )}
