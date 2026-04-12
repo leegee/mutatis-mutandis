@@ -57,6 +57,8 @@ function radialLayout(
             (i / n) * 2 * Math.PI +
             ((d.count ?? 0) % 7) * 0.08;
 
+        // console.log('xxx', d)
+
         return {
             ...d,
             x: cx + Math.cos(angle) * radius,
@@ -160,23 +162,11 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
                     cy={center().y}
                     r={16}
                 />
-                <text
-                    class={styles.ngCenterText}
-                    x="50%"
-                    y="50%"
-                    dy={4}
-                >
+                <text class={styles.ngCenterText} x="50%" y="50%" dy={4} >
                     {props.slice.token}
                 </text>
-                <text
-                    class={styles.ngCenterTextSmall}
-                    x="50%"
-                    y="50%"
-                    dy={30}
-                >
-                    {props.slice.slice_start}
-                    -
-                    {props.slice.slice_end}
+                <text class={styles.ngCenterTextSmall} x="50%" y="50%" dy={30} >
+                    {props.slice.slice_start} - {props.slice.slice_end}
                 </text>
             </g>
 
@@ -184,23 +174,10 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
             <For each={layout()}>
                 {(n) => (
                     <g>
-                        <circle
-                            class={styles.ngPoint}
-                            fill={
-                                eeboStore.selected.color!
-                            }
-                            cx={n.x}
-                            cy={n.y}
-                            r={nodeSize(n)}
-                        />
-                        <text
-                            class={styles.ngPointText}
-                            x={n.x}
-                            y={n.y}
-                            dy={4}
-                        >
-                            {n.token}
-                        </text>
+                        <circle class={styles.ngPoint} fill={eeboStore.selected.color!} cx={n.x} cy={n.y} r={nodeSize(n)} />
+                        <text class={styles.ngPointText} x={n.x} y={n.y} dy={4} > {n.token} </text>
+                        <text class={styles.ngPointTextSmall} x={n.x} y={n.y} dy={30}> count = {n.count || 0} </text>
+                        <text class={styles.ngPointTextSmall} x={n.x} y={n.y} dy={55}> sim = {n.similarity.toFixed(4) || 'No similarity'} </text>
                     </g>
                 )}
             </For>

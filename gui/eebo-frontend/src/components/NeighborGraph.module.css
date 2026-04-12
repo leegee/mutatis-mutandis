@@ -4,20 +4,23 @@
 
 .ngCenterText,
 .ngCenterTextSmall {
-    fill: white;
-    font-weight: 900;
     stroke: black;
     stroke-width: 1px;
+    fill: white;
+    font-weight: 900;
     text-transform: uppercase;
     text-anchor: middle;
 }
 
 .ngCenterText {
     font-size: 150%;
+    font-weight: 900;
 }
 
 .ngCenterTextSmall {
-    font-size: 80%;
+    font-size: 100%;
+    stroke: none;
+    font-weight: 400;
 }
 
 .ngPoint {
@@ -26,8 +29,20 @@
 }
 
 .ngPointText {
+    opacity: 100%;
+}
+
+.ngPointText,
+.ngPointTextSmall {
     fill: var(--on-surface, white);
     font-size: 12pt;
+    font-weight: normal;
     pointer-events: none;
     text-anchor: middle;
+}
+
+.ngPointTextSmall {
+    font-size: 8pt;
+    font-weight: 100;
+    opacity: 50%;
 }

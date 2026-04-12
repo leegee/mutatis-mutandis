@@ -12,5 +12,6 @@
 
 article {
   opacity: 1;
-  transition: opacity 222ms ease-in-out;
+  transition: all 222ms ease-in-out;
+  filter: none;
 }

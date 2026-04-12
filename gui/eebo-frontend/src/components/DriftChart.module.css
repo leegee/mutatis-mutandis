@@ -75,7 +75,8 @@
 
 .dimmed {
     opacity: 0.25;
-    transition: opacity 222ms ease-in-out;
+    transition: all 222ms ease-in-out;
+    filter: grayscale(90%);
 }
 
 
