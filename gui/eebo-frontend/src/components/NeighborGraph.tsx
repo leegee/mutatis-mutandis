@@ -161,11 +161,11 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
                         fill={eeboStore.selected.color ?? "red"}
                     />
 
-                    <text x={center().x} y={center().y} dy={4} text-anchor="middle">
+                    <text x={center().x} y={center().y} dy={4} text-anchor="middle" class={styles.ngCenterText}>
                         {props.slice.token}
                     </text>
 
-                    <text x={center().x} y={center().y} dy={26} text-anchor="middle">
+                    <text x={center().x} y={center().y} dy={26} text-anchor="middle" class={styles.ngCenterTextSmall}>
                         {props.slice.slice_start} - {props.slice.slice_end}
                     </text>
                 </g>
@@ -182,15 +182,15 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
                                 opacity={0.85}
                             />
 
-                            <text x={n.x} y={n.y} dy={4} text-anchor="middle">
+                            <text x={n.x} y={n.y} dy={4} text-anchor="middle" class={styles.ngCenterTextSmall}>
                                 {n.token}
                             </text>
 
-                            <text x={n.x} y={n.y} dy={20} text-anchor="middle">
+                            <text x={n.x} y={n.y} dy={20} text-anchor="middle" class={styles.ngCenterTextSmall}>
                                 {n.count ?? 0}
                             </text>
 
-                            <text x={n.x} y={n.y} dy={36} text-anchor="middle">
+                            <text x={n.x} y={n.y} dy={36} text-anchor="middle" class={styles.ngCenterTextSmaller}>
                                 {(n.similarity ?? 0).toFixed(4)}
                             </text>
                         </g>
