@@ -1,6 +1,6 @@
 import 'beercss';
 import { createMemo, } from "solid-js";
-import { data, eeboStore, openOverlay, OVERLAY_SIZE, setEeboStore } from "./stores/Eebo.store";
+import { closeOverlay, data, eeboStore, openOverlay, OVERLAY_SIZE, setEeboStore } from "./stores/Eebo.store";
 
 import NeighborGraph from "./components/NeighborGraph";
 import DriftChart, { color } from "./components/DriftChart";
@@ -76,6 +76,7 @@ export default function App() {
               slice={sliceView()!}
               width={OVERLAY_SIZE.width}
               height={OVERLAY_SIZE.height}
+              onClick={closeOverlay}
             />
           </aside>
         )}

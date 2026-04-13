@@ -10,12 +10,15 @@ export type NeighborGraphProps = {
     slice: SliceView;
     width: number;
     height: number;
+    onClick: (e: MouseEvent) => void
 };
 
 type PositionedNeighbor = Neighbor & {
     x: number;
     y: number;
 };
+
+
 
 function radialLayout(
     cx: number,
@@ -55,6 +58,9 @@ function nodeSize(n: Neighbor): number {
 }
 
 const NeighborGraph: Component<NeighborGraphProps> = (props) => {
+    // First click fires the callback (potentially to close this interface)
+    const clickHandler = (e: MouseEvent) => props.onClick(e);
+
     const neighbors = createMemo(() => {
         return props.slice.neighbors ?? [];
     });
@@ -101,24 +107,17 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
             toggleOverlay(x, y);
         };
 
-        window.addEventListener(
-            "neighbourhood:open",
-            handler
-        );
+        window.addEventListener("neighbourhood:open", handler);
+        document.addEventListener("click", clickHandler, true)
 
         onCleanup(() => {
-            window.removeEventListener(
-                "neighbourhood:open",
-                handler
-            );
+            window.removeEventListener("neighbourhood:open", handler);
+            document.removeEventListener("click", clickHandler, true);
         });
     });
 
     return (
-        <svg
-            width={props.width}
-            height={props.height}
-        >
+        <svg width={props.width} height={props.height} >
             {/* center token */}
             <g>
                 <circle class={styles.ngCenter}

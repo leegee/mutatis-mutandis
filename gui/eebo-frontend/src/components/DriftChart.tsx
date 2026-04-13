@@ -1,13 +1,12 @@
-import { createEffect, createSignal, onMount, onCleanup } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import * as d3 from "d3";
 import type { SlicePoint, NamedSlicePoint } from "../types";
-import { closeOverlay, eeboStore, } from "../stores/Eebo.store";
+import { closeOverlay, eeboStore } from "../stores/Eebo.store";
 import styles from "./DriftChart.module.css";
 
 export const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
 
 const POINT_RADIUS = 7;
-const STROKE_WIDTH = 2;
 
 const MARGIN = {
     top: 5,
@@ -27,14 +26,14 @@ type TooltipState = {
     data: ScreenPoint;
 } | null;
 
-
 export default function DriftChart(props: {
     series: Record<string, SlicePoint[]>;
     width?: number;
     height?: number;
     onSelectSlice?: (d: ScreenPoint, x: number, y: number) => void;
 }) {
-    let ref: SVGSVGElement | undefined;
+    let svgRef: SVGSVGElement | undefined;
+    let interactionRef: SVGRectElement | undefined;
 
     const [size, setSize] = createSignal({ width: 0, height: 0 });
     const [tooltip, setTooltip] = createSignal<TooltipState>(null);
@@ -43,25 +42,20 @@ export default function DriftChart(props: {
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
 
-    // DRY STATE HELPERS
+    // ----------------------------
+    // visibility helpers (pure)
+    // ----------------------------
     const allTerms = () => Object.keys(props.series ?? {});
 
     const setAll = () => new Set(allTerms());
-    const setSolo = (term: string) => new Set([term]);
-
-    const isSolo = (set: Set<string>, term: string) => set.size === 1 && set.has(term);
+    const setSolo = (t: string) => new Set([t]);
 
     const toggleOne = (prev: Set<string>, term: string) => {
         const next = new Set(prev);
-
-        if (next.has(term)) next.delete(term);
-        else next.add(term);
-
-        return next.size === 0 ? setAll() : next;
+        next.has(term) ? next.delete(term) : next.add(term);
+        return next.size ? next : setAll();
     };
 
-
-    // CLICK LOGIC (single + dbl)
     let clickTimer: number | undefined;
 
     const handleClick = (term: string) => {
@@ -70,13 +64,11 @@ export default function DriftChart(props: {
             clickTimer = undefined;
 
             const current = visibleTerms();
-
             setVisibleTerms(
-                isSolo(current, term)
+                current.size === 1 && current.has(term)
                     ? setAll()
                     : setSolo(term)
             );
-
             return;
         }
 
@@ -86,146 +78,142 @@ export default function DriftChart(props: {
         }, 250);
     };
 
-    // RESIZE OBSERVER
-    onMount(() => {
-        if (!ref) return;
+    onCleanup(() => {
+        if (clickTimer) clearTimeout(clickTimer);
+    });
 
-        const observer = new ResizeObserver(([entry]) => {
+    // ----------------------------
+    // resize observer
+    // ----------------------------
+    onMount(() => {
+        if (!svgRef) return;
+
+        const ro = new ResizeObserver(([entry]) => {
             setSize({
                 width: entry.contentRect.width,
                 height: entry.contentRect.height
             });
         });
 
-        observer.observe(ref);
-        onCleanup(() => observer.disconnect());
+        ro.observe(svgRef);
+        onCleanup(() => ro.disconnect());
     });
 
-
-    // INIT VISIBILITY
+    // ----------------------------
+    // init visibility
+    // ----------------------------
     createEffect(() => {
         const keys = allTerms();
         setVisibleTerms(prev => prev.size ? prev : new Set(keys));
     });
 
-
-    // D3 RENDER
-    createEffect(() => {
+    // ----------------------------
+    // derived dataset (Solid owns data)
+    // ----------------------------
+    const visibleData = () => {
         const seriesMap = props.series;
+        const vis = visibleTerms();
+
+        const out: ScreenPoint[] = [];
+
+        for (const term of Object.keys(seriesMap ?? {})) {
+            if (!vis.has(term)) continue;
+
+            for (const p of seriesMap[term]) {
+                out.push({
+                    ...p,
+                    term,
+                    sx: 0,
+                    sy: 0
+                });
+            }
+        }
+
+        return out;
+    };
+
+    // ----------------------------
+    // D3 MATH ONLY (scales + geometry)
+    // ----------------------------
+    const geom = () => {
+        const data = visibleData();
         const w = width();
         const h = height();
 
-        if (!seriesMap || !ref || w === 0 || h === 0) return;
-
-        const svg = d3.select(ref);
-        svg.selectAll("*").remove();
-
-        const termNames = Object.keys(seriesMap);
-        const visibleTermsArr = termNames.filter(t => visibleTerms().has(t));
-
-        const visiblePoints: NamedSlicePoint[] = visibleTermsArr.flatMap(term =>
-            seriesMap[term].map(i => ({ ...i, term }))
-        );
+        if (!data.length || !w || !h) return null;
 
         const x = d3.scaleLinear()
-            .domain(d3.extent(visiblePoints, d => d.slice_start) as [number, number])
+            .domain(d3.extent(data, d => d.slice_start) as [number, number])
             .range([MARGIN.left, w - MARGIN.right]);
 
         const y = d3.scaleLinear()
-            .domain(d3.extent(visiblePoints, d => d.drift) as [number, number])
+            .domain(d3.extent(data, d => d.drift) as [number, number])
             .nice()
-            .range([
-                h - MARGIN.bottom - (POINT_RADIUS * 2),
-                MARGIN.top + (POINT_RADIUS * 2)
-            ]);
+            .range([h - MARGIN.bottom - POINT_RADIUS * 2, MARGIN.top + POINT_RADIUS * 2]);
 
-        const line = d3.line<SlicePoint>()
-            .x(d => x(d.slice_start))
-            .y(d => y(d.drift))
-            .curve(d3.curveMonotoneX);
-
-        // LINES
-        const linesLayer = svg.append("g").attr("class", styles.driftTermLine);
-
-        linesLayer.selectAll("path")
-            .data(visibleTermsArr)
-            .enter()
-            .append("path")
-            .attr("fill", "none")
-            .attr("stroke-width", STROKE_WIDTH)
-            .attr("stroke", d => color(d) as string)
-            .attr("d", d => line(seriesMap[d]));
-
-        // POINTS
-        const pointsLayer = svg.append("g").attr("class", styles.driftPointsLayer);
-
-        const pts: ScreenPoint[] = visiblePoints.map(d => ({
+        const pts = data.map(d => ({
             ...d,
             sx: x(d.slice_start),
             sy: y(d.drift)
         }));
 
-        pointsLayer.selectAll("circle")
-            .data(pts)
-            .enter()
-            .append("circle")
-            .attr("r", POINT_RADIUS)
-            .attr("fill", d => color(d.term) as string)
-            .attr("cx", d => d.sx)
-            .attr("cy", d => d.sy);
-
-        // INTERACTION
-        const delaunay = d3.Delaunay.from<ScreenPoint>(
+        const delaunay = d3.Delaunay.from(
             pts,
             d => d.sx,
             d => d.sy
         );
 
-        const interactionLayer = svg.append("rect")
-            .attr("width", w)
-            .attr("height", h)
-            .attr("fill", "transparent")
-            .style("pointer-events", "all");
+        const line = d3.line<NamedSlicePoint>()
+            .x(d => x(d.slice_start))
+            .y(d => y(d.drift))
+            .curve(d3.curveMonotoneX);
 
-        interactionLayer
-            .on("mousemove", (event) => {
-                if (eeboStore._overlay.open) return;
+        return { x, y, pts, delaunay, line };
+    };
 
-                const [mx, my] = d3.pointer(event);
-                const i = delaunay.find(mx, my);
-                const d = pts[i];
+    // ----------------------------
+    // interaction handlers (stable refs)
+    // ----------------------------
+    const handleMove = (event: MouseEvent) => {
+        if (eeboStore._overlay.open) return;
 
-                if (!d) return setTooltip(null);
+        const g = geom();
+        if (!g) return setTooltip(null);
 
-                setTooltip({ x: mx, y: my, data: d });
-            })
+        const [mx, my] = d3.pointer(event);
+        const i = g.delaunay.find(mx, my);
+        const d = g.pts[i];
 
-            .on("mouseleave", () => setTooltip(null))
+        if (!d) return setTooltip(null);
 
-            .on("click", (event) => {
-                if (eeboStore._overlay.open || tooltip() == null) {
-                    closeOverlay();
-                    return;
-                }
+        setTooltip({ x: mx, y: my, data: d });
+    };
 
-                const [mx, my] = d3.pointer(event);
-                const i = delaunay.find(mx, my);
-                const d = pts[i];
-                if (!d) return;
+    const handleLeave = () => setTooltip(null);
 
-                // openOverlay(rect.left + mx, rect.top + my);
-                const cx = mx - (width() / 2);
-                const cy = my - (height() / 2)
-                // openOverlay(cx, cy)
-                // props.onSelectSlice?.(d.term, Number(d.slice_start));
+    const handleSvgClick = (event: MouseEvent) => {
+        if (eeboStore._overlay.open) {
+            closeOverlay();
+            return;
+        }
 
-                props.onSelectSlice?.(d, cx, cy);
-            });
-    });
+        const g = geom();
+        if (!g || !tooltip()) return;
 
+        const [mx, my] = d3.pointer(event);
+        const i = g.delaunay.find(mx, my);
+        const d = g.pts[i];
+        if (!d) return;
 
+        const cx = mx - width() / 2;
+        const cy = my - height() / 2;
+
+        props.onSelectSlice?.(d, cx, cy);
+    };
+
+    // ----------------------------
     // RENDER
-
+    // ----------------------------
     return (
         <article
             classList={{
@@ -235,32 +223,31 @@ export default function DriftChart(props: {
             }}
             style={{ width: "100%", height: "100%" }}
         >
-
+            {/* LEGEND */}
             <header class={'responsive surface-container-high border ' + styles.driftLegend}>
-                <div class="field middle-align">
-                    <nav class="wrap padding middle-align">
-                        {Object.keys(props.series ?? {}).map(term => (
-                            <label
-                                class="chip checkbox small"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    handleClick(term);
-                                }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={visibleTerms().has(term)}
-                                    onChange={() => { }}
-                                />
-                                <span style={{ color: color(term) }} class={styles.driftLegendItem}>
-                                    {term}
-                                </span>
-                            </label>
-                        ))}
-                    </nav>
-                </div>
+                <nav class="wrap padding middle-align">
+                    {Object.keys(props.series ?? {}).map(term => (
+                        <label
+                            class="chip checkbox small"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleClick(term);
+                            }}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={visibleTerms().has(term)}
+                                onChange={() => { }}
+                            />
+                            <span style={{ color: color(term) }}>
+                                {term}
+                            </span>
+                        </label>
+                    ))}
+                </nav>
             </header>
 
+            {/* TOOLTIP */}
             {tooltip() && (
                 <aside
                     class={styles.driftTooltip}
@@ -269,16 +256,67 @@ export default function DriftChart(props: {
                         top: `${tooltip()!.y + 10}px`
                     }}
                 >
-                    <h6 class="bottom-margin">{tooltip()!.data.term}</h6>
+                    <h6>{tooltip()!.data.term}</h6>
                     <div>Year: {tooltip()!.data.slice_start}</div>
                     <div>Drift: {tooltip()!.data.drift}</div>
                 </aside>
             )}
 
+            {/* SVG = PURE RENDER TARGET */}
             <svg
-                ref={el => (ref = el)}
+                ref={el => (svgRef = el)}
                 style={{ width: "100%", height: "100%" }}
-            />
+            >
+                {(() => {
+                    const g = geom();
+                    if (!g) return null;
+
+                    const groups = new Map<string, NamedSlicePoint[]>();
+                    for (const p of g.pts) {
+                        if (!groups.has(p.term)) groups.set(p.term, []);
+                        groups.get(p.term)!.push(p);
+                    }
+
+                    return (
+                        <>
+                            {/* LINES */}
+                            <g>
+                                {Array.from(groups.entries()).map(([term, pts]) => (
+                                    <path
+                                        d={g.line(pts)!}
+                                        fill="none"
+                                        stroke={color(term)}
+                                        stroke-width="2"
+                                    />
+                                ))}
+                            </g>
+
+                            {/* POINTS */}
+                            <g>
+                                {g.pts.map(p => (
+                                    <circle
+                                        cx={p.sx}
+                                        cy={p.sy}
+                                        r={POINT_RADIUS}
+                                        fill={color(p.term)}
+                                    />
+                                ))}
+                            </g>
+
+                            {/* INTERACTION LAYER */}
+                            <rect
+                                ref={el => (interactionRef = el)}
+                                width={width()}
+                                height={height()}
+                                fill="transparent"
+                                onMouseMove={handleMove}
+                                onMouseLeave={handleLeave}
+                                onClick={handleSvgClick}
+                            />
+                        </>
+                    );
+                })()}
+            </svg>
         </article>
     );
 }
