@@ -3,7 +3,7 @@
 import json
 import time
 import numpy as np
-from collections import Counter
+from collections import Counter, defaultdict
 import hdbscan
 
 from mb_embedding_pipeline import load_vectors
@@ -27,18 +27,50 @@ _CACHE_FILE = OUT_DIR / "token_occurrence_cache.json"
 _ID_CACHE = {}
 
 
+def select_neighbors(
+    tokens,
+    sims,
+    *,
+    top_k=15,
+    min_sim=0.35,
+    use_percentile=True,
+    percentile=75.0,
+):
+    if len(tokens) != len(sims):
+        raise ValueError("tokens and sims must be same length")
+
+    if not tokens:
+        return []
+
+    sims_arr = np.array(sims, dtype=float)
+
+    if use_percentile:
+        cutoff = float(np.percentile(sims_arr, percentile))
+        threshold = max(min_sim, cutoff)
+    else:
+        threshold = min_sim
+
+    filtered = [
+        (t, s)
+        for t, s in zip(tokens, sims)
+        if s >= threshold
+    ]
+
+    if not filtered:
+        pairs = list(zip(tokens, sims))
+        pairs.sort(key=lambda x: -x[1])
+        return pairs[:top_k]
+
+    filtered.sort(key=lambda x: -x[1])
+    return filtered[:top_k]
+
+
 def get_faiss_index(slice_range):
     if slice_range in _FAISS_CACHE:
-        logger.debug(f"[{slice_range}] FAISS cache hit")
         return _FAISS_CACHE[slice_range]
 
     path = str(faiss_slice_path(slice_range))
-    logger.debug(f"[{slice_range}] loading FAISS index: {path}")
-    t0 = time.time()
-
     index = FaissIndex.load(path)
-
-    logger.debug(f"[{slice_range}] FAISS loaded in {time.time() - t0:.2f}s")
     _FAISS_CACHE[slice_range] = index
     return index
 
@@ -46,17 +78,14 @@ def get_faiss_index(slice_range):
 def save_id_cache():
     with _CACHE_FILE.open("w", encoding="utf-8") as f:
         json.dump({str(k): v for k, v in _ID_CACHE.items()}, f)
-    logger.info(f"Saved ID cache ({len(_ID_CACHE)} entries)")
 
 
 def load_id_cache():
     if not _CACHE_FILE.exists():
-        logger.info("No ID cache found, starting fresh")
         return
     with _CACHE_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
         _ID_CACHE.update({int(k): tuple(v) for k, v in data.items()})
-    logger.info(f"Loaded ID cache ({len(_ID_CACHE)} entries)")
 
 
 def lookup_token_occurrences(conn, ids):
@@ -66,7 +95,6 @@ def lookup_token_occurrences(conn, ids):
     missing = [i for i in ids if i not in _ID_CACHE]
 
     if missing:
-        logger.debug(f"[lookup] cache miss: {len(missing)}/{len(ids)}")
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT token_occurrence_id, token, canonical, doc_id, pub_year
@@ -105,7 +133,11 @@ def compute_clusters(slice_id, token):
     n = len(vecs)
 
     if n < 15:
-        return [np.mean(vecs, axis=0)], vecs, [n]
+        centroid = np.mean(vecs, axis=0)
+        norm = np.linalg.norm(centroid)
+        if norm != 0:
+            centroid = centroid / norm
+        return [centroid], vecs, [n]
 
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=max(5, n // 200),
@@ -122,11 +154,20 @@ def compute_clusters(slice_id, token):
             continue
         members = vecs[labels == label]
         if len(members) > 0:
-            clusters.append(np.mean(members, axis=0))
+            centroid = np.mean(members, axis=0)
+            norm = np.linalg.norm(centroid)
+            if norm == 0:
+                continue
+            centroid = centroid / norm
+            clusters.append(centroid)
             sizes.append(len(members))
 
     if not clusters:
-        return [np.mean(vecs, axis=0)], vecs, [n]
+        centroid = np.mean(vecs, axis=0)
+        norm = np.linalg.norm(centroid)
+        if norm != 0:
+            centroid = centroid / norm
+        return [centroid], vecs, [n]
 
     return clusters, vecs, sizes
 
@@ -160,7 +201,6 @@ def compute_drift_and_neighbors_clustered(token, conn):
     slices_data = []
     prev_clusters = []
     prev_neighbor_counts = None
-    prev_year = None
 
     for start, end in SLICES:
         sid = f"{start}-{end}"
@@ -168,7 +208,6 @@ def compute_drift_and_neighbors_clustered(token, conn):
 
         cluster_centroids, vecs, cluster_sizes = compute_clusters(sid, token)
 
-        # --- GUARANTEE SLICE EXISTS ---
         if not cluster_centroids:
             slices_data.append({
                 "slice_start": start,
@@ -198,21 +237,31 @@ def compute_drift_and_neighbors_clustered(token, conn):
                 doc_ids.extend([doc for (_, _, doc, _) in rows])
 
             for (tkn, _can, _doc, _year), sim in zip(rows, distances[0], strict=True):
-                if sim < 0.6 or tkn == token:
+                if tkn == token:
                     continue
                 neighbor_tokens.append(tkn)
                 neighbor_sims.append(sim)
 
-        filtered = [
+        pairs = [
             (t, s)
             for t, s in zip(neighbor_tokens, neighbor_sims)
             if t.lower() not in STOPWORDS
         ]
 
-        from collections import defaultdict
+        tokens_, sims_ = zip(*pairs) if pairs else ([], [])
+
+        selected = select_neighbors(
+            list(tokens_),
+            list(sims_),
+            top_k=TOP_K_NEIGHBORS,
+            min_sim=0.35,
+            use_percentile=True,
+            percentile=75.0
+        )
+
         neighbor_map = defaultdict(lambda: {"count": 0, "sim_sum": 0.0})
 
-        for t, s in filtered:
+        for t, s in selected:
             neighbor_map[t]["count"] += 1
             neighbor_map[t]["sim_sum"] += s
 
@@ -230,7 +279,7 @@ def compute_drift_and_neighbors_clustered(token, conn):
         top_neighbors.sort(key=lambda x: -x["similarity"])
         top_neighbors = top_neighbors[:TOP_K_NEIGHBORS]
 
-        ent = entropy_from_tokens([t for t, _ in filtered])
+        ent = entropy_from_tokens([t for t, _ in selected])
 
         slice_entry = {
             "slice_start": start,
@@ -265,169 +314,8 @@ def compute_drift_and_neighbors_clustered(token, conn):
 
         prev_neighbor_counts = curr_counts
         prev_clusters = cluster_centroids
-        prev_year = start
 
         slices_data.append(slice_entry)
 
-    # --- ENFORCE ORDER ---
     slices_data.sort(key=lambda s: s["slice_start"])
-
     return slices_data
-
-
-def log_phase_transitions(token, transitions, logger):
-    if not transitions:
-        logger.info(f"[{token}] No phase transitions detected.")
-        return
-
-    for t in transitions.get("major", []):
-        logger.info(
-            f"[{token}] MAJOR PHASE SHIFT @ {t['slice_start']} "
-            f"(score={t['score']:.2f}, drift={t['drift']:.4f}, "
-            f"jsd={t['js_divergence']:.4f}, births={t['births']}, deaths={t['deaths']})"
-        )
-
-    for t in transitions.get("minor", []):
-        logger.info(
-            f"[{token}] MINOR SHIFT @ {t['slice_start']} "
-            f"(small_clusters={t['small_cluster_count']}, "
-            f"births={t['births']}, deaths={t['deaths']})"
-        )
-
-    for t in transitions.get("single_doc_spikes", []):
-        logger.info(
-            f"[{token}] SINGLE-DOC SPIKE @ {t['slice_start']} "
-            f"(top_doc={t['top_doc']}, count={t['top_doc_count']}, "
-            f"cluster_size={t['cluster_size']})"
-        )
-
-def detect_phase_transitions(
-    slices_data,
-    min_tokens=30,
-    minor_cluster_threshold=10,
-    single_doc_ratio=0.5
-):
-    if len(slices_data) < 3:
-        return {"major": [], "minor": [], "single_doc_spikes": []}
-
-    import numpy as np
-    from collections import Counter
-
-    token_counts = np.array([
-        s["count"] if "count" in s else 0
-        for s in slices_data
-    ])
-
-    drifts = np.array([s["drift"] for s in slices_data[1:]])
-    jsd = np.array([s["js_divergence"] for s in slices_data[1:]])
-    births = np.array([s["births"] for s in slices_data[1:]])
-
-    valid = token_counts[1:] >= min_tokens
-
-    def zscore(x):
-        if np.std(x) == 0:
-            return np.zeros_like(x)
-        return (x - np.mean(x)) / np.std(x)
-
-    drift_z = zscore(drifts)
-    jsd_z = zscore(jsd)
-    births_z = zscore(births)
-
-    score = drift_z + jsd_z + 0.5 * births_z
-
-    major, minor, spikes = [], [], []
-
-    for i, s in enumerate(score):
-        if not valid[i]:
-            continue
-
-        slice_data = slices_data[i + 1]
-
-        if s > 1.5 and drift_z[i] > 0.5 and jsd_z[i] > 0.5:
-            major.append({
-                "slice_start": slice_data["slice_start"],
-                "slice_end": slice_data["slice_end"],
-                "score": float(s),
-                "drift": slice_data["drift"],
-                "js_divergence": slice_data["js_divergence"],
-                "births": slice_data["births"],
-                "deaths": slice_data["deaths"],
-                "count": int(token_counts[i + 1])
-            })
-
-        if slice_data["births"] > 0 or slice_data["deaths"] > 0:
-            small = [
-                c for c in slice_data["cluster_sizes"]
-                if c <= minor_cluster_threshold
-            ]
-
-            if small:
-                minor.append({
-                    "slice_start": slice_data["slice_start"],
-                    "slice_end": slice_data["slice_end"],
-                    "score": float(s),
-                    "small_cluster_count": len(small),
-                    "births": slice_data["births"],
-                    "deaths": slice_data["deaths"],
-                    "count": int(token_counts[i + 1])
-                })
-
-        if slice_data.get("top_docs"):
-            top_doc_count = slice_data["top_docs"][0][1]
-            if top_doc_count / max(token_counts[i + 1], 1) > single_doc_ratio:
-                spikes.append({
-                    "slice_start": slice_data["slice_start"],
-                    "slice_end": slice_data["slice_end"],
-                    "top_doc": slice_data["top_docs"][0][0],
-                    "top_doc_count": top_doc_count,
-                    "cluster_size": slice_data["cluster_sizes"][0] if slice_data["cluster_sizes"] else 0,
-                    "count": int(token_counts[i + 1])
-                })
-
-    return {
-        "major": major,
-        "minor": minor,
-        "single_doc_spikes": spikes
-    }
-
-
-def main():
-    start = time.time()
-    logger.info("Starting cluster-aware drift + phase transition detection")
-
-    load_id_cache()
-    conn = get_connection()
-
-    terms = CONCEPT_SETS.keys()
-    results = {}
-
-    for concept in terms:
-        token = concept.lower()
-        logger.info(f"Processing '{token}'")
-
-        slices_data = compute_drift_and_neighbors_clustered(token, conn)
-
-        if not slices_data:
-            continue
-
-        transitions = detect_phase_transitions(slices_data)
-
-        log_phase_transitions(token, transitions, logger)
-
-        results[token] = {
-            "slices": slices_data,
-            "phase_transitions": transitions
-        }
-
-    save_id_cache()
-
-    logger.info(f"Elapsed time: {time.time() - start:.3f} seconds")
-
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2)
-
-    logger.info(f"Saved dataset to {OUT_PATH}")
-
-
-if __name__ == "__main__":
-    main()
