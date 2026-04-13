@@ -1,12 +1,12 @@
 import 'beercss';
-import { createMemo, } from "solid-js";
+import { createMemo, Show, } from "solid-js";
 import { closeOverlay, data, eeboStore, openOverlay, OVERLAY_SIZE, setEeboStore } from "./stores/Eebo.store";
 
-import NeighborGraph from "./components/NeighborGraph";
 import DriftChart, { color } from "./components/DriftChart";
 import type { NamedSlicePoint, Slice, SlicePoint } from "./types"
 
 import { buildSliceView } from "./models/buildSliceView";
+import KernalDensityNeighborGraph from './components/KernalDensityNeighborGraph';
 
 export default function App() {
   const series = createMemo(() => {
@@ -63,25 +63,34 @@ export default function App() {
           onSelectSlice={(d, x, y) => onSelectSlice(d, x, y)}
         />
 
-        {eeboStore._overlay.open && sliceView() && (
+        <Show when={eeboStore._overlay.open && sliceView()}>
           <aside
             style={{
               position: "fixed",
+              "pointer-events": "none",
               left: `${eeboStore._overlay.x}px`,
               top: `${eeboStore._overlay.y}px`,
-              "pointer-events": "none"
             }}
           >
-            <NeighborGraph
+
+            <KernalDensityNeighborGraph
               slice={sliceView()!}
               width={OVERLAY_SIZE.width}
               height={OVERLAY_SIZE.height}
-              onClick={closeOverlay}
             />
-          </aside>
-        )}
-      </article>
 
-    </main>
+            <button class='chip surface-container-high'
+              style={{ "pointer-events": "auto", cursor: "pointer", float: 'right' }}
+              onClick={closeOverlay}>
+              <i>close</i>
+              CLOSE
+            </button>
+
+          </aside>
+        </Show>
+
+      </article >
+
+    </main >
   );
 }

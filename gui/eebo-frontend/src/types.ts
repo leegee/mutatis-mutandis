@@ -110,3 +110,17 @@ export type EventNeighbourhoodOpen = {
     y: number;
 }
 
+
+
+export type SemanticSlice = {
+    slice_start: number;
+    slice_end: number;
+
+    count: number;
+    support_mass: number;
+    entropy: number;
+    cluster_dispersion: number;
+    js_drift: number;
+
+    top_neighbors: Neighbor[];
+};

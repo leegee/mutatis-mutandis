@@ -26,9 +26,8 @@ _CACHE_FILE = OUT_DIR / "token_occurrence_cache.json"
 _ID_CACHE = {}
 
 
-# ----------------------------
+
 # FAISS cache
-# ----------------------------
 def get_faiss_index(slice_range):
     if slice_range in _FAISS_CACHE:
         return _FAISS_CACHE[slice_range]
@@ -39,9 +38,8 @@ def get_faiss_index(slice_range):
     return index
 
 
-# ----------------------------
+
 # token lookup cache
-# ----------------------------
 def lookup_token_occurrences(conn, ids):
     if not ids:
         return []
@@ -63,9 +61,25 @@ def lookup_token_occurrences(conn, ids):
     return [_ID_CACHE[i] for i in ids if i in _ID_CACHE]
 
 
-# ----------------------------
+
+def cluster_dispersion(clusters, vecs, labels):
+    if len(vecs) == 0 or len(clusters) == 0:
+        return 0.0
+
+    variances = []
+
+    for c_id in range(len(clusters)):
+        members = vecs[labels == c_id]
+        if len(members) < 2:
+            continue
+
+        centroid = np.mean(members, axis=0)
+        diffs = np.linalg.norm(members - centroid, axis=1)
+        variances.append(np.mean(diffs))
+
+    return float(np.mean(variances)) if variances else 0.0
+
 # entropy
-# ----------------------------
 def entropy_from_tokens(tokens):
     counts = Counter(tokens)
     total = sum(counts.values())
@@ -76,9 +90,9 @@ def entropy_from_tokens(tokens):
     return float(-np.sum(p * np.log(p)))
 
 
-# ----------------------------
+
 # normalize distribution
-# ----------------------------
+
 def normalize_counts(counter: Counter):
     total = sum(counter.values())
     if total == 0:
@@ -86,9 +100,9 @@ def normalize_counts(counter: Counter):
     return {k: v / total for k, v in counter.items()}
 
 
-# ----------------------------
+
 # cluster inference (unchanged)
-# ----------------------------
+
 def compute_clusters(slice_id, token):
     data = load_vectors(slice_id)
     vecs = data.get(token, [])
@@ -141,9 +155,8 @@ def compute_clusters(slice_id, token):
     return clusters, vecs, sizes
 
 
-# ----------------------------
-# MAIN PIPELINE
-# ----------------------------
+
+
 def compute_drift_and_neighbors_clustered(token, conn):
     slices_data = []
 
@@ -174,9 +187,8 @@ def compute_drift_and_neighbors_clustered(token, conn):
             })
             continue
 
-        # ----------------------------
+
         # retrieval-space accumulation
-        # ----------------------------
         retrieval_map = defaultdict(lambda: {"support_count": 0, "sim_sum": 0.0})
 
         # corpus-space approximation within slice context
@@ -209,9 +221,9 @@ def compute_drift_and_neighbors_clustered(token, conn):
                 m["support_count"] += 1
                 m["sim_sum"] += float(sim)
 
-        # ----------------------------
+
         # distributions
-        # ----------------------------
+
         retrieval_counts = Counter({
             t: v["support_count"]
             for t, v in retrieval_map.items()
@@ -219,14 +231,14 @@ def compute_drift_and_neighbors_clustered(token, conn):
 
         curr_dist = normalize_counts(retrieval_counts)
 
-        # ----------------------------
+
         # entropy (retrieval space)
-        # ----------------------------
+
         ent = entropy_from_tokens(list(retrieval_counts.elements()))
 
-        # ----------------------------
+
         # scored neighbors
-        # ----------------------------
+
         scored_neighbors = []
 
         for t, v in retrieval_map.items():
@@ -244,35 +256,35 @@ def compute_drift_and_neighbors_clustered(token, conn):
         scored_neighbors.sort(key=lambda x: -x["similarity"])
         top_neighbors = scored_neighbors[:TOP_K_NEIGHBORS]
 
-        # ----------------------------
+
         # JS divergence drift
-        # ----------------------------
+
         drift_val = 0.0
         if prev_neighbor_dist is not None:
             drift_val = float(js_divergence(prev_neighbor_dist, curr_dist))
 
-        # ----------------------------
-        # slice output
-        # ----------------------------
         slice_entry = {
             "slice_start": start,
             "slice_end": end,
+
+            "count": int(sum(cluster_sizes)) if cluster_sizes else 0,
+
+            # strength of association in FAISS neighbourhood space
+            "support_mass": float(sim_sum / max(1.0, (count ** 0.5))),
+
+            # empirical neighbour distribution entropy
+            "entropy": float(entropy_from_tokens(neighbor_tokens)),
+
+            # embedding space coherence (cluster tightness)
+            "cluster_dispersion": float(cluster_dispersion(clusters, vecs, labels)),
+
             "n_clusters": len(cluster_centroids),
             "cluster_sizes": cluster_sizes,
 
-            # corpus space (approx within FAISS retrieval context)
-            "corpus_count": int(sum(corpus_counts.values())),
+            "js_drift": float(js_divergence(prev_neighbor_dist, curr_dist)),
 
-            # retrieval space
-            "support_count": int(sum(retrieval_counts.values())),
-
-            "entropy": ent,
             "top_neighbors": top_neighbors,
             "top_docs": Counter(doc_ids).most_common(5) if doc_ids else [],
-
-            # drift in unified retrieval probability space
-            "drift": drift_val,
-            "js_divergence": drift_val
         }
 
         prev_neighbor_dist = curr_dist

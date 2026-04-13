@@ -41,9 +41,6 @@ export default function DriftChart(props: {
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
 
-    // ----------------------------
-    // term helpers
-    // ----------------------------
     const allTerms = () => Object.keys(props.series ?? {});
     const setAll = () => new Set(allTerms());
     const setSolo = (t: string) => new Set([t]);
@@ -80,9 +77,8 @@ export default function DriftChart(props: {
         if (clickTimer) clearTimeout(clickTimer);
     });
 
-    // ----------------------------
+
     // resize observer
-    // ----------------------------
     onMount(() => {
         if (!svgRef) return;
 
@@ -97,17 +93,15 @@ export default function DriftChart(props: {
         onCleanup(() => ro.disconnect());
     });
 
-    // ----------------------------
+
     // init visibility
-    // ----------------------------
     createEffect(() => {
         const keys = allTerms();
         setVisibleTerms(prev => prev.size ? prev : new Set(keys));
     });
 
-    // ----------------------------
+
     // DERIVED DATA (Solid owns selection)
-    // ----------------------------
     const visibleData = createMemo(() => {
         const vis = visibleTerms();
         const seriesMap = props.series ?? {};
@@ -130,9 +124,8 @@ export default function DriftChart(props: {
         return out;
     });
 
-    // ----------------------------
+
     // D3 MATH LAYER (cached)
-    // ----------------------------
     const geom = createMemo(() => {
         const data = visibleData();
         const w = width();
@@ -169,9 +162,8 @@ export default function DriftChart(props: {
         return { x, y, pts, delaunay, line };
     });
 
-    // ----------------------------
-    // stable interaction handlers
-    // ----------------------------
+
+    // interaction handlers
     const handleMove = (event: MouseEvent) => {
         if (eeboStore._overlay.open) return;
 
@@ -210,9 +202,7 @@ export default function DriftChart(props: {
         props.onSelectSlice?.(d, cx, cy);
     };
 
-    // ----------------------------
-    // RENDER
-    // ----------------------------
+
     return (
         <article
             classList={{
@@ -220,10 +210,9 @@ export default function DriftChart(props: {
                 [styles.dimmed]: eeboStore._overlay.open,
                 [styles.disabled]: eeboStore._overlay.open
             }}
-            style={{ width: "100%", height: "100%" }}
         >
             {/* LEGEND */}
-            <header class={'responsive surface-container-high border ' + styles.driftLegend}>
+            <header class={'responsive surface-container border ' + styles.driftLegend}>
                 <nav class="wrap padding middle-align">
                     {Object.keys(props.series ?? {}).map(term => (
                         <label
@@ -249,7 +238,7 @@ export default function DriftChart(props: {
             {/* TOOLTIP */}
             {tooltip() && (
                 <aside
-                    class={styles.driftTooltip}
+                    class={styles.driftTooltip + ' surface-container-high'}
                     style={{
                         left: `${tooltip()!.x + 10}px`,
                         top: `${tooltip()!.y + 10}px`
