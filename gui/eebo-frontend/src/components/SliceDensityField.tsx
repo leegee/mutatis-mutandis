@@ -1,8 +1,5 @@
-import { type Component, createMemo, onCleanup, onMount } from "solid-js";
+import { type Component, createMemo, createEffect, onMount } from "solid-js";
 import type { SliceView } from "../types";
-import { eeboStore, setEeboStore } from "../stores/Eebo.store";
-
-type Neighbor = SliceView["neighbors"][number];
 
 export type SliceDensityFieldProps = {
     slice: SliceView;
@@ -10,32 +7,30 @@ export type SliceDensityFieldProps = {
     height: number;
 };
 
-type Vec2 = { x: number; y: number };
+type Vec2L = {
+    x: number;
+    y: number;
+    label: string;
+    weight: number;
+};
 
 function gaussian2D(dx: number, dy: number, h: number) {
     return Math.exp(-(dx * dx + dy * dy) / (2 * h * h));
 }
 
-/**
- * PCA (2D) via covariance eigenvectors
- * - deterministic
- * - slice-local geometry
- */
-function pca2D(points: number[][]): Vec2[] {
+function pca2D(points: number[][]) {
     const n = points.length;
-    if (n === 0) return [];
+    if (!n) return [];
 
     const dim = points[0].length;
 
-    // mean
     const mean = new Array(dim).fill(0);
-    for (const p of points) {
+    for (const p of points)
         for (let i = 0; i < dim; i++) mean[i] += p[i];
-    }
+
     for (let i = 0; i < dim; i++) mean[i] /= n;
 
-    // covariance (diagonal approximation for stability + speed)
-    const cov = new Array(dim).fill(0).map(() => new Array(dim).fill(0));
+    const cov = Array.from({ length: dim }, () => new Array(dim).fill(0));
 
     for (const p of points) {
         for (let i = 0; i < dim; i++) {
@@ -45,18 +40,15 @@ function pca2D(points: number[][]): Vec2[] {
         }
     }
 
-    for (let i = 0; i < dim; i++) {
-        for (let j = 0; j < dim; j++) {
+    for (let i = 0; i < dim; i++)
+        for (let j = 0; j < dim; j++)
             cov[i][j] /= n;
-        }
-    }
 
-    // crude 2D projection: take two highest-variance axes
-    const variances = cov.map((row, i) => ({ i, v: row[i] }));
-    variances.sort((a, b) => b.v - a.v);
+    const vars = cov.map((row, i) => ({ i, v: row[i] }))
+        .sort((a, b) => b.v - a.v);
 
-    const ax = variances[0].i;
-    const ay = variances[1]?.i ?? variances[0].i;
+    const ax = vars[0].i;
+    const ay = vars[1]?.i ?? ax;
 
     return points.map(p => ({
         x: p[ax],
@@ -64,17 +56,43 @@ function pca2D(points: number[][]): Vec2[] {
     }));
 }
 
-function computeField(
-    points: Vec2[],
-    width: number,
-    height: number,
-    resolution = 3,
-    h = 35
+function normalizePoints(
+    pts: { x: number; y: number }[],
+    w: number,
+    h: number
 ) {
-    const wSteps = Math.floor(width / resolution);
-    const hSteps = Math.floor(height / resolution);
+    if (!pts.length) return [];
 
-    const field: number[][] = Array.from({ length: hSteps }, () =>
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const p of pts) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    }
+
+    const dx = maxX - minX || 1;
+    const dy = maxY - minY || 1;
+
+    return pts.map(p => ({
+        x: ((p.x - minX) / dx) * w,
+        y: ((p.y - minY) / dy) * h
+    }));
+}
+
+function computeField(
+    points: Vec2L[],
+    w: number,
+    h: number,
+    res = 3,
+    hK = 40
+) {
+    const wSteps = Math.floor(w / res);
+    const hSteps = Math.floor(h / res);
+
+    const field = Array.from({ length: hSteps }, () =>
         new Array(wSteps).fill(0)
     );
 
@@ -83,13 +101,13 @@ function computeField(
     for (let y = 0; y < hSteps; y++) {
         for (let x = 0; x < wSteps; x++) {
 
-            const px = x * resolution;
-            const py = y * resolution;
+            const px = x * res;
+            const py = y * res;
 
             let sum = 0;
 
             for (const p of points) {
-                sum += gaussian2D(px - p.x, py - p.y, h);
+                sum += p.weight * gaussian2D(px - p.x, py - p.y, hK);
             }
 
             field[y][x] = sum;
@@ -97,39 +115,37 @@ function computeField(
         }
     }
 
-    return { field, max, resolution };
+    return { field, max, res };
 }
 
 function renderField(
     ctx: CanvasRenderingContext2D,
     field: number[][],
     max: number,
-    resolution: number
+    res: number
 ) {
     const h = field.length;
     const w = field[0].length;
 
-    const img = ctx.createImageData(w * resolution, h * resolution);
+    const img = ctx.createImageData(w * res, h * res);
 
     for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
 
             const v = field[y][x] / (max || 1);
+            const c = Math.pow(v, 0.65) * 255;
 
-            // perceptual ramp (better than linear blue/pink collapse)
-            const c = Math.min(255, Math.floor(Math.pow(v, 0.65) * 255));
+            for (let dy = 0; dy < res; dy++) {
+                for (let dx = 0; dx < res; dx++) {
 
-            for (let dy = 0; dy < resolution; dy++) {
-                for (let dx = 0; dx < resolution; dx++) {
+                    const i =
+                        (y * res + dy) * w * res +
+                        (x * res + dx);
 
-                    const ix =
-                        (y * resolution + dy) * w * resolution +
-                        (x * resolution + dx);
-
-                    img.data[ix * 4 + 0] = c;      // R
-                    img.data[ix * 4 + 1] = 40;     // G
-                    img.data[ix * 4 + 2] = 140;    // B
-                    img.data[ix * 4 + 3] = 255;    // A
+                    img.data[i * 4 + 0] = c;
+                    img.data[i * 4 + 1] = 40;
+                    img.data[i * 4 + 2] = 140;
+                    img.data[i * 4 + 3] = 255;
                 }
             }
         }
@@ -138,68 +154,100 @@ function renderField(
     ctx.putImageData(img, 0, 0);
 }
 
+function selectTop(points: Vec2L[], k = 12) {
+    return [...points].sort((a, b) => b.weight - a.weight).slice(0, k);
+}
+
+function avoidCollisions(points: Vec2L[], d = 18) {
+    const out: Vec2L[] = [];
+
+    for (const p of points) {
+        if (out.every(o => {
+            const dx = p.x - o.x;
+            const dy = p.y - o.y;
+            return dx * dx + dy * dy > d * d;
+        })) {
+            out.push(p);
+        }
+    }
+
+    return out;
+}
+
 const SliceDensityField: Component<SliceDensityFieldProps> = (props) => {
-    let canvasRef: HTMLCanvasElement | undefined;
+    let canvas!: HTMLCanvasElement;
 
-    const neighbors = createMemo(() => props.slice.neighbors ?? []);
+    const projected = createMemo<Vec2L[]>(() => {
+        const n = props.slice.neighbors ?? [];
 
-    const projected = createMemo(() => {
-        const n = neighbors();
-
-        // flatten embeddings from FAISS-like structure if available
         const vectors = n.map(d => {
-            // fallback: simulate embedding if missing
             const sim = d.similarity ?? 0;
             const count = Math.log1p(d.count ?? 1);
-
-            return [
-                sim,
-                count,
-                sim * count
-            ];
+            return [sim, count, sim * count];
         });
 
-        const pts2D = pca2D(vectors);
+        const raw = pca2D(vectors);
+        const norm = normalizePoints(raw, props.width, props.height);
 
-        return pts2D.map((p, i) => ({
-            x: p.x * props.width,
-            y: p.y * props.height
-        }));
+        return norm.map((p, i) => {
+            const d = n[i];
+            console.log(d)
+            return {
+                x: p.x,
+                y: p.y,
+                label: d.token ?? "∅",
+                weight: Math.log1p(d.count ?? 1) * (d.similarity ?? 0.5)
+            };
+        });
     });
 
     const draw = () => {
-        if (!canvasRef) return;
+        if (!canvas) return;
 
-        const ctx = canvasRef.getContext("2d");
+        const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
         const pts = projected();
 
-        const { field, max, resolution } = computeField(
+        const { field, max, res } = computeField(
             pts,
             props.width,
-            props.height,
-            3,
-            40
+            props.height
         );
 
         ctx.clearRect(0, 0, props.width, props.height);
-        renderField(ctx, field, max, resolution);
+        renderField(ctx, field, max, res);
+
+        const labels = avoidCollisions(selectTop(pts, 15));
+
+        ctx.font = "12px sans-serif";
+        ctx.textBaseline = "middle";
+
+        for (const l of labels) {
+            const w = ctx.measureText(l.label || "?").width;
+
+            ctx.fillStyle = "rgba(0,0,0,0.7)";
+            ctx.fillRect(l.x - 2, l.y - 10, w + 4, 18);
+
+            ctx.fillStyle = "white";
+            ctx.fillText(l.label || "?", l.x, l.y);
+        }
     };
 
-    onMount(() => {
+    onMount(draw);
+
+    createEffect(() => {
+        projected(); // reactive dependency
         draw();
     });
 
     return (
-        <article style={{ width: "100%", height: "100%", position: "relative" }}>
-            <canvas
-                ref={el => (canvasRef = el)}
-                width={props.width}
-                height={props.height}
-                style={{ width: "100%", height: "100%" }}
-            />
-        </article>
+        <canvas
+            ref={canvas}
+            width={props.width}
+            height={props.height}
+            style={{ width: "100%", height: "100%" }}
+        />
     );
 };
 

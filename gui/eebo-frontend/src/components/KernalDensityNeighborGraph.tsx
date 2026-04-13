@@ -125,7 +125,7 @@ function renderField(
     ctx.putImageData(image, 0, 0);
 }
 
-export default function SliceDensityField(props: Props) {
+export default function KernalDensityField(props: Props) {
     let canvas: HTMLCanvasElement | undefined;
 
     const resize = () => {
@@ -145,15 +145,13 @@ export default function SliceDensityField(props: Props) {
     });
 
     return (
-        <aside class='surface-container'>
-            <canvas
-                ref={canvas}
-                style={{
-                    width: "100%",
-                    height: "100%",
-                    display: "block"
-                }}
-            />
-        </aside>
+        <canvas
+            ref={canvas}
+            style={{
+                width: "100%",
+                height: "100%",
+                display: "block"
+            }}
+        />
     );
 }

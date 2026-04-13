@@ -3,10 +3,10 @@ import { createMemo, Show, } from "solid-js";
 import { closeOverlay, data, eeboStore, openOverlay, OVERLAY_SIZE, setEeboStore } from "./stores/Eebo.store";
 
 import DriftChart, { color } from "./components/DriftChart";
-import type { NamedSlicePoint, Slice, SlicePoint } from "./types"
+import type { NamedSlicePoint, SlicePoint } from "./types"
 
 import { buildSliceView } from "./models/buildSliceView";
-import KernalDensityNeighborGraph from './components/KernalDensityNeighborGraph';
+import SliceDensityField from './components/SliceDensityField';
 
 export default function App() {
   const series = createMemo(() => {
@@ -65,6 +65,7 @@ export default function App() {
 
         <Show when={eeboStore._overlay.open && sliceView()}>
           <aside
+            class='surface-container'
             style={{
               position: "fixed",
               "pointer-events": "none",
@@ -73,7 +74,7 @@ export default function App() {
             }}
           >
 
-            <KernalDensityNeighborGraph
+            <SliceDensityField
               slice={sliceView()!}
               width={OVERLAY_SIZE.width}
               height={OVERLAY_SIZE.height}

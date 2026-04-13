@@ -7,8 +7,8 @@ let cached: Dataset | null = null;
 
 const WINDOW_OFFSET = 12;
 export const OVERLAY_SIZE = {
-    width: 750,
-    height: 750
+    width: 350,
+    height: 350
 };
 
 
