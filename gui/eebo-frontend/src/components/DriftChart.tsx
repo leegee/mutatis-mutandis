@@ -1,30 +1,38 @@
 import { createEffect, createSignal, onMount, onCleanup } from "solid-js";
 import * as d3 from "d3";
-import type { SlicePoint } from "../types";
-import { closeOverlay, eeboStore, openOverlay, setEeboStore } from "../stores/Eebo.store";
+import type { SlicePoint, NamedSlicePoint } from "../types";
+import { closeOverlay, eeboStore, } from "../stores/Eebo.store";
 import styles from "./DriftChart.module.css";
+
+export const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
 
 const POINT_RADIUS = 7;
 const STROKE_WIDTH = 2;
 
 const MARGIN = {
-    top: 10,
-    right: 20,
-    bottom: 30,
-    left: 40
+    top: 5,
+    right: 5,
+    bottom: 5,
+    left: 5
+};
+
+type ScreenPoint = NamedSlicePoint & {
+    sx: number;
+    sy: number;
 };
 
 type TooltipState = {
     x: number;
     y: number;
-    data: any | null;
+    data: ScreenPoint;
 } | null;
+
 
 export default function DriftChart(props: {
     series: Record<string, SlicePoint[]>;
     width?: number;
     height?: number;
-    onSelectSlice?: (term: string, slice_start: number) => void;
+    onSelectSlice?: (d: ScreenPoint, x: number, y: number) => void;
 }) {
     let ref: SVGSVGElement | undefined;
 
@@ -35,18 +43,13 @@ export default function DriftChart(props: {
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
 
-    const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
-
-    // ----------------------------
     // DRY STATE HELPERS
-    // ----------------------------
     const allTerms = () => Object.keys(props.series ?? {});
 
     const setAll = () => new Set(allTerms());
     const setSolo = (term: string) => new Set([term]);
 
-    const isSolo = (set: Set<string>, term: string) =>
-        set.size === 1 && set.has(term);
+    const isSolo = (set: Set<string>, term: string) => set.size === 1 && set.has(term);
 
     const toggleOne = (prev: Set<string>, term: string) => {
         const next = new Set(prev);
@@ -57,9 +60,8 @@ export default function DriftChart(props: {
         return next.size === 0 ? setAll() : next;
     };
 
-    // ----------------------------
+
     // CLICK LOGIC (single + dbl)
-    // ----------------------------
     let clickTimer: number | undefined;
 
     const handleClick = (term: string) => {
@@ -84,9 +86,7 @@ export default function DriftChart(props: {
         }, 250);
     };
 
-    // ----------------------------
     // RESIZE OBSERVER
-    // ----------------------------
     onMount(() => {
         if (!ref) return;
 
@@ -101,17 +101,15 @@ export default function DriftChart(props: {
         onCleanup(() => observer.disconnect());
     });
 
-    // ----------------------------
+
     // INIT VISIBILITY
-    // ----------------------------
     createEffect(() => {
         const keys = allTerms();
         setVisibleTerms(prev => prev.size ? prev : new Set(keys));
     });
 
-    // ----------------------------
+
     // D3 RENDER
-    // ----------------------------
     createEffect(() => {
         const seriesMap = props.series;
         const w = width();
@@ -125,8 +123,8 @@ export default function DriftChart(props: {
         const termNames = Object.keys(seriesMap);
         const visibleTermsArr = termNames.filter(t => visibleTerms().has(t));
 
-        const visiblePoints = visibleTermsArr.flatMap(term =>
-            seriesMap[term].map(p => ({ ...p, term }))
+        const visiblePoints: NamedSlicePoint[] = visibleTermsArr.flatMap(term =>
+            seriesMap[term].map(i => ({ ...i, term }))
         );
 
         const x = d3.scaleLinear()
@@ -161,7 +159,7 @@ export default function DriftChart(props: {
         // POINTS
         const pointsLayer = svg.append("g").attr("class", styles.driftPointsLayer);
 
-        const pts = visiblePoints.map(d => ({
+        const pts: ScreenPoint[] = visiblePoints.map(d => ({
             ...d,
             sx: x(d.slice_start),
             sy: y(d.drift)
@@ -177,7 +175,7 @@ export default function DriftChart(props: {
             .attr("cy", d => d.sy);
 
         // INTERACTION
-        const delaunay = d3.Delaunay.from(
+        const delaunay = d3.Delaunay.from<ScreenPoint>(
             pts,
             d => d.sx,
             d => d.sy
@@ -201,42 +199,37 @@ export default function DriftChart(props: {
 
                 setTooltip({ x: mx, y: my, data: d });
             })
+
             .on("mouseleave", () => setTooltip(null))
+
             .on("click", (event) => {
-                if (eeboStore._overlay.open) {
+                if (eeboStore._overlay.open || tooltip() == null) {
                     closeOverlay();
                     return;
                 }
 
                 const [mx, my] = d3.pointer(event);
-                const rect = ref!.getBoundingClientRect();
-
                 const i = delaunay.find(mx, my);
                 const d = pts[i];
-
                 if (!d) return;
 
-                setTooltip(null);
+                // openOverlay(rect.left + mx, rect.top + my);
+                const cx = mx - (width() / 2);
+                const cy = my - (height() / 2)
+                // openOverlay(cx, cy)
+                // props.onSelectSlice?.(d.term, Number(d.slice_start));
 
-                setEeboStore("selected", {
-                    token: d.term,
-                    slice_start: d.slice_start,
-                    slice_end: d.slice_end ?? d.slice_start,
-                    color: color(d.term) as string,
-                });
-
-                openOverlay(rect.left + mx, rect.top + my);
-                props.onSelectSlice?.(d.term, Number(d.slice_start));
+                props.onSelectSlice?.(d, cx, cy);
             });
     });
 
-    // ----------------------------
+
     // RENDER
-    // ----------------------------
+
     return (
         <article
             classList={{
-                [styles.distChartWrapper]: true,
+                [styles.driftChartWrapper]: true,
                 [styles.dimmed]: eeboStore._overlay.open,
                 [styles.disabled]: eeboStore._overlay.open
             }}

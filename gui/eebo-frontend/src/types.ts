@@ -33,6 +33,10 @@ export type SlicePoint = {
     transitions?: number[];
 };
 
+export type NamedSlicePoint = SlicePoint & {
+    term: string;
+};
+
 export type Neighbor = {
     token: string;
     similarity: number;
@@ -105,3 +109,4 @@ export type EventNeighbourhoodOpen = {
     x: number;
     y: number;
 }
+

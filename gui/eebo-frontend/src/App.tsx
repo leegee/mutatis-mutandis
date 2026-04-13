@@ -1,10 +1,10 @@
 import 'beercss';
 import { createMemo, } from "solid-js";
-import { data, eeboStore, OVERLAY_SIZE } from "./stores/Eebo.store";
+import { data, eeboStore, openOverlay, OVERLAY_SIZE, setEeboStore } from "./stores/Eebo.store";
 
 import NeighborGraph from "./components/NeighborGraph";
-import DriftChart from "./components/DriftChart";
-import type { SlicePoint } from "./types"
+import DriftChart, { color } from "./components/DriftChart";
+import type { NamedSlicePoint, Slice, SlicePoint } from "./types"
 
 import { buildSliceView } from "./models/buildSliceView";
 
@@ -44,11 +44,24 @@ export default function App() {
   });
 
 
+  const onSelectSlice = (d: NamedSlicePoint, x: number, y: number) => {
+    setEeboStore("selected", {
+      token: d.term,
+      slice_start: d.slice_start,
+      slice_end: d.slice_end,
+      color: color(d.term) as string,
+    });
+
+    openOverlay(x, y);
+  };
+
   return (
     <main>
       <article style={{ width: "100%", height: "90%" }}>
 
-        <DriftChart series={series()!} />
+        <DriftChart series={series()!}
+          onSelectSlice={(d, x, y) => onSelectSlice(d, x, y)}
+        />
 
         {eeboStore._overlay.open && sliceView() && (
           <aside

@@ -3,8 +3,8 @@
     --drift-clr: navy;
 }
 
-.distChartWrapper {
-    background-color: transparent;
+.driftChartWrapper {
+    background-color: var(--surface);
 }
 
 .driftPath {
