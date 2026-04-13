@@ -121,20 +121,18 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
         >
             {/* center token */}
             <g>
-                <circle
-                    class={styles.ngCenter}
-                    fill={
-                        eeboStore.selected.color || "red"
-                    }
-                    cx={center().x}
-                    cy={center().y}
-                    r={16}
+                <circle class={styles.ngCenter}
+                    cx={center().x} cy={center().y} r={16}
+                    fill={eeboStore.selected.color || "red"}
                 />
                 <text class={styles.ngCenterText} x="50%" y="50%" dy={4} >
                     {props.slice.token}
                 </text>
                 <text class={styles.ngCenterTextSmall} x="50%" y="50%" dy={30} >
                     {props.slice.slice_start} - {props.slice.slice_end}
+                </text>
+                <text class={styles.ngCenterTextSmall} x="50%" y="50%" dy={55} >
+                    Count / Similarity
                 </text>
             </g>
 
@@ -144,8 +142,8 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
                     <g>
                         <circle class={styles.ngPoint} fill={eeboStore.selected.color!} cx={n.x} cy={n.y} r={nodeSize(n)} />
                         <text class={styles.ngPointText} x={n.x} y={n.y} dy={4} > {n.token} </text>
-                        <text class={styles.ngPointTextSmall} x={n.x} y={n.y} dy={30}> count = {n.count || 0} </text>
-                        <text class={styles.ngPointTextSmall} x={n.x} y={n.y} dy={55}> sim = {n.similarity.toFixed(4) || 'No similarity'} </text>
+                        <text class={styles.ngPointTextSmall} x={n.x} y={n.y} dy={20}> {n.count || 0} </text>
+                        <text class={styles.ngPointTextSmaller} x={n.x} y={n.y} dy={40}> {n.similarity.toFixed(4) || 0} </text>
                     </g>
                 )}
             </For>

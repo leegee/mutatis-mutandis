@@ -3,7 +3,6 @@ from mb_test import OUT_PATH
 
 import json
 import math
-from pathlib import Path
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
@@ -12,6 +11,7 @@ from plotly.subplots import make_subplots
 import networkx as nx
 
 from lib.eebo_logging import logger
+
 
 HOVER_FONT_SIZE = 48
 CENTER_FONT_SIZE = 32
@@ -24,29 +24,42 @@ HIGH_CONTRAST_COLORS = [
     "#FFC0CB", "#808000"
 ]
 
+
 def load_data(path):
     if not path.exists():
         raise FileNotFoundError(f"Data file not found: {path}")
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def normalize_series(series):
-    lo, hi = min(series), max(series)
-    if hi <= lo:
-        return [0.0]*len(series)
-    return [(x - lo) / (hi - lo) for x in series]
 
 data = load_data(OUT_PATH)
 tokens = list(data.keys())
-all_years = sorted({s["year"] for t in data.values() for s in t.get("slices", [])})
 
-def create_main_dashboard_figure(data, normalize=False, highlight_year=None, base_color="#225"):
-    title_suffix = " (Normalized)" if normalize else " (Raw)"
+
+def slice_keys(token_data):
+    # invariant: slices are time-ordered after pipeline sort
+    return [s["slice_start"] for s in token_data.get("slices", [])]
+
+
+def get_slice(token_data, slice_start):
+    # failure mode: missing slice → fallback to last known state
+    slices = token_data.get("slices", [])
+    return next((s for s in slices if s["slice_start"] == slice_start), slices[-1] if slices else None)
+
+
+def normalize_series(series):
+    lo, hi = min(series), max(series)
+    if hi <= lo:
+        return [0.0] * len(series)
+    return [(x - lo) / (hi - lo) for x in series]
+
+
+def create_main_dashboard_figure(data, normalize=False, highlight_slice=None):
     fig = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.08,
-        subplot_titles=[f"Structural Drift{title_suffix}", f"Distributional Drift{title_suffix}"]
+        subplot_titles=["Structural Drift", "Distributional Drift"]
     )
 
     for idx, (token, token_data) in enumerate(data.items()):
@@ -55,56 +68,48 @@ def create_main_dashboard_figure(data, normalize=False, highlight_year=None, bas
         if not slices:
             continue
 
-        years = [s["year"] for s in slices]
-        drift = [s.get("drift",0) for s in slices]
-        jsd = [s.get("js_divergence",0) for s in slices]
+        xs = [s["slice_start"] for s in slices]
+        drift = [s.get("drift", 0) for s in slices]
+        jsd = [s.get("js_divergence", 0) for s in slices]
 
         if normalize:
             drift = normalize_series(drift)
             jsd = normalize_series(jsd)
 
         fig.add_trace(go.Scatter(
-            x=years, y=drift,
-            mode='lines+markers',
+            x=xs, y=drift,
+            mode="lines+markers",
             name=token,
             legendgroup=token,
-            customdata=[{"token": token, "color": color}] * len(years),
-            marker=dict(color=color)
+            marker=dict(color=color),
+            customdata=[{"token": token, "color": color}] * len(xs)
         ), row=1, col=1)
 
         fig.add_trace(go.Scatter(
-            x=years, y=jsd,
-            mode='lines+markers',
+            x=xs, y=jsd,
+            mode="lines+markers",
             name=token,
             legendgroup=token,
-            customdata=[{"token": token, "color": color}] * len(years),
-            line=dict(dash='dot'),
             marker=dict(color=color),
+            line=dict(dash="dot"),
             showlegend=False
         ), row=2, col=1)
 
-        if highlight_year in years:
-            i = years.index(highlight_year)
+        if highlight_slice in xs:
+            i = xs.index(highlight_slice)
             fig.add_trace(go.Scatter(
-                x=[years[i]], y=[drift[i]],
-                mode='markers',
-                marker=dict(size=14, color='yellow'),
+                x=[xs[i]], y=[drift[i]],
+                mode="markers",
+                marker=dict(size=14, color="yellow"),
                 showlegend=False
             ), row=1, col=1)
+
             fig.add_trace(go.Scatter(
-                x=[years[i]], y=[jsd[i]],
-                mode='markers',
-                marker=dict(size=14, color='yellow'),
+                x=[xs[i]], y=[jsd[i]],
+                mode="markers",
+                marker=dict(size=14, color="yellow"),
                 showlegend=False
             ), row=2, col=1)
-
-        transitions = token_data.get("phase_transitions",{})
-        for t in transitions.get("major",[]):
-            for r in (1,2):
-                fig.add_vline(x=t["year"], line_width=3, line_color="red", opacity=0.7, row=r, col=1)
-        for t in transitions.get("minor",[]):
-            for r in (1,2):
-                fig.add_vline(x=t["year"], line_width=1, line_dash="dash", line_color="orange", opacity=0.6, row=r, col=1)
 
     fig.update_layout(
         title="Semantic Drift Decomposition",
@@ -116,50 +121,34 @@ def create_main_dashboard_figure(data, normalize=False, highlight_year=None, bas
     return fig
 
 
-def create_neighbor_figure(token, neighbors, year, base_color):
-    """
-    Create a Plotly figure showing the neighbors of a given token.
-
-    Args:
-        token (str): The central token.
-        neighbors (list of dict): Each dict has 'token', 'similarity', 'count'.
-        year (int): Year of the slice.
-        base_color (str): Base color to use for neighbor nodes.
-
-    Returns:
-        go.Figure: Plotly figure of the neighbor graph.
-    """
+def create_neighbor_figure(token, neighbors, slice_start, base_color):
     if not neighbors:
         return go.Figure()
 
     slices = data[token].get("slices", [])
-    slice_for_year = next((s for s in slices if s["year"]==year), slices[-1])
-    drift_mag = slice_for_year.get("drift", 0.0)
+    slice_data = get_slice(data[token], slice_start)
+    drift_mag = slice_data.get("drift", 0.0) if slice_data else 0.0
 
-    drift_scale = 0.5 + 2.0 * drift_mag  # exaggerate neighbors if drift is large
+    drift_scale = 0.5 + 2.0 * drift_mag
 
-    # Build graph
     G = nx.Graph()
-    G.add_node(token, sim=1.0, count=1)  # central token
+    G.add_node(token, sim=1.0)
+
     for n in neighbors:
         t = n.get("token")
         sim = n.get("similarity", 0)
-        count = n.get("count", 1)
         if t:
-            G.add_node(t, sim=sim, count=count)
-            G.add_edge(token, t, weight=1-sim)
+            G.add_node(t, sim=sim)
+            G.add_edge(token, t, weight=1 - sim)
 
-    # Layout
-    pos = nx.spring_layout(G, weight='weight', seed=42)
+    pos = nx.spring_layout(G, weight="weight", seed=42)
 
-    # Scale neighbors by drift
     cx, cy = pos[token]
     for n in pos:
         if n != token:
-            dx, dy = pos[n][0]-cx, pos[n][1]-cy
-            pos[n] = (cx + dx*drift_scale, cy + dy*drift_scale)
+            dx, dy = pos[n][0] - cx, pos[n][1] - cy
+            pos[n] = (cx + dx * drift_scale, cy + dy * drift_scale)
 
-    # Extract edges
     edge_x, edge_y = [], []
     for u, v in G.edges():
         x0, y0 = pos[u]
@@ -167,60 +156,61 @@ def create_neighbor_figure(token, neighbors, year, base_color):
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
 
-    # Extract nodes
     node_x, node_y, sizes, labels, tips = [], [], [], [], []
+
     for n in G.nodes():
         x, y = pos[n]
         node_x.append(x)
         node_y.append(y)
-        sim = G.nodes[n].get('sim', 0)
-        count = G.nodes[n].get('count', 1)
+
+        sim = G.nodes[n].get("sim", 0)
 
         if n == token:
-            sizes.append(CENTER_FONT_SIZE)  # central token big
-            # labels.append(f"{n} (drift={drift_mag:.2f})")
-            labels.append(f"{n}")
+            sizes.append(CENTER_FONT_SIZE)
+            labels.append(n)
             tips.append(f"{n} (drift={drift_mag:.2f})")
         else:
-            w = G[token][n]['weight']
-            size = 12 + 18*(1-w) + math.log1p(count)*4  # similarity + count
+            size = 12 + 18 * (1 - sim)
             sizes.append(size)
-            # labels.append(f"{n} (sim={sim:.2f}, count={count})")
-            labels.append(f"{n}")
-            tips.append(f"{n} (sim={sim:.2f}, count={count})")
+            labels.append(n)
+            tips.append(f"{n} (sim={sim:.2f})")
 
-    # Build figure
     fig = go.Figure()
-    # Edges
+
     fig.add_trace(go.Scatter(
-        x=edge_x, y=edge_y, mode='lines', hoverinfo='none', showlegend=False,
-        line=dict(color='gray', width=1)
-    ))
-    # Nodes
-    fig.add_trace(go.Scatter(
-        x=node_x, y=node_y, mode='markers',
-        marker=dict(size=sizes, color=base_color, line=dict(width=1, color='white')),
-        text=tips,
-        hoverinfo='text',
+        x=edge_x, y=edge_y,
+        mode="lines",
+        hoverinfo="none",
+        line=dict(color="gray", width=1),
         showlegend=False
     ))
-    # Node labels on plot
+
     fig.add_trace(go.Scatter(
-        x=node_x, y=node_y, mode='text',
+        x=node_x, y=node_y,
+        mode="markers",
+        marker=dict(size=sizes, color=base_color),
+        text=tips,
+        hoverinfo="text",
+        showlegend=False
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=node_x, y=node_y,
+        mode="text",
         text=labels,
-        textposition='middle center',
-        textfont=dict(size=[ CENTER_FONT_SIZE ] + [PLOT_FONT_SIZE] * (len(labels)-1 )),
-        hoverinfo='none',
+        textposition="middle center",
+        textfont=dict(size=PLOT_FONT_SIZE),
+        hoverinfo="none",
         showlegend=False
     ))
 
     fig.update_layout(
-        title=f"Neighbors of '{token}'" + (f" ({year})" if year else ""),
-        template='plotly_dark',
+        title=f"Neighbors of '{token}' ({slice_start})",
+        template="plotly_dark",
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
-        width=1200,
         height=800,
+        width=1200,
         hoverlabel=dict(font=dict(size=HOVER_FONT_SIZE)),
         uirevision="constant"
     )
@@ -228,149 +218,96 @@ def create_neighbor_figure(token, neighbors, year, base_color):
     return fig
 
 
-# Dash app
+# ---------------- Dash ----------------
+
 app = dash.Dash(__name__)
 
+all_slices = sorted({
+    s["slice_start"]
+    for t in data.values()
+    for s in t.get("slices", [])
+})
+
+
 app.layout = html.Div([
-    html.Header(html.H1("EEBO Semantic Drift Dashboard")),
+    html.H1("EEBO Semantic Drift Dashboard"),
 
-    html.Section([
-        html.Label("View mode:"),
-        dcc.RadioItems(
-            id='normalize-toggle',
-            options=[{"label":"Raw","value":"raw"},{"label":"Normalized","value":"norm"}],
-            value="raw",
-            inline=True
-        ),
-        dcc.Graph(id='main-dashboard', figure=create_main_dashboard_figure(data))
-    ]),
+    dcc.Graph(id="main-dashboard", figure=create_main_dashboard_figure(data)),
 
-    html.Section([
-        html.Label(["Select token:",
-            dcc.Dropdown(
-                id='token-dropdown',
-                options=[{"label":t,"value":t} for t in sorted(tokens)],
-                value=tokens[0] if tokens else None
-            ),
-        ]),
-        html.Label("Select year:"),
-        dcc.Slider(
-            id='year-slider',
-            min=min(all_years),
-            max=max(all_years),
-            step=1,
-            marks={y:str(y) for y in all_years},
-            value=min(all_years)
-        ),
-        html.Button("Start/Stop Animation", id='anim-button'),
-        dcc.Graph(id='neighbor-graph'),
-    ]),
+    dcc.Dropdown(
+        id="token-dropdown",
+        options=[{"label": t, "value": t} for t in sorted(tokens)],
+        value=tokens[0] if tokens else None
+    ),
 
-    dcc.Store(id='selected-point', data={'token': None, 'year': None}),
-    dcc.Store(id='animation-state', data=False),
-    dcc.Interval(id='animate-interval', interval=1000, n_intervals=0, disabled=True)
+    dcc.Slider(
+        id="slice-slider",
+        min=min(all_slices) if all_slices else 0,
+        max=max(all_slices) if all_slices else 0,
+        step=None,
+        marks={s: str(s) for s in all_slices},
+        value=all_slices[0] if all_slices else None
+    ),
+
+    dcc.Graph(id="neighbor-graph"),
+
+    dcc.Store(id="selected", data={"token": None, "slice": None})
 ])
 
+
 @app.callback(
-    Output('selected-point', 'data'),
-    Input('main-dashboard', 'clickData'),
-    Input('token-dropdown', 'value'),
-    Input('year-slider', 'value'),
-    State('selected-point', 'data')
+    Output("selected", "data"),
+    Input("main-dashboard", "clickData"),
+    Input("token-dropdown", "value"),
+    Input("slice-slider", "value"),
+    State("selected", "data")
 )
-def update_selected_point(clickData, dropdown_value, slider_year, current):
-    ctx = dash.callback_context
+def update_selected(clickData, token, slice_start, current):
+    if not current:
+        current = {}
 
-    if not current or current.get('token') is None:
-        current = {
-            'token': dropdown_value if dropdown_value else (tokens[0] if tokens else None),
-            'year': slider_year if slider_year else (min(all_years) if all_years else None)
-        }
+    if token:
+        current["token"] = token
+    if slice_start:
+        current["slice"] = slice_start
 
-    if not ctx.triggered:
-        return current
-
-    trigger = ctx.triggered[0]['prop_id'].split('.')[0]
-
-    if trigger == 'main-dashboard' and clickData:
-        point = clickData['points'][0]
-        year = point.get('x')
-        cd = point.get('customdata') or {}
-        token = cd.get('token')
-        color = cd.get('color')
-        if token is None:
-            return current
-        return {'token': token, 'year': year if year is not None else current['year'], 'color': color}
-
-    elif trigger == 'token-dropdown' and dropdown_value:
-        return {'token': dropdown_value, 'year': current['year']}
-
-    elif trigger == 'year-slider':
-        return {'token': current['token'], 'year': slider_year}
+    if clickData:
+        pt = clickData["points"][0]
+        cd = pt.get("customdata") or {}
+        if cd.get("token"):
+            current["token"] = cd["token"]
+        if pt.get("x"):
+            current["slice"] = pt["x"]
 
     return current
 
-@app.callback(
-    Output('main-dashboard', 'figure'),
-    Input('normalize-toggle', 'value'),
-    Input('year-slider', 'value')
-)
-def update_main(normalize_mode, highlight_year):
-    logger.info(f"[DASH update_main] {normalize_mode} year={highlight_year}")
-    normalize = normalize_mode=="norm"
-    return create_main_dashboard_figure(data, normalize=normalize, highlight_year=highlight_year)
 
 @app.callback(
-    Output('neighbor-graph', 'figure'),
-    Input('selected-point', 'data'),
-    Input('animate-interval', 'n_intervals'),
-    State('animation-state', 'data')
+    Output("neighbor-graph", "figure"),
+    Input("selected", "data")
 )
-def update_neighbors(selected_point, n_intervals, anim_state):
-    if not selected_point or not selected_point.get("token"):
+def update_neighbors(selected):
+    if not selected or not selected.get("token"):
         return go.Figure()
 
-    token = selected_point["token"]
-    year = selected_point["year"]
-    color = selected_point.get("color", "#222")
+    token = selected["token"]
+    slice_start = selected.get("slice")
 
-    if anim_state and n_intervals:
-        i = all_years.index(year)
-        year = all_years[(i+1) % len(all_years)]
+    token_data = data.get(token, {})
+    slice_data = get_slice(token_data, slice_start)
 
-    slices = data[token].get("slices", [])
-    if not slices:
+    if not slice_data:
         return go.Figure()
 
-    s = next((x for x in slices if x["year"] == year), slices[-1])
-    neighbors = s.get("top_neighbors", [])
+    neighbors = slice_data.get("top_neighbors", [])
+
+    return create_neighbor_figure(
+        token,
+        neighbors,
+        slice_start,
+        base_color="#225"
+    )
 
 
-    neighbors = [
-        {"token": n.get("token"), "similarity": n.get("similarity", 0), "count": n.get("count", -2)}
-        for n in neighbors if isinstance(n, dict)
-    ]
-
-    logger.info(f"[DASH update_neighbours] neighbors={neighbors}")
-
-    return create_neighbor_figure(token, neighbors, year, color)
-
-@app.callback(
-    Output('animation-state', 'data'),
-    Output('animate-interval', 'disabled'),
-    Input('anim-button', 'n_clicks'),
-    Input('main-dashboard', 'clickData'),
-    State('animation-state', 'data'),
-    prevent_initial_call=True
-)
-def control_animation(n_clicks, clickData, state):
-    ctx = dash.callback_context
-    trigger = ctx.triggered[0]['prop_id'].split('.')[0]
-    if trigger=='main-dashboard':
-        return False, True
-    if trigger=='anim-button':
-        return not state, state
-    return state, not state
-
-if __name__=="__main__":
+if __name__ == "__main__":
     app.run(debug=True)

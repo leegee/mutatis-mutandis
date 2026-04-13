@@ -41,7 +41,7 @@ function clampOverlay(x: number, y: number) {
     cx = Math.max(0, Math.min(cx, vw - OVERLAY_SIZE.width));
     cy = Math.max(0, Math.min(cy, vh - OVERLAY_SIZE.height));
 
-    console.log(x, y, '→', cx, cy);
+    console.log(x, y, ' to ', cx, cy);
 
     return { x: cx, y: cy };
 }

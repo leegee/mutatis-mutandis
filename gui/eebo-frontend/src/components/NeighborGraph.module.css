@@ -24,7 +24,6 @@
 }
 
 .ngPoint {
-    /* fill: var(--tertiary); */
     opacity: 0.35;
 }
 
@@ -33,7 +32,8 @@
 }
 
 .ngPointText,
-.ngPointTextSmall {
+.ngPointTextSmall,
+.ngPointTextSmaller {
     fill: var(--on-surface, white);
     font-size: 12pt;
     font-weight: normal;
@@ -41,8 +41,13 @@
     text-anchor: middle;
 }
 
-.ngPointTextSmall {
+.ngPointTextSmall,
+.ngPointTextSmaller {
     font-size: 8pt;
     font-weight: 100;
+    opacity: 75%;
+}
+
+.ngPointTextSmaller {
     opacity: 50%;
 }
