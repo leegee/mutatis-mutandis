@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, createMemo, onCleanup, onMount } from "solid-js";
 import * as d3 from "d3";
 import type { SlicePoint, NamedSlicePoint } from "../types";
 import { closeOverlay, eeboStore } from "../stores/Eebo.store";
@@ -33,7 +33,6 @@ export default function DriftChart(props: {
     onSelectSlice?: (d: ScreenPoint, x: number, y: number) => void;
 }) {
     let svgRef: SVGSVGElement | undefined;
-    let interactionRef: SVGRectElement | undefined;
 
     const [size, setSize] = createSignal({ width: 0, height: 0 });
     const [tooltip, setTooltip] = createSignal<TooltipState>(null);
@@ -43,10 +42,9 @@ export default function DriftChart(props: {
     const height = () => props.height ?? size().height;
 
     // ----------------------------
-    // visibility helpers (pure)
+    // term helpers
     // ----------------------------
     const allTerms = () => Object.keys(props.series ?? {});
-
     const setAll = () => new Set(allTerms());
     const setSolo = (t: string) => new Set([t]);
 
@@ -108,15 +106,15 @@ export default function DriftChart(props: {
     });
 
     // ----------------------------
-    // derived dataset (Solid owns data)
+    // DERIVED DATA (Solid owns selection)
     // ----------------------------
-    const visibleData = () => {
-        const seriesMap = props.series;
+    const visibleData = createMemo(() => {
         const vis = visibleTerms();
+        const seriesMap = props.series ?? {};
 
         const out: ScreenPoint[] = [];
 
-        for (const term of Object.keys(seriesMap ?? {})) {
+        for (const term of Object.keys(seriesMap)) {
             if (!vis.has(term)) continue;
 
             for (const p of seriesMap[term]) {
@@ -130,12 +128,12 @@ export default function DriftChart(props: {
         }
 
         return out;
-    };
+    });
 
     // ----------------------------
-    // D3 MATH ONLY (scales + geometry)
+    // D3 MATH LAYER (cached)
     // ----------------------------
-    const geom = () => {
+    const geom = createMemo(() => {
         const data = visibleData();
         const w = width();
         const h = height();
@@ -169,10 +167,10 @@ export default function DriftChart(props: {
             .curve(d3.curveMonotoneX);
 
         return { x, y, pts, delaunay, line };
-    };
+    });
 
     // ----------------------------
-    // interaction handlers (stable refs)
+    // stable interaction handlers
     // ----------------------------
     const handleMove = (event: MouseEvent) => {
         if (eeboStore._overlay.open) return;
@@ -191,7 +189,7 @@ export default function DriftChart(props: {
 
     const handleLeave = () => setTooltip(null);
 
-    const handleSvgClick = (event: MouseEvent) => {
+    const handleClickSvg = (event: MouseEvent) => {
         if (eeboStore._overlay.open) {
             closeOverlay();
             return;
@@ -203,6 +201,7 @@ export default function DriftChart(props: {
         const [mx, my] = d3.pointer(event);
         const i = g.delaunay.find(mx, my);
         const d = g.pts[i];
+
         if (!d) return;
 
         const cx = mx - width() / 2;
@@ -262,16 +261,20 @@ export default function DriftChart(props: {
                 </aside>
             )}
 
-            {/* SVG = PURE RENDER TARGET */}
+            {/* SVG */}
             <svg
                 ref={el => (svgRef = el)}
                 style={{ width: "100%", height: "100%" }}
+                onMouseMove={handleMove}
+                onMouseLeave={handleLeave}
+                onClick={handleClickSvg}
             >
                 {(() => {
                     const g = geom();
                     if (!g) return null;
 
                     const groups = new Map<string, NamedSlicePoint[]>();
+
                     for (const p of g.pts) {
                         if (!groups.has(p.term)) groups.set(p.term, []);
                         groups.get(p.term)!.push(p);
@@ -302,17 +305,6 @@ export default function DriftChart(props: {
                                     />
                                 ))}
                             </g>
-
-                            {/* INTERACTION LAYER */}
-                            <rect
-                                ref={el => (interactionRef = el)}
-                                width={width()}
-                                height={height()}
-                                fill="transparent"
-                                onMouseMove={handleMove}
-                                onMouseLeave={handleLeave}
-                                onClick={handleSvgClick}
-                            />
                         </>
                     );
                 })()}
