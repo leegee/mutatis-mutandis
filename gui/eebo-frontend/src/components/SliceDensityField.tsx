@@ -12,7 +12,10 @@ type Vec2L = {
     y: number;
     label: string;
     weight: number;
+    isTarget?: boolean;
 };
+
+const PAD = 32;
 
 function gaussian2D(dx: number, dy: number, h: number) {
     return Math.exp(-(dx * dx + dy * dy) / (2 * h * h));
@@ -77,18 +80,12 @@ function normalizePoints(
     const dy = maxY - minY || 1;
 
     return pts.map(p => ({
-        x: ((p.x - minX) / dx) * w,
-        y: ((p.y - minY) / dy) * h
+        x: PAD + ((p.x - minX) / dx) * (w - PAD * 2),
+        y: PAD + ((p.y - minY) / dy) * (h - PAD * 2)
     }));
 }
 
-function computeField(
-    points: Vec2L[],
-    w: number,
-    h: number,
-    res = 3,
-    hK = 40
-) {
+function computeField(points: Vec2L[], w: number, h: number, res = 3, hK = 40) {
     const wSteps = Math.floor(w / res);
     const hSteps = Math.floor(h / res);
 
@@ -107,6 +104,7 @@ function computeField(
             let sum = 0;
 
             for (const p of points) {
+                if (p.isTarget) continue; // exclude target
                 sum += p.weight * gaussian2D(px - p.x, py - p.y, hK);
             }
 
@@ -154,8 +152,28 @@ function renderField(
     ctx.putImageData(img, 0, 0);
 }
 
+function drawAxes(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 1;
+
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.font = "12px sans-serif";
+
+    ctx.textAlign = "center";
+    ctx.fillText("Semantic Proximity →", w / 2, h - 6);
+
+    ctx.save();
+    ctx.translate(10, h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("Usage Intensity →", 0, 0);
+    ctx.restore();
+}
+
 function selectTop(points: Vec2L[], k = 12) {
-    return [...points].sort((a, b) => b.weight - a.weight).slice(0, k);
+    return points
+        .filter(p => !p.isTarget)
+        .sort((a, b) => b.weight - a.weight)
+        .slice(0, k);
 }
 
 function avoidCollisions(points: Vec2L[], d = 18) {
@@ -189,16 +207,25 @@ const SliceDensityField: Component<SliceDensityFieldProps> = (props) => {
         const raw = pca2D(vectors);
         const norm = normalizePoints(raw, props.width, props.height);
 
-        return norm.map((p, i) => {
+        const neighbors = norm.map((p, i) => {
             const d = n[i];
-            console.log(d)
             return {
                 x: p.x,
                 y: p.y,
-                label: d.token ?? "∅",
+                label: d.token,
                 weight: Math.log1p(d.count ?? 1) * (d.similarity ?? 0.5)
             };
         });
+
+        const target: Vec2L = {
+            x: props.width / 2,
+            y: props.height / 2,
+            label: props.slice.term ?? props.slice.token ?? "TARGET",
+            weight: 2,
+            isTarget: true
+        };
+
+        return [target, ...neighbors];
     });
 
     const draw = () => {
@@ -216,28 +243,47 @@ const SliceDensityField: Component<SliceDensityFieldProps> = (props) => {
         );
 
         ctx.clearRect(0, 0, props.width, props.height);
+
         renderField(ctx, field, max, res);
+        drawAxes(ctx, props.width, props.height);
 
         const labels = avoidCollisions(selectTop(pts, 15));
 
-        ctx.font = "12px sans-serif";
+        ctx.font = "14px sans-serif";
+        ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
         for (const l of labels) {
-            const w = ctx.measureText(l.label || "?").width;
+            const w = ctx.measureText(l.label).width;
 
-            ctx.fillStyle = "rgba(0,0,0,0.7)";
-            ctx.fillRect(l.x - 2, l.y - 10, w + 4, 18);
+            ctx.fillStyle = "#00D3";
+            ctx.fillRect(l.x - w / 2 - 2, l.y - 10, w + 4, 18);
 
             ctx.fillStyle = "white";
-            ctx.fillText(l.label || "?", l.x, l.y);
+            ctx.fillText(l.label, l.x, l.y);
+        }
+
+        // ---- TARGET DRAW ----
+        const target = pts.find(p => p.isTarget);
+        if (target) {
+            ctx.beginPath();
+            ctx.arc(target.x, target.y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = "#FF0D";
+            ctx.fill();
+
+            ctx.strokeStyle = "#000D";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.font = "bold 32pt sans-serif";
+            ctx.fillStyle = "#0004";
+            ctx.fillText(target.label, target.x, target.y - 18);
         }
     };
 
     onMount(draw);
 
     createEffect(() => {
-        projected(); // reactive dependency
+        projected();
         draw();
     });
 
