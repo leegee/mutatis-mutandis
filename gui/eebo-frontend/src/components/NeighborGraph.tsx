@@ -1,11 +1,9 @@
-import { type Component, createMemo, For, onCleanup, onMount } from "solid-js";
+import { createMemo, For, onCleanup, onMount } from "solid-js";
 import type { EventNeighbourhoodOpen, SliceView } from "../types";
 import { eeboStore, setEeboStore, closeOverlay, toggleOverlay } from "../stores/Eebo.store";
 import styles from "./NeighborGraph.module.css";
 
 type Neighbor = SliceView["neighbors"][number];
-
-const PADDING = 24;
 
 export type NeighborGraphProps = {
     slice: SliceView;
@@ -86,7 +84,7 @@ function nodeSize(n: Neighbor): number {
 }
 
 
-const NeighborGraph: Component<NeighborGraphProps> = (props) => {
+export default function NeighborGraph(props: NeighborGraphProps) {
     const neighbors = createMemo(() => props.slice.neighbors ?? []);
 
     const center = createMemo(() => ({
@@ -201,4 +199,3 @@ const NeighborGraph: Component<NeighborGraphProps> = (props) => {
     );
 };
 
-export default NeighborGraph;

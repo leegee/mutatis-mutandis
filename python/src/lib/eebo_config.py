@@ -103,6 +103,7 @@ FASTTEXT_PARAMS: FastTextParams = {
     "maxn": 6,
 }
 
+# Mirror in JSON file gui\eebo-frontend\src\services\SLICES.json
 SLICES = [
     (1625, 1629),
     (1630, 1634),

@@ -4,6 +4,8 @@ import type { SlicePoint, NamedSlicePoint } from "../types";
 import { closeOverlay, eeboStore } from "../stores/Eebo.store";
 import styles from "./DriftChart.module.css";
 
+import SLICE_RANGES from "../services/SLICES.json";
+
 export const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
 
 const POINT_RADIUS = 7;
@@ -30,13 +32,14 @@ export default function DriftChart(props: {
     series: Record<string, SlicePoint[]>;
     width?: number;
     height?: number;
-    onSelectSlice?: (d: ScreenPoint, x: number, y: number) => void;
+    onSelectSlice?: (d: ScreenPoint, x?: number, y?: number) => void;
 }) {
     let svgRef: SVGSVGElement | undefined;
 
     const [size, setSize] = createSignal({ width: 0, height: 0 });
     const [tooltip, setTooltip] = createSignal<TooltipState>(null);
     const [visibleTerms, setVisibleTerms] = createSignal<Set<string>>(new Set());
+    const isActiveMode = () => eeboStore._overlay.open;
 
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
@@ -44,6 +47,16 @@ export default function DriftChart(props: {
     const allTerms = () => Object.keys(props.series ?? {});
     const setAll = () => new Set(allTerms());
     const setSolo = (t: string) => new Set([t]);
+
+    const inActiveRange = (p: NamedSlicePoint) => {
+        if (!isActiveMode()) return false;
+
+        const r = activeRange();
+        if (!r) return false;
+
+        const [a, b] = r;
+        return p.slice_start >= a && p.slice_start <= b;
+    };
 
     const toggleOne = (prev: Set<string>, term: string) => {
         const next = new Set(prev);
@@ -77,7 +90,6 @@ export default function DriftChart(props: {
         if (clickTimer) clearTimeout(clickTimer);
     });
 
-
     // resize observer
     onMount(() => {
         if (!svgRef) return;
@@ -93,15 +105,32 @@ export default function DriftChart(props: {
         onCleanup(() => ro.disconnect());
     });
 
-
     // init visibility
     createEffect(() => {
         const keys = allTerms();
         setVisibleTerms(prev => prev.size ? prev : new Set(keys));
     });
 
+    const activeRange = createMemo(() => {
+        return SLICE_RANGES[eeboStore.sliceIndex];
+    });
 
-    // DERIVED DATA (Solid owns selection)
+    const groupScore = (pts: NamedSlicePoint[]) => {
+        if (!isActiveMode()) return 0;
+
+        const range = activeRange();
+        if (!range) return 0;
+
+        const [a, b] = range;
+
+        let hit = 0;
+        for (const p of pts) {
+            if (p.slice_start >= a && p.slice_start <= b) hit++;
+        }
+
+        return hit / pts.length;
+    };
+
     const visibleData = createMemo(() => {
         const vis = visibleTerms();
         const seriesMap = props.series ?? {};
@@ -124,8 +153,6 @@ export default function DriftChart(props: {
         return out;
     });
 
-
-    // D3 MATH LAYER (cached)
     const geom = createMemo(() => {
         const data = visibleData();
         const w = width();
@@ -162,8 +189,6 @@ export default function DriftChart(props: {
         return { x, y, pts, delaunay, line };
     });
 
-
-    // interaction handlers
     const handleMove = (event: MouseEvent) => {
         if (eeboStore._overlay.open) return;
 
@@ -196,12 +221,8 @@ export default function DriftChart(props: {
 
         if (!d) return;
 
-        const cx = mx - width() / 2;
-        const cy = my - height() / 2;
-
-        props.onSelectSlice?.(d, cx, cy);
+        props.onSelectSlice?.(d);
     };
-
 
     return (
         <article
@@ -273,14 +294,19 @@ export default function DriftChart(props: {
                         <>
                             {/* LINES */}
                             <g>
-                                {Array.from(groups.entries()).map(([term, pts]) => (
-                                    <path
-                                        d={g.line(pts)!}
-                                        fill="none"
-                                        stroke={color(term)}
-                                        stroke-width="2"
-                                    />
-                                ))}
+                                {Array.from(groups.entries()).map(([term, pts]) => {
+                                    const intensity = groupScore(pts);
+
+                                    return (
+                                        <path
+                                            d={g.line(pts)!}
+                                            fill="none"
+                                            stroke={color(term)}
+                                            stroke-width={isActiveMode() ? 1 + intensity * 3 : 2}
+                                            opacity={isActiveMode() ? 0.2 + intensity * 0.8 : 1}
+                                        />
+                                    );
+                                })}
                             </g>
 
                             {/* POINTS */}
@@ -291,6 +317,7 @@ export default function DriftChart(props: {
                                         cy={p.sy}
                                         r={POINT_RADIUS}
                                         fill={color(p.term)}
+                                        opacity={isActiveMode() ? (inActiveRange(p) ? 1 : 0.25) : 1}
                                     />
                                 ))}
                             </g>

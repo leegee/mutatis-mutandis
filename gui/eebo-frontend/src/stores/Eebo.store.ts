@@ -6,11 +6,11 @@ import { fetchTokenClusters } from "../services/tokenClustersService";
 let cached: Dataset | null = null;
 
 const WINDOW_OFFSET = 12;
-export const OVERLAY_SIZE = {
-    width: 350,
-    height: 350
-};
 
+export const OVERLAY_SIZE = {
+    width: 300,
+    height: 300
+};
 
 function clampOverlay(x: number, y: number) {
     const vw = window.innerWidth;
@@ -19,45 +19,34 @@ function clampOverlay(x: number, y: number) {
     let cx: number;
     let cy: number;
 
-    // --- horizontal
     if (x + OVERLAY_SIZE.width + WINDOW_OFFSET <= vw) {
-        // place to the right of cursor
         cx = x + WINDOW_OFFSET;
     } else {
-        // place to the left
         cx = x - OVERLAY_SIZE.width - WINDOW_OFFSET;
     }
 
-    // --- vertical
     if (y + OVERLAY_SIZE.height + WINDOW_OFFSET <= vh) {
-        // place below cursor
         cy = y + WINDOW_OFFSET;
     } else {
-        // place above cursor
         cy = y - OVERLAY_SIZE.height - WINDOW_OFFSET;
     }
 
-    // --- final clamp safety (important for extreme edges)
     cx = Math.max(0, Math.min(cx, vw - OVERLAY_SIZE.width));
     cy = Math.max(0, Math.min(cy, vh - OVERLAY_SIZE.height));
-
-    console.log(x, y, ' to ', cx, cy);
 
     return { x: cx, y: cy };
 }
 
-
 export function closeOverlay() {
-    const prev = { ...eeboStore._overlay };
     setEeboStore("_overlay", {
-        ...prev,
+        ...eeboStore._overlay,
         open: false
     });
 }
 
-
 export function openOverlay(x: number, y: number) {
     const pos = clampOverlay(x, y);
+
     setEeboStore("_overlay", {
         x: pos.x,
         y: pos.y,
@@ -65,9 +54,9 @@ export function openOverlay(x: number, y: number) {
     });
 }
 
-
 export function toggleOverlay(x: number, y: number) {
     const pos = clampOverlay(x, y);
+
     setEeboStore("_overlay", (prev) => {
         const isSame =
             prev.open &&
@@ -82,21 +71,24 @@ export function toggleOverlay(x: number, y: number) {
     });
 }
 
-
 export const [data] = createResource<Dataset>(async () => {
-    cached ??= await fetchTokenClusters("drift_neighbors_micro_senses_slices.json")
-    console.log(`[Eebo.store] [Resource] data rv`, cached)
+    cached ??= await fetchTokenClusters("drift_neighbors_micro_senses_slices.json");
     return cached;
 });
 
 const [eeboStore, setEeboStore] = createStore({
     year: 1625,
+
+    // NEW: global slice navigation index (authoritative temporal cursor)
+    sliceIndex: 0,
+
     selected: {
         token: null,
         slice_start: null,
         slice_end: null,
         color: null,
     } as Selection,
+
     _overlay: {
         open: false,
         x: 0,

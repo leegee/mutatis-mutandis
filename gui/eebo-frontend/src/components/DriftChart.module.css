@@ -1,6 +1,7 @@
 :root {
     --drift-stroke-width: 3pt;
     --drift-clr: navy;
+    transition: all 222ms ease-in-out;
 }
 
 .driftChartWrapper {
@@ -77,12 +78,12 @@
 }
 
 .dimmed {
-    opacity: 0.25;
     transition: all 222ms ease-in-out;
-    filter: grayscale(90%);
+    filter: grayscale(20%);
 }
 
 
 .disabled {
+    transition: all 222ms ease-in-out;
     pointer-events: none;
 }
