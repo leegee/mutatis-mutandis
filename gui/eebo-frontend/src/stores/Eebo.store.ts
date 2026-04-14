@@ -29,12 +29,12 @@ const [eeboStore, setEeboStore] = createStore({
     } as Selection,
 });
 
-const setNullSelected = () => eeboStore.selected = {
+const setNullSelected = () => setEeboStore("selected", {
     token: null,
     slice_start: null,
     slice_end: null,
     color: null,
-} as Selection;
+} as Selection);
 
 
 export { eeboStore, setEeboStore, setNullSelected };

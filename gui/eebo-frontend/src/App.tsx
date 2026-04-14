@@ -1,7 +1,7 @@
 import 'beercss';
 import { createMemo, Show, onMount, onCleanup } from "solid-js";
 
-import { data, eeboStore, setEeboStore } from "./stores/Eebo.store";
+import { data, eeboStore, setEeboStore, setNullSelected } from "./stores/Eebo.store";
 import DriftChart, { color } from "./components/DriftChart";
 import type { NamedSlicePoint, SlicePoint } from "./types";
 import { buildSliceView } from "./models/buildSliceView";
@@ -50,6 +50,7 @@ export default function App() {
 
     return buildSliceView(token, slice, dataset);
   });
+
 
   const syncIndexToSlice = (d: NamedSlicePoint) => {
     const idx = SLICE_RANGES.findIndex(
@@ -116,15 +117,26 @@ export default function App() {
         slice_end: sliceEnd,
         color: color(nextToken) as string,
       });
+      break;
     }
   };
 
   onMount(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!eeboStore.selected.token) return;
       if (e.repeat) return;
 
+      if (e.key === "Escape") {
+        setNullSelected();
+        return;
+      }
+
+      if (!eeboStore.selected.token) return;
+
       switch (e.key) {
+        case "Escape":
+          setNullSelected();
+          break;
+
         case "ArrowRight":
           step(1);
           e.preventDefault();
@@ -165,7 +177,7 @@ export default function App() {
         </div>
 
         <div class="s4 border">
-          <Show when={eeboStore.selected.token && sliceView()}>
+          <Show when={sliceView()}>
             <aside class='surface-container' style={{ height: '100%' }}>
               <SliceDensityField slice={sliceView()!} />
             </aside>

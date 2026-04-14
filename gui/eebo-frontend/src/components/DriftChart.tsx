@@ -198,8 +198,6 @@ export default function DriftChart(props: Props) {
     });
 
     const handleMove = (event: MouseEvent) => {
-        if (eeboStore.selected.token) return;
-
         const g = geom();
         if (!g) return setTooltip(null);
 
