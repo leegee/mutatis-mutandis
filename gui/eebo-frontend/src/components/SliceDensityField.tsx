@@ -197,7 +197,6 @@ function avoidCollisions(points: Vec2L[], d = 18) {
     return out;
 }
 
-/* ---------------- component ---------------- */
 
 export default function SliceDensityField(props: SliceDensityFieldProps) {
     let canvas!: HTMLCanvasElement;
@@ -247,7 +246,7 @@ export default function SliceDensityField(props: SliceDensityFieldProps) {
         const target: Vec2L = {
             x: w() / 2,
             y: h() / 2,
-            label: props.slice.term ?? props.slice.token ?? "TARGET",
+            label: props.slice.token ?? "TARGET",
             weight: 2,
             isTarget: true
         };
@@ -323,7 +322,6 @@ export default function SliceDensityField(props: SliceDensityFieldProps) {
                 ref={canvas}
                 width={w()}
                 height={h()}
-                style={{ width: "100%", height: "100%" }}
             />
         </div>
     );

@@ -37,7 +37,7 @@
     fill: var(--on-surface, white);
     font-size: 12pt;
     font-weight: normal;
-    pointer-events: none;
+    /* pointer-events: none; */
     text-anchor: middle;
 }
 

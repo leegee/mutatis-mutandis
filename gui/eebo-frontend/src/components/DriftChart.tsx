@@ -1,8 +1,8 @@
-import { createEffect, createSignal, createMemo, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, createMemo, onCleanup, onMount, Show } from "solid-js";
 import * as d3 from "d3";
 
 import type { SlicePoint, NamedSlicePoint } from "../types";
-import { eeboStore, setNullSelected } from "../stores/Eebo.store";
+import { eeboStore, setEeboStore, setNullSelected } from "../stores/Eebo.store";
 import DriftLegend from "./DriftLegend";
 import styles from "./DriftChart.module.css";
 import SLICE_RANGES from "../services/SLICES.json";
@@ -218,9 +218,8 @@ export default function DriftChart(props: Props) {
         if (eeboStore.selected.token) {
             setNullSelected();
         }
-
         const g = geom();
-        if (!g || !tooltip()) return;
+        if (!g) return;
         setTooltip(null);
 
         const [mx, my] = d3.pointer(event);
@@ -228,7 +227,6 @@ export default function DriftChart(props: Props) {
         const d = g.pts[i];
 
         if (!d) return;
-
         props.onSelectSlice?.(d);
     };
 
@@ -240,7 +238,7 @@ export default function DriftChart(props: Props) {
             }}
         >
             {/* TOOLTIP */}
-            {tooltip() && (
+            <Show when={tooltip()}>
                 <aside
                     class={styles.driftTooltip + ' surface-container-high'}
                     style={{
@@ -252,12 +250,12 @@ export default function DriftChart(props: Props) {
                     <div>Year: {tooltip()!.data.slice_start}</div>
                     <div>Drift: {tooltip()!.data.drift}</div>
                 </aside>
-            )}
+            </Show>
 
             {/* SVG */}
             <svg
                 ref={el => (svgRef = el)}
-                style={{ width: "100%", height: "100%", position: "absolute", top: 0 }}
+                style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}
                 onMouseMove={handleMove}
                 onMouseLeave={handleLeave}
                 onClick={handleClickSvg}
