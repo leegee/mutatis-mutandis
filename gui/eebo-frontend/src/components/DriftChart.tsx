@@ -2,7 +2,7 @@ import { createEffect, createSignal, createMemo, onCleanup, onMount, Show } from
 import * as d3 from "d3";
 
 import type { SlicePoint, NamedSlicePoint } from "../types";
-import { eeboStore, setEeboStore, setNullSelected } from "../stores/Eebo.store";
+import { eeboStore, setNullSelected } from "../stores/Eebo.store";
 import DriftLegend from "./DriftLegend";
 import styles from "./DriftChart.module.css";
 import SLICE_RANGES from "../services/SLICES.json";
