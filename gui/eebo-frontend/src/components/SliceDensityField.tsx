@@ -300,12 +300,12 @@ export default function SliceDensityField(props: SliceDensityFieldProps) {
             ctx.textAlign = "center";
 
             ctx.font = "bold 38pt sans-serif";
-            ctx.strokeStyle = "#111A";
-            ctx.strokeText(target.label, target.x, target.y - 20);
+            ctx.fillStyle = "#001A";
+            ctx.fillText(target.label, target.x, target.y - 20);
 
             ctx.font = "bold 32pt sans-serif";
-            ctx.fillStyle = "#555A";
-            ctx.strokeText(yearLabel, target.x, target.y + 48);
+            ctx.fillStyle = "#0029";
+            ctx.fillText(yearLabel, target.x, target.y + 48);
         }
     };
 
