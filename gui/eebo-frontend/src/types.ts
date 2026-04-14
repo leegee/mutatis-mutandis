@@ -21,15 +21,9 @@ export interface Hit {
 }
 
 
-
-
-
 // todo move to a new file
 
-export type SlicePoint = {
-    slice_start: number;
-    slice_end: number;
-    drift: number;
+export type SlicePoint = Slice & {
     transitions?: number[];
 };
 

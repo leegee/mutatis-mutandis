@@ -17,9 +17,7 @@ export default function App() {
 
     for (const token of Object.keys(d)) {
       out[token] = d[token].slices.map(s => ({
-        slice_start: s.slice_start,
-        slice_end: s.slice_end,
-        drift: s.drift
+        ...s
       }));
     }
 

@@ -36,6 +36,7 @@ type Props = {
     onSelectSlice?: (d: ScreenPoint) => void;
 }
 
+
 export default function DriftChart(props: Props) {
     let svgRef: SVGSVGElement | undefined;
 
@@ -45,10 +46,8 @@ export default function DriftChart(props: Props) {
 
     const terms = () => Object.keys(props.series ?? {});
 
-
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
-
 
     const setAll = () => new Set(terms());
     const setSolo = (t: string) => new Set([t]);
@@ -68,6 +67,10 @@ export default function DriftChart(props: Props) {
         const [a, b] = r;
         return p.slice_start >= a && p.slice_start <= b;
     };
+
+    const rScale = d3.scaleSqrt()
+        .domain([0, d3.max(Object.values(props.series).flat(), d => d.count) ?? 1])
+        .range([3, 12]);
 
     const groupScore = (pts: NamedSlicePoint[]) => {
         if (!isActiveMode()) return 0;
@@ -291,7 +294,7 @@ export default function DriftChart(props: Props) {
                             {/* POINTS */}
                             <g>
                                 {g.pts.map(p => (
-                                    <circle cx={p.sx} cy={p.sy} r={POINT_RADIUS}
+                                    <circle cx={p.sx} cy={p.sy} r={rScale(p.count)}
                                         class={p.term === eeboStore.selected.token ? styles.selectedTermNode : ''}
                                         fill={color(p.term)}
                                         stroke-color={'white'}
