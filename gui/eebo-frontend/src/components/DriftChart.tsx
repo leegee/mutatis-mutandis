@@ -1,10 +1,11 @@
 import { createEffect, createSignal, createMemo, onCleanup, onMount } from "solid-js";
 import * as d3 from "d3";
 import type { SlicePoint, NamedSlicePoint } from "../types";
-import { closeOverlay, eeboStore } from "../stores/Eebo.store";
+import { eeboStore, setNullSelected } from "../stores/Eebo.store";
 import styles from "./DriftChart.module.css";
 
 import SLICE_RANGES from "../services/SLICES.json";
+import DriftLegend from "./DriftLegend";
 
 export const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
 
@@ -39,14 +40,21 @@ export default function DriftChart(props: {
     const [size, setSize] = createSignal({ width: 0, height: 0 });
     const [tooltip, setTooltip] = createSignal<TooltipState>(null);
     const [visibleTerms, setVisibleTerms] = createSignal<Set<string>>(new Set());
-    const isActiveMode = () => eeboStore._overlay.open;
+
+    const terms = () => Object.keys(props.series ?? {});
+
+    const isActiveMode = () => eeboStore.selected.token;
 
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
 
-    const allTerms = () => Object.keys(props.series ?? {});
-    const setAll = () => new Set(allTerms());
+
+    const setAll = () => new Set(terms());
     const setSolo = (t: string) => new Set([t]);
+
+    const activeRange = createMemo(() => {
+        return SLICE_RANGES[eeboStore.sliceIndex];
+    });
 
     const inActiveRange = (p: NamedSlicePoint) => {
         if (!isActiveMode()) return false;
@@ -56,6 +64,22 @@ export default function DriftChart(props: {
 
         const [a, b] = r;
         return p.slice_start >= a && p.slice_start <= b;
+    };
+
+    const groupScore = (pts: NamedSlicePoint[]) => {
+        if (!isActiveMode()) return 0;
+
+        const range = activeRange();
+        if (!range) return 0;
+
+        const [a, b] = range;
+
+        let hit = 0;
+        for (const p of pts) {
+            if (p.slice_start >= a && p.slice_start <= b) hit++;
+        }
+
+        return hit / pts.length;
     };
 
     const toggleOne = (prev: Set<string>, term: string) => {
@@ -72,6 +96,7 @@ export default function DriftChart(props: {
             clickTimer = undefined;
 
             const current = visibleTerms();
+
             setVisibleTerms(
                 current.size === 1 && current.has(term)
                     ? setAll()
@@ -107,29 +132,9 @@ export default function DriftChart(props: {
 
     // init visibility
     createEffect(() => {
-        const keys = allTerms();
+        const keys = terms();
         setVisibleTerms(prev => prev.size ? prev : new Set(keys));
     });
-
-    const activeRange = createMemo(() => {
-        return SLICE_RANGES[eeboStore.sliceIndex];
-    });
-
-    const groupScore = (pts: NamedSlicePoint[]) => {
-        if (!isActiveMode()) return 0;
-
-        const range = activeRange();
-        if (!range) return 0;
-
-        const [a, b] = range;
-
-        let hit = 0;
-        for (const p of pts) {
-            if (p.slice_start >= a && p.slice_start <= b) hit++;
-        }
-
-        return hit / pts.length;
-    };
 
     const visibleData = createMemo(() => {
         const vis = visibleTerms();
@@ -190,7 +195,7 @@ export default function DriftChart(props: {
     });
 
     const handleMove = (event: MouseEvent) => {
-        if (eeboStore._overlay.open) return;
+        if (eeboStore.selected.token) return;
 
         const g = geom();
         if (!g) return setTooltip(null);
@@ -207,8 +212,8 @@ export default function DriftChart(props: {
     const handleLeave = () => setTooltip(null);
 
     const handleClickSvg = (event: MouseEvent) => {
-        if (eeboStore._overlay.open) {
-            closeOverlay();
+        if (eeboStore.selected.token) {
+            setNullSelected;
             return;
         }
 
@@ -228,34 +233,9 @@ export default function DriftChart(props: {
         <article
             classList={{
                 [styles.driftChartWrapper]: true,
-                [styles.dimmed]: eeboStore._overlay.open,
-                [styles.disabled]: eeboStore._overlay.open
+                [styles.dimmed]: eeboStore.selected.token
             }}
         >
-            {/* LEGEND */}
-            <header class={'responsive surface-container border ' + styles.driftLegend}>
-                <nav class="wrap padding middle-align">
-                    {Object.keys(props.series ?? {}).map(term => (
-                        <label
-                            class="chip checkbox small"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                handleClick(term);
-                            }}
-                        >
-                            <input
-                                type="checkbox"
-                                checked={visibleTerms().has(term)}
-                                onChange={() => { }}
-                            />
-                            <span style={{ color: color(term) }}>
-                                {term}
-                            </span>
-                        </label>
-                    ))}
-                </nav>
-            </header>
-
             {/* TOOLTIP */}
             {tooltip() && (
                 <aside
@@ -274,7 +254,7 @@ export default function DriftChart(props: {
             {/* SVG */}
             <svg
                 ref={el => (svgRef = el)}
-                style={{ width: "100%", height: "100%" }}
+                style={{ width: "100%", height: "100%", position: "absolute", top: 0 }}
                 onMouseMove={handleMove}
                 onMouseLeave={handleLeave}
                 onClick={handleClickSvg}
@@ -312,11 +292,10 @@ export default function DriftChart(props: {
                             {/* POINTS */}
                             <g>
                                 {g.pts.map(p => (
-                                    <circle
-                                        cx={p.sx}
-                                        cy={p.sy}
-                                        r={POINT_RADIUS}
+                                    <circle cx={p.sx} cy={p.sy} r={POINT_RADIUS}
+                                        class={p.term === eeboStore.selected.token ? styles.selectedTermNode : ''}
                                         fill={color(p.term)}
+                                        stroke-color={'white'}
                                         opacity={isActiveMode() ? (inActiveRange(p) ? 1 : 0.25) : 1}
                                     />
                                 ))}
@@ -325,6 +304,13 @@ export default function DriftChart(props: {
                     );
                 })()}
             </svg>
+
+            {/* LEGEND (EXTRACTED) */}
+            <DriftLegend
+                terms={terms()}
+                visible={visibleTerms()}
+                onToggle={handleClick}
+            />
         </article>
     );
 }

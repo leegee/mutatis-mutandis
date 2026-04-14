@@ -11,6 +11,7 @@
     position: relative;
 }
 
+
 .driftPath {
     fill: none;
     stroke: var(--drift-clr);
@@ -23,6 +24,13 @@
     fill: var(--primary, );
     cursor: pointer;
 
+}
+
+.selectedLegendTerm,
+.selectedTermNode {
+    outline: 1px solid var(--on-surface) !important;
+    stroke: white;
+    stroke-width: 2pt;
 }
 
 .driftTermLine {
@@ -45,7 +53,7 @@
 .driftInspector {
     fill: var(--on-surface);
     font-size: 12px;
-    pointer-events: none;
+    /* pointer-events: none; */
     opacity: 0;
 }
 
@@ -69,7 +77,15 @@
 }
 
 .driftLegend {
+    transition: all 222ms ease-in-out;
+    background: var(--surface-container-dim);
+    opacity: 0.5 !important;
     border-color: var(--surface-dim, red) !important;
+}
+
+.driftLegend:hover {
+    background: var(--surface-container-high);
+    opacity: 1 !important;
 }
 
 .driftLegendItem {
@@ -85,5 +101,4 @@
 
 .disabled {
     transition: all 222ms ease-in-out;
-    pointer-events: none;
 }

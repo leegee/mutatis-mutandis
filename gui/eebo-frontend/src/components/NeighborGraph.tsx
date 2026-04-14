@@ -1,6 +1,6 @@
 import { createMemo, For, onCleanup, onMount } from "solid-js";
 import type { EventNeighbourhoodOpen, SliceView } from "../types";
-import { eeboStore, setEeboStore, closeOverlay, toggleOverlay } from "../stores/Eebo.store";
+import { eeboStore, setEeboStore, setNullSelected } from "../stores/Eebo.store";
 import styles from "./NeighborGraph.module.css";
 
 type Neighbor = SliceView["neighbors"][number];
@@ -130,7 +130,7 @@ export default function NeighborGraph(props: NeighborGraphProps) {
 
     onMount(() => {
         const handler = (e: MouseEvent) => {
-            if (!eeboStore._overlay.open) return;
+            if (!eeboStore.selected.token) return;
 
             const target = e.target as Node | null;
             const svgEl = document.querySelector("svg");
@@ -139,7 +139,7 @@ export default function NeighborGraph(props: NeighborGraphProps) {
                 return;
             }
 
-            closeOverlay();
+            setNullSelected();
         };
 
         document.addEventListener("mousedown", handler, true);

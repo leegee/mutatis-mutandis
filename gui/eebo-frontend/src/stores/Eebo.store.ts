@@ -37,40 +37,6 @@ function clampOverlay(x: number, y: number) {
     return { x: cx, y: cy };
 }
 
-export function closeOverlay() {
-    setEeboStore("_overlay", {
-        ...eeboStore._overlay,
-        open: false
-    });
-}
-
-export function openOverlay(x: number, y: number) {
-    const pos = clampOverlay(x, y);
-
-    setEeboStore("_overlay", {
-        x: pos.x,
-        y: pos.y,
-        open: true
-    });
-}
-
-export function toggleOverlay(x: number, y: number) {
-    const pos = clampOverlay(x, y);
-
-    setEeboStore("_overlay", (prev) => {
-        const isSame =
-            prev.open &&
-            Math.abs(prev.x - pos.x) < 1 &&
-            Math.abs(prev.y - pos.y) < 1;
-
-        return {
-            x: pos.x,
-            y: pos.y,
-            open: !isSame
-        };
-    });
-}
-
 export const [data] = createResource<Dataset>(async () => {
     cached ??= await fetchTokenClusters("drift_neighbors_micro_senses_slices.json");
     return cached;
@@ -88,12 +54,14 @@ const [eeboStore, setEeboStore] = createStore({
         slice_end: null,
         color: null,
     } as Selection,
-
-    _overlay: {
-        open: false,
-        x: 0,
-        y: 0
-    }
 });
 
-export { eeboStore, setEeboStore };
+const setNullSelected = eeboStore.selected = {
+    token: null,
+    slice_start: null,
+    slice_end: null,
+    color: null,
+} as Selection;
+
+
+export { eeboStore, setEeboStore, setNullSelected };
