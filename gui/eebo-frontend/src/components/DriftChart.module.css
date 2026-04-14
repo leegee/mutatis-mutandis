@@ -53,13 +53,11 @@
 .driftInspector {
     fill: var(--on-surface);
     font-size: 12px;
-    /* pointer-events: none; */
     opacity: 0;
 }
 
 .driftTooltip {
     position: absolute;
-    pointer-events: none;
     background: rgba(0, 0, 0, 0.85);
     color: white;
     padding: 6px 8px;
@@ -79,7 +77,7 @@
 .driftLegend {
     transition: all 222ms ease-in-out;
     background: var(--surface-container-dim);
-    opacity: 0.5 !important;
+    opacity: 0.75 !important;
     border-color: var(--surface-dim, red) !important;
 }
 

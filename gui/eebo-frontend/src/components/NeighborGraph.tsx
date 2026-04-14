@@ -117,8 +117,6 @@ export default function NeighborGraph(props: NeighborGraphProps) {
                 slice_end: d.slice_end ?? d.slice_start,
                 color: d.color ?? "red"
             });
-
-            toggleOverlay(d.x, d.y);
         };
 
         window.addEventListener("neighbourhood:open", handler);

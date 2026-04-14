@@ -1,11 +1,11 @@
 import { createEffect, createSignal, createMemo, onCleanup, onMount } from "solid-js";
 import * as d3 from "d3";
+
 import type { SlicePoint, NamedSlicePoint } from "../types";
 import { eeboStore, setNullSelected } from "../stores/Eebo.store";
-import styles from "./DriftChart.module.css";
-
-import SLICE_RANGES from "../services/SLICES.json";
 import DriftLegend from "./DriftLegend";
+import styles from "./DriftChart.module.css";
+import SLICE_RANGES from "../services/SLICES.json";
 
 export const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
 
@@ -29,12 +29,14 @@ type TooltipState = {
     data: ScreenPoint;
 } | null;
 
-export default function DriftChart(props: {
+type Props = {
     series: Record<string, SlicePoint[]>;
     width?: number;
     height?: number;
-    onSelectSlice?: (d: ScreenPoint, x?: number, y?: number) => void;
-}) {
+    onSelectSlice?: (d: ScreenPoint) => void;
+}
+
+export default function DriftChart(props: Props) {
     let svgRef: SVGSVGElement | undefined;
 
     const [size, setSize] = createSignal({ width: 0, height: 0 });
@@ -43,7 +45,6 @@ export default function DriftChart(props: {
 
     const terms = () => Object.keys(props.series ?? {});
 
-    const isActiveMode = () => eeboStore.selected.token;
 
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
@@ -51,6 +52,8 @@ export default function DriftChart(props: {
 
     const setAll = () => new Set(terms());
     const setSolo = (t: string) => new Set([t]);
+
+    const isActiveMode = () => eeboStore.selected.token;
 
     const activeRange = createMemo(() => {
         return SLICE_RANGES[eeboStore.sliceIndex];
@@ -213,12 +216,12 @@ export default function DriftChart(props: {
 
     const handleClickSvg = (event: MouseEvent) => {
         if (eeboStore.selected.token) {
-            setNullSelected;
-            return;
+            setNullSelected();
         }
 
         const g = geom();
         if (!g || !tooltip()) return;
+        setTooltip(null);
 
         const [mx, my] = d3.pointer(event);
         const i = g.delaunay.find(mx, my);
@@ -233,7 +236,7 @@ export default function DriftChart(props: {
         <article
             classList={{
                 [styles.driftChartWrapper]: true,
-                [styles.dimmed]: eeboStore.selected.token
+                [styles.dimmed]: eeboStore.selected.token !== null
             }}
         >
             {/* TOOLTIP */}

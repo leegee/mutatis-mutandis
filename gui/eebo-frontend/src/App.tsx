@@ -1,18 +1,11 @@
 import 'beercss';
 import { createMemo, Show, onMount, onCleanup } from "solid-js";
-import {
-  data,
-  eeboStore,
-  OVERLAY_SIZE,
-  setEeboStore
-} from "./stores/Eebo.store";
 
+import { data, eeboStore, setEeboStore } from "./stores/Eebo.store";
 import DriftChart, { color } from "./components/DriftChart";
 import type { NamedSlicePoint, SlicePoint } from "./types";
-
 import { buildSliceView } from "./models/buildSliceView";
 import SliceDensityField from './components/SliceDensityField';
-
 import SLICE_RANGES from "./services/SLICES.json";
 
 export default function App() {
@@ -66,18 +59,18 @@ export default function App() {
     if (idx >= 0) setEeboStore("sliceIndex", _ => idx);
   };
 
-  const onSelectSlice = (d: NamedSlicePoint, x?: number, y?: number) => {
-    x = x ?? (window.innerWidth / 2 - OVERLAY_SIZE.width / 2);
-    y = y ?? (window.innerHeight / 2 - OVERLAY_SIZE.height / 2);
+
+  const onSelectSlice = (d: NamedSlicePoint) => {
     setEeboStore("selected", {
       token: d.term,
       slice_start: d.slice_start,
       slice_end: d.slice_end,
       color: color(d.term) as string,
     });
-
     syncIndexToSlice(d);
   };
+
+
 
   const step = (dir: -1 | 1) => {
     setEeboStore("sliceIndex", (i) =>
@@ -123,8 +116,6 @@ export default function App() {
         slice_end: sliceEnd,
         color: color(nextToken) as string,
       });
-
-      return;
     }
   };
 
@@ -164,16 +155,16 @@ export default function App() {
   });
 
   return (
-    <main class="responsive max">
+    <main class="responsive max large-gap">
       <div class="grid" style={{ height: '100%' }}>
-        <div class="s8">
+        <div class="s8 border">
           <DriftChart
             series={series()!}
-            onSelectSlice={(d, x, y) => onSelectSlice(d, x, y)}
+            onSelectSlice={(d) => onSelectSlice(d)}
           />
         </div>
 
-        <div class="s4">
+        <div class="s4 border">
           <Show when={eeboStore.selected.token && sliceView()}>
             <aside class='surface-container' style={{ height: '100%' }}>
               <SliceDensityField slice={sliceView()!} />
