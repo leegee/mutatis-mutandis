@@ -124,6 +124,7 @@ export default function App() {
       if (e.repeat) return;
 
       if (e.key === "Escape") {
+        eeboStore.selected.token = null;
         setNullSelected();
         return;
       }
