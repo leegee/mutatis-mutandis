@@ -15,3 +15,7 @@ article {
   transition: all 222ms ease-in-out;
   filter: none;
 }
+
+svg {
+  outline: none !important;
+}

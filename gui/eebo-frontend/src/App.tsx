@@ -167,16 +167,16 @@ export default function App() {
   return (
     <main class="responsive max large-gap">
       <div class="grid" style={{ height: '100%' }}>
-        <div class="s8 border">
+        <div class="s8 surface-container padding">
           <DriftChart
             series={series()!}
             onSelectSlice={(d) => onSelectSlice(d)}
           />
         </div>
 
-        <div class="s4 border">
+        <div class="s4">
           <Show when={sliceView()}>
-            <aside class='surface-container' style={{ height: '100%' }}>
+            <aside class='surface-container-low' style={{ height: '100%' }}>
               <SliceDensityField slice={sliceView()!} />
             </aside>
           </Show>

@@ -3,6 +3,7 @@ import type { SliceView } from "../types";
 
 export type SliceDensityFieldProps = {
     slice: SliceView;
+    prevSlice?: SliceView;
     width?: number;
     height?: number;
 };
@@ -17,7 +18,6 @@ type Vec2L = {
 
 const PAD = 32;
 
-/* ---------------- PCA ---------------- */
 
 function gaussian2D(dx: number, dy: number, h: number) {
     return Math.exp(-(dx * dx + dy * dy) / (2 * h * h));
@@ -197,6 +197,18 @@ function avoidCollisions(points: Vec2L[], d = 18) {
     return out;
 }
 
+function centroid(points: Vec2L[]) {
+    let x = 0, y = 0, w = 0;
+
+    for (const p of points) {
+        if (p.isTarget) continue;
+        x += p.x * p.weight;
+        y += p.y * p.weight;
+        w += p.weight;
+    }
+
+    return w ? { x: x / w, y: y / w } : null;
+}
 
 export default function SliceDensityField(props: SliceDensityFieldProps) {
     let canvas!: HTMLCanvasElement;

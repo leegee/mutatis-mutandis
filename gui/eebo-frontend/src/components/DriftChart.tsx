@@ -7,15 +7,41 @@ import DriftLegend from "./DriftLegend";
 import styles from "./DriftChart.module.css";
 import SLICE_RANGES from "../services/SLICES.json";
 
-export const color = d3.scaleOrdinal<string>().range(d3.schemeCategory10);
+export const color = d3.scaleOrdinal<string, string>();
 
-const POINT_RADIUS = 7;
+const graphStyle = {
+    default: {
+        container: {
+            margin: {
+                top: 5,
+                right: 5,
+                bottom: 5,
+                left: 5
+            }
+        },
+        line: {
+            width: 2,
+            opacity: 1,
+        },
+        circle: {
+            radius: 7,
+            opacity: 1,
+        }
+    },
 
-const MARGIN = {
-    top: 5,
-    right: 5,
-    bottom: 5,
-    left: 5
+    solo: {
+        line: {
+            width: 1,
+            opacity: 0.5,
+        }
+    },
+
+    active: {
+        line: {
+            width: 1,
+            opacity: 0.5,
+        }
+    }
 };
 
 type ScreenPoint = NamedSlicePoint & {
@@ -36,7 +62,6 @@ type Props = {
     onSelectSlice?: (d: ScreenPoint) => void;
 }
 
-
 export default function DriftChart(props: Props) {
     let svgRef: SVGSVGElement | undefined;
 
@@ -44,10 +69,10 @@ export default function DriftChart(props: Props) {
     const [tooltip, setTooltip] = createSignal<TooltipState>(null);
     const [visibleTerms, setVisibleTerms] = createSignal<Set<string>>(new Set());
 
-    const terms = () => Object.keys(props.series ?? {});
-
     const width = () => props.width ?? size().width;
     const height = () => props.height ?? size().height;
+
+    const terms = () => Object.keys(props.series ?? {});
 
     const setAll = () => new Set(terms());
     const setSolo = (t: string) => new Set([t]);
@@ -56,6 +81,28 @@ export default function DriftChart(props: Props) {
 
     const activeRange = createMemo(() => {
         return SLICE_RANGES[eeboStore.sliceIndex];
+    });
+
+    // Adaptive color scale
+    const colorScale = createMemo(() => {
+        const t = [...terms()].sort();
+        const n = t.length;
+
+        // For small sets: best categorical palette
+        if (n <= 10) {
+            return d3.scaleOrdinal<string, string>()
+                .domain(t)
+                .range(d3.schemeTableau10);
+        }
+
+        // For medium/large sets: evenly spaced hues (clipped Turbo)
+        return d3.scaleOrdinal<string, string>()
+            .domain(t)
+            .range(
+                t.map((_, i) =>
+                    d3.hsl((i * 360) / n, 0.65, 0.55).formatHex()
+                )
+            );
     });
 
     const inActiveRange = (p: NamedSlicePoint) => {
@@ -67,10 +114,6 @@ export default function DriftChart(props: Props) {
         const [a, b] = r;
         return p.slice_start >= a && p.slice_start <= b;
     };
-
-    const rScale = d3.scaleSqrt()
-        .domain([0, d3.max(Object.values(props.series).flat(), d => d.count) ?? 1])
-        .range([3, 12]);
 
     const groupScore = (pts: NamedSlicePoint[]) => {
         if (!isActiveMode()) return 0;
@@ -121,7 +164,6 @@ export default function DriftChart(props: Props) {
         if (clickTimer) clearTimeout(clickTimer);
     });
 
-    // resize observer
     onMount(() => {
         if (!svgRef) return;
 
@@ -136,7 +178,6 @@ export default function DriftChart(props: Props) {
         onCleanup(() => ro.disconnect());
     });
 
-    // init visibility
     createEffect(() => {
         const keys = terms();
         setVisibleTerms(prev => prev.size ? prev : new Set(keys));
@@ -173,12 +214,20 @@ export default function DriftChart(props: Props) {
 
         const x = d3.scaleLinear()
             .domain(d3.extent(data, d => d.slice_start) as [number, number])
-            .range([MARGIN.left, w - MARGIN.right]);
+            .range([
+                graphStyle.default.container.margin.left,
+                w -
+                graphStyle.default.container.margin.right
+            ]);
 
         const y = d3.scaleLinear()
             .domain(d3.extent(data, d => d.drift) as [number, number])
             .nice()
-            .range([h - MARGIN.bottom - POINT_RADIUS * 2, MARGIN.top + POINT_RADIUS * 2]);
+            .range([
+                h -
+                graphStyle.default.container.margin.bottom - graphStyle.default.circle.radius * 2,
+                graphStyle.default.container.margin.top + graphStyle.default.circle.radius * 2
+            ]);
 
         const pts = data.map(d => ({
             ...d,
@@ -238,7 +287,6 @@ export default function DriftChart(props: Props) {
                 [styles.dimmed]: eeboStore.selected.token !== null
             }}
         >
-            {/* TOOLTIP */}
             <Show when={tooltip()}>
                 <aside
                     class={styles.driftTooltip + ' surface-container-high'}
@@ -253,7 +301,6 @@ export default function DriftChart(props: Props) {
                 </aside>
             </Show>
 
-            {/* SVG */}
             <svg
                 ref={el => (svgRef = el)}
                 style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}
@@ -274,31 +321,33 @@ export default function DriftChart(props: Props) {
 
                     return (
                         <>
-                            {/* LINES */}
                             <g>
                                 {Array.from(groups.entries()).map(([term, pts]) => {
                                     const intensity = groupScore(pts);
 
                                     return (
                                         <path
+                                            class={term === eeboStore.selected.token ? styles.selectedTermPath : ''}
                                             d={g.line(pts)!}
                                             fill="none"
-                                            stroke={color(term)}
-                                            stroke-width={isActiveMode() ? 1 + intensity * 3 : 2}
-                                            opacity={isActiveMode() ? 0.2 + intensity * 0.8 : 1}
+                                            stroke={colorScale()(term)}
+                                            stroke-width={isActiveMode() ? graphStyle.active.line.width + intensity * 3 : graphStyle.default.line.width}
+                                            opacity={isActiveMode() ? graphStyle.active.line.opacity + intensity * 0.8 : graphStyle.default.line.opacity}
                                         />
                                     );
                                 })}
                             </g>
 
-                            {/* POINTS */}
                             <g>
                                 {g.pts.map(p => (
-                                    <circle cx={p.sx} cy={p.sy} r={rScale(p.count)}
+                                    <circle
                                         class={p.term === eeboStore.selected.token ? styles.selectedTermNode : ''}
-                                        fill={color(p.term)}
-                                        stroke-color={'white'}
-                                        opacity={isActiveMode() ? (inActiveRange(p) ? 1 : 0.25) : 1}
+                                        cx={p.sx}
+                                        cy={p.sy}
+                                        r={graphStyle.default.circle.radius}
+                                        fill={colorScale()(p.term)}
+                                        stroke="white"
+                                        opacity={isActiveMode() ? (inActiveRange(p) ? 1 : 0.25) : graphStyle.default.circle.opacity}
                                     />
                                 ))}
                             </g>
@@ -307,11 +356,11 @@ export default function DriftChart(props: Props) {
                 })()}
             </svg>
 
-            {/* LEGEND (EXTRACTED) */}
             <DriftLegend
                 terms={terms()}
                 visible={visibleTerms()}
                 onToggle={handleClick}
+                colorScale={colorScale()}
             />
         </article>
     );

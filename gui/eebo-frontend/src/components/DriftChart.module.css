@@ -39,6 +39,11 @@
     opacity: 90%;
 }
 
+.selectedTermPath {
+    stroke-width: 16pt;
+    outline: 0 !important;
+}
+
 .driftVoronoi {
     fill: transparent;
     pointer-events: all;
