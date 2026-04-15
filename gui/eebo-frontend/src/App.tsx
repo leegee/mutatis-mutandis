@@ -1,5 +1,5 @@
 import 'beercss';
-import { createMemo, Show, onMount, onCleanup } from "solid-js";
+import { createMemo, Show, onMount, onCleanup, Match, Switch } from "solid-js";
 
 import { data, eeboStore, setEeboStore, setNullSelected } from "./stores/Eebo.store";
 import DriftChart, { color } from "./components/DriftChart";
@@ -175,12 +175,33 @@ export default function App() {
         </div>
 
         <div class="s4">
-          <Show when={sliceView()}>
-            <aside class='surface-container-low' style={{ height: '100%' }}>
-              <SliceDensityField slice={sliceView()!} />
-            </aside>
-          </Show>
-
+          <aside class='surface-container-low center-align middle-align' style={{ height: '100%' }}>
+            <Switch>
+              <Match when={sliceView()}>
+                <SliceDensityField slice={sliceView()!} />
+              </Match>
+              <Match when={!sliceView()}>
+                <article class='border padding large-elevate'>
+                  <h1>EEBO Pamphlets</h1>
+                  <p>
+                    Embeddings created from all EEBO documents in the range 1625-1651 that has a token count in the range of 200-20,000,
+                    and whose title does not contain <code>tragedy|comedy|farce|interlude|play</code> and is not obvviously written in Latin.
+                  </p>
+                  <h2>Usage</h2>
+                  <p>
+                    Select a term via the checkboxes, which when single-clicked toggle the display of indivual terms,
+                    and when double-click show only that term.
+                  </p>
+                  <p>
+                    Once a term is selected, navigate time and terms using the cursor keys.
+                  </p>
+                  <p>
+                    Reset the view with <kbd>ESC</kbd>
+                  </p>
+                </article>
+              </Match>
+            </Switch>
+          </aside>
         </div>
       </div>
     </main >

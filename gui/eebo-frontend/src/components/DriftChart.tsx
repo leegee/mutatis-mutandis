@@ -341,7 +341,7 @@ export default function DriftChart(props: Props) {
                             <g>
                                 {g.pts.map(p => (
                                     <circle
-                                        class={p.term === eeboStore.selected.token ? styles.selectedTermNode : ''}
+                                        class={p.term === eeboStore.selected.token ? styles.selectedTermNode : isActiveMode() ? styles.nodeSelectedGroup : styles.nodeBar}
                                         cx={p.sx}
                                         cy={p.sy}
                                         r={graphStyle.default.circle.radius}
