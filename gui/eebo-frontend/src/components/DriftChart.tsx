@@ -281,12 +281,18 @@ export default function DriftChart(props: Props) {
     };
 
     return (
-        <article
-            classList={{
-                [styles.driftChartWrapper]: true,
-                [styles.dimmed]: eeboStore.selected.token !== null
-            }}
+        <article classList={{
+            [styles.driftChartWrapper]: true,
+            [styles.dimmed]: eeboStore.selected.token !== null
+        }}
         >
+            <DriftLegend
+                terms={terms()}
+                visible={visibleTerms()}
+                onToggle={handleClick}
+                colorScale={colorScale()}
+            />
+
             <Show when={tooltip()}>
                 <aside
                     class={styles.driftTooltip + ' surface-container-high'}
@@ -356,12 +362,6 @@ export default function DriftChart(props: Props) {
                 })()}
             </svg>
 
-            <DriftLegend
-                terms={terms()}
-                visible={visibleTerms()}
-                onToggle={handleClick}
-                colorScale={colorScale()}
-            />
         </article>
     );
 }

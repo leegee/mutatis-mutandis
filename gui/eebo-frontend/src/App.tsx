@@ -1,5 +1,5 @@
 import 'beercss';
-import { createMemo, Show, onMount, onCleanup, Match, Switch } from "solid-js";
+import { createMemo, onMount, onCleanup, Match, Switch } from "solid-js";
 
 import { data, eeboStore, setEeboStore, setNullSelected } from "./stores/Eebo.store";
 import DriftChart, { color } from "./components/DriftChart";
@@ -167,7 +167,7 @@ export default function App() {
   return (
     <main class="responsive max large-gap">
       <div class="grid" style={{ height: '100%' }}>
-        <div class="s8 surface-container padding">
+        <div class="s8 surface-container ">
           <DriftChart
             series={series()!}
             onSelectSlice={(d) => onSelectSlice(d)}
@@ -189,11 +189,11 @@ export default function App() {
                   </p>
                   <h2>Usage</h2>
                   <p>
-                    Select a term via the checkboxes, which when single-clicked toggle the display of indivual terms,
-                    and when double-click show only that term.
+                    Select a point on the term/time axis,
+                    then navigate time and terms using the cursor keys
                   </p>
                   <p>
-                    Once a term is selected, navigate time and terms using the cursor keys.
+                    Filter terms with the checkboxes: double-click the buttons to show only that term/toggle all term.
                   </p>
                   <p>
                     Reset the view with <kbd>ESC</kbd>

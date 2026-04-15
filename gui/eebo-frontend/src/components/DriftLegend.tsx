@@ -1,4 +1,4 @@
-import { For } from "solid-js";
+import { createSignal, For, Match, Show, Switch } from "solid-js";
 import type { ScaleOrdinal } from "d3-scale";
 
 import { eeboStore } from "../stores/Eebo.store";
@@ -12,17 +12,34 @@ type Props = {
 };
 
 export default function DriftLegend(props: Props) {
+    const [iAmOpen, setIAmOpen] = createSignal(true);
     return (
-        <header class={"responsive surface-container-high " + styles.driftLegend} >
-            <nav class="wrap small-padding">
+        <nav class={"m l left surface-container-high " + styles.driftLegend + ' ' + (
+            iAmOpen() ? 'max' : styles.driftLegendMin
+        )}>
+            {/* <header class={"surface-container-high " + styles.driftLegend} > */}
+            <header>
+                <button class="extra circle transparent" onclick={() => setIAmOpen(!iAmOpen())}>
+                    <Switch>
+                        <Match when={iAmOpen()}>
+                            <i>menu_open</i>
+                        </Match>
+                        <Match when={!iAmOpen()}>
+                            <i>menu</i>
+                        </Match>
+                    </Switch>
+                </button>
+            </header>
+
+            <Show when={iAmOpen()}>
                 <For each={props.terms}>
                     {(term) => (
-                        <label
+                        <button
                             style={
                                 "background-color:" + props.colorScale(term) + ' !important; ' +
                                 "color:" + props.colorScale(term) + ' !important; '
                             }
-                            class={"chip checkbox small small-padding " + (
+                            class={"chip checkbox small-padding " + (
                                 term === eeboStore.selected.token
                                     ? ('surface-container-highest large-elevate ' + String(styles.legendTerm) + ' ' + styles.selectedLegendTerm)
                                     : (' surface-container-high ' + String(styles.legendTerm))
@@ -34,10 +51,10 @@ export default function DriftLegend(props: Props) {
                         >
                             <input type="checkbox" checked={props.visible.has(term)} onChange={() => { }} />
                             <span> {term} </span>
-                        </label>
+                        </button>
                     )}
                 </For>
-            </nav>
-        </header >
+            </Show>
+        </nav >
     );
 };
