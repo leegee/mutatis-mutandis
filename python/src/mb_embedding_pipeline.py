@@ -52,7 +52,7 @@ from lib.eebo_config import (
 )
 from lib.mb_paths import vectors_path, faiss_slice_path
 from lib.eebo_sentences import stream_sentences_within_model_limit
-from lib.FaissIndex import FaissIndex as OccurrenceFaissIndex
+from lib.FaissIndex import FaissIndex
 
 SAVE_OCCURRENCE_VECTORS = os.getenv("SAVE_OCCURRENCE_VECTORS", "1") == "1"
 DEVICE: str
@@ -215,7 +215,7 @@ def process_sentence(
     batch_encoding: BatchEncoding,
     batch_index: int,
     token_occurrence_ids: list[int],
-    index: OccurrenceFaissIndex,
+    index: FaissIndex,
     embeddings_accum: Optional[dict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[dict[str, list[str]]],
 ) -> None:
@@ -287,7 +287,7 @@ def process_batch(
     batch: list,
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
-    index: OccurrenceFaissIndex,
+    index: FaissIndex,
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]],
     doc_ids_accum: Optional[DefaultDict[str, list[str]]],
 ) -> None:
@@ -442,7 +442,7 @@ def process_slice(
     model.eval()
 
     dim = model.config.hidden_size
-    index = OccurrenceFaissIndex(dim)
+    index = FaissIndex(dim)
     embeddings_accum: Optional[DefaultDict[str, list[np.ndarray]]] = defaultdict(list) if SAVE_OCCURRENCE_VECTORS else None
     doc_ids_accum: Optional[DefaultDict[str, list[str]]] = defaultdict(list) if SAVE_OCCURRENCE_VECTORS else None
 
@@ -474,7 +474,7 @@ def process_slice(
             process_batch(batch, model, tokenizer, index, embeddings_accum, doc_ids_accum )
             logger.info(f"Processed {processed_count} sentences (final)")
 
-    index.save(str(index_path))
+    index.save(index_path)
     logger.info(f"Saved FAISS index at {index_path}")
 
     if SAVE_OCCURRENCE_VECTORS and embeddings_accum is not None and doc_ids_accum is not None:
