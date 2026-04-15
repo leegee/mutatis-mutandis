@@ -14,7 +14,7 @@ class TokenIndexQuery:
     """
 
     def __init__(self, index_path: Path, token_list_path: Path):
-        self.index = TokenFaissIndex.load(str(index_path))
+        self.index = TokenFaissIndex.load(index_path)
         self.tokens = self._load_tokens(token_list_path)
 
         # critical invariant: 1:1 alignment
