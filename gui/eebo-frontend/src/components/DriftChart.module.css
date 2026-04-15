@@ -123,7 +123,7 @@
 }
 
 .selectedLegendTerm {
-    transform: scale(2);
+    transform: scale(1.2);
     z-index: 2;
     border: 0 !important;
     outline: 0 !important;
