@@ -2,6 +2,7 @@ from pathlib import Path
 import faiss
 import numpy as np
 from typing import Sequence, Tuple, cast, Protocol
+from lib.eebo_logging import logger
 
 
 class _FaissIndexProto(Protocol):
@@ -54,25 +55,49 @@ class FaissIndex:
         distances, indices = self._index.search(queries, k)
         return distances, indices
 
-    def save(self, path: str) -> None:
+    def save(self, path: Path) -> None:
         # invariant: index must remain IndexIDMap over IndexFlatIP
-        faiss.write_index(cast(faiss.Index, self._index), path)
+        faiss.write_index(cast(faiss.Index, self._index), str(path))
 
     @classmethod
-    def load(cls, path: str) -> "FaissIndex":
+    def load(cls, path: Path) -> "FaissIndex":
         if not Path(path).is_file():
             raise FileNotFoundError(f"Index file not found: {path}")
 
         obj = cls.__new__(cls)
-        obj._index = cast(_FaissIndexProto, faiss.read_index(path))
+        obj._index = cast(_FaissIndexProto, faiss.read_index(str(path)))
 
         # invariant: ID mapping must be preserved across persistence
         if not isinstance(obj._index, faiss.IndexIDMap):
             raise TypeError("Loaded FAISS index is not IndexIDMap (ID mode required)")
 
         # invariant: base index must be inner-product for cosine equivalence
-        base = obj._index.index
-        if not isinstance(base, faiss.IndexFlatIP):
-            raise TypeError("Underlying FAISS index must be IndexFlatIP")
+        def _unwrap_index(index):
+            seen = set()
+            while True:
+                if id(index) in seen:
+                    break
+                seen.add(id(index))
+
+                if hasattr(index, "index"):
+                    index = index.index
+                    continue
+                if hasattr(index, "base_index"):
+                    index = index.base_index
+                    continue
+
+                break
+            return index
+
+        base = _unwrap_index(obj._index)
+        # logger.info("metric_type: " + str(base.metric_type)) // 0
+
+        if not hasattr(base, "metric_type"):
+            raise TypeError(f"Cannot determine metric type for index: {type(base)}")
+
+        if base.metric_type != faiss.METRIC_INNER_PRODUCT:
+            raise TypeError(
+                f"FAISS index must use INNER_PRODUCT (cosine), got metric_type={base.metric_type}"
+            )
 
         return obj
