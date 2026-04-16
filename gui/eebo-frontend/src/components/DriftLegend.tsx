@@ -14,22 +14,32 @@ type Props = {
 export default function DriftLegend(props: Props) {
     const [iAmOpen, setIAmOpen] = createSignal(true);
     return (
-        <nav class={"m l left surface-container-high " + styles.driftLegend + ' ' + (
-            iAmOpen() ? 'max' : styles.driftLegendMin
-        )}>
-            {/* <header class={"surface-container-high " + styles.driftLegend} > */}
+        <nav class={"m l left " + styles.driftLegend + ' '
+            + (iAmOpen() ? 'max surface-container-high' : ' throbbing transparent ' + styles.driftLegendMin)
+        }>
             <header>
-                <button class="extra circle transparent" onclick={() => setIAmOpen(!iAmOpen())}>
-                    <Switch>
-                        <Match when={iAmOpen()}>
-                            <i>menu_open</i>
-                        </Match>
-                        <Match when={!iAmOpen()}>
-                            <i>menu</i>
-                        </Match>
-                    </Switch>
-                </button>
-            </header>
+                <h6 class="row max">
+                    <button
+                        class={
+                            "border extra circle transparent"
+                            + (iAmOpen() ? '' : ' throbbing')
+                        }
+                        onclick={() => setIAmOpen(!iAmOpen())}
+                    >
+                        <Switch>
+                            <Match when={iAmOpen()}>
+                                <i>menu_open</i>
+                            </Match>
+                            <Match when={!iAmOpen()}>
+                                <i>menu</i>
+                            </Match>
+                        </Switch>
+                    </button>
+                    <Show when={iAmOpen()}>
+                        Filters
+                    </Show>
+                </h6>
+            </header >
 
             <Show when={iAmOpen()}>
                 <For each={props.terms}>
