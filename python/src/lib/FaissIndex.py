@@ -46,6 +46,11 @@ class FaissIndex:
 
         self._index.add_with_ids(vectors, ids_arr)
 
+
+    def get_vector(index, vid: int):
+        return index._index.reconstruct(int(vid))
+
+
     def search(self, queries: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
         queries = np.ascontiguousarray(queries, dtype=np.float32)
 
@@ -55,9 +60,11 @@ class FaissIndex:
         distances, indices = self._index.search(queries, k)
         return distances, indices
 
+
     def save(self, path: Path) -> None:
         # invariant: index must remain IndexIDMap over IndexFlatIP
         faiss.write_index(cast(faiss.Index, self._index), str(path))
+
 
     @classmethod
     def load(cls, path: Path) -> "FaissIndex":

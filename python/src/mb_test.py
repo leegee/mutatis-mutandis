@@ -1,294 +1,360 @@
 #!/usr/bin/env python
 
+"""
+Compute semantic drift across time slices using optimal transport over
+occurrence-level neighbourhood distributions.
+
+Pipeline:
+
+1. For each token and time slice:
+   - Retrieve token_occurrence_ids from DB
+   - Map to vector positions via id-aligned vector store
+   - Query FAISS for local neighbourhoods per occurrence
+
+2. Build a weighted semantic cloud:
+   - X_accum: neighbour vectors
+   - w_accum: kernel-weighted similarities
+
+3. Compress cloud into a small measure:
+   - k-means-like clustering (OT_CLUSTERS)
+   - produces centroids + weights
+
+4. Compute drift:
+   - Wasserstein distance between consecutive slice measures
+
+5. Output per-slice:
+   - drift scalar
+   - top neighbors (aggregated mass)
+   - top documents
+   - compressed geometry (centroids + weights) for visualization
+
+Critical invariants:
+- FAISS IDs must equal token_occurrence_id
+- vectors.npz must be id-aligned with FAISS index
+- DB token_occurrence_id must match embedding pipeline
+
+Failure modes:
+- Missing slice data = empty_slice emitted
+- ID mismatch = neighbors silently dropped
+- No valid neighbors = zero drift
+"""
+
 import json
+import argparse
 import numpy as np
 from collections import Counter, defaultdict
-import hdbscan
+from dataclasses import dataclass
 
-from mb_embedding_pipeline import load_vectors
-from lib.js_divergence import js_divergence
+import ot
+from sklearn.metrics import pairwise_distances
+
+from mb_embedding_pipeline import load_id_vectors
 from lib.eebo_logging import logger
 from lib.FaissIndex import FaissIndex
 from lib.mb_paths import faiss_slice_path
 from lib.eebo_db import get_connection
-from lib.eebo_config import OUT_DIR, CONCEPT_SETS, SLICES
+from lib.eebo_config import OUT_DIR, SLICES, CONCEPT_SETS
 from lib.wordlist import STOPWORDS
 
-MIN_TOKENS = 30
 
-OUT_PATH = OUT_DIR / "drift_neighbors_micro_senses_slices.json"
+OUT_PATH = OUT_DIR / "drift_state.json"
 
 K_NEIGHBORS = 5
 TOP_K_NEIGHBORS = 15
+OT_CLUSTERS = 12   # controls geometry resolution
 
 _FAISS_CACHE = {}
-_CACHE_FILE = OUT_DIR / "token_occurrence_cache.json"
-_ID_CACHE = {}
+_VEC_CACHE = {}
+
+USE_KERNEL_DEFAULT = True
+KERNEL_ALPHA_DEFAULT = 6.0
 
 
+@dataclass
+class OTMeasure:
+    X: np.ndarray
+    w: np.ndarray
 
-# FAISS cache
+
+# IO
+
+def load_state():
+    if not OUT_PATH.exists():
+        return {}
+    with open(OUT_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_state(state):
+    with open(OUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+
+
+def norm_token(t: str) -> str:
+    return t.strip().lower()
+
+
+# FAISS / VECTOR ACCESS
+
 def get_faiss_index(slice_range):
     if slice_range in _FAISS_CACHE:
         return _FAISS_CACHE[slice_range]
 
-    path = str(faiss_slice_path(slice_range))
-    index = FaissIndex.load(path)
+    index = FaissIndex.load(str(faiss_slice_path(slice_range)))
     _FAISS_CACHE[slice_range] = index
     return index
 
 
+def get_vec_index(slice_id):
+    if slice_id in _VEC_CACHE:
+        return _VEC_CACHE[slice_id]
 
-# token lookup cache
-def lookup_token_occurrences(conn, ids):
+    vecs, id_to_pos, ids = load_id_vectors(slice_id)
+
+    _VEC_CACHE[slice_id] = (vecs, id_to_pos, ids)
+    return vecs, id_to_pos, ids
+
+
+# DB
+
+def get_token_occurrence_ids(conn, token, start, end):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT token_occurrence_id
+            FROM pamphlet_tokens
+            WHERE lower(token) = %s
+              AND pub_year >= %s
+              AND pub_year < %s
+        """, (token, start, end))
+        return [row[0] for row in cur.fetchall()]
+
+
+def lookup_token_metadata(conn, ids):
     if not ids:
-        return []
-
-    missing = [i for i in ids if i not in _ID_CACHE]
-
-    if missing:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT token_occurrence_id, token, canonical, doc_id, pub_year
-                FROM pamphlet_tokens
-                WHERE token_occurrence_id = ANY(%s)
-            """, (missing,))
-            rows = cur.fetchall()
-
-        for occ_id, token, canonical, doc_id, year in rows:
-            _ID_CACHE[occ_id] = (token, canonical, doc_id, year)
-
-    return [_ID_CACHE[i] for i in ids if i in _ID_CACHE]
-
-
-
-def cluster_dispersion(clusters, vecs, labels):
-    if len(vecs) == 0 or len(clusters) == 0:
-        return 0.0
-
-    variances = []
-
-    for c_id in range(len(clusters)):
-        members = vecs[labels == c_id]
-        if len(members) < 2:
-            continue
-
-        centroid = np.mean(members, axis=0)
-        diffs = np.linalg.norm(members - centroid, axis=1)
-        variances.append(np.mean(diffs))
-
-    return float(np.mean(variances)) if variances else 0.0
-
-# entropy
-def entropy_from_tokens(tokens):
-    counts = Counter(tokens)
-    total = sum(counts.values())
-    if total == 0:
-        return 0.0
-
-    p = np.array(list(counts.values()), dtype=float) / total
-    return float(-np.sum(p * np.log(p)))
-
-
-
-# normalize distribution
-
-def normalize_counts(counter: Counter):
-    total = sum(counter.values())
-    if total == 0:
         return {}
-    return {k: v / total for k, v in counter.items()}
+
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT token_occurrence_id, token, doc_id
+            FROM pamphlet_tokens
+            WHERE token_occurrence_id = ANY(%s)
+        """, (ids,))
+        rows = cur.fetchall()
+
+    return {i: (t, d) for i, t, d in rows}
 
 
+# OT
 
-# cluster inference (unchanged)
+def kernel_weights(similarities, alpha):
+    w = np.exp(alpha * (similarities - 1.0))
+    s = np.sum(w)
+    return w / s if s > 0 else np.ones_like(w) / len(w)
 
-def compute_clusters(slice_id, token):
-    data = load_vectors(slice_id)
-    vecs = data.get(token, [])
 
-    if not vecs:
-        return [], [], []
+def wasserstein_drift(m1: OTMeasure, m2: OTMeasure) -> float:
+    M = pairwise_distances(m1.X, m2.X, metric="cosine")
+    return float(ot.sinkhorn2(m1.w, m2.w, M, reg=0.05))
 
-    vecs = np.array(vecs, dtype=np.float32)
-    n = len(vecs)
 
-    if n < 15:
-        centroid = np.mean(vecs, axis=0)
-        norm = np.linalg.norm(centroid)
-        if norm != 0:
-            centroid = centroid / norm
-        return [centroid], vecs, [n]
+# OT COMPRESSION (CRITICAL FOR D3)
+def compress_measure(X, w, k=OT_CLUSTERS):
+    if len(X) <= k:
+        return X, w
 
-    clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=max(5, n // 200),
-        min_samples=None
-    )
+    idx = np.random.choice(len(X), k, replace=False)
+    centers = X[idx]
 
-    labels = clusterer.fit_predict(vecs)
+    for _ in range(5):
+        dists = pairwise_distances(X, centers, metric="cosine")
+        assign = dists.argmin(axis=1)
 
-    clusters = []
-    sizes = []
+        new_centers = []
+        new_weights = []
 
-    for label in set(labels):
-        if label == -1:
-            continue
-
-        members = vecs[labels == label]
-        if len(members) > 0:
-            centroid = np.mean(members, axis=0)
-            norm = np.linalg.norm(centroid)
-            if norm == 0:
+        for j in range(k):
+            mask = assign == j
+            if not np.any(mask):
                 continue
-            centroid = centroid / norm
 
-            clusters.append(centroid)
-            sizes.append(len(members))
+            wj = w[mask]
+            Xj = X[mask]
 
-    if not clusters:
-        centroid = np.mean(vecs, axis=0)
-        norm = np.linalg.norm(centroid)
-        if norm != 0:
-            centroid = centroid / norm
-        return [centroid], vecs, [n]
+            wsum = wj.sum()
+            center = (Xj * wj[:, None]).sum(axis=0) / wsum
 
-    return clusters, vecs, sizes
+            new_centers.append(center)
+            new_weights.append(wsum)
+
+        centers = np.array(new_centers)
+        weights = np.array(new_weights)
+
+    weights = weights / weights.sum()
+    return centers, weights
 
 
-
-
-def compute_drift_and_neighbors_clustered(token, conn):
+# CORE
+def compute_drift(token, conn, use_kernel, alpha):
     slices_data = []
-
-    prev_neighbor_dist = None
+    prev_measure = None
 
     for start, end in SLICES:
         sid = f"{start}-{end}"
+
         index = get_faiss_index((start, end))
+        vecs, id_to_pos, _ = get_vec_index(sid)
 
-        cluster_centroids, vecs, cluster_sizes = compute_clusters(sid, token)
+        occ_ids = get_token_occurrence_ids(conn, token, start, end)
 
-        if not cluster_centroids:
-            slices_data.append({
-                "slice_start": start,
-                "slice_end": end,
-                "n_clusters": 0,
-                "cluster_sizes": [],
+        positions = [id_to_pos[i] for i in occ_ids if i in id_to_pos]
 
-                "corpus_count": 0,
-                "support_count": 0,
-
-                "entropy": 0.0,
-                "top_neighbors": [],
-                "top_docs": [],
-
-                "drift": 0.0,
-                "js_divergence": 0.0
-            })
+        if not positions:
+            slices_data.append(empty_slice(start, end))
             continue
 
-
-        # retrieval-space accumulation
-        retrieval_map = defaultdict(lambda: {"support_count": 0, "sim_sum": 0.0})
-
-        # corpus-space approximation within slice context
-        corpus_counts = Counter()
+        X_accum = []
+        w_accum = []
+        neighbor_mass = defaultdict(float)
         doc_ids = []
 
-        for i, vec in enumerate(vecs):
-            distances, neighbor_ids = index.search(
-                vec.reshape(1, -1),
-                K_NEIGHBORS * 5
-            )
+        for i, pos in enumerate(positions):
+            vec = vecs[pos]
 
-            rows = lookup_token_occurrences(
-                conn,
-                neighbor_ids[0].tolist()
-            )
+            D, I = index.search(vec.reshape(1, -1), K_NEIGHBORS * 5)
+            neigh_ids = I[0]
+            sims = D[0]
 
-            if i < 10:
-                doc_ids.extend([doc for (_, _, doc, _) in rows])
+            meta = lookup_token_metadata(conn, neigh_ids.tolist())
 
-            for (tkn, _can, doc, _year), sim in zip(rows, distances[0]):
-                if tkn == token:
-                    continue
-                if tkn.lower() in STOPWORDS:
+            weights = kernel_weights(sims, alpha) if use_kernel else np.ones_like(sims) / len(sims)
+
+            for nid, w in zip(neigh_ids, weights):
+                if nid not in id_to_pos:
                     continue
 
-                corpus_counts[tkn] += 1
+                if nid not in meta:
+                    continue
 
-                m = retrieval_map[tkn]
-                m["support_count"] += 1
-                m["sim_sum"] += float(sim)
+                tkn, doc = meta[nid]
 
+                if tkn == token or tkn.lower() in STOPWORDS:
+                    continue
 
-        # distributions
+                neigh_vec = vecs[id_to_pos[nid]]
 
-        retrieval_counts = Counter({
-            t: v["support_count"]
-            for t, v in retrieval_map.items()
-        })
+                X_accum.append(neigh_vec)
+                w_accum.append(float(w))
 
-        curr_dist = normalize_counts(retrieval_counts)
+                neighbor_mass[tkn] += float(w)
 
+                if i < 10:
+                    doc_ids.append(doc)
 
-        # entropy (retrieval space)
+        if not w_accum:
+            curr_measure = None
+            centroids, masses = [], []
+        else:
+            X = np.array(X_accum, dtype=np.float32)
+            w = np.array(w_accum, dtype=np.float32)
+            w /= w.sum()
 
-        ent = entropy_from_tokens(list(retrieval_counts.elements()))
+            Xc, wc = compress_measure(X, w)
 
+            curr_measure = OTMeasure(X=Xc, w=wc)
 
-        # scored neighbors
+            centroids = Xc.tolist()
+            masses = wc.tolist()
 
-        scored_neighbors = []
+        drift = 0.0
+        if prev_measure is not None and curr_measure is not None:
+            drift = wasserstein_drift(prev_measure, curr_measure)
 
-        for t, v in retrieval_map.items():
-            support_count = v["support_count"]
-            sim_sum = v["sim_sum"]
+        prev_measure = curr_measure
 
-            score = sim_sum / np.sqrt(support_count) if support_count > 0 else 0.0
+        top_neighbors = sorted(
+            [{"token": t, "mass": v} for t, v in neighbor_mass.items()],
+            key=lambda x: -x["mass"]
+        )[:TOP_K_NEIGHBORS]
 
-            scored_neighbors.append({
-                "token": t,
-                "support_count": support_count,
-                "similarity": float(score)
-            })
-
-        scored_neighbors.sort(key=lambda x: -x["similarity"])
-        top_neighbors = scored_neighbors[:TOP_K_NEIGHBORS]
-
-
-        # JS divergence drift
-
-        drift_val = 0.0
-        if prev_neighbor_dist is not None:
-            drift_val = float(js_divergence(prev_neighbor_dist, curr_dist))
-
-        slice_entry = {
+        slices_data.append({
             "slice_start": start,
             "slice_end": end,
+            "drift": drift,
 
-            "count": int(sum(cluster_sizes)) if cluster_sizes else 0,
-
-            # strength of association in FAISS neighbourhood space
-            "support_mass": float(sim_sum / max(1.0, (count ** 0.5))),
-
-            # empirical neighbour distribution entropy
-            "entropy": float(entropy_from_tokens(neighbor_tokens)),
-
-            # embedding space coherence (cluster tightness)
-            "cluster_dispersion": float(cluster_dispersion(clusters, vecs, labels)),
-
-            "n_clusters": len(cluster_centroids),
-            "cluster_sizes": cluster_sizes,
-
-            "js_drift": float(js_divergence(prev_neighbor_dist, curr_dist)),
+            "corpus_count": len(positions),
+            "support_count": len(X_accum),
 
             "top_neighbors": top_neighbors,
-            "top_docs": Counter(doc_ids).most_common(5) if doc_ids else [],
-        }
+            "top_docs": Counter(doc_ids).most_common(5),
 
-        prev_neighbor_dist = curr_dist
-        slices_data.append(slice_entry)
+            # geometry for D3
+            "centroids": centroids,
+            "centroid_weights": masses,
+        })
 
-    slices_data.sort(key=lambda s: s["slice_start"])
     return slices_data
+
+
+def empty_slice(start, end):
+    return {
+        "slice_start": start,
+        "slice_end": end,
+        "drift": 0.0,
+        "corpus_count": 0,
+        "support_count": 0,
+        "top_neighbors": [],
+        "top_docs": [],
+        "centroids": [],
+        "centroid_weights": [],
+    }
+
+
+# PIPELINE
+def update_token(token, conn, state, use_kernel, alpha):
+    logger.info(f"token={token}")
+
+    result = compute_drift(token, conn, use_kernel, alpha)
+
+    state[token] = {
+        f"{r['slice_start']}-{r['slice_end']}": r
+        for r in result
+    }
+
+    return state
+
+
+def run_batch(tokens, conn, state, use_kernel, alpha):
+    for token in tokens:
+        state = update_token(norm_token(token), conn, state, use_kernel, alpha)
+    return state
+
+
+# ENTRY
+def main():
+    conn = get_connection()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("token", nargs="?", default=None)
+    parser.add_argument("--no-kernel", action="store_true")
+    parser.add_argument("--alpha", type=float, default=KERNEL_ALPHA_DEFAULT)
+
+    args = parser.parse_args()
+    use_kernel = USE_KERNEL_DEFAULT and not args.no_kernel
+
+    state = load_state()
+
+    if args.token:
+        state = update_token(norm_token(args.token), conn, state, use_kernel, args.alpha)
+    else:
+        state = run_batch(list(CONCEPT_SETS.keys()), conn, state, use_kernel, args.alpha)
+
+    save_state(state)
+
+    print(json.dumps({
+        "status": "ok",
+        "tokens": len(state)
+    }, indent=2))
+
+
+if __name__ == "__main__":
+    main()

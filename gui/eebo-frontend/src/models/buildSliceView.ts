@@ -1,23 +1,37 @@
-import type { Dataset, Slice, SliceView } from "../types";
+import type { Dataset, Slice, SliceView, TokenData } from "../types";
 import { buildSliceHistory, detectTransitions } from "../signals/sliceSignals";
+import SLICE_RANGES from "../services/SLICES.json";
 
 export function buildSliceView(
     token: string,
     slice: Slice,
     dataset: Dataset
 ): SliceView {
+
     const tokenData = dataset[token];
 
     const neighbors = slice.top_neighbors ?? [];
 
     const rank = new Map(
-        neighbors.map((n, i) => [n.token, i])
+        neighbors.map((n, i) => [n.token, { rank: i, mass: n.mass }])
     );
 
-    const history = buildSliceHistory(tokenData.slices);
-    const transitions = detectTransitions(history);
+    // keep aligned raw history (with nulls)
+    const rawHistory = SLICE_RANGES.map(([start, end]) => {
+        const key = `${start}-${end}`;
+        return tokenData?.[key as keyof TokenData] ?? null;
+    });
+
+    // build proper history points
+    const historyPoints = buildSliceHistory(rawHistory);
+
+    const detected = detectTransitions(historyPoints);
 
     const drift = slice.drift ?? 0;
+
+    const maxDrift = Math.max(
+        ...rawHistory.map(s => s?.drift ?? 0)
+    );
 
     return {
         token,
@@ -26,10 +40,11 @@ export function buildSliceView(
 
         neighbors,
         drift,
-        normalizedDrift: Math.min(1, drift / 5),
+        normalizedDrift: maxDrift > 0 ? drift / maxDrift : 0,
 
         rank,
-        history,
-        transitions
+
+        history: historyPoints,
+        transitions: detected
     };
 }

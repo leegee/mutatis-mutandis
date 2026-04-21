@@ -3,33 +3,41 @@ import { createMemo, onMount, onCleanup, Match, Switch } from "solid-js";
 
 import { data, eeboStore, setEeboStore, setNullSelected } from "./stores/Eebo.store";
 import DriftChart, { color } from "./components/DriftChart";
-import type { NamedSlicePoint, SlicePoint } from "./types";
+import type { Dataset, NamedSlicePoint, TokenData } from "./types";
 import { buildSliceView } from "./models/buildSliceView";
 import SliceDensityField from './components/SliceDensityField';
 import SLICE_RANGES from "./services/SLICES.json";
 
-export default function App() {
-  const series = createMemo(() => {
-    const d = data();
-    if (!d) return;
 
-    const out: Record<string, SlicePoint[]> = {};
+export default function App() {
+
+  const series = createMemo(() => {
+    let d;
+    try {
+      d = data();
+      if (!d) return;
+    } catch (e) {
+      console.log('Caught', e);
+      return;
+    }
+
+    const out: Record<string, Record<string, any>> = {};
 
     for (const token of Object.keys(d)) {
-      out[token] = d[token].slices.map(s => ({
-        ...s
-      }));
+      out[token] = d[token] ?? {};
     }
 
     return out;
   });
 
+
   const currentRange = createMemo(() => {
     return SLICE_RANGES[eeboStore.sliceIndex];
   });
 
+
   const sliceView = createMemo(() => {
-    const dataset = data();
+    const dataset: Dataset | undefined = data();
     const token = eeboStore.selected.token;
     const range = currentRange();
 
@@ -40,9 +48,8 @@ export default function App() {
     const tokenData = dataset[token];
     if (!tokenData) return;
 
-    const slice = tokenData.slices.find(
-      s => s.slice_start === sliceStart && s.slice_end === sliceEnd
-    );
+    const sliceKey = `${sliceStart}-${sliceEnd}`;
+    const slice = tokenData[sliceKey as keyof TokenData];
 
     if (!slice) return;
 
@@ -66,9 +73,9 @@ export default function App() {
       slice_end: d.slice_end,
       color: color(d.term) as string,
     });
+
     syncIndexToSlice(d);
   };
-
 
 
   const step = (dir: -1 | 1) => {
@@ -80,13 +87,14 @@ export default function App() {
     );
   };
 
+
   const stepTerm = (dir: -1 | 1) => {
     const s = series();
     const current = eeboStore.selected.token;
 
     if (!s || !current) return;
 
-    const list = Object.keys(s); // preserves DriftChart ordering
+    const list = Object.keys(s);
     const i = list.indexOf(current);
     if (i === -1) return;
 
@@ -94,19 +102,18 @@ export default function App() {
     if (!range) return;
 
     const [sliceStart, sliceEnd] = range;
+    const key = `${sliceStart}-${sliceEnd}`;
+
     const dataset = data();
     if (!dataset) return;
 
-    // scan to handle missing slices
     for (let j = i + dir; j >= 0 && j < list.length; j += dir) {
       const nextToken = list[j];
       const tokenData = dataset[nextToken];
+
       if (!tokenData) continue;
 
-      const slice = tokenData.slices.find(
-        s => s.slice_start === sliceStart && s.slice_end === sliceEnd
-      );
-
+      const slice = tokenData[key as keyof TokenData];
       if (!slice) continue;
 
       setEeboStore("selected", {
@@ -115,16 +122,17 @@ export default function App() {
         slice_end: sliceEnd,
         color: color(nextToken) as string,
       });
+
       break;
     }
   };
+
 
   onMount(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.repeat) return;
 
       if (e.key === "Escape") {
-        eeboStore.selected.token = null;
         setNullSelected();
         return;
       }
@@ -132,10 +140,6 @@ export default function App() {
       if (!eeboStore.selected.token) return;
 
       switch (e.key) {
-        case "Escape":
-          setNullSelected();
-          break;
-
         case "ArrowRight":
           step(1);
           e.preventDefault();
@@ -165,10 +169,12 @@ export default function App() {
     });
   });
 
+
   return (
     <main class="responsive max large-gap">
       <div class="grid" style={{ height: '100%' }}>
-        <div class="s8 surface-container ">
+
+        <div class="s8 surface-container">
           <DriftChart
             series={series()!}
             onSelectSlice={(d) => onSelectSlice(d)}
@@ -177,34 +183,48 @@ export default function App() {
 
         <div class="s4">
           <aside class='surface-container-low center-align middle-align' style={{ height: '100%' }}>
+
             <Switch>
               <Match when={sliceView()}>
                 <SliceDensityField slice={sliceView()!} />
               </Match>
+
               <Match when={!sliceView()}>
                 <article class='border padding large-elevate'>
                   <h1>EEBO Pamphlets</h1>
+
                   <p>
-                    Embeddings created from all EEBO documents in the range 1625-1651 that has a token count in the range of 200-20,000,
-                    and whose title does not contain <code>tragedy|comedy|farce|interlude|play</code> and is not obvviously written in Latin.
+                    Embeddings from EEBO pamphlets filtered by token count and genre constraints.
                   </p>
+
+                  <p>
+                    Horiztonal axis is chronological slice of the corpus.
+                  </p>
+                  <p>
+                    Vertical access is Jensen–Shannon divergence between consecutive slices for a given token.
+                  </p>
+
                   <h2>Usage</h2>
+
                   <p>
-                    Select a point on the term/time axis,
-                    then navigate time and terms using the cursor keys
+                    Select a point, then navigate time and terms using cursor keys.
                   </p>
+
                   <p>
-                    Filter terms with the checkboxes: double-click the buttons to show only that term/toggle all term.
+                    Filter terms via legend controls (double-click isolates term).
                   </p>
+
                   <p>
-                    Reset the view with <kbd>ESC</kbd>
+                    Reset view with <kbd>ESC</kbd>
                   </p>
                 </article>
               </Match>
             </Switch>
+
           </aside>
         </div>
+
       </div>
-    </main >
+    </main>
   );
 }

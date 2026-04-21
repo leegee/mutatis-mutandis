@@ -1,7 +1,7 @@
 import { createEffect, createSignal, createMemo, onCleanup, onMount, Show } from "solid-js";
 import * as d3 from "d3";
 
-import type { SlicePoint, NamedSlicePoint } from "../types";
+import type { SlicePoint } from "../types";
 import { eeboStore, setNullSelected } from "../stores/Eebo.store";
 import DriftLegend from "./DriftLegend";
 import styles from "./DriftChart.module.css";
@@ -9,44 +9,10 @@ import SLICE_RANGES from "../services/SLICES.json";
 
 export const color = d3.scaleOrdinal<string, string>();
 
-const graphStyle = {
-    default: {
-        container: {
-            margin: {
-                top: 5,
-                right: 5,
-                bottom: 5,
-                left: 5
-            }
-        },
-        line: {
-            width: 2,
-            opacity: 1,
-        },
-        circle: {
-            radius: 7,
-            opacity: 1,
-        }
-    },
-
-    solo: {
-        line: {
-            width: 1,
-            opacity: 0.5,
-        }
-    },
-
-    active: {
-        line: {
-            width: 1,
-            opacity: 0.5,
-        }
-    }
-};
-
-type ScreenPoint = NamedSlicePoint & {
+type ScreenPoint = SlicePoint & {
     sx: number;
     sy: number;
+    term: string;
 };
 
 type TooltipState = {
@@ -56,11 +22,11 @@ type TooltipState = {
 } | null;
 
 type Props = {
-    series: Record<string, SlicePoint[]>;
+    series: Record<string, Record<string, SlicePoint>>;
     width?: number;
     height?: number;
     onSelectSlice?: (d: ScreenPoint) => void;
-}
+};
 
 export default function DriftChart(props: Props) {
     let svgRef: SVGSVGElement | undefined;
@@ -83,31 +49,25 @@ export default function DriftChart(props: Props) {
         return SLICE_RANGES[eeboStore.sliceIndex];
     });
 
-    // Adaptive color scale
     const colorScale = createMemo(() => {
         const t = [...terms()].sort();
         const n = t.length;
 
-        // For small sets: best categorical palette
         if (n <= 10) {
             return d3.scaleOrdinal<string, string>()
                 .domain(t)
                 .range(d3.schemeTableau10);
         }
 
-        // For medium/large sets: evenly spaced hues (clipped Turbo)
         return d3.scaleOrdinal<string, string>()
             .domain(t)
-            .range(
-                t.map((_, i) =>
-                    d3.hsl((i * 360) / n, 0.65, 0.55).formatHex()
-                )
-            );
+            .range(t.map((_, i) =>
+                d3.hsl((i * 360) / n, 0.65, 0.55).formatHex()
+            ));
     });
 
-    const inActiveRange = (p: NamedSlicePoint) => {
+    const inActiveRange = (p: ScreenPoint) => {
         if (!isActiveMode()) return false;
-
         const r = activeRange();
         if (!r) return false;
 
@@ -115,7 +75,7 @@ export default function DriftChart(props: Props) {
         return p.slice_start >= a && p.slice_start <= b;
     };
 
-    const groupScore = (pts: NamedSlicePoint[]) => {
+    const groupScore = (pts: ScreenPoint[]) => {
         if (!isActiveMode()) return 0;
 
         const range = activeRange();
@@ -129,12 +89,6 @@ export default function DriftChart(props: Props) {
         }
 
         return hit / pts.length;
-    };
-
-    const toggleOne = (prev: Set<string>, term: string) => {
-        const next = new Set(prev);
-        next.has(term) ? next.delete(term) : next.add(term);
-        return next.size ? next : setAll();
     };
 
     let clickTimer: number | undefined;
@@ -155,7 +109,11 @@ export default function DriftChart(props: Props) {
         }
 
         clickTimer = window.setTimeout(() => {
-            setVisibleTerms(prev => toggleOne(prev, term));
+            setVisibleTerms(prev => {
+                const next = new Set(prev);
+                next.has(term) ? next.delete(term) : next.add(term);
+                return next.size ? next : setAll();
+            });
             clickTimer = undefined;
         }, 250);
     };
@@ -192,7 +150,19 @@ export default function DriftChart(props: Props) {
         for (const term of Object.keys(seriesMap)) {
             if (!vis.has(term)) continue;
 
-            for (const p of seriesMap[term]) {
+            const sliceMap = seriesMap[term];
+
+            // enforce chronological order
+            const orderedKeys = Object.keys(sliceMap)
+                .sort((a, b) => {
+                    const [aStart] = a.split("-").map(Number);
+                    const [bStart] = b.split("-").map(Number);
+                    return aStart - bStart;
+                });
+
+            for (const sliceKey of orderedKeys) {
+                const p = sliceMap[sliceKey];
+
                 out.push({
                     ...p,
                     term,
@@ -214,20 +184,14 @@ export default function DriftChart(props: Props) {
 
         const x = d3.scaleLinear()
             .domain(d3.extent(data, d => d.slice_start) as [number, number])
-            .range([
-                graphStyle.default.container.margin.left,
-                w -
-                graphStyle.default.container.margin.right
-            ]);
+            .range([5, w - 5]);
+
+        // stabilized Y scale for OT drift
+        const yMax = d3.max(data, d => d.drift) ?? 1;
 
         const y = d3.scaleLinear()
-            .domain(d3.extent(data, d => d.drift) as [number, number])
-            .nice()
-            .range([
-                h -
-                graphStyle.default.container.margin.bottom - graphStyle.default.circle.radius * 2,
-                graphStyle.default.container.margin.top + graphStyle.default.circle.radius * 2
-            ]);
+            .domain([0, yMax * 1.1])
+            .range([h - 5, 5]);
 
         const pts = data.map(d => ({
             ...d,
@@ -241,7 +205,7 @@ export default function DriftChart(props: Props) {
             d => d.sy
         );
 
-        const line = d3.line<NamedSlicePoint>()
+        const line = d3.line<ScreenPoint>()
             .x(d => x(d.slice_start))
             .y(d => y(d.drift))
             .curve(d3.curveMonotoneX);
@@ -265,11 +229,11 @@ export default function DriftChart(props: Props) {
     const handleLeave = () => setTooltip(null);
 
     const handleClickSvg = (event: MouseEvent) => {
-        if (eeboStore.selected.token) {
-            setNullSelected();
-        }
+        if (eeboStore.selected.token) setNullSelected();
+
         const g = geom();
         if (!g) return;
+
         setTooltip(null);
 
         const [mx, my] = d3.pointer(event);
@@ -284,8 +248,7 @@ export default function DriftChart(props: Props) {
         <article classList={{
             [styles.driftChartWrapper]: true,
             [styles.dimmed]: eeboStore.selected.token !== null
-        }}
-        >
+        }}>
             <DriftLegend
                 terms={terms()}
                 visible={visibleTerms()}
@@ -303,7 +266,7 @@ export default function DriftChart(props: Props) {
                 >
                     <h6>{tooltip()!.data.term}</h6>
                     <div>Year: {tooltip()!.data.slice_start}</div>
-                    <div>Drift: {tooltip()!.data.drift}</div>
+                    <div>Drift: {tooltip()!.data.drift.toFixed(4)}</div>
                 </aside>
             </Show>
 
@@ -318,7 +281,7 @@ export default function DriftChart(props: Props) {
                     const g = geom();
                     if (!g) return null;
 
-                    const groups = new Map<string, NamedSlicePoint[]>();
+                    const groups = new Map<string, ScreenPoint[]>();
 
                     for (const p of g.pts) {
                         if (!groups.has(p.term)) groups.set(p.term, []);
@@ -331,14 +294,17 @@ export default function DriftChart(props: Props) {
                                 {Array.from(groups.entries()).map(([term, pts]) => {
                                     const intensity = groupScore(pts);
 
+                                    // ensure ordered lines
+                                    const sorted = pts.slice()
+                                        .sort((a, b) => a.slice_start - b.slice_start);
+
                                     return (
                                         <path
-                                            class={term === eeboStore.selected.token ? styles.selectedTermPath : ''}
-                                            d={g.line(pts)!}
+                                            d={g.line(sorted)!}
                                             fill="none"
                                             stroke={colorScale()(term)}
-                                            stroke-width={isActiveMode() ? graphStyle.active.line.width + intensity * 3 : graphStyle.default.line.width}
-                                            opacity={isActiveMode() ? graphStyle.active.line.opacity + intensity * 0.8 : graphStyle.default.line.opacity}
+                                            stroke-width={isActiveMode() ? 1 + intensity * 3 : 2}
+                                            opacity={isActiveMode() ? 0.5 + intensity * 0.8 : 1}
                                         />
                                     );
                                 })}
@@ -347,13 +313,11 @@ export default function DriftChart(props: Props) {
                             <g>
                                 {g.pts.map(p => (
                                     <circle
-                                        class={p.term === eeboStore.selected.token ? styles.selectedTermNode : isActiveMode() ? styles.nodeSelectedGroup : styles.nodeBar}
                                         cx={p.sx}
                                         cy={p.sy}
-                                        r={graphStyle.default.circle.radius}
+                                        r={7}
                                         fill={colorScale()(p.term)}
-                                        stroke="white"
-                                        opacity={isActiveMode() ? (inActiveRange(p) ? 1 : 0.25) : graphStyle.default.circle.opacity}
+                                        opacity={isActiveMode() ? (inActiveRange(p) ? 1 : 0.25) : 1}
                                     />
                                 ))}
                             </g>
@@ -361,7 +325,6 @@ export default function DriftChart(props: Props) {
                     );
                 })()}
             </svg>
-
         </article>
     );
 }

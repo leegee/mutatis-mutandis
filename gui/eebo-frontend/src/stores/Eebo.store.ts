@@ -5,14 +5,15 @@ import { fetchTokenClusters } from "../services/tokenClustersService";
 
 let cached: Dataset | null = null;
 
+const JSON_PATH = "drift_state.json";
+
 export const OVERLAY_SIZE = {
     width: 300,
     height: 300
 };
 
-
 export const [data] = createResource<Dataset>(async () => {
-    cached ??= await fetchTokenClusters("drift_neighbors_micro_senses_slices.json");
+    cached ??= await fetchTokenClusters(JSON_PATH);
     return cached;
 });
 
