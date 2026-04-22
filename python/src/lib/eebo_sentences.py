@@ -14,7 +14,15 @@ from transformers import PreTrainedTokenizerBase
 from lib.eebo_logging import logger
 
 # simple sentence boundary detection
-SENTENCE_END_RE = re.compile(r'[.!?;:\-—…]$')
+SENTENCE_END_RE = re.compile(r'[.!?…]$')
+ABBREV = {"mr.", "dr.", "sr.", "jr.", "&c.", "etc."}
+
+def is_sentence_end(token: str) -> bool:
+    t = token.lower()
+    if t in ABBREV:
+        return False
+    return bool(SENTENCE_END_RE.search(token))
+
 
 def stream_sentences_within_model_limit(
     conn: Connection,
@@ -83,18 +91,24 @@ def stream_sentences_within_model_limit(
             if doc_id != current_doc:
                 # flush any remaining sentence first
                 if sentence_tokens:
-                    if buffer_len + sentence_len + special_tokens <= max_tokens:
-                        buffer_tokens.extend(sentence_tokens)
-                        buffer_ids.extend(sentence_ids)
-                        buffer_len += sentence_len
-                    else:
-                        result = flush_buffer()
-                        if result:
-                            yield result
-                        buffer_tokens.extend(sentence_tokens)
-                        buffer_ids.extend(sentence_ids)
-                        buffer_len = sentence_len
+                    if sentence_len + special_tokens > max_tokens:
+                        # pathological sentence: force split at token level
+                        for tok, occ in zip(sentence_tokens, sentence_ids):
+                            tok_len = token_subword_len(tok)
 
+                            if buffer_len + tok_len + special_tokens > max_tokens:
+                                result = flush_buffer()
+                                if result:
+                                    yield result
+
+                            buffer_tokens.append(tok)
+                            buffer_ids.append(occ)
+                            buffer_len += tok_len
+
+                        sentence_tokens.clear()
+                        sentence_ids.clear()
+                        sentence_len = 0
+                        continue
                     sentence_tokens.clear()
                     sentence_ids.clear()
                     sentence_len = 0
@@ -112,7 +126,7 @@ def stream_sentences_within_model_limit(
             sentence_len += tok_len
 
             # check if sentence ends
-            if SENTENCE_END_RE.search(token):
+            if is_sentence_end(token):
                 if buffer_len + sentence_len + special_tokens > max_tokens:
                     # flush buffer
                     result = flush_buffer()
