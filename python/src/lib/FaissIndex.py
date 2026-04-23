@@ -47,8 +47,12 @@ class FaissIndex:
         self._index.add_with_ids(vectors, ids_arr)
 
 
-    def get_vector(index, vid: int):
-        return index._index.reconstruct(int(vid))
+    # TODO not like this
+    def get_vector(self, vid: int) -> np.ndarray:
+        try:
+            return self._index.reconstruct(int(vid))
+        except RuntimeError:
+            raise KeyError(f"Vector ID {vid} not found in FAISS index")
 
 
     def search(self, queries: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:

@@ -1,21 +1,17 @@
 from collections.abc import Iterator
+from typing import List, Tuple
 from psycopg import Connection
 from transformers import PreTrainedTokenizerBase
-from typing import List, Tuple
 from lib.eebo_logging import logger
-
-SENTENCE_END_TOKENS = {".", "!", "?", ";"}  # basic sentence boundaries
 
 import re
-from collections.abc import Iterator
-from typing import List, Tuple
-from psycopg import Connection
-from transformers import PreTrainedTokenizerBase
-from lib.eebo_logging import logger
 
-# simple sentence boundary detection
+# invariant: sentence boundaries must be detected from token content only
 SENTENCE_END_RE = re.compile(r'[.!?…]$')
-ABBREV = {"mr.", "dr.", "sr.", "jr.", "&c.", "etc."}
+
+# invariant: abbreviations must not trigger sentence boundaries
+ABBREV = {"mr.", "dr.", "sr.", "jr.", "etc.", "&c.", "etc."}
+
 
 def is_sentence_end(token: str) -> bool:
     t = token.lower()
@@ -28,16 +24,12 @@ def stream_sentences_within_model_limit(
     conn: Connection,
     slice_range: tuple[int, int],
     tokenizer: PreTrainedTokenizerBase,
+    max_model_tokens: int,
     safety_margin: int = 64
 ) -> Iterator[Tuple[str, str, List[int]]]:
-    """
-    Yields (doc_id, text, token_occurrence_ids) where each chunk
-    respects tokenizer.model_max_length - safety_margin.
 
-    Sentences are detected using punctuation awareness, and subword
-    lengths are cached per token for efficiency.
-    """
-    max_tokens = tokenizer.model_max_length - safety_margin
+    # invariant: never rely on tokenizer.model_max_length
+    max_tokens = max_model_tokens - safety_margin
     special_tokens = tokenizer.num_special_tokens_to_add(pair=False)
 
     slice_start, slice_end = slice_range
@@ -64,9 +56,10 @@ def stream_sentences_within_model_limit(
         cur.execute(query, {"slice_start": slice_start, "slice_end": slice_end})
 
         current_doc = None
+
         buffer_tokens: List[str] = []
         buffer_ids: List[int] = []
-        buffer_len = 0  # subword length of buffer
+        buffer_len = 0
 
         sentence_tokens: List[str] = []
         sentence_ids: List[int] = []
@@ -83,89 +76,79 @@ def stream_sentences_within_model_limit(
             buffer_len = 0
             return current_doc, text, ids
 
-        for doc_id, token, occ_id in cur:
-            if current_doc is None:
-                current_doc = doc_id
+        def flush_sentence_into_buffer():
+            nonlocal sentence_tokens, sentence_ids, sentence_len
+            nonlocal buffer_tokens, buffer_ids, buffer_len
 
-            # doc boundary → flush buffer
-            if doc_id != current_doc:
-                # flush any remaining sentence first
-                if sentence_tokens:
-                    if sentence_len + special_tokens > max_tokens:
-                        # pathological sentence: force split at token level
-                        for tok, occ in zip(sentence_tokens, sentence_ids):
-                            tok_len = token_subword_len(tok)
+            if not sentence_tokens:
+                return
 
-                            if buffer_len + tok_len + special_tokens > max_tokens:
-                                result = flush_buffer()
-                                if result:
-                                    yield result
+            # pathological sentence → degrade to token-level packing
+            if sentence_len + special_tokens > max_tokens:
+                for tok, occ in zip(sentence_tokens, sentence_ids):
+                    tok_len = token_subword_len(tok)
 
-                            buffer_tokens.append(tok)
-                            buffer_ids.append(occ)
-                            buffer_len += tok_len
+                    if buffer_len + tok_len + special_tokens > max_tokens:
+                        result = flush_buffer()
+                        if result:
+                            yield result
 
-                        sentence_tokens.clear()
-                        sentence_ids.clear()
-                        sentence_len = 0
-                        continue
-                    sentence_tokens.clear()
-                    sentence_ids.clear()
-                    sentence_len = 0
+                    buffer_tokens.append(tok)
+                    buffer_ids.append(occ)
+                    buffer_len += tok_len
 
-                # flush buffer for previous doc
-                result = flush_buffer()
-                if result:
-                    yield result
-                current_doc = doc_id
-
-            # append token to current sentence
-            tok_len = token_subword_len(token)
-            sentence_tokens.append(token)
-            sentence_ids.append(occ_id)
-            sentence_len += tok_len
-
-            # check if sentence ends
-            if is_sentence_end(token):
+            else:
                 if buffer_len + sentence_len + special_tokens > max_tokens:
-                    # flush buffer
                     result = flush_buffer()
                     if result:
                         yield result
 
-                    buffer_tokens.extend(sentence_tokens)
-                    buffer_ids.extend(sentence_ids)
-                    buffer_len = sentence_len
-                else:
-                    buffer_tokens.extend(sentence_tokens)
-                    buffer_ids.extend(sentence_ids)
-                    buffer_len += sentence_len
+                buffer_tokens.extend(sentence_tokens)
+                buffer_ids.extend(sentence_ids)
+                buffer_len += sentence_len
 
-                sentence_tokens.clear()
-                sentence_ids.clear()
-                sentence_len = 0
+            sentence_tokens.clear()
+            sentence_ids.clear()
+            sentence_len = 0
 
-                # safety flush if buffer exceeds max_tokens
+        for doc_id, token, occ_id in cur:
+
+            if current_doc is None:
+                current_doc = doc_id
+
+            # invariant: doc boundary must flush all state
+            if doc_id != current_doc:
+                yield from flush_sentence_into_buffer()
+
+                result = flush_buffer()
+                if result:
+                    yield result
+
+                current_doc = doc_id
+
+            tok_len = token_subword_len(token)
+
+            sentence_tokens.append(token)
+            sentence_ids.append(occ_id)
+            sentence_len += tok_len
+
+            # early pathological detection
+            if sentence_len + special_tokens > max_tokens:
+                yield from flush_sentence_into_buffer()
+                continue
+
+            if is_sentence_end(token):
+                yield from flush_sentence_into_buffer()
+
                 if buffer_len + special_tokens > max_tokens:
                     result = flush_buffer()
                     if result:
                         yield result
 
-        # flush any remaining sentence
-        if sentence_tokens:
-            if buffer_len + sentence_len + special_tokens > max_tokens:
-                result = flush_buffer()
-                if result:
-                    yield result
-                buffer_tokens.extend(sentence_tokens)
-                buffer_ids.extend(sentence_ids)
-                buffer_len = sentence_len
-            else:
-                buffer_tokens.extend(sentence_tokens)
-                buffer_ids.extend(sentence_ids)
-                buffer_len += sentence_len
+        # flush trailing sentence
+        yield from flush_sentence_into_buffer()
 
-        # final flush
+        # final buffer flush
         result = flush_buffer()
         if result:
             yield result

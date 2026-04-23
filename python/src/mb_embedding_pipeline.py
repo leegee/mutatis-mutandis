@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import annotations
-from typing import Optional, List, Tuple, cast
+from typing import Optional, List, Tuple
 import os
 import gc
 from dataclasses import dataclass
@@ -95,21 +95,112 @@ def get_macberth_model() -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
     return TOKENIZER, MODEL
 
 
-def forward_batch(model, tokenizer, batch):
+
+def forward_single(model, tokenizer, text: str):
     enc = tokenizer(
-        batch,
+        text,
         return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=512,
+        truncation=False,
         return_offsets_mapping=True
     )
+
+    input_ids = enc["input_ids"]
+    max_len = model.config.max_position_embeddings
+
+    seq_len = input_ids.shape[1]
+
+    if seq_len > max_len:
+        raise ValueError(f"Sequence too long: {seq_len} > {max_len}")
 
     inputs = {k: v.to(get_device()) for k, v in enc.items() if k != "offset_mapping"}
     outputs = model(**inputs, output_hidden_states=True)
 
-    hidden = outputs.hidden_states[-1].detach().cpu().numpy()
-    return hidden, enc
+    hidden = outputs.hidden_states[-1][0].detach().cpu().numpy()
+    offsets = enc["offset_mapping"][0].tolist()
+
+    return hidden, offsets
+
+
+def process_single_sentence(
+    item: SentenceBatchItem,
+    model,
+    tokenizer
+):
+    text = item.sentence
+    tokens = text.split(" ")
+    occ_ids = item.token_occurrence_ids
+    max_len = model.config.max_position_embeddings
+
+    try:
+        hidden, offsets = forward_single(model, tokenizer, text)
+        return [(item, hidden, offsets)]
+    except ValueError as e:
+        first_id = occ_ids[0] if occ_ids else None
+        last_id  = occ_ids[-1] if occ_ids else None
+        logger.warning(
+            f"[doc_id={item.doc_id} occ={first_id}-{last_id}] "
+            f"{str(e)} | chars={len(text)}\n"
+            f"{text[:300]}"
+        )
+
+        chunks = []
+        chunk_tokens = []
+        chunk_ids = []
+
+        for tok, oid in zip(tokens, occ_ids, strict=Trie):
+            candidate_tokens = chunk_tokens + [tok]
+            candidate_text = " ".join(candidate_tokens)
+
+            test_ids = tokenizer(
+                candidate_text,
+                add_special_tokens=True
+            )["input_ids"]
+
+            if len(test_ids) > max_len:
+                if chunk_tokens:
+                    chunks.append((chunk_tokens, chunk_ids))
+                    chunk_tokens = [tok]
+                    chunk_ids = [oid]
+                else:
+                    # single token too large → force split at subword level
+                    sub_ids = tokenizer(tok, add_special_tokens=True)["input_ids"]
+
+                    if len(sub_ids) > max_len:
+                        raise ValueError(
+                            f"Single token explodes beyond model limit: '{tok}'"
+                        )
+
+                    chunks.append(([tok], [oid]))
+                    chunk_tokens = []
+                    chunk_ids = []
+            else:
+                chunk_tokens.append(tok)
+                chunk_ids.append(oid)
+
+        if chunk_tokens:
+            chunks.append((chunk_tokens, chunk_ids))
+
+        outputs = []
+
+        for toks, ids in chunks:
+            sub_text = " ".join(toks)
+
+            # HARD GUARD before model call
+            test_ids = tokenizer(sub_text, add_special_tokens=True)["input_ids"]
+            if len(test_ids) > max_len:
+                raise ValueError(
+                    f"Chunk still too large after splitting: {len(test_ids)} > {max_len}"
+                )
+
+            hidden, offsets = forward_single(model, tokenizer, sub_text)
+
+            outputs.append((
+                SentenceBatchItem(item.doc_id, sub_text, ids),
+                hidden,
+                offsets
+            ))
+
+        return outputs
 
 
 def process_token_batch(
@@ -120,37 +211,56 @@ def process_token_batch(
     vecs_accum: List[np.ndarray],
     ids_accum: List[int],
 ):
-    sentences = [b.sentence for b in batch]
+    results = []
 
-    hidden, enc = forward_batch(model, tokenizer, sentences)
+    for item in batch:
+        results.extend(process_single_sentence(item, model, tokenizer))
 
-    input_ids = enc["input_ids"]
-    offsets = enc["offset_mapping"]
+    for item, token_vecs, offsets_i in results:
 
-    for b_i, item in enumerate(batch):
-
-        toks = input_ids[b_i].tolist()
+        text = item.sentence
         occ_ids = item.token_occurrence_ids
 
-        token_vecs = hidden[b_i]
+        tokens = text.split(" ")
+        spans = []
 
-        # HARD ALIGNMENT INVARIANT:
-        # one vector per occurrence ID
-        n = min(len(toks), len(occ_ids), len(token_vecs))
+        cursor = 0
+        for tok in tokens:
+            start = cursor
+            end = start + len(tok)
+            spans.append((start, end))
+            cursor = end + 1
 
-        for i in range(n):
-            vec = token_vecs[i]
-            vid = occ_ids[i]
+        if len(spans) != len(occ_ids):
+            raise ValueError("Token/span mismatch")
 
+        token_to_vecs = [[] for _ in spans]
+
+        for sub_idx, (start, end) in enumerate(offsets_i):
+            if start == end:
+                continue
+
+            for tok_idx, (t_start, t_end) in enumerate(spans):
+                if start >= t_start and end <= t_end:
+                    token_to_vecs[tok_idx].append(token_vecs[sub_idx])
+                    break
+
+        for tok_idx, occ_id in enumerate(occ_ids):
+            sub_vecs = token_to_vecs[tok_idx]
+
+            if not sub_vecs:
+                raise ValueError(f"No vectors for token {occ_id}")
+
+            vec = np.mean(sub_vecs, axis=0)
             v = normalize(vec)
             if v is None:
                 continue
 
-            index.add(v.reshape(1, -1), [vid])
+            index.add(v.reshape(1, -1), [occ_id])
 
             if SAVE_OCCURRENCE_VECTORS:
                 vecs_accum.append(v)
-                ids_accum.append(vid)
+                ids_accum.append(occ_id)
 
     batch.clear()
     gc.collect()
@@ -167,13 +277,12 @@ def process_slice(conn, slice_range, batch_size=128):
     vecs_accum: List[np.ndarray] = []
     ids_accum: List[int] = []
 
-    stream = stream_sentences_within_model_limit(conn, slice_range, tokenizer)
+    stream = stream_sentences_within_model_limit(conn, slice_range, tokenizer, model.config.max_position_embeddings)
 
     batch: List[SentenceBatchItem] = []
 
     with torch.no_grad():
         for doc_id, sent, occ_ids in stream:
-
             batch.append(SentenceBatchItem(doc_id, sent, occ_ids))
 
             if len(batch) >= batch_size:
@@ -181,6 +290,9 @@ def process_slice(conn, slice_range, batch_size=128):
 
         if batch:
             process_token_batch(batch, model, tokenizer, index, vecs_accum, ids_accum)
+
+    if SAVE_OCCURRENCE_VECTORS and len(ids_accum) != index._index.ntotal:
+        raise ValueError("FAISS size mismatch")
 
     index.save(faiss_slice_path(slice_range))
 

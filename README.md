@@ -261,3 +261,8 @@ Detect whether model fine-tuning is introducing artificial drift.
 
 Port dash/plotly to Solid/d3 feeding on `mb_test.py` (to be renamed)
 
+OT not JD,
+
+Fix:
+
+  <SEG REND="decorInit">I</SEG>F
