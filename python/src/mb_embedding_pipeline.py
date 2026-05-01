@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Optional, List, Tuple
 import os
+import re
 from dataclasses import dataclass
 
 import numpy as np
@@ -33,11 +34,9 @@ MODEL: Optional[PreTrainedModel] = None
 _DEVICE: Optional[str] = None
 
 
-# sliding window avoids truncation loss at 512
 WINDOW_SIZE = 384
 WINDOW_STRIDE = 256
 
-# CPU-friendly batching
 TOKEN_BUDGET = 12000
 
 
@@ -88,12 +87,47 @@ def get_macberth_model() -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
     return TOKENIZER, MODEL
 
 
-def forward_batch(model, tokenizer, sentences: List[str]):
+def get_valid_subwords(offsets):
+    # removes special tokens like [CLS], [SEP]
+    return [
+        (i, s, e)
+        for i, (s, e) in enumerate(offsets)
+        if not (s == 0 and e == 0)
+    ]
+
+
+def build_token_spans(text: str):
+    return [
+        (m.start(), m.end())
+        for m in re.finditer(r"\S+", text)
+    ]
+
+
+def overlaps(a_s, a_e, b_s, b_e):
+    return not (a_e <= b_s or a_s >= b_e)
+
+
+def map_tokens_to_subwords(text, offsets):
+    spans = build_token_spans(text)
+    valid_subwords = get_valid_subwords(offsets)
+
+    token_to_subwords = [[] for _ in spans]
+
+    for sub_i, s, e in valid_subwords:
+        for t_i, (ts, te) in enumerate(spans):
+            if overlaps(s, e, ts, te):
+                token_to_subwords[t_i].append(sub_i)
+                break
+
+    return token_to_subwords, spans
+
+
+def forward_batch(device, model, tokenizer, sentences: List[str]):
     enc = tokenizer(
         sentences,
         return_tensors="pt",
         padding=True,
-        truncation=True,     # safe because windowing guarantees fit
+        truncation=True,
         max_length=512,
         return_offsets_mapping=True
     )
@@ -102,11 +136,10 @@ def forward_batch(model, tokenizer, sentences: List[str]):
     input_ids = enc["input_ids"]
     attention_mask = enc["attention_mask"]
 
-    inputs = {k: v.to(get_device()) for k, v in enc.items() if k != "offset_mapping"}
+    inputs = {k: v.to(device) for k, v in enc.items() if k != "offset_mapping"}
 
     outputs = model(**inputs, output_hidden_states=True)
 
-    # invariant: representation space defined here only
     layers = outputs.hidden_states
     mixed = torch.stack(layers[2:-2], dim=0).mean(dim=0)
 
@@ -116,6 +149,7 @@ def forward_batch(model, tokenizer, sentences: List[str]):
 
 
 def process_token_batch(
+    device,
     batch: List[SentenceBatchItem],
     model,
     tokenizer,
@@ -126,54 +160,44 @@ def process_token_batch(
     sentences = [b.sentence for b in batch]
 
     hidden, offsets, input_ids, attention_mask = forward_batch(
-        model, tokenizer, sentences
+        device, model, tokenizer, sentences
     )
 
     special_ids = set(tokenizer.all_special_ids)
 
     for b_i, item in enumerate(batch):
         text = item.sentence
-        keys = item.token_keys
+        keys = item.token_keys  # (doc_id, token_idx, vector_id)
 
         if not keys:
             continue
 
-        spans = []
-        cursor = 0
-        tokens = text.split(" ")
-
-        for tok in tokens:
-            start = cursor
-            end = start + len(tok)
-            spans.append((start, end))
-            cursor = end + 1
+        # OFFSET-DRIVEN ALIGNMENT (single source of truth)
+        token_to_subwords, spans = map_tokens_to_subwords(
+            text,
+            offsets[b_i].tolist()
+        )
 
         token_vecs = hidden[b_i]
-        token_offsets = offsets[b_i].tolist()
         ids = input_ids[b_i].tolist()
         mask = attention_mask[b_i].tolist()
 
-        token_to_subwords = [[] for _ in spans]
-
-        for sub_i, ((s, e), tok_id, m) in enumerate(zip(token_offsets, ids, mask)):
-            if m == 0 or tok_id in special_ids or s == e:
-                continue
-
-            for t_i, (ts, te) in enumerate(spans):
-                if not (e <= ts or s >= te):
-                    token_to_subwords[t_i].append(sub_i)
-                    break
-
+        # VECTOR CONSTRUCTION + FAISS INSERT
         for i, (_, _, vector_id) in enumerate(keys):
             sub_idxs = token_to_subwords[i]
+
             if not sub_idxs:
                 continue
 
-            vec = normalize(np.mean([token_vecs[j] for j in sub_idxs], axis=0))
+            vec = normalize(
+                np.mean([token_vecs[j] for j in sub_idxs], axis=0)
+            )
+
             if vec is None:
                 continue
 
             vector_id = int(vector_id)
+
             index.add(vec.reshape(1, -1), [vector_id])
 
             if SAVE_OCCURRENCE_VECTORS:
@@ -181,12 +205,12 @@ def process_token_batch(
                 ids_accum.append(vector_id)
 
 
-
 def stream_for_embedding(conn):
     """
+    vector_id is the ONLY identity layer.
+
     Invariant:
-        tokens.vector_id is the stable identity.
-        Ordering is irrelevant for identity, only for batching.
+        tokens.vector_id must be pre-populated before embedding.
     """
 
     with conn.cursor(name="eebo_stream") as cur:
@@ -198,7 +222,7 @@ def stream_for_embedding(conn):
                 token_idx,
                 token,
                 vector_id
-            FROM tokens
+            FROM pamphlet_tokens
             ORDER BY doc_id, token_idx;
         """)
 
@@ -262,7 +286,8 @@ def process_slice(conn, slice_range):
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
 
     tokenizer, model = get_macberth_model()
-    model.to(get_device())
+    device = get_device()
+    model.to(device)
 
     index = FaissIndex(model.config.hidden_size)
 
@@ -274,8 +299,11 @@ def process_slice(conn, slice_range):
     with torch.no_grad():
         for batch in batch_stream(stream):
             process_token_batch(
-                batch, model, tokenizer, index, vecs_accum, ids_accum
+                device, batch, model, tokenizer, index, vecs_accum, ids_accum
             )
+
+    if SAVE_OCCURRENCE_VECTORS and len(set(ids_accum)) != len(ids_accum):
+        raise ValueError("Duplicate vector_id in accumulation buffer")
 
     index.save(faiss_slice_path(slice_range))
 
