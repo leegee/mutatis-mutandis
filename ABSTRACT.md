@@ -6,7 +6,7 @@ PhD Proposal, Digital Humanities / History of Ideas
 
 This project traces the evolution of moral, political, and legal vocabulary in early modern England by combining computational modelling with interpretive close reading. Building on the frameworks of Quentin Skinner, Reinhart Koselleck, and Ryan Heuser, it investigates the semantic drift of key conceptual poles—pairs of historically contingent opposites such as liberty / authority and conscience / obedience—across the pamphlet literature of the seventeenth century.
 
-Using diachronic distributional semantics and orthological mapping, the project renders shifts in meaning empirically visible, while close reading interprets their rhetorical and ideological significance. By situating these shifts within Alan Sinfield’s notion of ideological faultlines, the project aims to illuminate how concepts were repurposed, contested, and secularised under conditions of social and institutional strain, contributing to the emergence of modern English secular law and political discourse.
+Using diachronic distributional semantics, orthological mapping over a constructed occurance topology of EEBO pamphlets, the project renders shifts in meaning empirically visible, while close reading interprets their rhetorical and ideological significance. By situating these shifts within Alan Sinfield’s notion of ideological faultlines, the project aims to illuminate how concepts were repurposed, contested, and secularised under conditions of social and institutional strain, contributing to the emergence of modern English secular law and political discourse.
 
 The methodology combines:
 
