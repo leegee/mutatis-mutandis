@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 import os
-import re
-from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -33,16 +31,8 @@ TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
 _DEVICE: Optional[str] = None
 
-WINDOW_SIZE = 384
-WINDOW_STRIDE = WINDOW_SIZE
-TOKEN_BUDGET = 12000
-
-
-@dataclass
-class SentenceBatchItem:
-    doc_id: str
-    sentence: str
-    token_keys: List[Tuple[str, int, int]]  # (doc_id, token_idx, vector_id)
+WINDOW_SIZE = 512
+WINDOW_STRIDE = 256
 
 
 def get_device() -> str:
@@ -85,167 +75,91 @@ def get_macberth_model() -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
     return TOKENIZER, MODEL
 
 
-def get_valid_subwords(offsets):
-    # removes special tokens like [CLS], [SEP]
-    return [
-        (i, s, e)
-        for i, (s, e) in enumerate(offsets)
-        if not (s == 0 and e == 0)
-    ]
+
+# STRICT ALIGNMENT
 
 
-def build_token_spans(text: str):
-    return [
-        (m.start(), m.end())
-        for m in re.finditer(r"\S+", text)
-    ]
-
-
-def overlaps(a_s, a_e, b_s, b_e):
-    return not (a_e <= b_s or a_s >= b_e)
-
-
-def map_tokens_to_subwords(text, offsets):
-    spans = build_token_spans(text)
-    valid_subwords = get_valid_subwords(offsets)
-
-    token_to_subwords = [[] for _ in spans]
-
-    for sub_i, s, e in valid_subwords:
-        for t_i, (ts, te) in enumerate(spans):
-            if overlaps(s, e, ts, te):
-                token_to_subwords[t_i].append(sub_i)
-                break
-
-    return token_to_subwords, spans
-
-
-def forward_batch(device, model, tokenizer, sentences: List[str]):
-    enc = tokenizer(
-        sentences,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=512,
-        return_offsets_mapping=True
-    )
-
-    offsets = enc["offset_mapping"]
-    input_ids = enc["input_ids"]
-    attention_mask = enc["attention_mask"]
-
-    inputs = {k: v.to(device) for k, v in enc.items() if k != "offset_mapping"}
-
-    outputs = model(**inputs, output_hidden_states=True)
-
-    layers = outputs.hidden_states
-    mixed = torch.stack(layers[2:-2], dim=0).mean(dim=0)
-
-    hidden = mixed.detach().cpu().numpy()
-
-    return hidden, offsets, input_ids, attention_mask
-
-
-def process_token_batch(
-    device,
-    batch: List[SentenceBatchItem],
-    model,
-    tokenizer,
-    index,
-    vecs_accum,
-    ids_accum,
-):
-    sentences = [b.sentence for b in batch]
-
-    hidden, offsets, input_ids, attention_mask = forward_batch(
-        device, model, tokenizer, sentences
-    )
-
-    special_ids = set(tokenizer.all_special_ids)
-
-    for b_i, item in enumerate(batch):
-        text = item.sentence
-        keys = item.token_keys  # (doc_id, token_idx, vector_id)
-
-        if not keys:
-            continue
-
-        # OFFSET-DRIVEN ALIGNMENT (single source of truth)
-        token_to_subwords, spans = map_tokens_to_subwords(
-            text,
-            offsets[b_i].tolist()
-        )
-
-        token_vecs = hidden[b_i]
-        ids = input_ids[b_i].tolist()
-        mask = attention_mask[b_i].tolist()
-
-        # VECTOR CONSTRUCTION + FAISS INSERT
-        for i, (_, _, vector_id) in enumerate(keys):
-            sub_idxs = token_to_subwords[i]
-
-            if not sub_idxs:
-                continue
-
-            vec = normalize(
-                np.mean([token_vecs[j] for j in sub_idxs], axis=0)
-            )
-
-            if vec is None:
-                continue
-
-            vector_id = int(vector_id)
-
-            index.add(vec.reshape(1, -1), [vector_id])
-
-            if SAVE_OCCURRENCE_VECTORS:
-                vecs_accum.append(vec)
-                ids_accum.append(vector_id)
-
-
-def stream_for_embedding(conn):
+def build_db_token_spans(text: str, tokens: List[str]) -> List[Tuple[int, int]]:
     """
-    vector_id is the ONLY identity layer.
+    Deterministic span reconstruction.
 
     Invariant:
-        tokens.vector_id must be pre-populated before embedding.
+    - tokens must appear sequentially in text with monotonic offsets
+    - any deviation is treated as a hard failure
+    """
+    spans: List[Tuple[int, int]] = []
+    cursor = 0
+
+    for tok in tokens:
+        idx = text.find(tok, cursor)
+
+        if idx == -1:
+            raise ValueError(f"Token not found in text at cursor={cursor}: {tok!r}")
+
+        if idx < cursor:
+            raise ValueError(f"Non-monotonic alignment for token={tok!r}")
+
+        spans.append((idx, idx + len(tok)))
+        cursor = idx + len(tok)
+
+    return spans
+
+
+def map_subwords_to_db_tokens(
+    offsets: List[Tuple[int, int]],
+    db_spans: List[Tuple[int, int]]
+) -> Dict[int, List[int]]:
+    """
+    Linear-time mapping: O(S + T)
+
+    Assumes:
+    - offsets sorted by subword index
+    - db_spans sorted by token index
+    - both are monotonic in character space (true if reconstruction is consistent)
     """
 
-    with conn.cursor(name="eebo_stream") as cur:
-        cur.itersize = 10_000
+    mapping: Dict[int, List[int]] = {i: [] for i in range(len(db_spans))}
 
-        cur.execute("""
-            SELECT
-                doc_id,
-                token_idx,
-                token,
-                vector_id
-            FROM pamphlet_tokens
-            ORDER BY doc_id, token_idx;
-        """)
+    t = 0  # pointer into db_spans
+    T = len(db_spans)
 
-        current_doc = None
-        buffer = []
+    for sub_i, (s, e) in enumerate(offsets):
 
-        for doc_id, token_idx, token_text, vector_id in cur:
-            if vector_id is None:
-                raise ValueError(f"Missing vector_id for {doc_id}:{token_idx}")
+        if s == 0 and e == 0:
+            continue
 
-            if doc_id != current_doc and buffer:
-                yield from _emit_windows(current_doc, buffer)
-                buffer.clear()
+        # advance db pointer until span could overlap
+        while t < T and db_spans[t][1] <= s:
+            t += 1
 
-            current_doc = doc_id
-            buffer.append((token_idx, token_text, vector_id))
+        # check current and next few tokens only (usually 1–2)
+        probe = t
 
-        if buffer:
-            yield from _emit_windows(current_doc, buffer)
+        while probe < T and db_spans[probe][0] < e:
+            ts, te = db_spans[probe]
+
+            overlap = max(0, min(e, te) - max(s, ts))
+
+            if overlap > 0:
+                mapping[probe].append(sub_i)
+
+            probe += 1
+
+            # early exit if we've passed the subword range
+            if ts > e:
+                break
+
+    return mapping
+
+
+# EMBEDDING CORE
 
 
 def embed_document(
     device,
     doc_id: str,
     text: str,
+    tokens: List[str],
     vector_keys,
     model,
     tokenizer,
@@ -253,41 +167,46 @@ def embed_document(
     vecs_accum,
     ids_accum,
 ):
-    """
-    Option B core:
-    full document → model → hidden states → window in embedding space
-    """
-
-    hidden, offsets, input_ids, attention_mask = forward_batch(
-        device, model, tokenizer, [text]
+    enc = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=WINDOW_SIZE,
+        stride=WINDOW_STRIDE,
+        return_overflowing_tokens=True,
+        return_offsets_mapping=True,
+        padding=True,
     )
 
-    hidden = hidden[0]
-    offsets = offsets[0].tolist()
+    input_ids = enc["input_ids"].to(device)
+    attention_mask = enc["attention_mask"].to(device)
+    offsets = enc["offset_mapping"]
 
-    special_ids = set(tokenizer.all_special_ids)
+    outputs = model(
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+        output_hidden_states=True,
+    )
 
-    token_to_subwords, _ = map_tokens_to_subwords(text, offsets)
+    hidden = torch.stack(outputs.hidden_states[2:-2], dim=0).mean(dim=0)
+    hidden = hidden.detach().cpu().numpy()
 
-    # FULL-DOCUMENT EMBEDDING SPACE WINDOWING
-    n_tokens = len(vector_keys)
-    start = 0
+    db_spans = build_db_token_spans(text, tokens)
 
-    while start < n_tokens:
-        end = min(start + WINDOW_SIZE, n_tokens)
+    for w_i in range(len(hidden)):
+        window_hidden = hidden[w_i]
+        window_offsets = offsets[w_i].tolist()
 
-        window_keys = vector_keys[start:end]
+        subword_map = map_subwords_to_db_tokens(window_offsets, db_spans)
 
-        window_vecs = []
+        for tok_i, (_, _, vector_id) in enumerate(vector_keys):
 
-        for i, (_, _, vector_id) in enumerate(window_keys):
-            sub_idxs = token_to_subwords[start + i] if (start + i) < len(token_to_subwords) else []
-
+            sub_idxs = subword_map.get(tok_i)
             if not sub_idxs:
                 continue
 
             vec = normalize(
-                np.mean([hidden[j] for j in sub_idxs], axis=0)
+                np.mean([window_hidden[j] for j in sub_idxs], axis=0)
             )
 
             if vec is None:
@@ -301,86 +220,14 @@ def embed_document(
                 vecs_accum.append(vec)
                 ids_accum.append(vector_id)
 
-        if end == n_tokens:
-            break
-
-        start += WINDOW_STRIDE
 
 
-def _emit_windows(doc_id, tokens):
-    """
-    tokens: List[(token_idx, token_text, vector_id)]
-
-    Character-based windowing with strict token assignment.
-
-    Invariants:
-    - Each token is emitted exactly once
-    - Window text matches tokenizer offsets
-    - Token→window assignment is based on span midpoint
-
-    To do:
-    - Semantic awareness (sentence and clauses)
-    """
-
-    # reconstruct full text
-    text_tokens = [t[1] for t in tokens]
-    vector_keys = [(doc_id, t[0], t[2]) for t in tokens]
-
-    text = " ".join(text_tokens)
-
-    # build spans once (global coordinate system)
-    spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
-
-    assert len(spans) == len(vector_keys), "span/token mismatch"
-
-    n_chars = len(text)
-
-    start = 0
-
-    while start < n_chars:
-        end = min(start + WINDOW_SIZE, n_chars)
-
-        window_text = text[start:end]
-
-        window_keys = []
-
-        for i, (s, e) in enumerate(spans):
-            # assign token to window by midpoint (prevents duplication)
-            mid = (s + e) // 2
-
-            if start <= mid < end:
-                window_keys.append(vector_keys[i])
-
-        if window_keys:
-            yield doc_id, window_text, window_keys
-
-        if end == n_chars:
-            break
-
-        start += WINDOW_STRIDE
-
-
-def batch_stream(stream):
-    batch = []
-    token_count = 0
-
-    for doc_id, text, keys in stream:
-        n_tokens = len(keys)
-
-        if batch and token_count + n_tokens > TOKEN_BUDGET:
-            yield batch
-            batch = []
-            token_count = 0
-
-        batch.append(SentenceBatchItem(doc_id, text, keys))
-        token_count += n_tokens
-
-    if batch:
-        yield batch
+# PIPELINE
 
 
 def process_slice(conn, slice_range):
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
+    logger.info(f"[SLICE START] {slice_id}")
 
     tokenizer, model = get_macberth_model()
     device = get_device()
@@ -391,15 +238,32 @@ def process_slice(conn, slice_range):
     vecs_accum = []
     ids_accum = []
 
+    def flush_doc(doc_id, buffer):
+        if not buffer:
+            return
+
+        tokens = [t[1] for t in buffer]
+        vector_keys = [(doc_id, t[0], t[2]) for t in buffer]
+        text = " ".join(tokens)
+
+        embed_document(
+            device,
+            doc_id,
+            text,
+            tokens,
+            vector_keys,
+            model,
+            tokenizer,
+            index,
+            vecs_accum,
+            ids_accum,
+        )
+
     with conn.cursor(name="eebo_stream") as cur:
         cur.itersize = 10_000
 
         cur.execute("""
-            SELECT
-                doc_id,
-                token_idx,
-                token,
-                vector_id
+            SELECT doc_id, token_idx, token, vector_id
             FROM pamphlet_tokens
             ORDER BY doc_id, token_idx;
         """)
@@ -411,46 +275,15 @@ def process_slice(conn, slice_range):
             if vector_id is None:
                 raise ValueError(f"Missing vector_id for {doc_id}:{token_idx}")
 
-            if doc_id != current_doc and buffer:
-                text_tokens = [t[1] for t in buffer]
-                vector_keys = [(doc_id, t[0], t[2]) for t in buffer]
-
-                text = " ".join(text_tokens)
-
-                embed_document(
-                    device,
-                    doc_id,
-                    text,
-                    vector_keys,
-                    model,
-                    tokenizer,
-                    index,
-                    vecs_accum,
-                    ids_accum,
-                )
-
+            if current_doc is not None and doc_id != current_doc:
+                flush_doc(current_doc, buffer)
                 buffer.clear()
 
             current_doc = doc_id
             buffer.append((token_idx, token_text, vector_id))
 
         if buffer:
-            text_tokens = [t[1] for t in buffer]
-            vector_keys = [(current_doc, t[0], t[2]) for t in buffer]
-
-            text = " ".join(text_tokens)
-
-            embed_document(
-                device,
-                current_doc,
-                text,
-                vector_keys,
-                model,
-                tokenizer,
-                index,
-                vecs_accum,
-                ids_accum,
-            )
+            flush_doc(current_doc, buffer)
 
     if SAVE_OCCURRENCE_VECTORS and len(set(ids_accum)) != len(ids_accum):
         raise ValueError("Duplicate vector_id in accumulation buffer")
