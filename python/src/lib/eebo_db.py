@@ -165,7 +165,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     token TEXT NOT NULL,
                     raw_token text,
                     canonical TEXT,
-                    vector_id BIGINT UNIQUE,
+                    vector_id BIGINT UNIQUE DEFAULT nextval('vector_id_seq'),
                     PRIMARY KEY (doc_id, token_idx),
                     FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
                 );
@@ -242,6 +242,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     hashtext(t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
                     t.doc_id,
                     t.token_idx,
+                    t.vector_id,
                     t.token,
                     t.canonical,
                     d.corpus_zone,
