@@ -33,10 +33,8 @@ TOKENIZER: Optional[PreTrainedTokenizerBase] = None
 MODEL: Optional[PreTrainedModel] = None
 _DEVICE: Optional[str] = None
 
-
 WINDOW_SIZE = 384
-WINDOW_STRIDE = 256
-
+WINDOW_STRIDE = WINDOW_SIZE
 TOKEN_BUDGET = 12000
 
 
@@ -244,20 +242,119 @@ def stream_for_embedding(conn):
             yield from _emit_windows(current_doc, buffer)
 
 
-def _emit_windows(doc_id, tokens):
-    n = len(tokens)
+def embed_document(
+    device,
+    doc_id: str,
+    text: str,
+    vector_keys,
+    model,
+    tokenizer,
+    index,
+    vecs_accum,
+    ids_accum,
+):
+    """
+    Option B core:
+    full document → model → hidden states → window in embedding space
+    """
+
+    hidden, offsets, input_ids, attention_mask = forward_batch(
+        device, model, tokenizer, [text]
+    )
+
+    hidden = hidden[0]
+    offsets = offsets[0].tolist()
+
+    special_ids = set(tokenizer.all_special_ids)
+
+    token_to_subwords, _ = map_tokens_to_subwords(text, offsets)
+
+    # FULL-DOCUMENT EMBEDDING SPACE WINDOWING
+    n_tokens = len(vector_keys)
     start = 0
 
-    while start < n:
-        end = min(start + WINDOW_SIZE, n)
-        window = tokens[start:end]
+    while start < n_tokens:
+        end = min(start + WINDOW_SIZE, n_tokens)
 
-        text_tokens = [t[1] for t in window]
-        keys = [(doc_id, t[0], t[2]) for t in window]
+        window_keys = vector_keys[start:end]
 
-        yield doc_id, " ".join(text_tokens), keys
+        window_vecs = []
 
-        if end == n:
+        for i, (_, _, vector_id) in enumerate(window_keys):
+            sub_idxs = token_to_subwords[start + i] if (start + i) < len(token_to_subwords) else []
+
+            if not sub_idxs:
+                continue
+
+            vec = normalize(
+                np.mean([hidden[j] for j in sub_idxs], axis=0)
+            )
+
+            if vec is None:
+                continue
+
+            vector_id = int(vector_id)
+
+            index.add(vec.reshape(1, -1), [vector_id])
+
+            if SAVE_OCCURRENCE_VECTORS:
+                vecs_accum.append(vec)
+                ids_accum.append(vector_id)
+
+        if end == n_tokens:
+            break
+
+        start += WINDOW_STRIDE
+
+
+def _emit_windows(doc_id, tokens):
+    """
+    tokens: List[(token_idx, token_text, vector_id)]
+
+    Character-based windowing with strict token assignment.
+
+    Invariants:
+    - Each token is emitted exactly once
+    - Window text matches tokenizer offsets
+    - Token→window assignment is based on span midpoint
+
+    To do:
+    - Semantic awareness (sentence and clauses)
+    """
+
+    # reconstruct full text
+    text_tokens = [t[1] for t in tokens]
+    vector_keys = [(doc_id, t[0], t[2]) for t in tokens]
+
+    text = " ".join(text_tokens)
+
+    # build spans once (global coordinate system)
+    spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
+
+    assert len(spans) == len(vector_keys), "span/token mismatch"
+
+    n_chars = len(text)
+
+    start = 0
+
+    while start < n_chars:
+        end = min(start + WINDOW_SIZE, n_chars)
+
+        window_text = text[start:end]
+
+        window_keys = []
+
+        for i, (s, e) in enumerate(spans):
+            # assign token to window by midpoint (prevents duplication)
+            mid = (s + e) // 2
+
+            if start <= mid < end:
+                window_keys.append(vector_keys[i])
+
+        if window_keys:
+            yield doc_id, window_text, window_keys
+
+        if end == n_chars:
             break
 
         start += WINDOW_STRIDE
@@ -294,12 +391,65 @@ def process_slice(conn, slice_range):
     vecs_accum = []
     ids_accum = []
 
-    stream = stream_for_embedding(conn)
+    with conn.cursor(name="eebo_stream") as cur:
+        cur.itersize = 10_000
 
-    with torch.no_grad():
-        for batch in batch_stream(stream):
-            process_token_batch(
-                device, batch, model, tokenizer, index, vecs_accum, ids_accum
+        cur.execute("""
+            SELECT
+                doc_id,
+                token_idx,
+                token,
+                vector_id
+            FROM pamphlet_tokens
+            ORDER BY doc_id, token_idx;
+        """)
+
+        current_doc = None
+        buffer = []
+
+        for doc_id, token_idx, token_text, vector_id in cur:
+            if vector_id is None:
+                raise ValueError(f"Missing vector_id for {doc_id}:{token_idx}")
+
+            if doc_id != current_doc and buffer:
+                text_tokens = [t[1] for t in buffer]
+                vector_keys = [(doc_id, t[0], t[2]) for t in buffer]
+
+                text = " ".join(text_tokens)
+
+                embed_document(
+                    device,
+                    doc_id,
+                    text,
+                    vector_keys,
+                    model,
+                    tokenizer,
+                    index,
+                    vecs_accum,
+                    ids_accum,
+                )
+
+                buffer.clear()
+
+            current_doc = doc_id
+            buffer.append((token_idx, token_text, vector_id))
+
+        if buffer:
+            text_tokens = [t[1] for t in buffer]
+            vector_keys = [(current_doc, t[0], t[2]) for t in buffer]
+
+            text = " ".join(text_tokens)
+
+            embed_document(
+                device,
+                current_doc,
+                text,
+                vector_keys,
+                model,
+                tokenizer,
+                index,
+                vecs_accum,
+                ids_accum,
             )
 
     if SAVE_OCCURRENCE_VECTORS and len(set(ids_accum)) != len(ids_accum):
