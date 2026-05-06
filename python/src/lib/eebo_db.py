@@ -244,13 +244,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     t.token_idx,
                     t.vector_id,
                     t.token,
-                    t.canonical,
-                    d.corpus_zone,
-                    d.pub_year,
-                    d.title,
-                    d.token_count,
-                    d.slice_start,
-                    d.slice_end
+                    t.canonical
                 FROM tokens t
                 JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
             """)
