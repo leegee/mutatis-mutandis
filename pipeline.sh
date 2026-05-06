@@ -45,12 +45,8 @@ case "$PHASE" in
         RUN_SCRIPTS+=("$SRC/eebo_parse_tei.py")
         RUN_ENVS+=("")
         ;;
-    # 2|pretrain)
-    #     RUN_SCRIPTS+=("$SRC/generate_training_files.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    3|train)
-        RUN_SCRIPTS+=("$SRC/mb_embedding_pipeline.py")
+    2|train)
+        RUN_SCRIPTS+=("$SRC/db-to-mb-to-zarr.py")
         RUN_ENVS+=("")
         ;;
     4|mbtest)
