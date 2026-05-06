@@ -30,6 +30,7 @@ Firth to Heuser to Williams to Sinfield
 
 ## Items
 
+Arendt, Hannah, and Jerome Kohn. Between Past and Future: Eight Exercises in Political Thought. Penguin Classics. Penguin books, 2006.
 Austin, J. L. How to Do Things with Words: The William James Lectures Delivered in Harvard University in 1955. Clarendon Press / Oxford University Press, 1962.
 Berger, Peter L. The Sacred Canopy: Elements of a Sociological Theory of Religion. Open Road Media, 2011.
 Betz, David. Carnage and Connectivity: Landmarks in the Decline of Conventional Military Power. Oxford University Press, 2016. https://doi.org/10.1093/acprof:oso/9780190264857.001.0001.
@@ -61,6 +62,7 @@ McRae, Andrew. Literature, Satire, and the Early Stuart State. Cambridge Univers
 Maitland, F. W. The Constitutional History of England. Cambridge University Press, 1908.
 McElligott, Jason. ‘Review of Raymond, Joad, Pamphlets and Pamphleteering in Early Modern Britain’. H-Albion (Michigan State University), April 2004. http://www.h-net.org/reviews/showrev.php?id=9180.
 Milsom, S. F. C. Historical Foundations of the Common Law. Butterworths, 1969.
+Nietzsche, Friedrich. On the Genealogy of Morals: A Polemic. Translated by Michael A. Scarpitti. With Robert C. Holub. Penguin Classics. Penguin Books, 2013.
 O’Connor, Patrick. ‘A Conversation with Lord Dyson’. Counsel Magazine (London), 23 January 2020. https://www.counselmagazine.co.uk/articles/a-conversation-with-lord-dyson.
 Pocock, J. G. A. The Machiavellian Moment: Florentine Political Thought and the Atlantic Republican Tradition. Princeton University Press, 1975.
 Pocock, J. G. A. Virtue, Commerce, and History: Essays on Political Thought and History, Chiefly in the Eighteenth Century. Cambridge University Press, 1985.
