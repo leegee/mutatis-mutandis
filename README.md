@@ -3,6 +3,12 @@
     git@github.com:leegee/mutatis-mutandis.git
     https://github.com/leegee/mutatis-mutandis.git
 
+## Conceptual Synopsis
+
+Ontological Topology: the study of semantic space as a structured geometric object, where meaning is defined by relative positions, continuity, and deformation of distributions across time rather than discrete sense inventories. Nice idea but requires 2-5 days GPU or about  6 weeks of CPU...
+
+So: instead of corpus-wide embedding, trying a recursive probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
+
 ## Code Synopsis
 
     conda activate eebo
@@ -259,10 +265,96 @@ Detect whether model fine-tuning is introducing artificial drift.
 
 ## WIP
 
-Port dash/plotly to Solid/d3 feeding on `mb_test.py` (to be renamed)
+- OT not JD.
+- Fix: ` <SEG REND="decorInit">I</SEG>F`
+- Tidy MV `pamphlet_tokens` and use a join rather than cutting corners
 
-OT not JD,
+### Note-to-self — Windowing, topology, and embedding design (EEBO pipeline)
 
-Fix:
+Current windowed embedding setup (512 size / 256 stride + cross-window averaging) is introducing **structural artefacts into the semantic space**, not just measuring it. Overlapping windows + post-hoc averaging are shaping the geometry in ways that can be mistaken for drift, clustering, or noise.
 
-  <SEG REND="decorInit">I</SEG>F
+---
+
+## Immediate problem
+
+* Fixed sliding windows impose an artificial segmentation of discourse.
+* Overlap + averaging smooths away local structure and can both:
+
+  * flatten meaningful variation (loss of signal)
+  * create spurious variation at boundaries (false structure)
+* Result: observed “drift” is partly an artefact of sampling geometry.
+
+---
+
+## Option B — Token-centred windows (recommended first fix)
+
+Replace global sliding windows with **token-anchored contexts**:
+
+* Each token gets its own local window (e.g. ±256 tokens)
+* Embedding is computed directly for that token in its local context
+* Removes dependence on arbitrary window boundaries
+
+**Effect:**
+
+* Eliminates boundary artefacts
+* Produces cleaner per-occurrence representations
+* Makes drift and variance more interpretable
+
+**Tradeoff:**
+
+* More compute
+* Less implicit smoothing (more true variance appears)
+
+---
+
+## Option C — Multi-scale embeddings (topological upgrade)
+
+Represent each token at multiple context scales:
+
+* small window → syntactic context
+* medium window → clause/rhetorical context
+* large window → discourse / ideological context
+
+Each token becomes a **vector field across scales**, not a single point.
+
+**Effect:**
+
+* Drift becomes scale-dependent rather than absolute
+* Separates syntax / semantics / discourse effects
+* Aligns strongly with an Ontological Topology framing (meaning as deformation across scales)
+
+**Tradeoff:**
+
+* Higher system complexity
+* Requires rethinking storage + analysis (Zarr + downstream visualisation)
+
+---
+
+## Conceptual takeaway
+
+Current pipeline assumes:
+
+> one embedding per token occurrence represents meaning
+
+Better framing:
+
+* Option B: improves sampling of a fixed semantic space
+* Option C: replaces point semantics with **multi-scale topological structure**
+
+---
+
+## Recommended sequence
+
+1. Implement Option B first (stabilise representation, remove artefacts)
+2. Validate on key tokens (“church”, “man”, “state”)
+3. Prototype Option C on small subset to test whether multi-scale structure yields clearer regime separation
+
+---
+
+## Core risk being addressed
+
+Without change, “drift” and “clustering” are partially driven by:
+
+> window segmentation + averaging effects rather than linguistic structure
+
+Goal is to ensure observed topology reflects **textual behaviour**, not **sampling design**.
