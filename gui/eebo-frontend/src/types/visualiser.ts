@@ -1,3 +1,5 @@
+export type DocWeights = Record<string, number>;
+
 export type Tier3Node = {
     id: string;
     slice: string;
@@ -5,6 +7,7 @@ export type Tier3Node = {
     size: number;
     centroid: number[] | null;
     vector_ids: number[];
+    doc_weights: DocWeights;
     x?: number;
     y?: number;
 };

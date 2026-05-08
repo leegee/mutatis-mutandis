@@ -270,11 +270,22 @@ export default function Tier3Graph(props: Props) {
 
                 <Show when={selectedNode()}>
                     {(n) => (
-                        <div>
-                            <p><b>ID:</b> {n().id}</p>
-                            <p><b>Slice:</b> {n().slice}</p>
-                            <p><b>Cluster:</b> {n().cluster}</p>
-                            <p><b>Size:</b> {n().size ?? 1}</p>
+                        <div class="grid">
+                            <div class="s6">
+                                <p><b>ID:</b> {n().id}</p>
+                                <p><b>Slice:</b> {n().slice}</p>
+                                <p><b>Cluster:</b> {n().cluster}</p>
+                                <p><b>Size:</b> {n().size ?? 1}</p>
+                            </div>
+
+                            <div class="s6">
+                                <p><b>Docs:</b></p>
+                                <ul>
+                                    {Object.entries(n().doc_weights ?? {}).map(([doc, w]) => (
+                                        <li>{doc}: {(w as number).toFixed(3)}</li>
+                                    ))}
+                                </ul>
+                            </div>
 
                             <hr />
 

@@ -41,70 +41,26 @@ case "$PHASE" in
         popd >/dev/null
         exit 0
         ;;
-    1|in|ingest)
+    0|in|ingest)
         RUN_SCRIPTS+=("$SRC/eebo_parse_tei.py")
         RUN_ENVS+=("")
         ;;
-    2|train)
-        RUN_SCRIPTS+=("$SRC/db-to-mb-to-zarr.py")
+    1|embed)
+        RUN_SCRIPTS+=("$SRC/tier1_corpus_embed.py")
         RUN_ENVS+=("")
         ;;
-    4|mbtest)
-        RUN_SCRIPTS+=("$SRC/mb_test.py")
+    2|struct)
+        RUN_SCRIPTS+=("$SRC/tier2_0_concept_structure.py ")
         RUN_ENVS+=("")
         ;;
-    5|plot)
-        RUN_SCRIPTS+=("$SRC/mb_plot.py")
+    7|branch)
+        RUN_SCRIPTS+=("$SRC/tier2_7_branch_builder.py")
         RUN_ENVS+=("")
         ;;
-    # diag)
-    #     RUN_SCRIPTS+=("$SRC/diagnostics_alignment_evaluation.py");
-    #     RUN_ENVS+=("")
-    #     ;;
-    # cts|concept-timeseries)
-    #     RUN_SCRIPTS+=("$SRC/build_concept_timeseries.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # ps|plot-centroid-sim)
-    #     RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_aligned.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # plot-centroid-sim-knn)
-    #     RUN_SCRIPTS+=("$SRC/vis_centroid_similarity_neighbours_aligned.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # pca-poles)
-    #     RUN_SCRIPTS+=("$SRC/pca_compute_eg_poles_aligned.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # pcai|pca-poles-interactive)
-    #     RUN_SCRIPTS+=("$SRC/pca_interactive_liberty_plot.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # umap-liberty)
-    #     RUN_SCRIPTS+=("$SRC/umap_interactive_liberty_umap.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # exp|concept-explorer)
-    #     RUN_SCRIPTS+=("$SRC/concept_neighbour_explorer.py")
-    #     RUN_ENVS+=("" "")
-    #     ;;
-    # uc|usage-cluster)
-    #     RUN_SCRIPTS+=("$SRC/usage_clusterer2.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # ucv|usage-cluster-viz)
-    #     RUN_SCRIPTS+=("$SRC/viz_usage_clusters_interactive.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # ucs|usage-cluster-sankey)
-    #     RUN_SCRIPTS+=("$SRC/viz_usage_clusters_sankey.py")
-    #     RUN_ENVS+=("")
-    #     ;;
-    # sa|secularisation_analysis)
-    #     RUN_SCRIPTS+=("$SRC/secularisation_analysis.py")
-    #     RUN_ENVS+=("")
-    #     ;;
+    8|attract)
+        RUN_SCRIPTS+=("$SRC/tier2_8_attractor_field.py")
+        RUN_ENVS+=("")
+        ;;
     *)
         echo "! Invalid phase: $PHASE"
         popd >/dev/null

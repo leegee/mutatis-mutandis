@@ -7,14 +7,16 @@ export function serveOutJsonPlugin(outDir: string): Plugin {
         name: "vite-serve-out-json",
         configureServer(server) {
             server.middlewares.use((req, res, next) => {
-                if (req.url?.startsWith("/api/")) {
-                    // Map /api/foo.json → ../out/foo.json
-                    const filePath = path.resolve(outDir, req.url.replace("/api/", ""));
+                const match = req.url?.match(/^\/(api|xml)\/(.+)/);
+                if (match) {
+                    const filePath = path.resolve(outDir, match[2]);
                     if (fs.existsSync(filePath)) {
                         res.setHeader("Content-Type", "application/json");
                         fs.createReadStream(filePath).pipe(res);
                         return;
-                    } else {
+                    }
+
+                    else {
                         res.statusCode = 404;
                         res.end(JSON.stringify({ error: "File not found" }));
                         return;
