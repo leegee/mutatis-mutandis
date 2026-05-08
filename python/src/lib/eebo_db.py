@@ -146,6 +146,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 /* Core document metadata */
                 CREATE TABLE documents (
                     doc_id TEXT PRIMARY KEY,
+                    filepath TEXT,
                     title TEXT,
                     author TEXT,
                     pub_year INTEGER,
@@ -182,9 +183,10 @@ def drop_token_indexes(conn: Connection) -> None:
             cur.execute("""
                 DROP INDEX IF EXISTS idx_tokens_token;
                 DROP INDEX IF EXISTS idx_tokens_doc;
-                DROP INDEX IF EXISTS idx_tokens_sentence;
                 DROP INDEX IF EXISTS idx_tokens_canonical;
-                DROP INDEX IF EXISTS idx_tokens_sentence_notnull;
+                DROP INDEX idx_tokens_token_lower;
+                DROP INDEX idx_documents_lang;
+                DROP INDEX idx_documents_filepath;
             """)
     logger.info("Token indexes dropped")
 
@@ -197,6 +199,7 @@ def create_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(doc_id);")
             cur.execute("CREATE INDEX idx_tokens_token_lower ON tokens (lower(token));")
             cur.execute("CREATE INDEX idx_documents_lang ON documents(lang);")
+            cur.execute("CREATE INDEX idx_documents_filepath ON documents(filepath);")
 
     logger.info("Basic token indexes created")
 
