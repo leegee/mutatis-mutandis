@@ -9,6 +9,8 @@ Ontological Topology: the study of semantic space as a structured geometric obje
 
 So: instead of corpus-wide embedding, trying a recursive probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
 
+Finally, attempt topological data analysis if I can get my head around the Betti numbers.
+
 ## Code Synopsis
 
     conda activate eebo
@@ -269,92 +271,104 @@ Detect whether model fine-tuning is introducing artificial drift.
 - Fix: ` <SEG REND="decorInit">I</SEG>F`
 - Tidy MV `pamphlet_tokens` and use a join rather than cutting corners
 
-### Note-to-self — Windowing, topology, and embedding design (EEBO pipeline)
+# Note to Self -- Semantic Drift / Ontological Topology Pipeline
 
-Current windowed embedding setup (512 size / 256 stride + cross-window averaging) is introducing **structural artefacts into the semantic space**, not just measuring it. Overlapping windows + post-hoc averaging are shaping the geometry in ways that can be mistaken for drift, clustering, or noise.
+## Current Position
 
----
+The original pipeline used:
 
-## Immediate problem
+* sliding-window embeddings
+* averaged contextual vectors
+* one vector per token per slice
 
-* Fixed sliding windows impose an artificial segmentation of discourse.
-* Overlap + averaging smooths away local structure and can both:
+This produced measurable drift curves, but also introduced artefacts:
 
-  * flatten meaningful variation (loss of signal)
-  * create spurious variation at boundaries (false structure)
-* Result: observed “drift” is partly an artefact of sampling geometry.
+* segmentation instability
+* window contamination
+* artificial smoothing
+* unstable cluster structure
 
----
+Particularly problematic:
 
-## Option B — Token-centred windows (recommended first fix)
+* supposedly stable lexical items (`man`, `house`) appeared to drift significantly.
 
-Replace global sliding windows with **token-anchored contexts**:
+This suggested:
 
-* Each token gets its own local window (e.g. ±256 tokens)
-* Embedding is computed directly for that token in its local context
-* Removes dependence on arbitrary window boundaries
-
-**Effect:**
-
-* Eliminates boundary artefacts
-* Produces cleaner per-occurrence representations
-* Makes drift and variance more interpretable
-
-**Tradeoff:**
-
-* More compute
-* Less implicit smoothing (more true variance appears)
+* the representation itself was unstable,
+  rather than the concepts genuinely undergoing semantic transformation.
 
 ---
 
-## Option C — Multi-scale embeddings (topological upgrade)
+# Architectural Revision
 
-Represent each token at multiple context scales:
+We redesigned the system into a clean two-tier architecture.
 
-* small window → syntactic context
-* medium window → clause/rhetorical context
-* large window → discourse / ideological context
+The key methodological distinction is now:
 
-Each token becomes a **vector field across scales**, not a single point.
+## Tier 1 = Distributional Drift
 
-**Effect:**
+Measure:
 
-* Drift becomes scale-dependent rather than absolute
-* Separates syntax / semantics / discourse effects
-* Aligns strongly with an Ontological Topology framing (meaning as deformation across scales)
+* average semantic movement of concepts over time.
 
-**Tradeoff:**
+## Tier 2 = Semantic Structure / Ontological Topology
 
-* Higher system complexity
-* Requires rethinking storage + analysis (Zarr + downstream visualisation)
+Measure:
 
----
+* internal organisation of semantic space:
 
-## Conceptual takeaway
+  * clusters
+  * bifurcations
+  * persistence
+  * emergence
+  * collapse
 
-Current pipeline assumes:
-
-> one embedding per token occurrence represents meaning
-
-Better framing:
-
-* Option B: improves sampling of a fixed semantic space
-* Option C: replaces point semantics with **multi-scale topological structure**
+The two tiers must remain methodologically separate.
 
 ---
 
-## Recommended sequence
+A. k-branch graph (Tier 2.75)
 
-1. Implement Option B first (stabilise representation, remove artefacts)
-2. Validate on key tokens (“church”, “man”, “state”)
-3. Prototype Option C on small subset to test whether multi-scale structure yields clearer regime separation
+For LIBERTY:
 
----
+nodes coloured by slice
+edges weighted by similarity
+thickness = similarity
+position = force layout OR time-axis layout
 
-## Core risk being addressed
+This answers:
 
-Without change, “drift” and “clustering” are partially driven by:
+“does semantic continuity actually exist?”
 
-> window segmentation + averaging effects rather than linguistic structure
+B. slice density timeline
 
-Goal is to ensure observed topology reflects **textual behaviour**, not **sampling design**.
+From your DB counts (you already computed this):
+
+x-axis: slice
+y-axis: token frequency
+
+This is crucial because:
+
+your system is not sampling uniformly across time
+
+This alone can explain a lot of apparent “drift”.
+
+C. cluster stability per slice
+
+For each slice:
+
+number of clusters
+average cluster size
+variance
+
+This tells you:
+
+whether DBSCAN is behaving consistently across time or fragmenting under sparsity
+
+D. attractor strength heatmap (only after A–C)
+
+Once the above are validated:
+
+x: slice
+y: cluster id (or compressed index)
+color: attractor strength

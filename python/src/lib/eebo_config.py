@@ -41,6 +41,8 @@ SLICES_DIR.mkdir(parents=True, exist_ok=True)
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
+ZARR_ROOT = OUT_DIR / "zarr"
+
 MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -273,6 +275,17 @@ CONCEPT_SETS: CanonicalRules = {
     "RELIGION": {
         "forms": {"religion", "religions", "faith", "doctrine", "creed"},
         "false_positives": {"religious", "religionist"}
+    },
+
+    # Baselines
+    "MAN": {
+        "forms": {"man"},
+        "false_positives": {"woman"},
+    },
+
+    "HOUSE": {
+        "forms": {"house"},
+        "false_positives": {},
     },
 
     # "PROPERTY": {
