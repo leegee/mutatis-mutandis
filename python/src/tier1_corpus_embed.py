@@ -24,12 +24,10 @@ from lib.eebo_logging import logger
 from lib.eebo_config import ZARR_ROOT, SLICES, EEBO_MODEL_NAME
 from lib.vector_store_zarr import ZarrVectorStore
 from lib.embed import embed_window
-
+from lib.macberth import load_macberth, normalize
 
 WINDOW_SIZE = 512
 
-TOKENIZER = None
-MODEL = None
 _DEVICE = None
 
 
@@ -47,44 +45,6 @@ def clear_output_dir():
     path.mkdir(parents=True, exist_ok=True)
 
 
-def get_device():
-    global _DEVICE
-    if _DEVICE is None:
-        _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    return _DEVICE
-
-
-def get_model():
-    global TOKENIZER, MODEL
-
-    if TOKENIZER is None or MODEL is None:
-        logger.info("Loading model...")
-
-        TOKENIZER = AutoTokenizer.from_pretrained(
-            EEBO_MODEL_NAME,
-            local_files_only=True
-        )
-
-        MODEL = AutoModel.from_pretrained(
-            EEBO_MODEL_NAME,
-            local_files_only=True
-        )
-
-        if not getattr(TOKENIZER, "is_fast", False):
-            raise RuntimeError("Tokenizer must be fast")
-
-        MODEL.eval()
-
-    return TOKENIZER, MODEL
-
-
-def normalize(v: np.ndarray):
-    n = np.linalg.norm(v)
-    if n < 1e-12:
-        return None
-    return v / n
-
-
 def safe_int(x) -> Optional[int]:
     try:
         if x is None:
@@ -98,9 +58,10 @@ def process_slice(conn, slice_range):
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
     logger.info(f"[SLICE START] {slice_id}")
 
-    tokenizer, model = get_model()
-    device = get_device()
-    model.to(device)
+    mac = load_macberth()
+    tokenizer = mac.tokenizer
+    model = mac.model
+    device = mac.device
 
     store = ZarrVectorStore(
         path=str(ZARR_ROOT / "tier1" / slice_id),
