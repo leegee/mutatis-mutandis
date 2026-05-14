@@ -12,7 +12,9 @@ The methodology combines:
 
 * TEI-encoded corpora (EEBO-TCP Phase I) with rich metadata
 
-* Dynamic fastText embeddings aligned across temporal slices, MacBERTh embeddings per slice
+* Keyword probes chosen in reference to Koselleck poles
+
+* Dynamic MacBERTh and fastText embeddings aligned across temporal slices
 
 * FAISS-based retrieval and graph-based visualisation
 
@@ -22,7 +24,7 @@ The methodology combines:
 
 This dual approach demonstrates the explanatory power of computational methods while situating the analysis in a deep historiographical context, providing insights into the historically contingent formation of political concepts and their enduring ideological significance.
 
-## 2. Research Questions
+## 2.
 
 The project addresses the following questions:
 
@@ -40,6 +42,8 @@ The project addresses the following questions:
 ### 3.1 Historiographical Background
 
 The formation of early modern English political vocabulary has long been studied through close reading (Skinner, 1969; Raymond, 2003) and lexicographical work (Williams, 1976). However, much of the field has focused on isolated keywords, leaving the dynamics of conceptual opposition and ideological tension underexplored. Koselleck’s framework of Begriffspole provides a model for understanding the relational and asymmetrical nature of historical concepts, showing how opposing poles define the conceptual space in which debate occurs.
+
+Pamphlets are selected as the primary corpus because they represent one of the most responsive and ideologically heterogeneous print genres of the seventeenth century. Their rapid circulation, topical immediacy, and engagement in polemical debate make them particularly suited to tracing contested and unstable conceptual usage prior to later lexical and legal stabilisation.
 
 Sinfield’s notion of ideological faultlines further frames the study by identifying moments where competing systems of meaning collide, producing sites of negotiation rather than resolution. Early modern pamphlets, as Joad Raymond demonstrates, were uniquely responsive media where such debates unfolded in real time, before any stabilisation into law or doctrine.
 

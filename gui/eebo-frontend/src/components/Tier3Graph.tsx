@@ -282,7 +282,11 @@ export default function Tier3Graph(props: Props) {
                                 <p><b>Docs:</b></p>
                                 <ul>
                                     {Object.entries(n().doc_weights ?? {}).map(([doc, w]) => (
-                                        <li>{doc}: {(w as number).toFixed(3)}</li>
+                                        <li>
+                                            <a href={`"/xml/${doc}"`}>
+                                                {doc}: {(w as number).toFixed(3)}
+                                            </a>
+                                        </li>
                                     ))}
                                 </ul>
                             </div>

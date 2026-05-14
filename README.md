@@ -26,6 +26,8 @@ Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/por
 
 Don't forget to restart the Colab session when the IP changes.
 
+(This is now sadly out of date. May revisit.)
+
 ## Abstract: About This Project
 
 * [Abstract](./ABSTRACT.md)
