@@ -13,10 +13,6 @@ Invariant:
     - no embedding modification
     - deterministic recomputation from Tier 1 Zarr
 
-Key upgrade:
-    - correct vector_id → doc_id propagation
-    - slice-safe document projection
-    - cluster-level document support weighting
 """
 
 from __future__ import annotations
@@ -33,17 +29,13 @@ from lib.eebo_db import get_connection
 from lib.eebo_config import ZARR_ROOT, SLICES, CONCEPT_SETS
 from lib.eebo_logging import logger
 
-out_dir = ZARR_ROOT / "tier2"
+out_dir = ZARR_ROOT
 out_dir.mkdir(parents=True, exist_ok=True)
 
-OUTPUT_PATH = out_dir / "tier2.json"
+OUTPUT_PATH = out_dir / "tier2_0.json"
 
 DIAGNOSTICS: Dict[str, Any] = {}
 
-
-# ----------------------------
-# JSON safety
-# ----------------------------
 
 def to_jsonable(obj):
     if isinstance(obj, np.ndarray):
@@ -59,9 +51,9 @@ def to_jsonable(obj):
     return obj
 
 
-# ----------------------------
+
 # slice cache
-# ----------------------------
+
 
 _SLICE_CACHE: Dict[str, tuple[np.ndarray, np.ndarray]] = {}
 
@@ -80,9 +72,9 @@ def load_slice(slice_id: str):
     return vecs, ids
 
 
-# ----------------------------
+
 # clustering
-# ----------------------------
+
 
 def cluster_vectors(vecs: np.ndarray):
     from sklearn.cluster import DBSCAN
@@ -138,9 +130,6 @@ def cluster_vectors(vecs: np.ndarray):
     return summary, int(noise)
 
 
-# ----------------------------
-# DB resolution
-# ----------------------------
 
 def resolve_token(conn, token):
     """
@@ -168,9 +157,9 @@ def resolve_token(conn, token):
     return vector_ids, doc_ids
 
 
-# ----------------------------
+
 # core analysis
-# ----------------------------
+
 
 def analyse_token(
     vecs: np.ndarray,
@@ -239,9 +228,9 @@ def analyse_token(
     }
 
 
-# ----------------------------
+
 # pipeline
-# ----------------------------
+
 
 def run_all_slices(token_vector_ids, token_doc_map, token):
 
@@ -265,9 +254,9 @@ def run_all_slices(token_vector_ids, token_doc_map, token):
     return results
 
 
-# ----------------------------
+
 # output
-# ----------------------------
+
 
 def write_output(data: Dict[str, Any]):
 
@@ -282,9 +271,9 @@ def write_output(data: Dict[str, Any]):
     logger.info(f"[tier2] wrote output={OUTPUT_PATH}")
 
 
-# ----------------------------
+
 # main
-# ----------------------------
+
 
 def main():
 

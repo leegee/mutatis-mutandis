@@ -2,6 +2,7 @@ export type DocWeights = Record<string, number>;
 
 export type Tier3Node = {
     id: string;
+    filepath: string;
     slice: string;
     cluster: number;
     size: number;

@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 """
-tier2_7_branch_builder.py - Tier 2.7: k-Branch Persistence Model for Semantic Continuity
+tier2_7_branch_builder.py
+
+k-Branch persistence layer.
+
+Key property:
+    Node = cluster identity + aggregated doc support
+
+Invariant:
+    doc weights are accumulated across ALL retained edges
+    and normalised only at final node materialisation
 """
 
 from __future__ import annotations
@@ -15,7 +24,7 @@ from lib.eebo_config import ZARR_ROOT
 from lib.eebo_logging import logger
 from tier2_0_concept_structure import OUTPUT_PATH as INPUT_PATH
 
-OUTPUT_PATH = ZARR_ROOT / "tier2" / "d3_export.json"
+OUTPUT_PATH = ZARR_ROOT / "tier2_7.json"
 
 
 def load_structure() -> Dict[str, Any]:
@@ -77,7 +86,7 @@ def build_candidate_edges(token_data: Dict[str, Any], similarity_threshold: floa
                     "to_size": int(b["size"]),
                     "similarity": float(sim),
 
-                    # NEW: propagate doc support if present upstream
+                    # raw doc support (may be sparse)
                     "from_docs": a.get("doc_weights", {}),
                     "to_docs": b.get("doc_weights", {})
                 })
@@ -101,11 +110,12 @@ def build_k_branch_graph(edges, k=3):
         ranked = sorted(outgoing, key=score_edge, reverse=True)
         retained_edges.extend([e for e in ranked[:k] if score_edge(e) > 0.6])
 
-    nodes = {}
-
     node_intrinsic = defaultdict(int)
     node_doc_weights = defaultdict(lambda: defaultdict(float))
 
+    # -----------------------------
+    # ACCUMULATION PHASE
+    # -----------------------------
     for e in retained_edges:
 
         src = (e["from_slice"], e["from_cluster"])
@@ -114,18 +124,24 @@ def build_k_branch_graph(edges, k=3):
         node_intrinsic[src] = max(node_intrinsic[src], e["from_size"])
         node_intrinsic[dst] = max(node_intrinsic[dst], e["to_size"])
 
-        # MERGE DOC WEIGHTS (core fix)
-        for doc, w in e.get("from_docs", {}).items():
+        # accumulate doc signal (CRITICAL FIX)
+        for doc, w in e["from_docs"].items():
             node_doc_weights[src][doc] += float(w)
 
-        for doc, w in e.get("to_docs", {}).items():
+        for doc, w in e["to_docs"].items():
             node_doc_weights[dst][doc] += float(w)
+
+    # -----------------------------
+    # NORMALISATION PHASE
+    # -----------------------------
+    nodes = {}
 
     for node in set(node_intrinsic) | set(node_doc_weights):
 
-        doc_weights = node_doc_weights[node]
+        raw = node_doc_weights[node]
+        total = sum(raw.values()) + 1e-12
 
-        total = sum(doc_weights.values()) + 1e-12
+        doc_weights = {k: float(v / total) for k, v in raw.items()}
 
         nodes[node] = {
             "id": f"{node[0]}:{node[1]}",
@@ -134,13 +150,8 @@ def build_k_branch_graph(edges, k=3):
 
             "size": int(node_intrinsic[node]),
 
-            # CRITICAL D3 OUTPUT FORMAT
             "doc_ids": list(doc_weights.keys()),
-
-            "doc_weights": {
-                k: float(v / total) for k, v in doc_weights.items()
-            },
-
+            "doc_weights": doc_weights,
             "doc_mass": float(total)
         }
 
@@ -170,23 +181,19 @@ def build_all():
     diagnostics = {}
 
     for token, token_data in data.items():
-
         logger.info(f"[tier2.7] token={token}")
 
         edges = build_candidate_edges(token_data)
         if not edges:
             continue
 
-        graph = build_k_branch_graph(edges, k=3)
-
-        graphs[token] = graph
+        graphs[token] = build_k_branch_graph(edges, k=3)
         diagnostics[token] = {"edges": len(edges)}
 
     return graphs, diagnostics
 
 
 def write_output(graphs, diagnostics):
-
     payload = {
         "data": graphs,
         "diagnostics": diagnostics

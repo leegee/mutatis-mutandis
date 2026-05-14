@@ -3,9 +3,9 @@ import solid from "vite-plugin-solid";
 import path from "path";
 import { serveOutJsonPlugin } from "./vite-custom-plugins/serveOutJsonPlugin";
 
-const documentRoot = path.resolve(__dirname, "../../out");
+const documentRoot = path.resolve(__dirname, "../..");
 
-console.info(`[vite.config] documentRoot: ${documentRoot}`);
+console.info(`[vite.config] documentRoot: ${ documentRoot }`);
 
 export default defineConfig({
   plugins: [
@@ -15,8 +15,7 @@ export default defineConfig({
   server: {
     fs: {
       allow: [
-        path.resolve(__dirname),           // frontend root
-        path.resolve(__dirname, "../out"), // JSON folder
+        path.resolve(__dirname)
       ],
     },
   },
