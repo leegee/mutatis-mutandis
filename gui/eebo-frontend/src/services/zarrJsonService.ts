@@ -4,7 +4,7 @@ export async function loadDriftData(url: string): Promise<Tier3GraphData> {
     const res = await fetch('/api/' + url);
 
     if (!res.ok) {
-        throw new Error(`Failed to load drift data: ${ res.status }`);
+        throw new Error(`Failed to load drift data from ${ url }: ${ res.status }`);
     }
 
     const resp = await res.json();
