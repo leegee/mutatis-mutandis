@@ -140,11 +140,7 @@ def iter_windows(input_ids, attention_mask, word_ids):
 
 
 # Forward pass
-
-
 def forward_windows(windows, model, device):
-    windows = sorted(windows, key=lambda w: len(w.input_ids), reverse=True)
-
     results = []
     batch = []
 
@@ -166,20 +162,11 @@ def forward_windows(windows, model, device):
         ).to(device)
 
         with torch.inference_mode():
-            use_amp = device.startswith("cuda")
-            if use_amp:
-                with torch.cuda.amp.autocast():
-                    out = model(
-                        input_ids=batch_input,
-                        attention_mask=batch_mask,
-                        return_dict=True
-                    )
-            else:
-                out = model(
-                    input_ids=batch_input,
-                    attention_mask=batch_mask,
-                    return_dict=True
-                )
+            out = model(
+                input_ids=batch_input,
+                attention_mask=batch_mask,
+                return_dict=True
+            )
 
         hidden = out.last_hidden_state.detach().cpu().numpy()
 
@@ -198,9 +185,7 @@ def forward_windows(windows, model, device):
     return results
 
 
-
 # Accumulation (ARRAY VERSION)
-
 
 def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
     for i, word_id in enumerate(window.word_ids):
@@ -232,10 +217,7 @@ def finalise(pending: PendingDoc):
 
 
 # Per-document pipeline
-
-
 def process_doc(tokens, vector_ids, tokenizer, model, device):
-
     input_ids, attention_mask, word_ids = encode_doc(tokens, tokenizer)
 
     n = len(tokens)
@@ -266,7 +248,6 @@ def process_doc(tokens, vector_ids, tokenizer, model, device):
             accumulate(pending, win, hidden)
 
     return finalise(pending)
-
 
 
 # Slice processor
