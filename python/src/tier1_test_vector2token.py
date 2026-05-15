@@ -6,22 +6,18 @@ Checks structural equivalence between DB token stream and Zarr output.
 
 Focus:
 - completeness
-- ordering
+- per-document ordering
 - uniqueness
-- gap detection
+- boundary consistency
 """
 
 import argparse
 import zarr
 import numpy as np
-from collections import Counter
+from collections import Counter, defaultdict
 
 from lib.eebo_db import get_connection
 from lib.eebo_config import ZARR_ROOT, SLICES
-
-
-
-# CLI
 
 
 def parse_args():
@@ -38,39 +34,39 @@ args = parse_args()
 slices = SLICES[:1] if args.first_slice_only else SLICES
 
 
-
-# Run tests per slice
-
-
+# Main test loop
 for SLICE in slices:
 
     slice_id = f"{SLICE[0]}-{SLICE[1]}"
     print(f"\n=== Testing slice {slice_id} ===")
 
-
-    # Load DB vector stream
     conn = get_connection()
-
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT vector_id
+            SELECT t.doc_id, t.vector_id
             FROM pamphlet_tokens t
             JOIN pamphlet_corpus d ON d.doc_id = t.doc_id
             WHERE d.pub_year BETWEEN %s AND %s
-            ORDER BY vector_id
+            ORDER BY t.doc_id, t.token_idx
         """, SLICE)
 
-        db_ids = np.array([r[0] for r in cur], dtype=np.int64)
-
+        rows = list(cur)
     conn.close()
 
+    db_by_doc = defaultdict(list)
+    db_ids = []
 
-    # Load Zarr output
+    for doc_id, vid in rows:
+        db_by_doc[doc_id].append(vid)
+        db_ids.append(vid)
+
+    db_ids = np.array(db_ids, dtype=np.int64)
+
+    # Load Zarr stream
     root = zarr.open(ZARR_ROOT / "tier1" / slice_id, mode="r")
     zarr_ids = np.array(root["ids"][:], dtype=np.int64)
 
-
-    # Basic set equivalence
+    # 1. Set equivalence (robust invariant)
     db_set = set(db_ids.tolist())
     zarr_set = set(zarr_ids.tolist())
 
@@ -82,48 +78,51 @@ for SLICE in slices:
     print("Missing in Zarr:", len(missing))
     print("Extra in Zarr:", len(extra))
 
-    if missing:
-        print("Sample missing:", missing[:10])
+    assert len(missing) == 0, f"Missing IDs detected: {missing[:10]}"
+    assert len(extra) == 0, f"Extra IDs detected: {extra[:10]}"
 
-    if extra:
-        print("Sample extra:", extra[:10])
-
-
-    # 1. Strict uniqueness
-    db_counts = Counter(db_ids.tolist())
-    zarr_counts = Counter(zarr_ids.tolist())
-
-    db_dupes = [k for k, v in db_counts.items() if v != 1]
-    zarr_dupes = [k for k, v in zarr_counts.items() if v != 1]
+    # 2. Uniqueness
+    db_dupes = [k for k, v in Counter(db_ids.tolist()).items() if v != 1]
+    zarr_dupes = [k for k, v in Counter(zarr_ids.tolist()).items() if v != 1]
 
     print("DB duplicate ids:", len(db_dupes))
     print("Zarr duplicate ids:", len(zarr_dupes))
 
-    assert len(db_dupes) == 0, f"DB has duplicates: {db_dupes[:10]}"
-    assert len(zarr_dupes) == 0, f"Zarr has duplicates: {zarr_dupes[:10]}"
+    assert not db_dupes, f"DB duplicates: {db_dupes[:10]}"
+    assert not zarr_dupes, f"Zarr duplicates: {zarr_dupes[:10]}"
 
+    # 3. Global monotonic sanity (weaker check only)
+    assert np.all(np.diff(zarr_ids) != 0), "Zarr has repeated ordering artefacts"
 
-    # 2. Ordering checks
-    assert np.all(np.diff(db_ids) > 0), "DB ids not strictly increasing"
-    assert np.all(np.diff(zarr_ids) > 0), "Zarr ids not strictly increasing"
+    # NOTE: we DO NOT enforce global strict ordering anymore
+    # because pipeline is document-structured, not globally linear-preserving.
 
+    # 4. Per-document correctness (core invariant)
+    start = 0
+    for doc_id, db_seq in db_by_doc.items():
+        n = len(db_seq)
 
-    # 3. Gap detection
-    db_gaps = np.where(np.diff(db_ids) > 1)[0]
-    zarr_gaps = np.where(np.diff(zarr_ids) > 1)[0]
+        zarr_seq = zarr_ids[start:start + n]
+        start += n
 
-    print("DB gaps:", len(db_gaps))
-    print("Zarr gaps:", len(zarr_gaps))
+        # length match
+        assert len(db_seq) == len(zarr_seq), (
+            f"Length mismatch in doc {doc_id}"
+        )
 
+        # identity per doc
+        assert np.array_equal(
+            np.array(db_seq, dtype=np.int64),
+            zarr_seq
+        ), f"Doc mismatch: {doc_id}"
 
-    # 4. Boundary sanity
+        # ordering sanity (within doc only)
+        assert np.all(np.diff(zarr_seq) > 0), (
+            f"Non-monotonic vector_ids within doc {doc_id}"
+        )
+
+    print("✔ Per-document structural equivalence confirmed")
+
+    # 5. Boundary sanity (optional weak global check)
     assert db_ids.min() == zarr_ids.min(), "Min id mismatch"
     assert db_ids.max() == zarr_ids.max(), "Max id mismatch"
-
-
-    # 5. Final structural equivalence
-    assert np.array_equal(db_ids, zarr_ids), (
-        "Exact sequence mismatch between DB and Zarr"
-    )
-
-    print("✔ Full structural equivalence confirmed")
