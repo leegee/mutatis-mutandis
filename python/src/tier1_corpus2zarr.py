@@ -224,13 +224,15 @@ def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
 def finalise(pending: PendingDoc):
     vecs, ids = [], []
 
-    for word_id in sorted(pending.vec_sum):
+    for word_id in sorted(pending.vec_sum.keys()):
         c = pending.count[word_id]
         if c == 0:
             continue
 
         vecs.append((pending.vec_sum[word_id] / c).astype(np.float32))
-        ids.append(pending.vector_ids_by_word[word_id])
+
+        assert word_id in pending.vector_ids
+        ids.append(pending.vector_ids[word_id])
 
     return (
         np.array(vecs, dtype=np.float32),
