@@ -20,8 +20,6 @@ IDEALLY WE WANT:
 - sentence-aware chunking
 - paragraph-aware chunking
 - discourse-aware chunking
-
-
 """
 
 from __future__ import annotations
@@ -64,9 +62,15 @@ class Window:
 
 @dataclass
 class PendingDoc:
-    vec_sum: Dict[int, np.ndarray] = field(default_factory=dict)
-    count: Dict[int, int] = field(default_factory=lambda: defaultdict(int))
-    vector_ids_by_word: Dict[int, int] = field(default_factory=dict)
+    """
+    Dense accumulator:
+    - vec_sum: [num_tokens, hidden_dim] float64
+    - count:   [num_tokens] int32
+    - vector_ids: [num_tokens] int64
+    """
+    vec_sum: np.ndarray
+    count: np.ndarray
+    vector_ids: np.ndarray
 
 
 # ---------------------------------------------------------------------
@@ -112,7 +116,7 @@ def encode_doc(tokens, tokenizer):
 
 
 # ---------------------------------------------------------------------
-# Streaming window generator (B1)
+# Streaming window generator
 # ---------------------------------------------------------------------
 
 def iter_windows(input_ids, attention_mask, word_ids):
@@ -135,11 +139,10 @@ def iter_windows(input_ids, attention_mask, word_ids):
 
 
 # ---------------------------------------------------------------------
-# Forward pass (B2 + B4)
+# Forward pass
 # ---------------------------------------------------------------------
 
 def forward_windows(windows, model, device):
-    # length-sorted batching reduces padding waste
     windows = sorted(windows, key=lambda w: len(w.input_ids), reverse=True)
 
     results = []
@@ -178,10 +181,7 @@ def forward_windows(windows, model, device):
                     return_dict=True
                 )
 
-        hidden = out.last_hidden_state.detach()
-
-        # avoid double CPU copy chain
-        hidden = hidden.cpu().numpy()
+        hidden = out.last_hidden_state.detach().cpu().numpy()
 
         for i in range(len(batch)):
             results.append((batch[i], hidden[i]))
@@ -199,7 +199,7 @@ def forward_windows(windows, model, device):
 
 
 # ---------------------------------------------------------------------
-# Accumulation
+# Accumulation (ARRAY VERSION)
 # ---------------------------------------------------------------------
 
 def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
@@ -211,47 +211,41 @@ def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
         if vec is None:
             continue
 
-        vec_sum = pending.vec_sum
-        count = pending.count
-
-        if word_id not in vec_sum:
-            vec_sum[word_id] = np.zeros(vec.shape, dtype=np.float64)
-
-        vec_sum[word_id] += vec
-        count[word_id] += 1
+        pending.vec_sum[word_id] += vec
+        pending.count[word_id] += 1
 
 
 def finalise(pending: PendingDoc):
-    vecs, ids = [], []
+    valid = pending.count > 0
 
-    for word_id in sorted(pending.vec_sum.keys()):
-        c = pending.count[word_id]
-        if c == 0:
-            continue
+    if not np.any(valid):
+        return (
+            np.empty((0, pending.vec_sum.shape[1]), dtype=np.float32),
+            np.empty((0,), dtype=np.int64),
+        )
 
-        vecs.append((pending.vec_sum[word_id] / c).astype(np.float32))
+    vecs = (pending.vec_sum[valid] / pending.count[valid, None]).astype(np.float32)
+    ids = pending.vector_ids[valid].astype(np.int64)
 
-        assert word_id in pending.vector_ids
-        ids.append(pending.vector_ids[word_id])
-
-    return (
-        np.array(vecs, dtype=np.float32),
-        np.array(ids, dtype=np.int64),
-    )
+    return vecs, ids
 
 
 # ---------------------------------------------------------------------
-# Per-document pipeline (B1 integrated)
+# Per-document pipeline
 # ---------------------------------------------------------------------
 
 def process_doc(tokens, vector_ids, tokenizer, model, device):
 
     input_ids, attention_mask, word_ids = encode_doc(tokens, tokenizer)
 
-    pending = PendingDoc()
-    pending.vector_ids_by_word = {
-        i: vector_ids[i] for i in range(len(vector_ids))
-    }
+    n = len(tokens)
+    dim = model.config.hidden_size
+
+    pending = PendingDoc(
+        vec_sum=np.zeros((n, dim), dtype=np.float64),
+        count=np.zeros(n, dtype=np.int32),
+        vector_ids=np.array(vector_ids, dtype=np.int64),
+    )
 
     window_iter = iter_windows(input_ids, attention_mask, word_ids)
 
@@ -275,7 +269,7 @@ def process_doc(tokens, vector_ids, tokenizer, model, device):
 
 
 # ---------------------------------------------------------------------
-# Slice processor (unchanged CLI behaviour)
+# Slice processor
 # ---------------------------------------------------------------------
 
 def process_slice(conn, slice_range, tokenizer, model, device, doc_index):
