@@ -12,7 +12,7 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 
 from lib.eebo_logging import logger
-from lib.eebo_config import EEBO_MODEL_NAME
+from lib.eebo_config import MACBERTH_MODEL_PATH
 
 
 @dataclass
@@ -33,12 +33,12 @@ def load_macberth(local_files_only: bool = True) -> MacberthModel:
     logger.info("Loading Macberth model...")
 
     tokenizer = AutoTokenizer.from_pretrained(
-        EEBO_MODEL_NAME,
+        MACBERTH_MODEL_PATH,
         local_files_only=local_files_only,
     )
 
     model = AutoModel.from_pretrained(
-        EEBO_MODEL_NAME,
+        MACBERTH_MODEL_PATH,
         local_files_only=local_files_only,
     )
 

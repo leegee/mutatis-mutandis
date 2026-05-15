@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Window-consistent embedding and indexing pipeline for EEBO pamphlet tokens.
+mb_embedding_pipeline.py - Window-consistent embedding and indexing pipeline for EEBO pamphlet tokens.
 
 This script streams tokenized EEBO documents from the database, reconstructs each
 document, and generates contextual token embeddings using MacBERTh.
@@ -91,7 +91,7 @@ from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import (
     SLICES,
-    EEBO_MODEL_NAME,
+    MACBERTH_MODEL_PATH,
     MACBERTH_FINE_TUNED_DIR
 )
 from lib.mb_paths import faiss_slice_path
@@ -134,8 +134,8 @@ def get_macberth_model():
     if TOKENIZER is None or MODEL is None:
         logger.info("Loading model...")
 
-        tokenizer = AutoTokenizer.from_pretrained(EEBO_MODEL_NAME, local_files_only=True)
-        model = AutoModelForMaskedLM.from_pretrained(EEBO_MODEL_NAME, local_files_only=True)
+        tokenizer = AutoTokenizer.from_pretrained(MACBERTH_MODEL_PATH, local_files_only=True)
+        model = AutoModelForMaskedLM.from_pretrained(MACBERTH_MODEL_PATH, local_files_only=True)
 
         if not getattr(tokenizer, "is_fast", False):
             raise RuntimeError("Tokenizer must be fast")

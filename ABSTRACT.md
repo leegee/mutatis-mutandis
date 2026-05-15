@@ -64,9 +64,9 @@ Scope: Pamphlets spanning 1600–1700, covering civil, religious, and legal deba
 
 ### 4.2 Conceptual Pole Framework
 
-Define canonical poles based on historical scholarship and corpus evidence
+Hypothesised conceptual pole pairs derived from historiography, and iteratively refined through results analysis.
 
-Example poles:
+Example poles being used in exploratory work:
 
     liberty / authority
 

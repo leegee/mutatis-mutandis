@@ -188,15 +188,15 @@ export default function Tier3Graph(props: Props) {
 
             <section class="no-margin border">
                 <aside class="padding border">
-                    <label>Token</label>
-                    <select
-                        value={selectedToken() ?? ""}
-                        onChange={(e) => setSelectedToken(e.currentTarget.value)}
-                    >
-                        {tokenKeys().map(token => (
-                            <option value={token}>{token}</option>
-                        ))}
-                    </select>
+                    <h6>Token{" "}
+                        <select value={selectedToken() ?? ""}
+                            onChange={(e) => setSelectedToken(e.currentTarget.value)}
+                        >
+                            {tokenKeys().map(token => (
+                                <option value={token}>{token}</option>
+                            ))}
+                        </select>
+                    </h6>
                 </aside>
 
                 <svg ref={svgRef}></svg>
@@ -240,11 +240,6 @@ export default function Tier3Graph(props: Props) {
                                     })}
                                 </ul>
                             </div>
-
-                            <hr />
-
-                            <p>Nodes are structural states.</p>
-                            <p>Links encode continuity strength.</p>
                         </div>
                     )}
                 </Show>

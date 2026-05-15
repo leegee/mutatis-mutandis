@@ -20,11 +20,11 @@ from collections import defaultdict
 
 import numpy as np
 
-from lib.eebo_config import ZARR_ROOT
+from lib.eebo_config import OUT_DIR
 from lib.eebo_logging import logger
 from tier2_0_concept_structure import OUTPUT_PATH as INPUT_PATH
 
-OUTPUT_PATH = ZARR_ROOT / "tier2_7.json"
+OUTPUT_PATH = OUT_DIR / "tier2_7.json"
 
 
 def load_structure() -> Dict[str, Any]:

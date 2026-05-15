@@ -17,9 +17,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 EEBO_SRC_DIR = Path(__file__).resolve().parent
 XML_ROOT_DIR = BASE_DIR / "eebo_all"
 
-# EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
-EEBO_MODEL_NAME = str("lib/macberth-huggingface")
-
 try:
     import google.colab  # noqa: F401
     COLAB_MODE = True
@@ -70,6 +67,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
+# EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
 
 FAISS_ID_TO_EEBO_DOC_ID = INDEXES_DIR / 'index_to_doc_id.json'
 

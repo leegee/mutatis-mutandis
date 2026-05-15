@@ -23,12 +23,12 @@ from typing import Dict, Any
 from pathlib import Path
 
 from lib.eebo_db import get_connection
-from lib.eebo_config import ZARR_ROOT, XML_ROOT_DIR, CONCEPT_SETS
+from lib.eebo_config import XML_ROOT_DIR, CONCEPT_SETS, OUT_DIR
 from lib.eebo_logging import logger
 
 from tier2_7_branch_builder import OUTPUT_PATH as INPUT_PATH
 
-OUTPUT_PATH = ZARR_ROOT / "d3_export.json"
+OUTPUT_PATH = OUT_DIR / "d3_export.json"
 
 
 
