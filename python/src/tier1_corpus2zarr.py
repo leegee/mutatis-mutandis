@@ -48,9 +48,9 @@ STRIDE = WINDOW_SIZE // 2
 DOC_INDEX_PATH = ZARR_ROOT / "tier1" / "doc_index.json"
 
 
-# ---------------------------------------------------------------------
+
 # Data structures
-# ---------------------------------------------------------------------
+
 
 @dataclass
 class Window:
@@ -73,9 +73,9 @@ class PendingDoc:
     vector_ids: np.ndarray
 
 
-# ---------------------------------------------------------------------
+
 # Sidecar index
-# ---------------------------------------------------------------------
+
 
 def load_doc_index() -> Dict:
     if DOC_INDEX_PATH.exists():
@@ -96,9 +96,9 @@ def record_doc(index, slice_id, doc_id, start, end):
     save_doc_index(index)
 
 
-# ---------------------------------------------------------------------
+
 # Tokenisation
-# ---------------------------------------------------------------------
+
 
 def encode_doc(tokens, tokenizer):
     enc = tokenizer(
@@ -115,9 +115,9 @@ def encode_doc(tokens, tokenizer):
     return input_ids, attention_mask, word_ids
 
 
-# ---------------------------------------------------------------------
+
 # Streaming window generator
-# ---------------------------------------------------------------------
+
 
 def iter_windows(input_ids, attention_mask, word_ids):
     n = len(input_ids)
@@ -138,9 +138,9 @@ def iter_windows(input_ids, attention_mask, word_ids):
         start += STRIDE
 
 
-# ---------------------------------------------------------------------
+
 # Forward pass
-# ---------------------------------------------------------------------
+
 
 def forward_windows(windows, model, device):
     windows = sorted(windows, key=lambda w: len(w.input_ids), reverse=True)
@@ -165,7 +165,7 @@ def forward_windows(windows, model, device):
             [pad(w.attention_mask, 0) for w in batch]
         ).to(device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             use_amp = device.startswith("cuda")
             if use_amp:
                 with torch.cuda.amp.autocast():
@@ -198,9 +198,9 @@ def forward_windows(windows, model, device):
     return results
 
 
-# ---------------------------------------------------------------------
+
 # Accumulation (ARRAY VERSION)
-# ---------------------------------------------------------------------
+
 
 def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
     for i, word_id in enumerate(window.word_ids):
@@ -230,9 +230,9 @@ def finalise(pending: PendingDoc):
     return vecs, ids
 
 
-# ---------------------------------------------------------------------
+
 # Per-document pipeline
-# ---------------------------------------------------------------------
+
 
 def process_doc(tokens, vector_ids, tokenizer, model, device):
 
@@ -268,9 +268,9 @@ def process_doc(tokens, vector_ids, tokenizer, model, device):
     return finalise(pending)
 
 
-# ---------------------------------------------------------------------
+
 # Slice processor
-# ---------------------------------------------------------------------
+
 
 def process_slice(conn, slice_range, tokenizer, model, device, doc_index):
 
@@ -340,9 +340,9 @@ def process_slice(conn, slice_range, tokenizer, model, device, doc_index):
     logger.info(f"[SLICE COMPLETE] {slice_id}")
 
 
-# ---------------------------------------------------------------------
+
 # CLI (UNCHANGED)
-# ---------------------------------------------------------------------
+
 
 def clear_output_dir():
     path = ZARR_ROOT / "tier1"
