@@ -15,7 +15,7 @@ export default function App() {
 
   onMount(async () => {
     try {
-      const result = await loadDriftData("zarr/d3_export.json");
+      const result = await loadDriftData("d3_export.json");
       setData(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
