@@ -242,7 +242,7 @@ def process_doc(tokens, vector_ids, tokenizer, model, device):
     dim = model.config.hidden_size
 
     pending = PendingDoc(
-        vec_sum=np.zeros((n, dim), dtype=np.float64),
+        vec_sum=np.zeros((n, dim), dtype=np.float32),
         count=np.zeros(n, dtype=np.int32),
         vector_ids=np.array(vector_ids, dtype=np.int64),
     )
