@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-tier1_test.py
+tier1_test_vector2token.py
 """
 import zarr
 import numpy as np

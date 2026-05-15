@@ -2,16 +2,26 @@
 """
 tier1_corpus2zarr.py
 
-Clean architecture:
--------------------
-- Tokenise once per document into subword space
-- Window over subword sequence only
-- No re-tokenisation downstream
-- No word/subword mixed indexing in runtime logic
+Subword-native embedding pipeline (clean + memory optimised).
 
-Core invariant:
-    ALL MODEL OPERATIONS ARE IN SUBWORD SPACE
-    ALL AGGREGATION IS IN WORD SPACE (metadata only)
+Core invariants:
+- Tokenisation happens once per document
+- Windowing operates only on subword sequence
+- No word/subword mixed indexing in runtime logic
+- No global window lists (streaming windows)
+
+HIDDEN-STATE LAYER CHOICE IS IMPLICIT
+
+We use `out.last_hidden_state` which means final transformer layer only.
+This may not be optimal.
+
+IDEALLY WE WANT:
+
+- sentence-aware chunking
+- paragraph-aware chunking
+- discourse-aware chunking
+
+
 """
 
 from __future__ import annotations
@@ -83,7 +93,7 @@ def record_doc(index, slice_id, doc_id, start, end):
 
 
 # ---------------------------------------------------------------------
-# Tokenisation + windowing (SUBWORD ONLY)
+# Tokenisation
 # ---------------------------------------------------------------------
 
 def encode_doc(tokens, tokenizer):
@@ -101,60 +111,95 @@ def encode_doc(tokens, tokenizer):
     return input_ids, attention_mask, word_ids
 
 
-def make_windows(input_ids, attention_mask, word_ids):
-    windows = []
-    n = len(input_ids)
+# ---------------------------------------------------------------------
+# Streaming window generator (B1)
+# ---------------------------------------------------------------------
 
+def iter_windows(input_ids, attention_mask, word_ids):
+    n = len(input_ids)
     start = 0
+
     while start < n:
         end = min(start + WINDOW_SIZE, n)
 
-        windows.append(Window(
+        yield Window(
             input_ids=input_ids[start:end],
             attention_mask=attention_mask[start:end],
             word_ids=word_ids[start:end],
             token_offset=start,
-        ))
+        )
 
         if end == n:
             break
         start += STRIDE
 
-    return windows
-
 
 # ---------------------------------------------------------------------
-# Forward pass (NO TOKENIZER HERE)
+# Forward pass (B2 + B4)
 # ---------------------------------------------------------------------
 
 def forward_windows(windows, model, device):
-    max_len = max(len(w.input_ids) for w in windows)
+    # length-sorted batching reduces padding waste
+    windows = sorted(windows, key=lambda w: len(w.input_ids), reverse=True)
 
-    def pad(seq, pad_id=0):
-        return seq + [pad_id] * (max_len - len(seq))
+    results = []
+    batch = []
 
-    batch_input = torch.tensor(
-        [pad(w.input_ids) for w in windows]
-    ).to(device)
+    def flush(batch):
+        if not batch:
+            return
 
-    batch_mask = torch.tensor(
-        [pad(w.attention_mask, 0) for w in windows]
-    ).to(device)
+        max_len = len(batch[0].input_ids)
 
-    with torch.no_grad():
-        out = model(
-            input_ids=batch_input,
-            attention_mask=batch_mask,
-            return_dict=True
-        )
+        def pad(seq, pad=0):
+            return seq + [pad] * (max_len - len(seq))
 
-    hidden = out.last_hidden_state.cpu().numpy()
+        batch_input = torch.tensor(
+            [pad(w.input_ids) for w in batch]
+        ).to(device)
 
-    return [(windows[i], hidden[i]) for i in range(len(windows))]
+        batch_mask = torch.tensor(
+            [pad(w.attention_mask, 0) for w in batch]
+        ).to(device)
+
+        with torch.no_grad():
+            use_amp = device.startswith("cuda")
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    out = model(
+                        input_ids=batch_input,
+                        attention_mask=batch_mask,
+                        return_dict=True
+                    )
+            else:
+                out = model(
+                    input_ids=batch_input,
+                    attention_mask=batch_mask,
+                    return_dict=True
+                )
+
+        hidden = out.last_hidden_state.detach()
+
+        # avoid double CPU copy chain
+        hidden = hidden.cpu().numpy()
+
+        for i in range(len(batch)):
+            results.append((batch[i], hidden[i]))
+
+        batch.clear()
+
+    for w in windows:
+        batch.append(w)
+        if len(batch) >= EMBED_BATCH_SIZE:
+            flush(batch)
+
+    flush(batch)
+
+    return results
 
 
 # ---------------------------------------------------------------------
-# Accumulation (word-space aggregation only)
+# Accumulation
 # ---------------------------------------------------------------------
 
 def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
@@ -166,11 +211,14 @@ def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
         if vec is None:
             continue
 
-        if word_id not in pending.vec_sum:
-            pending.vec_sum[word_id] = np.zeros(vec.shape, dtype=np.float64)
+        vec_sum = pending.vec_sum
+        count = pending.count
 
-        pending.vec_sum[word_id] += vec
-        pending.count[word_id] += 1
+        if word_id not in vec_sum:
+            vec_sum[word_id] = np.zeros(vec.shape, dtype=np.float64)
+
+        vec_sum[word_id] += vec
+        count[word_id] += 1
 
 
 def finalise(pending: PendingDoc):
@@ -191,7 +239,7 @@ def finalise(pending: PendingDoc):
 
 
 # ---------------------------------------------------------------------
-# Per-document pipeline
+# Per-document pipeline (B1 integrated)
 # ---------------------------------------------------------------------
 
 def process_doc(tokens, vector_ids, tokenizer, model, device):
@@ -203,20 +251,29 @@ def process_doc(tokens, vector_ids, tokenizer, model, device):
         i: vector_ids[i] for i in range(len(vector_ids))
     }
 
-    windows = make_windows(input_ids, attention_mask, word_ids)
+    window_iter = iter_windows(input_ids, attention_mask, word_ids)
 
-    for chunk_start in range(0, len(windows), EMBED_BATCH_SIZE):
-        chunk = windows[chunk_start:chunk_start + EMBED_BATCH_SIZE]
-        results = forward_windows(chunk, model, device)
+    batch = []
 
-        for w, hidden in results:
-            accumulate(pending, w, hidden)
+    for w in window_iter:
+        batch.append(w)
+
+        if len(batch) >= EMBED_BATCH_SIZE:
+            results = forward_windows(batch, model, device)
+            for win, hidden in results:
+                accumulate(pending, win, hidden)
+            batch.clear()
+
+    if batch:
+        results = forward_windows(batch, model, device)
+        for win, hidden in results:
+            accumulate(pending, win, hidden)
 
     return finalise(pending)
 
 
 # ---------------------------------------------------------------------
-# Slice processing
+# Slice processor (unchanged CLI behaviour)
 # ---------------------------------------------------------------------
 
 def process_slice(conn, slice_range, tokenizer, model, device, doc_index):
@@ -288,7 +345,7 @@ def process_slice(conn, slice_range, tokenizer, model, device, doc_index):
 
 
 # ---------------------------------------------------------------------
-# CLI
+# CLI (UNCHANGED)
 # ---------------------------------------------------------------------
 
 def clear_output_dir():
