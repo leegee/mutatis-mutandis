@@ -5,33 +5,46 @@ tier2_7_branch_builder.py
 k-Branch persistence layer.
 
 Key property:
-    Node = cluster identity + aggregated doc support
+    Nodes are NOT semantic identities.
+    They are slice-local cluster observations linked via centroid similarity.
 
 Invariant:
-    doc weights are accumulated across ALL retained edges
-    and normalised only at final node materialisation
+    - doc weights accumulate across retained edges
+    - normalisation only occurs at final node materialisation
+    - cluster IDs are local-only labels (NOT stable identities)
 """
 
 from __future__ import annotations
 
 import json
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 from collections import defaultdict
 
 import numpy as np
 
 from lib.eebo_config import OUT_DIR
 from lib.eebo_logging import logger
-from tier2_0_concept_structure import OUTPUT_PATH as INPUT_PATH
+
+from tier2_0_initial_structures import OUTPUT_PATH as INPUT_PATH
 
 OUTPUT_PATH = OUT_DIR / "tier2_7.json"
 
+log = logger
+
+
+# -----------------------------
+# IO
+# -----------------------------
 
 def load_structure() -> Dict[str, Any]:
     with open(INPUT_PATH, "r", encoding="utf-8") as f:
         payload = json.load(f)
     return payload["data"]["tokens"]
 
+
+# -----------------------------
+# Geometry
+# -----------------------------
 
 def node_id(slice_id: str, cluster_id: int) -> str:
     return f"{slice_id}:{cluster_id}"
@@ -53,25 +66,58 @@ def score_edge(edge: Dict[str, Any]) -> float:
     return sim - (0.15 * size_penalty) - gap_penalty
 
 
+# -----------------------------
+# Edge construction
+# -----------------------------
+
+def _safe_centroid(c: Dict[str, Any]) -> np.ndarray | None:
+    if c is None:
+        return None
+    centroid = c.get("centroid", None)
+    if centroid is None:
+        return None
+    return np.asarray(centroid, dtype=np.float32)
+
+
 def build_candidate_edges(token_data: Dict[str, Any], similarity_threshold: float = 0.75):
 
     slice_ids = sorted(token_data.keys())
     edges = []
 
+    log.info(f"[tier2.7] building_edges slices={len(slice_ids)}")
+
     for i in range(len(slice_ids) - 1):
         s1, s2 = slice_ids[i], slice_ids[i + 1]
 
-        c1 = token_data[s1].get("clusters", [])
-        c2 = token_data[s2].get("clusters", [])
+        c1 = token_data[s1].get("clusters", {}).get("centered", [])
+        c2 = token_data[s2].get("clusters", {}).get("centered", [])
+
+        log.debug(
+            f"[tier2.7] slice_pair={s1}->{s2} "
+            f"clusters={len(c1)}->{len(c2)}"
+        )
 
         if not c1 or not c2:
+            log.debug(f"[tier2.7] skip_pair empty_clusters {s1}->{s2}")
             continue
 
         for a in c1:
-            va = np.asarray(a["centroid"], dtype=np.float32)
+            va = _safe_centroid(a)
+            if va is None:
+                continue
+
+            if a.get("degenerate"):
+                log.debug(f"[tier2.7] skip_cluster degenerate from {s1}:{a.get('cluster_id')}")
+                continue
 
             for b in c2:
-                vb = np.asarray(b["centroid"], dtype=np.float32)
+                vb = _safe_centroid(b)
+                if vb is None:
+                    continue
+
+                if b.get("degenerate"):
+                    continue
+
                 sim = cosine(va, vb)
 
                 if sim < similarity_threshold:
@@ -86,13 +132,22 @@ def build_candidate_edges(token_data: Dict[str, Any], similarity_threshold: floa
                     "to_size": int(b["size"]),
                     "similarity": float(sim),
 
-                    # raw doc support (may be sparse)
                     "from_docs": a.get("doc_weights", {}),
                     "to_docs": b.get("doc_weights", {})
                 })
 
+        log.debug(
+            f"[tier2.7] slice_pair_done={s1}->{s2} edges_so_far={len(edges)}"
+        )
+
+    log.info(f"[tier2.7] total_edges={len(edges)}")
+
     return edges
 
+
+# -----------------------------
+# Edge grouping
+# -----------------------------
 
 def group_by_source(edges):
     by_src = defaultdict(list)
@@ -101,20 +156,43 @@ def group_by_source(edges):
     return by_src
 
 
+# -----------------------------
+# Graph construction
+# -----------------------------
+
 def build_k_branch_graph(edges, k=3):
 
     by_src = group_by_source(edges)
+
+    log.info(
+        f"[tier2.7] k_branch_start edges={len(edges)} "
+        f"groups={len(by_src)}"
+    )
+
     retained_edges = []
 
-    for _, outgoing in by_src.items():
-        ranked = sorted(outgoing, key=score_edge, reverse=True)
-        retained_edges.extend([e for e in ranked[:k] if score_edge(e) > 0.6])
+    def score(e):
+        return score_edge(e)
+
+    for src, outgoing in by_src.items():
+        ranked = sorted(outgoing, key=score, reverse=True)
+
+        kept = 0
+
+        for e in ranked[:k]:
+            s = score_edge(e)
+            if s > 0.6:
+                retained_edges.append(e)
+                kept += 1
+
+        if kept == 0:
+            log.debug(f"[tier2.7] prune_node {src} no_retained_edges")
 
     node_intrinsic = defaultdict(int)
     node_doc_weights = defaultdict(lambda: defaultdict(float))
 
     # -----------------------------
-    # ACCUMULATION PHASE
+    # ACCUMULATION
     # -----------------------------
     for e in retained_edges:
 
@@ -124,15 +202,19 @@ def build_k_branch_graph(edges, k=3):
         node_intrinsic[src] = max(node_intrinsic[src], e["from_size"])
         node_intrinsic[dst] = max(node_intrinsic[dst], e["to_size"])
 
-        # accumulate doc signal (CRITICAL FIX)
         for doc, w in e["from_docs"].items():
             node_doc_weights[src][doc] += float(w)
 
         for doc, w in e["to_docs"].items():
             node_doc_weights[dst][doc] += float(w)
 
+    log.info(
+        f"[tier2.7] retained_edges={len(retained_edges)} "
+        f"nodes_src={len(node_intrinsic)}"
+    )
+
     # -----------------------------
-    # NORMALISATION PHASE
+    # NORMALISATION
     # -----------------------------
     nodes = {}
 
@@ -174,6 +256,10 @@ def build_k_branch_graph(edges, k=3):
     }
 
 
+# -----------------------------
+# Driver
+# -----------------------------
+
 def build_all():
     data = load_structure()
 
@@ -181,10 +267,14 @@ def build_all():
     diagnostics = {}
 
     for token, token_data in data.items():
-        logger.info(f"[tier2.7] token={token}")
+        log.info(f"[tier2.7] token={token} slices={len(token_data)}")
 
         edges = build_candidate_edges(token_data)
+
+        log.info(f"[tier2.7] token={token} edges={len(edges)}")
+
         if not edges:
+            log.warning(f"[tier2.7] DROP_TOKEN_NO_EDGES token={token}")
             continue
 
         graphs[token] = build_k_branch_graph(edges, k=3)
@@ -202,7 +292,7 @@ def write_output(graphs, diagnostics):
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
 
-    logger.info(f"[tier2.7] wrote {OUTPUT_PATH}")
+    log.info(f"[tier2.7] wrote {OUTPUT_PATH}")
 
 
 def main():

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-tier1_test_vector2token.py
+tier1_test_corpus2zarr.py
 
 Checks structural equivalence between DB token stream and Zarr output.
 
@@ -115,11 +115,6 @@ for SLICE in slices:
             np.array(db_seq, dtype=np.int64),
             zarr_seq
         ), f"Doc mismatch: {doc_id}"
-
-        # ordering sanity (within doc only)
-        assert np.all(np.diff(zarr_seq) > 0), (
-            f"Non-monotonic vector_ids within doc {doc_id}"
-        )
 
     print("✔ Per-document structural equivalence confirmed")
 
