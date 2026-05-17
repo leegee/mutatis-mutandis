@@ -275,7 +275,7 @@ CONCEPT_SETS: CanonicalRules = {
         "false_positives": {"religious", "religionist"}
     },
 
-    # Baselines
+    # Neutral baselines
     "MAN": {
         "forms": {"man"},
         "false_positives": {"woman"},
