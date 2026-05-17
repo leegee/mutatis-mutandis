@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-tier2_0_initial_structures.py
+tier2_0_dbscan_fail.py
 
 Tier 2:
     - slice-local embedding clustering
