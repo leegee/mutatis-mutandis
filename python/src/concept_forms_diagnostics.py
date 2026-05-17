@@ -58,9 +58,7 @@ from lib.eebo_logging import logger
 from lib.eebo_db import get_connection
 
 
-# ----------------------------
 # Zarr loading
-# ----------------------------
 
 def iter_slices():
     base = Path(ZARR_ROOT) / "tier1"
@@ -101,9 +99,7 @@ def build_global_space():
     return vecs, ids
 
 
-# ----------------------------
 # lexical resolution layer
-# ----------------------------
 
 def load_vector_id_to_token(conn):
     logger.info("[db] loading vector_id → token map")
@@ -117,9 +113,7 @@ def load_vector_id_to_token(conn):
     return {vid: tok for vid, tok in cur}
 
 
-# ----------------------------
 # geometry utilities
-# ----------------------------
 
 def centroid(vectors):
     c = vectors.mean(axis=0)
@@ -159,12 +153,9 @@ def random_baseline(vecs, sample_n=200):
     return idx, sims
 
 
-# ----------------------------
 # concept analysis
-# ----------------------------
 
 def analyse_concept(name, concept, vecs, ids, id2tok, k=100):
-
     forms = {f.lower() for f in concept["forms"]}
     false_positives = {f.lower() for f in concept.get("false_positives", set())}
 
@@ -195,10 +186,7 @@ def analyse_concept(name, concept, vecs, ids, id2tok, k=100):
 
     c = centroid(form_vecs)
 
-    # ----------------------------
     # neighbourhood sampling
-    # ----------------------------
-
     nn_idx, nn_sims = topk(vecs, c, k=k)
     mid_idx, _ = mid_band(vecs, c)
     rand_idx, _ = random_baseline(vecs)
@@ -231,9 +219,6 @@ def analyse_concept(name, concept, vecs, ids, id2tok, k=100):
     return result
 
 
-# ----------------------------
-# main
-# ----------------------------
 
 def main():
     conn = get_connection()
