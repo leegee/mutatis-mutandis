@@ -7,8 +7,34 @@ Tier 2:
     - DBSCAN grouping in embedding space
     - produces atomic semantic micro-clusters per token per slice
     - deterministic recomputation from Tier 1 Zarr
-    - No links between nodes/clusters
-    - Plot global bias.
+    - no links between nodes/clusters
+    - preserves both raw and centered geometry
+
+Purpose:
+    Investigate whether Early Modern political and
+    theological concepts form stable local semantic
+    clusters within chronological EEBO slices.
+
+Initial hypothesis:
+    Concepts such as LIBERTY, LAW, RELIGION, etc
+    would form identifiable local semantic structures
+    within slice-constrained contextual embedding space.
+
+Methodological outcome:
+    The experiments demonstrated that slice-local
+    density clustering is often unstable because
+    token distributions are sparse, rhetorically
+    heterogeneous, and distributed across many
+    documents and contexts.
+
+    Follow-up neighbour diagnostics later showed
+    that meaningful semantic structure does exist
+    globally within embedding space, but not
+    necessarily as dense local DBSCAN clusters.
+
+    This script therefore represents an important
+    negative-result stage in the methodological
+    development of the project.
 
 Core invariants:
     - clustering is strictly slice-local
@@ -18,7 +44,7 @@ Core invariants:
 
 IMPORTANT:
 
-    We now preserve BOTH:
+    We preserve BOTH:
 
         1. raw semantic geometry
         2. centered analytic geometry
@@ -31,8 +57,55 @@ RAW SPACE:
 CENTERED SPACE:
     Local slice-relative deviation from discourse baseline.
 
-Tier 2.7 should generally operate on RAW geometry unless
-explicitly experimenting with relative semantic structure.
+The distinction later became methodologically important.
+
+Subsequent neighbour-analysis experiments suggested
+that the global discourse field itself may encode
+historically meaningful ideological organisation,
+rather than merely statistical embedding bias.
+
+This implies that subtracting global centroids too
+aggressively may erase historically meaningful
+semantic structure.
+
+Interpretive finding:
+    Failure to produce stable DBSCAN clusters did
+    NOT imply absence of semantic organisation.
+
+    Later neighbour diagnostics demonstrated that
+    embeddings around concepts such as LIBERTY
+    form coherent semantic/discourse fields
+    containing:
+
+        - orthographic variants
+        - semantic associates
+        - rhetorical companions
+        - ideological co-positioning
+
+    The principal issue was therefore slice-level
+    sparsity and fragmentation rather than failure
+    of the embedding space itself.
+
+Methodological shift:
+    The project subsequently moved away from assuming
+    that concepts necessarily form compact local
+    semantic islands.
+
+    Instead, the later stages focus on:
+
+        - semantic neighbourhoods
+        - discourse fields
+        - temporal neighbour drift
+        - changing conceptual associations
+        - rhetorical co-position networks
+
+    This better reflects the distributed and
+    intertextual nature of Early Modern pamphlet
+    discourse.
+
+Tier 2.7 should generally operate on RAW geometry
+unless explicitly experimenting with relative
+semantic structure.
 """
 
 from __future__ import annotations
@@ -127,6 +200,16 @@ def local_center(vecs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         This is NOT semantic normalization.
         It is an analytic projection only.
 
+    Historical note:
+        Subsequent experiments suggested that
+        the global discourse field may itself
+        encode historically meaningful rhetorical
+        structure rather than statistical noise.
+
+        Centering is therefore preserved as an
+        optional analytic view rather than a
+        mandatory preprocessing step.
+
     Returns:
         centered_vecs,
         global_centroid
@@ -151,6 +234,16 @@ def summarise_clusters(
     IMPORTANT:
         Cluster IDs are local-only DBSCAN labels.
         They are NOT stable semantic identities.
+
+    Methodological note:
+        Most generated clusters in practice were
+        either extremely small or highly unstable
+        across slices.
+
+        This later became evidence that pamphlet
+        discourse may organise semantically as
+        distributed rhetorical fields rather than
+        compact local density structures.
     """
 
     clusters = defaultdict(list)
@@ -528,4 +621,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
