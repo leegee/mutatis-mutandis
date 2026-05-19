@@ -1,38 +1,127 @@
-import 'beercss';
-import { createEffect, createSignal, onMount, Show } from "solid-js";
+// src/App.tsx
 
-import Tier3Graph from './components/Tier3Graph';
-import { loadDriftData } from './services/zarrJsonService';
-import type { Tier3GraphData } from './types';
+import {
+  createMemo,
+  createResource,
+  Show
+} from "solid-js";
+
+import { loadEvents } from "./services/loadEvents";
+
+import type { SemanticEvent } from "./types/events";
+
+import EventScatter from "./components/EventScatter";
+import EventStream from "./components/EventStream";
+import EventInspector from "./components/EventInspector";
+
+import {
+  selectedConcept,
+  selectedSlice,
+  selectedEventId
+} from "./state/selection";
 
 export default function App() {
-  const [data, setData] = createSignal<Tier3GraphData | null>(null);
-  const [error, setError] = createSignal<string | null>(null);
 
-  createEffect(() => {
-    if (error() !== null) console.error(error()) // later: toast
-  })
+  const [events] =
+    createResource(loadEvents);
 
-  onMount(async () => {
-    try {
-      const result = await loadDriftData("d3_export.json");
-      setData(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
+  const concepts = createMemo(() => {
+    const e = events();
+    if (!e) return [];
+
+    return [...new Set(
+      e.map(x => x.concept)
+    )].sort();
+  });
+
+
+  const slicesByConcept = createMemo(() => {
+    const e = events();
+    if (!e) return {};
+
+    const out: Record<string, string[]> = {};
+
+    for (const ev of e) {
+      if (!out[ev.concept]) {
+        out[ev.concept] = [];
+      }
+
+      if (!out[ev.concept].includes(ev.slice)) {
+        out[ev.concept].push(ev.slice);
+      }
     }
+
+    return out;
+  });
+
+  const filteredVisibleEvents = createMemo(() => {
+    const e = events();
+
+    if (!e) return [];
+
+    return e.filter(ev => {
+      const concept =
+        selectedConcept();
+
+      const slice =
+        selectedSlice();
+
+      if (concept && ev.concept !== concept) {
+        return false;
+      }
+
+      if (slice && ev.slice !== slice) {
+        return false;
+      }
+
+      return true;
+    });
+  });
+
+  // O(1) event lookup
+  const eventIndex = createMemo(() => {
+    const e = events();
+    if (!e) return {};
+
+    const out: Record<string, SemanticEvent> = {};
+
+    for (const ev of e) {
+      out[ev.id] = ev;
+    }
+
+    return out;
+  });
+
+  const selectedEvent = createMemo(() => {
+    const id = selectedEventId();
+    if (!id) return null;
+
+    return eventIndex()[id] ?? null;
   });
 
   return (
-    <main class="responsive max large-gap">
+    <>
+      <nav class="left">
+        <EventStream
+          concepts={concepts()}
+          slicesByConcept={slicesByConcept()}
+        />
+      </nav>
 
-      <Show when={!error()} fallback={<p>{error()}</p>}>
-        <Show when={data()} fallback={<p>Loading drift data...</p>}>
-          {(d) => (
-            <Tier3Graph data={d()} />
-          )}
+      <main class="responsive max">
+        <Show when={events()}>
+          <div class="grid" style="max-heigh: 100%; overflow:none">
+            <div class="s9 border">
+              <EventScatter events={filteredVisibleEvents()} />
+            </div>
+
+            <div class="s3">
+              <EventInspector event={selectedEvent()} />
+            </div>
+          </div>
         </Show>
-      </Show>
 
-    </main>
+      </main>
+    </>
   );
 }

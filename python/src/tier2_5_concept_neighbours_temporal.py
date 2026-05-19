@@ -2,6 +2,8 @@
 """
 tier2_5_concept_neighbours_temporal.py
 
+tier2_5_concept_neighbours_temporal.py
+
 Temporal extension of Tier 2 instance-level semantic neighbourhood extraction.
 
 RATIONALE
@@ -35,6 +37,8 @@ Enables:
     - slice-level semantic field comparison
     - drift analysis of neighbour distributions
     - conceptual stability vs volatility measurement
+    - global 2D PCA projection for visualization (EventScatter support)
+
 """
 
 from __future__ import annotations
@@ -45,6 +49,7 @@ from typing import Dict, Any
 
 import numpy as np
 import zarr
+from sklearn.decomposition import PCA
 
 from lib.eebo_config import CONCEPT_SETS, ZARR_ROOT, OUT_DIR
 from lib.eebo_db import get_connection
@@ -55,15 +60,7 @@ OUTPUT_PATH = OUT_DIR / "tier2_5_concept_neighbours_temporal.json"
 K_NEIGHBOURS = 25
 
 
-# Slice reconstruction from Zarr layout
 def build_vector_slice_map() -> Dict[int, str]:
-    """
-    Reconstruct vector_id → slice_id mapping from Zarr partitioning.
-
-    Invariant:
-        each vector_id appears in exactly one slice folder
-    """
-
     mapping: Dict[int, str] = {}
 
     root = ZARR_ROOT / "tier1"
@@ -81,11 +78,9 @@ def build_vector_slice_map() -> Dict[int, str]:
             mapping[int(vid)] = slice_id
 
     logger.info(f"[tier2.5] slice_map_size={len(mapping)}")
-
     return mapping
 
 
-# Embeddings (unchanged from Tier 2)
 def load_embeddings():
     vecs_all = []
     ids_all = []
@@ -104,13 +99,13 @@ def load_embeddings():
     vecs = np.concatenate(vecs_all, axis=0)
     ids = np.concatenate(ids_all, axis=0)
 
+    # normalize for cosine similarity
     norms = np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
     vecs = vecs / norms
 
     return vecs, ids
 
 
-# Token index
 def load_token_index():
     conn = get_connection()
 
@@ -134,7 +129,32 @@ def load_token_index():
     return vec_to_token, vec_to_doc
 
 
-# Fast cosine (dot product on normalised vectors)
+# Global 2D projection (NEW)
+def build_projection(vecs, ids):
+    """
+    Global PCA projection of embedding space.
+    Preserves relative geometry for scatter visualization.
+    """
+
+    logger.info("[tier2.5] building PCA projection")
+
+    pca = PCA(n_components=2)
+    proj = pca.fit_transform(vecs)
+
+    vec_to_xy = {
+        int(ids[i]): {
+            "x": float(proj[i, 0]),
+            "y": float(proj[i, 1]),
+        }
+        for i in range(len(ids))
+    }
+
+    logger.info("[tier2.5] PCA variance ratio = %s", pca.explained_variance_ratio_)
+
+    return vec_to_xy
+
+
+# Nearest neighbors
 def nearest(vecs, ids, vec_to_token, query_vec, k):
     sims = vecs @ query_vec
     sims = np.clip(sims, -1.0, 1.0)
@@ -152,17 +172,16 @@ def nearest(vecs, ids, vec_to_token, query_vec, k):
     ]
 
 
-# Concept processing (now slice-aware)
 def process_concept(
     vecs,
     ids,
     vec_to_token,
     vec_to_doc,
     vec_to_slice,
+    vec_to_xy,
     concept_name,
     concept
 ):
-
     forms = {f.lower() for f in concept["forms"]}
     logger.info(f"[tier2.5] processing={concept_name} forms={len(forms)}")
 
@@ -202,7 +221,11 @@ def process_concept(
             "vector_id": int(vid),
             "token": vec_to_token.get(int(vid)),
             "doc_id": vec_to_doc.get(int(vid)),
-            "slice": vec_to_slice.get(int(vid)),   # NEW
+            "slice": vec_to_slice.get(int(vid)),
+
+            # NEW: scatter projection
+            "xy": vec_to_xy.get(int(vid)),
+
             "neighbours": neighbours
         })
 
@@ -212,7 +235,6 @@ def process_concept(
         "n_instances": int(len(concept_vecs)),
         "instances": results
     }
-
 
 
 def main():
@@ -225,6 +247,8 @@ def main():
     logger.info("[tier2.5] building slice map")
     vec_to_slice = build_vector_slice_map()
 
+    vec_to_xy = build_projection(vecs, ids)
+
     output: Dict[str, Any] = {
         "k": K_NEIGHBOURS,
         "concepts": {}
@@ -232,12 +256,14 @@ def main():
 
     for concept_name, concept in CONCEPT_SETS.items():
         logger.info(f"[tier2.5] START {concept_name}")
+
         output["concepts"][concept_name] = process_concept(
             vecs,
             ids,
             vec_to_token,
             vec_to_doc,
             vec_to_slice,
+            vec_to_xy,
             concept_name,
             concept
         )

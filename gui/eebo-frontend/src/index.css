@@ -9,31 +9,58 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-
-article {
-  opacity: 1;
-  transition: all 222ms ease-in-out;
-  filter: none;
+html,
+body,
+:root,
+#root {
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-svg {
-  outline: none !important;
+body {
+  overflow: hidden;
 }
 
-.throbbing {
-  animation: throbbingOpacity 5s ease-in-out infinite;
+#root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
 }
 
-@keyframes throbbingOpacity {
-  0% {
-    opacity: 0.5;
-  }
+nav.left {
+  width: 280px;
+  overflow-y: auto;
+  height: 100%;
+}
 
-  50% {
-    opacity: 1;
-  }
+main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
 
-  100% {
-    opacity: 0.5;
-  }
+.grid {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  width: 100%;
+}
+
+.s9 {
+  flex: 1;
+  overflow: hidden;
+}
+
+.s3 {
+  width: 320px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.grid,
+main,
+.s9,
+.s3 {
+  min-height: 0;
 }

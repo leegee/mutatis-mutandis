@@ -1,2 +1,2 @@
 export * from './types/search-engine';
-export * from './types/visualiser';
+export * from './types/events';
