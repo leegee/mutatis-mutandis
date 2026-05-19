@@ -40,8 +40,9 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-
-from lib.eebo_config import OUT_DIR
+from pathlib import Path
+from lib.eebo_config import OUT_DIR, XML_ROOT_DIR
+from lib.eebo_logging import logger
 from tier2_5_concept_neighbours_temporal import OUTPUT_PATH as INPUT_PATH
 
 OUTPUT_PATH = OUT_DIR / "tier2_5_d3.json"
@@ -52,15 +53,26 @@ def load():
         return json.load(f)
 
 
-# --------------------------------------
+def normalize_filepath(fp: str) -> str:
+    if not fp:
+        return None
+
+    p = Path(fp).expanduser().resolve()
+
+    try:
+        p = p.relative_to(XML_ROOT_DIR)
+    except ValueError:
+        # fallback: keep absolute but normalized
+        return str(p)
+
+    return p.as_posix()
+
+
 # Transform to UI-ready structure
-# --------------------------------------
 def transform(data):
     out = {
         "k": data.get("k"),
         "concepts": {},
-
-        # NEW: flat index for scatter / lookup / inspector sync
         "index": {}
     }
 
@@ -84,23 +96,20 @@ def transform(data):
                 "vector_id": inst["vector_id"],
                 "token": inst.get("token"),
                 "doc_id": inst.get("doc_id"),
+                "filepath": normalize_filepath(inst.get("filepath")),
                 "slice": slice_id,
-
-                # NEW: preserve geometry for EventScatter
                 "xy": inst.get("xy"),
-
-                # unchanged semantic graph
                 "neighbours": inst.get("neighbours", [])
             }
 
             slices[slice_id].append(node)
 
-            # NEW: global index for fast lookup (EventInspector + sync)
             out["index"][inst["vector_id"]] = {
                 "concept": concept,
                 "slice": slice_id,
                 "token": inst.get("token"),
                 "doc_id": inst.get("doc_id"),
+                "filepath": normalize_filepath(inst.get("filepath")),
                 "xy": inst.get("xy")
             }
 

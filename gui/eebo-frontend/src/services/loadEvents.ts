@@ -29,14 +29,11 @@ export async function loadEvents(): Promise<SemanticEvent[]> {
                 if (!inst.xy) continue;
 
                 events.push({
-
                     id: String(inst.vector_id),
-
                     vector_id: inst.vector_id,
-
                     token: inst.token,
                     doc_id: inst.doc_id,
-
+                    filepath: inst.filepath,
                     concept: conceptName,
                     slice: sliceId,
 

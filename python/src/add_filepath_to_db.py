@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from lib.eebo_db import get_connection
 from lib.eebo_config import XML_ROOT_DIR, OUT_DIR
@@ -5,17 +6,24 @@ from lib.eebo_logging import logger
 
 def build_file_map(base_dir: str):
     """
-    Build mapping: filename (no extension) -> full absolute path
+    Build mapping: filename (no extension) -> relative path
     """
     file_map = {}
 
+    root = Path(XML_ROOT_DIR).resolve()
+
     for path in Path(base_dir).rglob("*.xml"):
         if path.is_file():
-            key = path.name.split(".", 1)[0]
+            key = path.stem  # cleaner than split(".")
+
             if key in file_map:
                 logger.info(f"Warning: duplicate filename detected for '{key}'")
             else:
-                file_map[key] = str(path.resolve())
+                try:
+                    file_map[key] = path.resolve().relative_to(root)
+                except ValueError:
+                    # file is outside XML_ROOT_DIR
+                    file_map[key] = path.resolve()
 
     return file_map
 

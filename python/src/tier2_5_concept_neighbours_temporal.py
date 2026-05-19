@@ -111,8 +111,14 @@ def load_token_index():
 
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT vector_id, token, doc_id
-            FROM pamphlet_tokens
+            SELECT
+                pt.vector_id,
+                pt.token,
+                pt.doc_id,
+                d.filepath
+            FROM pamphlet_tokens pt
+            JOIN documents d
+                ON pt.doc_id = d.doc_id
         """)
         rows = list(cur)
 
@@ -120,13 +126,15 @@ def load_token_index():
 
     vec_to_token = {}
     vec_to_doc = {}
+    vec_to_filepath = {}
 
-    for vid, tok, doc in rows:
+    for vid, tok, doc, filepath in rows:
         vid = int(vid)
         vec_to_token[vid] = str(tok)
         vec_to_doc[vid] = doc
+        vec_to_filepath[vid] = filepath
 
-    return vec_to_token, vec_to_doc
+    return vec_to_token, vec_to_doc, vec_to_filepath
 
 
 # Global 2D projection (NEW)
@@ -179,6 +187,7 @@ def process_concept(
     vec_to_doc,
     vec_to_slice,
     vec_to_xy,
+    vec_to_filepath,
     concept_name,
     concept
 ):
@@ -221,11 +230,9 @@ def process_concept(
             "vector_id": int(vid),
             "token": vec_to_token.get(int(vid)),
             "doc_id": vec_to_doc.get(int(vid)),
+            "filepath": vec_to_filepath.get(int(vid)),
             "slice": vec_to_slice.get(int(vid)),
-
-            # NEW: scatter projection
             "xy": vec_to_xy.get(int(vid)),
-
             "neighbours": neighbours
         })
 
@@ -242,7 +249,7 @@ def main():
     vecs, ids = load_embeddings()
 
     logger.info("[tier2.5] loading token index")
-    vec_to_token, vec_to_doc = load_token_index()
+    vec_to_token, vec_to_doc, vec_to_filepath = load_token_index()
 
     logger.info("[tier2.5] building slice map")
     vec_to_slice = build_vector_slice_map()
@@ -264,6 +271,7 @@ def main():
             vec_to_doc,
             vec_to_slice,
             vec_to_xy,
+            vec_to_filepath,
             concept_name,
             concept
         )

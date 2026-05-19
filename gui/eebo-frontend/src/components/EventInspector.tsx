@@ -98,7 +98,7 @@ export default function EventInspector(props: Props) {
           <p>Concept set: {event()!.concept}</p>
           <p>Slice: {event()!.slice}</p>
           <p>Vector ID: {event()!.vector_id}</p>
-          <p>Document: {event()!.doc_id}</p>
+          <p>Document: <a target="_blank" href={`/xml/${ event()!.filepath }`}>{event()!.doc_id}</a></p>
 
           <h5>Neighbours</h5>
 

@@ -12,6 +12,7 @@ export type SemanticEvent = {
   vector_id: number;
   token: string;
   doc_id: string;
+  filepath: string;
 
   concept: string;
   slice: string;

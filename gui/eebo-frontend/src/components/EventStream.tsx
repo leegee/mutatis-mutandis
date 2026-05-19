@@ -29,19 +29,20 @@ export default function EventStream(
                 const activeConcept = selectedConcept() === concept;
 
                 return (
-                    <ul class="stream-concept list border no-space">
-                        <li onClick={() => {
-                            setSelectedConcept(concept);
-                            setSelectedSlice(null);
-                            setSelectedEventId(null);
-                        }}
+                    <ul class="stream-concept list border no-space right-margin max">
+                        <li class="max"
+                            onClick={() => {
+                                setSelectedConcept(concept);
+                                setSelectedSlice(null);
+                                setSelectedEventId(null);
+                            }}
                         >
                             {concept}
                         </li>
 
                         {activeConcept && (
-                            <li>
-                                <ul class="stream-slices list border no-space">
+                            <li class="no-space max right-align">
+                                <ul class="stream-slices list border no-space max right-align">
                                     {(props.slicesByConcept[concept] ?? [])
                                         .sort()
                                         .map(slice => {
