@@ -4,40 +4,85 @@ type Props = {
   event: SemanticEvent | null;
 };
 
+type Bucket = {
+  range: string;
+  count: number;
+  maxSim: number;
+};
+
+type Grouped = {
+  token: string;
+  maxSimilarity: number;
+  buckets: Bucket[];
+};
+
 export default function EventInspector(props: Props) {
-  const groupedNeighbours = () => {
+  const groupedNeighbours = (): Grouped[] => {
     const ev = props.event;
     if (!ev) return [];
 
-    const map = new Map<string, number>();
+    const map = new Map<
+      string,
+      {
+        maxSim: number;
+        buckets: Map<string, { count: number; maxSim: number }>;
+      }
+    >();
 
     for (const n of ev.neighbours) {
-      // normalize similarity BEFORE grouping
-      const sim = Math.round(n.similarity * 1000) / 1000;
+      const token = n.token;
 
-      const key = `${ n.token }::${ sim }`;
+      const sim = n.similarity;
+      const bucketStart = Math.floor(sim * 100) / 100;
+      const bucketKey = `${ bucketStart.toFixed(2) }–${ (bucketStart + 0.01).toFixed(2) }`;
 
-      map.set(key, (map.get(key) ?? 0) + 1);
+      if (!map.has(token)) {
+        map.set(token, {
+          maxSim: sim,
+          buckets: new Map()
+        });
+      }
+
+      const entry = map.get(token)!;
+
+      // update token max similarity
+      if (sim > entry.maxSim) {
+        entry.maxSim = sim;
+      }
+
+      // update bucket
+      const b = entry.buckets.get(bucketKey);
+
+      if (!b) {
+        entry.buckets.set(bucketKey, {
+          count: 1,
+          maxSim: sim
+        });
+      } else {
+        b.count += 1;
+        if (sim > b.maxSim) {
+          b.maxSim = sim;
+        }
+      }
     }
 
     return Array.from(map.entries())
-      .map(([key, count]) => {
-        const [token, sim] = key.split("::");
+      .map(([token, v]) => ({
+        token,
+        maxSimilarity: v.maxSim,
 
-        return {
-          token,
-          similarity: Number(sim),
-          count
-        };
-      })
-      .sort((a, b) => {
-        // importance = similarity desc
-        if (b.similarity !== a.similarity) {
-          return b.similarity - a.similarity;
-        }
+        // 🔽 SORT BUCKETS by strongest similarity first
+        buckets: Array.from(v.buckets.entries())
+          .map(([range, b]) => ({
+            range,
+            count: b.count,
+            maxSim: b.maxSim
+          }))
+          .sort((a, b) => b.maxSim - a.maxSim)
+      }))
 
-        return b.count - a.count;
-      });
+      // 🔽 SORT TOKENS by strongest similarity first
+      .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
   };
 
   const event = () => props.event;
@@ -58,10 +103,19 @@ export default function EventInspector(props: Props) {
           <h5>Neighbours</h5>
 
           <ul class="list no-space border">
-            {groupedNeighbours().map(n => (
+            {groupedNeighbours().map(group => (
               <li>
-                {n.count} × {n.token}{" "}
-                ({n.similarity.toFixed(3)})
+                <strong>
+                  {group.token} ({group.maxSimilarity.toFixed(3)})
+                </strong>
+
+                <ul class="no-space">
+                  {group.buckets.map(b => (
+                    <li>
+                      {b.count} × {b.range}
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>
