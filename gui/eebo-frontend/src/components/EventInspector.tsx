@@ -109,7 +109,7 @@ export default function EventInspector(props: Props) {
                   {group.token} ({group.maxSimilarity.toFixed(3)})
                 </strong>
 
-                <ul class="no-space">
+                <ul class="list no-space no-margin">
                   {group.buckets.map(b => (
                     <li>
                       {b.count} × {b.range}
