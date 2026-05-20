@@ -2,50 +2,52 @@
 """
 tier1_test_repro.py
 
-Checks embedding stability under different batching regimes.
+Stability test for event-log embedding pipeline.
 
-Invariant tested:
-    embeddings(doc) should be stable under changes to:
-    - EMBED_BATCH_SIZE
-    - forward chunking order
+This test does NOT assume strict determinism of embeddings.
 
-This isolates:
-    - floating point accumulation effects
-    - batching artefacts
+Instead it evaluates:
+
+1. Identity stability
+   - token alignment is invariant across batching regimes
+
+2. Coverage stability
+   - same number of token-level events are produced
+
+3. Numerical stability
+   - embeddings are stable under changes in:
+       - EMBED_BATCH_SIZE
+       - window batching order
+
+Core interpretation:
+- The pipeline is a stochastic reduction over overlapping contexts
+- Exact equality is not expected
+- We measure cosine stability within tolerance bands
 """
 
 import tempfile
 import shutil
 import numpy as np
-
 from dataclasses import dataclass
 
 from lib.eebo_db import get_connection
 from lib.macberth import load_macberth
-from lib.vector_store_zarr import ZarrVectorStore
+
+from tier1_corpus2zarr import process_doc
 
 
 # ------------------------------------------------------------
-# Config injection layer
+# Config
 # ------------------------------------------------------------
 
 @dataclass
 class RunConfig:
-    zarr_root: str
     embed_batch_size: int
     window_size: int = 512
 
 
 # ------------------------------------------------------------
-# Core pipeline import (you already have this logic)
-# ------------------------------------------------------------
-# We assume you refactor process_doc to accept config:
-
-from tier1_corpus2zarr import process_doc  # same function, but parameterised
-
-
-# ------------------------------------------------------------
-# single-document extraction
+# Data extraction
 # ------------------------------------------------------------
 
 def extract_doc(conn, slice_range):
@@ -66,37 +68,44 @@ def extract_doc(conn, slice_range):
 
 
 # ------------------------------------------------------------
-# run one configuration
+# run configuration (controlled injection)
 # ------------------------------------------------------------
 
 def run(config: RunConfig, tokens, vids, tokenizer, model, device):
     import tier1_corpus2zarr as mod
 
-    # monkey-patch config knobs TODO: refactor properly later
-    mod.ZARR_ROOT = config.zarr_root
     mod.EMBED_BATCH_SIZE = config.embed_batch_size
     mod.WINDOW_SIZE = config.window_size
 
-    vecs, ids = process_doc(tokens, vids, tokenizer, model, device)
-
-    return vecs, ids
+    return process_doc(tokens, vids, tokenizer, model, device)
 
 
 # ------------------------------------------------------------
-# comparison metric
+# metrics
 # ------------------------------------------------------------
 
-def compare(a, b):
+def cosine_stability(a, b):
     assert len(a) == len(b)
 
-    cos = np.sum(a * b, axis=1) / (
-        np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1)
-    )
+    a = a.astype(np.float32)
+    b = b.astype(np.float32)
 
+    denom = (np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1))
+    denom = np.clip(denom, 1e-12, None)
+
+    cos = np.sum(a * b, axis=1) / denom
+
+    return cos
+
+
+def report(cos):
     return {
         "mean_cosine": float(np.mean(cos)),
-        "min_cosine": float(np.min(cos)),
+        "std_cosine": float(np.std(cos)),
         "p01": float(np.percentile(cos, 1)),
+        "p99": float(np.percentile(cos, 99)),
+        "min_cosine": float(np.min(cos)),
+        "stable": bool(np.mean(cos) > 0.98),
     }
 
 
@@ -108,31 +117,46 @@ def main():
     conn = get_connection()
     mac = load_macberth()
 
-    # choose ONE document (important for signal clarity)
+    # single document for signal clarity
     slice_range = (1641, 1641)
     tokens, vids = extract_doc(conn, slice_range)
-
     conn.close()
 
-    tmp1 = tempfile.mkdtemp()
-    tmp2 = tempfile.mkdtemp()
+    tmp_a = tempfile.mkdtemp()
+    tmp_b = tempfile.mkdtemp()
 
-    config_a = RunConfig(tmp1, embed_batch_size=8)
-    config_b = RunConfig(tmp2, embed_batch_size=64)
+    config_a = RunConfig(embed_batch_size=8)
+    config_b = RunConfig(embed_batch_size=64)
 
     vecs_a, ids_a = run(config_a, tokens, vids, mac.tokenizer, mac.model, mac.device)
     vecs_b, ids_b = run(config_b, tokens, vids, mac.tokenizer, mac.model, mac.device)
 
-    assert np.array_equal(ids_a, ids_b), "ID mismatch between runs"
+    # ------------------------------------------------------------
+    # 1. Identity invariant (hard requirement)
+    # ------------------------------------------------------------
+    assert np.array_equal(ids_a, ids_b), "Token/event identity mismatch"
 
-    stats = compare(vecs_a, vecs_b)
+    # ------------------------------------------------------------
+    # 2. Coverage invariant (hard requirement)
+    # ------------------------------------------------------------
+    assert len(vecs_a) == len(vecs_b), "Event coverage mismatch"
 
-    print("\n=== REPRODUCIBILITY REPORT ===")
-    print(stats)
+    # ------------------------------------------------------------
+    # 3. Stability invariant (soft requirement)
+    # ------------------------------------------------------------
+    cos = cosine_stability(vecs_a, vecs_b)
+    stats = report(cos)
 
-    # cleanup
-    shutil.rmtree(tmp1)
-    shutil.rmtree(tmp2)
+    print("\n=== EMBEDDING STABILITY REPORT ===")
+    for k, v in stats.items():
+        print(f"{k}: {v}")
+
+    # interpretive guardrail (not a hard failure)
+    if not stats["stable"]:
+        print("\nWARNING: embeddings show high sensitivity to batching regime")
+
+    shutil.rmtree(tmp_a)
+    shutil.rmtree(tmp_b)
 
 
 if __name__ == "__main__":
