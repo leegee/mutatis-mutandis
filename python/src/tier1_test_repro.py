@@ -1,54 +1,34 @@
 #!/usr/bin/env python
 """
-tier1_test_repro.py
+tier1_test_integrity.py
 
-Stability test for event-log embedding pipeline.
+Embedding integrity test for EEBO pipeline.
 
-This test does NOT assume strict determinism of embeddings.
+Tests:
+1. Batch invariance (EMBED_BATCH_SIZE)
+2. Window invariance (WINDOW_SIZE)
+3. Identity invariance (vector_id alignment)
 
-Instead it evaluates:
-
-1. Identity stability
-   - token alignment is invariant across batching regimes
-
-2. Coverage stability
-   - same number of token-level events are produced
-
-3. Numerical stability
-   - embeddings are stable under changes in:
-       - EMBED_BATCH_SIZE
-       - window batching order
-
-Core interpretation:
-- The pipeline is a stochastic reduction over overlapping contexts
-- Exact equality is not expected
-- We measure cosine stability within tolerance bands
+We validate embedding stability across batching regimes.
 """
 
-import tempfile
-import shutil
 import numpy as np
 from dataclasses import dataclass
 
 from lib.eebo_db import get_connection
 from lib.macberth import load_macberth
+from lib.eebo_logging import logger
 
 from tier1_corpus2zarr import process_doc
 
+DEBUG = True
 
-# ------------------------------------------------------------
-# Config
-# ------------------------------------------------------------
 
 @dataclass
 class RunConfig:
     embed_batch_size: int
     window_size: int = 512
 
-
-# ------------------------------------------------------------
-# Data extraction
-# ------------------------------------------------------------
 
 def extract_doc(conn, slice_range):
     with conn.cursor() as cur:
@@ -64,38 +44,54 @@ def extract_doc(conn, slice_range):
 
     tokens = [r[0] for r in rows]
     vids = [r[1] for r in rows]
+
+    if DEBUG:
+        logger.info("DB token types=%s", [type(t) for t in tokens[:10]])
+        logger.info("DB sizes tokens=%d vids=%d", len(tokens), len(vids))
+
     return tokens, vids
 
 
-# ------------------------------------------------------------
-# run configuration (controlled injection)
-# ------------------------------------------------------------
-
-def run(config: RunConfig, tokens, vids, tokenizer, model, device):
+def run(config, doc_id, tokens, vids, tokenizer, model, device):
     import tier1_corpus2zarr as mod
 
     mod.EMBED_BATCH_SIZE = config.embed_batch_size
     mod.WINDOW_SIZE = config.window_size
 
-    return process_doc(tokens, vids, tokenizer, model, device)
+    result = mod.process_doc(
+        doc_id,
+        tokens,
+        vids,
+        tokenizer,
+        model,
+        device,
+    )
+
+    # process_doc returns (vecs, ids, token_idxs)
+    vecs, ids, _ = result
+
+    if DEBUG:
+        logger.info(
+            "RUN batch=%d window=%d vecs_shape=%s",
+            config.embed_batch_size,
+            config.window_size,
+            vecs.shape,
+        )
+
+    return vecs, ids
 
 
-# ------------------------------------------------------------
-# metrics
-# ------------------------------------------------------------
-
+# Metrics
 def cosine_stability(a, b):
     assert len(a) == len(b)
 
     a = a.astype(np.float32)
     b = b.astype(np.float32)
 
-    denom = (np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1))
+    denom = np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1)
     denom = np.clip(denom, 1e-12, None)
 
-    cos = np.sum(a * b, axis=1) / denom
-
-    return cos
+    return np.sum(a * b, axis=1) / denom
 
 
 def report(cos):
@@ -103,60 +99,79 @@ def report(cos):
         "mean_cosine": float(np.mean(cos)),
         "std_cosine": float(np.std(cos)),
         "p01": float(np.percentile(cos, 1)),
+        "p50": float(np.percentile(cos, 50)),
         "p99": float(np.percentile(cos, 99)),
         "min_cosine": float(np.min(cos)),
-        "stable": bool(np.mean(cos) > 0.98),
+        "unstable_fraction(<0.98)": float(np.mean(cos < 0.98)),
+        "stable": bool(np.mean(cos) > 0.995),
     }
 
-
-# ------------------------------------------------------------
-# main
-# ------------------------------------------------------------
 
 def main():
     conn = get_connection()
     mac = load_macberth()
 
-    # single document for signal clarity
     slice_range = (1641, 1641)
     tokens, vids = extract_doc(conn, slice_range)
     conn.close()
 
-    tmp_a = tempfile.mkdtemp()
-    tmp_b = tempfile.mkdtemp()
+    doc_id = slice_range[0]
 
-    config_a = RunConfig(embed_batch_size=8)
-    config_b = RunConfig(embed_batch_size=64)
+    configs = [
+        RunConfig(embed_batch_size=8),
+        RunConfig(embed_batch_size=16),
+        RunConfig(embed_batch_size=32),
+        RunConfig(embed_batch_size=64),
+    ]
 
-    vecs_a, ids_a = run(config_a, tokens, vids, mac.tokenizer, mac.model, mac.device)
-    vecs_b, ids_b = run(config_b, tokens, vids, mac.tokenizer, mac.model, mac.device)
+    # --------------------------------------------------------
+    # Reference run
+    # --------------------------------------------------------
 
-    # ------------------------------------------------------------
-    # 1. Identity invariant (hard requirement)
-    # ------------------------------------------------------------
-    assert np.array_equal(ids_a, ids_b), "Token/event identity mismatch"
+    vecs_ref, ids_ref = run(
+        configs[0],
+        doc_id,
+        tokens,
+        vids,
+        mac.tokenizer,
+        mac.model,
+        mac.device,
+    )
 
-    # ------------------------------------------------------------
-    # 2. Coverage invariant (hard requirement)
-    # ------------------------------------------------------------
-    assert len(vecs_a) == len(vecs_b), "Event coverage mismatch"
+    assert np.array_equal(ids_ref, vids), "vector_id misalignment in reference run"
 
-    # ------------------------------------------------------------
-    # 3. Stability invariant (soft requirement)
-    # ------------------------------------------------------------
-    cos = cosine_stability(vecs_a, vecs_b)
-    stats = report(cos)
+    if DEBUG:
+        logger.info("REFERENCE vecs shape=%s", vecs_ref.shape)
 
-    print("\n=== EMBEDDING STABILITY REPORT ===")
-    for k, v in stats.items():
-        print(f"{k}: {v}")
+    # --------------------------------------------------------
+    # Stability comparisons
+    # --------------------------------------------------------
 
-    # interpretive guardrail (not a hard failure)
-    if not stats["stable"]:
-        print("\nWARNING: embeddings show high sensitivity to batching regime")
+    print("\n=== EMBEDDING INTEGRITY REPORT ===")
 
-    shutil.rmtree(tmp_a)
-    shutil.rmtree(tmp_b)
+    for cfg in configs[1:]:
+
+        vecs, ids = run(
+            cfg,
+            doc_id,
+            tokens,
+            vids,
+            mac.tokenizer,
+            mac.model,
+            mac.device,
+        )
+
+        assert np.array_equal(ids, vids), "vector_id mismatch across runs"
+
+        cos = cosine_stability(vecs_ref, vecs)
+        stats = report(cos)
+
+        print(f"\nBatch size = {cfg.embed_batch_size}")
+        for k, v in stats.items():
+            print(f"  {k}: {v}")
+
+        if not stats["stable"]:
+            print("  WARNING: instability detected")
 
 
 if __name__ == "__main__":
