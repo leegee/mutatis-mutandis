@@ -1,39 +1,46 @@
 """
-ZarrEmbeddingEventLog
+lib.zarr_embedding_eventlog.py
 
-True event-store for EEBO embedding inference.
+ZarrEmbeddingEventLog - canonical EEBO event store.
 
-Each stored record is a single atomic semantic event:
+This module defines a single-slice, append-only event log for
+contextualised embedding inference.
+
+Each row is a semantic event:
 
     event = (
-        vector_id,     # stable lexical identity from Postgres
-        doc_id,        # document provenance
-        token_idx,     # position in document
-        emb_norm,      # contextualised + normalised embedding
-        emb_raw        # unnormalised embedding (model space)
+        vector_id,   # stable lexical identity (Postgres-backed)
+        doc_id,      # document provenance
+        token_idx,   # token position within document
+        emb_norm,    # normalised contextual embedding (for cosine space)
+        emb_raw      # raw contextual embedding (model space)
     )
 
-Design principles:
+Design invariants
+------------------
 
 1. Event atomicity
-   - Each row is independently meaningful
-   - No semantic dependence on neighbouring rows
+   Each row is an independent semantic observation.
 
-2. No implicit alignment
-   - Column arrays are strictly parallel by construction
-   - Integrity enforced at append-time
+2. Column alignment is structural, not logical
+   Arrays are guaranteed aligned only by append contract.
 
-3. Reconstructability
-   - Any subset of events can be rehydrated into sequences
-   - Suitable for drift analysis, clustering, or temporal slicing
+3. Append-only semantics
+   No mutation, deletion, or rewriting of existing events.
 
-4. Append-only semantics
-   - Zarr is treated as an immutable log structure
-   - No in-place mutation of event semantics
+4. Single-store responsibility
+   This object represents ONE Zarr event store (typically one slice).
 
-This structure prioritises interpretability and downstream analytical
-flexibility over storage compactness.
+Cross-slice composition is handled externally (streaming layer).
+
+Failure modes
+-------------
+- Concurrent writers will break determinism
+- Partial writes are not transactional
+- Zero-length embeddings are rejected implicitly upstream
 """
+
+from __future__ import annotations
 
 import numpy as np
 import zarr
@@ -41,13 +48,19 @@ from numcodecs import Blosc
 
 
 class ZarrEmbeddingEventLog:
+    """
+    Append-only event log over Zarr arrays.
+
+    Intended usage:
+        - ingestion pipeline (tier1_corpus2zarr.py)
+        - slice-level analysis/debugging
+    """
 
     def __init__(self, path: str, dim: int):
         self.root = zarr.open_group(path, mode="a", zarr_version=2)
         self.dim = dim
 
         compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
-
         g = self.root.require_group("events")
 
         self.emb_norm = self._ds(g, "emb_norm", (dim,), compressor, "float32")
@@ -56,6 +69,10 @@ class ZarrEmbeddingEventLog:
         self.vector_id = self._ds(g, "vector_id", (), compressor, "int64")
         self.token_idx = self._ds(g, "token_idx", (), compressor, "int64")
         self.doc_id = self._ds(g, "doc_id", (), compressor, "U32")
+
+    # ------------------------------------------------------------
+    # dataset helpers
+    # ------------------------------------------------------------
 
     def _ds(self, g, name, shape_suffix, compressor, dtype):
         if name in g:
@@ -73,7 +90,18 @@ class ZarrEmbeddingEventLog:
             compressor=compressor,
         )
 
-    def append_events(self, emb_norm, emb_raw, vector_id, doc_id, token_idx):
+    # ------------------------------------------------------------
+    # core write path
+    # ------------------------------------------------------------
+
+    def append_events(
+        self,
+        emb_norm,
+        emb_raw,
+        vector_id,
+        doc_id,
+        token_idx,
+    ):
         emb_norm = np.asarray(emb_norm, dtype=np.float32)
         emb_raw = np.asarray(emb_raw, dtype=np.float32)
         vector_id = np.asarray(vector_id, dtype=np.int64)
@@ -111,5 +139,58 @@ class ZarrEmbeddingEventLog:
 
         ds[old:new] = arr
 
-    def __len__(self):
-        return self.vector_id.shape[0]
+    # ------------------------------------------------------------
+    # introspection
+    # ------------------------------------------------------------
+
+    @property
+    def n_events(self) -> int:
+        return int(self.vector_id.shape[0])
+
+    def dim(self) -> int:
+        return int(self.emb_norm.shape[1]) if len(self.emb_norm.shape) > 1 else 0
+
+    def __len__(self) -> int:
+        return self.n_events
+
+    # ------------------------------------------------------------
+    # single-store streaming (NOT cross-slice)
+    # ------------------------------------------------------------
+
+    def iter_batches(self, batch_size: int = 8192):
+        """
+        Stream embeddings from this single event store.
+
+        This is intentionally *not* cross-slice aware.
+
+        Use ZarrEventStream for multi-slice FAISS construction.
+        """
+
+        n = self.n_events
+
+        for start in range(0, n, batch_size):
+            end = min(start + batch_size, n)
+
+            yield (
+                np.asarray(self.emb_norm[start:end], dtype=np.float32),
+                np.asarray(self.vector_id[start:end], dtype=np.int64),
+            )
+
+    def iter_events(self, batch_size: int = 8192):
+        """
+        Full event view including provenance fields.
+        Useful for debugging, analysis, and reconstruction.
+        """
+
+        n = self.n_events
+
+        for start in range(0, n, batch_size):
+            end = min(start + batch_size, n)
+
+            yield {
+                "emb_norm": self.emb_norm[start:end],
+                "emb_raw": self.emb_raw[start:end],
+                "vector_id": self.vector_id[start:end],
+                "doc_id": self.doc_id[start:end],
+                "token_idx": self.token_idx[start:end],
+            }

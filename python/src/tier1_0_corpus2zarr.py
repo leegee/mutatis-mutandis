@@ -89,20 +89,35 @@ def forward(model, device, batch):
 def process_doc(doc_id, tokens, vector_ids, tokenizer, model, device):
     input_ids, attention_mask, word_ids = encode_doc(tokens, tokenizer)
 
-    n = len(tokens)
     dim = model.config.hidden_size
 
-    vec_sum = np.zeros((n, dim), dtype=np.float32)
-    count = np.zeros(n, dtype=np.int32)
-
-    def accumulate(window_word_ids, hidden):
-        for i, wid in enumerate(window_word_ids):
-            if wid is None or wid < 0:
-                continue
-            vec_sum[wid] += normalize(hidden[i])
-            count[wid] += 1
+    # We will emit events directly, not accumulate per-token means
+    events_vecs = []
+    events_ids = []
+    events_token_idx = []
 
     batch = []
+
+    def emit_batch(batch):
+        """
+        Convert a batch of windows into per-token events.
+
+        Each window produces contextualised embeddings.
+        We do NOT aggregate across windows.
+        """
+        hidden = forward(model, device, batch)
+
+        for b, h in zip(batch, hidden):
+            wids = b["word_ids"]
+
+            for i, wid in enumerate(wids):
+                if wid is None or wid < 0:
+                    continue
+
+                # Each (window, token) interaction is a distinct event
+                events_vecs.append(normalize(h[i]))
+                events_ids.append(vector_ids[wid])
+                events_token_idx.append(wid)
 
     for start, ids, mask, wids in iter_windows(input_ids, attention_mask, word_ids):
         batch.append({
@@ -112,23 +127,18 @@ def process_doc(doc_id, tokens, vector_ids, tokenizer, model, device):
         })
 
         if len(batch) >= EMBED_BATCH_SIZE:
-            hidden = forward(model, device, batch)
-            for b, h in zip(batch, hidden):
-                accumulate(b["word_ids"], h)
+            emit_batch(batch)
             batch.clear()
 
     if batch:
-        hidden = forward(model, device, batch)
-        for b, h in zip(batch, hidden):
-            accumulate(b["word_ids"], h)
+        emit_batch(batch)
 
-    valid = count > 0
-    if not np.any(valid):
+    if not events_ids:
         return None
 
-    vecs = (vec_sum[valid] / count[valid, None]).astype(np.float32)
-    ids = np.asarray(vector_ids, dtype=np.int64)[valid]
-    token_idxs = np.where(valid)[0]
+    vecs = np.asarray(events_vecs, dtype=np.float32)
+    ids = np.asarray(events_ids, dtype=np.int64)
+    token_idxs = np.asarray(events_token_idx, dtype=np.int64)
 
     return vecs, ids, token_idxs
 

@@ -67,9 +67,13 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
-# EEBO_MODEL_NAME = "emanjavacas/MacBERTh"
 
-FAISS_ID_TO_EEBO_DOC_ID = INDEXES_DIR / 'index_to_doc_id.json'
+# FAISS_ID_TO_EEBO_DOC_ID = INDEXES_DIR / 'index_to_doc_id.json'
+
+FAISS_ROOT = INDEXES_DIR / "faiss"
+FAISS_ROOT.mkdir(parents=True, exist_ok=True)
+FAISS_TIER1_INDEX = FAISS_ROOT / "tier1.index"
+FAISS_SLICE_DIR = FAISS_ROOT / "slices"
 
 BATCH_DOCS = 100
 BATCH_TOKENS = 10000
