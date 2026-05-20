@@ -7,9 +7,23 @@
 
 Ontological Topology: the study of semantic space as a structured geometric object, where meaning is defined by relative positions, continuity, and deformation of distributions across time rather than discrete sense inventories. Nice idea but requires 2-5 days GPU or about  6 weeks of CPU...
 
-So: instead of corpus-wide embedding, trying a recursive probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
+So: instead of corpus-wide embedding, I am trying a recursive probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
 
 Finally, attempt topological data analysis if I can get my head around the Betti numbers.
+
+    EEBO-TCP TEI XML
+            |
+    Postgres (text + meta)
+            |
+    Zarr (event log: contextual embeddings)
+            |
+    FAISS (approximate semantic geometry index)
+            |
+    Query layer (token/window/hybrid encoding)
+            |
+    Analysis (drift, clustering, interpretation)
+            |
+    GUI (Solid, d3)
 
 ## Code Synopsis
 
@@ -26,7 +40,7 @@ Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/por
 
 Don't forget to restart the Colab session when the IP changes.
 
-(This is now sadly out of date. May revisit.)
+(Colab workbooks is well out of date)
 
 ## Abstract: About This Project
 
@@ -41,6 +55,7 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 
 * [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
 * [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
+* [McGillivray, Barbara](https://www.kcl.ac.uk/people/barbara-mcgillivray)
 * [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
 * [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
 * [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
