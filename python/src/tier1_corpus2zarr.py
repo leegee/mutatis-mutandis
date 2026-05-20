@@ -185,13 +185,13 @@ def forward_windows(windows, model, device):
     return results
 
 
-# Accumulation (ARRAY VERSION)
-
 def accumulate(pending: PendingDoc, window: Window, hidden: np.ndarray):
     for i, word_id in enumerate(window.word_ids):
         if word_id is None:
             continue
 
+        # ie remove vectors' magnitude ie frequnecy
+        # Mayvbe keep an unnormalized version for comparison?
         vec = normalize(hidden[i])
         if vec is None:
             continue

@@ -1,109 +1,225 @@
+# Event-Led Semantic Analysis of Early Modern English Pamphlet Discourse
 
-# 1. Computational DH foregrounded
+## Abstract and Research Programme
 
-This version is tuned for institutions where the *methodological legitimacy of computation is already assumed*, and where supervisors are comfortable with NLP-adjacent framing.
+This project develops a computational Digital Humanities framework for analysing semantic variation in early modern English pamphlet discourse (EEBO-TCP corpus) using instance-level embedding events and projection-based analysis of distributional semantic fields.
 
-## Core identity
+Rather than treating lexical items as stable analytical units or modelling semantic change as vector drift, the project reconceptualises meaning as a **distribution of contextual semantic events**. Each occurrence of a word is treated as a discrete event in embedding space, situated within a local neighbourhood of semantically related terms.
 
-> A computational Digital Humanities project investigating semantic change in early modern English pamphlet discourse using diachronic embeddings and corpus-scale vector analysis.
+Meaning is therefore not represented as a single vector, centroid, or trajectory, but as a **field of recurrent relational structures across time, genre, and discourse context**.
 
----
-
-## Framing
-
-This project investigates semantic change in early modern English pamphlet literature by applying computational methods from distributional semantics and information retrieval to the EEBO-TCP corpus.
-
-It focuses on how key political, legal, and religious concepts shift in meaning across time, particularly under conditions of rapid pamphlet circulation and ideological contestation.
+The central object of analysis is a corpus-wide **semantic event ledger**, in which each token occurrence is preserved with full provenance, embedding representation, and local semantic neighbourhood structure. Higher-level representations such as heatmaps, scatter plots, and temporal comparisons are treated as **projections over this event ledger**, rather than primary analytical objects.
 
 ---
 
 ## Research focus
 
-* How do key lexical concepts (e.g. liberty, authority, conscience, obedience) shift in embedding space across the seventeenth century?
-* Can we distinguish genuine semantic drift from shifts in discourse composition or genre mixture?
-* How do local neighbourhood structures in embedding space reflect conceptual instability over time?
+The project investigates how key moral, political, and religious concepts (e.g. *liberty*, *authority*, *conscience*, *obedience*) behave as distributions of semantic events within pamphlet discourse.
+
+Core questions include:
+
+* How do individual occurrences of key concepts behave as local semantic events in embedding space?
+* How do neighbourhood fields surrounding these events shift across temporal slices of the EEBO corpus?
+* What forms of semantic stability, fragmentation, or reconfiguration emerge when meaning is modelled as distributions of instance-level relational structure?
+* How do discourse conditions (genre, polemic intensity, political crisis) shape local semantic environments?
 
 ---
 
-## Methodological approach
+## Methods
 
-The project uses:
+### 1. Corpus and embedding generation
 
-* diachronic contextual embeddings (e.g. MacBERTh-style models)
-* FAISS-based retrieval over temporally segmented vector spaces
-* token-level neighbourhood tracking across time slices
-* trajectory-based representation of lexical items in embedding space
-* clustering of semantic change behaviours into emergent regimes
+The EEBO-TCP corpus is processed using contextual language models (MacBERTh-style architectures), producing token-level embeddings for each lexical occurrence. Each embedding encodes local syntactic and semantic context rather than abstract lexical identity.
 
-A key contribution is the development of **semantic behaviour profiles**, representing lexical items as trajectories of contextual change rather than static vectors.
-
-These profiles are then clustered to identify regimes such as:
-
-* stable doctrinal vocabulary
-* rapidly recontextualised political terms
-* high-volatility rhetorical usage
-* semantically anchored legal and theological terminology
+The corpus is segmented into coarse temporal slices, which function as organisational scaffolding for comparative analysis rather than as primary semantic units.
 
 ---
 
-## Contribution
+### 2. Semantic event ledger
 
-The project contributes to computational Digital Humanities by:
+Each token occurrence is represented as a **semantic event**, defined as:
 
-* advancing methods for diachronic semantic modelling in historical corpora
-* introducing trajectory-based representations of meaning
-* providing a framework for separating semantic drift from discourse-level variation
-* enabling scalable analysis of EEBO pamphlet discourse
+* contextual embedding vector
+* token form (including orthographic and OCR variation)
+* document identifier (EEBO provenance)
+* temporal slice identifier
+* k-nearest semantic neighbours in embedding space
 
-
----
----
-
-# 2. Humanities / intellectual history foregrounded
-
-## Core identity
-
-> A study of semantic change in early modern English pamphlets, investigating how political and moral concepts evolve under conditions of ideological and institutional strain, using corpus-based computational methods.
+This produces a complete event ledger in which semantic structure is distributed across instances rather than aggregated at the level of word types or centroids.
 
 ---
 
-## Framing
+### 3. Neighbourhood field extraction
 
-This project examines how key moral, legal, and political concepts change meaning in early modern English pamphlet literature, particularly during periods of political instability and contested authority.
+For each event, k-nearest neighbours are computed in embedding space using normalised dot-product similarity. These neighbours define a **local semantic field**, representing the immediate relational environment of each occurrence.
 
-It focuses on conceptual oppositions such as liberty and authority, conscience and obedience, and examines how these terms are reconfigured across pamphlet discourse in seventeenth-century England.
-
----
-
-## Research focus
-
-* How do key political and moral concepts shift in meaning across early modern pamphlet literature?
-* How do patterns of usage reflect changing understandings of authority, law, and moral obligation?
-* How do conceptual oppositions structure political argument in pamphlet discourse over time?
+Meaning is operationalised as the structure of these neighbourhood fields, rather than as a single vector position or trajectory.
 
 ---
 
-## Methodological approach
+### 4. Slice-aware comparative analysis
 
-The project uses corpus-based computational methods to support close reading of large-scale textual patterns in the EEBO-TCP corpus.
+Temporal slices are used only for grouping event distributions. The analysis focuses on changes in neighbourhood field structure across time, rather than movement of aggregated representations.
 
-Methods include:
-
-* diachronic distributional semantic modelling of lexical change
-* corpus-based analysis of semantic shift across time periods
-* vector-based similarity analysis to trace conceptual variation
-* clustering of patterns of usage to identify broad regimes of change
-
-These computational methods are used to identify points of semantic instability, which are then interpreted through close reading of pamphlet texts.
+This avoids assuming semantic homogeneity within slices and preserves internal variation.
 
 ---
 
-## Contribution
+### 5. Projection-based visual analytics
 
-The project contributes to early modern intellectual history and historical semantics by:
+All higher-level representations are treated as projections over the event ledger:
 
-* providing new evidence for the gradual transformation of political and moral vocabulary
-* showing how conceptual oppositions evolve in pamphlet discourse
-* contributing to debates on the emergence of modern political and legal language
-* integrating computational evidence into interpretive historical analysis
+* scatter plots of embedding space (navigation layer over events)
+* heatmaps of concept–neighbour strength (aggregated relational structure)
+* event stream views (linear inspection of semantic occurrences)
+* document-linked inspection layers (traceability to EEBO texts)
 
+All projections are reversible mappings: no view introduces new semantic entities or assumptions.
+
+---
+
+## Theoretical contribution
+
+### 1. Semantic events as the primary unit of analysis
+
+The project replaces the word type or lemma with the **semantic event** as the primary unit of computational historical semantics. Meaning is no longer an attribute of lexical items but a property of situated contextual occurrences.
+
+Semantic change is therefore reformulated as **variation in distributions of events**, rather than drift in word-level representations.
+
+---
+
+### 2. From trajectories to relational fields
+
+Existing diachronic semantic models typically represent meaning as:
+
+* vector drift
+* centroid movement
+* trajectory through embedding space
+
+This project replaces these with a **relational field model**, in which meaning is defined by:
+
+* stability and instability of neighbourhood structure
+* recurrence of local semantic companions
+* reconfiguration of contextual adjacency across time
+
+Semantic change is thus understood as **structural reorganisation of relational environments**, not geometric displacement.
+
+---
+
+### 3. Separation of semantic signal from discourse composition
+
+By preserving instance-level embeddings and document provenance, the model distinguishes semantic change from:
+
+* genre mixture effects
+* rhetorical variation
+* corpus composition shifts
+
+This addresses a central limitation of distributional historical semantics: the conflation of semantic drift with corpus-level structural variation.
+
+---
+
+### 4. Computational philology and full traceability
+
+Each analytical output is traceable to:
+
+* vector embedding
+* token occurrence
+* document source
+
+This enables a form of **computational philology**, where quantitative claims remain continuously grounded in retrievable textual evidence.
+
+---
+
+## Positioning within computational historical semantics
+
+### Ryan Heuser and vector-based semantic change
+
+Heuser’s work (with colleagues including Le-Khac) establishes a canonical framework in which semantic change is modelled as:
+
+* word-level vector representations
+* alignment across time
+* measurement of geometric drift in embedding space
+
+This project departs from this model by rejecting the assumption of stable word-level semantic objects. Instead, it treats meaning as a **distribution of instance-level semantic events**, where no stable centroid or lexical vector is assumed.
+
+Where Heuser models semantic change as **movement of word representations**, this project models it as **reconfiguration of local semantic fields around repeated occurrences**.
+
+---
+
+### Barbara McGillivray and contextual semantic modelling
+
+McGillivray’s work emphasises:
+
+* statistically robust diachronic modelling
+* careful control of corpus effects
+* integration of linguistic theory and computational methods
+
+This project aligns with this methodological rigour but diverges in representational strategy.
+
+Rather than modelling words as aggregated contextual distributions over time, it models meaning at the level of **individual contextual events and their relational neighbourhoods**.
+
+The key shift is from:
+
+> word-level semantic distributions
+> to
+> event-level relational structure
+
+---
+
+### Hamilton, Leskovec & Jurafsky (2016)
+
+Hamilton et al. introduce a framework based on:
+
+* static embeddings per time slice
+* alignment across time
+* cosine-based measurement of semantic shift
+
+This assumes:
+
+* stable word identities
+* meaning as a point in vector space
+* semantic change as displacement of that point
+
+This project explicitly rejects these assumptions:
+
+* there are no stable word-level semantic objects, only events
+* meaning is not a point but a **field of local relations**
+* change is not displacement but **reorganisation of neighbourhood structure**
+
+---
+
+## Synthesis
+
+Across much of computational historical semantics, meaning has been modelled as:
+
+> movement of lexical representations through embedding space
+
+This project proposes a different formulation:
+
+> meaning as a continuously reconstituted field of relational structure instantiated across semantic events
+
+This yields three fundamental shifts:
+
+1. from word types → semantic events
+2. from vectors → neighbourhood fields
+3. from trajectories → distributions of relational structure
+
+---
+
+## Contribution to Digital Humanities
+
+This project contributes to Digital Humanities by:
+
+* introducing an event-led framework for semantic analysis in historical corpora
+* replacing centroid and trajectory models with neighbourhood field representations
+* enabling fully traceable semantic analysis grounded in textual evidence
+* unifying clustering, neighbour analysis, and visualisation under a single event-led architecture
+* reframing diachronic semantics as relational field dynamics rather than lexical drift
+
+---
+
+## Final conceptual claim
+
+Semantic change in early modern pamphlet discourse is best understood not as movement of words through a geometric space, but as:
+
+> the evolving structure of relational semantic fields generated by repeated contextual events across time and discourse conditions
