@@ -2,28 +2,54 @@
 """
 tier1_5_build_faiss_index.py
 
-Streaming FAISS construction over EEBO Zarr event logs.
+Streaming FAISS construction over Tier 1 contextual observation stores.
 
 Architecture
 ------------
 
-Tier1 Zarr is a multi-slice append-only event store:
+Tier 1 is a multi-slice contextual observation layer:
 
     ZARR_ROOT/tier1/<slice>/events/*
 
-This builder constructs a global FAISS index by streaming:
+Each stored row represents a contextual observation of a corpus token
+under a specific transformer window.
 
-    ZarrEventStream → FAISS (EeboFaissIndex)
+This builder constructs a global FAISS geometry index by streaming:
+
+    Tier1 Observation Store
+        ->
+    FAISS observation-space index
+
+FAISS is retrieval infrastructure only.
+
+It does NOT define:
+    - semantic meaning
+    - concepts
+    - drift
+    - clusters
+    - fields
+
+It provides approximate nearest-neighbour geometry over contextual
+observations.
 
 Key invariants
 --------------
 
-1. Zarr is the only source of truth for embeddings + event IDs
+1. Tier 1 observation stores are the sole source of truth for embeddings.
+
 2. FAISS stores only:
       - L2-normalised embedding vectors
-      - stable vector_id keys
-3. No full corpus materialisation
-4. Cross-slice aggregation is streaming-only
+      - stable observation IDs
+
+3. vector_id is lexical identity, NOT embedding identity.
+
+4. Multiple contextual observations may share the same vector_id.
+
+5. Cross-slice aggregation is streaming-only.
+
+6. No full-corpus materialisation occurs during index construction.
+
+7. FAISS geometry operates over contextual observations, not corpus events.
 """
 
 from __future__ import annotations
@@ -39,24 +65,28 @@ from lib.zarr_event_stream import ZarrEventStream
 BATCH_SIZE = 8192
 
 
-# ------------------------------------------------------------
-# FAISS build
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------
+# FAISS construction
+# ---------------------------------------------------------------------
 
 def build_index(stream: ZarrEventStream) -> EeboFaissIndex:
     """
-    Build FAISS index from streamed Zarr embeddings.
+    Build a global FAISS index over Tier 1 contextual observations.
 
-    Invariant:
-        vector_id is globally unique across slices
+    Observation identity is defined by stream position, not lexical identity.
+
+    Important:
+        vector_id is NOT unique at the embedding level because
+        overlapping transformer windows generate multiple contextual
+        observations for the same corpus token occurrence.
     """
 
     index = None
     total = 0
 
-    logger.info("[faiss-build] streaming Zarr event logs")
+    logger.info("[faiss-build] streaming Tier1 observation stores")
 
-    for vecs, ids in stream.iter_embeddings(batch_size=BATCH_SIZE):
+    for vecs, obs_ids in stream.iter_embeddings(batch_size=BATCH_SIZE):
 
         if vecs is None or len(vecs) == 0:
             continue
@@ -65,36 +95,44 @@ def build_index(stream: ZarrEventStream) -> EeboFaissIndex:
             dim = vecs.shape[1]
             index = EeboFaissIndex(dim=dim, exact=True)
 
-        index.add(vecs, ids)
-        total += len(ids)
+        index.add(vecs, obs_ids)
+
+        total += len(obs_ids)
 
     if index is None:
-        raise RuntimeError("No embeddings found in Zarr event stream")
+        raise RuntimeError(
+            "No embeddings found in Tier1 observation stream"
+        )
 
     logger.info(f"[faiss-build] complete ntotal={total}")
 
     return index
 
 
-# ------------------------------------------------------------
-# entry point
-# ------------------------------------------------------------
+def clear_faiss_output():
+    path = INDEXES_DIR / "faiss"
+
+    if path.exists():
+        shutil.rmtree(path)
+
+    path.mkdir(parents=True, exist_ok=True)
+
 
 def main():
-    logger.info("[faiss-build] loading Zarr event stream")
-
+    logger.info("[faiss-build] loading Tier1 observation stream")
     stream = ZarrEventStream(str(ZARR_ROOT / "tier1"))
 
-    logger.info("[faiss-build] building FAISS index")
+    logger.info("[faiss-build] clearing existing FAISS indexes")
+    clear_faiss_output()
 
+    logger.info("[faiss-build] building FAISS observation index")
     index = build_index(stream)
 
     out_path = INDEXES_DIR / "faiss" / "tier1.index"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     index.save(out_path)
-
-    logger.info(f"[faiss-build] done → {out_path}")
+    logger.info(f"[faiss-build] done -> {out_path}")
 
 
 if __name__ == "__main__":

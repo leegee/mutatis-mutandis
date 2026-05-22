@@ -1,5 +1,10 @@
 """
 lib/macberth.py
+
+If you see an error like the below, make sure you are running from the `python/` dir:
+
+    OSError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'lib\macberth-huggingface'.
+
 """
 
 from __future__ import annotations

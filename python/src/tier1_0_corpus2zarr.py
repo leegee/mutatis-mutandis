@@ -2,23 +2,35 @@
 """
 tier1_corpus2zarr.py
 
-Event-log ingestion pipeline for EEBO embeddings.
+Contextual Observation Log (Tier 1)
 
-This version implements a *true event model*:
+This layer implements a model-mediated observation system over a corpus event log.
 
-Each emitted row corresponds to a single token occurrence event:
-- A token in a document at a specific position
-- Observed through overlapping transformer windows
-- Aggregated from contextualised hidden states
+It does NOT store corpus events directly.
 
-Core invariant:
-- Each stored row is an atomic semantic observation event
-- Events are reconstructable without cross-column alignment assumptions
-- Postgres remains source of truth for identity and lexical metadata
+Instead, it records contextual observations of those events under overlapping transformer windows.
 
-Important conceptual shift:
-- We no longer store "parallel arrays of columns"
-- We store *event objects* derived from model inference over windows
+Each stored row is a single token-in-context observation event:
+
+    event = (
+        doc_id,
+        token_idx,          # corpus position (from Postgres event log)
+        window_start,       # start offset of transformer window
+        window_token_pos,   # position of token inside window (local index)
+        token,
+        vector_id,
+        embedding           # raw  hidden state (not normalised)
+    )
+
+Core invariant
+--------------
+
+- Corpus identity (Postgres) defines what exists.
+- Tier 1 defines how a model observes it.
+- Observations are intentionally non-IID due to overlapping windows.
+- No aggregation or summarisation is performed.
+
+This is a measurement system, not a reduction system.
 """
 
 from __future__ import annotations
@@ -31,8 +43,8 @@ import torch
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import ZARR_ROOT, SLICES, EMBED_BATCH_SIZE
-from lib.zarr_embedding_eventlog import ZarrEmbeddingEventLog
-from lib.macberth import load_macberth, normalize
+from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
+from lib.macberth import load_macberth
 
 
 WINDOW_SIZE = 512
@@ -77,8 +89,15 @@ def forward(model, device, batch):
     def pad(seq):
         return seq + [0] * (max_len - len(seq))
 
-    input_ids = torch.tensor([pad(x["input_ids"]) for x in batch], dtype=torch.long).to(device)
-    mask = torch.tensor([pad(x["mask"]) for x in batch], dtype=torch.long).to(device)
+    input_ids = torch.tensor(
+        [pad(x["input_ids"]) for x in batch],
+        dtype=torch.long
+    ).to(device)
+
+    mask = torch.tensor(
+        [pad(x["mask"]) for x in batch],
+        dtype=torch.long
+    ).to(device)
 
     with torch.inference_mode():
         out = model(input_ids=input_ids, attention_mask=mask, return_dict=True)
@@ -86,68 +105,86 @@ def forward(model, device, batch):
     return out.last_hidden_state.cpu().numpy()
 
 
-def process_doc(doc_id, tokens, vector_ids, tokenizer, model, device):
+# ------------------------------------------------------------
+# Core observation extraction
+# ------------------------------------------------------------
+
+def process_windows_events(doc_id, tokens, vector_ids, tokenizer, model, device):
     input_ids, attention_mask, word_ids = encode_doc(tokens, tokenizer)
 
-    dim = model.config.hidden_size
-
-    # We will emit events directly, not accumulate per-token means
-    events_vecs = []
-    events_ids = []
-    events_token_idx = []
-
+    events = []
     batch = []
 
-    def emit_batch(batch):
-        """
-        Convert a batch of windows into per-token events.
-
-        Each window produces contextualised embeddings.
-        We do NOT aggregate across windows.
-        """
-        hidden = forward(model, device, batch)
-
-        for b, h in zip(batch, hidden):
-            wids = b["word_ids"]
-
-            for i, wid in enumerate(wids):
-                if wid is None or wid < 0:
-                    continue
-
-                # Each (window, token) interaction is a distinct event
-                events_vecs.append(normalize(h[i]))
-                events_ids.append(vector_ids[wid])
-                events_token_idx.append(wid)
-
-    for start, ids, mask, wids in iter_windows(input_ids, attention_mask, word_ids):
+    for window_start, ids, mask, wids in iter_windows(
+        input_ids,
+        attention_mask,
+        word_ids
+    ):
         batch.append({
             "input_ids": ids,
             "mask": mask,
-            "word_ids": wids
+            "word_ids": wids,
+            "window_start": window_start
         })
 
         if len(batch) >= EMBED_BATCH_SIZE:
-            emit_batch(batch)
+            hidden = forward(model, device, batch)
+            for b, h in zip(batch, hidden):
+                events.extend(
+                    extract_events(doc_id, tokens, vector_ids, b, h)
+                )
             batch.clear()
 
     if batch:
-        emit_batch(batch)
+        hidden = forward(model, device, batch)
+        for b, h in zip(batch, hidden):
+            events.extend(
+                extract_events(doc_id, tokens, vector_ids, b, h)
+            )
 
-    if not events_ids:
-        return None
+    return events if events else None
 
-    vecs = np.asarray(events_vecs, dtype=np.float32)
-    ids = np.asarray(events_ids, dtype=np.int64)
-    token_idxs = np.asarray(events_token_idx, dtype=np.int64)
 
-    return vecs, ids, token_idxs
+def extract_events(doc_id, tokens, vector_ids, batch_item, hidden):
+    """
+    Converts a single transformer window into token-level observation events.
 
+    Event definition is local to the window:
+    - word_ids defines corpus alignment
+    - i defines intra-window position
+    """
+
+    window_start = batch_item["window_start"]
+    word_ids = batch_item["word_ids"]
+
+    events = []
+
+    for i, wid in enumerate(word_ids):
+        if wid is None or wid < 0:
+            continue
+
+        events.append((
+            doc_id,
+            int(wid),                  # corpus token position
+            int(window_start),        # window identity
+            int(i),                   # intra-window token position (IMPORTANT)
+            tokens[wid],
+            int(vector_ids[wid]),
+            hidden[i].astype(np.float32) # no longer norm
+        ))
+
+    return events
+
+
+# ------------------------------------------------------------
+# Slice processing
+# ------------------------------------------------------------
 
 def process_slice(conn, slice_range, tokenizer, model, device):
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
     logger.info(f"[SLICE START] {slice_id}")
 
-    store = ZarrEmbeddingEventLog(
+    store = ZarrEmbeddingObservationStore(
         path=str(ZARR_ROOT / "tier1" / slice_id),
         dim=model.config.hidden_size,
     )
@@ -173,7 +210,7 @@ def process_slice(conn, slice_range, tokenizer, model, device):
         if not buf_tokens:
             return
 
-        result = process_doc(
+        result = process_windows_events(
             buf_doc_id,
             buf_tokens,
             buf_vids,
@@ -185,14 +222,31 @@ def process_slice(conn, slice_range, tokenizer, model, device):
         if result is None:
             return
 
-        vecs, ids, token_idxs = result
+        doc_ids = []
+        token_idxs = []
+        window_ids = []
+        window_pos = []
+        tokens_out = []
+        vector_ids_out = []
+        vecs = []
+
+        for (d_id, t_idx, w_id, w_pos, tok, v_id, vec) in result:
+            doc_ids.append(d_id)
+            token_idxs.append(t_idx)
+            window_ids.append(w_id)
+            window_pos.append(w_pos)
+            tokens_out.append(tok)
+            vector_ids_out.append(v_id)
+            vecs.append(vec)
 
         store.append_events(
-            emb_norm=vecs,
-            emb_raw=vecs,
-            vector_id=ids,
-            doc_id=np.array([buf_doc_id] * len(ids), dtype="U32"),
-            token_idx=token_idxs,
+            emb_raw=np.stack(vecs),
+            vector_id=np.asarray(vector_ids_out, dtype=np.int64),
+            doc_id=np.asarray(doc_ids, dtype="U32"),
+            token_idx=np.asarray(token_idxs, dtype=np.int32),
+            window_id=np.asarray(window_ids, dtype=np.int32),
+            window_token_pos=np.asarray(window_pos, dtype=np.int32),
+            token=np.asarray(tokens_out, dtype=object),
         )
 
     for doc_id, token_idx, vid, token in cur:
@@ -215,6 +269,10 @@ def process_slice(conn, slice_range, tokenizer, model, device):
 
     logger.info(f"[SLICE COMPLETE] {slice_id}")
 
+
+# ------------------------------------------------------------
+# CLI
+# ------------------------------------------------------------
 
 def clear_output_dir():
     path = ZARR_ROOT / "tier1"
