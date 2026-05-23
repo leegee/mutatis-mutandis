@@ -85,19 +85,43 @@ class EeboFaissIndex:
         self._index = faiss.IndexIDMap(base)
 
     @staticmethod
-    def _normalize(x: np.ndarray) -> np.ndarray:
+    def _normalize(
+        x: np.ndarray,
+        event_ids: np.ndarray | None = None,
+    ) -> np.ndarray:
         """
         Enforce cosine/IP equivalence.
 
         Failure mode:
             zero vectors imply invalid embedding generation upstream.
+            event_ids, if provided, are included in the error to identify
+            the offending observations.
         """
 
         x = np.asarray(x, dtype=np.float32)
         norms = np.linalg.norm(x, axis=1, keepdims=True)
 
-        if np.any(norms == 0):
-            raise ValueError("Zero vector encountered during normalization")
+        zero_mask = (norms == 0).ravel()
+
+        if np.any(zero_mask):
+            zero_positions = np.where(zero_mask)[0].tolist()
+
+            if event_ids is not None:
+                offending = [
+                    int(np.asarray(event_ids)[i]) for i in zero_positions
+                ]
+                raise ValueError(
+                    f"Zero vector encountered during normalisation at batch "
+                    f"positions {zero_positions}, event_ids={offending}. "
+                    f"This indicates invalid embedding generation upstream."
+                )
+            else:
+                raise ValueError(
+                    f"Zero vector encountered during normalisation at batch "
+                    f"positions {zero_positions}. "
+                    f"This indicates invalid embedding generation upstream."
+                )
+
         return x / norms
 
     def add(self, vectors: np.ndarray, event_ids: Sequence[int]) -> None:
@@ -127,7 +151,7 @@ class EeboFaissIndex:
                 raise ValueError(f"Duplicate event_id in batch: {eid}")
             seen.add(eid)
 
-        vectors = self._normalize(vectors)
+        vectors = self._normalize(vectors, event_ids=ids)
         self._index.add_with_ids(vectors, ids)
 
     def search(
@@ -221,10 +245,18 @@ class EeboFaissIndex:
                 "(cosine similarity invariant)"
             )
 
+        # Both IndexFlatIP and IndexHNSWFlat expose .d for the vector
+        # dimension. If this ever fails for a future index type, the
+        # TypeError below will surface it explicitly rather than
+        # letting obj.dim remain unset.
         if hasattr(base, "d"):
             obj.dim = base.d
         else:
-            raise TypeError("Cannot infer dimension from FAISS index")
+            raise TypeError(
+                f"Cannot infer embedding dimension from FAISS index "
+                f"of type {type(base).__name__}. Expected an index with "
+                f"a '.d' attribute (e.g. IndexFlatIP, IndexHNSWFlat)."
+            )
 
         logger.info(
             f"[faiss] loaded ntotal={obj._index.ntotal} dim={obj.dim}"
