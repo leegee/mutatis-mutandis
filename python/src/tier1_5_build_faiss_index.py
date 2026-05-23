@@ -54,6 +54,7 @@ Key invariants
 
 from __future__ import annotations
 
+import shutil
 import numpy as np
 
 from lib.eebo_config import ZARR_ROOT, INDEXES_DIR
