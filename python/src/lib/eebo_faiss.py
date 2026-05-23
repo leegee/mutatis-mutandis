@@ -94,24 +94,13 @@ class EeboFaissIndex:
         """
 
         x = np.asarray(x, dtype=np.float32)
-
         norms = np.linalg.norm(x, axis=1, keepdims=True)
 
         if np.any(norms == 0):
             raise ValueError("Zero vector encountered during normalization")
-
         return x / norms
 
     def add(self, vectors: np.ndarray, event_ids: Sequence[int]) -> None:
-        """
-        Add semantic event embeddings to index.
-
-        Invariant:
-            len(vectors) == len(event_ids)
-
-        event_ids MUST be globally stable identifiers.
-        """
-
         vectors = np.ascontiguousarray(vectors, dtype=np.float32)
         ids = np.ascontiguousarray(event_ids, dtype=np.int64)
 
@@ -128,8 +117,17 @@ class EeboFaissIndex:
                 "number of vectors must match number of event IDs"
             )
 
-        vectors = self._normalize(vectors)
+        if np.any(ids == -1):
+            raise ValueError("Invalid FAISS ids (-1) detected")
 
+        seen = set()
+        for eid in ids:
+            eid = int(eid)
+            if eid in seen:
+                raise ValueError(f"Duplicate event_id in batch: {eid}")
+            seen.add(eid)
+
+        vectors = self._normalize(vectors)
         self._index.add_with_ids(vectors, ids)
 
     def search(
