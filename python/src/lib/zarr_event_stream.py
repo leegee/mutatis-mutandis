@@ -67,20 +67,22 @@ class ZarrEventStream:
             if self.EXPECTED_ID_KEY not in group:
                 raise KeyError(f"Missing event_id in {slice_dir}")
 
-            eids = group[self.EXPECTED_ID_KEY]
-            docs = group["doc_id"] if "doc_id" in group else None
-            tokens = group["token"] if "token" in group else None  # string token, not token_idx
+            # Read entire arrays in one chunk-aware call rather than
+            # indexing element-by-element. The previous row-by-row loop
+            # bypassed Zarr's chunked I/O and was O(n) Python overhead.
+            eids = group[self.EXPECTED_ID_KEY][:]  # (n,) int64
 
-            n = eids.shape[0]
+            docs = group["doc_id"][:] if "doc_id" in group else None
+            tokens = group["token"][:] if "token" in group else None
 
-            for i in range(n):
-                eid = int(eids[i])
+            for i, eid in enumerate(eids):
+                eid = int(eid)
 
                 if docs is not None:
                     doc_map[eid] = str(docs[i])
 
                 if tokens is not None:
-                    token_map[eid] = str(tokens[i])  # surface form string
+                    token_map[eid] = str(tokens[i])
 
         self._token_by_id = token_map
         self._doc_by_id = doc_map
