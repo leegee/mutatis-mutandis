@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Tier2: neighbourhood analysis over event-space substrate
+tier2_0_concept_events.py - Tier2: neighbourhood analysis over event-space substrate
 
 Core invariant
 --------------
@@ -17,6 +17,46 @@ vector_id is lexical identity only and is NOT used as a lookup key.
 
 No aggregation or centroid reconstruction is performed.
 Events remain atomic observations with full provenance.
+
+Performance model
+-----------------
+
+ZarrEventLookup._build reads each Zarr array slice-by-slice in batches,
+materialising one numpy array per dataset per batch before iterating in
+Python. This avoids the element-by-element Zarr reads that would otherwise
+pay decompression overhead on every scalar access.
+
+Embeddings are currently stored in ZarrEventLookup alongside metadata so
+that FAISS queries can be issued using the canonical Zarr vector rather than
+relying on FAISS internal storage. This is correct and safe for IndexFlatIP,
+which stores vectors verbatim, but it has two consequences:
+
+    1. Memory: all embeddings for the full corpus are resident in the lookup
+       dict. For a large corpus this can be several GB.
+
+    2. Coupling: the lookup is responsible for both metadata and vector
+       storage, which conflates two concerns.
+
+A cleaner long-term approach is to drop the "embedding" field from
+ZarrEventLookup.by_event_id entirely, and instead reconstruct vectors
+from the FAISS index at query time via EeboFaissIndex.reconstruct().
+See eebo_faiss.py for the reconstruct() method and usage notes.
+
+This migration is deferred until the index type (exact vs. approximate)
+is confirmed stable, because IndexHNSWFlat does not support vector
+reconstruction.
+
+window_id scoping invariant
+---------------------------
+
+window_counter keys are (doc_id, window_id) because window_id is defined
+as a document-local coordinate in the Tier 1 store (it is the token-space
+start offset of the transformer window within that document). Treating
+window_id as globally unique across documents would silently merge windows
+from different documents that happen to share the same offset. This
+invariant is enforced in Tier 1 but is not re-checked here; if Tier 1
+were ever rebuilt with a global window_id scheme this counter would
+become incorrect without raising an error.
 """
 
 from __future__ import annotations
@@ -55,7 +95,14 @@ class ZarrEventLookup:
         vector_id is stored as metadata only - NOT used as key.
 
     Embeddings are loaded alongside metadata so that FAISS queries
-    can be issued without reaching back into private index internals.
+    can be issued using the canonical Zarr vector rather than relying
+    on FAISS internal vector storage. See module docstring for the
+    trade-offs and the deferred migration path to EeboFaissIndex.reconstruct().
+
+    Read strategy:
+        Each Zarr dataset is read as a contiguous numpy slice per batch.
+        Iterating over pre-loaded numpy arrays avoids per-element Zarr
+        decompression overhead, which is significant at corpus scale.
     """
 
     def __init__(self, root):
@@ -87,7 +134,6 @@ class ZarrEventLookup:
             idxs = e["token_idx"]
             wins = e["window_id"]
             embs = e["emb_raw"]
-
             wpos = e["window_token_pos"] if "window_token_pos" in e else None
 
             n = eids.shape[0]
@@ -95,18 +141,34 @@ class ZarrEventLookup:
             for start in range(0, n, BATCH_SIZE):
                 end = min(start + BATCH_SIZE, n)
 
+                # Read each dataset once per batch as a contiguous numpy
+                # array. Indexing into these numpy arrays in the inner loop
+                # is cheap; indexing into the Zarr datasets directly would
+                # trigger one decompressed read per element.
+                b_eids = eids[start:end]
+                b_vids = vids[start:end]
+                b_docs = docs[start:end]
+                b_toks = toks[start:end]
+                b_idxs = idxs[start:end]
+                b_wins = wins[start:end]
+                b_embs = embs[start:end]
+                b_wpos = wpos[start:end] if wpos is not None else None
+
                 for i in range(end - start):
-                    eid = int(eids[start + i])
+                    eid = int(b_eids[i])
 
                     self.by_event_id[eid] = {
                         "event_id": eid,
-                        "vector_id": int(vids[start + i]),
-                        "doc_id": str(docs[start + i]),
-                        "token": str(toks[start + i]),
-                        "token_idx": int(idxs[start + i]),
-                        "window_id": int(wins[start + i]),
-                        "window_token_pos": int(wpos[start + i]) if wpos is not None else None,
-                        "embedding": np.asarray(embs[start + i], dtype=np.float32),
+                        "vector_id": int(b_vids[i]),
+                        "doc_id": str(b_docs[i]),
+                        "token": str(b_toks[i]),
+                        "token_idx": int(b_idxs[i]),
+                        "window_id": int(b_wins[i]),
+                        "window_token_pos": int(b_wpos[i]) if b_wpos is not None else None,
+                        # NOTE: storing embeddings here holds the full corpus
+                        # embedding matrix in memory. See module docstring for
+                        # the deferred migration to EeboFaissIndex.reconstruct().
+                        "embedding": np.asarray(b_embs[i], dtype=np.float32),
                     }
 
         logger.info(f"[tier2] events={len(self.by_event_id)}")
@@ -127,6 +189,22 @@ class ZarrEventLookup:
 # ------------------------------------------------------------
 
 def analyse_concept(index, lookup, concept_name, concept, top_n=25):
+    """
+    Compute neighbourhood structure for all events matching a concept.
+
+    FAISS search is batched over all matching events: a single index.search()
+    call is issued with all query vectors stacked, rather than one call per
+    event. For concepts with many matching events this is materially faster
+    because FAISS parallelises multi-query search internally.
+
+    Vectors come from ZarrEventLookup (Zarr is the canonical source of truth),
+    not from FAISS internal storage. See module docstring re: the deferred
+    migration to EeboFaissIndex.reconstruct().
+
+    window_counter keys are (doc_id, window_id). window_id is doc-local;
+    see module docstring for the scoping invariant.
+    """
+
     forms = set(concept["forms"])
     logger.info(f"[tier2] concept={concept_name}")
 
@@ -135,6 +213,18 @@ def analyse_concept(index, lookup, concept_name, concept, top_n=25):
     if not event_ids:
         return {"concept": concept_name, "empty": True}
 
+    # Stack all query vectors and issue a single batched FAISS search.
+    # Previously this was one index.search() call per event; FAISS
+    # parallelises multi-query search so the batched form is significantly
+    # faster for concepts with many matching events.
+    query_vecs = np.stack(
+        [lookup.get_event(eid)["embedding"] for eid in event_ids]
+    )  # (n_events, dim)
+
+    all_scores, all_neigh_ids = index.search(query_vecs, K)
+    # all_scores:    (n_events, K)
+    # all_neigh_ids: (n_events, K)
+
     token_counter = Counter()
     doc_counter = Counter()
     window_counter = Counter()
@@ -142,19 +232,11 @@ def analyse_concept(index, lookup, concept_name, concept, top_n=25):
     results = []
 
     for i, eid in enumerate(event_ids):
-        if i % 50 == 0:
-            logger.debug(f"[tier2] {concept_name} {i}/{len(event_ids)}")
-
         event = lookup.get_event(eid)
-
-        # Vector comes from Zarr (source of truth), not FAISS internals
-        vec = event["embedding"][None, :]
-
-        scores, neigh_ids = index.search(vec, K)
 
         neighbours = []
 
-        for nid, score in zip(neigh_ids[0], scores[0]):
+        for nid, score in zip(all_neigh_ids[i], all_scores[i]):
 
             if nid == -1:
                 continue
@@ -167,7 +249,8 @@ def analyse_concept(index, lookup, concept_name, concept, top_n=25):
 
             token_counter[n_event["token"]] += 1
             doc_counter[n_event["doc_id"]] += 1
-            # window_counter scoped to (doc_id, window_id) - window_id is doc-local
+            # window_id is doc-local: key must include doc_id to avoid
+            # merging windows from different documents that share an offset.
             window_counter[(n_event["doc_id"], n_event["window_id"])] += 1
 
             neighbours.append({

@@ -27,7 +27,24 @@ It does NOT own:
     - metadata
     - provenance
     - semantic interpretation
-    - vector reconstruction
+
+Vector reconstruction
+---------------------
+
+EeboFaissIndex exposes a reconstruct() method that retrieves the
+unit-normalised vector stored for a given event_id directly from the
+FAISS index, without reaching back into the Zarr store.
+
+This is currently supported because the pipeline uses IndexFlatIP, which
+stores vectors verbatim. It is NOT supported by IndexHNSWFlat, which does
+not retain vectors after index construction.
+
+The intended future use is in ZarrEventLookup (tier2_concept_neighbours.py):
+once the index type is confirmed stable, the "embedding" field can be
+dropped from by_event_id and replaced with reconstruct() calls, eliminating
+the in-memory copy of the full corpus embedding matrix. Until that migration
+is made, Zarr remains the authoritative source for query vectors and
+reconstruct() is provided but not called.
 
 Core invariant
 --------------
@@ -194,6 +211,55 @@ class EeboFaissIndex:
         Number of indexed semantic events.
         """
         return self._index.ntotal
+
+    def reconstruct(self, event_id: int) -> np.ndarray:
+        """
+        Retrieve the unit-normalised vector stored for event_id.
+
+        Returns:
+            (dim,) float32 array — the L2-normalised vector as it was
+            inserted, i.e. suitable for direct inner-product comparison.
+
+        Index-type constraint:
+            This method is only supported when the underlying base index is
+            IndexFlatIP, which stores vectors verbatim. It will raise a
+            RuntimeError for IndexHNSWFlat, which discards vectors after
+            construction and does not support reconstruction.
+
+            Before calling this method, callers should confirm the index
+            type via isinstance(self._index.index, faiss.IndexFlatIP).
+
+        Intended use (deferred migration):
+            ZarrEventLookup in tier2_concept_neighbours.py currently stores
+            a copy of every embedding in its by_event_id dict, holding the
+            full corpus embedding matrix in memory. Once the index type is
+            confirmed stable as IndexFlatIP, that "embedding" field can be
+            dropped and replaced with calls to this method, eliminating the
+            duplicate copy. The migration is deferred because switching to
+            IndexHNSWFlat would silently break any caller relying on
+            reconstruct().
+
+        Note:
+            Reconstructed vectors are the normalised form stored in FAISS,
+            not the raw pre-normalisation vectors from Zarr. For cosine
+            similarity purposes these are equivalent, but for any use case
+            that requires the original unnormalised embedding, Zarr remains
+            the authoritative source.
+        """
+
+        base = self._index.index
+
+        if not isinstance(base, faiss.IndexFlatIP):
+            raise RuntimeError(
+                f"reconstruct() is only supported for IndexFlatIP. "
+                f"Current base index is {type(base).__name__}, which does "
+                f"not support vector reconstruction. Query vectors must be "
+                f"sourced from Zarr instead."
+            )
+
+        vec = np.zeros(self.dim, dtype=np.float32)
+        self._index.reconstruct(int(event_id), vec)
+        return vec
 
     def save(self, path: Path) -> None:
         """
