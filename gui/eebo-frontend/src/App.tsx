@@ -14,13 +14,21 @@ export default function App() {
     <>
       <main class="responsive max">
         <ErrorBoundary fallback={
-          (err) => <article><div class="error padding">{err.message}</div></article>
+          (err) => <article>
+            <div class="error padding">{err.message}</div>
+          </article>
         }>
-          <Show when={events()} fallback="Loading events...">
+          <Show when={events()} fallback={
+            <article class="responsive">
+              <progress></progress>
+              <h1>Concept Graph</h1>
+              <h2>Loading events...</h2>
+            </article>
+          }>
             {(data) => <ConceptGraph data={data()} />}
           </Show>
         </ErrorBoundary>
-      </main>
+      </main >
 
       <Transition name="slide-fade">
         {openHelp() && (

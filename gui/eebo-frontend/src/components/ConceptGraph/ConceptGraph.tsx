@@ -234,16 +234,10 @@ const ConceptGraph: Component<Props> = (props) => {
       .selectAll<HTMLDivElement, unknown>(".cg-tooltip")
       .data([null])
       .join("div")
-      .attr("class", "cg-tooltip")
+      .attr("class", "cg-tooltip surface-container-high border large-elevate padding")
       .style("position", "fixed")
       .style("pointer-events", "none")
-      .style("background", "rgba(8,16,28,0.93)")
-      .style("border", "1px solid #2a4a6a")
-      .style("color", "#c8e6ff")
       .style("font-family", "'IBM Plex Mono', monospace")
-      .style("font-size", "11px")
-      .style("padding", "6px 10px")
-      .style("border-radius", "3px")
       .style("opacity", "0")
       .style("transition", "opacity 0.15s");
 
@@ -252,10 +246,12 @@ const ConceptGraph: Component<Props> = (props) => {
         const stats = aggregated()?.byToken.get(d.id);
         tooltip
           .html(
-            `<strong>${ d.id }</strong><br/>` +
-            `connections: ${ d.degree }<br/>` +
-            `documents: ${ stats?.docs.size ?? "—" }<br/>` +
-            `appearances: ${ stats?.totalAppearances ?? "—" }`
+            `<aside>` +
+            `<h6 class="bottom-padding">${ d.id }</h6>` +
+            `Connections: ${ d.degree }<br/>` +
+            `Documents: ${ stats?.docs.size ?? "—" }<br/>` +
+            `Appearances: ${ stats?.totalAppearances ?? "—" }` +
+            `</aside>`
           )
           .style("opacity", "1")
           .style("left", event.clientX + 14 + "px")
@@ -332,7 +328,7 @@ const ConceptGraph: Component<Props> = (props) => {
       }}
     >
       <header
-        class="padding border bottom-border"
+        class="responsive padding surface-container-low"
         style={{
           display: "flex",
           gap: "2rem",
@@ -340,8 +336,6 @@ const ConceptGraph: Component<Props> = (props) => {
           "flex-shrink": "0",
         }}
       >
-        <h1 style="font-size: 1rem">Concept Graph</h1>
-
         <div>
           <label>Concept </label>
           <select value={concept()} onChange={(e) => setConcept(e.currentTarget.value)}>
@@ -368,13 +362,13 @@ const ConceptGraph: Component<Props> = (props) => {
       </header>
 
       {/* Main area: graph + optional drill-down panel */}
-      <div style={{ display: "flex", flex: "1", overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: "1", overflow: "hidden" }} class="background">
 
-        <svg ref={svgRef!} style={{ flex: "1", display: "block" }} />
+        <svg ref={svgRef!} style={{ flex: "1", display: "block" }} class="surface-container-lowest" />
 
         {/* Drill-down panel — shown when a node is selected */}
         <Show when={selectedNode()}>
-          <aside class="surface padding"
+          <aside class="surface-container-high padding border"
             style={{
               width: "20rem",
               "flex-shrink": "0",
@@ -382,9 +376,7 @@ const ConceptGraph: Component<Props> = (props) => {
             }}
           >
             <div style={{ display: "flex", "justify-content": "space-between", "align-items": "center" }}>
-              <strong>
-                {selectedNode()}
-              </strong>
+              <h2> {selectedNode()} </h2>
               <button class="link border" onClick={() => setSelectedNode(null)} >
                 ✕
               </button>
@@ -400,9 +392,7 @@ const ConceptGraph: Component<Props> = (props) => {
               )}
             </Show>
 
-            <div class="bottom-padding">
-              Source documents
-            </div>
+            <h3 class="bottom-padding"> Sources </h3>
 
             <Show
               when={selectedDocs().length > 0}
@@ -410,7 +400,7 @@ const ConceptGraph: Component<Props> = (props) => {
             >
               <For each={selectedDocs()}>
                 {(docId) => (
-                  <div>
+                  <div class="chip small-margin">
                     {docId}
                   </div>
                 )}
@@ -422,7 +412,7 @@ const ConceptGraph: Component<Props> = (props) => {
       </div>
 
       <footer
-        class="fixed responsive small-padding border"
+        class="fixed responsive small-padding surface-container-low"
         style={{ "flex-shrink": "0" }}
       >
         {graphData().nodes.length} nodes · {graphData().edges.length} edges

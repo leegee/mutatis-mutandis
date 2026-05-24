@@ -1,14 +1,15 @@
 export default function ConceptGraphGuide() {
   return (
     <article>
-      <h1>Concept Graph — User Guide</h1>
+      <h1>Concept Graph</h1>
+      <h2>User Guide</h2>
 
-      <h2>What you are looking at</h2>
+      <h3>What you are looking at</h3>
 
       <p>
         Each graph shows the <dfn>semantic neighbourhood structure</dfn>
         of a concept as it appears across the EEBO corpus.
-        It is not a map of words that <em>mean</em> the same thing as the concept —
+        It is not a map of words that <em>mean</em> the same thing as the concept  &mdash;
         it is a map of words that <em>appear in similar contexts</em> to it,
         across thousands of individual token occurrences in early modern pamphlet texts.
       </p>
@@ -18,7 +19,7 @@ export default function ConceptGraphGuide() {
         a word is known by the company it keeps.
         Every time a concept such as <em>liberty</em> or <em>conscience</em>
         appears in the corpus, the model records which other words appear
-        in its immediate semantic neighbourhood —
+        in its immediate semantic neighbourhood  &mdash;
         the contextual environment the transformer model perceives
         around that occurrence.
       </p>
@@ -31,7 +32,7 @@ export default function ConceptGraphGuide() {
       </p>
 
 
-      <h2>Nodes</h2>
+      <h3>Nodes</h3>
 
       <p>
         Each node is a word that appeared frequently
@@ -39,7 +40,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <dfn>Size</dfn> encodes degree —
+        <dfn>Size</dfn> encodes degree  &mdash;
         how many other words in the graph this word co-occurs with.
         Larger nodes are more relationally central:
         they appear alongside many other words in the concept's context,
@@ -54,11 +55,11 @@ export default function ConceptGraphGuide() {
         of the concept's semantic world.
       </p>
 
-      <h2>Edges</h2>
+      <h3>Edges</h3>
 
       <p>
         Each edge connects two words that appeared together
-        in the neighbourhood of the same concept occurrence —
+        in the neighbourhood of the same concept occurrence  &mdash;
         they were both close to the concept at the same moment
         in the same text.
       </p>
@@ -90,7 +91,7 @@ export default function ConceptGraphGuide() {
       </p>
 
 
-      <h2>Controls</h2>
+      <h3>Controls</h3>
 
       <p>
         <dfn>Concept</dfn> selects which concept's neighbourhood structure
@@ -101,13 +102,13 @@ export default function ConceptGraphGuide() {
 
       <p>
         <dfn>Max nodes</dfn> sets a ceiling on how many words are shown.
-        The graph always displays the highest-degree nodes first —
-        the words most centrally connected in neighbourhood space —
+        The graph always displays the highest-degree nodes first  &mdash;
+        the words most centrally connected in neighbourhood space  &mdash;
         and drops lower-degree words to meet the limit.
       </p>
 
       <p>
-        <dfn>Degree</dfn> is the number of direct connections a node has to other nodes in the graph — how many other words it consistently co-occurs with in the neighbourhood of this concept, given the current filters.
+        <dfn>Degree</dfn> is the number of direct connections a node has to other nodes in the graph  &mdash;  how many other words it consistently co-occurs with in the neighbourhood of this concept, given the current filters.
       </p>
 
       <p>
@@ -124,7 +125,7 @@ export default function ConceptGraphGuide() {
 
       <p>
         Raising this threshold is useful for identifying
-        the stable semantic companions of a concept —
+        the stable semantic companions of a concept  &mdash;
         the words that appear with it not once or twice
         but consistently across the corpus.
       </p>
@@ -135,7 +136,7 @@ export default function ConceptGraphGuide() {
       </p>
 
 
-      <h2>Navigation</h2>
+      <h3>Navigation</h3>
 
       <p>
         <dfn>Scroll</dfn> to zoom in and out.
@@ -159,11 +160,11 @@ export default function ConceptGraphGuide() {
       </p>
 
 
-      <h2>What to look for</h2>
+      <h3>What to look for</h3>
 
       <p>
-        <dfn>Tight clusters</dfn> —
-        groups of densely interconnected nodes —
+        <dfn>Tight clusters</dfn>  &mdash;
+        groups of densely interconnected nodes  &mdash;
         suggest semantic sub-fields:
         words that consistently travel together around the concept,
         implying a coherent domain of usage.
@@ -177,16 +178,16 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <dfn>Bridge nodes</dfn> —
-        words that connect otherwise separate clusters —
+        <dfn>Bridge nodes</dfn>  &mdash;
+        words that connect otherwise separate clusters  &mdash;
         are particularly significant.
         They suggest semantic overlap or contested ground
         between two domains of usage.
       </p>
 
       <p>
-        <dfn>Isolated or peripheral nodes</dfn> —
-        connected by thin, faint edges —
+        <dfn>Isolated or peripheral nodes</dfn>  &mdash;
+        connected by thin, faint edges  &mdash;
         represent occasional or idiosyncratic associations,
         possibly tied to specific documents or authors
         rather than general usage patterns.
@@ -201,10 +202,10 @@ export default function ConceptGraphGuide() {
       </p>
 
 
-      <h2>Relationship to the underlying data</h2>
+      <h3>Relationship to the underlying data</h3>
 
       <p>
-        The graph is a projection over the full semantic event ledger —
+        The graph is a projection over the full semantic event ledger  &mdash;
         a visualisation of aggregate neighbourhood structure,
         not the primary data.
       </p>
@@ -218,7 +219,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        Changing the filters does not change the underlying data —
+        Changing the filters does not change the underlying data  &mdash;
         it changes which part of the neighbourhood structure is visible.
         The same corpus events underlie all views.
       </p>

@@ -82,11 +82,11 @@ main,
 .slide-fade-enter,
 .slide-fade-exit-to {
   opacity: 0;
-  transform: translateY(-12px);
+  transform: translateX(+50rem);
 }
 
 .slide-fade-enter-to,
 .slide-fade-exit {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateX(0);
 }
