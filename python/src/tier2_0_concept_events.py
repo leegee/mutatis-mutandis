@@ -84,8 +84,6 @@ OUTPUT_PATH = INDEXES_DIR / "tier2_concept_neighbours.json"
 
 
 # Event metadata + embedding index
-
-
 class ZarrEventLookup:
     """
     In-memory index of all Tier 1 observation events.
@@ -184,11 +182,37 @@ class ZarrEventLookup:
                 yield eid
 
 
+# Additional metadata
+def load_doc_metadata(conn) -> dict:
+    """
+    Build a doc_id -> metadata mapping from pamphlet_tokens.
+
+    pub_year, slice_start, slice_end are stable per doc_id so
+    we take the first occurrence of each.
+    """
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT ON (doc_id)
+            doc_id,
+            pub_year,
+            slice_start,
+            slice_end,
+            title
+        FROM pamphlet_tokens
+        ORDER BY doc_id
+    """)
+    return {
+        row[0]: {
+            "pub_year":    row[1],
+            "slice_start": row[2],
+            "slice_end":   row[3],
+            "title":       row[4],
+        }
+        for row in cur.fetchall()
+    }
 
 # Concept analysis
-
-
-def analyse_concept(index, lookup, concept_name, concept, top_n=25):
+def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
     """
     Compute neighbourhood structure for all events matching a concept.
 
@@ -254,25 +278,31 @@ def analyse_concept(index, lookup, concept_name, concept, top_n=25):
             window_counter[(n_event["doc_id"], n_event["window_id"])] += 1
 
             neighbours.append({
-                "event_id": int(nid),
-                "vector_id": n_event["vector_id"],
-                "token": n_event["token"],
-                "doc_id": n_event["doc_id"],
-                "token_idx": n_event["token_idx"],
-                "window_id": n_event["window_id"],
+                "event_id":         int(nid),
+                "vector_id":        n_event["vector_id"],
+                "token":            n_event["token"],
+                "doc_id":           n_event["doc_id"],
+                "pub_year":         doc_meta.get(event["doc_id"], {}).get("pub_year"),
+                "slice_start":      doc_meta.get(event["doc_id"], {}).get("slice_start"),
+                "slice_end":        doc_meta.get(event["doc_id"], {}).get("slice_end"),
+                "token_idx":        n_event["token_idx"],
+                "window_id":        n_event["window_id"],
                 "window_token_pos": n_event["window_token_pos"],
-                "score": float(score),
+                "score":            float(score),
             })
 
         results.append({
-            "event_id": int(eid),
-            "vector_id": event["vector_id"],
-            "token": event["token"],
-            "doc_id": event["doc_id"],
-            "token_idx": event["token_idx"],
-            "window_id": event["window_id"],
+            "event_id":         int(eid),
+            "vector_id":        event["vector_id"],
+            "token":            event["token"],
+            "doc_id":           event["doc_id"],
+            "pub_year":         doc_meta.get(event["doc_id"], {}).get("pub_year"),
+            "slice_start":      doc_meta.get(event["doc_id"], {}).get("slice_start"),
+            "slice_end":        doc_meta.get(event["doc_id"], {}).get("slice_end"),
+            "token_idx":        event["token_idx"],
+            "window_id":        event["window_id"],
             "window_token_pos": event["window_token_pos"],
-            "neighbours": neighbours,
+            "neighbours":       neighbours,
         })
 
     return {
@@ -296,12 +326,13 @@ def main():
 
     index = EeboFaissIndex.load(INDEXES_DIR / "faiss" / "tier1.index")
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
+    doc_meta = load_doc_metadata(conn)
 
     output = {}
 
     for concept_name, concept in resolve_concepts(args):
         output[concept_name] = analyse_concept(
-            index, lookup, concept_name, concept
+            doc_meta, kup, concept_name, concept
         )
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
