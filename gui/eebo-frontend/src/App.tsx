@@ -2,9 +2,9 @@
 
 import { createResource, createSignal, ErrorBoundary, Match, Show, Switch } from "solid-js";
 import { Transition } from "solid-transition-group";
-import { loadConceptNeighbours } from "./services/loadConceptNeighbours";
-import ConceptGraph from "./components/ConceptGraph";
-import ConceptGraphGuide from "./components/ConceptGraphGuide";
+import ConceptGraph from "./components/ConceptGraph/ConceptGraph";
+import ConceptGraphGuide from "./components/ConceptGraph/ConceptGraphGuide";
+import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeighbours.service";
 
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);

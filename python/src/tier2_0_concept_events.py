@@ -82,9 +82,9 @@ BATCH_SIZE = 8192
 OUTPUT_PATH = INDEXES_DIR / "tier2_concept_neighbours.json"
 
 
-# ------------------------------------------------------------
+
 # Event metadata + embedding index
-# ------------------------------------------------------------
+
 
 class ZarrEventLookup:
     """
@@ -184,9 +184,9 @@ class ZarrEventLookup:
                 yield eid
 
 
-# ------------------------------------------------------------
+
 # Concept analysis
-# ------------------------------------------------------------
+
 
 def analyse_concept(index, lookup, concept_name, concept, top_n=25):
     """

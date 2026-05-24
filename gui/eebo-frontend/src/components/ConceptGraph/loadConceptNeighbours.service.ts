@@ -1,4 +1,4 @@
-import type { Tier2Data } from "../components/ConceptGraph";
+import type { Tier2Data } from "../components/ConceptGraph/ConceptGraph.types";
 
 const URL = '/api/indexes/tier2_concept_neighbours.json';
 
