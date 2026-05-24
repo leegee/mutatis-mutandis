@@ -1,141 +1,44 @@
+#!/usr/bin/env python
 """
-tier2_0_vis.py - Tier2 Concept Visualisation Toolkit
-----------------------------------------------------
+Tier2 Graph Explorer (Dash Prototype) - Multi-Concept Edition
+------------------------------------------------------------
 
-This script visualises output from tier2_concept_neighbours.json
-produced by tier2_0_concept_events.py.
+Upgrades:
+- Concept selector (multi-graph support)
+- Per-concept stateful node removal
+- Stable layout per concept
+- Toggle node removal (click again restores)
+- Min edge weight + max nodes filters
+- Clean separation of graph state per concept
 
-It provides multiple complementary views:
-
-1. Token frequency distribution (aggregate neighbours)
-2. Document distribution
-3. Window distribution heatmap-like aggregation
-4. Neighbour score distribution
-5. Concept co-occurrence graph (token graph)
-
-Assumes JSON structure:
-{
-  concept_name: {
-    concept,
-    n_events,
-    aggregate: {top_tokens, top_docs, top_windows},
-    events: [
-      {
-        event_id,
-        token,
-        neighbours: [
-          {token, doc_id, score, ...}
-        ]
-      }
-    ]
-  }
-}
+This remains a prototype intended for SolidJS migration later.
 """
 
 import json
 from collections import Counter
-import matplotlib.pyplot as plt
+
 import networkx as nx
+
 from tier2_0_concept_events import OUTPUT_PATH as INPUT_PATH
 
+from dash import Dash, dcc, html, Input, Output, State
+import plotly.graph_objects as go
 
-def load_data(path=INPUT_PATH):
-    with open(path, "r", encoding="utf-8") as f:
+
+# ------------------------------------------------------------
+# Load data
+# ------------------------------------------------------------
+
+def load_data():
+    with open(INPUT_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 # ------------------------------------------------------------
-# 1. Token frequency
+# Graph building
 # ------------------------------------------------------------
 
-def plot_top_tokens(concept_data, top_k=20):
-    tokens = Counter()
-
-    for event in concept_data["events"]:
-        for n in event["neighbours"]:
-            tokens[n["token"]] += 1
-
-    most = tokens.most_common(top_k)
-    labels, values = zip(*most) if most else ([], [])
-
-    plt.figure()
-    plt.bar(labels, values)
-    plt.xticks(rotation=45, ha="right")
-    plt.title("Top neighbour tokens")
-    plt.tight_layout()
-    plt.show()
-
-
-# ------------------------------------------------------------
-# 2. Document distribution
-# ------------------------------------------------------------
-
-def plot_doc_distribution(concept_data, top_k=20):
-    docs = Counter()
-
-    for event in concept_data["events"]:
-        for n in event["neighbours"]:
-            docs[n["doc_id"]] += 1
-
-    most = docs.most_common(top_k)
-    labels, values = zip(*most) if most else ([], [])
-
-    plt.figure()
-    plt.bar(labels, values)
-    plt.xticks(rotation=45, ha="right")
-    plt.title("Top neighbour documents")
-    plt.tight_layout()
-    plt.show()
-
-
-# ------------------------------------------------------------
-# 3. Window distribution (doc, window)
-# ------------------------------------------------------------
-
-def plot_window_distribution(concept_data, top_k=20):
-    windows = Counter()
-
-    for event in concept_data["events"]:
-        for n in event["neighbours"]:
-            key = f"{n['doc_id']}::{n['window_id']}"
-            windows[key] += 1
-
-    most = windows.most_common(top_k)
-    labels, values = zip(*most) if most else ([], [])
-
-    plt.figure()
-    plt.bar(labels, values)
-    plt.xticks(rotation=45, ha="right")
-    plt.title("Top (doc, window) neighbourhood density")
-    plt.tight_layout()
-    plt.show()
-
-
-# ------------------------------------------------------------
-# 4. Score distribution
-# ------------------------------------------------------------
-
-def plot_score_distribution(concept_data):
-    scores = []
-
-    for event in concept_data["events"]:
-        for n in event["neighbours"]:
-            scores.append(n["score"])
-
-    plt.figure()
-    plt.hist(scores, bins=50)
-    plt.title("Neighbour similarity score distribution")
-    plt.tight_layout()
-    plt.show()
-
-
-# ------------------------------------------------------------
-# 5. Token graph (co-occurrence in neighbourhoods)
-# ------------------------------------------------------------
-
-def plot_token_graph(concept_data, min_edge_weight=3, max_nodes=50):
-    G = nx.Graph()
-
+def build_graph(concept_data, min_edge_weight=3):
     edge_weights = Counter()
 
     for event in concept_data["events"]:
@@ -146,78 +49,191 @@ def plot_token_graph(concept_data, min_edge_weight=3, max_nodes=50):
                 a, b = sorted((tokens[i], tokens[j]))
                 edge_weights[(a, b)] += 1
 
+    G = nx.Graph()
+
     for (a, b), w in edge_weights.items():
         if w >= min_edge_weight:
             G.add_edge(a, b, weight=w)
 
+    return G
+
+
+def subset_graph(G, max_nodes, removed):
+    if removed:
+        G = G.subgraph([n for n in G.nodes if n not in removed]).copy()
+
     if len(G.nodes) > max_nodes:
         top_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)[:max_nodes]
         keep = {n for n, _ in top_nodes}
-        G = G.subgraph(keep)
+        G = G.subgraph(keep).copy()
 
-    plt.figure(figsize=(10, 8), facecolor="black")
-    ax = plt.gca()
-    ax.set_facecolor("black")
+    return G
 
-    pos = nx.spring_layout(G, seed=42)
-
-    widths = [G[u][v]["weight"] for u, v in G.edges]
-
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        node_size=120,
-        node_color="white",
-        alpha=0.9
-    )
-
-    nx.draw_networkx_edges(
-        G,
-        pos,
-        width=widths,
-        edge_color="gray",
-        alpha=0.4
-    )
-
-    nx.draw_networkx_labels(
-        G,
-        pos,
-        font_size=7,
-        font_color="white"
-    )
-
-    plt.title("Neighbour token co-occurrence graph", color="white")
-    plt.axis("off")
-    plt.tight_layout()
-    plt.show()
 
 # ------------------------------------------------------------
-# Runner
+# Layout (stable per concept graph instance)
 # ------------------------------------------------------------
 
-def run_all(concept_name):
-    data = load_data()
+def compute_layout(G):
+    return nx.spring_layout(G, seed=42)
 
-    if concept_name not in data:
-        raise ValueError(f"Concept {concept_name} not found")
 
-    concept_data = data[concept_name]
+# ------------------------------------------------------------
+# Plot builder
+# ------------------------------------------------------------
 
-    print(f"Concept: {concept_name}")
-    print(f"Events: {concept_data.get('n_events')}")
+def make_figure(G, pos):
+    edge_x, edge_y = [], []
 
-    plot_top_tokens(concept_data)
-    plot_doc_distribution(concept_data)
-    plot_window_distribution(concept_data)
-    plot_score_distribution(concept_data)
-    plot_token_graph(concept_data)
+    for a, b in G.edges():
+        x0, y0 = pos[a]
+        x1, y1 = pos[b]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
 
+    edge_trace = go.Scatter(
+        x=edge_x,
+        y=edge_y,
+        mode="lines",
+        line=dict(width=1.5, color="rgba(220,220,220,0.55)"),
+        hoverinfo="none"
+    )
+
+    node_x, node_y, labels = [], [], []
+
+    for n in G.nodes():
+        x, y = pos[n]
+        node_x.append(x)
+        node_y.append(y)
+        labels.append(n)
+
+    node_trace = go.Scatter(
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
+        text=labels,
+        textposition="top center",
+        marker=dict(size=10, color="white"),
+        textfont=dict(color="white"),
+        hoverinfo="text"
+    )
+
+    fig = go.Figure(data=[edge_trace, node_trace])
+
+    fig.update_layout(
+        paper_bgcolor="black",
+        plot_bgcolor="black",
+        font=dict(color="white"),
+        margin=dict(l=20, r=20, t=40, b=20),
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False)
+    )
+
+    return fig
+
+
+# ------------------------------------------------------------
+# App setup
+# ------------------------------------------------------------
+
+data = load_data()
+concept_keys = list(data.keys())
+
+app = Dash(__name__)
+
+
+app.layout = html.Div(
+    style={"backgroundColor": "black", "height": "100vh"},
+    children=[
+
+        html.H3("Tier2 Multi-Concept Graph Explorer", style={"color": "white"}),
+
+        # ---------------- concept selector ----------------
+        html.Div([
+            html.Label("Concept", style={"color": "white"}),
+            dcc.Dropdown(
+                id="concept",
+                options=[{"label": k, "value": k} for k in concept_keys],
+                value=concept_keys[0]
+            )
+        ]),
+
+        # ---------------- controls ----------------
+        html.Div([
+            html.Label("Max nodes", style={"color": "white"}),
+            dcc.Dropdown(
+                id="max-nodes",
+                options=[
+                    {"label": "20", "value": 20},
+                    {"label": "50", "value": 50},
+                    {"label": "100", "value": 100},
+                ],
+                value=50
+            ),
+
+            html.Label("Min edge weight", style={"color": "white"}),
+            dcc.Slider(
+                id="min-edge",
+                min=1,
+                max=10,
+                step=1,
+                value=3
+            ),
+        ]),
+
+        dcc.Store(id="removed-nodes", data={}),  # per-concept state
+
+        dcc.Graph(
+            id="graph",
+            style={"height": "88vh"}
+        ),
+
+        html.Div("Click node to toggle removal (per concept)", style={"color": "gray"})
+    ]
+)
+
+
+# ------------------------------------------------------------
+# CALLBACK
+# ------------------------------------------------------------
+
+@app.callback(
+    Output("graph", "figure"),
+    Output("removed-nodes", "data"),
+    Input("concept", "value"),
+    Input("max-nodes", "value"),
+    Input("min-edge", "value"),
+    Input("graph", "clickData"),
+    State("removed-nodes", "data"),
+)
+def update_graph(concept, max_nodes, min_edge, clickData, removed_map):
+
+    removed_map = removed_map or {}
+    removed = set(removed_map.get(concept, []))
+
+    # toggle node
+    if clickData and "points" in clickData:
+        node = clickData["points"][0].get("text")
+        if node:
+            if node in removed:
+                removed.remove(node)
+            else:
+                removed.add(node)
+
+    removed_map[concept] = list(removed)
+
+    concept_data = data[concept]
+
+    G = build_graph(concept_data, min_edge_weight=min_edge)
+    G = subset_graph(G, max_nodes, removed)
+
+    pos = compute_layout(G)
+    fig = make_figure(G, pos)
+
+    return fig, removed_map
+
+
+# ------------------------------------------------------------
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--concept", type=str, required=True)
-    args = parser.parse_args()
-
-    run_all(args.concept.upper())
+    app.run(debug=True)
