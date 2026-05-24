@@ -40,8 +40,6 @@ import {
 } from "solid-js";
 
 import * as d3 from "d3";
-import ConceptGraphGuide from "./ConceptGraphGuide";
-import { Transition } from "solid-transition-group";
 
 export interface Tier2Data {
   [concept: string]: ConceptData;
@@ -153,7 +151,6 @@ function buildGraph(
 
 const ConceptGraph: Component<Props> = (props) => {
   const concepts = Object.keys(props.data);
-  const [openHelp, setOpenHelp] = createSignal(false);
 
   const [concept, setConcept] = createSignal(concepts[0] ?? "");
   const [maxNodes, setMaxNodes] = createSignal(50);
@@ -205,7 +202,7 @@ const ConceptGraph: Component<Props> = (props) => {
     const edgeWidth = d3
       .scaleLinear()
       .domain([0, maxWeight])
-      .range([1, 6]);
+      .range([2, 10]);
 
     const nodeColor = d3
       .scaleLinear<string>()
@@ -347,11 +344,11 @@ const ConceptGraph: Component<Props> = (props) => {
           .forceLink<GraphNode, GraphEdge>(edges)
           .id((d) => d.id)
           // .distance((d) => 80 - d.weight * 2)
-          .distance((d) => Math.max(50, 120 - d.weight * 3))
+          .distance((d) => Math.max(100, 200 - d.weight * 3))
           .strength(0.6) // was 0.4
       )
       // .force("charge", d3.forceManyBody().strength(-180))
-      .force("charge", d3.forceManyBody().strength(-80))
+      .force("charge", d3.forceManyBody().strength(-300))
       .force("center", d3.forceCenter(W / 2, H / 2))
       .force(
         "collision",
@@ -409,48 +406,24 @@ const ConceptGraph: Component<Props> = (props) => {
           width: "100%",
           background: "#080e18",
           color: "#c8e6ff",
-          "font-family": "'IBM Plex Mono', 'Courier New', monospace",
         }}
       >
-        <header
+        <header class="padding border bottom-border"
           style={{
-            display: "flex",
+            "display": "flex",
+            "gap": "2rem",
             "align-items": "center",
-            gap: "2rem",
-            padding: "0.75rem 1.25rem",
-            "border-bottom": "1px solid #1a2e42",
             "flex-shrink": "0",
           }}
         >
-          <span
-            style={{
-              "font-size": "11px",
-              "letter-spacing": "0.15em",
-              "text-transform": "uppercase",
-              color: "#4a7a9b",
-            }}
-          >
+          <h1 style="font-size: 1rem">
             Concept Graph
-          </span>
+          </h1>
 
           {/* Concept selector */}
-          <div style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}>
-            <label style={{ "font-size": "10px", color: "#4a7a9b" }}>
-              concept
-            </label>
-            <select
-              value={concept()}
-              onChange={(e) => setConcept(e.currentTarget.value)}
-              style={{
-                background: "#0d1a28",
-                border: "1px solid #1e3a52",
-                color: "#c8e6ff",
-                "font-family": "inherit",
-                "font-size": "11px",
-                padding: "3px 6px",
-                cursor: "pointer",
-              }}
-            >
+          <div>
+            <label> Concept </label>
+            <select value={concept()} onChange={(e) => setConcept(e.currentTarget.value)} >
               <For each={concepts}>
                 {(c) => <option value={c}>{c}</option>}
               </For>
@@ -458,23 +431,9 @@ const ConceptGraph: Component<Props> = (props) => {
           </div>
 
           {/* Max nodes */}
-          <div style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}>
-            <label style={{ "font-size": "10px", color: "#4a7a9b" }}>
-              max nodes
-            </label>
-            <select
-              value={maxNodes()}
-              onChange={(e) => setMaxNodes(Number(e.currentTarget.value))}
-              style={{
-                background: "#0d1a28",
-                border: "1px solid #1e3a52",
-                color: "#c8e6ff",
-                "font-family": "inherit",
-                "font-size": "11px",
-                padding: "3px 6px",
-                cursor: "pointer",
-              }}
-            >
+          <div>
+            <label> Max nodes </label>
+            <select value={maxNodes()} onChange={(e) => setMaxNodes(Number(e.currentTarget.value))} >
               <For each={[10, 20, 50, 100]}>
                 {(n) => <option value={n}>{n}</option>}
               </For>
@@ -482,83 +441,24 @@ const ConceptGraph: Component<Props> = (props) => {
           </div>
 
           {/* Min edge weight */}
-          <div
-            style={{
-              display: "flex",
-              "align-items": "center",
-              gap: "0.5rem",
-              flex: "1",
-              "max-width": "220px",
-            }}
-          >
-            <label
-              style={{
-                "font-size": "10px",
-                color: "#4a7a9b",
-                "white-space": "nowrap",
-              }}
-            >
-              min edge {minEdge()}
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={10}
-              step={1}
+          <div >
+            <label> Min edge {minEdge()} </label>
+            <input type="range"
+              min={1} max={10} step={1}
               value={minEdge()}
               onInput={(e) => setMinEdge(Number(e.currentTarget.value))}
-              style={{ flex: "1", "accent-color": "#4a7a9b" }}
             />
           </div>
+        </header >
 
-          {/* Stats */}
-          <div
-            style={{
-              "margin-left": "auto",
-              "font-size": "10px",
-              color: "#2a5a7a",
-            }}
-          >
-            {graphData().nodes.length} nodes · {graphData().edges.length} edges
-            {" · "}
-            {props.data[concept()]?.n_events ?? 0} events
-          </div>
+        <svg ref={svgRef!} style={{ flex: "1", display: "block", width: "100%" }} />
 
-          <button class="border small" onClick={() => setOpenHelp(v => !v)}>
-            <i>help</i>
-          </button>
-
-        </header>
-
-        {/* Graph canvas */}
-        <svg
-          ref={svgRef!}
-          style={{ flex: "1", display: "block", width: "100%" }}
-        />
-
-        {/* Footer hint */}
-        <footer
-          style={{
-            padding: "0.35rem 1.25rem",
-            "font-size": "9px",
-            color: "#1e3a52",
-            "border-top": "1px solid #0e1e2e",
-            "flex-shrink": "0",
-          }}
-        >
-          scroll to zoom · drag to pan · drag nodes to reposition
+        <footer class="fixed responsive small-padding border" style={{ "flex-shrink": "0", }} >
+          {graphData().nodes.length} nodes · {graphData().edges.length} edges
+          {" · "}
+          {props.data[concept()]?.n_events ?? 0} events
         </footer>
-      </div>
-
-
-      <Transition name="slide-fade">
-        {openHelp() && (
-          <article class="helpContainer">
-            <ConceptGraphGuide />
-          </article>
-        )}
-      </Transition>
-
+      </div >
     </>
   );
 };

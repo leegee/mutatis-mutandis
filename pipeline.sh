@@ -46,20 +46,24 @@ case "$PHASE" in
         RUN_ENVS+=("")
         ;;
     1|embed)
-        RUN_SCRIPTS+=("$SRC/tier1_corpus_embed.py")
+        RUN_SCRIPTS+=("$SRC/tier1_0_corpus2zarr.py")
         RUN_ENVS+=("")
         ;;
-    2|struct)
-        RUN_SCRIPTS+=("$SRC/tier2_0_concept_structure.py ")
+    2|ann)
+        RUN_SCRIPTS+=("$SRC/tier1_5_build_faiss_index.py")
         RUN_ENVS+=("")
         ;;
-    7|branch)
-        RUN_SCRIPTS+=("$SRC/tier2_7_branch_builder.py")
+    3|graph)
+        RUN_SCRIPTS+=("$SRC/tier2_0_concept_events.py")
         RUN_ENVS+=("")
         ;;
-    8|attract)
-        RUN_SCRIPTS+=("$SRC/tier2_8_attractor_field.py")
-        RUN_ENVS+=("")
+    all)
+        RUN_SCRIPTS+=(
+            "$SRC/tier1_0_corpus2zarr.py"
+            "$SRC/tier1_5_build_faiss_index.py"
+            "$SRC/tier2_0_concept_events.py"
+        )
+        RUN_ENVS+=("" "" "")
         ;;
     *)
         echo "! Invalid phase: $PHASE"

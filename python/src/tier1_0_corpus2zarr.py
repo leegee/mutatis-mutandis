@@ -10,6 +10,9 @@ Core invariant
 - concept_id defines stable lexical occurrence identity
 - event_id defines contextual embedding observation identity
 - FAISS indexes event_id space ONLY
+
+Check the minimal STOPWORDS list
+
 """
 
 from __future__ import annotations
@@ -31,6 +34,22 @@ from lib.macberth import load_macberth
 WINDOW_SIZE = 512
 STRIDE = WINDOW_SIZE // 2
 
+STOPWORDS = {
+    # articles
+    "the", "a", "an",
+    # pronouns
+    "i", "he", "she", "it", "we", "they", "who", "which", "that",
+    "his", "her", "its", "our", "their", "my", "thy", "your",
+    "him", "them", "us", "me", "thee", "thy", "thou", "thoust",
+    # conjunctions / prepositions
+    "and", "or", "but", "of", "in", "to", "for", "with", "by",
+    "at", "from", "as", "on", "into", "upon", "unto", "not",
+    "nor", "yet", "so", "if", "be", "is", "are", "was", "were",
+    "have", "hath", "hath", "do", "doth",
+    # "shall", "will", "may", "might", "should", "would", "could",
+    "than", "then", "when",
+    "this", "these", "those", "all", "no", "any",
+}
 
 def stable_hash(key: str) -> np.int64:
     h = xxhash.xxh64(key, seed=0).intdigest()
@@ -43,16 +62,15 @@ def is_content_token(token: str) -> bool:
     single non-alphabetic characters. Early modern texts include
     many
     """
-    stripped = token.strip()
+    stripped = token.strip().lower()
     if not stripped:
         return False
-    if all(unicodedata.category(c).startswith("P") or
-           unicodedata.category(c).startswith("S") or
-           unicodedata.category(c).startswith("Z")
+    if stripped in STOPWORDS:
+        return False
+    if all(unicodedata.category(c).startswith(("P", "S", "Z"))
            for c in stripped):
         return False
     return True
-
 
 # Stable textual locus in corpus space.
 # Must remain invariant across contextual embedding passes.

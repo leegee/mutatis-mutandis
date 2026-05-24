@@ -6,7 +6,7 @@ export default function ConceptGraphGuide() {
       <h2>What you are looking at</h2>
 
       <p>
-        Each graph shows the <strong>semantic neighbourhood structure</strong>
+        Each graph shows the <dfn>semantic neighbourhood structure</dfn>
         of a concept as it appears across the EEBO corpus.
         It is not a map of words that <em>mean</em> the same thing as the concept —
         it is a map of words that <em>appear in similar contexts</em> to it,
@@ -39,7 +39,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <strong>Size</strong> encodes degree —
+        <dfn>Size</dfn> encodes degree —
         how many other words in the graph this word co-occurs with.
         Larger nodes are more relationally central:
         they appear alongside many other words in the concept's context,
@@ -47,7 +47,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <strong>Brightness</strong> also encodes degree.
+        <dfn>Brightness</dfn> also encodes degree.
         Brighter, more blue-white nodes are hubs;
         darker, more slate-coloured nodes are peripheral.
         A large, bright node is a word that sits at the centre
@@ -64,20 +64,20 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <strong>Thickness</strong> encodes how often this pair
+        <dfn>Thickness</dfn> encodes how often this pair
         co-occurred in neighbourhood space.
         A thick edge means the two words were repeatedly found together
         around the concept, across many documents.
       </p>
 
       <p>
-        <strong>Opacity</strong> also encodes co-occurrence frequency.
+        <dfn>Opacity</dfn> also encodes co-occurrence frequency.
         Faint edges represent occasional pairings;
         solid edges represent persistent ones.
       </p>
 
       <p>
-        <strong>Colour</strong> runs as a gradient
+        <dfn>Colour</dfn> runs as a gradient
         from one node's colour to the other's.
         This means edges between two hub nodes appear bright blue-white;
         edges between a hub and a peripheral node fade from bright to dark;
@@ -93,17 +93,21 @@ export default function ConceptGraphGuide() {
       <h2>Controls</h2>
 
       <p>
-        <strong>Concept</strong> selects which concept's neighbourhood structure
+        <dfn>Concept</dfn> selects which concept's neighbourhood structure
         to display.
         Each concept is built from a set of word forms drawn from the corpus,
         including orthographic variants common in early modern English.
       </p>
 
       <p>
-        <strong>Max nodes</strong> sets a ceiling on how many words are shown.
+        <dfn>Max nodes</dfn> sets a ceiling on how many words are shown.
         The graph always displays the highest-degree nodes first —
         the words most centrally connected in neighbourhood space —
         and drops lower-degree words to meet the limit.
+      </p>
+
+      <p>
+        <dfn>Degree</dfn> is the number of direct connections a node has to other nodes in the graph — how many other words it consistently co-occurs with in the neighbourhood of this concept, given the current filters.
       </p>
 
       <p>
@@ -112,7 +116,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <strong>Min edge</strong> sets the minimum number
+        <dfn>Min edge</dfn> sets the minimum number
         of co-occurrences required for an edge to appear.
         At low values the graph is dense and shows occasional associations;
         at higher values only persistent, recurring relationships survive.
@@ -134,23 +138,23 @@ export default function ConceptGraphGuide() {
       <h2>Navigation</h2>
 
       <p>
-        <strong>Scroll</strong> to zoom in and out.
+        <dfn>Scroll</dfn> to zoom in and out.
         At high zoom levels individual node labels become readable
         for dense regions of the graph.
       </p>
 
       <p>
-        <strong>Drag the background</strong> to pan across the graph.
+        <dfn>Drag the background</dfn> to pan across the graph.
       </p>
 
       <p>
-        <strong>Drag individual nodes</strong> to reposition them.
+        <dfn>Drag individual nodes</dfn> to reposition them.
         The simulation will continue running around the moved node;
         releasing it returns it to the simulation.
       </p>
 
       <p>
-        <strong>Hover over a node</strong> to see its label and degree
+        <dfn>Hover over a node</dfn> to see its label and degree
         in a tooltip.
       </p>
 
@@ -158,7 +162,7 @@ export default function ConceptGraphGuide() {
       <h2>What to look for</h2>
 
       <p>
-        <strong>Tight clusters</strong> —
+        <dfn>Tight clusters</dfn> —
         groups of densely interconnected nodes —
         suggest semantic sub-fields:
         words that consistently travel together around the concept,
@@ -173,7 +177,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <strong>Bridge nodes</strong> —
+        <dfn>Bridge nodes</dfn> —
         words that connect otherwise separate clusters —
         are particularly significant.
         They suggest semantic overlap or contested ground
@@ -181,7 +185,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <strong>Isolated or peripheral nodes</strong> —
+        <dfn>Isolated or peripheral nodes</dfn> —
         connected by thin, faint edges —
         represent occasional or idiosyncratic associations,
         possibly tied to specific documents or authors
@@ -189,7 +193,7 @@ export default function ConceptGraphGuide() {
       </p>
 
       <p>
-        <strong>Absence</strong> is also meaningful.
+        <dfn>Absence</dfn> is also meaningful.
         If a word you expect to find near a concept does not appear,
         it may mean the association is present in the texts
         but below the co-occurrence threshold,
