@@ -304,77 +304,75 @@ const ConceptGraph: Component<Props> = (props) => {
 
   return (
     <div style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
-
-      <header
-        class="fill responsive surface-container-low"
-        style={{ display: "flex", gap: "2rem", "align-items": "center", "flex-shrink": "0", "flex-wrap": "wrap" }}
-      >
-        {/* Concept */}
-        <div>
-          <label>Concept </label>
-          <select value={concept()} onChange={(e) => setConcept(e.currentTarget.value)}>
-            <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
-          </select>
-        </div>
-
-        {/* Max nodes */}
-        <div>
-          <label>Max nodes </label>
-          <select value={maxNodes()} onChange={(e) => setMaxNodes(Number(e.currentTarget.value))}>
-            <For each={[10, 20, 50, 100]}>{(n) => <option value={n}>{n}</option>}</For>
-          </select>
-        </div>
-
-        {/* Min edge */}
-        <div>
-          <label>Min edge {minEdge()} </label>
-          <input type="range" min={1} max={10} step={1} value={minEdge()}
-            onInput={(e) => setMinEdge(Number(e.currentTarget.value))} />
-        </div>
-
-        {/* Year range — only shown when year data is present */}
-        <Show when={yearBounds()[0] !== yearBounds()[1]}>
-          <div class="slider small">
-            <input
-              type="range"
-              min={yearBounds()[0]}
-              max={yearBounds()[1]}
-              step={1}
-              value={fromYear()}
-              onInput={(e) => {
-                const v = Number(e.currentTarget.value);
-                setFromYear(Math.min(v, toYear())); // prevent crossing
-              }}
-            />
-
-            <input
-              type="range"
-              min={yearBounds()[0]}
-              max={yearBounds()[1]}
-              step={1}
-              value={toYear()}
-              onInput={(e) => {
-                const v = Number(e.currentTarget.value);
-                setToYear(Math.max(v, fromYear())); // prevent crossing
-              }}
-            />
-
-            <span />
-
-            <span class="tooltip bottom" />
+      <header class="fill responsive surface-container-low small-padding top-padding" >
+        <nav>
+          <h1 class='small-opacity right-margin'>EEBO-TCP</h1>
+          {/* Concept */}
+          <div class="field suffix border middle-align">
+            <select value={concept()} onChange={(e) => setConcept(e.currentTarget.value)}>
+              <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
+            </select>
+            <output>Concept</output>
           </div>
 
-          {/* Info line */}
-          <div>
-            <span class="small-text">
-              {fromYear()}-{toYear()}
-            </span>
-            <span class="small-text">
-              {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} occurrences
-            </span>
+          <div class="field suffix border middle-align">
+            <select value={maxNodes()} onChange={(e) => setMaxNodes(Number(e.currentTarget.value))}>
+              <For each={[10, 20, 50, 100]}>{(n) => <option value={n}>{n}</option>}</For>
+            </select>
+            <output>Max nodes </output>
           </div>
-        </Show>
 
+          <div class="field middle-align">
+            <div class="slider tiny">
+              <input type="range" min={1} max={10} step={1} value={minEdge()}
+                onInput={(e) => setMinEdge(Number(e.currentTarget.value))} />
+              <span />
+              <span class="tooltip bottom" />
+            </div>
+            <output class="small-padding top-padding">Minimum edges {minEdge()} </output>
+          </div>
+
+          <Show when={yearBounds()[0] !== yearBounds()[1]}>
+            <div class="field middle-align">
+              <div class="slider tiny">
+                <input
+                  type="range"
+                  min={yearBounds()[0]}
+                  max={yearBounds()[1]}
+                  step={1}
+                  value={fromYear()}
+                  onInput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    setFromYear(Math.min(v, toYear())); // prevent crossing
+                  }}
+                />
+
+                <input
+                  type="range"
+                  min={yearBounds()[0]}
+                  max={yearBounds()[1]}
+                  step={1}
+                  value={toYear()}
+                  onInput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    setToYear(Math.max(v, fromYear())); // prevent crossing
+                  }}
+                />
+                <span />
+                <span class="tooltip bottom" />
+                <span class="tooltip bottom" />
+              </div>
+              <output class="small-padding top-padding">
+                <span>
+                  {fromYear()}-{toYear()}
+                </span>
+                <span class="left-padding">
+                  {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} occurrences
+                </span>
+              </output>
+            </div>
+          </Show>
+        </nav>
       </header>
 
       {/* Main area */}
@@ -432,11 +430,7 @@ const ConceptGraph: Component<Props> = (props) => {
         {yearFiltered().length} occurrences
         <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
           {" • "}
-          <span style={{ opacity: "0.6" }}>{fromYear()}–{toYear()}</span>
-        </Show>
-        <Show when={selectedNode()}>
-          {" • "}
-          <span style={{ opacity: "0.6" }}>{selectedNode()} — {selectedDocs().length} docs</span>
+          Betwen {fromYear()} and {toYear()}
         </Show>
       </footer>
 
