@@ -59,6 +59,11 @@ interface Props {
 const EEBO_CONFIG_SLICES_MIN = 1625;
 const EEBO_CONFIG_SLICES_MAX = 1665;
 
+const showDocument = (docId: string) => {
+  const url = `/api/${ docId }`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 const ConceptGraph: Component<Props> = (props) => {
   const concepts = Object.keys(props.data);
 
@@ -67,7 +72,7 @@ const ConceptGraph: Component<Props> = (props) => {
   const [minEdge, setMinEdge] = createSignal(3);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
 
-  // Year range ───────────────────────────────────────────
+  // Year range
   // Bounds are derived from the current concept's events.
   // fromYear/toYear signals are reset whenever the concept changes.
 
@@ -164,7 +169,7 @@ const ConceptGraph: Component<Props> = (props) => {
     const nodeRadius = d3.scaleSqrt().domain([0, maxDegree]).range([4, 18]);
     const edgeOpacity = d3.scaleLinear().domain([0, maxWeight]).range([0.5, 1]);
     const edgeWidth = d3.scaleLinear().domain([0, maxWeight]).range([2, 10]);
-    const nodeColor = d3.scaleLinear<string>().domain([0, maxDegree]).range(["#5a87ba", "#e9f3fc"]);
+    const nodeColor = d3.scaleLinear<string>().domain([0, maxDegree]).range(["#5a87ba66", "#e9f3fcdd"]);
 
     const container = svg.append("g").attr("class", "zoom-container");
 
@@ -347,7 +352,7 @@ const ConceptGraph: Component<Props> = (props) => {
               }}
             />
             <span class="small-text">
-              {yearFiltered().length} / {props.data[concept()]?.n_events ?? 0} events
+              {yearFiltered().length} / {props.data[concept()]?.n_events ?? 0} occurrences
             </span>
           </div>
         </Show>
@@ -386,7 +391,7 @@ const ConceptGraph: Component<Props> = (props) => {
             >
               <For each={selectedDocs()}>
                 {([docId, pubYear]) => (
-                  <button class="chip small-margin">
+                  <button class="chip small-margin" onClick={() => showDocument(docId)}>
                     <span>{docId}</span>
                     <Show when={pubYear !== undefined}>
                       <span class="small-text"> {pubYear} </span>
@@ -401,15 +406,17 @@ const ConceptGraph: Component<Props> = (props) => {
       </div>
 
       <footer class="fixed responsive small-padding surface-container-low" style={{ "flex-shrink": "0" }}>
-        {graphData().nodes.length} nodes · {graphData().edges.length} edges
-        {" · "}
-        {yearFiltered().length} events
+        {graphData().nodes.length} nodes
+        {" • "}
+        {graphData().edges.length} edges
+        {" • "}
+        {yearFiltered().length} occurrences
         <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
-          {" · "}
+          {" • "}
           <span style={{ opacity: "0.6" }}>{fromYear()}–{toYear()}</span>
         </Show>
         <Show when={selectedNode()}>
-          {" · "}
+          {" • "}
           <span style={{ opacity: "0.6" }}>{selectedNode()} — {selectedDocs().length} docs</span>
         </Show>
       </footer>
