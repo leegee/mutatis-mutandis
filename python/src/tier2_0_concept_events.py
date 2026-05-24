@@ -190,7 +190,6 @@ def load_doc_metadata(conn) -> dict:
     pub_year, slice_start, slice_end are stable per doc_id so
     we take the first occurrence of each.
     """
-    conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
         SELECT DISTINCT ON (doc_id)
@@ -327,13 +326,15 @@ def main():
 
     index = EeboFaissIndex.load(INDEXES_DIR / "faiss" / "tier1.index")
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
+
+    conn = get_connection()
     doc_meta = load_doc_metadata(conn)
 
     output = {}
 
     for concept_name, concept in resolve_concepts(args):
         output[concept_name] = analyse_concept(
-            doc_meta, kup, concept_name, concept
+            doc_meta, index, lookup, concept_name, concept
         )
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
