@@ -334,28 +334,47 @@ const ConceptGraph: Component<Props> = (props) => {
 
         {/* Year range — only shown when year data is present */}
         <Show when={yearBounds()[0] !== yearBounds()[1]}>
-          <div style={{ display: "flex", gap: "0.75rem", "align-items": "center" }}>
-            <label>From</label>
-            <input class="border" type="number" min={yearBounds()[0]} max={toYear()} step={1}
+          <div class="slider small">
+            <input
+              type="range"
+              min={yearBounds()[0]}
+              max={yearBounds()[1]}
+              step={1}
               value={fromYear()}
               onInput={(e) => {
                 const v = Number(e.currentTarget.value);
-                if (!isNaN(v)) setFromYear(Math.min(v, toYear()));
+                setFromYear(Math.min(v, toYear())); // prevent crossing
               }}
             />
-            <label>To</label>
-            <input class="border" type="number" min={fromYear()} max={yearBounds()[1]} step={1}
+
+            <input
+              type="range"
+              min={yearBounds()[0]}
+              max={yearBounds()[1]}
+              step={1}
               value={toYear()}
               onInput={(e) => {
                 const v = Number(e.currentTarget.value);
-                if (!isNaN(v)) setToYear(Math.max(v, fromYear()));
+                setToYear(Math.max(v, fromYear())); // prevent crossing
               }}
             />
+
+            <span />
+
+            <span class="tooltip bottom" />
+          </div>
+
+          {/* Info line */}
+          <div>
             <span class="small-text">
-              {yearFiltered().length} / {props.data[concept()]?.n_events ?? 0} occurrences
+              {fromYear()}-{toYear()}
+            </span>
+            <span class="small-text">
+              {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} occurrences
             </span>
           </div>
         </Show>
+
       </header>
 
       {/* Main area */}
