@@ -19,6 +19,7 @@ import shutil
 import numpy as np
 import torch
 import xxhash
+import unicodedata
 
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
@@ -34,6 +35,23 @@ STRIDE = WINDOW_SIZE // 2
 def stable_hash(key: str) -> np.int64:
     h = xxhash.xxh64(key, seed=0).intdigest()
     return np.int64(h & 0x7FFFFFFFFFFFFFFF)
+
+
+def is_content_token(token: str) -> bool:
+    """
+    Reject tokens that are purely punctuation, whitespace, or
+    single non-alphabetic characters. Early modern texts include
+    many
+    """
+    stripped = token.strip()
+    if not stripped:
+        return False
+    if all(unicodedata.category(c).startswith("P") or
+           unicodedata.category(c).startswith("S") or
+           unicodedata.category(c).startswith("Z")
+           for c in stripped):
+        return False
+    return True
 
 
 # Stable textual locus in corpus space.
@@ -300,18 +318,16 @@ def process_slice(conn, slice_range, tokenizer, model, device):
 
         if doc_id != current_doc:
             flush()
-
             buf_tokens.clear()
             buf_vids.clear()
-
             current_doc = doc_id
             buf_doc_id = doc_id
 
-        buf_tokens.append(token)
-        buf_vids.append(vid)
+        if is_content_token(token):
+            buf_tokens.append(token)
+            buf_vids.append(vid)
 
     flush()
-
     logger.info(f"[SLICE COMPLETE] {slice_id}")
 
 
