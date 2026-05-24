@@ -19,6 +19,9 @@ export interface ConceptEvent {
   event_id?: number;
   token?: string;
   doc_id?: string;
+  pub_year?: number;
+  slice_start?: number;
+  slice_end?: number;
   neighbours: Neighbour[];
 }
 

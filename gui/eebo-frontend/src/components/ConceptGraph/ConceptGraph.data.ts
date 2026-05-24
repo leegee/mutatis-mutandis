@@ -5,13 +5,13 @@
  *
  * Responsibilities
  * ----------------
- * aggregateConcept  — O(n²) pass over raw events, run once per concept.
+ * aggregateConcept  - O(n²) pass over raw events, run once per concept.
  *                     Produces AggregatedConcept with full provenance.
  *
- * filterByYearRange — Filters raw events by publication year before
+ * filterByYearRange - Filters raw events by publication year before
  *                     aggregation, enabling temporal split view.
  *
- * buildGraph        — Takes AggregatedConcept + filter params, produces
+ * buildGraph        - Takes AggregatedConcept + filter params, produces
  *                     GraphData for D3. Cheap: no event scanning.
  *
  * Separation rationale
@@ -27,8 +27,8 @@
  *     directly, without touching GraphData. No provenance needs to live
  *     on GraphNode.
  *
- *   - Filter changes (min edge, max nodes) only rerun buildGraph — the
- *     cheap pass — not aggregateConcept.
+ *   - Filter changes (min edge, max nodes) only rerun buildGraph - the
+ *     cheap pass - not aggregateConcept.
  */
 
 import type {
@@ -44,7 +44,7 @@ import type {
 /**
  * Aggregate raw concept events into a provenance-carrying intermediate.
  *
- * O(n²) in neighbours per event — the same complexity as the original
+ * O(n²) in neighbours per event - the same complexity as the original
  * buildGraph, but run once and memoised rather than on every filter change.
  */
 export function aggregateConcept(
@@ -111,15 +111,14 @@ export function aggregateConcept(
  */
 export function filterByYearRange(
   events: ConceptEvent[],
-  docYears: Map<string, number>,
   fromYear: number,
   toYear: number
 ): ConceptEvent[] {
-  return events.filter((e) => {
-    const year = e.doc_id ? docYears.get(e.doc_id) : undefined;
-    if (year === undefined) return false;
-    return year >= fromYear && year <= toYear;
-  });
+  return events.filter(
+    (e) => e.pub_year !== undefined &&
+      e.pub_year >= fromYear &&
+      e.pub_year <= toYear
+  );
 }
 
 // D3 graph construction
