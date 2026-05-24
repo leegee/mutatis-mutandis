@@ -64,3 +64,29 @@ main,
 .s3 {
   min-height: 0;
 }
+
+
+
+.helpContainer {
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.slide-fade-enter-active,
+.slide-fade-exit-active {
+  transition:
+    opacity 250ms ease,
+    transform 250ms ease;
+}
+
+.slide-fade-enter,
+.slide-fade-exit-to {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.slide-fade-enter-to,
+.slide-fade-exit {
+  opacity: 1;
+  transform: translateY(0);
+}

@@ -5,7 +5,6 @@ const URL = '/api/tier2_5_d3.json';
 import type { SemanticEvent } from "../types/events";
 
 export async function loadEvents(): Promise<SemanticEvent[]> {
-
     const res = await fetch(URL);
 
     if (!res.ok) {
@@ -13,19 +12,15 @@ export async function loadEvents(): Promise<SemanticEvent[]> {
     }
 
     const json = await res.json();
-
     const events: SemanticEvent[] = [];
 
     for (const conceptName of Object.keys(json.concepts)) {
-
         const concept = json.concepts[conceptName];
 
         for (const sliceId of Object.keys(concept.slices)) {
-
             const slice = concept.slices[sliceId];
 
             for (const inst of slice.instances) {
-
                 if (!inst.xy) continue;
 
                 events.push({
