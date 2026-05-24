@@ -3,32 +3,10 @@
  *
  * Data layer for the ConceptGraph pipeline.
  *
- * Responsibilities
- * ----------------
- * aggregateConcept  - O(n²) pass over raw events, run once per concept.
- *                     Produces AggregatedConcept with full provenance.
- *
- * filterByYearRange - Filters raw events by publication year before
- *                     aggregation, enabling temporal split view.
- *
- * buildGraph        - Takes AggregatedConcept + filter params, produces
- *                     GraphData for D3. Cheap: no event scanning.
- *
- * Separation rationale
- * --------------------
- * aggregateConcept and buildGraph are deliberately separate because they
- * serve different consumers:
- *
- *   - Temporal split view calls aggregateConcept twice with different
- *     year-filtered event sets, then buildGraph twice. The aggregation
- *     cost is paid once per filtered slice, not per filter change.
- *
- *   - Document drill-down queries AggregatedConcept.byToken[node.id].docs
- *     directly, without touching GraphData. No provenance needs to live
- *     on GraphNode.
- *
- *   - Filter changes (min edge, max nodes) only rerun buildGraph - the
- *     cheap pass - not aggregateConcept.
+ * aggregateConcept     — O(n²), run once per concept (or filtered slice).
+ * scanYearRange        — derive min/max pub_year from a ConceptData.
+ * filterByYearRange    — filter events to a year window before aggregation.
+ * buildGraph           — cheap, D3-facing, reruns on filter change only.
  */
 
 import type {
@@ -41,15 +19,71 @@ import type {
   GraphEdge,
 } from "./ConceptGraph.types";
 
+
+// Year range scanning
+
+
+/**
+ * Derive the min and max pub_year present in a ConceptData.
+ *
+ * Called once at load time so the UI can set slider bounds.
+ * Returns [undefined, undefined] if no year data is present.
+ */
+export function scanYearRange(
+  conceptData: ConceptData
+): [number | undefined, number | undefined] {
+  let min: number | undefined;
+  let max: number | undefined;
+
+  for (const event of conceptData.events) {
+    const y = event.pub_year;
+    if (y === undefined) continue;
+    if (min === undefined || y < min) min = y;
+    if (max === undefined || y > max) max = y;
+  }
+
+  return [min, max];
+}
+
+
+// Temporal filtering
+
+
+/**
+ * Filter concept events to a publication year range.
+ *
+ * pub_year is now inline on ConceptEvent (added in tier2_0_concept_events.py),
+ * so no external doc→year mapping is needed.
+ *
+ * Events with no pub_year are excluded when a filter is active.
+ */
+export function filterByYearRange(
+  events: ConceptEvent[],
+  fromYear: number,
+  toYear: number
+): ConceptEvent[] {
+  return events.filter(
+    (e) =>
+      e.pub_year !== undefined &&
+      e.pub_year >= fromYear &&
+      e.pub_year <= toYear
+  );
+}
+
+
+// Aggregation
+
+
 /**
  * Aggregate raw concept events into a provenance-carrying intermediate.
  *
- * O(n²) in neighbours per event - the same complexity as the original
- * buildGraph, but run once and memoised rather than on every filter change.
+ * O(n²) in neighbours per event — run once per concept or filtered slice
+ * and memoised by the caller. Carrying pub_year through onto TokenStats.docs
+ * means the drill-down panel can show document years without re-scanning.
  */
 export function aggregateConcept(
   conceptData: ConceptData,
-  events?: ConceptEvent[]   // optional pre-filtered event list for temporal split
+  events?: ConceptEvent[]
 ): AggregatedConcept {
   const src = events ?? conceptData.events;
   const byToken = new Map<string, TokenStats>();
@@ -59,7 +93,7 @@ export function aggregateConcept(
       byToken.set(token, {
         token,
         coOccurrences: new Map(),
-        docs: new Set(),
+        docs: new Map(),
         totalAppearances: 0,
       });
     }
@@ -75,21 +109,25 @@ export function aggregateConcept(
 
       stats.totalAppearances += 1;
 
-      if (ni.doc_id) stats.docs.add(ni.doc_id);
+      // Store doc_id → pub_year. If the same doc appears multiple times
+      // the year is stable so overwriting is safe.
+      if (ni.doc_id) {
+        stats.docs.set(ni.doc_id, ni.pub_year);
+      }
 
-      // Record pairwise co-occurrence with all other neighbours in this event
       for (let j = i + 1; j < neighbours.length; j++) {
         const nj = neighbours[j];
 
         const countIJ = stats.coOccurrences.get(nj.token) ?? 0;
         stats.coOccurrences.set(nj.token, countIJ + 1);
 
-        // Symmetric: also record from nj's perspective
         const njs = getOrCreate(nj.token);
         const countJI = njs.coOccurrences.get(ni.token) ?? 0;
         njs.coOccurrences.set(ni.token, countJI + 1);
 
-        if (nj.doc_id) njs.docs.add(nj.doc_id);
+        if (nj.doc_id) {
+          njs.docs.set(nj.doc_id, nj.pub_year);
+        }
       }
     }
   }
@@ -97,31 +135,10 @@ export function aggregateConcept(
   return { byToken, nEvents: src.length };
 }
 
-/**
- * Filter concept events to a publication year range.
- *
- * Requires doc_id → year mapping, which the caller must supply.
- * This keeps the data layer independent of any Postgres/API coupling.
- *
- * Usage:
- *   const docYears = await fetchDocYears();   // Map<doc_id, year>
- *   const eventsA = filterByYearRange(conceptData.events, docYears, 1580, 1620);
- *   const aggA = aggregateConcept(conceptData, eventsA);
- *   const graphA = buildGraph(aggA, minEdge, maxNodes);
- */
-export function filterByYearRange(
-  events: ConceptEvent[],
-  fromYear: number,
-  toYear: number
-): ConceptEvent[] {
-  return events.filter(
-    (e) => e.pub_year !== undefined &&
-      e.pub_year >= fromYear &&
-      e.pub_year <= toYear
-  );
-}
 
-// D3 graph construction
+// Graph construction (D3-facing)
+
+
 export const EMPTY_GRAPH: GraphData = {
   nodes: [],
   edges: [],
@@ -132,30 +149,24 @@ export const EMPTY_GRAPH: GraphData = {
 /**
  * Build D3-ready graph data from an AggregatedConcept.
  *
- * Cheap: no event scanning. Takes what it needs from the aggregation
- * and applies min-edge and max-node filters.
- *
- * GraphNode carries no provenance (doc_ids, years, scores).
- * For drill-down, callers query AggregatedConcept.byToken[node.id] directly.
+ * Cheap: no event scanning. GraphNode carries no provenance;
+ * for drill-down, callers query AggregatedConcept.byToken[node.id] directly.
  */
 export function buildGraph(
   agg: AggregatedConcept,
   minEdgeWeight: number,
   maxNodes: number
 ): GraphData {
-  // Collect all qualifying edges from the aggregation
   const filteredEdges: Array<[string, string, number]> = [];
 
   for (const [tokenA, stats] of agg.byToken) {
     for (const [tokenB, count] of stats.coOccurrences) {
-      // Deduplicate: only emit A→B, not B→A (coOccurrences is symmetric)
       if (tokenA < tokenB && count >= minEdgeWeight) {
         filteredEdges.push([tokenA, tokenB, count]);
       }
     }
   }
 
-  // Compute degree in filtered graph
   const degreeMap = new Map<string, number>();
 
   for (const [a, b] of filteredEdges) {
@@ -165,15 +176,12 @@ export function buildGraph(
 
   if (degreeMap.size === 0) return EMPTY_GRAPH;
 
-  // Top-N by degree
   const sortedNodes = [...degreeMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, maxNodes);
 
   const keepSet = new Set(sortedNodes.map(([id]) => id));
-
   const nodes: GraphNode[] = sortedNodes.map(([id, degree]) => ({ id, degree }));
-
   const nodeIndex = new Map(nodes.map((n) => [n.id, n]));
 
   const edges: GraphEdge[] = filteredEdges
