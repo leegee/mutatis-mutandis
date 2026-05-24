@@ -1,6 +1,6 @@
 // src/services/loadEvents.ts
 
-const URL = '/api/tier2_5_d3.json';
+const URL = '/json/tier2_5_d3.json';
 
 import type { SemanticEvent } from "../types/events";
 

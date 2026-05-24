@@ -38,7 +38,13 @@ export default function App() {
         )}
       </Transition>
 
-      <button class="border small" onClick={() => setOpenHelp(v => !v)}>
+      <button class="border small" onClick={() => setOpenHelp(v => !v)}
+        style={{
+          position: 'fixed',
+          top: '2rem',
+          right: '1rem',
+          'z-index': '100',
+        }}>
         <Switch>
           <Match when={!openHelp()}>
             <i>help</i>

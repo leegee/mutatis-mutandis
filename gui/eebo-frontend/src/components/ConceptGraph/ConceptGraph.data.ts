@@ -4,7 +4,7 @@
  * Data layer for the ConceptGraph pipeline.
  *
  * aggregateConcept     — O(n²), run once per concept (or filtered slice).
- * scanYearRange        — derive min/max pub_year from a ConceptData.
+ * scanYearRange        — derive min/max pub_year (or slice_start) from a ConceptData.
  * filterByYearRange    — filter events to a year window before aggregation.
  * buildGraph           — cheap, D3-facing, reruns on filter change only.
  */
@@ -22,9 +22,33 @@ import type {
 
 // Year range scanning
 
+export const SLICES = [
+  [1625, 1629],
+  [1630, 1634],
+  [1635, 1639],
+  [1640, 1640],
+  [1641, 1641],
+  [1642, 1642],
+  [1643, 1643],
+  [1644, 1644],
+  [1645, 1645],
+  [1646, 1646],
+  [1647, 1647],
+  [1648, 1648],
+  [1649, 1649],
+  [1650, 1650],
+  [1651, 1651],
+  [1652, 1654],
+  [1655, 1657],
+  [1658, 1660],
+  [1661, 1665],
+];
+
+export const SLICE_MIN = SLICES[0][0];
+export const SLICE_MAX = SLICES[SLICES.length - 1][1];
 
 /**
- * Derive the min and max pub_year present in a ConceptData.
+ * Derive the min and max pub_year/slice_start present in a ConceptData.
  *
  * Called once at load time so the UI can set slider bounds.
  * Returns [undefined, undefined] if no year data is present.
@@ -36,7 +60,7 @@ export function scanYearRange(
   let max: number | undefined;
 
   for (const event of conceptData.events) {
-    const y = event.pub_year;
+    const y = event.slice_start; // event.pub_year;
     if (y === undefined) continue;
     if (min === undefined || y < min) min = y;
     if (max === undefined || y > max) max = y;
@@ -52,10 +76,10 @@ export function scanYearRange(
 /**
  * Filter concept events to a publication year range.
  *
- * pub_year is now inline on ConceptEvent (added in tier2_0_concept_events.py),
- * so no external doc→year mapping is needed.
+ * pub_year/slice_start is inline on ConceptEvent (added in tier2_0_concept_events.py),
+ * so no external doctoyear mapping is needed.
  *
- * Events with no pub_year are excluded when a filter is active.
+ * Events with no pub_year/slice_start are excluded when a filter is active.
  */
 export function filterByYearRange(
   events: ConceptEvent[],
@@ -64,9 +88,12 @@ export function filterByYearRange(
 ): ConceptEvent[] {
   return events.filter(
     (e) =>
-      e.pub_year !== undefined &&
-      e.pub_year >= fromYear &&
-      e.pub_year <= toYear
+      e.slice_start !== undefined &&
+      e.slice_start >= fromYear &&
+      e.slice_start <= toYear
+    // e.pub_year !== undefined &&
+    // e.pub_year >= fromYear &&
+    // e.pub_year <= toYear
   );
 }
 
@@ -78,7 +105,7 @@ export function filterByYearRange(
  * Aggregate raw concept events into a provenance-carrying intermediate.
  *
  * O(n²) in neighbours per event — run once per concept or filtered slice
- * and memoised by the caller. Carrying pub_year through onto TokenStats.docs
+ * and memoised by the caller. Carrying pub_year/slice_start through onto TokenStats.docs
  * means the drill-down panel can show document years without re-scanning.
  */
 export function aggregateConcept(
@@ -109,10 +136,14 @@ export function aggregateConcept(
 
       stats.totalAppearances += 1;
 
-      // Store doc_id → pub_year. If the same doc appears multiple times
+      // Store doc_id to pub_year/slice_start. If the same doc appears multiple times
       // the year is stable so overwriting is safe.
       if (ni.doc_id) {
-        stats.docs.set(ni.doc_id, ni.pub_year);
+        stats.docs.set(
+          ni.doc_id,
+          // ni.pub_year
+          ni.slice_start
+        );
       }
 
       for (let j = i + 1; j < neighbours.length; j++) {
@@ -126,7 +157,11 @@ export function aggregateConcept(
         njs.coOccurrences.set(ni.token, countJI + 1);
 
         if (nj.doc_id) {
-          njs.docs.set(nj.doc_id, nj.pub_year);
+          njs.docs.set(
+            nj.doc_id,
+            // nj.pub_year
+            nj.slice_start
+          );
         }
       }
     }

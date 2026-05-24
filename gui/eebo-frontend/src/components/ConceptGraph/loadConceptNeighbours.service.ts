@@ -1,6 +1,6 @@
 import type { Tier2Data } from "../components/ConceptGraph/ConceptGraph.types";
 
-const URL = '/api/indexes/tier2_concept_neighbours.json';
+const URL = '/json/indexes/tier2_concept_neighbours.json';
 
 export async function loadConceptNeighbours(): Promise<Tier2Data> {
     const res = await fetch(URL);

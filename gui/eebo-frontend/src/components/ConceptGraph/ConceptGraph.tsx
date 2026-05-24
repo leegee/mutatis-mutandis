@@ -42,6 +42,7 @@ import {
   filterByYearRange,
   scanYearRange,
   EMPTY_GRAPH,
+  SLICE_MIN, SLICE_MAX, // SLICES,
 } from "./ConceptGraph.data";
 
 import type {
@@ -56,11 +57,9 @@ interface Props {
   data: Tier2Data;
 }
 
-const EEBO_CONFIG_SLICES_MIN = 1625;
-const EEBO_CONFIG_SLICES_MAX = 1665;
 
 const showDocument = (docId: string) => {
-  const url = `/api/${ docId }`;
+  const url = `/api/doc/${ docId }`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
@@ -78,9 +77,9 @@ const ConceptGraph: Component<Props> = (props) => {
 
   const yearBounds = createMemo<[number, number]>(() => {
     const cd = props.data[concept()];
-    if (!cd) return [EEBO_CONFIG_SLICES_MIN, EEBO_CONFIG_SLICES_MAX];
+    if (!cd) return [SLICE_MIN, SLICE_MAX];
     const [min, max] = scanYearRange(cd);
-    return [min ?? EEBO_CONFIG_SLICES_MIN, max ?? EEBO_CONFIG_SLICES_MAX];
+    return [min ?? SLICE_MIN, max ?? SLICE_MAX];
   });
 
   const [fromYear, setFromYear] = createSignal<number>(yearBounds()[0]);
@@ -304,10 +303,8 @@ const ConceptGraph: Component<Props> = (props) => {
 
   return (
     <div style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
-      <header class="fill responsive surface-container-low small-padding top-padding" >
+      <header class="center-align fill max surface-container-low small-padding top-padding" >
         <nav>
-          <h1 class='small-opacity right-margin'>EEBO-TCP</h1>
-          {/* Concept */}
           <div class="field suffix border middle-align">
             <select value={concept()} onChange={(e) => setConcept(e.currentTarget.value)}>
               <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
@@ -422,7 +419,7 @@ const ConceptGraph: Component<Props> = (props) => {
 
       </div>
 
-      <footer class="fixed responsive small-padding surface-container-low" style={{ "flex-shrink": "0" }}>
+      <footer class="fixed max center-align small-padding surface-container-low" style={{ "flex-shrink": "0" }}>
         {graphData().nodes.length} nodes
         {" • "}
         {graphData().edges.length} edges
