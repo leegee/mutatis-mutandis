@@ -75,7 +75,7 @@ from lib.eebo_config import (
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
-
+from lib.eebo_db import get_connection
 
 K = 25
 BATCH_SIZE = 8192
@@ -190,6 +190,7 @@ def load_doc_metadata(conn) -> dict:
     pub_year, slice_start, slice_end are stable per doc_id so
     we take the first occurrence of each.
     """
+    conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
         SELECT DISTINCT ON (doc_id)
