@@ -66,6 +66,10 @@ import json
 import numpy as np
 import zarr
 import argparse
+import random
+import numpy as np
+from itertools import combinations
+from collections import Counter
 
 from lib.eebo_config import (
     CONCEPT_SETS,
@@ -357,6 +361,53 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
         "events": results,
     }
 
+def knn_diagnostics(lookup, index, concept_forms, sample_n=25, k=25):
+    forms = {f.lower() for f in concept_forms}
+
+    # collect event ids
+    event_ids = list(lookup.iter_matching_event_ids(forms))
+    if len(event_ids) < 5:
+        print("Too few events")
+        return
+
+    event_ids = event_ids[:sample_n]
+
+    # get embeddings
+    vecs = np.stack([lookup.get_event(eid)["embedding"] for eid in event_ids])
+
+    _, nn_ids = index.search(vecs, k)
+
+    knn_sets = [set(map(int, row)) for row in nn_ids]
+
+    overlaps = []
+    jaccards = []
+    entropies = []
+
+    for i, j in combinations(range(len(knn_sets)), 2):
+        a, b = knn_sets[i], knn_sets[j]
+
+        inter = len(a & b)
+        union = len(a | b)
+
+        overlaps.append(inter)
+        jaccards.append(inter / union if union else 0)
+
+    for s in knn_sets:
+        flat = list(s)
+        freq = Counter(flat)
+        p = np.array(list(freq.values())) / len(flat)
+        entropy = -(p * np.log(p + 1e-9)).sum()
+        entropies.append(entropy)
+
+    print("\n--- KNN DIAGNOSTICS ---")
+    print(f"events sampled: {len(event_ids)}")
+    print(f"mean overlap: {np.mean(overlaps):.3f} ± {np.std(overlaps):.3f}")
+    print(f"mean jaccard: {np.mean(jaccards):.3f} ± {np.std(jaccards):.3f}")
+    print(f"mean entropy: {np.mean(entropies):.3f}")
+
+    print("\noverlap quantiles:", np.percentile(overlaps, [0, 25, 50, 75, 100]))
+    print("jaccard quantiles:", np.percentile(jaccards, [0, 25, 50, 75, 100]))
+
 def main():
     logger.info("[tier2] init")
 
@@ -366,6 +417,11 @@ def main():
 
     index = EeboFaissIndex.load(INDEXES_DIR / "faiss" / "tier1.index")
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
+
+    knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
+    knn_diagnostics(lookup, index, CONCEPT_SETS["LAW"]["forms"])
+
+    raise ValueError("stop")
 
     conn = get_connection()
     doc_meta = load_doc_metadata(conn)
