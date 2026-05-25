@@ -290,13 +290,49 @@ CONCEPT_SETS: CanonicalRules = {
         "false_positives": {},
     },
 
-    # "PROPERTY": {
-    #     "forms": {
-    #         "property", "propertie", "propriety"
-    #     },
-    #     "false_positives": {
-    #         "properly"
-    #     }
-    # }
+    "PROPERTY": {
+        "forms": {
+            "property", "propertie", "propriety"
+        },
+        "false_positives": {
+            "properly"
+        }
+    },
+
+    # May 2026
+    "REVOLUTION": {
+        "forms": {
+            "revolution", "revolucion", "revolutio", "revolutions", "revolutión",
+            "revolucon", "revolucionary", "revolucioners", "revolutioners",
+            "rebellion", "insurrection"  # Often semantically overlapping in period usage
+        },
+        "false_positives": {
+            "revolution" : ["astronomical", "planetary", "celestial", "orb", "circle"]  # Pre-1688, often means literal 'turning/rotation'
+        }
+    },
+    "INTEREST": {
+        "forms": {
+            "interest", "interesse", "intrest", "intrests", "interests",
+            "interestes", "interessed", "interessing", "publique interest",
+            "common interest", "particular interest"
+        },
+        "false_positives": set(),
+        # { "usury", "usance", "money", "profit", "compound" }
+    },
+    "FANATIC": {
+        "forms": {
+            "fanatic", "fanatick", "fanatique", "fanaticks", "fanatiques",
+            "fanaticism", "fanaticisme", "phanatic", "phanatique"
+        },
+        "false_positives": set(),
+    },
+    "ENTHUSIASM": {
+        "forms": {
+            "enthusiasm", "enthusiasme", "enthousiasm", "enthusiast", "enthusiasts",
+            "enthusiastick", "enthusiastical", "enthusiasms", "enthusiastical"
+        },
+        "false_positives": set(),
+    }
+
 }
 
