@@ -1,5 +1,7 @@
 # Event-Led Semantic Analysis of Early Modern English Pamphlet Discourse
 
+? More on Wittgensteinian language games or Skinner/et al's speech acts ?
+
 ## Abstract and Research Programme
 
 This project develops a computational Digital Humanities framework for analysing semantic variation in early modern English pamphlet discourse (EEBO-TCP corpus) using instance-level embedding events and projection-based analysis of distributional semantic fields.
