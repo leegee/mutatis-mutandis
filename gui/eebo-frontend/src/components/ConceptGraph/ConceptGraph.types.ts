@@ -12,8 +12,6 @@ export interface Neighbour {
   event_id?: number;
   doc_id?: string;
   pub_year?: number;
-  slice_start?: number;
-  slice_end?: number;
   window_id?: number;
 }
 
@@ -22,8 +20,6 @@ export interface ConceptEvent {
   token?: string;
   doc_id?: string;
   pub_year?: number;
-  slice_start?: number;
-  slice_end?: number;
   neighbours: Neighbour[];
 }
 
@@ -98,8 +94,6 @@ export interface ConceptEvent {
   token?: string;
   doc_id?: string;
   pub_year?: number;
-  slice_start?: number;
-  slice_end?: number;
   neighbours: Neighbour[];
 }
 

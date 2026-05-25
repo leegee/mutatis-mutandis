@@ -42,7 +42,7 @@ import {
   filterByYearRange,
   scanYearRange,
   EMPTY_GRAPH,
-  SLICE_MIN, SLICE_MAX, // SLICES,
+  CORPUS_START_YEAR, CORPUS_END_YEAR,
 } from "./ConceptGraph.data";
 
 import type {
@@ -77,9 +77,9 @@ const ConceptGraph: Component<Props> = (props) => {
 
   const yearBounds = createMemo<[number, number]>(() => {
     const cd = props.data[concept()];
-    if (!cd) return [SLICE_MIN, SLICE_MAX];
+    if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
     const [min, max] = scanYearRange(cd);
-    return [min ?? SLICE_MIN, max ?? SLICE_MAX];
+    return [min ?? CORPUS_START_YEAR, max ?? CORPUS_END_YEAR];
   });
 
   const [fromYear, setFromYear] = createSignal<number>(yearBounds()[0]);
