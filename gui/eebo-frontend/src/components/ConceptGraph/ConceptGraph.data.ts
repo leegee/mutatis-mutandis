@@ -3,10 +3,10 @@
  *
  * Data layer for the ConceptGraph pipeline.
  *
- * aggregateConcept     — O(n²), run once per concept (or filtered pub_year).
- * scanYearRange        — derive min/max pub_year from a ConceptData.
- * filterByYearRange    — filter events to a year window before aggregation.
- * buildGraph           — cheap, D3-facing, reruns on filter change only.
+ * aggregateConcept     - O(n²), run once per concept (or filtered pub_year).
+ * scanYearRange        - derive min/max pub_year from a ConceptData.
+ * filterByYearRange    - filter events to a year window before aggregation.
+ * buildGraph           - cheap, D3-facing, reruns on filter change only.
  */
 
 import type {
@@ -74,7 +74,7 @@ export function filterByYearRange(
 /**
  * Aggregate raw concept events into a provenance-carrying intermediate.
  *
- * O(n²) in neighbours per event — run once per concept or filtered pub_year
+ * O(n²) in neighbours per event - run once per concept or filtered pub_year
  * and memoised by the caller. Carrying pub_year through onto TokenStats.docs
  * means the drill-down panel can show document years without re-scanning.
  */
@@ -164,6 +164,7 @@ export function buildGraph(
 
   for (const [tokenA, stats] of agg.byToken) {
     for (const [tokenB, count] of stats.coOccurrences) {
+      // console.log("EDGE SAMPLE", tokenA, tokenB, count);
       if (tokenA < tokenB && count >= minEdgeWeight) {
         filteredEdges.push([tokenA, tokenB, count]);
       }
@@ -176,6 +177,12 @@ export function buildGraph(
     degreeMap.set(a, (degreeMap.get(a) ?? 0) + 1);
     degreeMap.set(b, (degreeMap.get(b) ?? 0) + 1);
   }
+
+  // console.log("BUILD GRAPH DEBUG", {
+  //   tokens: agg.byToken.size,
+  //   edgesRaw: filteredEdges.length,
+  //   minEdgeWeight,
+  // });
 
   if (degreeMap.size === 0) return EMPTY_GRAPH;
 

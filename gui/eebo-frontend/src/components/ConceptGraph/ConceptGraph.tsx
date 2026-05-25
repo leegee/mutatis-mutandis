@@ -4,12 +4,12 @@
  * Architecture
  * ------------
  *   ConceptData (raw API)
- *       ↓  filterByYearRange()      — optional, driven by year slider
- *       ↓  aggregateConcept()       — O(n²), memoised per concept+year window
+ *       |  filterByYearRange()      — optional, driven by year slider
+ *       |  aggregateConcept()       — O(n²), memoised per concept+year window
  *   AggregatedConcept               — carries full provenance incl. pub_year
- *       ↓  buildGraph()             — cheap, reruns on filter change
+ *       |  buildGraph()             — cheap, reruns on filter change
  *   GraphData                       — D3-facing, no provenance
- *       ↓  render()
+ *       |  render()
  *   SVG
  *
  * Year filtering
@@ -70,10 +70,31 @@ const ConceptGraph: Component<Props> = (props) => {
   const [maxNodes, setMaxNodes] = createSignal(50);
   const [minEdge, setMinEdge] = createSignal(3);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [fromYear, setFromYear] = createSignal<number>(-1);
+  const [toYear, setToYear] = createSignal<number>(-1);
+  const [yearMode, setYearMode] = createSignal<"single" | "range">("range");
 
-  // Year range
-  // Bounds are derived from the current concept's events.
-  // fromYear/toYear signals are reset whenever the concept changes.
+  // init/reset year mode
+  createEffect(() => {
+    const [min, max] = yearBounds();
+
+    if (yearMode() === "single") {
+      const mid = Math.floor((min + max) / 2);
+      setFromYear(mid);
+      setToYear(mid);
+      return;
+    }
+
+    // range mode
+    if (fromYear() === -1 && toYear() === -1) {
+      setFromYear(min);
+      setToYear(max);
+      return;
+    }
+
+    setFromYear(min);
+    setToYear(max);
+  });
 
   const yearBounds = createMemo<[number, number]>(() => {
     const cd = props.data[concept()];
@@ -82,23 +103,25 @@ const ConceptGraph: Component<Props> = (props) => {
     return [min ?? CORPUS_START_YEAR, max ?? CORPUS_END_YEAR];
   });
 
-  const [fromYear, setFromYear] = createSignal<number>(yearBounds()[0]);
-  const [toYear, setToYear] = createSignal<number>(yearBounds()[1]);
-
-  // Reset year signals when concept (and therefore bounds) changes
-  createEffect(() => {
-    const [min, max] = yearBounds();
-    setFromYear(min);
-    setToYear(max);
-  });
 
   const yearFiltered = createMemo(() => {
     const cd = props.data[concept()];
     if (!cd) return [];
     const [min, max] = yearBounds();
-    // If the slider covers the full range, skip filtering entirely
-    if (fromYear() <= min && toYear() >= max) return cd.events;
-    return filterByYearRange(cd.events, fromYear(), toYear());
+    const events = cd.events;
+    const filtered =
+      fromYear() <= min && toYear() >= max
+        ? events
+        : filterByYearRange(events, fromYear(), toYear());
+
+    console.log("YEAR FILTER DEBUG");
+    console.log("range:", fromYear(), toYear());
+    console.log("input events:", events.length);
+    console.log("filtered events:", filtered.length);
+    console.log("sample event:", filtered[0]);
+    console.log("neighbours length:", filtered[0]?.neighbours?.length);
+
+    return filtered;
   });
 
   // Stage 1: aggregation
@@ -159,9 +182,10 @@ const ConceptGraph: Component<Props> = (props) => {
         .attr("x", W / 2)
         .attr("y", H / 2)
         .attr("text-anchor", "middle")
-        .attr("fill", "#933")
+        .attr("fill", "rgb(205, 89, 89)")
+        .attr("font-size", "2rem")
         .attr("font-family", "monospace")
-        .text("No graph — try reducing min edge weight or widening the year range");
+        .text("No graph - try reducing min edge weight");
       return;
     }
 
@@ -329,7 +353,42 @@ const ConceptGraph: Component<Props> = (props) => {
             <output class="small-padding top-padding">Minimum edges {minEdge()} </output>
           </div>
 
-          <Show when={yearBounds()[0] !== yearBounds()[1]}>
+          <div class="field suffix border middle-align">
+            <select
+              value={yearMode()}
+              onChange={(e) => setYearMode(e.currentTarget.value as any)}
+            >
+              <option value="single">Single year</option>
+              <option value="range">Year range</option>
+            </select>
+            <output>Year mode</output>
+          </div>
+
+          <Show when={yearMode() === 'single'}>
+            <div class="field middle-align">
+              <div class="slider tiny">
+                <input
+                  type="range"
+                  min={CORPUS_START_YEAR}
+                  max={CORPUS_END_YEAR}
+                  step={1}
+                  value={fromYear()}
+                  onInput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    setFromYear(v);
+                    setToYear(v);
+                  }}
+                />
+                <span class="tooltip bottom" />
+              </div>
+
+              <output class="small-padding top-padding">
+                {fromYear()} ({yearFiltered().length} occurrences)
+              </output>
+            </div>
+          </Show>
+
+          <Show when={yearMode() === 'range'}>
             <div class="field middle-align">
               <div class="slider tiny">
                 <input
