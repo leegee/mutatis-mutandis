@@ -215,18 +215,6 @@ def load_doc_metadata(conn) -> dict:
 def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
     """
     Compute neighbourhood structure for all events matching a concept.
-
-    FAISS search is batched over all matching events: a single index.search()
-    call is issued with all query vectors stacked, rather than one call per
-    event. For concepts with many matching events this is materially faster
-    because FAISS parallelises multi-query search internally.
-
-    Vectors come from ZarrEventLookup (Zarr is the canonical source of truth),
-    not from FAISS internal storage. See module docstring re: the deferred
-    migration to EeboFaissIndex.reconstruct().
-
-    window_counter keys are (doc_id, window_id). window_id is doc-local;
-    see module docstring for the scoping invariant.
     """
 
     forms = set(concept["forms"])
@@ -237,17 +225,57 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
     if not event_ids:
         return {"concept": concept_name, "empty": True}
 
-    # Stack all query vectors and issue a single batched FAISS search.
-    # Previously this was one index.search() call per event; FAISS
-    # parallelises multi-query search so the batched form is significantly
-    # faster for concepts with many matching events.
+    # ------------------------------------------------------------
+    # Build query matrix
+    # ------------------------------------------------------------
     query_vecs = np.stack(
         [lookup.get_event(eid)["embedding"] for eid in event_ids]
-    )  # (n_events, dim)
+    )
 
+    logger.info(f"[tier2] query_events={len(event_ids)}")
+    logger.info(f"[tier2] sample_event_id={event_ids[0] if event_ids else None}")
+    logger.info(f"[tier2] sample_embedding_shape={query_vecs.shape}")
+
+    # ------------------------------------------------------------
+    # EMBEDDING DIAGNOSTIC (correct cosine computation)
+    # ------------------------------------------------------------
+    logger.info("[tier2] EMBEDDING DIVERSITY AUDIT START")
+
+    sample_n = min(50, len(query_vecs))
+    sample = query_vecs[:sample_n]
+
+    # L2 norm stats
+    norms = np.linalg.norm(sample, axis=1)
+    logger.info(
+        f"[tier2] norms: mean={norms.mean():.6f} std={norms.std():.6f} "
+        f"min={norms.min():.6f} max={norms.max():.6f}"
+    )
+
+    # true cosine similarity (normalised)
+    normed = sample / (np.linalg.norm(sample, axis=1, keepdims=True) + 1e-12)
+    sim_matrix = normed @ normed.T
+
+    mask = ~np.eye(sample_n, dtype=bool)
+    off_diag = sim_matrix[mask]
+
+    logger.info(
+        f"[tier2] cosine: mean={off_diag.mean():.6f} "
+        f"std={off_diag.std():.6f} "
+        f"p95={np.percentile(off_diag, 95):.6f} "
+        f"max={off_diag.max():.6f}"
+    )
+
+    collapse_score = off_diag.std()
+    if collapse_score < 1e-3:
+        logger.warning(
+            "[tier2] EMBEDDING COLLAPSE SUSPECTED "
+            "(near-constant semantic neighbourhood geometry)"
+        )
+
+    # ------------------------------------------------------------
+    # FAISS SEARCH
+    # ------------------------------------------------------------
     all_scores, all_neigh_ids = index.search(query_vecs, K)
-    # all_scores:    (n_events, K)
-    # all_neigh_ids: (n_events, K)
 
     token_counter = Counter()
     doc_counter = Counter()
@@ -255,6 +283,22 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
 
     results = []
 
+    # ------------------------------------------------------------
+    # DEBUG: neighbour identity entropy (cheap + very informative)
+    # ------------------------------------------------------------
+    flat_ids = all_neigh_ids.flatten()
+    if len(flat_ids):
+        from collections import Counter as _C
+        freq = _C(flat_ids)
+        top10 = freq.most_common(10)
+
+        logger.info("[tier2] TOP NEIGHBOUR IDS (frequency)")
+        for k, v in top10:
+            logger.info(f"[tier2] id={k} freq={v}")
+
+    # ------------------------------------------------------------
+    # main loop
+    # ------------------------------------------------------------
     for i, eid in enumerate(event_ids):
         event = lookup.get_event(eid)
 
@@ -265,7 +309,6 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
             if nid == -1:
                 continue
 
-            # exclude query event itself from neighbourhood
             if int(nid) == int(eid):
                 continue
 
@@ -273,36 +316,34 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
 
             token_counter[n_event["token"]] += 1
             doc_counter[n_event["doc_id"]] += 1
-            # window_id is doc-local: key must include doc_id to avoid
-            # merging windows from different documents that share an offset.
             window_counter[(n_event["doc_id"], n_event["window_id"])] += 1
 
             neighbours.append({
-                "event_id":         int(nid),
-                "vector_id":        n_event["vector_id"],
-                "token":            n_event["token"],
-                "doc_id":           n_event["doc_id"],
-                "pub_year":         doc_meta.get(event["doc_id"], {}).get("pub_year"),
-                "slice_start":      doc_meta.get(event["doc_id"], {}).get("slice_start"),
-                "slice_end":        doc_meta.get(event["doc_id"], {}).get("slice_end"),
-                "token_idx":        n_event["token_idx"],
-                "window_id":        n_event["window_id"],
+                "event_id": int(nid),
+                "vector_id": n_event["vector_id"],
+                "token": n_event["token"],
+                "doc_id": n_event["doc_id"],
+                "pub_year": doc_meta.get(event["doc_id"], {}).get("pub_year"),
+                "slice_start": doc_meta.get(event["doc_id"], {}).get("slice_start"),
+                "slice_end": doc_meta.get(event["doc_id"], {}).get("slice_end"),
+                "token_idx": n_event["token_idx"],
+                "window_id": n_event["window_id"],
                 "window_token_pos": n_event["window_token_pos"],
-                "score":            float(score),
+                "score": float(score),
             })
 
         results.append({
-            "event_id":         int(eid),
-            "vector_id":        event["vector_id"],
-            "token":            event["token"],
-            "doc_id":           event["doc_id"],
-            "pub_year":         doc_meta.get(event["doc_id"], {}).get("pub_year"),
-            "slice_start":      doc_meta.get(event["doc_id"], {}).get("slice_start"),
-            "slice_end":        doc_meta.get(event["doc_id"], {}).get("slice_end"),
-            "token_idx":        event["token_idx"],
-            "window_id":        event["window_id"],
+            "event_id": int(eid),
+            "vector_id": event["vector_id"],
+            "token": event["token"],
+            "doc_id": event["doc_id"],
+            "pub_year": doc_meta.get(event["doc_id"], {}).get("pub_year"),
+            "slice_start": doc_meta.get(event["doc_id"], {}).get("slice_start"),
+            "slice_end": doc_meta.get(event["doc_id"], {}).get("slice_end"),
+            "token_idx": event["token_idx"],
+            "window_id": event["window_id"],
             "window_token_pos": event["window_token_pos"],
-            "neighbours":       neighbours,
+            "neighbours": neighbours,
         })
 
     return {
@@ -315,7 +356,6 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
         },
         "events": results,
     }
-
 
 def main():
     logger.info("[tier2] init")

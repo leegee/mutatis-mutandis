@@ -162,15 +162,26 @@ export function buildGraph(
 ): GraphData {
   const filteredEdges: Array<[string, string, number]> = [];
 
+  let rawEdgeCount = 0;
+  let keptEdgeCount = 0;
+
+  // Edge construction phase
   for (const [tokenA, stats] of agg.byToken) {
     for (const [tokenB, count] of stats.coOccurrences) {
-      // console.log("EDGE SAMPLE", tokenA, tokenB, count);
-      if (tokenA < tokenB && count >= minEdgeWeight) {
+      rawEdgeCount++;
+
+      if (tokenA !== tokenB && count >= minEdgeWeight) {
         filteredEdges.push([tokenA, tokenB, count]);
+        keptEdgeCount++;
       }
     }
   }
 
+  console.log("[graph] RAW EDGE PAIRS =", rawEdgeCount);
+  console.log("[graph] KEPT EDGES =", keptEdgeCount);
+  console.log("[graph] MIN EDGE WEIGHT =", minEdgeWeight);
+
+  // Degree accumulation phase
   const degreeMap = new Map<string, number>();
 
   for (const [a, b] of filteredEdges) {
@@ -178,22 +189,31 @@ export function buildGraph(
     degreeMap.set(b, (degreeMap.get(b) ?? 0) + 1);
   }
 
-  // console.log("BUILD GRAPH DEBUG", {
-  //   tokens: agg.byToken.size,
-  //   edgesRaw: filteredEdges.length,
-  //   minEdgeWeight,
-  // });
+  console.log("[graph] DEGREE MAP SIZE =", degreeMap.size);
 
-  if (degreeMap.size === 0) return EMPTY_GRAPH;
+  // Early exit: no structure survived thresholding
+  if (degreeMap.size === 0) {
+    console.log("[graph] EMPTY DEGREE MAP → returning EMPTY_GRAPH");
+    return EMPTY_GRAPH;
+  }
 
+  // Node selection phase
   const sortedNodes = [...degreeMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, maxNodes);
 
+  console.log("[graph] SORTED NODES =", sortedNodes.length);
+  console.log("[graph] TOP NODE SAMPLE =", sortedNodes[0]);
+
   const keepSet = new Set(sortedNodes.map(([id]) => id));
-  const nodes: GraphNode[] = sortedNodes.map(([id, degree]) => ({ id, degree }));
+  const nodes: GraphNode[] = sortedNodes.map(([id, degree]) => ({
+    id,
+    degree,
+  }));
+
   const nodeIndex = new Map(nodes.map((n) => [n.id, n]));
 
+  // Final edge filtering phase
   const edges: GraphEdge[] = filteredEdges
     .filter(([a, b]) => keepSet.has(a) && keepSet.has(b))
     .map(([a, b, weight]) => ({
@@ -202,8 +222,15 @@ export function buildGraph(
       weight,
     }));
 
+  console.log("[graph] FINAL NODES =", nodes.length);
+  console.log("[graph] FINAL EDGES =", edges.length);
+
+  // Stability metrics
   const maxWeight = Math.max(1, ...edges.map((e) => e.weight));
   const maxDegree = Math.max(1, ...nodes.map((n) => n.degree));
+
+  console.log("[graph] MAX WEIGHT =", maxWeight);
+  console.log("[graph] MAX DEGREE =", maxDegree);
 
   return { nodes, edges, maxWeight, maxDegree };
 }
