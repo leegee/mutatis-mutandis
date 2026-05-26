@@ -10,11 +10,12 @@ import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeig
 // import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
 import ContextGraph4, { type Tier2Data } from "./components/ContextGraph4";
 import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
+import ContextGraph5 from "./components/ContextGraph5";
 
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);
   const [openHelp, setOpenHelp] = createSignal(false);
-  const [view, setView] = createSignal<'graph' | 'table' | 'help'>('graph')
+  const [view, setView] = createSignal<'graph' | 'table' | 'help' | 'test'>('graph')
 
   return (
     <>
@@ -37,6 +38,11 @@ export default function App() {
           <i>help</i>
           <span>Guide</span>
         </a>
+        <hr />
+        <a onClick={() => setView('test')}>
+          <i>experiment</i>
+          <span>Test</span>
+        </a>
       </nav>
 
       <main class="responsive max">
@@ -58,6 +64,9 @@ export default function App() {
                 </Match>
                 <Match when={view() === 'table'}>
                   <NeighbourhoodBrowser data={data()} />
+                </Match>
+                <Match when={view() === 'test'}>
+                  <ContextGraph5 data={data()} />
                 </Match>
               </Switch>
             )}
