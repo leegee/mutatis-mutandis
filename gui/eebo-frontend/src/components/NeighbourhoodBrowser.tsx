@@ -41,6 +41,7 @@ import {
   For,
   Show,
   type Component,
+  createEffect,
 } from "solid-js";
 
 // Types
@@ -201,7 +202,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   });
 
   // Reset sliders when concept or mode changes
-  createMemo(() => {
+  createEffect(() => {
     const [min, max] = yearBounds();
     if (yearMode() === "single") {
       const mid = Math.floor((min + max) / 2);
