@@ -7,7 +7,7 @@ import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeig
 // import ConceptGraph from "./components/ConceptGraph/ConceptGraph";
 // import ConceptGraph from "./components/ConceptGraph2";
 // import ConceptGraph from "./components/ConceptGraph3";
-import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
+// import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
 import ContextGraph4 from "./components/ContextGraph4";
 
 export default function App() {

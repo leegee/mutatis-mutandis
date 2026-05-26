@@ -3,9 +3,9 @@
  *
  * Token-binned contextual similarity graph with neighbour expansion.
  *
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  * NODE KINDS
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  *  "hub"       — one per distinct surface form (LAW, LAWES …) aggregated
  *                across all events in the current year window.
  *                Radius ∝ sqrt(eventCount).  Filled circle.
@@ -15,9 +15,9 @@
  *                both LAW's and PREROGATIVE's top neighbours it is one node
  *                with two spokes.  Fixed small radius.  Diamond shape.
  *
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  * EDGE KINDS
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  *  "hub-hub"       — cosine similarity between two hubs' normalised
  *                    neighbour-frequency vectors.  Solid gradient line.
  *                    Only drawn when similarity ≥ minSimilarity.
@@ -28,9 +28,9 @@
  *                    Weight = normalised frequency of that neighbour in
  *                    the hub's vector.  Dashed, lower opacity.
  *
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  * PIPELINE
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  *   props.data (Tier2Data)
  *       │  filterByYearRange()
  *       ▼
@@ -49,16 +49,16 @@
  *       ▼
  *   SVG — two edge layers, two node layers
  *
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  * DRILL-DOWN
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  *  Hub node    → event count, doc range, year range, source doc chips
  *  Neighbour   → "shared by" hub list (rhetorical coalition signal) +
  *                mean cosine score per hub
  *
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  * STAGE ARCHITECTURE  (ready for layers 2 + 3)
- * ─────────────────────────────────────────────────────────────────────────────
+ * -----------------------------------------------------------------------------
  * TODO layer 2: temporal continuity edges between era-split hub nodes
  * TODO layer 3: shared-unusual-neighbour edges between hubs
  */
@@ -77,9 +77,9 @@ import * as d3 from "d3";
 
 const MAX_TOP_N = 20;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Scoped styles
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 const STYLES = `
   .cg-layout         { display:flex; flex-direction:column; height:100%; width:100%; }
@@ -113,9 +113,9 @@ const STYLES = `
                        transform:rotate(45deg); }
 `;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Types
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 interface Neighbour {
   token: string;
@@ -198,9 +198,9 @@ interface ContextGraphData {
   maxHubDegree: number;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Constants
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 const CORPUS_START_YEAR = 1625;
 const CORPUS_END_YEAR = 1665;
@@ -216,9 +216,9 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubHubWeight: 1, maxEventCount: 1, maxHubDegree: 1,
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Data functions
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 function scanYearRange(cd: ConceptData): [number, number] {
   let min = CORPUS_END_YEAR;
@@ -320,7 +320,7 @@ function buildContextualGraph(
   const hubKeys = [...bins.keys()];
   if (hubKeys.length === 0) return EMPTY_GRAPH;
 
-  // ── 1. Hub-hub edges: pairwise cosine ─────────────────────────────────────
+  // -- 1. Hub-hub edges: pairwise cosine -------------------------------------
   const rawHubHub: Array<[string, string, number]> = [];
   for (let i = 0; i < hubKeys.length; i++) {
     for (let j = i + 1; j < hubKeys.length; j++) {
@@ -354,7 +354,7 @@ function buildContextualGraph(
 
   const hubSet = new Set(sortedHubs);
 
-  // ── 2. Hub nodes ───────────────────────────────────────────────────────────
+  // -- 2. Hub nodes -----------------------------------------------------------
   const nodeMap = new Map<string, ContextNode>();
 
   for (const key of sortedHubs) {
@@ -367,7 +367,7 @@ function buildContextualGraph(
     });
   }
 
-  // ── 3. Neighbour nodes + hub-neighbour edges ───────────────────────────────
+  // -- 3. Neighbour nodes + hub-neighbour edges -------------------------------
   // Collect (hubKey, nbToken, freq) for all hubs in the retained set.
   // Neighbour nodes are shared: one ContextNode per distinct token.
   const spokeTriples: Array<[string, string, number]> = [];
@@ -396,7 +396,7 @@ function buildContextualGraph(
 
   const nodes = [...nodeMap.values()];
 
-  // ── 4. Materialise edges with pre-resolved node references ─────────────────
+  // -- 4. Materialise edges with pre-resolved node references -----------------
   const hubHubEdges: HubHubEdge[] = rawHubHub
     .filter(([a, b]) => hubSet.has(a) && hubSet.has(b))
     .map(([a, b, weight]) => ({
@@ -427,9 +427,9 @@ function buildContextualGraph(
   return { nodes, hubHubEdges, hubNbEdges, allEdges, maxHubHubWeight, maxEventCount, maxHubDegree };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Component
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
@@ -445,9 +445,16 @@ const ContextGraph: Component<Props> = (props) => {
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [fromYear, setFromYear] = createSignal<number>(-1);
   const [toYear, setToYear] = createSignal<number>(-1);
-  const [yearMode, setYearMode] = createSignal<"single" | "range">("range");
+  const [yearMode, setYearMode] = createSignal<"single" | "range">("single");
 
-  // ── Year bounds ────────────────────────────────────────────────────────────
+  // DEBUG --------------------------------------------------------------
+  // createEffect(() => {
+  //   console.log('selectedNode', selectedNode())
+  //   console.log(selectedKind())
+  //   console.log(selectedBin())
+  // })
+
+  // -- Year bounds ------------------------------------------------------------
 
   const yearBounds = createMemo<[number, number]>(() => {
     const cd = props.data[concept()];
@@ -465,7 +472,7 @@ const ContextGraph: Component<Props> = (props) => {
     }
   });
 
-  // ── Filtered events ────────────────────────────────────────────────────────
+  // -- Filtered events --------------------------------------------------------
 
   const yearFiltered = createMemo(() => {
     const cd = props.data[concept()];
@@ -477,19 +484,19 @@ const ContextGraph: Component<Props> = (props) => {
       : filterByYearRange(events, fromYear(), toYear());
   });
 
-  // ── Aggregation ────────────────────────────────────────────────────────────
+  // -- Aggregation ------------------------------------------------------------
 
   const tokenBins = createMemo<Map<string, TokenBin>>(() =>
     aggregateByToken(yearFiltered())
   );
 
-  // ── Graph ──────────────────────────────────────────────────────────────────
+  // -- Graph ------------------------------------------------------------------
 
   const graphData = createMemo<ContextGraphData>(() =>
     buildContextualGraph(tokenBins(), topN(), minSimilarity(), maxHubs())
   );
 
-  // ── Drill-down ─────────────────────────────────────────────────────────────
+  // -- Drill-down -------------------------------------------------------------
 
   const selectedKind = createMemo<"hub" | "neighbour" | null>(() => {
     const id = selectedNode();
@@ -522,7 +529,7 @@ const ContextGraph: Component<Props> = (props) => {
     return result.sort((a, b) => b.freq - a.freq);
   });
 
-  // ── D3 ────────────────────────────────────────────────────────────────────
+  // -- D3 --------------------------------------------------------------------
 
   let svgRef!: SVGSVGElement;
   let simulationRef: d3.Simulation<ContextNode, AnyEdge> | null = null;
@@ -575,7 +582,7 @@ const ContextGraph: Component<Props> = (props) => {
         .attr("stop-color", hubColor(d.target.hubDegree));
     });
 
-    // ── Edge layer 1: hub-neighbour spokes (rendered below hubs) ─────────────
+    // -- Edge layer 1: hub-neighbour spokes (rendered below hubs) -------------
     const spokeSelection = container.append("g").attr("class", "spokes")
       .selectAll<SVGLineElement, HubNbEdge>("line")
       .data(hubNbEdges).join("line")
@@ -584,7 +591,7 @@ const ContextGraph: Component<Props> = (props) => {
       .attr("stroke-width", (d) => spokeWidth(d.weight))
       .attr("stroke-dasharray", "3 3");
 
-    // ── Edge layer 2: hub-hub similarity edges ────────────────────────────────
+    // -- Edge layer 2: hub-hub similarity edges --------------------------------
     const hhSelection = container.append("g").attr("class", "hh-edges")
       .selectAll<SVGLineElement, HubHubEdge>("line")
       .data(hubHubEdges).join("line")
@@ -592,7 +599,7 @@ const ContextGraph: Component<Props> = (props) => {
       .attr("stroke-opacity", (d) => hhOpacity(d.weight))
       .attr("stroke-width", (d) => hhWidth(d.weight));
 
-    // ── Neighbour nodes ───────────────────────────────────────────────────────
+    // -- Neighbour nodes -------------------------------------------------------
     const nbNodes = nodes.filter(n => n.kind === "neighbour");
     const nbGroup = container.append("g").attr("class", "nb-nodes")
       .selectAll<SVGGElement, ContextNode>("g")
@@ -625,7 +632,7 @@ const ContextGraph: Component<Props> = (props) => {
       .attr("fill", "rgba(255,220,140,0.85)")
       .attr("pointer-events", "none");
 
-    // ── Hub nodes (on top) ────────────────────────────────────────────────────
+    // -- Hub nodes (on top) ----------------------------------------------------
     const hubNodes = nodes.filter(n => n.kind === "hub");
     const hubGroup = container.append("g").attr("class", "hub-nodes")
       .selectAll<SVGGElement, ContextNode>("g")
@@ -665,7 +672,7 @@ const ContextGraph: Component<Props> = (props) => {
       .attr("fill", "rgba(210,235,255,0.9)")
       .attr("pointer-events", "none");
 
-    // ── Tooltip ───────────────────────────────────────────────────────────────
+    // -- Tooltip ---------------------------------------------------------------
     const tooltip = d3.select("body")
       .selectAll<HTMLDivElement, unknown>(".cg-tooltip")
       .data([null]).join("div")
@@ -705,7 +712,7 @@ const ContextGraph: Component<Props> = (props) => {
       })
       .on("mousemove", moveTip).on("mouseleave", hideTip);
 
-    // ── Simulation ────────────────────────────────────────────────────────────
+    // -- Simulation ------------------------------------------------------------
     if (simulationRef) simulationRef.stop();
 
     simulationRef = d3.forceSimulation<ContextNode>(nodes)
@@ -720,7 +727,7 @@ const ContextGraph: Component<Props> = (props) => {
           .strength(d => d.kind === "hub-hub" ? 0.55 : 0.8)
       )
       .force("charge", d3.forceManyBody()
-        .strength(d => d.kind === "hub" ? -280 : -40)
+        .strength((d) => d.kind === "hub" ? -280 : -40)
       )
       .force("center", d3.forceCenter(W / 2, H / 2))
       .force("collision", d3.forceCollide<ContextNode>()
@@ -752,7 +759,7 @@ const ContextGraph: Component<Props> = (props) => {
     d3.select("body").selectAll(".cg-tooltip").remove();
   });
 
-  // ── UI ─────────────────────────────────────────────────────────────────────
+  // -- UI ---------------------------------------------------------------------
 
   return (
     <>
@@ -808,17 +815,27 @@ const ContextGraph: Component<Props> = (props) => {
             </div>
 
             <Show when={yearMode() === "single"}>
-              <div class="field middle-align">
-                <div class="slider tiny">
-                  <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
-                    value={fromYear()}
-                    onInput={(e) => { const v = Number(e.currentTarget.value); setFromYear(v); setToYear(v); }} />
-                  <span class="tooltip bottom" />
+              <nav class="no-space">
+                <button class="circle chip secondary no-space large-margin bottom-margin"
+                  onClick={() => { let v = fromYear() - 1; v = v >= CORPUS_START_YEAR ? v : CORPUS_START_YEAR; setFromYear(v); setToYear(v); }}>
+                  <i>remove</i>
+                </button>
+                <div class="field middle-align">
+                  <div class="slider tiny">
+                    <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
+                      value={fromYear()}
+                      onInput={(e) => { const v = Number(e.currentTarget.value); setFromYear(v); setToYear(v); }} />
+                    <span class="tooltip bottom" />
+                  </div>
+                  <output class="small-padding top-padding">
+                    {fromYear()} ({yearFiltered().length} events)
+                  </output>
                 </div>
-                <output class="small-padding top-padding">
-                  {fromYear()} ({yearFiltered().length} events)
-                </output>
-              </div>
+                <button class="circle chip secondary no-space large-margin bottom-margin"
+                  onClick={() => { let v = toYear() + 1; v = v <= CORPUS_END_YEAR ? v : CORPUS_END_YEAR; setToYear(v); setFromYear(v); }}>
+                  <i>add</i>
+                </button>
+              </nav>
             </Show>
 
             <Show when={yearMode() === "range"}>
@@ -840,7 +857,6 @@ const ContextGraph: Component<Props> = (props) => {
                 </output>
               </div>
             </Show>
-
           </nav>
         </header>
 
@@ -856,7 +872,7 @@ const ContextGraph: Component<Props> = (props) => {
                 <button class="link border" onClick={() => setSelectedNode(null)}>✕</button>
               </div>
 
-              {/* ── Hub drill-down ── */}
+              {/* -- Hub drill-down -- */}
               <Show when={selectedKind() === "hub" && selectedBin()}>
                 {(_) => {
                   const bin = selectedBin()!;
@@ -912,7 +928,7 @@ const ContextGraph: Component<Props> = (props) => {
                 }}
               </Show>
 
-              {/* ── Neighbour drill-down ── */}
+              {/* -- Neighbour drill-down -- */}
               <Show when={selectedKind() === "neighbour"}>
                 <div class="bottom-padding">
                   <div>Shared by {sharedByHubs().length} hub(s)</div>
