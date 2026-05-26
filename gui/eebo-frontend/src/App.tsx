@@ -8,14 +8,37 @@ import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeig
 // import ConceptGraph from "./components/ConceptGraph2";
 // import ConceptGraph from "./components/ConceptGraph3";
 // import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
-import ContextGraph4 from "./components/ContextGraph4";
+import ContextGraph4, { type Tier2Data } from "./components/ContextGraph4";
+import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
 
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);
   const [openHelp, setOpenHelp] = createSignal(false);
+  const [view, setView] = createSignal<'graph' | 'table' | 'help'>('graph')
 
   return (
     <>
+      <nav class="scroll max left">
+        <header>
+          <button class="extra circle transparent">
+            <i>menu_open</i>
+          </button>
+        </header>
+
+        <a onClick={() => setView('graph')}>
+          <i>graph_5</i>
+          <span>Graph</span>
+        </a>
+        <a onClick={() => setView('table')}>
+          <i>table</i>
+          <span>Table</span>
+        </a>
+        <a onClick={() => setOpenHelp(!openHelp())}>
+          <i>help</i>
+          <span>Guide</span>
+        </a>
+      </nav>
+
       <main class="responsive max">
         <ErrorBoundary fallback={
           (err) => <article>
@@ -25,12 +48,19 @@ export default function App() {
           <Show when={events()} fallback={
             <article class="responsive">
               <progress></progress>
-              <h1>Concept Graph</h1>
-              <h2>Loading events...</h2>
+              <h1>Loading events...</h1>
             </article>
           }>
-            {/* {(data) => <NeighbourhoodBrowser data={data() as any} />} */}
-            {(data) => <ContextGraph4 data={data() as any} />}
+            {(data) => (
+              <Switch>
+                <Match when={view() === 'graph'}>
+                  <ContextGraph4 data={data()} />
+                </Match>
+                <Match when={view() === 'table'}>
+                  <NeighbourhoodBrowser data={data()} />
+                </Match>
+              </Switch>
+            )}
           </Show>
         </ErrorBoundary>
       </main >
@@ -42,23 +72,6 @@ export default function App() {
           </article>
         )}
       </Transition>
-
-      <button class="border small" onClick={() => setOpenHelp(v => !v)}
-        style={{
-          position: 'fixed',
-          top: '2rem',
-          right: '1rem',
-          'z-index': '100',
-        }}>
-        <Switch>
-          <Match when={!openHelp()}>
-            <i>help</i>
-          </Match>
-          <Match when={openHelp()}>
-            <i>close</i>
-          </Match>
-        </Switch>
-      </button>
     </>
   );
 }
