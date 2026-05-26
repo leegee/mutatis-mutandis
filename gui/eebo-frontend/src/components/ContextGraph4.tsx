@@ -75,6 +75,8 @@ import {
 
 import * as d3 from "d3";
 
+const MAX_TOP_N = 20;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Scoped styles
 // ─────────────────────────────────────────────────────────────────────────────
@@ -541,18 +543,18 @@ const ContextGraph: Component<Props> = (props) => {
         .attr("fill", "rgb(205,89,89)")
         .attr("font-size", "1.5rem")
         .attr("font-family", "'IBM Plex Mono',monospace")
-        .text("No graph — try reducing min similarity or increasing top N");
+        .text("No graph: try reducing min similarity or increasing top N");
       return;
     }
 
-    const hubRadius = d3.scaleSqrt().domain([0, maxEventCount]).range([8, 30]);
+    const hubRadius = d3.scaleSqrt().domain([0, maxEventCount]).range([8, 40]);
     const hubColor = d3.scaleLinear<string>()
       .domain([0, Math.max(1, maxHubDegree)])
       .range([HUB_COLOR_LOW, HUB_COLOR_HIGH]);
     const hhOpacity = d3.scaleLinear().domain([0, maxHubHubWeight]).range([0.25, 0.85]);
     const hhWidth = d3.scaleLinear().domain([0, maxHubHubWeight]).range([1, 7]);
-    const spokeOpacity = d3.scaleLinear().domain([0, 1]).range([0.15, 0.5]);
-    const spokeWidth = d3.scaleLinear().domain([0, 1]).range([0.5, 2.5]);
+    const spokeOpacity = d3.scaleLinear().domain([0, 1]).range([0.5, 0.95]);
+    const spokeWidth = d3.scaleLinear().domain([0, 1]).range([1, 4]);
 
     const container = svg.append("g").attr("class", "zoom-container");
     svg.call(
@@ -778,7 +780,7 @@ const ContextGraph: Component<Props> = (props) => {
 
             <div class="field middle-align">
               <div class="slider tiny">
-                <input type="range" min={1} max={15} step={1} value={topN()}
+                <input type="range" min={1} max={MAX_TOP_N} step={1} value={topN()}
                   onInput={(e) => setTopN(Number(e.currentTarget.value))} />
                 <span /><span class="tooltip bottom" />
               </div>
@@ -787,7 +789,7 @@ const ContextGraph: Component<Props> = (props) => {
 
             <div class="field middle-align">
               <div class="slider tiny">
-                <input type="range" min={0.1} max={0.95} step={0.05} value={minSimilarity()}
+                <input type="range" min={0.01} max={0.95} step={0.05} value={minSimilarity()}
                   onInput={(e) => setMinSimilarity(Number(e.currentTarget.value))} />
                 <span /><span class="tooltip bottom" />
               </div>
@@ -876,7 +878,7 @@ const ContextGraph: Component<Props> = (props) => {
 
                       <h3 class="bottom-padding">Top neighbours</h3>
                       <div class="bottom-padding">
-                        <For each={bin.topNeighbours.slice(0, 15)}>
+                        <For each={bin.topNeighbours.slice(0, MAX_TOP_N)}>
                           {(nb) => (
                             <div class="cg-nb-row">
                               <div class="cg-nb-bar-wrap">
