@@ -628,7 +628,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
       >
         {yearFiltered().length} events
         {" • "}
-        {neighbourIndex().size} neighbour tokens
+        {neighbourIndex().size} event-linked tokens
         {" • "}
         {rightPanelDocs().length} documents
         < Show when={focusToken()} >
