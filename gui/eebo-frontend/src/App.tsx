@@ -12,17 +12,27 @@ import ContextGraph4, { type Tier2Data } from "./components/ContextGraph4";
 import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
 import ContextGraph5 from "./components/ContextGraph5";
 
+import "./App.css"
+
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);
   const [openHelp, setOpenHelp] = createSignal(false);
+  const [open, setOpen] = createSignal(false);
   const [view, setView] = createSignal<'graph' | 'table' | 'help' | 'test'>('graph')
 
   return (
     <>
-      <nav class="scroll max left">
-        <header>
-          <button class="extra circle transparent">
-            <i>menu_open</i>
+      <nav class={`surface-container fill left scroll ${ open() ? 'max' : 'small' }`}>
+        <header class="center-align ">
+          <button class="extra circle transparent" onClick={() => setOpen(!open())}>
+            <Switch>
+              <Match when={open()}>
+                <i>menu_open</i>
+              </Match>
+              <Match when={!open()}>
+                <i>menu</i>
+              </Match>
+            </Switch>
           </button>
         </header>
 
@@ -45,7 +55,7 @@ export default function App() {
         </a>
       </nav>
 
-      <main class="responsive max">
+      <main class="responsive max no-padding">
         <ErrorBoundary fallback={
           (err) => <article>
             <div class="error padding">{err.message}</div>

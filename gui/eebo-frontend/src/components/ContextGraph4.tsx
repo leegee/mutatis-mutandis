@@ -207,9 +207,9 @@ const CORPUS_END_YEAR = 1665;
 
 const HUB_COLOR_LOW = "#5a87ba66";
 const HUB_COLOR_HIGH = "#e9f3fcdd";
-const NB_COLOR = "rgba(255,190,80,0.85)";
+const NB_COLOR = "rgba(255,190,80,0.65)";
 const NB_RADIUS = 5;
-const DIAMOND_SIZE = 7;   // half-diagonal of the diamond shape
+const DIAMOND_SIZE = 6;   // half-diagonal of the diamond shape
 
 const EMPTY_GRAPH: ContextGraphData = {
   nodes: [], hubHubEdges: [], hubNbEdges: [], allEdges: [],
@@ -627,7 +627,7 @@ const ContextGraph: Component<Props> = (props) => {
       .attr("dx", DIAMOND_SIZE + 4)
       .attr("dy", "0.35em")
       .attr("text-anchor", "start")
-      .attr("font-size", "9px")
+      .attr("font-size", "10pt")
       .attr("font-family", "'IBM Plex Mono','Courier New',monospace")
       .attr("fill", "rgba(255,220,140,0.85)")
       .attr("pointer-events", "none");
@@ -657,7 +657,7 @@ const ContextGraph: Component<Props> = (props) => {
       .text(d => hubRadius(d.eventCount) > 12 ? String(d.eventCount) : "")
       .attr("dy", "0.35em")
       .attr("text-anchor", "middle")
-      .attr("font-size", "9px")
+      .attr("font-size", "12pt")
       .attr("font-family", "'IBM Plex Mono','Courier New',monospace")
       .attr("fill", "rgba(255,255,255,0.5)")
       .attr("pointer-events", "none");
@@ -667,7 +667,7 @@ const ContextGraph: Component<Props> = (props) => {
       .text(d => d.id)
       .attr("dy", d => hubRadius(d.eventCount) + 13)
       .attr("text-anchor", "middle")
-      .attr("font-size", d => Math.max(9, Math.min(13, hubRadius(d.eventCount) * 0.7)) + "px")
+      .attr("font-size", d => Math.max(9, Math.min(13, hubRadius(d.eventCount) * 0.7)) + "pt")
       .attr("font-family", "'IBM Plex Mono','Courier New',monospace")
       .attr("fill", "rgba(210,235,255,0.9)")
       .attr("pointer-events", "none");

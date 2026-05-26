@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: var(--background);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -23,28 +23,9 @@ body {
 }
 
 #root {
-  display: flex;
+  /* display: flex; */
   height: 100vh;
   overflow: hidden;
-}
-
-nav.left {
-  width: 280px;
-  overflow-y: auto;
-  height: 100%;
-}
-
-main {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-.grid {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  width: 100%;
 }
 
 .s9 {

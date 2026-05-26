@@ -4,7 +4,7 @@
  * Faceted browser for FAISS-derived KNN neighbourhood data.
  *
  * PURPOSE
-  * Surfaces the contextual evidence embedded in Tier 2 KNN data: for a given
+ * Surfaces the contextual evidence embedded in Tier 2 KNN data: for a given
  * concept word, what semantic neighbours appear alongside it across the corpus,
  * and in which documents and years?
  *
@@ -20,8 +20,8 @@
  *                         the selected event's doc)
  *                       - centre panel highlights it in the chip list
  *
-  * DATA FLOW
-  *   props.data (Tier2Data)
+ * DATA FLOW
+ *   props.data (Tier2Data)
  *       │  filterByYearRange()
  *       |
  *   ConceptEvent[]          — year-filtered events
@@ -93,6 +93,12 @@ interface NeighbourSummary {
   meanScore: number;
   /** Set of doc_ids from events carrying this token. */
   docIds: Set<string>;
+  /**
+   * doc_id : pub_year pairs from events carrying this token.
+   * Stored directly during index construction to avoid re-scanning
+   * yearFiltered() in rightPanelDocs.
+   */
+  docYears: Map<string, number | undefined>;
   /** event_id keys (or idx:N fallbacks) of events carrying this token. */
   eventKeys: Set<string>;
 }
@@ -158,6 +164,7 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
           eventCount: 0,
           meanScore: 0,
           docIds: new Set(),
+          docYears: new Map(),
           eventKeys: new Set(),
         };
         index.set(nb.token, summary);
@@ -176,7 +183,14 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
       // score accumulation still occurrence-weighted
       summary.meanScore += nb.score;
 
-      if (event.doc_id) summary.docIds.add(event.doc_id);
+      if (event.doc_id) {
+        summary.docIds.add(event.doc_id);
+        // FIX: store doc_id → year during index construction so
+        // rightPanelDocs does not need to re-scan yearFiltered().
+        if (!summary.docYears.has(event.doc_id)) {
+          summary.docYears.set(event.doc_id, event.pub_year);
+        }
+      }
     }
   }
 
@@ -190,7 +204,8 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
 }
 
 
-const showDocument = (docId: string) => window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
+const showDocument = (docId: string) =>
+  window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
 /** Convert a score in [scoreMin, scoreMax] to an opacity in [minOp, maxOp]. */
 function scoreToOpacity(
@@ -255,11 +270,6 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   );
 
   // Neighbour summaries sorted by (eventCount desc, meanScore desc)
-  // for the global centre panel when no event is selected.
-  // const sortedGlobalNeighbours = createMemo<NeighbourSummary[]>(() =>
-  //   [...neighbourIndex().values()]
-  //     .sort((a, b) => b.eventCount - a.eventCount || b.meanScore - a.meanScore)
-  // );
   const sortedGlobalNeighbours = createMemo<NeighbourSummary[]>(() =>
     [...neighbourIndex().values()]
       .sort((a, b) =>
@@ -287,12 +297,18 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return [...sel.event.neighbours].sort((a, b) => b.score - a.score);
   });
 
-  // Score range for the selected event (for opacity scaling)
+  // FIX: use reduce instead of spread + Math.min/max to avoid stack overflow
+  // on large neighbour lists.
   const selectedScoreRange = createMemo<[number, number]>(() => {
     const nbs = selectedEventNeighbours();
     if (nbs.length === 0) return [0, 1];
-    const scores = nbs.map((n) => n.score);
-    return [Math.min(...scores), Math.max(...scores)];
+    let min = nbs[0].score;
+    let max = nbs[0].score;
+    for (let i = 1; i < nbs.length; i++) {
+      if (nbs[i].score < min) min = nbs[i].score;
+      if (nbs[i].score > max) max = nbs[i].score;
+    }
+    return [min, max];
   });
 
   // Document panel ---------------------------------------------------------
@@ -303,22 +319,16 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
    *   annotated with year, sorted by year.
    * - Else if an event is selected: just that event's doc_id.
    * - Else: empty.
+   *
+   * FIX: reads doc_id → year from summary.docYears (populated during index
+   * construction) instead of re-scanning yearFiltered().
    */
   const rightPanelDocs = createMemo<Array<{ docId: string; year?: number }>>(() => {
     const ft = focusToken();
     if (ft) {
       const summary = neighbourIndex().get(ft);
       if (!summary) return [];
-      // Collect doc_id : year from events carrying this token
-      const docYearMap = new Map<string, number | undefined>();
-      const events = yearFiltered();
-      for (let idx = 0; idx < events.length; idx++) {
-        const e = events[idx];
-        const key = eventKey(e, idx);
-        if (!summary.eventKeys.has(key)) continue;
-        if (e.doc_id) docYearMap.set(e.doc_id, e.pub_year);
-      }
-      return [...docYearMap.entries()]
+      return [...summary.docYears.entries()]
         .map(([docId, year]) => ({ docId, year }))
         .sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
     }
@@ -340,18 +350,20 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   });
 
 
-  // Historgram -------------------------------
+  // Temporal profile -------------------------------------------------------
 
   const tokenTemporalProfile = createMemo(() => {
-    const index = neighbourIndex();
     const events = yearFiltered();
     const map = new Map<string, Map<number, Set<string>>>();
 
-    for (const e of events) {
+    // FIX: use the loop index so eventKey() produces correct fallback keys
+    // for events without an event_id, matching the keys stored in the index.
+    for (let idx = 0; idx < events.length; idx++) {
+      const e = events[idx];
       const year = e.pub_year;
       if (year === undefined) continue;
 
-      const key = eventKey(e, 0);
+      const key = eventKey(e, idx);
 
       for (const nb of e.neighbours) {
         let byYear = map.get(nb.token);
@@ -383,10 +395,11 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return [...byYear.entries()]
       .map(([year, set]) => ({
         year,
-        value: set.size, // event-level diffusion
+        value: set.size,
       }))
       .sort((a, b) => a.year - b.year);
   }
+
   // UI
 
   return (
@@ -463,14 +476,6 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
             </div>
           </Show>
 
-          {/* Clear focus token */}
-          {/* <Show when={focusToken()}>
-            <button class="button small-margin postfix" onClick={() => setFocusToken(null)}>
-              <span>"{focusToken()}"</span>
-              <i>close</i>
-            </button>
-          </Show> */}
-
         </nav>
       </header>
 
@@ -492,6 +497,8 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
           <For each={yearFiltered()}>
             {(event, idx) => {
               const key = () => eventKey(event, idx());
+              // FIX: actually apply the focusToken dim effect that was computed
+              // but never used. Events lacking the focus token are dimmed.
               const hasFocus = () => {
                 const ft = focusToken();
                 return !ft || focusEventKeys().has(key());
@@ -501,6 +508,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
               return (
                 <button
                   class={`left-padding right-padding no-round no-margin ${ isSelected() ? "primary" : "secondary" }`}
+                  style={{ opacity: hasFocus() ? 1 : 0.35, transition: "opacity 0.15s" }}
                   onClick={() => setSelectedEventId((prev) => prev === key() ? null : key())}
                 >
                   <span class="code">
@@ -546,7 +554,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
             </Show>
           </div>
 
-          {/* Event selected so show its neighbour list as rows with score bar */}
+          {/* Event selected: show its neighbour list as rows with score bar */}
           <Show when={selectedEvent()}>
             <div style={{ padding: "0.5rem 0" }}>
               <For each={selectedEventNeighbours()}>
@@ -594,14 +602,14 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
             </div>
           </Show>
 
-          {/* No event selected so show global neighbour summary as chips */}
+          {/* No event selected: show global neighbour summary as chips */}
           <Show when={!selectedEvent()}>
             <div style={{ padding: "0.75rem", display: "flex", "flex-wrap": "wrap", gap: "0.4rem", "align-content": "flex-start" }}>
               <For each={sortedGlobalNeighbours()}>
                 {(summary) => {
                   const maxCount = sortedGlobalNeighbours()[0]?.eventCount ?? 1;
                   const isFocus = () => focusToken() === summary.token;
-                  const sizePx = 11 + (summary.eventCount / maxCount) * 10; // log(eventCount)?
+                  const sizePx = 11 + (summary.eventCount / maxCount) * 10;
                   const sparklineData = toSeries(tokenTemporalProfile(), summary.token);
 
                   return (
@@ -674,10 +682,10 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
           </Show>
         </aside>
 
-      </div >
+      </div>
 
       {/* Footer */}
-      < footer
+      <footer
         class="fixed max center-align small-padding surface-container-low"
         style={{ "flex-shrink": "0" }}
       >
@@ -686,21 +694,21 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
         {neighbourIndex().size} event-linked tokens
         {" • "}
         {rightPanelDocs().length} documents
-        < Show when={focusToken()} >
+        <Show when={focusToken()}>
           {" • "}
           focus: "{focusToken()}"
           {" "}
           ({neighbourIndex().get(focusToken()!)?.eventCount ?? 0} events,
           {" "}
           {neighbourIndex().get(focusToken()!)?.docIds.size ?? 0} docs)
-        </Show >
+        </Show>
         <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
           {" • "}
           {fromYear()}–{toYear()}
         </Show>
-      </footer >
+      </footer>
 
-    </div >
+    </div>
   );
 };
 
