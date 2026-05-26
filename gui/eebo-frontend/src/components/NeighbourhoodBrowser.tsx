@@ -84,7 +84,9 @@ interface Props {
  */
 interface NeighbourSummary {
   token: string;
-  /** Number of events in which this token appears as a neighbour. */
+  /** raw neighbour occurrences across corpus slice */
+  occurrenceCount: number;
+  /** Number of distinct events in which this token appears as a neighbour. */
   eventCount: number;
   /** Mean cosine score across all occurrences. */
   meanScore: number;
@@ -142,33 +144,54 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
     const event = events[idx];
     const key = eventKey(event, idx);
 
+    // track per-event deduplication of tokens
+    const seenInEvent = new Set<string>();
+
     for (const nb of event.neighbours) {
       let summary = index.get(nb.token);
+
       if (!summary) {
-        summary = { token: nb.token, eventCount: 0, meanScore: 0, docIds: new Set(), eventKeys: new Set() };
+        summary = {
+          token: nb.token,
+          occurrenceCount: 0,
+          eventCount: 0,
+          meanScore: 0,
+          docIds: new Set(),
+          eventKeys: new Set(),
+        };
         index.set(nb.token, summary);
       }
-      // Accumulate for mean (finalised below)
+
+      // raw frequency signal
+      summary.occurrenceCount += 1;
+
+      // distributional signal (once per event)
+      if (!seenInEvent.has(nb.token)) {
+        summary.eventCount += 1;
+        summary.eventKeys.add(key);
+        seenInEvent.add(nb.token);
+      }
+
+      // score accumulation still occurrence-weighted
       summary.meanScore += nb.score;
-      summary.eventCount += 1;
-      summary.eventKeys.add(key);
+
       if (event.doc_id) summary.docIds.add(event.doc_id);
     }
   }
 
-  // Finalise means
   for (const s of index.values()) {
-    if (s.eventCount > 0) s.meanScore /= s.eventCount;
+    if (s.occurrenceCount > 0) {
+      s.meanScore /= s.occurrenceCount;
+    }
   }
 
   return index;
 }
 
-// Helpers
 
 const showDocument = (docId: string) => window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
-/** Lerp a score in [scoreMin, scoreMax] to an opacity in [minOp, maxOp]. */
+/** Convert a score in [scoreMin, scoreMax] to an opacity in [minOp, maxOp]. */
 function scoreToOpacity(
   score: number,
   scoreMin: number,
@@ -232,9 +255,15 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
 
   // Neighbour summaries sorted by (eventCount desc, meanScore desc)
   // for the global centre panel when no event is selected.
+  // const sortedGlobalNeighbours = createMemo<NeighbourSummary[]>(() =>
+  //   [...neighbourIndex().values()]
+  //     .sort((a, b) => b.eventCount - a.eventCount || b.meanScore - a.meanScore)
+  // );
   const sortedGlobalNeighbours = createMemo<NeighbourSummary[]>(() =>
     [...neighbourIndex().values()]
-      .sort((a, b) => b.eventCount - a.eventCount || b.meanScore - a.meanScore)
+      .sort((a, b) =>
+        b.eventCount - a.eventCount || b.meanScore - a.meanScore
+      )
   );
 
   // Selected event ─────────────────────────────────────────────────────────
@@ -523,7 +552,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
                 {(summary) => {
                   const maxCount = sortedGlobalNeighbours()[0]?.eventCount ?? 1;
                   const isFocus = () => focusToken() === summary.token;
-                  const sizePx = 11 + (summary.eventCount / maxCount) * 10;
+                  const sizePx = 11 + (summary.eventCount / maxCount) * 10; // log(eventCount)?
 
                   return (
                     <button
