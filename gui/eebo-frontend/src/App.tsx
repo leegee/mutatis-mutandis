@@ -2,9 +2,13 @@
 
 import { createResource, createSignal, ErrorBoundary, Match, Show, Switch } from "solid-js";
 import { Transition } from "solid-transition-group";
-import ConceptGraph from "./components/ConceptGraph/ConceptGraph";
 import ConceptGraphGuide from "./components/ConceptGraph/ConceptGraphGuide";
 import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeighbours.service";
+// import ConceptGraph from "./components/ConceptGraph/ConceptGraph";
+// import ConceptGraph from "./components/ConceptGraph2";
+// import ConceptGraph from "./components/ConceptGraph3";
+import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
+import ContextGraph4 from "./components/ContextGraph4";
 
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);
@@ -25,7 +29,8 @@ export default function App() {
               <h2>Loading events...</h2>
             </article>
           }>
-            {(data) => <ConceptGraph data={data()} />}
+            {/* {(data) => <NeighbourhoodBrowser data={data() as any} />} */}
+            {(data) => <ContextGraph4 data={data() as any} />}
           </Show>
         </ErrorBoundary>
       </main >
