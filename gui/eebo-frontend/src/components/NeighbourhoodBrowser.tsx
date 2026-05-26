@@ -43,6 +43,7 @@ import {
   type Component,
   createEffect,
 } from "solid-js";
+import Sparkline from "./NeighbourhoodBrowser/SparkLine";
 
 // Types
 
@@ -216,7 +217,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
-  // Year bounds ────────────────────────────────────────────────────────────
+  // Year bounds ------------------------------------------------------------
 
   const yearBounds = createMemo<[number, number]>(() => {
     const cd = props.data[concept()];
@@ -237,7 +238,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     }
   });
 
-  // Filtered events ────────────────────────────────────────────────────────
+  // Filtered events --------------------------------------------------------
 
   const yearFiltered = createMemo<ConceptEvent[]>(() => {
     const cd = props.data[concept()];
@@ -247,7 +248,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return filterByYearRange(cd.events, fromYear(), toYear());
   });
 
-  // Neighbour index ────────────────────────────────────────────────────────
+  // Neighbour index --------------------------------------------------------
 
   const neighbourIndex = createMemo<NeighbourIndex>(() =>
     buildNeighbourIndex(yearFiltered())
@@ -266,7 +267,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
       )
   );
 
-  // Selected event ─────────────────────────────────────────────────────────
+  // Selected event ---------------------------------------------------------
 
   const selectedEvent = createMemo<{ event: ConceptEvent; key: string } | null>(() => {
     const id = selectedEventId();
@@ -294,7 +295,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return [Math.min(...scores), Math.max(...scores)];
   });
 
-  // Document panel ─────────────────────────────────────────────────────────
+  // Document panel ---------------------------------------------------------
 
   /**
    * Documents to show in the right panel.
@@ -330,7 +331,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return [];
   });
 
-  // Highlight: events that carry the focusToken ────────────────────────────
+  // Highlight: events that carry the focusToken ----------------------------
 
   const focusEventKeys = createMemo<Set<string>>(() => {
     const ft = focusToken();
@@ -338,6 +339,54 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return neighbourIndex().get(ft)?.eventKeys ?? new Set();
   });
 
+
+  // Historgram -------------------------------
+
+  const tokenTemporalProfile = createMemo(() => {
+    const index = neighbourIndex();
+    const events = yearFiltered();
+    const map = new Map<string, Map<number, Set<string>>>();
+
+    for (const e of events) {
+      const year = e.pub_year;
+      if (year === undefined) continue;
+
+      const key = eventKey(e, 0);
+
+      for (const nb of e.neighbours) {
+        let byYear = map.get(nb.token);
+        if (!byYear) {
+          byYear = new Map();
+          map.set(nb.token, byYear);
+        }
+
+        let set = byYear.get(year);
+        if (!set) {
+          set = new Set();
+          byYear.set(year, set);
+        }
+        set.add(key);
+      }
+    }
+    return map;
+  });
+
+  type TemporalProfile = Map<number, Set<string>>;
+
+  function toSeries(
+    profile: Map<string, TemporalProfile>,
+    token: string
+  ): { year: number; value: number }[] {
+    const byYear = profile.get(token);
+    if (!byYear) return [];
+
+    return [...byYear.entries()]
+      .map(([year, set]) => ({
+        year,
+        value: set.size, // event-level diffusion
+      }))
+      .sort((a, b) => a.year - b.year);
+  }
   // UI
 
   return (
@@ -553,6 +602,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
                   const maxCount = sortedGlobalNeighbours()[0]?.eventCount ?? 1;
                   const isFocus = () => focusToken() === summary.token;
                   const sizePx = 11 + (summary.eventCount / maxCount) * 10; // log(eventCount)?
+                  const sparklineData = toSeries(tokenTemporalProfile(), summary.token);
 
                   return (
                     <button
@@ -561,6 +611,11 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
                       onClick={() => setFocusToken((prev) => prev === summary.token ? null : summary.token)}
                     >
                       <span>{summary.token}</span>
+
+                      <Show when={yearMode() == "range"}>
+                        <Sparkline data={sparklineData} color={isFocus() ? "var(--on-primary)" : "var(--tertiary)"} />
+                      </Show>
+
                       <span class="small-text" style={{ opacity: 0.6 }}>
                         {summary.eventCount}
                       </span>
