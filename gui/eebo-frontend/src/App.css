@@ -1,24 +1,8 @@
-.railbar {
-    position: fixed !important;
-    top: 0;
-    left: 0;
-
-    width: 280px;
-    height: 100vh;
-
-    transform: translate3d(-100%, 0, 0);
-    transition: transform 0.25s ease;
-
-    z-index: 1000;
+#app-nav.small a span {
+    display: none !important;
 }
 
-.railbar.open {
-    transform: translate3d(0, 0, 0);
-}
-
-.rail-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.32);
-    z-index: 999;
+#app-nav hr {
+    background-color: var(--on-surface-variant);
+    opacity: 0.5;
 }

@@ -8,23 +8,24 @@ import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeig
 // import ConceptGraph from "./components/ConceptGraph2";
 // import ConceptGraph from "./components/ConceptGraph3";
 // import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
-import ContextGraph4, { type Tier2Data } from "./components/ContextGraph4";
+// import ContextGraph4, { type Tier2Data } from "./components/ContextGraph4";
 import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
 import ContextGraph5 from "./components/ContextGraph5";
 
 import "./App.css"
+import DiachronicChart from "./components/DiachronicChart";
 
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);
   const [openHelp, setOpenHelp] = createSignal(false);
   const [open, setOpen] = createSignal(false);
-  const [view, setView] = createSignal<'graph' | 'table' | 'help' | 'test'>('graph')
+  const [view, setView] = createSignal<'graph' | 'table' | 'help' | 'diachronic'>('graph')
 
   return (
     <>
-      <nav class={`surface-container fill left scroll ${ open() ? 'max' : 'small' }`}>
+      <nav id='app-nav' class={`surface-container fill left scroll ${ open() ? 'max' : 'small' }`}>
         <header class="center-align ">
-          <button class="extra circle transparent" onClick={() => setOpen(!open())}>
+          <button class="extra transparent" onClick={() => setOpen(!open())}>
             <Switch>
               <Match when={open()}>
                 <i>menu_open</i>
@@ -38,20 +39,23 @@ export default function App() {
 
         <a onClick={() => setView('graph')}>
           <i>graph_5</i>
-          <span>Graph</span>
+          <span>Event Graph</span>
         </a>
         <a onClick={() => setView('table')}>
-          <i>table</i>
-          <span>Table</span>
+          <i>view_column</i>
+          <span>Neighbourhood Table</span>
         </a>
-        <a onClick={() => setOpenHelp(!openHelp())}>
+        <a onClick={() => setView('diachronic')}>
+          {/* <i>experiment</i> */}
+          <i>hourglass</i>
+          <span>Diachronic Chart</span>
+        </a>
+
+        <hr />
+
+        <a class="" onClick={() => setOpenHelp(!openHelp())}>
           <i>help</i>
           <span>Guide</span>
-        </a>
-        <hr />
-        <a onClick={() => setView('test')}>
-          <i>experiment</i>
-          <span>Test</span>
         </a>
       </nav>
 
@@ -62,21 +66,24 @@ export default function App() {
           </article>
         }>
           <Show when={events()} fallback={
-            <article class="responsive">
-              <progress></progress>
-              <h1>Loading events...</h1>
+            <article class="small-round padding border medium no-padding">
+              <div class="padding absolute center middle">
+                <h5>Loading events...</h5>
+              </div>
+              <progress />
             </article>
           }>
             {(data) => (
               <Switch>
                 <Match when={view() === 'graph'}>
-                  <ContextGraph4 data={data()} />
+                  {/* <ContextGraph4 data={data()} /> */}
+                  <ContextGraph5 data={data()} />
                 </Match>
                 <Match when={view() === 'table'}>
                   <NeighbourhoodBrowser data={data()} />
                 </Match>
-                <Match when={view() === 'test'}>
-                  <ContextGraph5 data={data()} />
+                <Match when={view() === 'diachronic'}>
+                  <DiachronicChart data={data()} />
                 </Match>
               </Switch>
             )}
@@ -85,11 +92,15 @@ export default function App() {
       </main >
 
       <Transition name="slide-fade">
-        {openHelp() && (
+        <Show when={openHelp()}>
           <article class="helpContainer right" style="width: 32rem">
-            <ConceptGraphGuide />
+            <Switch fallback={<article>To do...</article>}>
+              <Match when={view() === 'graph'}>
+                <ConceptGraphGuide />
+              </Match>
+            </Switch>
           </article>
-        )}
+        </Show>
       </Transition>
     </>
   );

@@ -82,6 +82,7 @@ import {
 } from "solid-js";
 
 import * as d3 from "d3";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -158,8 +159,6 @@ interface Props {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CORPUS_START_YEAR = 1625;
-const CORPUS_END_YEAR = 1665;
 
 const EMPTY_GRAPH: DistGraphData = {
   nodes: [],

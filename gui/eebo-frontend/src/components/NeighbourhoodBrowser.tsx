@@ -44,6 +44,7 @@ import {
   createEffect,
 } from "solid-js";
 import Sparkline from "./NeighbourhoodBrowser/SparkLine";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 // Types
 
@@ -108,8 +109,6 @@ type NeighbourIndex = Map<string, NeighbourSummary>;
 
 // Constants
 
-const CORPUS_START_YEAR = 1625;
-const CORPUS_END_YEAR = 1665;
 
 // Data functions
 
@@ -480,16 +479,16 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
       </header>
 
       {/* Three-column main area */}
-      <div style={{ display: "flex", flex: "1", overflow: "hidden" }} class="background">
+      <div class="grid background no-margin" style={{ display: "flex", flex: "1", overflow: "hidden" }} >
 
         {/* LEFT: event list */}
         <nav
-          class="surface-container-low border"
-          style={{ width: "16rem", "flex-shrink": "0", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
+          class="s3 surface-container-low border"
+          style={{ "flex-shrink": "0", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
           <div class="padding small-text bold" >
             Events
-            <span class="right-align small-text" style={{ float: "right", opacity: 0.6 }}>
+            <span class="right-align small-text left-padding medium-opacity">
               {yearFiltered().length}
             </span>
           </div>
@@ -497,8 +496,6 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
           <For each={yearFiltered()}>
             {(event, idx) => {
               const key = () => eventKey(event, idx());
-              // FIX: actually apply the focusToken dim effect that was computed
-              // but never used. Events lacking the focus token are dimmed.
               const hasFocus = () => {
                 const ft = focusToken();
                 return !ft || focusEventKeys().has(key());
@@ -511,13 +508,13 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
                   style={{ opacity: hasFocus() ? 1 : 0.35, transition: "opacity 0.15s" }}
                   onClick={() => setSelectedEventId((prev) => prev === key() ? null : key())}
                 >
+                  <Show when={event.pub_year !== undefined} fallback={"&mbash;"}>
+                    <span class="small-text">{event.pub_year}</span>
+                  </Show>
                   <span class="code">
                     {event.doc_id ?? key()}
                   </span>
-                  <Show when={event.pub_year !== undefined}>
-                    <span class="small-text" style={{ opacity: 0.6 }}>{event.pub_year}</span>
-                  </Show>
-                  <span class="small-text" style={{ opacity: 0.45 }}>
+                  <span class="small-text medium-opacity">
                     {event.neighbours.length} neighbours
                   </span>
                 </button>
@@ -528,14 +525,14 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
 
         {/* CENTRE: neighbour tokens */}
         <div
-          class="surface-container-lowest"
+          class="s6 surface-container-lowest"
           style={{ flex: "1", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
           <div class="padding small-text bold" style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}>
             <Show when={selectedEvent()} fallback={
               <span>
                 Neighbours: all events
-                <span class="small-text left-padding" style={{ opacity: 0.6 }}>
+                <span class="small-text left-padding medium-opacity">
                   {sortedGlobalNeighbours().length} tokens
                 </span>
               </span>
@@ -544,9 +541,9 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
                 <span>
                   Neighbours: {sel().event.doc_id ?? sel().key}
                   <Show when={sel().event.pub_year !== undefined}>
-                    <span class="small-text left-padding" style={{ opacity: 0.6 }}>{sel().event.pub_year}</span>
+                    <span class="small-text left-padding medium-opacity">{sel().event.pub_year}</span>
                   </Show>
-                  <span class="small-text left-padding" style={{ opacity: 0.6 }}>
+                  <span class="small-text left-padding medium-opacity">
                     {selectedEventNeighbours().length} tokens
                   </span>
                 </span>
@@ -624,7 +621,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
                         <Sparkline data={sparklineData} color={isFocus() ? "var(--on-primary)" : "var(--tertiary)"} />
                       </Show>
 
-                      <span class="small-text" style={{ opacity: 0.6 }}>
+                      <span class="small-text medium-opacity">
                         {summary.eventCount}
                       </span>
                     </button>
@@ -637,14 +634,14 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
 
         {/* RIGHT: documents */}
         <aside
-          class="surface-container-high border"
-          style={{ width: "18rem", "flex-shrink": "0", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
+          class="s3 surface-container-high border"
+        // style={{ width: "18rem", "flex-shrink": "0", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
           <div class="padding small-text bold" style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}>
             <Show when={focusToken()} fallback="Documents">
               <span>
                 Documents for "{focusToken()}"
-                <span class="small-text left-padding" style={{ opacity: 0.6 }}>
+                <span class="small-text left-padding medium-opacity">
                   {rightPanelDocs().length}
                 </span>
               </span>
@@ -654,7 +651,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
           <Show
             when={rightPanelDocs().length > 0}
             fallback={
-              <div class="padding" style={{ opacity: 0.4, "font-size": "0.85rem" }}>
+              <div class="padding small-opacity small-text">
                 Select an event or click a neighbour token
               </div>
             }
@@ -671,7 +668,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
                       {docId}
                     </span>
                     <Show when={year !== undefined}>
-                      <span class="small-text" style={{ opacity: 0.6, "flex-shrink": "0", "padding-left": "0.4rem" }}>
+                      <span class="small-text medium-opacity" style={{ "flex-shrink": "0", "padding-left": "0.4rem" }}>
                         {year}
                       </span>
                     </Show>

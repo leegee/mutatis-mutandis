@@ -42,7 +42,6 @@ import {
   filterByYearRange,
   scanYearRange,
   EMPTY_GRAPH,
-  CORPUS_START_YEAR, CORPUS_END_YEAR,
 } from "./ConceptGraph.data";
 
 import type {
@@ -52,6 +51,7 @@ import type {
   GraphEdge,
   GraphData,
 } from "./ConceptGraph.types";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 
 interface Props {
   data: Tier2Data;

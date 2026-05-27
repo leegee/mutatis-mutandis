@@ -74,6 +74,7 @@ import {
 } from "solid-js";
 
 import * as d3 from "d3";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 const MAX_TOP_N = 20;
 
@@ -201,9 +202,6 @@ interface ContextGraphData {
 // -----------------------------------------------------------------------------
 // Constants
 // -----------------------------------------------------------------------------
-
-const CORPUS_START_YEAR = 1625;
-const CORPUS_END_YEAR = 1665;
 
 const HUB_COLOR_LOW = "#5a87ba66";
 const HUB_COLOR_HIGH = "#e9f3fcdd";
@@ -434,7 +432,7 @@ function buildContextualGraph(
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
-const ContextGraph: Component<Props> = (props) => {
+const ContextGraph4: Component<Props> = (props) => {
   console.log(props)
   const concepts = Object.keys(props.data);
 
@@ -981,4 +979,4 @@ const ContextGraph: Component<Props> = (props) => {
   );
 };
 
-export default ContextGraph;
+export default ContextGraph4;

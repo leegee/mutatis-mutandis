@@ -24,6 +24,7 @@ import {
 } from "solid-js";
 
 import * as d3 from "d3";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 /* -------------------------------------------------------------------------- */
 /* Types */
@@ -78,8 +79,6 @@ interface GraphData {
 /* Constants */
 /* -------------------------------------------------------------------------- */
 
-const CORPUS_START_YEAR = 1470;
-const CORPUS_END_YEAR = 1700;
 
 const EMPTY_GRAPH: GraphData = {
   nodes: [],
