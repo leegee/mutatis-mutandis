@@ -89,6 +89,7 @@ import * as d3 from "d3";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 const MAX_TOP_N = 20;
+const hubSpread = () => 1;
 
 // Scoped styles
 

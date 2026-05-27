@@ -12,6 +12,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
+    "@cosmos.gl/graph": "^2.6.4",
     "@types/pg": "^8.20.0",
     "beercss": "^4.0.20",
     "d3": "^7.9.0",
