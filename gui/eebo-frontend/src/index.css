@@ -9,6 +9,10 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+.slider.tiny {
+  --_thumb: 1.5rem !important;
+}
+
 html,
 body,
 :root,
@@ -70,4 +74,9 @@ main,
 .slide-fade-exit {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* BeerCSS */
+.field {
+  --_input: 1rem;
 }

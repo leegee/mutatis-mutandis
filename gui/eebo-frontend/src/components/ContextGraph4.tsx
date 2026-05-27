@@ -799,7 +799,7 @@ const ContextGraph4: Component<Props> = (props) => {
                 <span /><span class="tooltip bottom" />
               </div>
               <output class="small-padding top-padding">
-                Min similarity {minSimilarity().toFixed(2)}
+                similarity similarity {minSimilarity().toFixed(2)}
               </output>
             </div>
 

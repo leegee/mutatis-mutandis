@@ -1,22 +1,22 @@
 /**
  * ContextGraph6.tsx
  *
- * Port of ContextGraph5 from D3 force + SVG  →  cosmos.gl (v2.x, @cosmos.gl/graph).
+ * Port of ContextGraph5 from D3 force + SVG  ->  cosmos.gl (v2.x, @cosmos.gl/graph).
  *
  * NOTE ON VERSIONS
- * ─────────────────
+ *─
  * The README describes setConfigPartial() as a v3 feature.  v3 is currently a
  * GitHub-only beta (3.0.0-beta.6) and NOT yet published to npm.  The latest
- * published version is 2.6.x, which only has setConfig() — but that resets
+ * published version is 2.6.x, which only has setConfig() - but that resets
  * ALL values to defaults before applying.  Effect 2 therefore re-passes every
  * relevant config property on each hubSpread change (see currentSimulation*
  * variables).  When you upgrade to v3, swap the setConfig() block in Effect 2
  * for a single setConfigPartial({ simulationRepulsion, simulationLinkSpring }).
  *
  * WHAT CHANGED vs ContextGraph5
- * ──────────────────────────────
- * • Rendering engine: D3 SVG tick loop → cosmos.gl GPU canvas
- * • Node terminology: D3 "node" → cosmos "point" (same objects, different words)
+ *
+ * • Rendering engine: D3 SVG tick loop -> cosmos.gl GPU canvas
+ * • Node terminology: D3 "node" -> cosmos "point" (same objects, different words)
  * • Shapes: neighbour diamonds replaced by smaller amber circles (cosmos renders
  *   circles only; the diamond was purely cosmetic).
  * • Hub-hub gradients: replaced by per-link colour + width both scaled by weight.
@@ -26,47 +26,47 @@
  * • Drag: cosmos built-in (enableDrag: true).
  * • Zoom/pan: cosmos built-in.
  * • hubSpread: live-updates via setConfigPartial({ simulationRepulsion, ... })
- *   without rebuilding the graph — same contract as the original Effect 2.
+ *   without rebuilding the graph - same contract as the original Effect 2.
  * • Tooltip: same HTML div pattern, positioned on onPointMouseOver.
  *
  * WHAT STAYED THE SAME
- * ─────────────────────
- * • All data functions (aggregateByToken, buildContextualGraph, buildPureEventGraph…)
+ *
+ * • All data functions (aggregateByToken, buildContextualGraph, buildPureEventGraph...)
  * • All SolidJS signals, memos, year filter, drill-down panel
  * • The two-effect pattern: Effect 1 rebuilds on graphData change,
  *   Effect 2 tweaks live forces on hubSpread change
  * • UI controls markup (untouched)
  *
  * COSMOS v3 QUICK PRIMER (read this if you've never used it)
- * ──────────────────────────────────────────────────────────
+ *
  * cosmos.gl represents graphs as parallel typed arrays:
  *
- *   pointPositions  Float32Array  [x0,y0, x1,y1, …]      (initial positions)
- *   pointColors     Float32Array  [r0,g0,b0,a0, …]        (0–1 per channel)
- *   pointSizes      Float32Array  [s0, s1, …]
- *   links           Float32Array  [src0,tgt0, src1,tgt1…] (indices into points)
- *   linkColors      Float32Array  [r0,g0,b0,a0, …]
- *   linkWidths      Float32Array  [w0, w1, …]
+ *   pointPositions  Float32Array  [x0,y0, x1,y1, ...]      (initial positions)
+ *   pointColors     Float32Array  [r0,g0,b0,a0, ...]        (0–1 per channel)
+ *   pointSizes      Float32Array  [s0, s1, ...]
+ *   links           Float32Array  [src0,tgt0, src1,tgt1...] (indices into points)
+ *   linkColors      Float32Array  [r0,g0,b0,a0, ...]
+ *   linkWidths      Float32Array  [w0, w1, ...]
  *
  * You never touch SVG.  Cosmos owns a <canvas> inside the div you give it.
  *
  * Important v3 API notes:
- *   • new Graph(divElement, config)  — pass a DIV, not a canvas
- *   • graph.render()                 — call after every setPoint/setLink call
- *   • graph.setConfigPartial(…)      — partial update; setConfig() resets all defaults
- *   • graph.start()                  — restarts simulation (like alphaTarget restart)
- *   • onPointMouseOver(index, pos)   — index into your points array
+ *   • new Graph(divElement, config)  - pass a DIV, not a canvas
+ *   • graph.render()                 - call after every setPoint/setLink call
+ *   • graph.setConfigPartial(...)      - partial update; setConfig() resets all defaults
+ *   • graph.start()                  - restarts simulation (like alphaTarget restart)
+ *   • onPointMouseOver(index, pos)   - index into your points array
  *   • onPointMouseOut()
  *   • onClick(index)
- *   • trackPointPositionsByIndices([…])  — registers indices to track
- *   • getTrackedPointPositionsMap()      — returns Map<number, [x,y]>
- *   • onSimulationEnd callback           — fires when alpha cools to rest
+ *   • trackPointPositionsByIndices([...])  - registers indices to track
+ *   • getTrackedPointPositionsMap()      - returns Map<number, [x,y]>
+ *   • onSimulationEnd callback           - fires when alpha cools to rest
  *
  * NODE INDEX CONTRACT
- * ────────────────────
+ *─
  * Cosmos knows points only by index, not by id.  We maintain:
  *   nodeIndexMap: Map<id, index>   built in buildCosmosArrays()
- *   indexToNode:  ContextNode[]    parallel array (index → node)
+ *   indexToNode:  ContextNode[]    parallel array (index -> node)
  * All event callbacks receive an index; we look up the node with indexToNode[i].
  */
 
@@ -82,12 +82,12 @@ import {
 } from "solid-js";
 
 import { Graph } from "@cosmos.gl/graph";
-import * as d3 from "d3"; // kept for scale helpers only — no simulation
+import * as d3 from "d3"; // kept for scale helpers only - no simulation
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 const MAX_TOP_N = 20;
 
-// ─── Scoped styles (unchanged from ContextGraph5) ─────────────────────────────
+//  Scoped styles (unchanged from ContextGraph5)─
 
 const STYLES = `
   .cg-layout         { display:flex; flex-direction:column; height:100%; width:100%; }
@@ -136,7 +136,7 @@ const STYLES = `
   .cg-label.neighbour{ color:rgba(255,220,140,0.85); font-size:10px; }
 `;
 
-// ─── Types (unchanged) ─────────────────────────────────────────────────────────
+//  Types (unchanged)
 
 type ViewMode = "aggregated" | "events";
 
@@ -182,7 +182,7 @@ interface TokenBin {
   years: Set<number>;
 }
 
-// NOTE: we keep d3.SimulationNodeDatum off this interface — cosmos doesn't use
+// NOTE: we keep d3.SimulationNodeDatum off this interface - cosmos doesn't use
 // x/y/vx/vy fields.  Position is managed entirely by the GPU.
 interface ContextNode {
   id: string;
@@ -221,7 +221,7 @@ interface ContextGraphData {
   maxHubDegree: number;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+//  Constants
 
 // All colours as [r,g,b,a] in 0-1 range (cosmos v3 requirement)
 const HUB_COLOR_LOW_RGBA: [number, number, number, number] = [0.35, 0.53, 0.73, 0.40];
@@ -235,14 +235,14 @@ const HH_LINK_BASE_RGBA: [number, number, number, number] = [0.55, 0.75, 0.95, 0
 // Spoke links
 const SPOKE_LINK_RGBA: [number, number, number, number] = [1.00, 0.75, 0.31, 0.90];
 
-// Simulation tuning — kept close to original BASE_* constants
+// Simulation tuning - kept close to original BASE_* constants
 const BASE_REPULSION = 1.2;   // (0–2): how hard nodes push each other apart. hubSpread slider multiplies this.
 const BASE_LINK_SPRING = 1;   // (0–2):  how tight edges pull nodes together
 const BASE_FRICTION = 0.85;  // cosmos simulationFriction
 const BASE_GRAVITY = 0.5;
 const FIT_VIEW_PADDING = 1; //  graph spread/looks small, try 0.05. To zoom out try 0.3.
 // const SPACE = 4096;
-const SPACE = window.innerHeight - (window.innerHeight / 6);
+const SPACE = (window.innerHeight / 2) - (window.innerHeight / 6);
 const NB_POINT_SIZE = 8;
 const HUB_MIN_SIZE = 12;
 const HUB_MAX_SIZE = 40;
@@ -253,7 +253,7 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubHubWeight: 1, maxEventCount: 1, maxHubDegree: 1,
 };
 
-// ─── Data functions (all unchanged from ContextGraph5) ─────────────────────────
+//  Data functions (all unchanged from ContextGraph5)
 
 function scanYearRange(cd: ConceptData): [number, number] {
   let min = CORPUS_END_YEAR;
@@ -407,32 +407,32 @@ function buildPureEventGraph(events: ConceptEvent[], topN: number): ContextGraph
   return { nodes, hubHubEdges: [], hubNbEdges, allEdges: hubNbEdges, maxHubHubWeight: 1, maxEventCount: 1, maxHubDegree: 1 };
 }
 
-// ─── Cosmos typed-array builder ────────────────────────────────────────────────
+//  Cosmos typed-array builder
 
 interface CosmosArrays {
-  pointPositions: Float32Array;  // [x,y, …] — random initial scatter
-  pointColors: Float32Array;  // [r,g,b,a, …]
-  pointSizes: Float32Array;  // [s, …]
-  links: Float32Array;  // [src,tgt, …]
-  linkColors: Float32Array;  // [r,g,b,a, …]
-  linkWidths: Float32Array;  // [w, …]
-  nodeIndexMap: Map<string, number>;  // id → point index
-  indexToNode: ContextNode[];        // point index → node
+  pointPositions: Float32Array;  // [x,y, ...] - random initial scatter
+  pointColors: Float32Array;  // [r,g,b,a, ...]
+  pointSizes: Float32Array;  // [s, ...]
+  links: Float32Array;  // [src,tgt, ...]
+  linkColors: Float32Array;  // [r,g,b,a, ...]
+  linkWidths: Float32Array;  // [w, ...]
+  nodeIndexMap: Map<string, number>;  // id -> point index
+  indexToNode: ContextNode[];        // point index -> node
 }
 
 function buildCosmosArrays(gd: ContextGraphData): CosmosArrays {
   const { nodes, allEdges, maxEventCount, maxHubDegree, maxHubHubWeight } = gd;
   const n = nodes.length;
 
-  // D3 scale helpers (for colour interpolation only — no simulation)
+  // D3 scale helpers (for colour interpolation only - no simulation)
   const hubColorScale = d3.scaleLinear<[number, number, number, number]>()
     .domain([0, Math.max(1, maxHubDegree)])
     .range([HUB_COLOR_LOW_RGBA, HUB_COLOR_HIGH_RGBA]);
   const hubSizeScale = d3.scaleSqrt().domain([0, maxEventCount]).range([HUB_MIN_SIZE, HUB_MAX_SIZE]);
   const hhAlphaScale = d3.scaleLinear().domain([0, maxHubHubWeight]).range([0.05, 0.25]);
-  const hhWidthScale = d3.scaleLinear().domain([0, maxHubHubWeight]).range([0.5, 2.5]);
+  const hhWidthScale = d3.scaleLinear().domain([0, maxHubHubWeight]).range([5, 12]);
   const spokeAlpha = d3.scaleLinear().domain([0, 1]).range([0.15, 0.45]);
-  const spokeWidth = d3.scaleLinear().domain([0, 1]).range([0.5, 2.5]);
+  const spokeWidth = d3.scaleLinear().domain([0, 1]).range([3, 6]);
 
   // Index map
   const nodeIndexMap = new Map<string, number>();
@@ -507,12 +507,12 @@ function buildCosmosArrays(gd: ContextGraphData): CosmosArrays {
   return { pointPositions, pointColors, pointSizes, links, linkColors, linkWidths, nodeIndexMap, indexToNode };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+//  Helpers
 
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
-// ─── Component ────────────────────────────────────────────────────────────────
+//  Component
 
 const ContextGraph6: Component<Props> = (props) => {
   const concepts = Object.keys(props.data);
@@ -531,7 +531,7 @@ const ContextGraph6: Component<Props> = (props) => {
   const [labelPositions, setLabelPositions] = createSignal<Array<{ id: string; kind: string; x: number; y: number }>>([]);
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 
-  // ── Year bounds (unchanged) ────────────────────────────────────────────────
+  //─ Year bounds (unchanged)
 
   const yearBounds = createMemo<[number, number]>(() => {
     const cd = props.data[concept()];
@@ -561,7 +561,7 @@ const ContextGraph6: Component<Props> = (props) => {
       : buildContextualGraph(tokenBins(), topN(), minSimilarity(), maxHubs())
   );
 
-  // ── Drill-down (unchanged) ─────────────────────────────────────────────────
+  //─ Drill-down (unchanged)
 
   const selectedKind = createMemo<"hub" | "neighbour" | "event" | null>(() => {
     const id = selectedNode(); if (!id) return null;
@@ -598,7 +598,7 @@ const ContextGraph6: Component<Props> = (props) => {
     return result.sort((a, b) => b.freq - a.freq);
   });
 
-  // ── Cosmos refs ───────────────────────────────────────────────────────────
+  //─ Cosmos refs─
 
   let wrapRef!: HTMLDivElement;
   let cosmosGraph: Graph | null = null;
@@ -620,7 +620,7 @@ const ContextGraph6: Component<Props> = (props) => {
     return tooltipEl;
   };
 
-  // ── Label overlay logic ───────────────────────────────────────────────────
+  //─ Label overlay logic
   //
   // Strategy:
   //   • When simulation settles (onSimulationEnd) we track all point indices,
@@ -646,7 +646,7 @@ const ContextGraph6: Component<Props> = (props) => {
     setLabelPositions(labels);
   }
 
-  // ── Core render (Effect 1 equivalent) ────────────────────────────────────
+  //─ Core render (Effect 1 equivalent)
   //
   // Rebuilds cosmos arrays and calls graph.setPointPositions etc.
   // Never called for hubSpread changes (Effect 2 handles those).
@@ -700,13 +700,13 @@ const ContextGraph6: Component<Props> = (props) => {
           if (node.kind === "hub") {
             const bin = tokenBins().get(node.id);
             const years = bin ? [...bin.years].sort((a, b) => a - b) : [];
-            const yStr = years.length ? `${ years[0] }${ years.length > 1 ? `–${ years[years.length - 1] }` : "" }` : "—";
-            html = `<aside><h6 class="bottom-padding">${ node.id }</h6>Events: ${ node.eventCount }<br/>Connections: ${ node.hubDegree }<br/>Documents: ${ bin?.docs.size ?? "—" }<br/>Years: ${ yStr }</aside>`;
+            const yStr = years.length ? `${ years[0] }${ years.length > 1 ? `–${ years[years.length - 1] }` : "" }` : "-";
+            html = `<aside><h6 class="bottom-padding">${ node.id }</h6>Events: ${ node.eventCount }<br/>Connections: ${ node.hubDegree }<br/>Documents: ${ bin?.docs.size ?? "-" }<br/>Years: ${ yStr }</aside>`;
           } else if (node.kind === "event") {
-            html = `<aside><h6 class="bottom-padding">${ node.token ?? node.id }</h6>Doc: ${ node.doc_id ?? "—" }<br/>Year: ${ node.pub_year ?? "—" }</aside>`;
+            html = `<aside><h6 class="bottom-padding">${ node.token ?? node.id }</h6>Doc: ${ node.doc_id ?? "-" }<br/>Year: ${ node.pub_year ?? "-" }</aside>`;
           } else {
             const hubs = sharedByHubs();
-            const lines = hubs.length ? hubs.slice(0, 5).map(h => `${ h.hub } (${ h.freq.toFixed(3) })`).join("<br/>") : "—";
+            const lines = hubs.length ? hubs.slice(0, 5).map(h => `${ h.hub } (${ h.freq.toFixed(3) })`).join("<br/>") : "-";
             html = `<aside><h6 class="bottom-padding">${ node.id }</h6>Shared by ${ node.degree } source(s):<br/>${ lines }</aside>`;
           }
           tip.innerHTML = html;
@@ -797,7 +797,7 @@ const ContextGraph6: Component<Props> = (props) => {
     setLabelsVisible(false); // labels will re-appear on next simulationEnd
   }
 
-  // ── Effect 1: full rebuild when graphData changes ─────────────────────────
+  //─ Effect 1: full rebuild when graphData changes
   //
   // hubSpread is NOT a dependency here.  untrack() guards any signal reads
   // inside renderGraph() (via closures) from registering as dependencies.
@@ -807,7 +807,7 @@ const ContextGraph6: Component<Props> = (props) => {
     if (wrapRef) untrack(() => renderGraph());
   });
 
-  // ── Effect 2: live force tweak when hubSpread changes ────────────────────
+  //─ Effect 2: live force tweak when hubSpread changes─
   //
   // Maps the [0.2, 2.0] slider linearly onto simulationRepulsion.
   // We also bump simulationLinkDistance for the hub-hub distance analogue.
@@ -815,7 +815,7 @@ const ContextGraph6: Component<Props> = (props) => {
   createEffect(() => {
     const spread = hubSpread();
     if (!cosmosGraph) return;
-    // Don't touch repulsion on degenerate graphs — it's already zeroed.
+    // Don't touch repulsion on degenerate graphs - it's already zeroed.
     const gd = untrack(graphData);
     if (gd.allEdges.length === 0 || gd.nodes.length <= 1) return;
     currentSimulationRepulsion = BASE_REPULSION * spread;
@@ -836,7 +836,7 @@ const ContextGraph6: Component<Props> = (props) => {
     setLabelsVisible(false);
   });
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
+  //─ Cleanup
 
   onCleanup(() => {
     cosmosGraph?.pause();
@@ -844,7 +844,7 @@ const ContextGraph6: Component<Props> = (props) => {
     tooltipEl = null;
   });
 
-  // ── Render label overlay ──────────────────────────────────────────────────
+  //─ Render label overlay─
   //
   // We show: all labels when labelsVisible=true, plus the hovered label always.
 
@@ -858,14 +858,14 @@ const ContextGraph6: Component<Props> = (props) => {
     return [];
   });
 
-  // ── UI (controls unchanged from ContextGraph5; only SVG → div) ───────────
+  //─ UI (controls unchanged from ContextGraph5; only SVG -> div)─
 
   return (
     <>
       <style>{STYLES}</style>
       <div class="cg-layout">
 
-        {/* ── Header controls (identical to ContextGraph5) ── */}
+        {/*─ Header controls (identical to ContextGraph5)─ */}
         <header class="center-align fill max surface-container-low small-padding top-padding">
           <nav>
             <div class="field suffix border middle-align">
@@ -920,7 +920,7 @@ const ContextGraph6: Component<Props> = (props) => {
                     onInput={(e) => setMinSimilarity(Number(e.currentTarget.value))} />
                   <span /><span class="tooltip bottom" />
                 </div>
-                <output class="small-padding top-padding">Min sim {minSimilarity().toFixed(2)}</output>
+                <output class="small-padding top-padding">Min similarity {minSimilarity().toFixed(2)}</output>
               </div>
             </Show>
 
@@ -977,7 +977,7 @@ const ContextGraph6: Component<Props> = (props) => {
           </nav>
         </header>
 
-        {/* ── Main canvas + aside ── */}
+        {/*─ Main canvas + aside─ */}
         <div class="cg-main background">
 
           {/*
@@ -1013,7 +1013,7 @@ const ContextGraph6: Component<Props> = (props) => {
             </Show>
           </div>
 
-          {/* ── Drill-down aside (identical to ContextGraph5) ── */}
+          {/*─ Drill-down aside (identical to ContextGraph5)─ */}
           <Show when={selectedNode()}>
             <aside class="cg-aside surface-container-high padding border">
               <div class="cg-header-row">
@@ -1031,7 +1031,7 @@ const ContextGraph6: Component<Props> = (props) => {
                       <div class="bottom-padding">
                         <div>Events: {bin.eventCount}</div>
                         <div>Documents: {bin.docs.size}</div>
-                        <div>Years: {years.length ? (years.length === 1 ? years[0] : `${ years[0] }–${ years[years.length - 1] }`) : "—"}</div>
+                        <div>Years: {years.length ? (years.length === 1 ? years[0] : `${ years[0] }–${ years[years.length - 1] }`) : "-"}</div>
                         <div>Hub connections: {graphData().nodes.find(n => n.id === selectedNode())?.hubDegree ?? 0}</div>
                       </div>
                       <h3 class="bottom-padding">Top neighbours</h3>
@@ -1072,8 +1072,8 @@ const ContextGraph6: Component<Props> = (props) => {
                   return (
                     <>
                       <div class="bottom-padding">
-                        <div>Token: {node.token ?? "—"}</div>
-                        <div>Year: {node.pub_year ?? "—"}</div>
+                        <div>Token: {node.token ?? "-"}</div>
+                        <div>Year: {node.pub_year ?? "-"}</div>
                         <Show when={node.doc_id}>
                           <div>
                             <button class="chip small-margin cg-chip-mono" onClick={() => showDocument(node.doc_id!)}>
@@ -1122,8 +1122,8 @@ const ContextGraph6: Component<Props> = (props) => {
           </Show>
         </div>
 
-        {/* ── Footer legend (unchanged) ── */}
-        <footer class="fixed max center-align small-padding surface-container-low">
+        {/*─ Footer legend (unchanged)─ */}
+        <footer class="fixed max center-align small-padding surface-container-low fill">
           <span class="cg-legend">
             <Show when={viewMode() === "aggregated"}>
               <span class="cg-legend-hub" />hubs ({graphData().nodes.filter(n => n.kind === "hub").length})

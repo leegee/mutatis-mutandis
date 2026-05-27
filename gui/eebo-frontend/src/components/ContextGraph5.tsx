@@ -949,7 +949,7 @@ const ContextGraph5: Component<Props> = (props) => {
                   <span /><span class="tooltip bottom" />
                 </div>
                 <output class="small-padding top-padding">
-                  Min sim {minSimilarity().toFixed(2)}
+                  Min similarity {minSimilarity().toFixed(2)}
                 </output>
               </div>
             </Show>
