@@ -1,10 +1,8 @@
 export default function ConceptGraphGuide() {
   return (
-    <article>
+    <section>
       <h1>Concept Graph</h1>
       <h2>User Guide</h2>
-
-      <h3>What you are looking at</h3>
 
       <p>
         Each graph shows the <dfn>semantic neighbourhood structure</dfn>
@@ -224,6 +222,6 @@ export default function ConceptGraphGuide() {
         The same corpus events underlie all views.
       </p>
 
-    </article>
+    </section>
   )
 }

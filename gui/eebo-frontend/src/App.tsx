@@ -13,18 +13,12 @@ import { Transition } from "solid-transition-group";
 import ConceptGraphGuide from "./components/ConceptGraph/ConceptGraphGuide";
 import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeighbours.service";
 
-const ContextGraph5 = lazy(() => import("./components/ContextGraph5"));
-const NeighbourhoodBrowser = lazy(
-  () => import("./components/NeighbourhoodBrowser")
-);
-const DiachronicChart = lazy(
-  () => import("./components/DiachronicChart")
-);
-const CosmosContextGraph = lazy(
-  () => import("./components/CosmosContextGraph")
-);
-
 import "./App.css";
+const ContextGraph5 = lazy(() => import("./components/ContextGraph5"));
+const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
+const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
+const CosmosContextGraph = lazy(() => import("./components/CosmosContextGraph"));
+const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraphGuide"));
 
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);
@@ -129,10 +123,13 @@ export default function App() {
 
       <Transition name="slide-fade">
         <Show when={openHelp()}>
-          <article class="helpContainer right" style="width: 32rem">
+          <article class="helpContainer right surface-container-highest padding  high-elevate border">
             <Switch fallback={<article>To do...</article>}>
               <Match when={view() === "graph"}>
                 <ConceptGraphGuide />
+              </Match>
+              <Match when={view() == "cosmos"}>
+                <CosmosContextGraphGuide />
               </Match>
             </Switch>
           </article>
