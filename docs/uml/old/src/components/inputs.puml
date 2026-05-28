@@ -1,5 +1,0 @@
-package "Input Sources" #lightpink {
-    class "EEBO-TCP XML"
-    class "Lincoln / Bodleian Scans (TIFF/JPEG)"
-    class "Manuscript Pamphleteering in Early Stuart England sources" as MPESE
-}
