@@ -215,7 +215,6 @@ function buildYearSlices(
 }
 
 // Classify a token's status in a given year.
-// TODO - maybe don't die so often?
 type TokenStatus = "birth" | "death" | "birth-death" | "continuation";
 
 function classifyStatus(
@@ -225,15 +224,22 @@ function classifyStatus(
     slices: YearSlices,
 ): TokenStatus {
     const idx = years.indexOf(year);
-    const prevYear = idx > 0 ? years[idx - 1] : null;
-    const nextYear = idx < years.length - 1 ? years[idx + 1] : null;
 
-    const inPrev = prevYear !== null && slices.get(prevYear)?.some(t => t.token === token);
-    const inNext = nextYear !== null && slices.get(nextYear)?.some(t => t.token === token);
+    const previousYears = years.slice(0, idx);
+    const futureYears = years.slice(idx + 1);
 
-    if (!inPrev && !inNext) return "birth-death";
-    if (!inPrev) return "birth";
-    if (nextYear && !inNext) return "death";
+    const existedBefore = previousYears.some(y =>
+        slices.get(y)?.some(t => t.token === token)
+    );
+
+    const existsLater = futureYears.some(y =>
+        slices.get(y)?.some(t => t.token === token)
+    );
+
+    if (!existedBefore && !existsLater) return "birth-death";
+    if (!existedBefore) return "birth";
+    if (!existsLater) return "death";
+
     return "continuation";
 }
 
