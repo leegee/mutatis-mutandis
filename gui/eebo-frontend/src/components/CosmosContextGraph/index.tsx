@@ -412,7 +412,7 @@ class GraphWorld {
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
-const CosmosExp: Component<Props> = (props) => {
+const CosmosComponent: Component<Props> = (props) => {
   const concepts = Object.keys(props.data);
 
   const [labelPositions, setLabelPositions] = createSignal<Array<{ id: string; kind: string; x: number; y: number }>>([]);
@@ -453,20 +453,24 @@ const CosmosExp: Component<Props> = (props) => {
     const id = controls.selectedNode; if (!id) return null;
     return graphData().nodes.find(n => n.id === id)?.kind ?? null;
   });
+
   const selectedBin = createMemo<TokenBin | null>(() => {
     const id = controls.selectedNode;
     if (!id || selectedKind() !== "hub") return null;
     return tokenBins().get(id) ?? null;
   });
+
   const selectedDocs = createMemo<Array<[string, number | undefined]>>(() => {
     const bin = selectedBin(); if (!bin) return [];
     return [...bin.docs.entries()].sort((a, b) => (a[1] ?? Infinity) - (b[1] ?? Infinity));
   });
+
   const selectedEventNode = createMemo<ContextNode | null>(() => {
     const id = controls.selectedNode;
     if (!id || selectedKind() !== "event") return null;
     return graphData().nodes.find(n => n.id === id) ?? null;
   });
+
   const sharedByHubs = createMemo<Array<{ hub: string; freq: number; meanScore: number }>>(() => {
     const id = controls.selectedNode; if (!id || selectedKind() !== "neighbour") return [];
     if (controls.viewMode === "aggregated") {
@@ -816,6 +820,9 @@ const CosmosExp: Component<Props> = (props) => {
                         <div>Token: {node.token ?? "—"}</div>
                         <div>Year: {node.pub_year ?? "—"}</div>
                         <Show when={node.doc_id}>
+                          {/* <pre>
+                            {JSON.stringify(node, null, 2)}
+                          </pre> */}
                           <div>
                             <button class="chip small-margin cg-chip-mono" onClick={() => showDocument(node.doc_id!)}>
                               <span>{node.doc_id}</span>
@@ -889,4 +896,4 @@ const CosmosExp: Component<Props> = (props) => {
   );
 };
 
-export default CosmosExp;
+export default CosmosComponent;

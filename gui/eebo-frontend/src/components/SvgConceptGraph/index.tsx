@@ -420,19 +420,8 @@ const ContextGraph5: Component<Props> = (props) => {
     return scanYearRange(cd);
   });
 
-  createEffect(() => {
-    const [min, max] = yearBounds();
-    if (controls.yearMode === "single") {
-      const mid = Math.floor((min + max) / 2);
-      setControls('fromYear', mid);
-      setControls('toYear', mid);
-    } else {
-      setControls('fromYear', min); setControls('toYear', max);
-    }
-  });
 
   // Filtered events
-
   const yearFiltered = createMemo(() => {
     const cd = props.data[controls.concept];
     if (!cd) return [];

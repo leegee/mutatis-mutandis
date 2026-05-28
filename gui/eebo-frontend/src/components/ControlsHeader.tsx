@@ -76,7 +76,17 @@ export default function Header(props: Props) {
 
         <div class="field suffix border middle-align">
           <select value={controls.yearMode}
-            onChange={(e) => setControls('yearMode', e.currentTarget.value as "single" | "range")}>
+            onChange={(e) => {
+              const [min, max] = props.yearBounds();
+              if (controls.yearMode === "single") {
+                const mid = Math.floor((min + max) / 2);
+                setControls('fromYear', mid);
+                setControls('toYear', mid);
+              } else {
+                setControls('fromYear', min); setControls('toYear', max);
+              }
+              setControls('yearMode', e.currentTarget.value as "single" | "range");
+            }}>
             <option value="single">Single year</option>
             <option value="range">Year range</option>
           </select>

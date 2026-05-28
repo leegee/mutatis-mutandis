@@ -16,15 +16,25 @@ export interface Tier2Data { [concept: string]: ConceptData; }
 
 export interface TokenBin {
   token: string; eventCount: number;
-  neighbourFreq: Map<string, number>; neighbourScoreSum: Map<string, number>;
-  topNeighbours: Array<{ token: string; freq: number; meanScore: number }>;
-  docs: Map<string, number | undefined>; years: Set<number>;
+  neighbourFreq: Map<string, number>;
+  neighbourScoreSum: Map<string, number>;
+  topNeighbours: Array<{
+    token: string;
+    freq: number;
+    meanScore: number
+  }>;
+  docs: Map<string, number | undefined>;
+  years: Set<number>;
 }
 
 export interface ContextNode {
   id: string; kind: "hub" | "neighbour" | "event";
-  eventCount: number; hubDegree: number; degree: number;
-  token?: string; doc_id?: string; pub_year?: number;
+  eventCount: number;
+  hubDegree: number;
+  degree: number;
+  token?: string;
+  doc_id?: string;
+  pub_year?: number;
 }
 
 export interface HubHubEdge { kind: "hub-hub"; sourceId: string; targetId: string; weight: number; }
