@@ -249,41 +249,11 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 Aligned diachornic vectors naturally detect semantic drift.
 
-The reconfiguration of Koselleckian poles is structural shift so requires imposed axis.
+The reconfiguration of Koselleckian poles is structural shift so requires some kind of imposed axis, or can it be seen emerging?
 
 ## To Do
 
-### 1. Replace KMeans with HDBSCAN
-
-* Drop forced `k`
-* Let clusters emerge from the data
-* Treat noise points explicitly
-
-```python
-clusterer = hdbscan.HDBSCAN(min_cluster_size=10)
-labels = clusterer.fit_predict(vecs)
-```
-
-### 2. Redefine drift to allow *sense birth/death*
-
-Current:
-
-* every cluster is forced to match a previous one
-
-Change:
-
-* introduce a distance threshold ε
-
-  * no match → **new sense (birth)**
-  * unmatched previous → **sense death**
-
-Track:
-
-* births per slice
-* deaths per slice
-* surviving senses
-
-### 3. Promote JSD to primary signal
+### Promote JSD to primary signal
 
 * Treat `js_divergence` as the main drift measure
 * Use cluster drift as supporting evidence
@@ -296,199 +266,39 @@ Plot together:
 
 Distributional change is more stable than centroid movement.
 
-### 4. Fix neighbor distribution bias
-
-Problem:
-
-* high-frequency tokens dominate
-
-Options:
-
-* downweight by global frequency
-* or compute something like:
-
-  ```
-  p(neighbor | token) / p(neighbor overall)
-  ```
-
-Otherwise results reflect corpus frequency, not semantics.
-
-### 5. Stabilize neighbor sampling
+### Stabilize neighbor sampling
 
 * Revisit:
 
   * `K_NEIGHBORS * 5`
   * similarity threshold `0.6`
-* Consider:
+
+Consider:
 
   * fixed top-k without threshold, or
   * adaptive threshold per slice
 
 Current sampling introduces inconsistent noise.
 
-### 6. Handle small-n slices more carefully
+### DB
 
-Current:
-
-* `< 8` → mean vector
-
-Better:
-
-* mark as “insufficient data”
-* or skip slice in drift calculation
-
-Small samples create fake stability or noise.
-
-## **Lower priority (interpretability / research payoff)**
-
-### 7. Track cluster statistics over time
-
-For each slice:
-
-* number of clusters
-* cluster sizes
-* proportion of noise (if using HDBSCAN)
-
-Gives a direct handle on polysemy evolution.
-
-### 8. Surface top neighbors per slice
-
-From:
-
-```python
-Counter(neighbor_tokens)
-```
-
-Extract:
-
-* top N neighbors per slice
-* deltas between slices
-
-### 9. Inspect drift spikes qualitatively
-
-For large changes:
-
-* look at:
-
-  * neighbors
-  * clusters
-  * source documents
-
-Validates that signals correspond to real semantic shifts.
-
-### 10. Add alignment sanity check
-
-* compare:
-
-  * intra-slice similarity vs cross-slice similarity
-
-Detect whether model fine-tuning is introducing artificial drift.
-
-
-## WIP
-
-- OT not JD.
-- Fix: ` <SEG REND="decorInit">I</SEG>F`
 - Tidy MV `pamphlet_tokens` and use a join rather than cutting corners
+- Tidy schema
 
-# Note to Self -- Semantic Drift / Ontological Topology Pipeline
+### Cosmos
 
-## Current Position
+Do properly
 
-The original pipeline used:
+### UI
 
-* sliding-window embeddings
-* averaged contextual vectors
-* one vector per token per slice
+Consolidate types, share more UI
 
-This produced measurable drift curves, but also introduced artefacts:
+## Screenshots
 
-* segmentation instability
-* window contamination
-* artificial smoothing
-* unstable cluster structure
-
-Particularly problematic:
-
-* supposedly stable lexical items (`man`, `house`) appeared to drift significantly.
-
-This suggested:
-
-* the representation itself was unstable,
-  rather than the concepts genuinely undergoing semantic transformation.
-
----
-
-# Architectural Revision
-
-We redesigned the system into a clean two-tier architecture.
-
-The key methodological distinction is now:
-
-## Tier 1 = Distributional Drift
-
-Measure:
-
-* average semantic movement of concepts over time.
-
-## Tier 2 = Semantic Structure / Ontological Topology
-
-Measure:
-
-* internal organisation of semantic space:
-
-  * clusters
-  * bifurcations
-  * persistence
-  * emergence
-  * collapse
-
-The two tiers must remain methodologically separate.
-
----
-
-A. k-branch graph (Tier 2.75)
-
-For LIBERTY:
-
-nodes coloured by slice
-edges weighted by similarity
-thickness = similarity
-position = force layout OR time-axis layout
-
-This answers:
-
-“does semantic continuity actually exist?”
-
-B. slice density timeline
-
-From your DB counts (you already computed this):
-
-x-axis: slice
-y-axis: token frequency
-
-This is crucial because:
-
-your system is not sampling uniformly across time
-
-This alone can explain a lot of apparent “drift”.
-
-C. cluster stability per slice
-
-For each slice:
-
-number of clusters
-average cluster size
-variance
-
-This tells you:
-
-whether DBSCAN is behaving consistently across time or fragmenting under sparsity
-
-D. attractor strength heatmap (only after A–C)
-
-Once the above are validated:
-
-x: slice
-y: cluster id (or compressed index)
-color: attractor strength
+![](./docs/screen-202605/1.png)
+![](./docs/screen-202605/1-e.png)
+![](./docs/screen-202605/2.png)
+![](./docs/screen-202605/2-e.png)
+![](./docs/screen-202605/3.png)
+![](./docs/screen-202605/4.png)
+![](./docs/screen-202605/4-s.png)
