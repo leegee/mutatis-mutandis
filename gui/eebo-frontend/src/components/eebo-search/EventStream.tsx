@@ -6,7 +6,7 @@ import {
     setSelectedConcept,
     setSelectedSlice,
     setSelectedEventId
-} from "../state/selection";
+} from "../../state/selection";
 
 import "./EventStream.css";
 

@@ -10,9 +10,9 @@ import { loadEvents } from "./services/loadEvents";
 
 import type { SemanticEvent } from "./types/events";
 
-import EventScatter from "./components/EventScatter";
-import EventStream from "./components/EventStream";
-import EventInspector from "./components/EventInspector";
+import EventScatter from "./components/eebo-search/EventScatter";
+import EventStream from "./components/eebo-search/EventStream";
+import EventInspector from "./components/eebo-search/EventInspector";
 
 import {
   selectedConcept,

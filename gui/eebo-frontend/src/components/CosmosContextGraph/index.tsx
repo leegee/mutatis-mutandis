@@ -11,120 +11,17 @@ import {
 
 import { Graph } from "@cosmos.gl/graph";
 import * as d3 from "d3";
-import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
-const MAX_TOP_N = 20;
+import "./styles.css";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
+import type { AnyEdge, ConceptData, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, Tier2Data, TokenBin } from "./types";
+import { controls, setControls } from '../../state/controls';
+import Header from "../SvgConceptGraph/Header";
 
-const STYLES = `
-  .cg-layout         { display:flex; flex-direction:column; height:100%; width:100%; }
-  .cg-main           { display:flex; flex:1; overflow:hidden; position:relative; }
-  .cg-canvas-wrap    { flex:1; position:relative; overflow:hidden; }
-  .cg-aside          { width:22rem; flex-shrink:0; overflow-y:auto; }
-  .cg-header-row     { display:flex; justify-content:space-between;
-                       align-items:center; padding-bottom:.25rem; }
-  .cg-nb-row         { display:flex; align-items:center; gap:.5rem;
-                       padding:.3rem 0;
-                       border-bottom:1px solid rgba(255,255,255,.06); }
-  .cg-nb-bar-wrap    { width:4rem; flex-shrink:0; height:6px;
-                       background:rgba(255,255,255,.1); border-radius:3px;
-                       position:relative; overflow:hidden; }
-  .cg-nb-bar-fill    { position:absolute; left:0; top:0; height:100%;
-                       border-radius:3px; }
-  .cg-nb-bar-fill.hub      { background:rgba(100,180,255,.75); }
-  .cg-nb-bar-fill.neighbour{ background:rgba(255,190,80,.75); }
-  .cg-nb-token       { flex:1; font-family:'IBM Plex Mono','Courier New',monospace;
-                       font-size:.82rem; }
-  .cg-nb-score       { flex-shrink:0; font-size:.75rem; opacity:.55; }
-  .cg-chip-mono span { font-family:'IBM Plex Mono','Courier New',monospace;
-                       font-size:.78rem; }
-  .cg-legend         { display:flex; gap:1rem; align-items:center;
-                       padding:.25rem .75rem; font-size:.75rem; opacity:.7; }
-  .cg-legend-hub     { display:inline-block; width:10px; height:10px;
-                       border-radius:50%; background:rgba(100,180,255,.8);
-                       flex-shrink:0; }
-  .cg-legend-event   { display:inline-block; width:10px; height:10px;
-                       border-radius:50%; background:rgba(120,210,130,.8);
-                       flex-shrink:0; }
-  .cg-legend-nb      { display:inline-block; width:9px; height:9px;
-                       border-radius:50%; background:rgba(255,190,80,.85);
-                       flex-shrink:0; }
-
-  /* Label overlay — always-on, updated every rAF tick */
-  .cg-labels         { position:absolute; top:0; left:0; width:100%; height:100%;
-                       pointer-events:none; overflow:hidden; }
-  .cg-label          { position:absolute; transform:translate(-50%, 0);
-                       white-space:nowrap;
-                       font-family:'IBM Plex Mono','Courier New',monospace;
-                       font-size:10px; pointer-events:none;
-                       text-shadow: 0 1px 3px rgba(0,0,0,.9),
-                                    0 0   6px rgba(0,0,0,.7); }
-  .cg-label.hub      { color:rgba(210,235,255,0.92); font-size:11px; font-weight:600; }
-  .cg-label.event    { color:rgba(180,255,190,0.85); font-size:9px; }
-  .cg-label.neighbour{ color:rgba(255,220,140,0.88); font-size:10px; }
-
-  /* User guide panel */
-  .cg-guide-toggle   { position:absolute; top:.6rem; right:.6rem; z-index:10;
-                       opacity:.65; transition:opacity .15s; }
-  .cg-guide-toggle:hover { opacity:1; }
-  .cg-guide          { position:absolute; top:2.6rem; right:.6rem; z-index:10;
-                       width:22rem; max-height:80vh; overflow-y:auto;
-                       border-radius:.5rem;
-                       font-size:.82rem; line-height:1.55; }
-  .cg-guide h4       { margin:.6rem 0 .25rem; font-size:.85rem; opacity:.8; }
-  .cg-guide p        { margin:.2rem 0 .5rem; opacity:.75; }
-  .cg-guide ul       { margin:.2rem 0 .5rem; padding-left:1.1rem; opacity:.75; }
-  .cg-guide li       { margin-bottom:.2rem; }
-  .cg-guide-swatch   { display:inline-block; width:9px; height:9px;
-                       border-radius:50%; vertical-align:middle;
-                       margin-right:.3rem; flex-shrink:0; }
-
-  /* Tooltip — positioned in VIEWPORT space */
-  .cg-tooltip        { position:fixed; pointer-events:none;
-                       font-family:'IBM Plex Mono',monospace;
-                       opacity:0; transition:opacity .15s;
-                       z-index:999; }
-`;
-
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
-type ViewMode = "aggregated" | "events";
-
-interface Neighbour {
-  token: string; score: number;
-  event_id?: number; doc_id?: string; pub_year?: number; window_id?: number;
-}
-interface ConceptEvent {
-  event_id?: number; token?: string; doc_id?: string; pub_year?: number;
-  neighbours: Neighbour[];
-}
-interface ConceptData {
-  n_events: number; year_min?: number; year_max?: number; events: ConceptEvent[];
-}
-export interface Tier2Data { [concept: string]: ConceptData; }
 interface Props { data: Tier2Data; }
 
-interface TokenBin {
-  token: string; eventCount: number;
-  neighbourFreq: Map<string, number>; neighbourScoreSum: Map<string, number>;
-  topNeighbours: Array<{ token: string; freq: number; meanScore: number }>;
-  docs: Map<string, number | undefined>; years: Set<number>;
-}
-interface ContextNode {
-  id: string; kind: "hub" | "neighbour" | "event";
-  eventCount: number; hubDegree: number; degree: number;
-  token?: string; doc_id?: string; pub_year?: number;
-}
-interface HubHubEdge { kind: "hub-hub"; sourceId: string; targetId: string; weight: number; }
-interface HubNbEdge { kind: "hub-neighbour"; sourceId: string; targetId: string; weight: number; }
-type AnyEdge = HubHubEdge | HubNbEdge;
-interface ContextGraphData {
-  nodes: ContextNode[]; hubHubEdges: HubHubEdge[]; hubNbEdges: HubNbEdge[];
-  allEdges: AnyEdge[]; maxHubHubWeight: number; maxEventCount: number; maxHubDegree: number;
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
+const MAX_TOP_N = 20;
 
 const HUB_COLOR_LOW_RGBA: [number, number, number, number] = [0.35, 0.53, 0.73, 0.40];
 const HUB_COLOR_HIGH_RGBA: [number, number, number, number] = [0.91, 0.95, 0.99, 0.87];
@@ -134,12 +31,11 @@ const HH_LINK_BASE_RGBA: [number, number, number, number] = [0.55, 0.75, 0.95, 0
 const SPOKE_LINK_RGBA: [number, number, number, number] = [1.00, 0.75, 0.31, 0.90];
 
 // Simulation — friction is velocity *damping* (higher = stops faster).
-// 0.85 was far too low (15% damping/tick = very slow cooldown).
-// 0.4 gives noticeable damping without feeling sluggish.
-const BASE_REPULSION = 1.2;
+// Repulsion lowered and gravity raised so nodes stay within the viewport.
+const BASE_REPULSION = 0.8;  // was 1.2
 const BASE_LINK_SPRING = 1.0;
-const BASE_FRICTION = 0.4;   // ← was 0.85 (now correctly high-damping)
-const BASE_GRAVITY = 0.1;   // ← was 0.5 (less gravity → less fighting)
+const BASE_FRICTION = 0.4;
+const BASE_GRAVITY = 0.25; // was 0.1 — needs to counteract repulsion at scale
 const FIT_VIEW_PADDING = 1;
 const SPACE = window.innerHeight - (window.innerHeight / 6);
 const NB_POINT_SIZE = 8;
@@ -349,11 +245,10 @@ class GraphWorld {
     this.flushToCosmosArrays(gd.allEdges);
     this.cosmos.trackPointPositionsByIndices([...this.nodeRegistry.values()].map(wn => wn.cosmosIndex));
 
-    if (!diff.onlyVisuals) {
-      this.cosmos.start();
-      return true;
-    }
-    return false;
+    // Do NOT call start() here. The caller sets the correct config via setConfig()
+    // before calling applyDiff(), and cosmos.start() re-applies construction-time
+    // defaults, overwriting it. The caller must call start() itself after returning.
+    return !diff.onlyVisuals;
   }
 
   reset() {
@@ -436,6 +331,9 @@ class GraphWorld {
   }
 
   private initialPosition(cn: ContextNode, gd: ContextGraphData): [number, number] {
+    // Single-node graph: place exactly at centre; gravity will hold it there.
+    if (gd.nodes.length === 1) return [SPACE / 2, SPACE / 2];
+
     const neighbourPositions: Array<[number, number]> = [];
     for (const edge of gd.allEdges) {
       let neighbourId: string | null = null;
@@ -510,68 +408,53 @@ class GraphWorld {
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-const ContextGraph6: Component<Props> = (props) => {
+const CosmosExp: Component<Props> = (props) => {
   const concepts = Object.keys(props.data);
 
-  const [concept, setConcept] = createSignal(concepts[0] ?? "");
-  const [viewMode, setViewMode] = createSignal<ViewMode>("aggregated");
-  const [maxHubs, setMaxHubs] = createSignal(50);
-  const [topN, setTopN] = createSignal(5);
-  const [minSimilarity, setMinSimilarity] = createSignal(0.5);
-  const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
-  const [fromYear, setFromYear] = createSignal<number>(-1);
-  const [toYear, setToYear] = createSignal<number>(-1);
-  const [yearMode, setYearMode] = createSignal<"single" | "range">("single");
-  const [hubSpread, setHubSpread] = createSignal(1);
   const [labelPositions, setLabelPositions] = createSignal<Array<{ id: string; kind: string; x: number; y: number }>>([]);
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 
-  // ── Year bounds ──────────────────────────────────────────────────────────
-
   const yearBounds = createMemo<[number, number]>(() => {
-    const cd = props.data[concept()];
+    const cd = props.data[controls.concept];
     if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
     return scanYearRange(cd);
   });
 
   createEffect(() => {
     const [min, max] = yearBounds();
-    if (yearMode() === "single") { const mid = Math.floor((min + max) / 2); setFromYear(mid); setToYear(mid); }
-    else { setFromYear(min); setToYear(max); }
+    if (controls.yearMode === "single") { const mid = Math.floor((min + max) / 2); setControls('fromYear', mid); setControls('toYear', mid); }
+    else { setControls('fromYear', min); setControls('toYear', max); }
   });
 
   const yearFiltered = createMemo(() => {
-    const cd = props.data[concept()];
+    const cd = props.data[controls.concept];
     if (!cd) return [];
     const [min, max] = yearBounds();
-    return fromYear() <= min && toYear() >= max
+    return controls.fromYear <= min && controls.toYear >= max
       ? cd.events
-      : filterByYearRange(cd.events, fromYear(), toYear());
+      : filterByYearRange(cd.events, controls.fromYear, controls.toYear);
   });
 
   const tokenBins = createMemo<Map<string, TokenBin>>(() => aggregateByToken(yearFiltered()));
 
   const graphData = createMemo<ContextGraphData>(() =>
-    viewMode() === "events"
-      ? buildPureEventGraph(yearFiltered(), topN())
-      : buildContextualGraph(tokenBins(), topN(), minSimilarity(), maxHubs())
+    controls.viewMode === "events"
+      ? buildPureEventGraph(yearFiltered(), controls.topN)
+      : buildContextualGraph(tokenBins(), controls.topN, controls.minSimilarity, controls.maxHubs)
   );
 
   // ── Drill-down ───────────────────────────────────────────────────────────
 
   const selectedKind = createMemo<"hub" | "neighbour" | "event" | null>(() => {
-    const id = selectedNode(); if (!id) return null;
+    const id = controls.selectedNode; if (!id) return null;
     return graphData().nodes.find(n => n.id === id)?.kind ?? null;
   });
   const selectedBin = createMemo<TokenBin | null>(() => {
-    const id = selectedNode();
+    const id = controls.selectedNode;
     if (!id || selectedKind() !== "hub") return null;
     return tokenBins().get(id) ?? null;
   });
@@ -580,13 +463,13 @@ const ContextGraph6: Component<Props> = (props) => {
     return [...bin.docs.entries()].sort((a, b) => (a[1] ?? Infinity) - (b[1] ?? Infinity));
   });
   const selectedEventNode = createMemo<ContextNode | null>(() => {
-    const id = selectedNode();
+    const id = controls.selectedNode;
     if (!id || selectedKind() !== "event") return null;
     return graphData().nodes.find(n => n.id === id) ?? null;
   });
   const sharedByHubs = createMemo<Array<{ hub: string; freq: number; meanScore: number }>>(() => {
-    const id = selectedNode(); if (!id || selectedKind() !== "neighbour") return [];
-    if (viewMode() === "aggregated") {
+    const id = controls.selectedNode; if (!id || selectedKind() !== "neighbour") return [];
+    if (controls.viewMode === "aggregated") {
       const result: Array<{ hub: string; freq: number; meanScore: number }> = [];
       for (const [hubKey, bin] of tokenBins()) {
         const nb = bin.topNeighbours.find(n => n.token === id);
@@ -607,12 +490,14 @@ const ContextGraph6: Component<Props> = (props) => {
   let world: GraphWorld | null = null;
   let rafHandle = 0;
 
+  // Real mouse position in viewport coordinates, updated on every mousemove
+  // over the canvas wrapper.  The tooltip uses these values directly so we
+  // have zero dependence on whatever coordinate space cosmos passes to
+  // onPointMouseOver (which has been consistently wrong).
+  let mouseClientX = 0;
+  let mouseClientY = 0;
+
   // ── Tooltip ──────────────────────────────────────────────────────────────
-  //
-  // FIX: cosmos onPointMouseOver fires with pos = [clientX, clientY] —
-  // already in VIEWPORT space.  The previous code added bx.left/top on top,
-  // double-counting the canvas offset and pushing the tooltip far off.
-  // Now we use pos directly as the fixed viewport coordinates.
 
   let tooltipEl: HTMLDivElement | null = null;
   const getTooltip = (): HTMLDivElement => {
@@ -624,7 +509,7 @@ const ContextGraph6: Component<Props> = (props) => {
     return tooltipEl;
   };
 
-  function showTooltip(wn: WorldNode, pos: [number, number]) {
+  function showTooltip(wn: WorldNode) {
     const tip = getTooltip();
     let html = "";
     if (wn.kind === "hub") {
@@ -644,11 +529,11 @@ const ContextGraph6: Component<Props> = (props) => {
       html = `<aside><h6 class="bottom-padding">${ wn.id }</h6>Shared by ${ wn.degree } source(s):<br/>${ lines }</aside>`;
     }
     tip.innerHTML = html;
-    // pos is viewport-relative — use directly as fixed position + small offset
+    // Use real mouse clientX/Y — no dependency on cosmos coordinate space.
     Object.assign(tip.style, {
       opacity: "1",
-      left: `${ pos[0] + 14 }px`,
-      top: `${ pos[1] - 10 }px`,
+      left: `${ mouseClientX + 14 }px`,
+      top: `${ mouseClientY - 10 }px`,
     });
   }
 
@@ -672,7 +557,8 @@ const ContextGraph6: Component<Props> = (props) => {
       if (posMap && posMap.size > 0) {
         const hid = hoveredId();
         const labels: Array<{ id: string; kind: string; x: number; y: number }> = [];
-        const currentConcept = untrack(concept);
+        // const currentConcept = untrack(concept);
+        const currentConcept = controls.concept;
         posMap.forEach(([x, y], idx) => {
           const wn = world!.getNodeByIndex(idx);
           if (!wn) return;
@@ -707,25 +593,33 @@ const ContextGraph6: Component<Props> = (props) => {
       hoveredPointRingColor: "white",
       renderHoveredPointRing: true,
 
-      onPointMouseOver: (index: number, pos: [number, number]) => {
+      onPointMouseOver: (index: number) => {
         const wn = world?.getNodeByIndex(index);
         if (!wn) return;
         setHoveredId(wn.id);
-        showTooltip(wn, pos);
+        showTooltip(wn);
       },
       onPointMouseOut: () => {
         setHoveredId(null);
         if (tooltipEl) tooltipEl.style.opacity = "0";
       },
       onClick: (index: number | undefined) => {
-        if (index === undefined) { setSelectedNode(null); return; }
+        if (index === undefined) { setControls('selectedNode', null); return; }
         const wn = world?.getNodeByIndex(index);
         if (!wn) return;
-        setSelectedNode(prev => prev === wn.id ? null : wn.id);
+        setControls('selectedNode', prev => prev === wn.id ? null : wn.id);
       },
     });
 
     world = new GraphWorld(cosmosGraph);
+
+    // Track actual cursor position so the tooltip can be placed at the mouse
+    // regardless of what coordinate space cosmos uses internally.
+    wrapRef.addEventListener("mousemove", (e: MouseEvent) => {
+      mouseClientX = e.clientX;
+      mouseClientY = e.clientY;
+    });
+
     startLabelLoop();
   }
 
@@ -735,7 +629,8 @@ const ContextGraph6: Component<Props> = (props) => {
 
   createEffect(() => {
     const gd = graphData();
-    const current = untrack(concept);
+    // const current = untrack(concept);
+    const current = controls.concept;
 
     if (!wrapRef) return;
     ensureCosmosInitialised();
@@ -751,14 +646,19 @@ const ContextGraph6: Component<Props> = (props) => {
       return;
     }
 
-    const isDegenerate = gd.allEdges.length === 0 || gd.nodes.length <= 1;
-
+    // A graph is "degenerate" (no meaningful force balance) when it has no
+    // edges, a single node, OR a single hub with only leaf neighbours — the
+    // hub has nothing pulling it back to centre and drifts under repulsion.
+    // In all these cases we zero repulsion and raise gravity to pin things.
+    const hubCount = gd.nodes.filter(n => n.kind === "hub" || n.kind === "event").length;
+    const isDegenerate = gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1;
+    const { hubSpread } = controls;
     cosmosGraph!.setConfig({
       spaceSize: SPACE,
-      simulationRepulsion: isDegenerate ? 0 : BASE_REPULSION * (0.6 + untrack(hubSpread) * 0.4),
+      simulationRepulsion: isDegenerate ? 0 : BASE_REPULSION * (0.6 + hubSpread * 0.4),
       simulationLinkSpring: isDegenerate ? 0 : BASE_LINK_SPRING,
+      simulationGravity: isDegenerate ? 0.8 : BASE_GRAVITY,
       simulationFriction: BASE_FRICTION,
-      simulationGravity: BASE_GRAVITY,
       enableDrag: true,
       fitViewPadding: FIT_VIEW_PADDING,
       hoveredPointRingColor: "white",
@@ -766,20 +666,26 @@ const ContextGraph6: Component<Props> = (props) => {
     });
 
     const topologyChanged = world!.applyDiff(gd);
-    if (topologyChanged) setTimeout(() => cosmosGraph?.fitView(), 300);
+    if (topologyChanged) {
+      // start() AFTER setConfig() so the correct forces are in effect.
+      // applyDiff() no longer calls start() itself for exactly this reason.
+      cosmosGraph!.start();
+      setTimeout(() => cosmosGraph?.fitView(), 300);
+    }
   });
 
   // ── Effect 2: hubSpread force tweak ──────────────────────────────────────
 
   createEffect(() => {
-    const spread = hubSpread();
+    const { hubSpread } = controls;
     if (!cosmosGraph || !world) return;
     const gd = untrack(graphData);
-    if (gd.allEdges.length === 0 || gd.nodes.length <= 1) return;
+    const hubCount = gd.nodes.filter(n => n.kind === "hub" || n.kind === "event").length;
+    if (gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1) return;
     cosmosGraph.setConfig({
       spaceSize: SPACE,
-      simulationRepulsion: BASE_REPULSION * spread,
-      simulationLinkSpring: Math.min(0.92, BASE_FRICTION + spread * 0.05),
+      simulationRepulsion: BASE_REPULSION * hubSpread,
+      simulationLinkSpring: Math.min(0.92, BASE_FRICTION + hubSpread * 0.05),
       simulationFriction: BASE_FRICTION,
       simulationGravity: BASE_GRAVITY,
       enableDrag: true,
@@ -790,7 +696,6 @@ const ContextGraph6: Component<Props> = (props) => {
     cosmosGraph.start();
   });
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
 
   onCleanup(() => {
     cancelAnimationFrame(rafHandle);
@@ -799,128 +704,21 @@ const ContextGraph6: Component<Props> = (props) => {
     tooltipEl = null;
   });
 
-  // ── UI ────────────────────────────────────────────────────────────────────
 
   return (
     <>
-      <style>{STYLES}</style>
       <div class="cg-layout">
 
-        {/* ── Header controls ── */}
-        <header class="center-align fill max surface-container-low small-padding top-padding">
-          <nav>
-            <div class="field suffix border middle-align">
-              <select value={concept()}
-                onChange={(e) => { setConcept(e.currentTarget.value); setSelectedNode(null); }}>
-                <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
-              </select>
-              <output>Concept</output>
-            </div>
-
-            <div class="field suffix border middle-align">
-              <select value={viewMode()}
-                onChange={(e) => { setViewMode(e.currentTarget.value as ViewMode); setSelectedNode(null); }}>
-                <option value="aggregated">Aggregated</option>
-                <option value="events">Events</option>
-              </select>
-              <output>View</output>
-            </div>
-
-            <Show when={viewMode() === "aggregated"}>
-              <div class="field suffix border middle-align">
-                <select value={maxHubs()}
-                  onChange={(e) => setMaxHubs(Number(e.currentTarget.value))}>
-                  <For each={[10, 20, 50, 100]}>{(n) => <option value={n}>{n}</option>}</For>
-                </select>
-                <output>Max hubs</output>
-              </div>
-            </Show>
-
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input type="range" min={1} max={MAX_TOP_N} step={1} value={topN()}
-                  onInput={(e) => setTopN(Number(e.currentTarget.value))} />
-                <span /><span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">Top N {topN()}</output>
-            </div>
-
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input type="range" min={0.2} max={2.0} step={0.05} value={hubSpread()}
-                  onInput={(e) => setHubSpread(Number(e.currentTarget.value))} />
-                <span /><span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">Hub spread {hubSpread().toFixed(2)}</output>
-            </div>
-
-            <Show when={viewMode() === "aggregated"}>
-              <div class="field middle-align">
-                <div class="slider tiny">
-                  <input type="range" min={0.01} max={0.95} step={0.05} value={minSimilarity()}
-                    onInput={(e) => setMinSimilarity(Number(e.currentTarget.value))} />
-                  <span /><span class="tooltip bottom" />
-                </div>
-                <output class="small-padding top-padding">Min sim {minSimilarity().toFixed(2)}</output>
-              </div>
-            </Show>
-
-            <div class="field suffix border middle-align">
-              <select value={yearMode()}
-                onChange={(e) => setYearMode(e.currentTarget.value as "single" | "range")}>
-                <option value="single">Single year</option>
-                <option value="range">Year range</option>
-              </select>
-              <output>Year mode</output>
-            </div>
-
-            <Show when={yearMode() === "single"}>
-              <nav class="no-space">
-                <button class="circle chip secondary no-space large-margin bottom-margin"
-                  onClick={() => { const v = Math.max(CORPUS_START_YEAR, fromYear() - 1); setFromYear(v); setToYear(v); }}>
-                  <i>remove</i>
-                </button>
-                <div class="field middle-align">
-                  <div class="slider tiny">
-                    <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
-                      value={fromYear()}
-                      onInput={(e) => { const v = Number(e.currentTarget.value); setFromYear(v); setToYear(v); }} />
-                    <span class="tooltip bottom" />
-                  </div>
-                  <output class="small-padding top-padding">
-                    {fromYear()} ({yearFiltered().length} events)
-                  </output>
-                </div>
-                <button class="circle chip secondary no-space large-margin bottom-margin"
-                  onClick={() => { const v = Math.min(CORPUS_END_YEAR, toYear() + 1); setToYear(v); setFromYear(v); }}>
-                  <i>add</i>
-                </button>
-              </nav>
-            </Show>
-
-            <Show when={yearMode() === "range"}>
-              <div class="field middle-align">
-                <div class="slider tiny">
-                  <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                    value={fromYear()}
-                    onInput={(e) => setFromYear(Math.min(Number(e.currentTarget.value), toYear()))} />
-                  <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                    value={toYear()}
-                    onInput={(e) => setToYear(Math.max(Number(e.currentTarget.value), fromYear()))} />
-                  <span /><span class="tooltip bottom" /><span class="tooltip bottom" />
-                </div>
-                <output class="small-padding top-padding">
-                  <span>{fromYear()}–{toYear()}</span>
-                  <span class="left-padding">{yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} events</span>
-                </output>
-              </div>
-            </Show>
-          </nav>
-        </header>
+        <Header
+          includeHubSpread={true}
+          concepts={concepts}
+          MAX_TOP_N={MAX_TOP_N}
+          yearFiltered={yearFiltered}
+          yearBounds={yearBounds}
+        />
 
         {/* ── Main canvas + aside ── */}
         <div class="cg-main background">
-
           <div ref={wrapRef!} class="cg-canvas-wrap surface-container-lowest">
 
             {/* Label overlay — updated every rAF tick, always visible */}
@@ -952,11 +750,11 @@ const ContextGraph6: Component<Props> = (props) => {
           </div>
 
           {/* ── Drill-down aside ── */}
-          <Show when={selectedNode()}>
+          <Show when={controls.selectedNode}>
             <aside class="cg-aside surface-container-high padding border">
               <div class="cg-header-row">
-                <h2>{selectedNode()}</h2>
-                <button class="link border" onClick={() => setSelectedNode(null)}>✕</button>
+                <h2>{controls.selectedNode}</h2>
+                <button class="link border" onClick={() => setControls('selectedNode', null)}>✕</button>
               </div>
 
               <Show when={selectedKind() === "hub" && selectedBin()}>
@@ -970,7 +768,7 @@ const ContextGraph6: Component<Props> = (props) => {
                         <div>Events: {bin.eventCount}</div>
                         <div>Documents: {bin.docs.size}</div>
                         <div>Years: {years.length ? (years.length === 1 ? years[0] : `${ years[0] }–${ years[years.length - 1] }`) : "—"}</div>
-                        <div>Hub connections: {graphData().nodes.find(n => n.id === selectedNode())?.hubDegree ?? 0}</div>
+                        <div>Hub connections: {graphData().nodes.find(n => n.id === controls.selectedNode)?.hubDegree ?? 0}</div>
                       </div>
                       <h3 class="bottom-padding">Top neighbours</h3>
                       <div class="bottom-padding">
@@ -1033,7 +831,7 @@ const ContextGraph6: Component<Props> = (props) => {
                   <div>Shared by {sharedByHubs().length} source(s)</div>
                 </div>
                 <h3 class="bottom-padding">
-                  {viewMode() === "aggregated" ? "Hub contexts" : "Event contexts"}
+                  {controls.viewMode === "aggregated" ? "Hub contexts" : "Event contexts"}
                 </h3>
                 <Show when={sharedByHubs().length > 0} fallback={<div class="error">Not in any top-N list</div>}>
                   {(_) => {
@@ -1063,20 +861,20 @@ const ContextGraph6: Component<Props> = (props) => {
         {/* ── Footer legend ── */}
         <footer class="fixed max center-align small-padding surface-container-low">
           <span class="cg-legend">
-            <Show when={viewMode() === "aggregated"}>
+            <Show when={controls.viewMode === "aggregated"}>
               <span class="cg-legend-hub" />hubs ({graphData().nodes.filter(n => n.kind === "hub").length})
             </Show>
-            <Show when={viewMode() === "events"}>
+            <Show when={controls.viewMode === "events"}>
               <span class="cg-legend-event" />events ({graphData().nodes.filter(n => n.kind === "event").length})
             </Show>
             <span class="cg-legend-nb" />neighbours ({graphData().nodes.filter(n => n.kind === "neighbour").length})
-            <Show when={viewMode() === "aggregated"}>
+            <Show when={controls.viewMode === "aggregated"}>
               {" • "}{graphData().hubHubEdges.length} similarity edges
             </Show>
             {" • "}{graphData().hubNbEdges.length} spokes
             {" • "}{yearFiltered().length} events
-            <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
-              {" • "}{fromYear()}–{toYear()}
+            <Show when={controls.fromYear !== yearBounds()[0] || controls.toYear !== yearBounds()[1]}>
+              {" • "}{controls.fromYear}–{controls.toYear}
             </Show>
           </span>
         </footer>
@@ -1086,4 +884,4 @@ const ContextGraph6: Component<Props> = (props) => {
   );
 };
 
-export default ContextGraph6;
+export default CosmosExp;

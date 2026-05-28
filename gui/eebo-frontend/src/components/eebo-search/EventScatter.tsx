@@ -1,13 +1,13 @@
 // src/components/EventScatter.tsx
 
 import { createEffect, createMemo } from "solid-js";
-import type { SemanticEvent } from "../types/events";
+import type { SemanticEvent } from "../../types/events";
 import {
     hoveredEventId,
     selectedEventId,
     setHoveredEventId,
     setSelectedEventId
-} from "../state/selection";
+} from "../../state/selection";
 import "./EventScatter.css";
 
 type Props = {

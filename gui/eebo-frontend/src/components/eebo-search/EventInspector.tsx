@@ -1,4 +1,4 @@
-import type { SemanticEvent } from "../types/events";
+import type { SemanticEvent } from "../../types/events";
 
 type Props = {
   event: SemanticEvent | null;

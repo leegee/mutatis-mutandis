@@ -86,147 +86,15 @@ import {
 } from "solid-js";
 
 import * as d3 from "d3";
-import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
+
+import './styles.css';
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
+import type {
+  ViewMode, ConceptEvent, ConceptData, TokenBin, ContextNode, HubHubEdge, HubNbEdge, AnyEdge, ContextGraphData, Tier2Data,
+} from "./types";
 
 const MAX_TOP_N = 20;
 const hubSpread = () => 1;
-
-// Scoped styles
-
-const STYLES = `
-  .cg-layout         { display:flex; flex-direction:column; height:100%; width:100%; }
-  .cg-main           { display:flex; flex:1; overflow:hidden; }
-  .cg-svg            { flex:1; display:block; }
-  .cg-aside          { width:22rem; flex-shrink:0; overflow-y:auto; }
-  .cg-header-row     { display:flex; justify-content:space-between;
-                       align-items:center; padding-bottom:.25rem; }
-  .cg-nb-row         { display:flex; align-items:center; gap:.5rem;
-                       padding:.3rem 0;
-                       border-bottom:1px solid rgba(255,255,255,.06); }
-  .cg-nb-bar-wrap    { width:4rem; flex-shrink:0; height:6px;
-                       background:rgba(255,255,255,.1); border-radius:3px;
-                       position:relative; overflow:hidden; }
-  .cg-nb-bar-fill    { position:absolute; left:0; top:0; height:100%;
-                       border-radius:3px; }
-  .cg-nb-bar-fill.hub      { background:rgba(100,180,255,.75); }
-  .cg-nb-bar-fill.neighbour{ background:rgba(255,190,80,.75); }
-  .cg-nb-token       { flex:1; font-family:'IBM Plex Mono','Courier New',monospace;
-                       font-size:.82rem; }
-  .cg-nb-score       { flex-shrink:0; font-size:.75rem; opacity:.55; }
-  .cg-chip-mono span { font-family:'IBM Plex Mono','Courier New',monospace;
-                       font-size:.78rem; }
-  .cg-legend         { display:flex; gap:1rem; align-items:center;
-                       padding:.25rem .75rem; font-size:.75rem; opacity:.7; }
-  .cg-legend-hub     { display:inline-block; width:10px; height:10px;
-                       border-radius:50%; background:rgba(100,180,255,.8);
-                       flex-shrink:0; }
-  .cg-legend-event   { display:inline-block; width:10px; height:10px;
-                       border-radius:50%; background:rgba(120,210,130,.8);
-                       flex-shrink:0; }
-  .cg-legend-nb      { display:inline-block; width:9px; height:9px;
-                       background:rgba(255,190,80,.85); flex-shrink:0;
-                       transform:rotate(45deg); }
-`;
-
-// Types
-
-type ViewMode = "aggregated" | "events";
-
-interface Neighbour {
-  token: string;
-  score: number;
-  event_id?: number;
-  doc_id?: string;
-  pub_year?: number;
-  window_id?: number;
-}
-
-interface ConceptEvent {
-  event_id?: number;
-  token?: string;
-  doc_id?: string;
-  pub_year?: number;
-  neighbours: Neighbour[];
-}
-
-interface ConceptData {
-  n_events: number;
-  year_min?: number;
-  year_max?: number;
-  events: ConceptEvent[];
-}
-
-export interface Tier2Data {
-  [concept: string]: ConceptData;
-}
-
-interface Props {
-  data: Tier2Data;
-}
-
-interface TokenBin {
-  token: string;
-  eventCount: number;
-  neighbourFreq: Map<string, number>;
-  /**
-   * Accumulated raw scores per neighbour token, tracked separately from
-   * frequency so that meanScore = scoreSum / freq is exact and not
-   * occurrence-weighted.
-   */
-  neighbourScoreSum: Map<string, number>;
-  topNeighbours: Array<{ token: string; freq: number; meanScore: number }>;
-  docs: Map<string, number | undefined>;
-  years: Set<number>;
-}
-
-/** Unified simulation node for hubs, events, and neighbours. */
-interface ContextNode extends d3.SimulationNodeDatum {
-  id: string;
-  kind: "hub" | "neighbour" | "event";
-  /** Hub only: number of corpus events aggregated here. */
-  eventCount: number;
-  /** Hub only: edge count from hub-hub edges. */
-  hubDegree: number;
-  /** Both: total edge count (hub-hub + hub-neighbour spokes). */
-  degree: number;
-  /** Event node only. */
-  token?: string;
-  doc_id?: string;
-  pub_year?: number;
-}
-
-/** Hub ↔ Hub edge: cosine similarity between neighbour-freq vectors. */
-interface HubHubEdge extends d3.SimulationLinkDatum<ContextNode> {
-  kind: "hub-hub";
-  source: ContextNode;
-  target: ContextNode;
-  weight: number;
-}
-
-/** Hub/Event > Neighbour spoke: normalised frequency or raw score. */
-interface HubNbEdge extends d3.SimulationLinkDatum<ContextNode> {
-  kind: "hub-neighbour";
-  source: ContextNode;
-  target: ContextNode;
-  weight: number;
-}
-
-type AnyEdge = HubHubEdge | HubNbEdge;
-
-interface ContextGraphData {
-  nodes: ContextNode[];
-  hubHubEdges: HubHubEdge[];
-  hubNbEdges: HubNbEdge[];
-  allEdges: AnyEdge[];
-  maxHubHubWeight: number;
-  maxEventCount: number;
-  maxHubDegree: number;
-}
-
-//---------------------
-// Constants
-//---------------------
-
 
 const HUB_COLOR_LOW = "#5a87ba66";
 const HUB_COLOR_HIGH = "#e9f3fcdd";
@@ -536,8 +404,12 @@ function buildPureEventGraph(
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
+export interface Props {
+  data: Tier2Data;
+}
+
 const ContextGraph5: Component<Props> = (props) => {
-  const concepts = Object.keys(props.data);
+  const concepts = Object.keys(props.data as Tier2Data);
 
   const [concept, setConcept] = createSignal(concepts[0] ?? "");
   const [viewMode, setViewMode] = createSignal<ViewMode>("aggregated");
@@ -892,277 +764,272 @@ const ContextGraph5: Component<Props> = (props) => {
     d3.select("body").selectAll(".cg-tooltip").remove();
   });
 
-  // UI-------------
-
   return (
-    <>
-      <style>{STYLES}</style>
-      <div class="cg-layout">
+    <div class="svg-cg-layout">
 
-        <header class="center-align fill max surface-container-low small-padding top-padding">
-          <nav>
+      <header class="center-align fill max surface-container-low small-padding top-padding">
+        <nav>
 
+          <div class="field suffix border middle-align">
+            <select value={concept()}
+              onChange={(e) => { setConcept(e.currentTarget.value); setSelectedNode(null); }}>
+              <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
+            </select>
+            <output>Concept</output>
+          </div>
+
+          {/* View mode toggle */}
+          <div class="field suffix border middle-align">
+            <select value={viewMode()}
+              onChange={(e) => { setViewMode(e.currentTarget.value as ViewMode); setSelectedNode(null); }}>
+              <option value="aggregated">Aggregated</option>
+              <option value="events">Events</option>
+            </select>
+            <output>View</output>
+          </div>
+
+          {/* Max hubs: aggregated mode only */}
+          <Show when={viewMode() === "aggregated"}>
             <div class="field suffix border middle-align">
-              <select value={concept()}
-                onChange={(e) => { setConcept(e.currentTarget.value); setSelectedNode(null); }}>
-                <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
+              <select value={maxHubs()}
+                onChange={(e) => setMaxHubs(Number(e.currentTarget.value))}>
+                <For each={[10, 20, 50, 100]}>{(n) => <option value={n}>{n}</option>}</For>
               </select>
-              <output>Concept</output>
+              <output>Max hubs</output>
             </div>
-
-            {/* View mode toggle */}
-            <div class="field suffix border middle-align">
-              <select value={viewMode()}
-                onChange={(e) => { setViewMode(e.currentTarget.value as ViewMode); setSelectedNode(null); }}>
-                <option value="aggregated">Aggregated</option>
-                <option value="events">Events</option>
-              </select>
-              <output>View</output>
-            </div>
-
-            {/* Max hubs: aggregated mode only */}
-            <Show when={viewMode() === "aggregated"}>
-              <div class="field suffix border middle-align">
-                <select value={maxHubs()}
-                  onChange={(e) => setMaxHubs(Number(e.currentTarget.value))}>
-                  <For each={[10, 20, 50, 100]}>{(n) => <option value={n}>{n}</option>}</For>
-                </select>
-                <output>Max hubs</output>
-              </div>
-            </Show>
-
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input type="range" min={1} max={MAX_TOP_N} step={1} value={topN()}
-                  onInput={(e) => setTopN(Number(e.currentTarget.value))} />
-                <span /><span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">Top N {topN()}</output>
-            </div>
-
-            {/* Min similarity: aggregated mode only */}
-            <Show when={viewMode() === "aggregated"}>
-              <div class="field middle-align">
-                <div class="slider tiny">
-                  <input type="range" min={0.01} max={0.95} step={0.05} value={minSimilarity()}
-                    onInput={(e) => setMinSimilarity(Number(e.currentTarget.value))} />
-                  <span /><span class="tooltip bottom" />
-                </div>
-                <output class="small-padding top-padding">
-                  Min similarity {minSimilarity().toFixed(2)}
-                </output>
-              </div>
-            </Show>
-
-            <div class="field suffix border middle-align">
-              <select value={yearMode()}
-                onChange={(e) => setYearMode(e.currentTarget.value as "single" | "range")}>
-                <option value="single">Single year</option>
-                <option value="range">Year range</option>
-              </select>
-              <output>Year mode</output>
-            </div>
-
-            <Show when={yearMode() === "single"}>
-              <nav class="no-space">
-                <button class="circle chip secondary no-space large-margin bottom-margin"
-                  onClick={() => { const v = Math.max(CORPUS_START_YEAR, fromYear() - 1); setFromYear(v); setToYear(v); }}>
-                  <i>remove</i>
-                </button>
-                <div class="field middle-align">
-                  <div class="slider tiny">
-                    <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
-                      value={fromYear()}
-                      onInput={(e) => { const v = Number(e.currentTarget.value); setFromYear(v); setToYear(v); }} />
-                    <span class="tooltip bottom" />
-                  </div>
-                  <output class="small-padding top-padding">
-                    {fromYear()} ({yearFiltered().length} events)
-                  </output>
-                </div>
-                <button class="circle chip secondary no-space large-margin bottom-margin"
-                  onClick={() => { const v = Math.min(CORPUS_END_YEAR, toYear() + 1); setToYear(v); setFromYear(v); }}>
-                  <i>add</i>
-                </button>
-              </nav>
-            </Show>
-
-            <Show when={yearMode() === "range"}>
-              <div class="field middle-align">
-                <div class="slider tiny">
-                  <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                    value={fromYear()}
-                    onInput={(e) => setFromYear(Math.min(Number(e.currentTarget.value), toYear()))} />
-                  <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                    value={toYear()}
-                    onInput={(e) => setToYear(Math.max(Number(e.currentTarget.value), fromYear()))} />
-                  <span /><span class="tooltip bottom" /><span class="tooltip bottom" />
-                </div>
-                <output class="small-padding top-padding">
-                  <span>{fromYear()}–{toYear()}</span>
-                  <span class="left-padding">
-                    {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} events
-                  </span>
-                </output>
-              </div>
-            </Show>
-
-          </nav>
-        </header>
-
-        <div class="cg-main background">
-
-          <svg ref={svgRef!} class="cg-svg surface-container-lowest" />
-
-          <Show when={selectedNode()}>
-            <aside class="cg-aside surface-container-high padding border">
-
-              <div class="cg-header-row">
-                <h2>{selectedNode()}</h2>
-                <button class="link border" onClick={() => setSelectedNode(null)}>✕</button>
-              </div>
-
-              {/* -- Hub drill-down -- */}
-              <Show when={selectedKind() === "hub" && selectedBin()}>
-                {(_) => {
-                  const bin = selectedBin()!;
-                  const years = [...bin.years].sort((a, b) => a - b);
-                  const topMax = bin.topNeighbours[0]?.freq ?? 1;
-                  return (
-                    <>
-                      <div class="bottom-padding">
-                        <div>Events: {bin.eventCount}</div>
-                        <div>Documents: {bin.docs.size}</div>
-                        <div>
-                          Years:{" "}
-                          {years.length
-                            ? years.length === 1 ? years[0] : `${ years[0] }–${ years[years.length - 1] }`
-                            : "—"}
-                        </div>
-                        <div>Hub connections: {graphData().nodes.find(n => n.id === selectedNode())?.hubDegree ?? 0}</div>
-                      </div>
-
-                      <h3 class="bottom-padding">Top neighbours</h3>
-                      <div class="bottom-padding">
-                        <For each={bin.topNeighbours.slice(0, MAX_TOP_N)}>
-                          {(nb) => (
-                            <div class="cg-nb-row">
-                              <div class="cg-nb-bar-wrap">
-                                <div class="cg-nb-bar-fill hub"
-                                  style={{ width: `${ (nb.freq / topMax) * 100 }%` }} />
-                              </div>
-                              <span class="cg-nb-token">{nb.token}</span>
-                              <span class="cg-nb-score">{nb.meanScore.toFixed(3)}</span>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-
-                      <h3 class="bottom-padding">Sources</h3>
-                      <Show when={selectedDocs().length > 0}
-                        fallback={<div class="error">No documents found</div>}>
-                        <For each={selectedDocs()}>
-                          {([docId, pubYear]) => (
-                            <button class="chip small-margin cg-chip-mono"
-                              onClick={() => showDocument(docId)}>
-                              <span>{docId}</span>
-                              <Show when={pubYear !== undefined}>
-                                <span class="small-text"> {pubYear}</span>
-                              </Show>
-                            </button>
-                          )}
-                        </For>
-                      </Show>
-                    </>
-                  );
-                }}
-              </Show>
-
-              {/* -- Event drill-down -- */}
-              <Show when={selectedKind() === "event" && selectedEventNode()}>
-                {(_) => {
-                  const node = selectedEventNode()!;
-                  return (
-                    <>
-                      <div class="bottom-padding">
-                        <div>Token: {node.token ?? "—"}</div>
-                        <div>Year: {node.pub_year ?? "—"}</div>
-                        <Show when={node.doc_id}>
-                          <div>
-                            <button class="chip small-margin cg-chip-mono"
-                              onClick={() => showDocument(node.doc_id!)}>
-                              <span>{node.doc_id}</span>
-                            </button>
-                          </div>
-                        </Show>
-                      </div>
-                      <div class="bottom-padding small-text" style={{ opacity: 0.6 }}>
-                        Select a neighbour diamond to see which sources share it.
-                      </div>
-                    </>
-                  );
-                }}
-              </Show>
-
-              {/* -- Neighbour drill-down -- */}
-              <Show when={selectedKind() === "neighbour"}>
-                <div class="bottom-padding">
-                  <div>Shared by {sharedByHubs().length} source(s)</div>
-                </div>
-                <h3 class="bottom-padding">
-                  {viewMode() === "aggregated" ? "Hub contexts" : "Event contexts"}
-                </h3>
-                <Show when={sharedByHubs().length > 0}
-                  fallback={<div class="error">Not in any top-N list</div>}>
-                  {(_) => {
-                    const maxFreq = sharedByHubs()[0]?.freq ?? 1;
-                    return (
-                      <div class="bottom-padding">
-                        <For each={sharedByHubs()}>
-                          {(h) => (
-                            <div class="cg-nb-row">
-                              <div class="cg-nb-bar-wrap">
-                                <div class="cg-nb-bar-fill neighbour"
-                                  style={{ width: `${ (h.freq / maxFreq) * 100 }%` }} />
-                              </div>
-                              <span class="cg-nb-token">{h.hub}</span>
-                              <span class="cg-nb-score">{h.meanScore.toFixed(3)}</span>
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    );
-                  }}
-                </Show>
-              </Show>
-
-            </aside>
           </Show>
 
-        </div>
+          <div class="field middle-align">
+            <div class="slider tiny">
+              <input type="range" min={1} max={MAX_TOP_N} step={1} value={topN()}
+                onInput={(e) => setTopN(Number(e.currentTarget.value))} />
+              <span /><span class="tooltip bottom" />
+            </div>
+            <output class="small-padding top-padding">Top N {topN()}</output>
+          </div>
 
-        <footer class="fixed max center-align small-padding surface-container-low">
-          <span class="cg-legend">
-            <Show when={viewMode() === "aggregated"}>
-              <span class="cg-legend-hub" />hubs ({graphData().nodes.filter(n => n.kind === "hub").length})
+          {/* Min similarity: aggregated mode only */}
+          <Show when={viewMode() === "aggregated"}>
+            <div class="field middle-align">
+              <div class="slider tiny">
+                <input type="range" min={0.01} max={0.95} step={0.05} value={minSimilarity()}
+                  onInput={(e) => setMinSimilarity(Number(e.currentTarget.value))} />
+                <span /><span class="tooltip bottom" />
+              </div>
+              <output class="small-padding top-padding">
+                Min similarity {minSimilarity().toFixed(2)}
+              </output>
+            </div>
+          </Show>
+
+          <div class="field suffix border middle-align">
+            <select value={yearMode()}
+              onChange={(e) => setYearMode(e.currentTarget.value as "single" | "range")}>
+              <option value="single">Single year</option>
+              <option value="range">Year range</option>
+            </select>
+            <output>Year mode</output>
+          </div>
+
+          <Show when={yearMode() === "single"}>
+            <nav class="no-space">
+              <button class="circle chip secondary no-space large-margin bottom-margin"
+                onClick={() => { const v = Math.max(CORPUS_START_YEAR, fromYear() - 1); setFromYear(v); setToYear(v); }}>
+                <i>remove</i>
+              </button>
+              <div class="field middle-align">
+                <div class="slider tiny">
+                  <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
+                    value={fromYear()}
+                    onInput={(e) => { const v = Number(e.currentTarget.value); setFromYear(v); setToYear(v); }} />
+                  <span class="tooltip bottom" />
+                </div>
+                <output class="small-padding top-padding">
+                  {fromYear()} ({yearFiltered().length} events)
+                </output>
+              </div>
+              <button class="circle chip secondary no-space large-margin bottom-margin"
+                onClick={() => { const v = Math.min(CORPUS_END_YEAR, toYear() + 1); setToYear(v); setFromYear(v); }}>
+                <i>add</i>
+              </button>
+            </nav>
+          </Show>
+
+          <Show when={yearMode() === "range"}>
+            <div class="field middle-align">
+              <div class="slider tiny">
+                <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
+                  value={fromYear()}
+                  onInput={(e) => setFromYear(Math.min(Number(e.currentTarget.value), toYear()))} />
+                <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
+                  value={toYear()}
+                  onInput={(e) => setToYear(Math.max(Number(e.currentTarget.value), fromYear()))} />
+                <span /><span class="tooltip bottom" /><span class="tooltip bottom" />
+              </div>
+              <output class="small-padding top-padding">
+                <span>{fromYear()}–{toYear()}</span>
+                <span class="left-padding">
+                  {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} events
+                </span>
+              </output>
+            </div>
+          </Show>
+
+        </nav>
+      </header>
+
+      <div class="cg-main background">
+
+        <svg ref={svgRef!} class="cg-svg surface-container-lowest" />
+
+        <Show when={selectedNode()}>
+          <aside class="cg-aside surface-container-high padding border">
+
+            <div class="cg-header-row">
+              <h2>{selectedNode()}</h2>
+              <button class="link border" onClick={() => setSelectedNode(null)}>✕</button>
+            </div>
+
+            {/* -- Hub drill-down -- */}
+            <Show when={selectedKind() === "hub" && selectedBin()}>
+              {(_) => {
+                const bin = selectedBin()!;
+                const years = [...bin.years].sort((a, b) => a - b);
+                const topMax = bin.topNeighbours[0]?.freq ?? 1;
+                return (
+                  <>
+                    <div class="bottom-padding">
+                      <div>Events: {bin.eventCount}</div>
+                      <div>Documents: {bin.docs.size}</div>
+                      <div>
+                        Years:{" "}
+                        {years.length
+                          ? years.length === 1 ? years[0] : `${ years[0] }–${ years[years.length - 1] }`
+                          : "—"}
+                      </div>
+                      <div>Hub connections: {graphData().nodes.find(n => n.id === selectedNode())?.hubDegree ?? 0}</div>
+                    </div>
+
+                    <h3 class="bottom-padding">Top neighbours</h3>
+                    <div class="bottom-padding">
+                      <For each={bin.topNeighbours.slice(0, MAX_TOP_N)}>
+                        {(nb) => (
+                          <div class="cg-nb-row">
+                            <div class="cg-nb-bar-wrap">
+                              <div class="cg-nb-bar-fill hub"
+                                style={{ width: `${ (nb.freq / topMax) * 100 }%` }} />
+                            </div>
+                            <span class="cg-nb-token">{nb.token}</span>
+                            <span class="cg-nb-score">{nb.meanScore.toFixed(3)}</span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+
+                    <h3 class="bottom-padding">Sources</h3>
+                    <Show when={selectedDocs().length > 0}
+                      fallback={<div class="error">No documents found</div>}>
+                      <For each={selectedDocs()}>
+                        {([docId, pubYear]) => (
+                          <button class="chip small-margin cg-chip-mono"
+                            onClick={() => showDocument(docId)}>
+                            <span>{docId}</span>
+                            <Show when={pubYear !== undefined}>
+                              <span class="small-text"> {pubYear}</span>
+                            </Show>
+                          </button>
+                        )}
+                      </For>
+                    </Show>
+                  </>
+                );
+              }}
             </Show>
-            <Show when={viewMode() === "events"}>
-              <span class="cg-legend-event" />events ({graphData().nodes.filter(n => n.kind === "event").length})
+
+            {/* -- Event drill-down -- */}
+            <Show when={selectedKind() === "event" && selectedEventNode()}>
+              {(_) => {
+                const node = selectedEventNode()!;
+                return (
+                  <>
+                    <div class="bottom-padding">
+                      <div>Token: {node.token ?? "—"}</div>
+                      <div>Year: {node.pub_year ?? "—"}</div>
+                      <Show when={node.doc_id}>
+                        <div>
+                          <button class="chip small-margin cg-chip-mono"
+                            onClick={() => showDocument(node.doc_id!)}>
+                            <span>{node.doc_id}</span>
+                          </button>
+                        </div>
+                      </Show>
+                    </div>
+                    <div class="bottom-padding small-text" style={{ opacity: 0.6 }}>
+                      Select a neighbour diamond to see which sources share it.
+                    </div>
+                  </>
+                );
+              }}
             </Show>
-            <span class="cg-legend-nb" />neighbours ({graphData().nodes.filter(n => n.kind === "neighbour").length})
-            <Show when={viewMode() === "aggregated"}>
-              {" • "}{graphData().hubHubEdges.length} similarity edges
+
+            {/* -- Neighbour drill-down -- */}
+            <Show when={selectedKind() === "neighbour"}>
+              <div class="bottom-padding">
+                <div>Shared by {sharedByHubs().length} source(s)</div>
+              </div>
+              <h3 class="bottom-padding">
+                {viewMode() === "aggregated" ? "Hub contexts" : "Event contexts"}
+              </h3>
+              <Show when={sharedByHubs().length > 0}
+                fallback={<div class="error">Not in any top-N list</div>}>
+                {(_) => {
+                  const maxFreq = sharedByHubs()[0]?.freq ?? 1;
+                  return (
+                    <div class="bottom-padding">
+                      <For each={sharedByHubs()}>
+                        {(h) => (
+                          <div class="cg-nb-row">
+                            <div class="cg-nb-bar-wrap">
+                              <div class="cg-nb-bar-fill neighbour"
+                                style={{ width: `${ (h.freq / maxFreq) * 100 }%` }} />
+                            </div>
+                            <span class="cg-nb-token">{h.hub}</span>
+                            <span class="cg-nb-score">{h.meanScore.toFixed(3)}</span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  );
+                }}
+              </Show>
             </Show>
-            {" • "}{graphData().hubNbEdges.length} spokes
-            {" • "}{yearFiltered().length} events
-            <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
-              {" • "}{fromYear()}–{toYear()}
-            </Show>
-          </span>
-        </footer>
+
+          </aside>
+        </Show>
 
       </div>
-    </>
+
+      <footer class="fixed max center-align small-padding surface-container-low">
+        <span class="cg-legend">
+          <Show when={viewMode() === "aggregated"}>
+            <span class="cg-legend-hub" />hubs ({graphData().nodes.filter(n => n.kind === "hub").length})
+          </Show>
+          <Show when={viewMode() === "events"}>
+            <span class="cg-legend-event" />events ({graphData().nodes.filter(n => n.kind === "event").length})
+          </Show>
+          <span class="cg-legend-nb" />neighbours ({graphData().nodes.filter(n => n.kind === "neighbour").length})
+          <Show when={viewMode() === "aggregated"}>
+            {" • "}{graphData().hubHubEdges.length} similarity edges
+          </Show>
+          {" • "}{graphData().hubNbEdges.length} spokes
+          {" • "}{yearFiltered().length} events
+          <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
+            {" • "}{fromYear()}–{toYear()}
+          </Show>
+        </span>
+      </footer>
+
+    </div>
   );
 };
 

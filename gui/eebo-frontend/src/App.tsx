@@ -10,15 +10,18 @@ import {
   Switch,
 } from "solid-js";
 import { Transition } from "solid-transition-group";
-import ConceptGraphGuide from "./components/ConceptGraph/ConceptGraphGuide";
-import { loadConceptNeighbours } from "./components/ConceptGraph/loadConceptNeighbours.service";
 
 import "./App.css";
-const ContextGraph5 = lazy(() => import("./components/ContextGraph5"));
+
+import { loadConceptNeighbours } from "./services/loadConceptNeighbours.service";
+
+import ConceptGraphGuide from "./components/SvgConceptGraph/Guide";
+const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"));
+
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
-const CosmosContextGraph = lazy(() => import("./components/CosmosContextGraph"));
-const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraphGuide"));
+const SvgContextGraph5 = lazy(() => import("./components/SvgConceptGraph"));
+const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
 
 export default function App() {
   const [events] = createResource(loadConceptNeighbours);
@@ -30,48 +33,32 @@ export default function App() {
   >("graph");
 
   const navItems = [
-    { key: "graph", icon: "graph_5", label: "Event FDG" },
+    { key: "graph", icon: "graph_5", label: "Force graph (SVG)" },
+    { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
-    { key: "diachronic", icon: "hourglass", label: "Diachronic Chart" },
-    { key: "cosmos", icon: "experiment", label: "Cosmos FDG" },
+    { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
   ] as const;
 
   return (
     <>
-      <nav
-        id="app-nav"
-        class={`surface-container fill left scroll ${ open() ? "max" : "small"
-          }`}
-      >
+      <nav id="app-nav" class={`surface-container fill left scroll ${ open() ? "max" : "small" }`} >
         <header class="center-align ">
-          <button
-            class="extra transparent"
-            onClick={() => setOpen(!open())}
-          >
+          <button class="extra transparent" onClick={() => setOpen(!open())} >
             <Switch>
-              <Match when={open()}>
-                <i>menu_open</i>
-              </Match>
-              <Match when={!open()}>
-                <i>menu</i>
-              </Match>
+              <Match when={open()}> <i>menu_open</i> </Match>
+              <Match when={!open()}> <i>menu</i> </Match>
             </Switch>
           </button>
         </header>
 
         {navItems.map((item) => (
-          <a
-            onClick={() => setView(item.key)}
-            classList={{
-              active: view() === item.key,
-            }}
-          >
+          <a onClick={() => setView(item.key)} classList={{ active: view() === item.key, }} >
             <i>{item.icon}</i>
             <span>{item.label}</span>
           </a>
         ))}
 
-        <hr />
+        <hr class="max" />
 
         <a onClick={() => setOpenHelp(!openHelp())}>
           <i>help</i>
@@ -87,21 +74,18 @@ export default function App() {
             </article>
           )}
         >
-          <Show
-            when={events()}
-            fallback={
-              <article class="small-round padding border medium no-padding">
-                <div class="padding absolute center middle">
-                  <h5>Loading events...</h5>
-                </div>
-                <progress />
-              </article>
-            }
+          <Show when={events()} fallback={<article class="small-round padding border medium no-padding">
+            <div class="padding absolute center middle">
+              <h5>Loading events...</h5>
+            </div>
+            <progress />
+          </article>
+          }
           >
             {(data) => (
               <Switch>
                 <Match when={view() === "graph"}>
-                  <ContextGraph5 data={data()} />
+                  <SvgContextGraph5 data={data()} />
                 </Match>
 
                 <Match when={view() === "table"}>
@@ -113,8 +97,9 @@ export default function App() {
                 </Match>
 
                 <Match when={view() === "cosmos"}>
-                  <CosmosContextGraph data={data()} />
+                  <Cosmos data={data()} />
                 </Match>
+
               </Switch>
             )}
           </Show>
