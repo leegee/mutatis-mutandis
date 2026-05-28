@@ -95,7 +95,6 @@ import Header from "../ControlsHeader";
 import { controls, setControls } from "../../state/controls";
 
 const MAX_TOP_N = 20;
-const hubSpread = () => 1;
 
 const HUB_COLOR_LOW = "#5a87ba66";
 const HUB_COLOR_HIGH = "#e9f3fcdd";
@@ -512,6 +511,7 @@ const ContextGraph5: Component<Props> = (props) => {
     const H = svgRef.clientHeight;
 
     svg.selectAll("*").remove();
+    d3.select("body").selectAll(".cg-tooltip").remove();
 
     if (nodes.length === 0) {
       svg.append("text")
@@ -706,14 +706,14 @@ const ContextGraph5: Component<Props> = (props) => {
           // .distance(d => d.kind === "hub-hub" ? Math.max(80, 260 - (d as HubHubEdge).weight * 180) : 60 )
           .distance(d =>
             d.kind === "hub-hub"
-              ? Math.max(40, (260 - (d as HubHubEdge).weight * 180) * hubSpread())
+              ? Math.max(40, (260 - (d as HubHubEdge).weight * 180) * controls.hubSpread)
               : 60
           )
           .strength(d => d.kind === "hub-hub" ? 0.55 : 0.8)
       )
       .force("charge", d3.forceManyBody()
         // .strength((d) => d.kind === "hub" ? -280 : -40)
-        .strength(d => (d as any).kind === "hub" ? -280 * hubSpread() : -40)
+        .strength(d => (d as any).kind === "hub" ? -280 * controls.hubSpread : -40)
       )
       .force("center", d3.forceCenter(W / 2, H / 2))
       .force("collision", d3.forceCollide<ContextNode>()

@@ -1,8 +1,6 @@
 # Lee Goddard
 
-cv@lee.goddards.space · +44 7719 900090 · github.com/leegee
-
----
+cv@lee.goddards.space · +44 7719 900090 · github.com/leegee · linkedin.com/in/leegoddard
 
 ## Education
 
@@ -16,8 +14,6 @@ BA (Hons) English Literature, 2:1
 
 Studied under Professor Willie Lamont (Civil War, millenarianism, puritan political thought, Dee) and Professor Cedric Watts. Dissertation on Samuel Beckett. Special interests in Elizabethan drama and early modern millenarian writing - the direct historiographical precursor to this research project.
 
----
-
 ## Pre-Doctoral Research
 
 **Event-based Semantic Analysis of Early Modern English** - December 2025–present
@@ -28,8 +24,6 @@ Full end-to-end pipeline implemented: contextual event extraction and Zarr-based
 
 Technical stack: Python (PyTorch, NumPy, FAISS), PostgreSQL/PostGIS, SolidJS, TypeScript, D3, Cosmos.gl.
 
----
-
 ## Relevant Technical Experience
 
 Twenty-five years as a platform architect and technical lead across media, finance, healthcare, and government. Selected projects relevant to this research:
@@ -37,6 +31,8 @@ Twenty-five years as a platform architect and technical lead across media, finan
 **BBC Earth - Platform Architect & Lead Developer** - 2008–2010
 
 Designed and implemented the Java/MySQL service layer for a global natural history digital platform. Developed the programme taxonomy, RDF/OWL API, and geospatial data systems - semantic knowledge modelling at production scale for a major cultural institution. One of two IT projects cited by the BBC Director General as a flagship success; first production deployment on the BBC Forge platform (which I initiated at a previous contract with the BBC).
+
+<div style="page-break-after: always"></div>
 
 **Companies House (UK Government) - Senior Developer** - 2014
 
@@ -54,20 +50,16 @@ Delivered a secure, auditable legislative consultation and document management s
 
 Designed and delivered the full-stack data governance platform for EU Solvency II regulatory compliance. Consulted with Chief Risk Officers and actuaries; owned full lifecycle from architecture through rollout.
 
----
-
 ## Technical Skills
 
 **Research tools:** Python, PyTorch, FAISS, NumPy, Zarr, PostgreSQL/PostGIS, XSLT, XML
 
+**Semantic / knowledge representation:** RDF/OWL, ElasticSearch, vector search, RAG pipelines, RDMS
+
 **Visualisation:** SolidJS, TypeScript, D3, cosmos.gl (GPU graph rendering)
 
-**Semantic / knowledge representation:** RDF/OWL (BBC Earth production system), ElasticSearch, vector search, RAG pipelines
-
-**Languages:** Python, TypeScript/JavaScript, C (ANN implementation), Perl, Java; formerly Rust, Prolog
-
----
+**Languages:** Python, TypeScript/JavaScript, Java, Perl, C, some Rust, Mono, Go, Prolog, POP-11
 
 ## Other
 
-Film soundtracks: *The Courier*; *The Tunnel at the End of the Light*. Guitar (flamenco to heavy metal), oud, sitar, mandolin, and related instruments. Currently studying orchestral arrangement and composition; learning Hungarian, Swedish, Norwegian, German, and some Hebrew.
+Film soundtracks: *The Courier*; *The Tunnel at the End of the Light*. Guitar (flamenco to heavy metal), oud, sitar, mandolin, and related instruments. Currently studying orchestral arrangement and composition; learning Hungarian, Swedish, Norwegian, German, and some Hebrew. Father of two.

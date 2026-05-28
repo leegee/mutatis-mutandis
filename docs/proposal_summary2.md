@@ -20,35 +20,20 @@ The project originates in a practical limitation I encountered whilst working wi
 - How do genre, rhetorical intensity, and political context shape local semantic neighbourhoods?
 
 ### Key Concepts
-The project explores politically salient terms with rich historiographical traditions:
-- Liberty / Prerogative
-- Divine / Temporal
-- Revolution
-- Parliament
-
-These were chosen to enable direct comparison with existing scholarship by Skinner, Pocock, Williams, and Koselleck.
+Liberty / Prerogative, Divine / Temporal, Revolution, Parliament - chosen to enable direct comparison with existing scholarship by Skinner, Pocock, Williams, and Koselleck.
 
 <div style="page-break-after: always"></div>
 
 ### Methodology
-The system is organised in two layers:
-
-**Tier 1 – Contextual Observation Layer**
-A semantic event is defined as a single token occurrence represented by its contextual embedding within a fixed window, together with full corpus provenance (document, date, and position). Events are the atomic unit of analysis.
-
-**Tier 2 – Neighbourhood Analysis Layer**
-Local semantic neighbourhoods are computed for each event using FAISS.
-
-Event overlap graphs are defined over semantic events as nodes, with edges weighted by the intersection size of their respective k-nearest neighbour sets in contextual embedding space, computed via FAISS retrieval.
-
-Exploratory visualisation tools support both aggregated and raw event-level views, with full traceability back to original corpus documents.
+The system as prototyped has two layers - Tier 1 defines a semantic event as a single token occurrence represented by its contextual embedding within a fixed window, together with full corpus provenance. Tier 2 computes local semantic neighbourhoods via FAISS, constructing event overlap graphs with edges weighted by k-nearest neighbour set intersection. This preserves instance-level geometry and supports analysis of similarity manifolds, clustering, and temporal reconfiguration. Visualisation tools support both aggregated and raw event-level views with full traceability to source documents.
 
 ### Current Progress
 A functioning end-to-end pipeline has been implemented, including:
-- Contextual event extraction and Zarr-based storage (Tier 1)
-- ANN indexing (FAISS) and neighbourhood retrieval (Tier 2)
-- Interactive visualisation tools supporting dual-mode exploration
+- Contextual event extraction and Zarr-based storage
+- ANN indexing and neighbourhood retrieval
+- Interactive visualisation tools supporting multi-mode exploration
+- Early experiments on temporally restricted subsets show strong structural effects, particularly the emergence of dense semantic attractors during periods of heightened political tension.
 
 ### Fit with Your Research
-Your work on unsupervised lexical semantic change detection and the sense aggregation challenges documented in SemEval-2020 Task 1 bears directly on the core methodological problem this project addresses. I would particularly value your guidance on evaluation design - specifically, how to construct baselines that fairly test whether event-level neighbourhood analysis recovers signals that aggregated methods genuinely miss, rather than simply producing different ones. I am also keen to discuss how quantitative outputs might be anchored to philological interpretation in a way that is defensible to both communities.
+Your work on unsupervised lexical semantic change detection and the sense aggregation challenges documented in SemEval-2020 Task 1 bears directly on the core methodological problem this project addresses. I would particularly value your guidance on evaluation design - specifically, how to construct baselines that fairly test whether event-level neighbourhood analysis recovers signals that aggregated methods genuinely miss, rather than simply producing different ones. I am also keen to learn how quantitative outputs might be anchored to philological interpretation in a way that is defensible to both communities.
 
