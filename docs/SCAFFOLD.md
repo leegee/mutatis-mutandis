@@ -6,7 +6,7 @@ I believe there is much to be revealed from the most easily-obtained and potenti
 
 | Domain                              | Key Transition                                                                                                                        | Representative Text Types                                                           | What They Reveal About Authority & Cognition                                                                                                                                                            | Example Sources                                                                                                         |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Theological**                     | Shift from Catholic authority → Protestant personal conscience; vernacular scripture; debates over salvation and sin                  | - Sermons<br>- Catechisms<br>- Religious polemics<br>- Biblical translations        | - How divine authority is mediated through scripture and preaching<br>- How ordinary readers internalize or contest spiritual claims<br>- Shifts from communal ritual to personal conscience            | - Tyndale’s *New Testament* (1526)<br>- Foxe’s *Book of Martyrs* (1563)<br>- Puritan pamphlets                          |
+| **Theological**                     | Shift from Catholic authority to Protestant personal conscience; vernacular scripture; debates over salvation and sin                  | - Sermons<br>- Catechisms<br>- Religious polemics<br>- Biblical translations        | - How divine authority is mediated through scripture and preaching<br>- How ordinary readers internalize or contest spiritual claims<br>- Shifts from communal ritual to personal conscience            | - Tyndale’s *New Testament* (1526)<br>- Foxe’s *Book of Martyrs* (1563)<br>- Puritan pamphlets                          |
 | **Legal**                           | Centralization of law; codification; increasing literacy of legal concepts; procedural reforms                                        | - Trial pamphlets<br>- Law reports<br>- How-to manuals for petitioning courts       | - Ordinary people’s understanding of rights, justice, and legal process<br>- Interaction between local custom and central authority<br>- How literacy shapes compliance and contestation                | - *The Tryall of Mary, Queen of Scots* (1586)<br>- Early law compendia<br>- Newsbooks reporting local trials            |
 | **Ethical / Moral**                 | Emergence of conduct literature; civic vs religious morality; commercialization of virtue                                             | - Conduct manuals<br>- Moral essays<br>- Sermons with social advice<br>- Almanacs   | - Codification of personal and civic responsibility<br>- Everyday moral reasoning<br>- Social hierarchy embedded in textual guidance                                                                    | - William Gouge’s *Of Domesticall Duties* (1622)<br>- Richard Brathwaite’s *The English Gentleman* (1630)               |
 | **Political / Authority**           | Conceptualization of monarchy, rebellion, and legitimacy; civil war debates; Restoration ideology                                     | - Pamphlets<br>- Newsbooks<br>- Political tracts<br>- Parliamentary records         | - Public reasoning about legitimacy, obedience, and social order<br>- Use of metaphor, biblical analogy, and rhetorical framing to argue authority<br>- How ordinary readers interpret political events | - *Eikon Basilike* (1649)<br>- Royalist and Parliamentarian pamphlets<br>- Early newsbooks (e.g., *The London Gazette*) |
@@ -25,7 +25,7 @@ I believe there is much to be revealed from the most easily-obtained and potenti
 2. **Cognitive Scaffolding**
 
    * Argument structures, rhetorical devices, and recurring idioms provide **mental frameworks** for reasoning across domains.
-   * Pamphlets act like compressed cognitive “schemas” for readers: moral, legal, theological.
+   * Pamphlets act like compressed cognitive "schemas" for readers: moral, legal, theological.
 
 3. **Multi-dimensional Integration**
 
@@ -65,8 +65,3 @@ I believe there is much to be revealed from the most easily-obtained and potenti
    * Track how concepts evolve before, during, and after civil war and Restoration.
    * Identify points where semantic flattening or expansion occurs.
 
----
-
-If you like, I can **draw this scaffold visually as a multi-dimensional map**, showing **domains as axes, text types as nodes, and authority/experience flows as arrows**. It gives a very intuitive sense of how ideas and authority circulated and overlapped.
-
-Do you want me to do that next?

@@ -1,4 +1,4 @@
-# Tier 2 Diagnostic Finding: FAISS Neighbourhood Collapse vs Graph Construction Failure Modes
+# GPT Summary - Tier 2 Diagnostic Finding: FAISS Neighbourhood Collapse vs Graph Construction Failure Modes
 
 ## 1. Empirical observation
 

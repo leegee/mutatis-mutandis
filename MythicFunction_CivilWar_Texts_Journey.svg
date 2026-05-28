@@ -102,9 +102,9 @@
     <!-- 10. Road Back -->
     <line class="line" x1="600" y1="600" x2="240" y2="600" />
     <rect class="box" x="10" y="560" width="260" height="80" />
-    <text class="title" x="140" y="582">The Road Back</text>
-    <text class="text" x="140" y="602">Restoration of monarchy</text>
-    <text class="date" x="140" y="622">1660 - Declaration of Breda</text>
+    <text class="title" x="130" y="582">The Road Back</text>
+    <text class="text" x="120" y="602">Restoration of monarchy</text>
+    <text class="date" x="120" y="622">1660 - Declaration of Breda</text>
 
     <!-- 11. Resurrection -->
     <line class="line" x1="600" y1="600" x2="270" y2="520" />

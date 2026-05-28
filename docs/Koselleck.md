@@ -1,6 +1,6 @@
 # Semantic Dimensions
 
-## An Introduction to Induction of Koselleck‑style neighbour‑induced role framework.
+## An Introduction to an Induction of Koselleck‑style neighbour‑induced role framework.
 
 Following Koselleck's analysis of recurring conceptual oppositions, this study treats such dimensions as heuristic axes along which distributional neighbourhoods cluster, permitting historically specific configurations to emerge rather than presupposing a fixed ontology.
 
@@ -61,7 +61,7 @@ These are especially important for pamphlet literature, where moral and politica
 
 ## D. Semantic–pragmatic dimensions
 
-These concern what concepts do, not what they “mean”.
+These concern what concepts do, not what they "mean".
 
 Description <> Prescription
 (naming a state of affairs <> calling for action)
@@ -76,7 +76,7 @@ This is where Skinner aligns most closely with Koselleck.
 
 ## NB
 
-Koselleck inherits (implicitly) a tradition running through:
+Koselleck inherits a tradition running through:
 * Blumenberg (metaphors as irreducible conceptual carriers)
 * Schmitt (spatial and existential metaphors in politics)
 * Classical rhetoric (topoi, oppositions, figures)
