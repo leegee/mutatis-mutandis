@@ -134,15 +134,10 @@ function filterByYearRange(
   );
 }
 
-/** Stable string key for an event. */
 function eventKey(event: ConceptEvent, idx: number): string {
   return event.event_id !== undefined ? String(event.event_id) : `idx:${ idx }`;
 }
 
-/**
- * Build an index from neighbour token : NeighbourSummary across all events.
- * O(E × K) where E = events, K = neighbours per event.
- */
 function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
   const index: NeighbourIndex = new Map();
 
@@ -169,7 +164,6 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
         index.set(nb.token, summary);
       }
 
-      // raw frequency signal
       summary.occurrenceCount += 1;
 
       // distributional signal (once per event)
@@ -184,8 +178,6 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
 
       if (event.doc_id) {
         summary.docIds.add(event.doc_id);
-        // FIX: store doc_id → year during index construction so
-        // rightPanelDocs does not need to re-scan yearFiltered().
         if (!summary.docYears.has(event.doc_id)) {
           summary.docYears.set(event.doc_id, event.pub_year);
         }
@@ -231,15 +223,13 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
-  // Year bounds ------------------------------------------------------------
-
   const yearBounds = createMemo<[number, number]>(() => {
     const cd = props.data[concept()];
     if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
     return scanYearRange(cd);
   });
 
-  // Reset sliders when concept or mode changes
+  // Reset sliders when concept or mode changes - move to the onChange event to avoid reactivty loop
   createEffect(() => {
     const [min, max] = yearBounds();
     if (yearMode() === "single") {
@@ -252,8 +242,6 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     }
   });
 
-  // Filtered events --------------------------------------------------------
-
   const yearFiltered = createMemo<ConceptEvent[]>(() => {
     const cd = props.data[concept()];
     if (!cd) return [];
@@ -261,8 +249,6 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     if (fromYear() <= min && toYear() >= max) return cd.events;
     return filterByYearRange(cd.events, fromYear(), toYear());
   });
-
-  // Neighbour index --------------------------------------------------------
 
   const neighbourIndex = createMemo<NeighbourIndex>(() =>
     buildNeighbourIndex(yearFiltered())
@@ -276,7 +262,6 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
       )
   );
 
-  // Selected event ---------------------------------------------------------
 
   const selectedEvent = createMemo<{ event: ConceptEvent; key: string } | null>(() => {
     const id = selectedEventId();
@@ -289,15 +274,12 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return null;
   });
 
-  // Neighbours for the selected event, sorted by score desc
   const selectedEventNeighbours = createMemo<Neighbour[]>(() => {
     const sel = selectedEvent();
     if (!sel) return [];
     return [...sel.event.neighbours].sort((a, b) => b.score - a.score);
   });
 
-  // FIX: use reduce instead of spread + Math.min/max to avoid stack overflow
-  // on large neighbour lists.
   const selectedScoreRange = createMemo<[number, number]>(() => {
     const nbs = selectedEventNeighbours();
     if (nbs.length === 0) return [0, 1];
@@ -310,7 +292,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return [min, max];
   });
 
-  // Document panel ---------------------------------------------------------
+  // Document panel
 
   /**
    * Documents to show in the right panel.
@@ -340,7 +322,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
     return [];
   });
 
-  // Highlight: events that carry the focusToken ----------------------------
+  // Highlight: events that carry the focusToken
 
   const focusEventKeys = createMemo<Set<string>>(() => {
     const ft = focusToken();
@@ -349,14 +331,12 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   });
 
 
-  // Temporal profile -------------------------------------------------------
+  // Temporal profile
 
   const tokenTemporalProfile = createMemo(() => {
     const events = yearFiltered();
     const map = new Map<string, Map<number, Set<string>>>();
 
-    // FIX: use the loop index so eventKey() produces correct fallback keys
-    // for events without an event_id, matching the keys stored in the index.
     for (let idx = 0; idx < events.length; idx++) {
       const e = events[idx];
       const year = e.pub_year;

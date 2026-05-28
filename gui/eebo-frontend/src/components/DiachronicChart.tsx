@@ -3,14 +3,6 @@
  *
  * Heuser-style diachronic chart of contextual neighbours.
  *
- * -----------------------------------------------------------------------------
- * LAYOUT
- * -----------------------------------------------------------------------------
- *  One column per year in the filtered range.
- *  Within each column, the top-N neighbour tokens for the focal concept are
- *  ranked by occurrence frequency (or mean cosine score) and drawn as labelled
- *  cells.
- *
  *  Cubic-bezier links connect the same token across adjacent year columns.
  *
  * -----------------------------------------------------------------------------
@@ -29,13 +21,10 @@
  * -----------------------------------------------------------------------------
  *  props.data (Tier2Data)
  *      │  filterByYearRange()
- *      ▼
  *  ConceptEvent[]
  *      │  buildYearSlices()
- *      ▼
  *  Map<year, RankedToken[]>   — top-N per year, rank-ordered
  *      │  (reactive memos)
- *      ▼
  *  SVG — link layer + cell layer
  */
 
@@ -46,12 +35,10 @@ import {
     Show,
     type Component,
 } from "solid-js";
+
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
-// -----------------------------------------------------------------------------
-// Types (shared shape with the rest of the codebase)
-// -----------------------------------------------------------------------------
-
+// Types (should share with  the rest of the codebase, check what's changed lately
 interface Neighbour {
     token: string;
     score: number;
@@ -80,14 +67,13 @@ export interface Tier2Data {
     [concept: string]: ConceptData;
 }
 
+// UI
+
 interface Props {
     data: Tier2Data;
 }
 
-// -----------------------------------------------------------------------------
 // Derived types
-// -----------------------------------------------------------------------------
-
 interface RankedToken {
     token: string;
     rank: number;        // 0-based
@@ -98,10 +84,7 @@ interface RankedToken {
 
 type YearSlices = Map<number, RankedToken[]>;
 
-// -----------------------------------------------------------------------------
-// Constants
-// -----------------------------------------------------------------------------
-
+const MAX_TOP_N = 50;
 
 const COL_WIDTH = 96;   // px per year column
 const ROW_HEIGHT = 22;   // px per rank row
@@ -112,17 +95,14 @@ const LEFT_MARGIN = 12;
 const RIGHT_MARGIN = 12;
 
 // Colour palette
-const C_BIRTH = "#e8a838";
+const C_BIRTH = "hsl(98, 79%, 56%)";
 const C_DEATH = "#c4566a";
-const C_BIRTH_DEATH = "grey";    // single-year
-const C_CONTINUATION = "#4a7fa5";
+const C_BIRTH_DEATH = "#4a7fa5";    // single-year
+const C_CONTINUATION = "#4aa59c";
 const C_FOCUS = "#3ecfb2";
 const C_LINK_ALPHA = 0.38;         // default link opacity
 const C_LINK_FOCUS = 0.85;
 
-// -----------------------------------------------------------------------------
-// Data helpers
-// -----------------------------------------------------------------------------
 
 function scanYearRange(cd: ConceptData): [number, number] {
     let min = CORPUS_END_YEAR;
@@ -161,7 +141,7 @@ function buildYearSlices(
 ): YearSlices {
     if (events.length === 0) return new Map();
 
-    // Step 1 — accumulate raw counts per (year, token).
+    // accumulate raw counts per (year, token).
     const raw = new Map<number, Map<string, { freq: number; scoreSum: number; eventSet: Set<string> }>>();
 
     for (let i = 0; i < events.length; i++) {
@@ -189,7 +169,7 @@ function buildYearSlices(
 
     const years = [...raw.keys()].sort((a, b) => a - b);
 
-    // Step 2 — optional smoothing: merge counts from ±window years.
+    // smoothing: merge counts from window years.
     const smoothed = new Map<number, Map<string, { freq: number; scoreSum: number; eventCount: number }>>();
 
     for (const yr of years) {
@@ -209,7 +189,7 @@ function buildYearSlices(
         smoothed.set(yr, merged);
     }
 
-    // Step 3 — rank and slice to topN.
+    // rank and slice to topN
     const slices: YearSlices = new Map();
 
     for (const yr of years) {
@@ -235,6 +215,7 @@ function buildYearSlices(
 }
 
 // Classify a token's status in a given year.
+// TODO - maybe don't die so often?
 type TokenStatus = "birth" | "death" | "birth-death" | "continuation";
 
 function classifyStatus(
@@ -396,15 +377,12 @@ const STYLES = `
   }
 `;
 
-// -----------------------------------------------------------------------------
-// Component
-// -----------------------------------------------------------------------------
 
 const DiachronicChart: Component<Props> = (props) => {
     const concepts = Object.keys(props.data);
 
     const [concept, setConcept] = createSignal(concepts[0] ?? "");
-    const [topN, setTopN] = createSignal(12);
+    const [topN, setTopN] = createSignal(Math.trunc(Number(MAX_TOP_N / 2)));
     const [smoothWindow, setSmoothWindow] = createSignal(0);
     const [sortKey, setSortKey] = createSignal<SortKey>("freq");
     const [fromYear, setFromYear] = createSignal<number>(CORPUS_START_YEAR);
@@ -506,14 +484,10 @@ const DiachronicChart: Component<Props> = (props) => {
     return (
         <>
             <style>{STYLES}</style>
-            <div class="dc-root">
-
-                {/* ── Header ───────────────────────────────────────────────── */}
-                <div class="dc-header">
-
+            <article class="dc-root no-padding no-margin">
+                <header class="dc-header  small-padding no-margin fill">
                     <span class="dc-title">diachronic neighbours</span>
 
-                    {/* Concept */}
                     <div class="dc-control">
                         <label>concept</label>
                         <select value={concept()} onChange={e => {
@@ -524,7 +498,6 @@ const DiachronicChart: Component<Props> = (props) => {
                         </select>
                     </div>
 
-                    {/* Year range */}
                     <div class="dc-control">
                         <label>from</label>
                         <input type="range"
@@ -545,17 +518,15 @@ const DiachronicChart: Component<Props> = (props) => {
                         <span class="dc-val">{toYear()}</span>
                     </div>
 
-                    {/* Top N */}
                     <div class="dc-control">
                         <label>top N</label>
-                        <input type="range" min={3} max={25} step={1}
+                        <input type="range" min={3} max={MAX_TOP_N} step={1}
                             value={topN()}
                             onInput={e => setTopN(Number(e.currentTarget.value))}
                         />
                         <span class="dc-val">{topN()}</span>
                     </div>
 
-                    {/* Smoothing */}
                     <div class="dc-control">
                         <label>window ±</label>
                         <input type="range" min={0} max={4} step={1}
@@ -565,7 +536,6 @@ const DiachronicChart: Component<Props> = (props) => {
                         <span class="dc-val">{smoothWindow()}</span>
                     </div>
 
-                    {/* Sort key */}
                     <div class="dc-control">
                         <label>rank by</label>
                         <select value={sortKey()} onChange={e => setSortKey(e.currentTarget.value as SortKey)}>
@@ -574,7 +544,6 @@ const DiachronicChart: Component<Props> = (props) => {
                         </select>
                     </div>
 
-                    {/* Clear focus */}
                     <Show when={focusToken()}>
                         <button
                             style={{
@@ -588,10 +557,8 @@ const DiachronicChart: Component<Props> = (props) => {
                             <span>{focusToken()}</span>
                         </button>
                     </Show>
+                </header>
 
-                </div>
-
-                {/* ── Chart ────────────────────────────────────────────────── */}
                 <div class="dc-scroll">
                     <svg
                         class="dc-svg"
@@ -599,7 +566,6 @@ const DiachronicChart: Component<Props> = (props) => {
                         height={svgHeight()}
                     >
 
-                        {/* Year column headers */}
                         <For each={years()}>
                             {(yr, i) => (
                                 <text
@@ -619,21 +585,7 @@ const DiachronicChart: Component<Props> = (props) => {
                             )}
                         </For>
 
-                        {/* Thin column separator lines */}
-                        <For each={years()}>
-                            {(_, i) => (
-                                <line
-                                    x1={colX(i()) - COL_WIDTH / 2 + 2}
-                                    y1={HEADER_H - 4}
-                                    x2={colX(i()) - COL_WIDTH / 2 + 2}
-                                    y2={svgHeight() - 8}
-                                    stroke="#1e2234"
-                                    stroke-width="1"
-                                />
-                            )}
-                        </For>
-
-                        {/* ── Link layer (behind cells) ── */}
+                        {/*  Link layer (behind cells)  */}
                         <For each={links()}>
                             {(lk) => {
                                 const isFocus = () => focusToken() === lk.token;
@@ -656,7 +608,7 @@ const DiachronicChart: Component<Props> = (props) => {
                             }}
                         </For>
 
-                        {/* ── Cell layer ── */}
+                        {/*  Cells */}
                         <For each={years()}>
                             {(yr, ci) => (
                                 <For each={slices().get(yr) ?? []}>
@@ -735,8 +687,8 @@ const DiachronicChart: Component<Props> = (props) => {
                     </svg>
                 </div>
 
-                {/* ── Legend ───────────────────────────────────────────────── */}
-                <div class="dc-legend">
+                {/*  Legend  */}
+                <footer class="dc-legend no-margin fill center-align">
                     <div class="dc-legend-item">
                         <div class="dc-legend-swatch" style={{ background: C_BIRTH }} />
                         <span>birth</span>
@@ -760,9 +712,9 @@ const DiachronicChart: Component<Props> = (props) => {
                     <span style={{ "margin-left": "auto", color: "#3a4560" }}>
                         {years().length} years · {filteredEvents().length} events · click cell to focus token
                     </span>
-                </div>
+                </footer>
 
-            </div>
+            </article>
         </>
     );
 };
