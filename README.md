@@ -25,70 +25,107 @@ Finally, attempt topological data analysis if I can get my head around the Betti
             |
     GUI (Solid, d3)
 
+## Architecture
+
 ```mermaid
 flowchart TB
 
-%% ---------------------------
+%% ===================================
+%% STYLES
+%% ===================================
+
+classDef process fill:#e8f0fe,stroke:#4a6fa5,stroke-width:1.5px;
+classDef datastore fill:#fff3cd,stroke:#c9a227,stroke-width:1.5px;
+classDef index fill:#f8d7da,stroke:#b24c63,stroke-width:1.5px;
+classDef output fill:#d1e7dd,stroke:#4f8a5b,stroke-width:1.5px;
+
+%% ===================================
 %% CORPUS LAYER
-%% ---------------------------
+%% ===================================
+
 subgraph L0["Corpus Layer"]
-A[EEBO-TCP Corpus\n(Postgres Tokens)]
+
+PG[(EEBO-TCP<br/>Postgres Token Store)]
+
 end
 
-%% ---------------------------
+%% ===================================
 %% TIER 1
-%% ---------------------------
+%% ===================================
+
 subgraph L1["Tier 1: Event Construction"]
-B[Token Filtering\n(Content tokens only)]
-C[Sliding Window Context\n(512 tokens, stride 256)]
-D[MacBERTh Encoder\n(Contextual Embeddings)]
-E[Event Builder\n(event_id, concept_id)]
-F[Zarr Event Store\n(Atomic observations)]
+
+TF[Token Filtering]
+WS[Sliding Window<br/>Segmentation]
+MB[MacBERTh<br/>Contextual Encoder]
+EB[Event Builder<br/>event_id / concept_id]
+
+ZS[(Zarr Event Store<br/>Atomic Semantic Events)]
+
 end
 
-%% ---------------------------
-%% INDEX LAYER
-%% ---------------------------
+%% ===================================
+%% INDEX
+%% ===================================
+
 subgraph L2["Event Space Index"]
-G[FAISS Index\n(Event embedding space)]
+
+FI{{FAISS Index<br/>Event Embedding Space}}
+
 end
 
-%% ---------------------------
+%% ===================================
 %% TIER 2
-%% ---------------------------
+%% ===================================
+
 subgraph L3["Tier 2: Neighbourhood Analysis"]
-H[kNN Retrieval\n(event neighbourhoods)]
-I[Event Graph Construction\n(kNN overlap graph)]
-J[Statistical Analysis\n(clustering / entropy / drift)]
+
+KR[kNN Retrieval]
+EG[Event Graph<br/>Construction]
+SA[Statistical Analysis<br/>Clustering / Drift / Entropy]
+
 end
 
-%% ---------------------------
-%% OUTPUT
-%% ---------------------------
+%% ===================================
+%% OUTPUTS
+%% ===================================
+
 subgraph L4["Outputs"]
-K[Concept Profiles\n(token distributions)]
-L[Temporal Drift Signals]
-M[Visualisation Interface\n(event + aggregated views)]
+
+CP[[Concept Profiles]]
+TD[[Temporal Drift Signals]]
+VI[[Visualisation Interface]]
+
 end
 
-%% ---------------------------
+%% ===================================
 %% FLOWS
-%% ---------------------------
+%% ===================================
 
-A --> B
-B --> C
-C --> D
-D --> E
-E --> F
+PG --> TF
+TF --> WS
+WS --> MB
+MB --> EB
+EB --> ZS
 
-F --> G
-G --> H
-H --> I
-I --> J
+ZS --> FI
 
-J --> K
-J --> L
-J --> M
+FI --> KR
+KR --> EG
+EG --> SA
+
+SA --> CP
+SA --> TD
+SA --> VI
+
+%% ===================================
+%% CLASSES
+%% ===================================
+
+class TF,WS,MB,EB,KR,EG,SA process;
+class PG,ZS datastore;
+class FI index;
+class CP,TD,VI output;
 ```
 
 ## Code Synopsis
