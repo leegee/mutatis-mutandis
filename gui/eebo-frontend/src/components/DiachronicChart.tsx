@@ -454,9 +454,6 @@ const DiachronicChart: Component<Props> = (props) => {
             const yr = yrs[c];
             const yrN = yrs[c + 1];
 
-            // Only draw links between *adjacent* years in the corpus (gap ≤ 1+smoothWindow)
-            if (yrN - yr > 1 + smoothWindow()) continue;
-
             const colA = sl.get(yr) ?? [];
             const colB = sl.get(yrN) ?? [];
             const mapB = new Map(colB.map(t => [t.token, t]));
@@ -599,8 +596,8 @@ const DiachronicChart: Component<Props> = (props) => {
                             {(lk) => {
                                 const isFocus = () => focusToken() === lk.token;
                                 const isAnyFocus = () => focusToken() !== null;
-                                const col = () => isFocus() ? C_FOCUS : statusColor(lk.status);
-                                const op = () => isAnyFocus()
+                                const clr = () => isFocus() ? C_FOCUS : statusColor(lk.status);
+                                const opacity = () => isAnyFocus()
                                     ? (isFocus() ? C_LINK_FOCUS : 0.06)
                                     : C_LINK_ALPHA;
 
@@ -608,9 +605,9 @@ const DiachronicChart: Component<Props> = (props) => {
                                     <path
                                         d={linkPath(lk.x1, lk.y1, lk.x2, lk.y2)}
                                         fill="none"
-                                        stroke={col()}
+                                        stroke={clr()}
                                         stroke-width={isFocus() ? 2 : 1.2}
-                                        stroke-opacity={op()}
+                                        stroke-opacity={opacity()}
                                         style={{ transition: "stroke-opacity 0.15s, stroke-width 0.1s" }}
                                     />
                                 );
