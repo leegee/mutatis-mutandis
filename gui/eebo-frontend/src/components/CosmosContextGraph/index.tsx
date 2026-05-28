@@ -554,10 +554,11 @@ const CosmosExp: Component<Props> = (props) => {
     function tick() {
       if (!cosmosGraph || !world) { rafHandle = requestAnimationFrame(tick); return; }
       const posMap = cosmosGraph.getTrackedPointPositionsMap();
+
       if (posMap && posMap.size > 0) {
         const hid = hoveredId();
         const labels: Array<{ id: string; kind: string; x: number; y: number }> = [];
-        // const currentConcept = untrack(concept);
+        // const currentConcept = untrack(controls.concept);
         const currentConcept = controls.concept;
         posMap.forEach(([x, y], idx) => {
           const wn = world!.getNodeByIndex(idx);
@@ -629,15 +630,15 @@ const CosmosExp: Component<Props> = (props) => {
 
   createEffect(() => {
     const gd = graphData();
-    // const current = untrack(concept);
-    const current = controls.concept;
+
+    const currentConcept = controls.concept;
 
     if (!wrapRef) return;
     ensureCosmosInitialised();
 
-    if (current !== lastConcept) {
+    if (currentConcept !== lastConcept) {
       world!.reset();
-      lastConcept = current;
+      lastConcept = currentConcept;
     }
 
     if (gd.nodes.length === 0) {
@@ -646,13 +647,14 @@ const CosmosExp: Component<Props> = (props) => {
       return;
     }
 
-    // A graph is "degenerate" (no meaningful force balance) when it has no
-    // edges, a single node, OR a single hub with only leaf neighbours — the
-    // hub has nothing pulling it back to centre and drifts under repulsion.
-    // In all these cases we zero repulsion and raise gravity to pin things.
     const hubCount = gd.nodes.filter(n => n.kind === "hub" || n.kind === "event").length;
-    const isDegenerate = gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1;
-    const { hubSpread } = controls;
+    const isDegenerate =
+      gd.allEdges.length === 0 ||
+      gd.nodes.length <= 1 ||
+      hubCount <= 1;
+
+    const { hubSpread } = untrack(() => controls);
+
     cosmosGraph!.setConfig({
       spaceSize: SPACE,
       simulationRepulsion: isDegenerate ? 0 : BASE_REPULSION * (0.6 + hubSpread * 0.4),
@@ -667,8 +669,6 @@ const CosmosExp: Component<Props> = (props) => {
 
     const topologyChanged = world!.applyDiff(gd);
     if (topologyChanged) {
-      // start() AFTER setConfig() so the correct forces are in effect.
-      // applyDiff() no longer calls start() itself for exactly this reason.
       cosmosGraph!.start();
       setTimeout(() => cosmosGraph?.fitView(), 300);
     }
@@ -677,11 +677,15 @@ const CosmosExp: Component<Props> = (props) => {
   // ── Effect 2: hubSpread force tweak ──────────────────────────────────────
 
   createEffect(() => {
-    const { hubSpread } = controls;
+    const hubSpread = controls.hubSpread;
     if (!cosmosGraph || !world) return;
-    const gd = untrack(graphData);
+
+    // const gd = untrack(graphData);
+    const gd = graphData();
+
     const hubCount = gd.nodes.filter(n => n.kind === "hub" || n.kind === "event").length;
     if (gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1) return;
+
     cosmosGraph.setConfig({
       spaceSize: SPACE,
       simulationRepulsion: BASE_REPULSION * hubSpread,
@@ -693,7 +697,8 @@ const CosmosExp: Component<Props> = (props) => {
       hoveredPointRingColor: "white",
       renderHoveredPointRing: true,
     });
-    cosmosGraph.start();
+    // No because reactivity of controls handles this?
+    // cosmosGraph.start();
   });
 
 
