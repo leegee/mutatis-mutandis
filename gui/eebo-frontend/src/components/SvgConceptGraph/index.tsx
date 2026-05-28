@@ -76,7 +76,6 @@
  */
 
 import {
-  createSignal,
   createMemo,
   createEffect,
   onCleanup,
@@ -90,8 +89,10 @@ import * as d3 from "d3";
 import './styles.css';
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 import type {
-  ViewMode, ConceptEvent, ConceptData, TokenBin, ContextNode, HubHubEdge, HubNbEdge, AnyEdge, ContextGraphData, Tier2Data,
+  ConceptEvent, ConceptData, TokenBin, ContextNode, HubHubEdge, HubNbEdge, AnyEdge, ContextGraphData, Tier2Data,
 } from "./types";
+import Header from "../ControlsHeader";
+import { controls, setControls } from "../../state/controls";
 
 const MAX_TOP_N = 20;
 const hubSpread = () => 1;
@@ -411,44 +412,35 @@ export interface Props {
 const ContextGraph5: Component<Props> = (props) => {
   const concepts = Object.keys(props.data as Tier2Data);
 
-  const [concept, setConcept] = createSignal(concepts[0] ?? "");
-  const [viewMode, setViewMode] = createSignal<ViewMode>("aggregated");
-  const [maxHubs, setMaxHubs] = createSignal(50);
-  const [topN, setTopN] = createSignal(5);
-  const [minSimilarity, setMinSimilarity] = createSignal(0.5);
-  const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
-  const [fromYear, setFromYear] = createSignal<number>(-1);
-  const [toYear, setToYear] = createSignal<number>(-1);
-  const [yearMode, setYearMode] = createSignal<"single" | "range">("single");
-
   //  Year bounds
 
   const yearBounds = createMemo<[number, number]>(() => {
-    const cd = props.data[concept()];
+    const cd = props.data[controls.concept];
     if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
     return scanYearRange(cd);
   });
 
   createEffect(() => {
     const [min, max] = yearBounds();
-    if (yearMode() === "single") {
+    if (controls.yearMode === "single") {
       const mid = Math.floor((min + max) / 2);
-      setFromYear(mid); setToYear(mid);
+      setControls('fromYear', mid);
+      setControls('toYear', mid);
     } else {
-      setFromYear(min); setToYear(max);
+      setControls('fromYear', min); setControls('toYear', max);
     }
   });
 
   // Filtered events
 
   const yearFiltered = createMemo(() => {
-    const cd = props.data[concept()];
+    const cd = props.data[controls.concept];
     if (!cd) return [];
     const [min, max] = yearBounds();
     const events = cd.events;
-    return fromYear() <= min && toYear() >= max
+    return controls.fromYear <= min && controls.toYear >= max
       ? events
-      : filterByYearRange(events, fromYear(), toYear());
+      : filterByYearRange(events, controls.fromYear, controls.toYear);
   });
 
   // Aggregation (aggregated mode only) ------------------------------------
@@ -460,22 +452,22 @@ const ContextGraph5: Component<Props> = (props) => {
   // Graph----------
 
   const graphData = createMemo<ContextGraphData>(() =>
-    viewMode() === "events"
-      ? buildPureEventGraph(yearFiltered(), topN())
-      : buildContextualGraph(tokenBins(), topN(), minSimilarity(), maxHubs())
+    controls.viewMode === "events"
+      ? buildPureEventGraph(yearFiltered(), controls.topN)
+      : buildContextualGraph(tokenBins(), controls.topN, controls.minSimilarity, controls.maxHubs)
   );
 
   // Drill-down-----
 
   const selectedKind = createMemo<"hub" | "neighbour" | "event" | null>(() => {
-    const id = selectedNode();
+    const id = controls.selectedNode;
     if (!id) return null;
     return graphData().nodes.find(n => n.id === id)?.kind ?? null;
   });
 
   // Hub drill-down: the TokenBin
   const selectedBin = createMemo<TokenBin | null>(() => {
-    const id = selectedNode();
+    const id = controls.selectedNode;
     if (!id || selectedKind() !== "hub") return null;
     return tokenBins().get(id) ?? null;
   });
@@ -488,17 +480,17 @@ const ContextGraph5: Component<Props> = (props) => {
 
   // Event drill-down: the raw ContextNode (carries token, doc_id, pub_year)
   const selectedEventNode = createMemo<ContextNode | null>(() => {
-    const id = selectedNode();
+    const id = controls.selectedNode;
     if (!id || selectedKind() !== "event") return null;
     return graphData().nodes.find(n => n.id === id) ?? null;
   });
 
   // Neighbour drill-down: which hubs/events share this token
   const sharedByHubs = createMemo<Array<{ hub: string; freq: number; meanScore: number }>>(() => {
-    const id = selectedNode();
+    const id = controls.selectedNode;
     if (!id || selectedKind() !== "neighbour") return [];
 
-    if (viewMode() === "aggregated") {
+    if (controls.viewMode === "aggregated") {
       const result: Array<{ hub: string; freq: number; meanScore: number }> = [];
       for (const [hubKey, bin] of tokenBins()) {
         const nb = bin.topNeighbours.find(n => n.token === id);
@@ -594,7 +586,7 @@ const ContextGraph5: Component<Props> = (props) => {
       .selectAll<SVGGElement, ContextNode>("g")
       .data(nbNodes, d => d.id).join("g")
       .attr("cursor", "pointer")
-      .on("click", (_, d) => setSelectedNode(prev => prev === d.id ? null : d.id))
+      .on("click", (_, d) => setControls('selectedNode', (prev: any) => prev === d.id ? null : d.id))
       .call(
         d3.drag<SVGGElement, ContextNode>()
           .on("start", (ev, d) => { if (!ev.active) simulationRef?.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
@@ -625,7 +617,7 @@ const ContextGraph5: Component<Props> = (props) => {
       .selectAll<SVGGElement, ContextNode>("g")
       .data(sourceNodes, d => d.id).join("g")
       .attr("cursor", "pointer")
-      .on("click", (_, d) => setSelectedNode(prev => prev === d.id ? null : d.id))
+      .on("click", (_, d) => setControls('selectedNode', prev => prev === d.id ? null : d.id))
       .call(
         d3.drag<SVGGElement, ContextNode>()
           .on("start", (ev, d) => { if (!ev.active) simulationRef?.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
@@ -732,7 +724,7 @@ const ContextGraph5: Component<Props> = (props) => {
       )
       .force("charge", d3.forceManyBody()
         // .strength((d) => d.kind === "hub" ? -280 : -40)
-        .strength(d => d.kind === "hub" ? -280 * hubSpread() : -40)
+        .strength(d => (d as any).kind === "hub" ? -280 * hubSpread() : -40)
       )
       .force("center", d3.forceCenter(W / 2, H / 2))
       .force("collision", d3.forceCollide<ContextNode>()
@@ -767,31 +759,37 @@ const ContextGraph5: Component<Props> = (props) => {
   return (
     <div class="svg-cg-layout">
 
-      <header class="center-align fill max surface-container-low small-padding top-padding">
+      <Header
+        includeHubSpread={true}
+        concepts={concepts}
+        MAX_TOP_N={MAX_TOP_N}
+        yearFiltered={yearFiltered}
+        yearBounds={yearBounds}
+      />
+
+      {/* <header class="center-align fill max surface-container-low small-padding top-padding">
         <nav>
 
           <div class="field suffix border middle-align">
             <select value={concept()}
-              onChange={(e) => { setConcept(e.currentTarget.value); setSelectedNode(null); }}>
+              onChange={(e) => { setConcept(e.currentTarget.value); setControls('selectedNode', null); }}>
               <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
             </select>
             <output>Concept</output>
           </div>
 
-          {/* View mode toggle */}
           <div class="field suffix border middle-align">
-            <select value={viewMode()}
-              onChange={(e) => { setViewMode(e.currentTarget.value as ViewMode); setSelectedNode(null); }}>
+            <select value={controls.viewMode}
+              onChange={(e) => { setViewMode(e.currentTarget.value as ViewMode); setControls('selectedNode', null); }}>
               <option value="aggregated">Aggregated</option>
               <option value="events">Events</option>
             </select>
             <output>View</output>
           </div>
 
-          {/* Max hubs: aggregated mode only */}
-          <Show when={viewMode() === "aggregated"}>
+          <Show when={controls.viewMode === "aggregated"}>
             <div class="field suffix border middle-align">
-              <select value={maxHubs()}
+              <select value={controls.maxHubs}
                 onChange={(e) => setMaxHubs(Number(e.currentTarget.value))}>
                 <For each={[10, 20, 50, 100]}>{(n) => <option value={n}>{n}</option>}</For>
               </select>
@@ -801,15 +799,14 @@ const ContextGraph5: Component<Props> = (props) => {
 
           <div class="field middle-align">
             <div class="slider tiny">
-              <input type="range" min={1} max={MAX_TOP_N} step={1} value={topN()}
+              <input type="range" min={1} max={MAX_TOP_N} step={1} value={controls.topN}
                 onInput={(e) => setTopN(Number(e.currentTarget.value))} />
               <span /><span class="tooltip bottom" />
             </div>
-            <output class="small-padding top-padding">Top N {topN()}</output>
+            <output class="small-padding top-padding">Top N {controls.topN}</output>
           </div>
 
-          {/* Min similarity: aggregated mode only */}
-          <Show when={viewMode() === "aggregated"}>
+          <Show when={controls.viewMode === "aggregated"}>
             <div class="field middle-align">
               <div class="slider tiny">
                 <input type="range" min={0.01} max={0.95} step={0.05} value={minSimilarity()}
@@ -834,22 +831,22 @@ const ContextGraph5: Component<Props> = (props) => {
           <Show when={yearMode() === "single"}>
             <nav class="no-space">
               <button class="circle chip secondary no-space large-margin bottom-margin"
-                onClick={() => { const v = Math.max(CORPUS_START_YEAR, fromYear() - 1); setFromYear(v); setToYear(v); }}>
+                onClick={() => { const v = Math.max(CORPUS_START_YEAR, controls.fromYear - 1); setControls('fromYear', v); setControls('toYear', v); }}>
                 <i>remove</i>
               </button>
               <div class="field middle-align">
                 <div class="slider tiny">
                   <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
-                    value={fromYear()}
-                    onInput={(e) => { const v = Number(e.currentTarget.value); setFromYear(v); setToYear(v); }} />
+                    value={controls.fromYear}
+                    onInput={(e) => { const v = Number(e.currentTarget.value); setControls('fromYear', v); setControls('toYear', v); }} />
                   <span class="tooltip bottom" />
                 </div>
                 <output class="small-padding top-padding">
-                  {fromYear()} ({yearFiltered().length} events)
+                  {controls.fromYear} ({yearFiltered().length} events)
                 </output>
               </div>
               <button class="circle chip secondary no-space large-margin bottom-margin"
-                onClick={() => { const v = Math.min(CORPUS_END_YEAR, toYear() + 1); setToYear(v); setFromYear(v); }}>
+                onClick={() => { const v = Math.min(CORPUS_END_YEAR, controls.toYear + 1); setControls('toYear', v); setControls('fromYear', v); }}>
                 <i>add</i>
               </button>
             </nav>
@@ -859,15 +856,15 @@ const ContextGraph5: Component<Props> = (props) => {
             <div class="field middle-align">
               <div class="slider tiny">
                 <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                  value={fromYear()}
-                  onInput={(e) => setFromYear(Math.min(Number(e.currentTarget.value), toYear()))} />
+                  value={controls.fromYear}
+                  onInput={(e) => setControls('fromYear', Math.min(Number(e.currentTarget.value), controls.toYear))} />
                 <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                  value={toYear()}
-                  onInput={(e) => setToYear(Math.max(Number(e.currentTarget.value), fromYear()))} />
+                  value={controls.toYear}
+                  onInput={(e) => setControls('toYear', Math.max(Number(e.currentTarget.value), controls.fromYear))} />
                 <span /><span class="tooltip bottom" /><span class="tooltip bottom" />
               </div>
               <output class="small-padding top-padding">
-                <span>{fromYear()}–{toYear()}</span>
+                <span>{controls.fromYear}–{controls.toYear}</span>
                 <span class="left-padding">
                   {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} events
                 </span>
@@ -876,18 +873,18 @@ const ContextGraph5: Component<Props> = (props) => {
           </Show>
 
         </nav>
-      </header>
+      </header> */}
 
       <div class="cg-main background">
 
         <svg ref={svgRef!} class="cg-svg surface-container-lowest" />
 
-        <Show when={selectedNode()}>
+        <Show when={controls.selectedNode}>
           <aside class="cg-aside surface-container-high padding border">
 
             <div class="cg-header-row">
-              <h2>{selectedNode()}</h2>
-              <button class="link border" onClick={() => setSelectedNode(null)}>✕</button>
+              <h2>{controls.selectedNode}</h2>
+              <button class="link border" onClick={() => setControls('selectedNode', null)}>✕</button>
             </div>
 
             {/* -- Hub drill-down -- */}
@@ -907,7 +904,7 @@ const ContextGraph5: Component<Props> = (props) => {
                           ? years.length === 1 ? years[0] : `${ years[0] }–${ years[years.length - 1] }`
                           : "—"}
                       </div>
-                      <div>Hub connections: {graphData().nodes.find(n => n.id === selectedNode())?.hubDegree ?? 0}</div>
+                      <div>Hub connections: {graphData().nodes.find(n => n.id === controls.selectedNode)?.hubDegree ?? 0}</div>
                     </div>
 
                     <h3 class="bottom-padding">Top neighbours</h3>
@@ -978,7 +975,7 @@ const ContextGraph5: Component<Props> = (props) => {
                 <div>Shared by {sharedByHubs().length} source(s)</div>
               </div>
               <h3 class="bottom-padding">
-                {viewMode() === "aggregated" ? "Hub contexts" : "Event contexts"}
+                {controls.viewMode === "aggregated" ? "Hub contexts" : "Event contexts"}
               </h3>
               <Show when={sharedByHubs().length > 0}
                 fallback={<div class="error">Not in any top-N list</div>}>
@@ -1011,20 +1008,20 @@ const ContextGraph5: Component<Props> = (props) => {
 
       <footer class="fixed max center-align small-padding surface-container-low">
         <span class="cg-legend">
-          <Show when={viewMode() === "aggregated"}>
+          <Show when={controls.viewMode === "aggregated"}>
             <span class="cg-legend-hub" />hubs ({graphData().nodes.filter(n => n.kind === "hub").length})
           </Show>
-          <Show when={viewMode() === "events"}>
+          <Show when={controls.viewMode === "events"}>
             <span class="cg-legend-event" />events ({graphData().nodes.filter(n => n.kind === "event").length})
           </Show>
           <span class="cg-legend-nb" />neighbours ({graphData().nodes.filter(n => n.kind === "neighbour").length})
-          <Show when={viewMode() === "aggregated"}>
+          <Show when={controls.viewMode === "aggregated"}>
             {" • "}{graphData().hubHubEdges.length} similarity edges
           </Show>
           {" • "}{graphData().hubNbEdges.length} spokes
           {" • "}{yearFiltered().length} events
-          <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
-            {" • "}{fromYear()}–{toYear()}
+          <Show when={controls.fromYear !== yearBounds()[0] || controls.toYear !== yearBounds()[1]}>
+            {" • "}{controls.fromYear}–{controls.toYear}
           </Show>
         </span>
       </footer>

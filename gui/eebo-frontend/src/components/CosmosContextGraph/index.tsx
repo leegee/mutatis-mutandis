@@ -17,7 +17,7 @@ import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 
 import type { AnyEdge, ConceptData, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, Tier2Data, TokenBin } from "./types";
 import { controls, setControls } from '../../state/controls';
-import Header from "../SvgConceptGraph/Header";
+import Header from "../ControlsHeader";
 
 interface Props { data: Tier2Data; }
 

@@ -1,7 +1,7 @@
 import { For, Show, type Accessor } from "solid-js";
-import { controls, setControls } from "../../state/controls";
-import type { ConceptEvent, ViewMode } from "./types";
-import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
+import { controls, setControls } from "../state/controls";
+import type { ConceptEvent, ViewMode } from "./SvgConceptGraph/types";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 interface Props {
   includeHubSpread: boolean;
@@ -129,7 +129,5 @@ export default function Header(props: Props) {
         </Show>
       </nav>
     </header>
-
-
   )
 }
