@@ -1,0 +1,56 @@
+@startuml
+title Event-led Semantic Analysis Architecture
+
+skinparam componentStyle rectangle
+
+package "Corpus Layer" {
+
+  database "EEBO-TCP\n(Postgres)" as PG
+}
+
+package "Tier 1: Event Construction" {
+
+  component "Token Filtering" as TF
+  component "Sliding Window\nSegmentation" as WS
+  component "MacBERTh\nEncoder" as MB
+  component "Event Builder" as EB
+
+  database "Zarr Event Store\n(event_id keyed)" as ZS
+}
+
+package "Event Space Index" {
+
+  component "FAISS Index\n(event embedding space)" as FI <<index>>
+}
+
+package "Tier 2: Neighbourhood Analysis" {
+
+  component "kNN Retrieval" as KR
+  component "Event Graph\nConstruction" as EG
+  component "Statistical\nAnalysis" as SA
+}
+
+package "Outputs" {
+
+  artifact "Concept Profiles" as CP
+  artifact "Temporal Drift\nSignals" as TD
+  artifact "Visualisation\nInterface" as VI
+}
+
+PG --> TF
+TF --> WS
+WS --> MB
+MB --> EB
+EB --> ZS
+
+ZS --> FI
+
+FI --> KR
+KR --> EG
+EG --> SA
+
+SA --> CP
+SA --> TD
+SA --> VI
+
+@enduml

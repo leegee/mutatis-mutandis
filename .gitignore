@@ -65,7 +65,5 @@ python/checkpoints/
 bibliography/zotero/
 python/eebo_env/
 status.md
-docs/cv.md
-docs/cv.pdf
-docs/proposal_summary2.pdf
-docs/proposal_summary2.md
+docs/cv.*
+docs/proposal_*

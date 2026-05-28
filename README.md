@@ -25,6 +25,72 @@ Finally, attempt topological data analysis if I can get my head around the Betti
             |
     GUI (Solid, d3)
 
+```mwemmaid
+flowchart TB
+
+%% ---------------------------
+%% CORPUS LAYER
+%% ---------------------------
+subgraph L0["Corpus Layer"]
+A[EEBO-TCP Corpus\n(Postgres Tokens)]
+end
+
+%% ---------------------------
+%% TIER 1
+%% ---------------------------
+subgraph L1["Tier 1: Event Construction"]
+B[Token Filtering\n(Content tokens only)]
+C[Sliding Window Context\n(512 tokens, stride 256)]
+D[MacBERTh Encoder\n(Contextual Embeddings)]
+E[Event Builder\n(event_id, concept_id)]
+F[Zarr Event Store\n(Atomic observations)]
+end
+
+%% ---------------------------
+%% INDEX LAYER
+%% ---------------------------
+subgraph L2["Event Space Index"]
+G[FAISS Index\n(Event embedding space)]
+end
+
+%% ---------------------------
+%% TIER 2
+%% ---------------------------
+subgraph L3["Tier 2: Neighbourhood Analysis"]
+H[kNN Retrieval\n(event neighbourhoods)]
+I[Event Graph Construction\n(kNN overlap graph)]
+J[Statistical Analysis\n(clustering / entropy / drift)]
+end
+
+%% ---------------------------
+%% OUTPUT
+%% ---------------------------
+subgraph L4["Outputs"]
+K[Concept Profiles\n(token distributions)]
+L[Temporal Drift Signals]
+M[Visualisation Interface\n(event + aggregated views)]
+end
+
+%% ---------------------------
+%% FLOWS
+%% ---------------------------
+
+A --> B
+B --> C
+C --> D
+D --> E
+E --> F
+
+F --> G
+G --> H
+H --> I
+I --> J
+
+J --> K
+J --> L
+J --> M
+```
+
 ## Code Synopsis
 
     conda activate eebo
