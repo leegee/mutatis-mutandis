@@ -25,7 +25,7 @@ Finally, attempt topological data analysis if I can get my head around the Betti
             |
     GUI (Solid, d3)
 
-```mwemmaid
+```mermaid
 flowchart TB
 
 %% ---------------------------
