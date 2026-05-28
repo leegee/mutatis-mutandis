@@ -86,7 +86,10 @@ type YearSlices = Map<number, RankedToken[]>;
 
 const MAX_TOP_N = 50;
 
-const COL_WIDTH = 96;   // px per year column
+const CELL_WIDTH = 92;
+const COL_GAP = 32;
+const COL_WIDTH = CELL_WIDTH + COL_GAP;
+
 const ROW_HEIGHT = 22;   // px per rank row
 const LABEL_PAD = 8;    // px inside cell for text
 const CELL_H = ROW_HEIGHT - 3;
@@ -463,9 +466,9 @@ const DiachronicChart: Component<Props> = (props) => {
                 if (!b) continue;
                 out.push({
                     token: a.token,
-                    x1: colX(c) + COL_WIDTH / 2 - 2,
+                    x1: colX(c) + CELL_WIDTH / 2,
                     y1: cellY(a.rank),
-                    x2: colX(c + 1) - COL_WIDTH / 2 + 2,
+                    x2: colX(c + 1) - CELL_WIDTH / 2,
                     y2: cellY(b.rank),
                     status: classifyStatus(a.token, yr, yrs, sl),
                 });
@@ -628,9 +631,9 @@ const DiachronicChart: Component<Props> = (props) => {
                                         const textOp = () => isAnyFocus() ? (isFocus() ? 1 : 0.2) : 0.88;
                                         const rectOp = () => isAnyFocus() ? (isFocus() ? 0.22 : 0.04) : 0.13;
 
-                                        const x = () => colX(ci()) - COL_WIDTH / 2 + 2;
+                                        const x = () => colX(ci()) - CELL_WIDTH / 2;
                                         const y = () => HEADER_H + rt.rank * ROW_HEIGHT;
-                                        const w = COL_WIDTH - 4;
+                                        const w = CELL_WIDTH;
 
                                         return (
                                             <g
