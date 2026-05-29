@@ -3,14 +3,14 @@ import { controls } from "../state/controls.store";
 import { controlsActions as A } from "../state/controls.actions";
 import { tier2Data } from "../state/tier2data.store";
 import type { ViewMode, YearMode } from "../state/controls.store";
-import { getYearBounds } from "../state/selectors";
+import { getYearBounds, getYearFiltered } from "../state/selectors";
 
 interface Props {
-  MAX_TOP_N: number;
   includeHubSpread: boolean;
-  yearFiltered: () => any[];
   totalEvents: () => number;
 }
+
+const MAX_TOP_N = 100;
 
 export default function ControlsHeader(props: Props) {
 
@@ -67,7 +67,7 @@ export default function ControlsHeader(props: Props) {
             <input
               type="range"
               min={1}
-              max={props.MAX_TOP_N}
+              max={MAX_TOP_N}
               step={1}
               value={controls.topN}
               onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
@@ -173,7 +173,7 @@ export default function ControlsHeader(props: Props) {
               </div>
 
               <output class="small-padding top-padding">
-                {controls.fromYear} ({props.yearFiltered().length} events)
+                {controls.fromYear} ({getYearFiltered().length} events)
               </output>
             </div>
 
@@ -238,7 +238,7 @@ export default function ControlsHeader(props: Props) {
               </span>
 
               <span class="left-padding">
-                {props.yearFiltered().length} / {props.totalEvents()} events
+                {getYearFiltered().length} / {props.totalEvents()} events
               </span>
             </output>
           </div>

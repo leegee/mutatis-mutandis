@@ -412,8 +412,6 @@ const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
 const CosmosComponent: Component = () => {
-  const concepts = Object.keys(tier2Data);
-
   const [labelPositions, setLabelPositions] = createSignal<Array<{ id: string; kind: string; x: number; y: number }>>([]);
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 
@@ -725,10 +723,6 @@ const CosmosComponent: Component = () => {
         <ControlsHeader
           totalEvents={totalEventsForConcept}
           includeHubSpread={true}
-          concepts={concepts}
-          MAX_TOP_N={MAX_TOP_N}
-          yearFiltered={yearFiltered}
-          yearBounds={yearBounds}
         />
 
         {/* ── Main canvas + aside ── */}

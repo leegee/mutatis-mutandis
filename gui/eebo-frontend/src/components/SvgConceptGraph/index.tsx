@@ -88,11 +88,11 @@ import * as d3 from "d3";
 
 import './styles.css';
 import { tier2Data } from "../../state/tier2data.store";
-import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 import type { TokenBin, ContextNode, HubHubEdge, HubNbEdge, AnyEdge, ContextGraphData } from "../../types/context-graph.types";
 import ControlsHeader from "../ControlsHeader";
 import { controls, setControls } from "../../state/controls.store";
-import { aggregateByToken, buildContextualGraph, buildPureEventGraph, filterByYearRange, scanYearRange } from "../../lib/contextGraphUtils";
+import { aggregateByToken, buildContextualGraph, buildPureEventGraph } from "../../lib/contextGraphUtils";
+import { getYearBounds, getYearFiltered } from "../../state/selectors";
 
 const MAX_TOP_N = 20;
 
@@ -113,37 +113,16 @@ const showDocument = (docId: string) =>
 
 
 const ContextGraph5: Component = () => {
-  const concepts = Object.keys(tier2Data)
-
-  const yearBounds = createMemo<[number, number]>(() => {
-    const cd = tier2Data[controls.concept];
-    if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
-    return scanYearRange(cd);
-  });
-
-
-  const yearFiltered = createMemo(() => {
-    const cd = tier2Data[controls.concept];
-    if (!cd) return [];
-    const [min, max] = yearBounds();
-    const events = cd.events;
-    return controls.fromYear <= min && controls.toYear >= max
-      ? events
-      : filterByYearRange(events, controls.fromYear, controls.toYear);
-  });
-
 
   const tokenBins = createMemo<Map<string, TokenBin>>(() =>
-    aggregateByToken(yearFiltered())
+    aggregateByToken(getYearFiltered())
   );
-
 
   const graphData = createMemo<ContextGraphData>(() =>
     controls.viewMode === "events"
-      ? buildPureEventGraph(yearFiltered(), controls.topN, EMPTY_GRAPH)
+      ? buildPureEventGraph(getYearFiltered(), controls.topN, EMPTY_GRAPH)
       : buildContextualGraph(tokenBins(), controls.topN, controls.minSimilarity, controls.maxHubs, EMPTY_GRAPH)
   );
-
 
   const selectedKind = createMemo<"hub" | "neighbour" | "event" | null>(() => {
     const id = controls.selectedNode;
@@ -468,10 +447,6 @@ const ContextGraph5: Component = () => {
       <ControlsHeader
         totalEvents={totalEventsForConcept}
         includeHubSpread={true}
-        concepts={concepts}
-        MAX_TOP_N={MAX_TOP_N}
-        yearFiltered={yearFiltered}
-        yearBounds={yearBounds}
       />
 
       <div class="cg-main background">
@@ -617,8 +592,8 @@ const ContextGraph5: Component = () => {
             {" • "}{graphData().hubHubEdges.length} similarity edges
           </Show>
           {" • "}{graphData().hubNbEdges.length} spokes
-          {" • "}{yearFiltered().length} events
-          <Show when={controls.fromYear !== yearBounds()[0] || controls.toYear !== yearBounds()[1]}>
+          {" • "}{getYearFiltered().length} events
+          <Show when={controls.fromYear !== getYearBounds()[0] || controls.toYear !== getYearBounds()[1]}>
             {" • "}{controls.fromYear}–{controls.toYear}
           </Show>
         </span>
