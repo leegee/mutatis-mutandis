@@ -1,9 +1,10 @@
 import { For, Show, type Accessor } from "solid-js";
-import { controls, setControls } from "../state/controls";
+import { controls, setControls, setConcept, setYearMode, type YearMode } from "../state/controls";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 import type { ConceptEvent, ViewMode } from "../types/context-graph.types";
 
 interface Props {
+  totalEvents: Accessor<number>;
   includeHubSpread: boolean;
   concepts: any;
   MAX_TOP_N: number;
@@ -17,8 +18,10 @@ export default function ControlsHeader(props: Props) {
     <header class="center-align fill max surface-container-low small-padding top-padding">
       <nav>
         <div class="field suffix border middle-align">
-          <select value={controls.concept}
-            onChange={(e) => { setControls('concept', e.currentTarget.value); setControls('selectedNode', null); }}>
+          <select
+            value={controls.concept}
+            onChange={(e) => setConcept(e.currentTarget.value)}
+          >
             <For each={props.concepts}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
           <output>Concept</output>
@@ -26,7 +29,11 @@ export default function ControlsHeader(props: Props) {
 
         <div class="field suffix border middle-align">
           <select value={controls.viewMode}
-            onChange={(e) => { setControls('viewMode', e.currentTarget.value as ViewMode); setControls('selectedNode', null); }}>
+            onChange={(e) => {
+              setControls('viewMode', e.currentTarget.value as ViewMode);
+              setControls('selectedNode', null);
+            }}
+          >
             <option value="aggregated">Aggregated</option>
             <option value="events">Events</option>
           </select>
@@ -76,17 +83,8 @@ export default function ControlsHeader(props: Props) {
 
         <div class="field suffix border middle-align">
           <select value={controls.yearMode}
-            onChange={(e) => {
-              const [min, max] = props.yearBounds();
-              if (controls.yearMode === "single") {
-                const mid = Math.floor((min + max) / 2);
-                setControls('fromYear', mid);
-                setControls('toYear', mid);
-              } else {
-                setControls('fromYear', min); setControls('toYear', max);
-              }
-              setControls('yearMode', e.currentTarget.value as "single" | "range");
-            }}>
+            onChange={(e) => setYearMode(e.currentTarget.value as YearMode, props.yearBounds())}
+          >
             <option value="single">Single year</option>
             <option value="range">Year range</option>
           </select>
@@ -99,6 +97,7 @@ export default function ControlsHeader(props: Props) {
               onClick={() => { const v = Math.max(CORPUS_START_YEAR, controls.fromYear - 1); setControls('fromYear', v); setControls('toYear', v); }}>
               <i>remove</i>
             </button>
+
             <div class="field middle-align">
               <div class="slider tiny">
                 <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
@@ -106,10 +105,12 @@ export default function ControlsHeader(props: Props) {
                   onInput={(e) => { const v = Number(e.currentTarget.value); setControls('fromYear', v); setControls('toYear', v); }} />
                 <span class="tooltip bottom" />
               </div>
+
               <output class="small-padding top-padding">
                 {controls.fromYear} ({props.yearFiltered().length} events)
               </output>
             </div>
+
             <button class="circle chip secondary no-space large-margin bottom-margin"
               onClick={() => { const v = Math.min(CORPUS_END_YEAR, controls.toYear + 1); setControls('toYear', v); setControls('fromYear', v); }}>
               <i>add</i>
@@ -130,10 +131,9 @@ export default function ControlsHeader(props: Props) {
             </div>
             <output class="small-padding top-padding">
               <span>{controls.fromYear}–{controls.toYear}</span>
-              {/* <span class="left-padding">{props.yearFiltered().length}
-                /
-                {props.data[controls.concept]?.n_events ?? 0} events
-              </span> */}
+              <span class="left-padding">
+                {props.yearFiltered().length} / {props.totalEvents()} events
+              </span>
             </output>
           </div>
         </Show>

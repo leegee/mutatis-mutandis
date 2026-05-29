@@ -463,10 +463,16 @@ const ContextGraph5: Component<Props> = (props) => {
     d3.select("body").selectAll(".cg-tooltip").remove();
   });
 
+  const totalEventsForConcept = createMemo(() => {
+    const cd = props.data[controls.concept];
+    return cd?.n_events ?? 0;
+  });
+
   return (
     <article class="svg-cg-layout no-padding no-margin">
 
       <ControlsHeader
+        totalEvents={totalEventsForConcept}
         includeHubSpread={true}
         concepts={concepts}
         MAX_TOP_N={MAX_TOP_N}

@@ -714,11 +714,17 @@ const CosmosComponent: Component<Props> = (props) => {
   });
 
 
+  const totalEventsForConcept = createMemo(() => {
+    const cd = props.data[controls.concept];
+    return cd?.n_events ?? 0;
+  });
+
   return (
     <>
       <div class="cg-layout">
 
         <ControlsHeader
+          totalEvents={totalEventsForConcept}
           includeHubSpread={true}
           concepts={concepts}
           MAX_TOP_N={MAX_TOP_N}

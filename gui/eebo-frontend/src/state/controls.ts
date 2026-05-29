@@ -30,3 +30,20 @@ export const [controls, setControls] = createStore<ControlsState>({
   toYear: CORPUS_END_YEAR,
 });
 
+
+export function setConcept(c: string) {
+  setControls({
+    concept: c,
+    selectedNode: null,
+  });
+}
+
+export function setYearMode(mode: YearMode, bounds: [number, number]) {
+  const [min, max] = bounds;
+
+  setControls({
+    yearMode: mode,
+    fromYear: mode === "single" ? Math.floor((min + max) / 2) : min,
+    toYear: mode === "single" ? Math.floor((min + max) / 2) : max,
+  });
+}
