@@ -1,25 +1,32 @@
-// src/state/controls.ts
 import { createStore } from "solid-js/store";
-import { CORPUS_START_YEAR } from "../corpus_config";
+import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 
-type ViewMode = "aggregated" | "events";
-type YearMode = "single" | "range";
+export type ViewMode = "aggregated" | "events";
+export type YearMode = "single" | "range";
 
-export const [controls, setControls] = createStore({
+export type ControlsState = {
+  concept: string;
+  viewMode: ViewMode;
+  maxHubs: number;
+  topN: number;
+  minSimilarity: number;
+  hubSpread: number;
+  selectedNode: string | null;
+  yearMode: YearMode;
+  fromYear: number;
+  toYear: number;
+};
+
+export const [controls, setControls] = createStore<ControlsState>({
   concept: 'LIBERTY',
-  viewMode: "aggregated" as ViewMode,
-
+  viewMode: "aggregated",
   maxHubs: 50,
   topN: 5,
   minSimilarity: 0.5,
   hubSpread: 1,
-
-  selectedNode: null as string | null,
-
-  yearMode: "single" as YearMode,
+  selectedNode: null,
+  yearMode: "single",
   fromYear: CORPUS_START_YEAR,
-  toYear: CORPUS_START_YEAR,
+  toYear: CORPUS_END_YEAR,
 });
 
-// Optional: export types too
-export type { ViewMode, YearMode };
