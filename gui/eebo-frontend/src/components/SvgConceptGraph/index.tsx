@@ -503,6 +503,11 @@ const ContextGraph5: Component<Props> = (props) => {
   let svgRef!: SVGSVGElement;
   let simulationRef: d3.Simulation<ContextNode, AnyEdge> | null = null;
 
+  type EdgeKey = string;
+
+  const key = (a: ContextNode, b: ContextNode): EdgeKey =>
+    a.id < b.id ? `${ a.id }__${ b.id }` : `${ b.id }__${ a.id }`;
+
   function render() {
     const { nodes, hubHubEdges, hubNbEdges, allEdges,
       maxHubHubWeight, maxEventCount, maxHubDegree } = graphData();
@@ -543,12 +548,16 @@ const ContextGraph5: Component<Props> = (props) => {
     const defs = container.append("defs");
 
     // Gradient defs for hub-hub edges.
-    hubHubEdges.forEach((d, i) => {
+    hubHubEdges.forEach((d: HubHubEdge) => {
       const grad = defs.append("linearGradient")
-        .attr("id", `hh-${ i }`).attr("gradientUnits", "userSpaceOnUse");
-      grad.append("stop").attr("offset", "0%")
+        .attr("id", `hh-${ key(d.source, d.target) }`);
+
+      grad.append("stop")
+        .attr("offset", "0%")
         .attr("stop-color", hubColor(d.source.hubDegree));
-      grad.append("stop").attr("offset", "100%")
+
+      grad.append("stop")
+        .attr("offset", "100%")
         .attr("stop-color", hubColor(d.target.hubDegree));
     });
 
@@ -565,7 +574,9 @@ const ContextGraph5: Component<Props> = (props) => {
     const hhSelection = container.append("g").attr("class", "hh-edges")
       .selectAll<SVGLineElement, HubHubEdge>("line")
       .data(hubHubEdges).join("line")
-      .attr("stroke", (_, i) => `url(#hh-${ i })`)
+      .attr("stroke", d =>
+        `url(#hh-${ key(d.source, d.target) })`
+      )
       .attr("stroke-opacity", (d) => hhOpacity(d.weight))
       .attr("stroke-width", (d) => hhWidth(d.weight));
 
@@ -746,7 +757,7 @@ const ContextGraph5: Component<Props> = (props) => {
   });
 
   return (
-    <div class="svg-cg-layout">
+    <article class="svg-cg-layout no-padding no-margin">
 
       <Header
         includeHubSpread={true}
@@ -756,116 +767,7 @@ const ContextGraph5: Component<Props> = (props) => {
         yearBounds={yearBounds}
       />
 
-      {/* <header class="center-align fill max surface-container-low small-padding top-padding">
-        <nav>
-
-          <div class="field suffix border middle-align">
-            <select value={concept()}
-              onChange={(e) => { setConcept(e.currentTarget.value); setControls('selectedNode', null); }}>
-              <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
-            </select>
-            <output>Concept</output>
-          </div>
-
-          <div class="field suffix border middle-align">
-            <select value={controls.viewMode}
-              onChange={(e) => { setViewMode(e.currentTarget.value as ViewMode); setControls('selectedNode', null); }}>
-              <option value="aggregated">Aggregated</option>
-              <option value="events">Events</option>
-            </select>
-            <output>View</output>
-          </div>
-
-          <Show when={controls.viewMode === "aggregated"}>
-            <div class="field suffix border middle-align">
-              <select value={controls.maxHubs}
-                onChange={(e) => setMaxHubs(Number(e.currentTarget.value))}>
-                <For each={[10, 20, 50, 100]}>{(n) => <option value={n}>{n}</option>}</For>
-              </select>
-              <output>Max hubs</output>
-            </div>
-          </Show>
-
-          <div class="field middle-align">
-            <div class="slider tiny">
-              <input type="range" min={1} max={MAX_TOP_N} step={1} value={controls.topN}
-                onInput={(e) => setTopN(Number(e.currentTarget.value))} />
-              <span /><span class="tooltip bottom" />
-            </div>
-            <output class="small-padding top-padding">Top N {controls.topN}</output>
-          </div>
-
-          <Show when={controls.viewMode === "aggregated"}>
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input type="range" min={0.01} max={0.95} step={0.05} value={minSimilarity()}
-                  onInput={(e) => setMinSimilarity(Number(e.currentTarget.value))} />
-                <span /><span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">
-                Min similarity {minSimilarity().toFixed(2)}
-              </output>
-            </div>
-          </Show>
-
-          <div class="field suffix border middle-align">
-            <select value={yearMode()}
-              onChange={(e) => setYearMode(e.currentTarget.value as "single" | "range")}>
-              <option value="single">Single year</option>
-              <option value="range">Year range</option>
-            </select>
-            <output>Year mode</output>
-          </div>
-
-          <Show when={yearMode() === "single"}>
-            <nav class="no-space">
-              <button class="circle chip secondary no-space large-margin bottom-margin"
-                onClick={() => { const v = Math.max(CORPUS_START_YEAR, controls.fromYear - 1); setControls('fromYear', v); setControls('toYear', v); }}>
-                <i>remove</i>
-              </button>
-              <div class="field middle-align">
-                <div class="slider tiny">
-                  <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
-                    value={controls.fromYear}
-                    onInput={(e) => { const v = Number(e.currentTarget.value); setControls('fromYear', v); setControls('toYear', v); }} />
-                  <span class="tooltip bottom" />
-                </div>
-                <output class="small-padding top-padding">
-                  {controls.fromYear} ({yearFiltered().length} events)
-                </output>
-              </div>
-              <button class="circle chip secondary no-space large-margin bottom-margin"
-                onClick={() => { const v = Math.min(CORPUS_END_YEAR, controls.toYear + 1); setControls('toYear', v); setControls('fromYear', v); }}>
-                <i>add</i>
-              </button>
-            </nav>
-          </Show>
-
-          <Show when={yearMode() === "range"}>
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                  value={controls.fromYear}
-                  onInput={(e) => setControls('fromYear', Math.min(Number(e.currentTarget.value), controls.toYear))} />
-                <input type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                  value={controls.toYear}
-                  onInput={(e) => setControls('toYear', Math.max(Number(e.currentTarget.value), controls.fromYear))} />
-                <span /><span class="tooltip bottom" /><span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">
-                <span>{controls.fromYear}–{controls.toYear}</span>
-                <span class="left-padding">
-                  {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} events
-                </span>
-              </output>
-            </div>
-          </Show>
-
-        </nav>
-      </header> */}
-
       <div class="cg-main background">
-
         <svg ref={svgRef!} class="cg-svg surface-container-lowest" />
 
         <Show when={controls.selectedNode}>
@@ -1015,7 +917,7 @@ const ContextGraph5: Component<Props> = (props) => {
         </span>
       </footer>
 
-    </div>
+    </article>
   );
 };
 
