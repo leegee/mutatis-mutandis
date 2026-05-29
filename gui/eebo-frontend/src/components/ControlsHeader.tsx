@@ -105,7 +105,6 @@ export default function ControlsHeader(props: Props) {
                   onInput={(e) => { const v = Number(e.currentTarget.value); setControls('fromYear', v); setControls('toYear', v); }} />
                 <span class="tooltip bottom" />
               </div>
-
               <output class="small-padding top-padding">
                 {controls.fromYear} ({props.yearFiltered().length} events)
               </output>
@@ -123,10 +122,12 @@ export default function ControlsHeader(props: Props) {
             <div class="slider tiny">
               <input type="range" min={props.yearBounds()[0]} max={props.yearBounds()[1]} step={1}
                 value={controls.fromYear}
-                onInput={(e) => setControls('fromYear', Math.min(Number(e.currentTarget.value), controls.toYear))} />
+                onInput={(e) => setControls('fromYear', Math.min(Number(e.currentTarget.value), controls.toYear))}
+              />
               <input type="range" min={props.yearBounds()[0]} max={props.yearBounds()[1]} step={1}
                 value={controls.toYear}
-                onInput={(e) => setControls('toYear', Math.max(Number(e.currentTarget.value), controls.fromYear))} />
+                onInput={(e) => setControls('toYear', Math.max(Number(e.currentTarget.value), controls.fromYear))}
+              />
               <span /><span class="tooltip bottom" /><span class="tooltip bottom" />
             </div>
             <output class="small-padding top-padding">
