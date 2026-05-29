@@ -671,6 +671,30 @@ const CosmosComponent: Component = () => {
     Array<{ id: string; label: string; kind: string; x: number; y: number }>
   >([]);
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
+  const [simulating, setSimulating] = createSignal(false);
+  let simTimeoutHandle = 0;
+  // Incremented on every intentional start(). onSimulationEnd checks against
+  // this to ignore spurious callbacks cosmos fires after setConfig/render.
+  let simGeneration = 0;
+
+  function stopSimulating(generation: number) {
+    if (generation !== simGeneration) return;
+    clearTimeout(simTimeoutHandle);
+    setSimulating(false);
+    // Pause before fitView so the graph doesn't keep drifting after reveal.
+    cosmosGraph?.pause();
+    cosmosGraph?.fitView();
+  }
+
+  function startSimulating(nodeCount = 0) {
+    clearTimeout(simTimeoutHandle);
+    const generation = ++simGeneration;
+    setSimulating(true);
+    // onSimulationEnd may never fire for large graphs — hard timeout fallback.
+    // ~10ms/node, clamped between 1.5s and 12s.
+    const ms = Math.min(12_000, Math.max(1_500, nodeCount * 10));
+    simTimeoutHandle = window.setTimeout(() => stopSimulating(generation), ms);
+  }
 
   // ── Year bounds ──────────────────────────────────────────────────────────
 
@@ -939,6 +963,8 @@ const CosmosComponent: Component = () => {
       hoveredPointRingColor: "white",
       renderHoveredPointRing: true,
 
+      onSimulationEnd: () => stopSimulating(simGeneration),
+
       onPointMouseOver: (index: number) => {
         const wn = world?.getNodeByIndex(index);
         if (!wn) return;
@@ -1018,8 +1044,8 @@ const CosmosComponent: Component = () => {
 
     const topologyChanged = world!.applyDiff(gd);
     if (topologyChanged) {
+      startSimulating(gd.nodes.length);
       cosmosGraph!.start();
-      setTimeout(() => cosmosGraph?.fitView(), 300);
     }
   });
 
@@ -1054,6 +1080,7 @@ const CosmosComponent: Component = () => {
 
   onCleanup(() => {
     cancelAnimationFrame(rafHandle);
+    clearTimeout(simTimeoutHandle);
     cosmosGraph?.pause();
     tooltipEl?.remove();
     tooltipEl = null;
@@ -1074,7 +1101,7 @@ const CosmosComponent: Component = () => {
 
         {/* ── Main canvas + aside ── */}
         <div class="cg-main background">
-          <div ref={wrapRef!} class="cg-canvas-wrap surface-container">
+          <div ref={wrapRef!} class="cg-canvas-wrap surface-container" style={{ visibility: simulating() ? "hidden" : "visible" }}>
             {/* Label overlay */}
             <div class="cg-labels">
               <For each={labelPositions()}>
@@ -1083,7 +1110,7 @@ const CosmosComponent: Component = () => {
                     class={`cg-label ${ lbl.kind }`}
                     style={{
                       left: `${ lbl.x }px`,
-                      top: `${ lbl.y - 32 }px`,
+                      top: `${ lbl.y + 14 }px`,
                     }}
                   >
                     {lbl.label}
@@ -1110,6 +1137,23 @@ const CosmosComponent: Component = () => {
               </div>
             </Show>
           </div>
+
+          {/* Simulation settling indicator */}
+          <Show when={simulating()}>
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              "flex-direction": "column",
+              "align-items": "center",
+              "justify-content": "center",
+              gap: "1rem",
+              "pointer-events": "none",
+            }}>
+              <span class="small-text">Settling layout…</span>
+              <progress class="circle light-green-text"></progress>
+            </div>
+          </Show>
 
           {/* ── Drill-down aside ── */}
           <Show when={controls.selectedNode}>
