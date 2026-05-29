@@ -37,6 +37,10 @@ const EVENT_RGBA: [number, number, number, number] = [0.47, 0.82, 0.51, 0.75];
 const NB_RGBA: [number, number, number, number] = [1.0, 0.75, 0.31, 0.65];
 const HH_LINK_BASE_RGBA: [number, number, number, number] = [0.55, 0.75, 0.95, 0.95];
 const SPOKE_LINK_RGBA: [number, number, number, number] = [1.0, 0.75, 0.31, 0.9];
+const SPOKE_ALPHA_MIN = 0.5; // 0.15;
+const SPOKE_ALPHA_MAX = 0.9; // 0.45;
+const SPOKE_WIDTH_MIN = 1; // 0.5;
+const SPOKE_WIDTH_MAX = 2.5;
 
 const BASE_REPULSION = 0.8;
 const BASE_LINK_SPRING = 1.0;
@@ -464,8 +468,8 @@ class GraphWorld {
       .scaleLinear()
       .domain([0, gd.maxHubHubWeight])
       .range([0.5, 2.5]);
-    this.spokeAlpha = d3.scaleLinear().domain([0, 1]).range([0.15, 0.45]);
-    this.spokeWidth = d3.scaleLinear().domain([0, 1]).range([0.5, 2.5]);
+    this.spokeAlpha = d3.scaleLinear().domain([0, 1]).range([SPOKE_ALPHA_MIN, SPOKE_ALPHA_MAX]);
+    this.spokeWidth = d3.scaleLinear().domain([0, 1]).range([SPOKE_WIDTH_MIN, SPOKE_WIDTH_MAX]);
   }
 
   private computeDiff(gd: ContextGraphData): DiffResult {
@@ -1079,7 +1083,7 @@ const CosmosComponent: Component = () => {
                     class={`cg-label ${ lbl.kind }`}
                     style={{
                       left: `${ lbl.x }px`,
-                      top: `${ lbl.y + 14 }px`,
+                      top: `${ lbl.y - 32 }px`,
                     }}
                   >
                     {lbl.label}

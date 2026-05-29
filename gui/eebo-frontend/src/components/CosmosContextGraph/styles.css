@@ -136,7 +136,7 @@
     transform: translate(-50%, 0);
     white-space: nowrap;
     font-family: 'IBM Plex Mono', 'Courier New', monospace;
-    font-size: 10px;
+    font-size: 12pt;
     pointer-events: none;
     text-shadow: 0 1px 3px rgba(0, 0, 0, .9),
       0 0 6px rgba(0, 0, 0, .7);
