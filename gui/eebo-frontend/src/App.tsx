@@ -70,26 +70,29 @@ export default function App() {
         </a>
       </nav>
 
-      <main class="responsive max no-padding">
+      <main class="responsive max no-padding full" >
         <ErrorBoundary
           fallback={(err) => (
             <article>
-              <div class="error padding">{err.message}</div>
+              <section>
+                <h3>Error</h3>
+                <div class="error padding center middle">{err.message}</div>
+              </section>
             </article>
           )}
         >
           <Show
             when={!loading() && Object.keys(tier2Data).length > 0}
             fallback={
-              <article class="small-round padding border medium no-padding">
-                <div class="padding absolute center middle">
-                  <h5>
-                    {error() ?? "Loading events..."}
-                  </h5>
-                </div>
-                <Show when={!error()}>
-                  <progress />
-                </Show>
+              <article class="max small-round padding border medium no-padding" style="min-height:100vh">
+                <section class="padding absolute center middle">
+                  <h4>
+                    {error() ?? "Loading text events..."}
+                  </h4>
+                  <Show when={!error()}>
+                    <progress class="wavy green-text" />
+                  </Show>
+                </section>
               </article>
             }
           >

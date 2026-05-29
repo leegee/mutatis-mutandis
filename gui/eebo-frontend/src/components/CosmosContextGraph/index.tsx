@@ -1140,17 +1140,18 @@ const CosmosComponent: Component = () => {
 
           {/* Simulation settling indicator */}
           <Show when={simulating()}>
-            <div style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              "flex-direction": "column",
-              "align-items": "center",
-              "justify-content": "center",
-              gap: "1rem",
-              "pointer-events": "none",
-            }}>
-              <span class="small-text">Settling layout…</span>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                "flex-direction": "column",
+                "align-items": "center",
+                "justify-content": "center",
+                gap: "1rem",
+                "pointer-events": "none",
+              }}>
+              <h3>Settling layout…</h3>
               <progress class="circle light-green-text"></progress>
             </div>
           </Show>
