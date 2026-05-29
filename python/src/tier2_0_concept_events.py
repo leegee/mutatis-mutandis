@@ -191,7 +191,7 @@ def load_doc_metadata(conn) -> dict:
     """
     Build a doc_id -> metadata mapping from pamphlet_tokens.
 
-    pub_year, slice_start, slice_end are stable per doc_id so
+    pub_year, are stable per doc_id so
     we take the first occurrence of each.
     """
     cur = conn.cursor()
@@ -199,8 +199,6 @@ def load_doc_metadata(conn) -> dict:
         SELECT DISTINCT ON (doc_id)
             doc_id,
             pub_year,
-            slice_start,
-            slice_end,
             title
         FROM pamphlet_tokens
         ORDER BY doc_id
@@ -208,8 +206,6 @@ def load_doc_metadata(conn) -> dict:
     return {
         row[0]: {
             "pub_year":    row[1],
-            "slice_start": row[2],
-            "slice_end":   row[3],
             "title":       row[4],
         }
         for row in cur.fetchall()
@@ -328,8 +324,6 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
                 "token": n_event["token"],
                 "doc_id": n_event["doc_id"],
                 "pub_year": doc_meta.get(event["doc_id"], {}).get("pub_year"),
-                "slice_start": doc_meta.get(event["doc_id"], {}).get("slice_start"),
-                "slice_end": doc_meta.get(event["doc_id"], {}).get("slice_end"),
                 "token_idx": n_event["token_idx"],
                 "window_id": n_event["window_id"],
                 "window_token_pos": n_event["window_token_pos"],
@@ -342,8 +336,6 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
             "token": event["token"],
             "doc_id": event["doc_id"],
             "pub_year": doc_meta.get(event["doc_id"], {}).get("pub_year"),
-            "slice_start": doc_meta.get(event["doc_id"], {}).get("slice_start"),
-            "slice_end": doc_meta.get(event["doc_id"], {}).get("slice_end"),
             "token_idx": event["token_idx"],
             "window_id": event["window_id"],
             "window_token_pos": event["window_token_pos"],
