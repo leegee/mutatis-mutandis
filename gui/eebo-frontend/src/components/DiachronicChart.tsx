@@ -7,38 +7,11 @@ import {
 
 import './DiachronicChart/styles.css';
 
-import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
-import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
+import { filterByYearRange, } from "../lib/contextGraphUtils";
 import { tier2Data } from "../state/tier2data.store";
-
-interface Neighbour {
-    token: string;
-    score: number;
-    event_id?: number;
-    doc_id?: string;
-    pub_year?: number;
-    window_id?: number;
-}
-
-interface ConceptEvent {
-    event_id?: number;
-    token?: string;
-    doc_id?: string;
-    pub_year?: number;
-    neighbours: Neighbour[];
-}
-
-interface ConceptData {
-    n_events: number;
-    year_min?: number;
-    year_max?: number;
-    events: ConceptEvent[];
-}
-
-export interface Tier2Data {
-    [concept: string]: ConceptData;
-}
-
+import ControlsHeader from "./ControlsHeader";
+import { controls } from "../state/controls.store";
+import type { ConceptEvent } from "../types/context-graph.types";
 
 interface RankedToken {
     token: string;
@@ -51,8 +24,6 @@ interface RankedToken {
 type YearSlices = Map<number, RankedToken[]>;
 type SortKey = "freq" | "score";
 type TokenStatus = "birth" | "death" | "birth-death" | "continuation";
-
-const MAX_TOP_N = 50;
 
 const CELL_WIDTH = 92;
 const COL_GAP = 32;
@@ -78,12 +49,6 @@ function yearLabel(year: number, window: number): string {
     return `${ year - window }–${ year + window }`;
 }
 
-/**
- * Build per-year ranked token lists.
- *
- * window = 0  -> raw yearly observation
- * window > 0  -> smoothing only for ranking stability (not identity logic)
- */
 function buildYearSlices(
     events: ConceptEvent[],
     topN: number,
@@ -234,53 +199,38 @@ function colX(colIdx: number): number {
     return LEFT_MARGIN + colIdx * COL_WIDTH + COL_WIDTH / 2;
 }
 
-function linkPath(
-    x1: number, y1: number,
-    x2: number, y2: number,
-): string {
+function linkPath(x1: number, y1: number, x2: number, y2: number): string {
     const cx = (x1 + x2) / 2;
     return `M ${ x1 } ${ y1 } C ${ cx } ${ y1 }, ${ cx } ${ y2 }, ${ x2 } ${ y2 }`;
 }
 
-const STYLES = `/* unchanged for brevity */`;
-
 const DiachronicChart: Component = () => {
-    const concepts = Object.keys(tier2Data);
-
-    const [concept, setConcept] = createSignal(concepts[0] ?? "");
-    const [topN, setTopN] = createSignal(Math.trunc(MAX_TOP_N / 2));
     const [smoothWindow, setSmoothWindow] = createSignal(0);
     const [sortKey, setSortKey] = createSignal<SortKey>("freq");
-    const [fromYear, setFromYear] = createSignal<number>(CORPUS_START_YEAR);
-    const [toYear, setToYear] = createSignal<number>(CORPUS_END_YEAR);
     const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
-    const yearBounds = createMemo<[number, number]>(() => {
-        const cd = tier2Data[concept()];
-        if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
-        return scanYearRange(cd);
-    });
-
-    createMemo(() => {
-        const [min, max] = yearBounds();
-        setFromYear(min);
-        setToYear(max);
-    });
-
     const filteredEvents = createMemo(() => {
-        const cd = tier2Data[concept()];
+        const cd = tier2Data[controls.concept];
         if (!cd) return [];
-        return filterByYearRange(cd.events, fromYear(), toYear());
+        return filterByYearRange(cd.events, controls.fromYear, controls.toYear);
     });
 
-    // DISPLAY slices (smoothed for ranking only)
     const displaySlices = createMemo<YearSlices>(() =>
-        buildYearSlices(filteredEvents(), topN(), smoothWindow(), sortKey())
+        buildYearSlices(
+            filteredEvents(),
+            controls.topN,
+            smoothWindow(),
+            sortKey()
+        )
     );
 
-    // RAW slices (identity + semantics)
     const rawSlices = createMemo<YearSlices>(() =>
-        buildYearSlices(filteredEvents(), topN(), 0, sortKey())
+        buildYearSlices(
+            filteredEvents(),
+            controls.topN,
+            0,
+            sortKey()
+        )
     );
 
     const years = createMemo<number[]>(() =>
@@ -292,10 +242,11 @@ const DiachronicChart: Component = () => {
     );
 
     const svgHeight = createMemo(() =>
-        HEADER_H + topN() * ROW_HEIGHT + 12
+        HEADER_H + controls.topN * ROW_HEIGHT + 12
     );
 
     const links = createMemo(() => {
+        const focus = focusToken();
         const yrs = years();
         const sl = displaySlices();
 
@@ -311,6 +262,8 @@ const DiachronicChart: Component = () => {
             const mapB = new Map(colB.map(t => [t.token, t]));
 
             for (const a of colA) {
+                if (focus && a.token !== focus) continue;
+
                 const b = mapB.get(a.token);
                 if (!b) continue;
 
@@ -322,6 +275,46 @@ const DiachronicChart: Component = () => {
                     y2: cellY(b.rank),
                 });
             }
+
+            if (focus) {
+                const token = focus;
+                const positions: number[] = [];
+
+                for (let i = 0; i < yrs.length; i++) {
+                    const yrX = yrs[i];
+                    const col = sl.get(yrX) ?? [];
+                    if (col.some(t => t.token === token)) {
+                        positions.push(i);
+                    }
+                }
+
+                for (let i = 0; i < positions.length - 1; i++) {
+                    const aIdx = positions[i];
+                    const bIdx = positions[i + 1];
+
+                    if (bIdx === aIdx + 1) continue;
+
+                    const yrA = yrs[aIdx];
+                    const yrB = yrs[bIdx];
+
+                    const colA = sl.get(yrA) ?? [];
+                    const colB = sl.get(yrB) ?? [];
+
+                    const a = colA.find(t => t.token === token);
+                    const b = colB.find(t => t.token === token);
+
+                    if (!a || !b) continue;
+
+                    out.push({
+                        token,
+                        x1: colX(aIdx) + CELL_WIDTH / 2,
+                        y1: cellY(a.rank),
+                        x2: colX(bIdx) - CELL_WIDTH / 2,
+                        y2: cellY(b.rank),
+                    });
+                }
+            }
+
         }
 
         return out;
@@ -346,139 +339,121 @@ const DiachronicChart: Component = () => {
     });
 
     return (
-        <>
-            <article class="dc-root">
-                <header class="dc-header">
-                    <span class="dc-title">diachronic neighbours</span>
+        <article class="dc-root">
+            <header class="dc-header">
+                <ControlsHeader title="Diachronic Neighbours" fdgControls={false} />
 
-                    <div class="dc-control">
-                        <label>concept</label>
-                        <select value={concept()} onChange={e => setConcept(e.currentTarget.value)}>
-                            <For each={concepts}>{c => <option value={c}>{c}</option>}</For>
-                        </select>
-                    </div>
+                <div class="field middle-align border">
+                    <select value={sortKey()} onChange={e => setSortKey(e.currentTarget.value as SortKey)}>
+                        <option value="freq">frequency</option>
+                        <option value="score">cosine score</option>
+                    </select>
+                    <output>Rank by</output>
+                </div>
 
-                    <div class="dc-control">
-                        <label>from</label>
-                        <input type="range"
-                            min={yearBounds()[0]}
-                            max={yearBounds()[1]}
-                            value={fromYear()}
-                            onInput={e => setFromYear(Number(e.currentTarget.value))}
-                        />
-                        <span>{fromYear()}</span>
-                    </div>
-
-                    <div class="dc-control">
-                        <label>to</label>
-                        <input type="range"
-                            min={yearBounds()[0]}
-                            max={yearBounds()[1]}
-                            value={toYear()}
-                            onInput={e => setToYear(Number(e.currentTarget.value))}
-                        />
-                        <span>{toYear()}</span>
-                    </div>
-
-                    <div class="dc-control">
-                        <label>top N</label>
-                        <input type="range"
-                            min={3}
-                            max={MAX_TOP_N}
-                            value={topN()}
-                            onInput={e => setTopN(Number(e.currentTarget.value))}
-                        />
-                    </div>
-
-                    <div class="dc-control">
-                        <label>window ±</label>
-                        <input type="range"
+                <div class="field middle-align">
+                    <div class="slider tiny">
+                        <input
+                            type="range"
                             min={0}
                             max={4}
                             value={smoothWindow()}
                             onInput={e => setSmoothWindow(Number(e.currentTarget.value))}
                         />
+                        <span class="tooltip bottom" />
                     </div>
-
-                    <div class="dc-control">
-                        <label>rank by</label>
-                        <select value={sortKey()} onChange={e => setSortKey(e.currentTarget.value as SortKey)}>
-                            <option value="freq">frequency</option>
-                            <option value="score">cosine score</option>
-                        </select>
-                    </div>
-                </header>
-
-                <div class="dc-scroll">
-                    <svg width={svgWidth()} height={svgHeight()}>
-
-                        <For each={years()}>
-                            {(yr, i) => (
-                                <text
-                                    x={colX(i())}
-                                    y={HEADER_H - 10}
-                                    text-anchor="middle"
-                                    font-size="11"
-                                >
-                                    {yearLabel(yr, smoothWindow())}
-                                </text>
-                            )}
-                        </For>
-
-                        <For each={links()}>
-                            {lk => (
-                                <path
-                                    d={linkPath(lk.x1, lk.y1, lk.x2, lk.y2)}
-                                    fill="none"
-                                    stroke="#4aa59c"
-                                    stroke-width="1.2"
-                                    stroke-opacity={C_LINK_ALPHA}
-                                />
-                            )}
-                        </For>
-
-                        <For each={years()}>
-                            {(yr, ci) => (
-                                <For each={displaySlices().get(yr) ?? []}>
-                                    {rt => {
-                                        const key = `${ yr }:${ rt.token }`;
-                                        const status = () => cellStatus().get(key) ?? "continuation";
-                                        const color = () => statusColor(status());
-
-                                        const x = () => colX(ci()) - CELL_WIDTH / 2;
-                                        const y = () => HEADER_H + rt.rank * ROW_HEIGHT;
-
-                                        return (
-                                            <g onClick={() => setFocusToken(rt.token)}>
-                                                <rect
-                                                    x={x()}
-                                                    y={y()}
-                                                    width={CELL_WIDTH}
-                                                    height={CELL_H}
-                                                    fill={color()}
-                                                    fill-opacity={0.12}
-                                                />
-
-                                                <text
-                                                    x={x() + LABEL_PAD}
-                                                    y={y() + CELL_H / 2}
-                                                    dominant-baseline="middle"
-                                                    font-size="10"
-                                                    fill={color()}
-                                                >
-                                                    {rt.token}
-                                                </text>
-                                            </g>
-                                        );
-                                    }}
-                                </For>
-                            )}
-                        </For>
-
-                    </svg>
+                    <output class="small-padding top-padding">
+                        Smoothing
+                    </output>
                 </div>
-            </article>
-        </>
+            </header>
+
+            <div class="dc-scroll">
+                <svg width={svgWidth()} height={svgHeight()}>
+
+                    <For each={years()}>
+                        {(yr, i) => (
+                            <text
+                                x={colX(i())}
+                                y={HEADER_H - 10}
+                                text-anchor="middle"
+                                font-size="11"
+                            >
+                                {yearLabel(yr, smoothWindow())}
+                            </text>
+                        )}
+                    </For>
+
+                    <For each={links()}>
+                        {lk => (
+                            <path
+                                d={linkPath(lk.x1, lk.y1, lk.x2, lk.y2)}
+                                fill="none"
+                                stroke="#4aa59c"
+                                stroke-width="1.2"
+                                stroke-opacity={
+                                    focusToken()
+                                        ? (lk.token === focusToken() ? C_LINK_FOCUS : 0.08)
+                                        : C_LINK_ALPHA
+                                }
+                            />
+                        )}
+                    </For>
+
+                    <For each={years()}>
+                        {(yr, ci) => (
+                            <For each={displaySlices().get(yr) ?? []}>
+                                {rt => {
+                                    const key = `${ yr }:${ rt.token }`;
+                                    const status = () =>
+                                        cellStatus().get(key) ?? "continuation";
+                                    const color = () => statusColor(status());
+
+                                    const isFocused = () =>
+                                        !focusToken() || focusToken() === rt.token;
+
+                                    const x = () => colX(ci()) - CELL_WIDTH / 2;
+                                    const y = () => HEADER_H + rt.rank * ROW_HEIGHT;
+
+                                    return (
+                                        <g
+                                            onClick={() =>
+                                                setFocusToken(prev =>
+                                                    prev === rt.token ? null : rt.token
+                                                )
+                                            }
+                                        >
+                                            <rect
+                                                x={x()}
+                                                y={y()}
+                                                width={CELL_WIDTH}
+                                                height={CELL_H}
+                                                fill={color()}
+                                                stroke={focusToken() === rt.token ? C_FOCUS : "none"}
+                                                stroke-width={focusToken() === rt.token ? 1.2 : 0}
+                                                fill-opacity={isFocused() ? 0.18 : 0.04}
+                                            />
+
+                                            <text
+                                                x={x() + LABEL_PAD}
+                                                y={y() + CELL_H / 2}
+                                                dominant-baseline="middle"
+                                                font-size="10"
+                                                fill={color()}
+                                                opacity={isFocused() ? 1 : 0.25}
+                                            >
+                                                {rt.token}
+                                            </text>
+                                        </g>
+                                    );
+                                }}
+                            </For>
+                        )}
+                    </For>
+
+                </svg>
+            </div>
+        </article>
     );
 };
 

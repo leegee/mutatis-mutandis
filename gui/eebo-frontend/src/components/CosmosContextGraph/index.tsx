@@ -727,7 +727,7 @@ const CosmosComponent: Component = () => {
 
         {/* ── Main canvas + aside ── */}
         <div class="cg-main background">
-          <div ref={wrapRef!} class="cg-canvas-wrap surface-container-lowest">
+          <div ref={wrapRef!} class="cg-canvas-wrap surface-container">
 
             {/* Label overlay — updated every rAF tick, always visible */}
             <div class="cg-labels">

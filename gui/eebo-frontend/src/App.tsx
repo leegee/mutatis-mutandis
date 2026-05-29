@@ -45,7 +45,7 @@ export default function App() {
 
   return (
     <>
-      <nav id="app-nav" class={`surface-container fill left scroll ${ open() ? "max" : "small" }`} >
+      <nav id="app-nav" class={`surface-container-low left scroll ${ open() ? "max" : "small" }`} >
         <header class="center-align ">
           <button class="extra transparent" onClick={() => setOpen(!open())} >
             <Switch>
@@ -62,7 +62,7 @@ export default function App() {
           </a>
         ))}
 
-        <hr class="max" />
+        <hr class="max surface-container-low" />
 
         <a onClick={() => setOpenHelp(!openHelp())}>
           <i>help</i>
@@ -117,7 +117,7 @@ export default function App() {
 
       <Transition name="slide-fade">
         <Show when={openHelp()}>
-          <article class="helpContainer right surface-container-highest padding  high-elevate border">
+          <article class="helpContainer right surface-container-high padding  high-elevate border">
             <Switch fallback={<article>To do...</article>}>
               <Match when={view() === "graph"}>
                 <ConceptGraphGuide />

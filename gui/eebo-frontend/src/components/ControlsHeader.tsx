@@ -1,4 +1,8 @@
-import { createMemo, For, Show } from "solid-js";
+import {
+  children,
+  createMemo, For, Show,
+  type ParentComponent
+} from "solid-js";
 import { controls } from "../state/controls.store";
 import { controlsActions as A } from "../state/controls.actions";
 import { tier2Data } from "../state/tier2data.store";
@@ -6,21 +10,24 @@ import type { ViewMode, YearMode } from "../state/controls.store";
 import { getYearBounds, getYearFiltered } from "../state/selectors";
 
 interface Props {
-  includeHubSpread: boolean;
-  totalEvents: () => number;
+  children?: any;
+  title?: string;
+  includeHubSpread?: boolean;
+  fdgControls?: boolean;
+  totalEvents?: () => number;
 }
 
 const MAX_TOP_N = 100;
 
-export default function ControlsHeader(props: Props) {
-
+const ControlsHeader: ParentComponent<Props> = (props) => {
+  const resolved = children(() => props.children);
+  const fdgControls = () => props.fdgControls ?? true;
   const conceptsMemo = createMemo(() => Object.keys(tier2Data));
   const yearBoundsMemo = createMemo(() => getYearBounds());
 
   return (
-    <header class="center-align fill max surface-container-low small-padding top-padding">
+    <header class="center-align max surface-container-low small-padding top-padding">
       <nav>
-
         <div class="field suffix border middle-align">
           <select
             value={controls.concept}
@@ -33,32 +40,34 @@ export default function ControlsHeader(props: Props) {
           <output>Concept</output>
         </div>
 
-        <div class="field suffix border middle-align">
-          <select
-            value={controls.viewMode}
-            onChange={(e) =>
-              A.setViewMode(e.currentTarget.value as ViewMode)
-            }
-          >
-            <option value="aggregated">Aggregated</option>
-            <option value="events">Events</option>
-          </select>
-          <output>View</output>
-        </div>
-
-        {/* Max hubs */}
-        <Show when={controls.viewMode === "aggregated"}>
+        <Show when={fdgControls()}>
           <div class="field suffix border middle-align">
             <select
-              value={controls.maxHubs}
-              onChange={(e) => A.setMaxHubs(Number(e.currentTarget.value))}
+              value={controls.viewMode}
+              onChange={(e) =>
+                A.setViewMode(e.currentTarget.value as ViewMode)
+              }
             >
-              <For each={[10, 20, 50, 100]}>
-                {(n) => <option value={n}>{n}</option>}
-              </For>
+              <option value="aggregated">Aggregated</option>
+              <option value="events">Events</option>
             </select>
-            <output>Max hubs</output>
+            <output>View</output>
           </div>
+
+          {/* Max hubs */}
+          <Show when={controls.viewMode === "aggregated"}>
+            <div class="field suffix border middle-align">
+              <select
+                value={controls.maxHubs}
+                onChange={(e) => A.setMaxHubs(Number(e.currentTarget.value))}
+              >
+                <For each={[10, 20, 50, 100]}>
+                  {(n) => <option value={n}>{n}</option>}
+                </For>
+              </select>
+              <output>Max hubs</output>
+            </div>
+          </Show>
         </Show>
 
         {/* Top N */}
@@ -75,7 +84,6 @@ export default function ControlsHeader(props: Props) {
             <span />
             <span class="tooltip bottom" />
           </div>
-
           <output class="small-padding top-padding">
             Top N {controls.topN}
           </output>
@@ -106,7 +114,7 @@ export default function ControlsHeader(props: Props) {
         </Show>
 
         {/* Min similarity */}
-        <Show when={controls.viewMode === "aggregated"}>
+        <Show when={fdgControls() && controls.viewMode === "aggregated"}>
           <div class="field middle-align">
             <div class="slider tiny">
               <input
@@ -236,15 +244,20 @@ export default function ControlsHeader(props: Props) {
               <span>
                 {controls.fromYear}–{controls.toYear}
               </span>
-
-              <span class="left-padding">
-                {getYearFiltered().length} / {props.totalEvents()} events
-              </span>
+              <Show when={props.totalEvents}>
+                <span class="left-padding">
+                  {getYearFiltered().length} / {props.totalEvents!()} events
+                </span>
+              </Show>
             </output>
           </div>
         </Show>
+
+        {resolved()}
 
       </nav>
     </header>
   );
 }
+
+export default ControlsHeader;

@@ -383,7 +383,7 @@ const NeighbourhoodBrowser: Component = () => {
     <div style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
 
       {/* Header */}
-      <header class="center-align fill max surface-container-low small-padding top-padding">
+      <header class="center-align max surface-container-low small-padding top-padding">
         <nav>
 
           {/* Concept */}
@@ -460,8 +460,7 @@ const NeighbourhoodBrowser: Component = () => {
       <div class="grid background no-margin" style={{ display: "flex", flex: "1", overflow: "hidden" }} >
 
         {/* LEFT: event list */}
-        <nav
-          class="s3 surface-container-low border"
+        <nav class="s3 surface-container"
           style={{ "flex-shrink": "0", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
           <div class="padding small-text bold" >
@@ -503,7 +502,7 @@ const NeighbourhoodBrowser: Component = () => {
 
         {/* CENTRE: neighbour tokens */}
         <div
-          class="s6 surface-container-lowest"
+          class="s6 surface-container"
           style={{ flex: "1", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
           <div class="padding small-text bold" style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}>
@@ -611,10 +610,7 @@ const NeighbourhoodBrowser: Component = () => {
         </div>
 
         {/* RIGHT: documents */}
-        <aside
-          class="s3 surface-container-high border"
-        // style={{ width: "18rem", "flex-shrink": "0", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
-        >
+        <aside class="s3 surface-container" >
           <div class="padding small-text bold" style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}>
             <Show when={focusToken()} fallback="Documents">
               <span>
