@@ -17,7 +17,7 @@ import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 
 import type { AnyEdge, ConceptData, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, Tier2Data, TokenBin } from "./types";
 import { controls, setControls } from '../../state/controls';
-import Header from "../ControlsHeader";
+import ControlsHeader from "../ControlsHeader";
 
 interface Props { data: Tier2Data; }
 
@@ -718,7 +718,7 @@ const CosmosComponent: Component<Props> = (props) => {
     <>
       <div class="cg-layout">
 
-        <Header
+        <ControlsHeader
           includeHubSpread={true}
           concepts={concepts}
           MAX_TOP_N={MAX_TOP_N}

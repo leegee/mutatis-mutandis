@@ -1,7 +1,7 @@
 import { For, Show, type Accessor } from "solid-js";
 import { controls, setControls } from "../state/controls";
-import type { ConceptEvent, ViewMode } from "./SvgConceptGraph/types";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
+import type { ConceptEvent, ViewMode } from "../types/context-graph.types";
 
 interface Props {
   includeHubSpread: boolean;
@@ -11,7 +11,7 @@ interface Props {
   yearBounds: any;
 }
 
-export default function Header(props: Props) {
+export default function ControlsHeader(props: Props) {
   return (
 
     <header class="center-align fill max surface-container-low small-padding top-padding">
