@@ -38,6 +38,7 @@ import {
 import './DiachronicChart/styles.css';
 
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
+import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
 
 interface Neighbour {
     token: string;
@@ -103,29 +104,6 @@ const C_CONTINUATION = "#4aa59c";
 const C_FOCUS = "#3ecfb2";
 const C_LINK_ALPHA = 0.38;
 const C_LINK_FOCUS = 0.85;
-
-function scanYearRange(cd: ConceptData): [number, number] {
-    let min = CORPUS_END_YEAR;
-    let max = CORPUS_START_YEAR;
-
-    for (const e of cd.events) {
-        if (e.pub_year === undefined) continue;
-        if (e.pub_year < min) min = e.pub_year;
-        if (e.pub_year > max) max = e.pub_year;
-    }
-
-    return min <= max ? [min, max] : [CORPUS_START_YEAR, CORPUS_END_YEAR];
-}
-
-function filterByYearRange(
-    events: ConceptEvent[],
-    from: number,
-    to: number
-): ConceptEvent[] {
-    return events.filter(
-        e => e.pub_year !== undefined && e.pub_year >= from && e.pub_year <= to
-    );
-}
 
 function yearLabel(year: number, window: number): string {
     if (window === 0) return String(year);
