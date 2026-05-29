@@ -124,7 +124,7 @@ export function buildContextualGraph(
     const hubKeys = [...bins.keys()];
     if (hubKeys.length === 0) return EMPTY_GRAPH;
 
-    // 1. Hub-hub edges: pairwise cosine -------------------------------------
+    // 1. Hub-hub edges: pairwise cosine
     const rawHubHub: Array<[string, string, number]> = [];
     for (let i = 0; i < hubKeys.length; i++) {
         for (let j = i + 1; j < hubKeys.length; j++) {
@@ -135,8 +135,8 @@ export function buildContextualGraph(
             if (sim >= minSimilarity) rawHubHub.push([hubKeys[i], hubKeys[j], sim]);
         }
     }
-    // TODO layer 2: inject temporal continuity edges here
-    // TODO layer 3: inject shared-unusual-neighbour edges here
+    // TODO layer 2: inject temporal continuity edges here?
+    // TODO layer 3: inject shared-unusual-neighbour edges here?
 
     // Hub degree from hub-hub edges only.
     const hubHubDegree = new Map<string, number>();
@@ -170,7 +170,7 @@ export function buildContextualGraph(
         });
     }
 
-    // 3. Neighbour nodes + hub-neighbour edges -------------------------------
+    // 3. Neighbour nodes + hub-neighbour edges
     const spokeTriples: Array<[string, string, number]> = [];
 
     for (const hubKey of sortedHubs) {
@@ -193,7 +193,7 @@ export function buildContextualGraph(
 
     const nodes = [...nodeMap.values()];
 
-    // 4. Materialise edges ---------------------------------------------------
+    // 4. Materialise edges
     const hubHubEdges: HubHubEdge[] = rawHubHub
         .filter(([a, b]) => hubSet.has(a) && hubSet.has(b))
         .map(([a, b, weight]) => ({
@@ -297,5 +297,3 @@ export function buildPureEventGraph(
         maxHubDegree: 1,
     };
 }
-
-
