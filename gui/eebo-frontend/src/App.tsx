@@ -30,11 +30,11 @@ export default function App() {
 
   const [view, setView] = createSignal<
     "graph" | "table" | "help" | "diachronic" | "cosmos"
-  >("graph");
+  >("cosmos");
 
   const navItems = [
-    { key: "graph", icon: "graph_5", label: "Force graph (SVG)" },
     { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
+    { key: "graph", icon: "graph_5", label: "Force graph (SVG)" },
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
     { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
   ] as const;
