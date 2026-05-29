@@ -481,10 +481,13 @@ const NeighbourhoodBrowser: Component = () => {
 
               return (
                 <button
-                  class={`left-padding right-padding no-round no-margin ${ isSelected() ? "primary" : "secondary" }`}
+                  class={`chip tiny-padding left-padding right-padding no-round no-margin ${ isSelected() ? "primary" : "transparent" }`}
                   style={{ opacity: hasFocus() ? 1 : 0.35, transition: "opacity 0.15s" }}
                   onClick={() => setSelectedEventId((prev) => prev === key() ? null : key())}
                 >
+                  <span class="tooltip top">
+                    eid:{event.event_id}
+                  </span>
                   <Show when={event.pub_year !== undefined} fallback={"&mbash;"}>
                     <span class="small-text">{event.pub_year}</span>
                   </Show>

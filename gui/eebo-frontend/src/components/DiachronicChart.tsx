@@ -157,6 +157,7 @@ function buildYearSlices(
     return slices;
 }
 
+
 function classifyStatus(
     token: string,
     year: number,
@@ -168,19 +169,27 @@ function classifyStatus(
     const previousYears = years.slice(0, idx);
     const futureYears = years.slice(idx + 1);
 
-    const existedBefore = previousYears.some(y =>
-        slices.get(y)?.some(t => t.token === token)
-    );
+    const existedBefore = previousYears.some(y => {
+        const col = slices.get(y);
+        return col?.some(t => t.token === token);
+    });
 
-    const existsLater = futureYears.some(y =>
-        slices.get(y)?.some(t => t.token === token)
-    );
+    const existsLater = futureYears.some(y => {
+        const col = slices.get(y);
+        return col?.some(t => t.token === token);
+    });
+
+    const presentThisYear =
+        slices.get(year)?.some(t => t.token === token) ?? false;
+
+    if (!presentThisYear) return "continuation";
 
     if (!existedBefore && !existsLater) return "birth-death";
     if (!existedBefore) return "birth";
     if (!existsLater) return "death";
     return "continuation";
 }
+
 
 function statusColor(s: TokenStatus): string {
     if (s === "birth") return C_BIRTH;
