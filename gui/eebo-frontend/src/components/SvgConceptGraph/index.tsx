@@ -41,7 +41,7 @@
  *
  * PIPELINE
 
- *   props.data (Tier2Data)
+ *   tier2Data (Tier2Data)
  *       │  filterByYearRange()
  *   ConceptEvent[]
  *       │
@@ -87,10 +87,9 @@ import {
 import * as d3 from "d3";
 
 import './styles.css';
+import { tier2Data } from "../../state/tier2data.store";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
-import type {
-  TokenBin, ContextNode, HubHubEdge, HubNbEdge, AnyEdge, ContextGraphData, Tier2Data,
-} from "../../types/context-graph.types";
+import type { TokenBin, ContextNode, HubHubEdge, HubNbEdge, AnyEdge, ContextGraphData } from "../../types/context-graph.types";
 import ControlsHeader from "../ControlsHeader";
 import { controls, setControls } from "../../state/controls";
 import { aggregateByToken, buildContextualGraph, buildPureEventGraph, filterByYearRange, scanYearRange } from "../../lib/contextGraphUtils";
@@ -109,27 +108,22 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubHubWeight: 1, maxEventCount: 1, maxHubDegree: 1,
 };
 
-
-
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
-export interface Props {
-  data: Tier2Data;
-}
 
-const ContextGraph5: Component<Props> = (props) => {
-  const concepts = Object.keys(props.data as Tier2Data);
+const ContextGraph5: Component = () => {
+  const concepts = Object.keys(tier2Data)
 
   const yearBounds = createMemo<[number, number]>(() => {
-    const cd = props.data[controls.concept];
+    const cd = tier2Data[controls.concept];
     if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
     return scanYearRange(cd);
   });
 
 
   const yearFiltered = createMemo(() => {
-    const cd = props.data[controls.concept];
+    const cd = tier2Data[controls.concept];
     if (!cd) return [];
     const [min, max] = yearBounds();
     const events = cd.events;
@@ -464,7 +458,7 @@ const ContextGraph5: Component<Props> = (props) => {
   });
 
   const totalEventsForConcept = createMemo(() => {
-    const cd = props.data[controls.concept];
+    const cd = tier2Data[controls.concept];
     return cd?.n_events ?? 0;
   });
 

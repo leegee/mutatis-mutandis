@@ -1,33 +1,3 @@
-/**
- * DiachronicChart.tsx
- *
- * Heuser-style diachronic chart of contextual neighbours.
- *
- *  Cubic-bezier links connect the same token across adjacent year columns.
- *
- * -----------------------------------------------------------------------------
- * COLOUR SEMANTICS  (after Heuser)
- * -----------------------------------------------------------------------------
- *  BIRTH       — token appears in this year but NOT the preceding year.
- *                Warm amber.
- *  DEATH       — token appears in this year but NOT the following year.
- *                Muted rose.
- *  BIRTH+DEATH — appears in only one year.  Deep orange.
- *  CONTINUATION — present in both neighbours.  Slate blue.
- *  FOCUSED     — highlighted token (hover / click).  Bright teal.
- *
- * -----------------------------------------------------------------------------
- * DATA FLOW
- * -----------------------------------------------------------------------------
- *  props.data (Tier2Data)
- *      │  filterByYearRange()
- *  ConceptEvent[]
- *      │  buildYearSlices()        (RAW + DISPLAY pipelines)
- *  Map<year, RankedToken[]>       — top-N per year, rank-ordered
- *      │  (reactive memos)
- *  SVG — link layer + cell layer
- */
-
 import {
     createSignal,
     createMemo,
@@ -39,6 +9,7 @@ import './DiachronicChart/styles.css';
 
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
+import { tier2Data } from "../state/tier2data.store";
 
 interface Neighbour {
     token: string;
@@ -68,9 +39,6 @@ export interface Tier2Data {
     [concept: string]: ConceptData;
 }
 
-interface Props {
-    data: Tier2Data;
-}
 
 interface RankedToken {
     token: string;
@@ -276,8 +244,8 @@ function linkPath(
 
 const STYLES = `/* unchanged for brevity */`;
 
-const DiachronicChart: Component<Props> = (props) => {
-    const concepts = Object.keys(props.data);
+const DiachronicChart: Component = () => {
+    const concepts = Object.keys(tier2Data);
 
     const [concept, setConcept] = createSignal(concepts[0] ?? "");
     const [topN, setTopN] = createSignal(Math.trunc(MAX_TOP_N / 2));
@@ -288,7 +256,7 @@ const DiachronicChart: Component<Props> = (props) => {
     const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
     const yearBounds = createMemo<[number, number]>(() => {
-        const cd = props.data[concept()];
+        const cd = tier2Data[concept()];
         if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
         return scanYearRange(cd);
     });
@@ -300,7 +268,7 @@ const DiachronicChart: Component<Props> = (props) => {
     });
 
     const filteredEvents = createMemo(() => {
-        const cd = props.data[concept()];
+        const cd = tier2Data[concept()];
         if (!cd) return [];
         return filterByYearRange(cd.events, fromYear(), toYear());
     });

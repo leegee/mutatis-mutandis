@@ -21,7 +21,7 @@
  *                       - centre panel highlights it in the chip list
  *
  * DATA FLOW
- *   props.data (Tier2Data)
+ *   tier2Data (Tier2Data)
  *       │  filterByYearRange()
  *       |
  *   ConceptEvent[]          — year-filtered events
@@ -45,6 +45,7 @@ import {
 } from "solid-js";
 import Sparkline from "./NeighbourhoodBrowser/SparkLine";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
+import { tier2Data } from "../state/tier2data.store";
 
 // Types
 
@@ -76,9 +77,6 @@ export interface Tier2Data {
   [concept: string]: ConceptData;
 }
 
-interface Props {
-  data: Tier2Data;
-}
 
 /**
  * Aggregated view of a neighbour token across all events in the current
@@ -213,8 +211,8 @@ function scoreToOpacity(
 
 // Component
 
-const NeighbourhoodBrowser: Component<Props> = (props) => {
-  const concepts = Object.keys(props.data);
+const NeighbourhoodBrowser: Component = () => {
+  const concepts = Object.keys(tier2Data);
 
   const [concept, setConcept] = createSignal(concepts[0] ?? "");
   const [fromYear, setFromYear] = createSignal<number>(-1);
@@ -224,7 +222,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
   const yearBounds = createMemo<[number, number]>(() => {
-    const cd = props.data[concept()];
+    const cd = tier2Data[concept()];
     if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
     return scanYearRange(cd);
   });
@@ -243,7 +241,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
   });
 
   const yearFiltered = createMemo<ConceptEvent[]>(() => {
-    const cd = props.data[concept()];
+    const cd = tier2Data[concept()];
     if (!cd) return [];
     const [min, max] = yearBounds();
     if (fromYear() <= min && toYear() >= max) return cd.events;
@@ -449,7 +447,7 @@ const NeighbourhoodBrowser: Component<Props> = (props) => {
               <output class="small-padding top-padding">
                 <span>{fromYear()}–{toYear()}</span>
                 <span class="left-padding">
-                  {yearFiltered().length}/{props.data[concept()]?.n_events ?? 0} events
+                  {yearFiltered().length}/{tier2Data[concept()]?.n_events ?? 0} events
                 </span>
               </output>
             </div>

@@ -94,7 +94,11 @@ export default function ControlsHeader(props: Props) {
         <Show when={controls.yearMode === "single"}>
           <nav class="no-space">
             <button class="circle chip secondary no-space large-margin bottom-margin"
-              onClick={() => { const v = Math.max(CORPUS_START_YEAR, controls.fromYear - 1); setControls('fromYear', v); setControls('toYear', v); }}>
+              onClick={() => {
+                const v = Math.max(CORPUS_START_YEAR, controls.fromYear - 1);
+                setControls('fromYear', v);
+                setControls('toYear', v);
+              }}>
               <i>remove</i>
             </button>
 
@@ -102,7 +106,11 @@ export default function ControlsHeader(props: Props) {
               <div class="slider tiny">
                 <input type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
                   value={controls.fromYear}
-                  onInput={(e) => { const v = Number(e.currentTarget.value); setControls('fromYear', v); setControls('toYear', v); }} />
+                  onInput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    setControls('fromYear', v);
+                    setControls('toYear', v);
+                  }} />
                 <span class="tooltip bottom" />
               </div>
               <output class="small-padding top-padding">
@@ -111,7 +119,11 @@ export default function ControlsHeader(props: Props) {
             </div>
 
             <button class="circle chip secondary no-space large-margin bottom-margin"
-              onClick={() => { const v = Math.min(CORPUS_END_YEAR, controls.toYear + 1); setControls('toYear', v); setControls('fromYear', v); }}>
+              onClick={() => {
+                const v = Math.min(CORPUS_END_YEAR, controls.toYear + 1);
+                setControls('toYear', v);
+                setControls('fromYear', v);
+              }}>
               <i>add</i>
             </button>
           </nav>

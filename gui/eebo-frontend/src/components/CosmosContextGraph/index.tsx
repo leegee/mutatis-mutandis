@@ -15,11 +15,10 @@ import * as d3 from "d3";
 import "./styles.css";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 
-import type { AnyEdge, ConceptData, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, Tier2Data, TokenBin } from "./types";
+import type { AnyEdge, ConceptData, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, TokenBin } from "./types";
 import { controls, setControls } from '../../state/controls';
 import ControlsHeader from "../ControlsHeader";
-
-interface Props { data: Tier2Data; }
+import { tier2Data } from "../../state/tier2data.store";
 
 const MAX_TOP_N = 20;
 
@@ -412,14 +411,14 @@ class GraphWorld {
 const showDocument = (docId: string) =>
   window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
 
-const CosmosComponent: Component<Props> = (props) => {
-  const concepts = Object.keys(props.data);
+const CosmosComponent: Component = () => {
+  const concepts = Object.keys(tier2Data);
 
   const [labelPositions, setLabelPositions] = createSignal<Array<{ id: string; kind: string; x: number; y: number }>>([]);
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 
   const yearBounds = createMemo<[number, number]>(() => {
-    const cd = props.data[controls.concept];
+    const cd = tier2Data[controls.concept];
     if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
     return scanYearRange(cd);
   });
@@ -431,7 +430,7 @@ const CosmosComponent: Component<Props> = (props) => {
   });
 
   const yearFiltered = createMemo(() => {
-    const cd = props.data[controls.concept];
+    const cd = tier2Data[controls.concept];
     if (!cd) return [];
     const [min, max] = yearBounds();
     return controls.fromYear <= min && controls.toYear >= max
@@ -715,7 +714,7 @@ const CosmosComponent: Component<Props> = (props) => {
 
 
   const totalEventsForConcept = createMemo(() => {
-    const cd = props.data[controls.concept];
+    const cd = tier2Data[controls.concept];
     return cd?.n_events ?? 0;
   });
 

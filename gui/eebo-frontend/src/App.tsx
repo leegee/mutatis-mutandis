@@ -1,19 +1,13 @@
 // src/App.tsx
 
-import {
-  createResource,
-  createSignal,
-  ErrorBoundary,
-  lazy,
-  Match,
-  Show,
-  Switch,
-} from "solid-js";
+import { createSignal, ErrorBoundary, lazy, Match, onMount, Show, Switch, } from "solid-js";
 import { Transition } from "solid-transition-group";
 
 import "./App.css";
-
-import { loadConceptNeighbours } from "./services/loadConceptNeighbours.service";
+import {
+  tier2Data,
+  loadTier2Data
+} from "./state/tier2data.store";
 
 import ConceptGraphGuide from "./components/SvgConceptGraph/Guide";
 const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"));
@@ -24,10 +18,10 @@ const SvgContextGraph5 = lazy(() => import("./components/SvgConceptGraph"));
 const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
 
 export default function App() {
-  const [events] = createResource(loadConceptNeighbours);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
   const [openHelp, setOpenHelp] = createSignal(false);
   const [open, setOpen] = createSignal(false);
-
   const [view, setView] = createSignal<
     "graph" | "table" | "help" | "diachronic" | "cosmos"
   >("cosmos");
@@ -38,6 +32,16 @@ export default function App() {
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
     { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
   ] as const;
+
+  onMount(async () => {
+    try {
+      await loadTier2Data();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  });
 
   return (
     <>
@@ -74,34 +78,39 @@ export default function App() {
             </article>
           )}
         >
-          <Show when={events()} fallback={<article class="small-round padding border medium no-padding">
-            <div class="padding absolute center middle">
-              <h5>Loading events...</h5>
-            </div>
-            <progress />
-          </article>
-          }
+          <Show
+            when={!loading() && Object.keys(tier2Data).length > 0}
+            fallback={
+              <article class="small-round padding border medium no-padding">
+                <div class="padding absolute center middle">
+                  <h5>
+                    {error() ?? "Loading events..."}
+                  </h5>
+                </div>
+                <Show when={!error()}>
+                  <progress />
+                </Show>
+              </article>
+            }
           >
-            {(data) => (
-              <Switch>
-                <Match when={view() === "graph"}>
-                  <SvgContextGraph5 data={data()} />
-                </Match>
+            <Switch>
+              <Match when={view() === "graph"}>
+                <SvgContextGraph5 />
+              </Match>
 
-                <Match when={view() === "table"}>
-                  <NeighbourhoodBrowser data={data()} />
-                </Match>
+              <Match when={view() === "table"}>
+                <NeighbourhoodBrowser />
+              </Match>
 
-                <Match when={view() === "diachronic"}>
-                  <DiachronicChart data={data()} />
-                </Match>
+              <Match when={view() === "diachronic"}>
+                <DiachronicChart />
+              </Match>
 
-                <Match when={view() === "cosmos"}>
-                  <Cosmos data={data()} />
-                </Match>
+              <Match when={view() === "cosmos"}>
+                <Cosmos />
+              </Match>
 
-              </Switch>
-            )}
+            </Switch>
           </Show>
         </ErrorBoundary>
       </main>
