@@ -17,6 +17,7 @@ export type ControlsState = {
   yearMode: YearMode;
   fromYear: number;
   toYear: number;
+  showEventLabels: boolean;
 };
 
 export const [controls, setControls] = createStore<ControlsState>({
@@ -30,6 +31,7 @@ export const [controls, setControls] = createStore<ControlsState>({
   yearMode: "single",
   fromYear: CORPUS_START_YEAR,
   toYear: CORPUS_END_YEAR,
+  showEventLabels: false,
 });
 
 

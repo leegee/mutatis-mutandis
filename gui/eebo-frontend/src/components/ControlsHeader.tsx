@@ -253,6 +253,17 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           </div>
         </Show>
 
+        {/* <Show when={fdgControls()}>
+          <label>
+            <input
+              type="checkbox"
+              checked={controls.showEventLabels}
+              onChange={e => setControls("showEventLabels", e.currentTarget.checked)}
+            />
+            Event labels
+          </label>
+        </Show> */}
+
         {resolved()}
 
       </nav>

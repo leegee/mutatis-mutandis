@@ -120,6 +120,8 @@
 
   /* Label overlay — always-on, updated every rAF tick */
   .cg-labels {
+    z-index: 200;
+    inset: 0;
     position: absolute;
     top: 0;
     left: 0;
