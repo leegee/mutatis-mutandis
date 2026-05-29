@@ -16,7 +16,7 @@ import "./styles.css";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 
 import type { AnyEdge, ConceptData, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, TokenBin } from "./types";
-import { controls, setControls } from '../../state/controls';
+import { controls, setControls } from '../../state/controls.store';
 import ControlsHeader from "../ControlsHeader";
 import { tier2Data } from "../../state/tier2data.store";
 

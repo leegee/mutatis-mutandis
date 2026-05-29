@@ -91,7 +91,7 @@ import { tier2Data } from "../../state/tier2data.store";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 import type { TokenBin, ContextNode, HubHubEdge, HubNbEdge, AnyEdge, ContextGraphData } from "../../types/context-graph.types";
 import ControlsHeader from "../ControlsHeader";
-import { controls, setControls } from "../../state/controls";
+import { controls, setControls } from "../../state/controls.store";
 import { aggregateByToken, buildContextualGraph, buildPureEventGraph, filterByYearRange, scanYearRange } from "../../lib/contextGraphUtils";
 
 const MAX_TOP_N = 20;

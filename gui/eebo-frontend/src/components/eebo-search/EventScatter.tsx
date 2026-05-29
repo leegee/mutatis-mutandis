@@ -7,7 +7,7 @@ import {
     selectedEventId,
     setHoveredEventId,
     setSelectedEventId
-} from "../../state/selection";
+} from "../../state/search-selection";
 import "./EventScatter.css";
 
 type Props = {

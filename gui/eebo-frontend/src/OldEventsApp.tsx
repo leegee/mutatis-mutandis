@@ -18,7 +18,7 @@ import {
   selectedConcept,
   selectedSlice,
   selectedEventId
-} from "./state/selection";
+} from "./state/search-selection";
 
 export default function App() {
 

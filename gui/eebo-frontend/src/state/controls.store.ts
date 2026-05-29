@@ -1,3 +1,5 @@
+// src/state/controls.store.ts
+
 import { createStore } from "solid-js/store";
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 
@@ -18,7 +20,7 @@ export type ControlsState = {
 };
 
 export const [controls, setControls] = createStore<ControlsState>({
-  concept: 'LIBERTY',
+  concept: "LIBERTY",
   viewMode: "aggregated",
   maxHubs: 50,
   topN: 5,
@@ -31,19 +33,3 @@ export const [controls, setControls] = createStore<ControlsState>({
 });
 
 
-export function setConcept(c: string) {
-  setControls({
-    concept: c,
-    selectedNode: null,
-  });
-}
-
-export function setYearMode(mode: YearMode, bounds: [number, number]) {
-  const [min, max] = bounds;
-
-  setControls({
-    yearMode: mode,
-    fromYear: mode === "single" ? Math.floor((min + max) / 2) : min,
-    toYear: mode === "single" ? Math.floor((min + max) / 2) : max,
-  });
-}
