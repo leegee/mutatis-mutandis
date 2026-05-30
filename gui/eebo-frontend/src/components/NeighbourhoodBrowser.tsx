@@ -48,6 +48,7 @@ import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 import { tier2Data } from "../state/tier2data.store";
 import type { ConceptData, Neighbour } from "../types/context-graph.types";
 import type { ConceptEvent } from "./CosmosContextGraph/types";
+import { createTokenWindowResource } from "../services/tokenWindowApi";
 
 
 /**
@@ -177,7 +178,6 @@ function scoreToOpacity(
   return minOp + ((score - scoreMin) / range) * (maxOp - minOp);
 }
 
-// Component
 
 const NeighbourhoodBrowser: Component = () => {
   const concepts = Object.keys(tier2Data);
@@ -239,6 +239,10 @@ const NeighbourhoodBrowser: Component = () => {
     }
     return null;
   });
+
+  const [windowText] = createTokenWindowResource(
+    () => selectedEvent()?.event ?? null
+  );
 
   const selectedEventNeighbours = createMemo<Neighbour[]>(() => {
     const sel = selectedEvent();
@@ -477,15 +481,13 @@ const NeighbourhoodBrowser: Component = () => {
 
           {/* event window token text */}
           <Show when={selectedEvent()}>
-            {(sel) => (
-              <aside class="center-align small-padding border small-round">
-                <blockquote>
-                  {
-                    sel().event.event_id
-                  }
-                </blockquote>
-              </aside>
-            )}
+            <aside class="center-align small-padding border small-round">
+              <Show when={windowText()} fallback={<div><p>Loading context…</p><progress /></div>}>
+                {(windowText) => (
+                  <blockquote innerHTML={windowText()}></blockquote>
+                )}
+              </Show>
+            </aside>
           </Show>
 
           <div class="padding small-text bold" style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}>

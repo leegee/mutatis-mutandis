@@ -92,3 +92,7 @@ main,
 .field {
   --_input: 1rem;
 }
+
+mark {
+  background-color: aqua;
+}

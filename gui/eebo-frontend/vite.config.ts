@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import path from "path";
-import { serveOutJsonPlugin } from "./vite-custom-plugins/serveOutJsonPlugin";
+import { temporaryMiddlewarePlugin } from "./vite-custom-plugins/tempMiddlewareJsonPlugin";
 
 const documentRoot = path.resolve(__dirname, "../..");
 
@@ -10,7 +10,7 @@ console.info(`[vite.config] documentRoot: ${ documentRoot }`);
 export default defineConfig({
   plugins: [
     solid(),
-    serveOutJsonPlugin(documentRoot),
+    temporaryMiddlewarePlugin(documentRoot),
   ],
   server: {
     fs: {

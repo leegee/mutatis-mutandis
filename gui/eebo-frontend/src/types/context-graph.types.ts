@@ -9,7 +9,7 @@ export interface Neighbour {
   window_id?: number;
 }
 
-interface ConceptEvent {
+export interface ConceptEvent {
   event_id?: number;
   vector_id?: number;
 
