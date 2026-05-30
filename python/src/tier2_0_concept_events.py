@@ -413,7 +413,7 @@ def main():
     knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
     knn_diagnostics(lookup, index, CONCEPT_SETS["LAW"]["forms"])
 
-    raise ValueError("stop")
+    logger.info('--------------------------------------------------------')
 
     conn = get_connection()
     doc_meta = load_doc_metadata(conn)
