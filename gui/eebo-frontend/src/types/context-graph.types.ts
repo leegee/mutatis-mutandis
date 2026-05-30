@@ -9,14 +9,6 @@ export interface Neighbour {
   window_id?: number;
 }
 
-// export interface ConceptEvent {
-//   event_id?: number;
-//   token?: string;
-//   doc_id?: string;
-//   pub_year?: number;
-//   neighbours: Neighbour[];
-// }
-
 interface ConceptEvent {
   event_id?: number;
   vector_id?: number;
@@ -102,9 +94,3 @@ export interface ContextGraphData {
   maxEventCount: number;
   maxHubDegree: number;
 }
-
-
-export type WindowRequest = {
-  doc_id: string;
-  token_idx: number;
-};
