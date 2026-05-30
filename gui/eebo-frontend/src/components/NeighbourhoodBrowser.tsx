@@ -299,8 +299,6 @@ const NeighbourhoodBrowser: Component = () => {
    * - Else if an event is selected: just that event's doc_id.
    * - Else: empty.
    *
-   * FIX: reads doc_id → year from summary.docYears (populated during index
-   * construction) instead of re-scanning yearFiltered().
    */
   const rightPanelDocs = createMemo<Array<{ docId: string; year?: number }>>(() => {
     const ft = focusToken();
@@ -504,10 +502,24 @@ const NeighbourhoodBrowser: Component = () => {
         </nav>
 
         {/* CENTRE: neighbour tokens */}
-        <div
+        <section
           class="s6 surface-container"
           style={{ flex: "1", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
+
+          {/* event window token text */}
+          <Show when={selectedEvent()}>
+            {(sel) => (
+              <aside class="center-align small-padding border small-round">
+                <blockquote>
+                  {
+                    sel().event.event_id
+                  }
+                </blockquote>
+              </aside>
+            )}
+          </Show>
+
           <div class="padding small-text bold" style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}>
             <Show when={selectedEvent()} fallback={
               <span>
@@ -610,7 +622,7 @@ const NeighbourhoodBrowser: Component = () => {
               </For>
             </div>
           </Show>
-        </div>
+        </section>
 
         {/* RIGHT: documents */}
         <aside class="s3 surface-container" >
