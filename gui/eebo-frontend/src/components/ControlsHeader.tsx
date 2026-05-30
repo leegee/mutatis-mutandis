@@ -42,116 +42,8 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           <output>Concept</output>
         </div>
 
-        <Show when={fdgControls()}>
-
-          <hr class="divider vertical max no-margin no-padding" />
-
-          <div class="field suffix border middle-align">
-            <select
-              value={controls.viewMode}
-              onChange={(e) =>
-                A.setViewMode(e.currentTarget.value as ViewMode)
-              }
-            >
-              <option value="aggregated">Aggregated</option>
-              <option value="events">Events</option>
-            </select>
-            <output>View</output>
-          </div>
-
-          <hr class="divider vertical max no-margin no-padding" />
-
-          {/* Max hubs */}
-          <Show when={controls.viewMode === "aggregated"}>
-            <div class="field suffix border middle-align">
-              <select
-                value={controls.maxHubs}
-                onChange={(e) => A.setMaxHubs(Number(e.currentTarget.value))}
-              >
-                <For each={[10, 20, 50, 100]}>
-                  {(n) => <option value={n}>{n}</option>}
-                </For>
-              </select>
-              <output>Max hubs</output>
-            </div>
-          </Show>
-        </Show>
-
         <hr class="divider vertical max no-margin no-padding" />
 
-        {/* Top N */}
-        <div class="field middle-align">
-          <div class="slider tiny">
-            <input
-              type="range"
-              min={1}
-              max={MAX_TOP_N}
-              step={1}
-              value={controls.topN}
-              onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
-            />
-            <span />
-            <span class="tooltip bottom" />
-          </div>
-          <output class="small-padding top-padding">
-            Top N {controls.topN}
-          </output>
-        </div>
-
-        {/* Hub spread */}
-        <Show when={props.includeHubSpread}>
-
-          <hr class="divider vertical max no-margin no-padding" />
-
-          <div class="field middle-align">
-            <div class="slider tiny">
-              <input
-                type="range"
-                min={0.2}
-                max={2.0}
-                step={0.05}
-                value={controls.hubSpread}
-                onInput={(e) =>
-                  A.setHubSpread(Number(e.currentTarget.value))
-                }
-              />
-              <span />
-              <span class="tooltip bottom" />
-            </div>
-            <output class="small-padding top-padding">
-              Hub spread {controls.hubSpread.toFixed(2)}
-            </output>
-          </div>
-        </Show>
-
-        {/* Min similarity */}
-        <Show when={fdgControls() && controls.viewMode === "aggregated"}>
-
-          <hr class="divider vertical max no-margin no-padding" />
-
-          <div class="field middle-align">
-            <div class="slider tiny">
-              <input
-                type="range"
-                min={0.01}
-                max={0.95}
-                step={0.05}
-                value={controls.minSimilarity}
-                onInput={(e) =>
-                  A.setMinSimilarity(Number(e.currentTarget.value))
-                }
-              />
-              <span />
-              <span class="tooltip bottom" />
-            </div>
-
-            <output class="small-padding top-padding">
-              Min sim {controls.minSimilarity.toFixed(2)}
-            </output>
-          </div>
-        </Show>
-
-        <hr class="divider vertical max no-margin no-padding" />
 
         {/* Year mode */}
         <div class="field suffix border middle-align">
@@ -267,6 +159,119 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             </output>
           </div>
         </Show>
+
+        {/* Top N */}
+        <div class="field middle-align">
+          <div class="slider tiny">
+            <input
+              type="range"
+              min={1}
+              max={MAX_TOP_N}
+              step={1}
+              value={controls.topN}
+              onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
+            />
+            <span />
+            <span class="tooltip bottom" />
+          </div>
+          <output class="small-padding top-padding">
+            Top N {controls.topN}
+          </output>
+        </div>
+
+        {/* Hub spread */}
+        <Show when={props.includeHubSpread}>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
+          <div class="field middle-align">
+            <div class="slider tiny">
+              <input
+                type="range"
+                min={0.2}
+                max={2.0}
+                step={0.05}
+                value={controls.hubSpread}
+                onInput={(e) =>
+                  A.setHubSpread(Number(e.currentTarget.value))
+                }
+              />
+              <span />
+              <span class="tooltip bottom" />
+            </div>
+            <output class="small-padding top-padding">
+              Hub spread {controls.hubSpread.toFixed(2)}
+            </output>
+          </div>
+        </Show>
+
+        {/* Min similarity */}
+        <Show when={fdgControls()}>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
+          <div class="field suffix border middle-align">
+            <select
+              value={controls.viewMode}
+              onChange={(e) =>
+                A.setViewMode(e.currentTarget.value as ViewMode)
+              }
+            >
+              <option value="aggregated">Aggregated</option>
+              <option value="events">Events</option>
+            </select>
+            <output>View</output>
+          </div>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
+          {/* Max hubs */}
+          <Show when={controls.viewMode === "aggregated"}>
+
+            <hr class="divider vertical max no-margin no-padding" />
+
+            <div class="field suffix border middle-align">
+              <select
+                value={controls.maxHubs}
+                onChange={(e) => A.setMaxHubs(Number(e.currentTarget.value))}
+              >
+                <For each={[10, 20, 50, 100]}>
+                  {(n) => <option value={n}>{n}</option>}
+                </For>
+              </select>
+              <output>Max hubs</output>
+            </div>
+          </Show>
+
+          <Show when={controls.viewMode === "aggregated"}>
+
+            <hr class="divider vertical max no-margin no-padding" />
+
+            <div class="field middle-align">
+              <div class="slider tiny">
+                <input
+                  type="range"
+                  min={0.01}
+                  max={0.95}
+                  step={0.05}
+                  value={controls.minSimilarity}
+                  onInput={(e) =>
+                    A.setMinSimilarity(Number(e.currentTarget.value))
+                  }
+                />
+                <span />
+                <span class="tooltip bottom" />
+              </div>
+
+              <output class="small-padding top-padding">
+                Min sim {controls.minSimilarity.toFixed(2)}
+              </output>
+            </div>
+          </Show>
+
+        </Show>
+
+        <hr class="divider vertical max no-margin no-padding" />
 
         {/* <Show when={fdgControls()}>
         <hr class="divider vertical max no-margin no-padding" />
