@@ -39,7 +39,8 @@ STOPWORDS = {
     "the", "a", "an",
     # pronouns
     "i", "he", "she", "it", "we", "they", "who", "which", "that",
-    "his", "her", "its", "our", "their", "my", "thy", "your",
+    "his", "her", "its", "our", "their", "my", "thy", "your", "hast",
+    "art", "is", "who", "thine", "mine", "his", "her", "its",
     "him", "them", "us", "me", "thee", "thy", "thou", "thoust",
     # conjunctions / prepositions
     "and", "or", "but", "of", "in", "to", "for", "with", "by",
