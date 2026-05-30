@@ -9,11 +9,27 @@ export interface Neighbour {
   window_id?: number;
 }
 
-export interface ConceptEvent {
+// export interface ConceptEvent {
+//   event_id?: number;
+//   token?: string;
+//   doc_id?: string;
+//   pub_year?: number;
+//   neighbours: Neighbour[];
+// }
+
+interface ConceptEvent {
   event_id?: number;
+  vector_id?: number;
+
   token?: string;
+  token_idx?: number;
+
   doc_id?: string;
   pub_year?: number;
+
+  window_id?: number;
+  window_token_pos?: number;
+
   neighbours: Neighbour[];
 }
 
