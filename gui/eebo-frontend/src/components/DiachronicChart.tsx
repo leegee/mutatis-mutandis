@@ -346,7 +346,7 @@ const DiachronicChart: Component = () => {
     });
 
     return (
-        <article class="background">
+        <article class="background  no-padding no-margin">
             <ControlsHeader title="Diachronic Neighbours" fdgControls={false}>
                 <div class="field middle-align border">
                     <select value={sortKey()} onChange={e => setSortKey(e.currentTarget.value as SortKey)}>
