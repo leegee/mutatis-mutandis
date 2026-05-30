@@ -46,36 +46,8 @@ import {
 import Sparkline from "./NeighbourhoodBrowser/SparkLine";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 import { tier2Data } from "../state/tier2data.store";
-
-// Types
-
-interface Neighbour {
-  token: string;
-  score: number;
-  event_id?: number;
-  doc_id?: string;
-  pub_year?: number;
-  window_id?: number;
-}
-
-interface ConceptEvent {
-  event_id?: number;
-  token?: string;
-  doc_id?: string;
-  pub_year?: number;
-  neighbours: Neighbour[];
-}
-
-interface ConceptData {
-  n_events: number;
-  year_min?: number;
-  year_max?: number;
-  events: ConceptEvent[];
-}
-
-export interface Tier2Data {
-  [concept: string]: ConceptData;
-}
+import type { ConceptData, Neighbour } from "../types/context-graph.types";
+import type { ConceptEvent } from "./CosmosContextGraph/types";
 
 
 /**
@@ -105,10 +77,6 @@ interface NeighbourSummary {
 /** Map from token string : NeighbourSummary. */
 type NeighbourIndex = Map<string, NeighbourSummary>;
 
-// Constants
-
-
-// Data functions
 
 function scanYearRange(cd: ConceptData): [number, number] {
   let min = CORPUS_END_YEAR;
