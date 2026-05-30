@@ -102,3 +102,9 @@ export interface ContextGraphData {
   maxEventCount: number;
   maxHubDegree: number;
 }
+
+
+export type WindowRequest = {
+  doc_id: string;
+  token_idx: number;
+};
