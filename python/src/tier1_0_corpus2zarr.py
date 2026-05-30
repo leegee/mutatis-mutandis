@@ -155,6 +155,7 @@ def process_windows_events(
     doc_id,
     tokens,
     vector_ids,
+    corpus_token_idxs,
     tokenizer,
     model,
     device
@@ -178,6 +179,7 @@ def process_windows_events(
                     doc_id,
                     tokens,
                     vector_ids,
+                    corpus_token_idxs,
                     b,
                     h
                 )
@@ -207,7 +209,7 @@ def process_windows_events(
     return events if events else None
 
 
-def extract_events(doc_id, tokens, vector_ids, batch_item, hidden):
+def extract_events(doc_id, tokens, vector_ids, corpus_token_idxs, batch_item, hidden):
     window_start = batch_item["window_start"]
     word_ids = batch_item["word_ids"]
 
@@ -217,14 +219,18 @@ def extract_events(doc_id, tokens, vector_ids, batch_item, hidden):
         if wid is None or wid < 0:
             continue
 
+        # Use the original corpus token_idx (not the buffer-local wid)
+        # to ensure concept_id and event_id are stable across runs.
+        corpus_token_idx = corpus_token_idxs[wid]
+
         concept_id = make_concept_id(
             doc_id,
-            int(wid)
+            corpus_token_idx
         )
 
         event_id = make_event_id(
             doc_id,
-            int(wid),
+            corpus_token_idx,
             int(window_start),
             int(i)
         )
@@ -233,7 +239,7 @@ def extract_events(doc_id, tokens, vector_ids, batch_item, hidden):
             event_id,                  # unique contextual observation
             concept_id,               # stable corpus token identity
             doc_id,
-            int(wid),                 # corpus token position
+            corpus_token_idx,         # original corpus token position
             int(window_start),        # contextual frame origin
             int(i),                   # intra-window transformer position
             tokens[wid],
@@ -267,18 +273,19 @@ def process_slice(conn, slice_range, tokenizer, model, device):
     current_doc = None
     buf_tokens = []
     buf_vids = []
-    buf_doc_id = None
+    buf_token_idxs = []  # original corpus token_idx for each buffered token
 
     def flush():
-        nonlocal buf_tokens, buf_vids, buf_doc_id
+        nonlocal buf_tokens, buf_vids, buf_token_idxs
 
         if not buf_tokens:
             return
 
         result = process_windows_events(
-            buf_doc_id,
+            current_doc,
             buf_tokens,
             buf_vids,
+            buf_token_idxs,
             tokenizer,
             model,
             device,
@@ -333,18 +340,18 @@ def process_slice(conn, slice_range, tokenizer, model, device):
     for doc_id, token_idx, vid, token in cur:
         if current_doc is None:
             current_doc = doc_id
-            buf_doc_id = doc_id
 
         if doc_id != current_doc:
             flush()
             buf_tokens.clear()
             buf_vids.clear()
+            buf_token_idxs.clear()
             current_doc = doc_id
-            buf_doc_id = doc_id
 
         if is_content_token(token):
             buf_tokens.append(token)
             buf_vids.append(vid)
+            buf_token_idxs.append(token_idx)  # preserve original corpus position
 
     flush()
     logger.info(f"[SLICE COMPLETE] {slice_id}")
