@@ -13,6 +13,8 @@ Core invariant
 
 Check the minimal STOPWORDS list
 
+Refactor this to OO
+
 """
 
 from __future__ import annotations
