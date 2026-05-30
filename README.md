@@ -253,6 +253,12 @@ The reconfiguration of Koselleckian poles is structural shift so requires some k
 
 ## To Do
 
+### Visualisations
+
+1. Cosmos animation - compute the cosmos for all years and fade out those not currently in the animation frame.
+
+1. New: 3D with x/y being current FDG or heatmap, z being time
+
 ### Promote JSD to primary signal
 
 * Treat `js_divergence` as the main drift measure
