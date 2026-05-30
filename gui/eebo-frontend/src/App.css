@@ -1,3 +1,8 @@
 #app-nav.small a span {
     display: none !important;
 }
+
+#app-nav a.active {
+    font-weight: bold;
+    color: var(--primary) !important;
+}

@@ -348,6 +348,9 @@ const DiachronicChart: Component = () => {
     return (
         <article class="background  no-padding no-margin">
             <ControlsHeader title="Diachronic Neighbours" fdgControls={false}>
+
+                <hr class="divider vertical max no-margin no-padding" />
+
                 <div class="field middle-align border">
                     <select value={sortKey()} onChange={e => setSortKey(e.currentTarget.value as SortKey)}>
                         <option value="freq">frequency</option>
@@ -355,6 +358,8 @@ const DiachronicChart: Component = () => {
                     </select>
                     <output>Rank by</output>
                 </div>
+
+                <hr class="divider vertical max no-margin no-padding" />
 
                 <div class="field middle-align">
                     <div class="slider tiny">
@@ -374,6 +379,7 @@ const DiachronicChart: Component = () => {
             </ControlsHeader>
 
             <div class="scroll">
+
                 <svg width={svgWidth()} height={svgHeight()}>
 
                     <For each={years()}>

@@ -56,7 +56,15 @@ export default function App() {
         </header>
 
         {navItems.map((item) => (
-          <a onClick={() => setView(item.key)} classList={{ active: view() === item.key, }} >
+          <a onClick={() => setView(item.key)} classList={{
+            active: view() === item.key,
+            button: true,
+            transparent: true,
+            "no-border": true,
+            "no-padding": true,
+            "no-margin": true,
+            "no-space": true,
+          }} >
             <i>{item.icon}</i>
             <span>{item.label}</span>
           </a>

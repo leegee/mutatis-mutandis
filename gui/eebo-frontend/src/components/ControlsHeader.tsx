@@ -9,6 +9,8 @@ import { tier2Data } from "../state/tier2data.store";
 import type { ViewMode, YearMode } from "../state/controls.store";
 import { getYearBounds, getYearFiltered } from "../state/selectors";
 
+import "./ControlsHeader.css";
+
 interface Props {
   children?: any;
   title?: string;
@@ -41,6 +43,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         </div>
 
         <Show when={fdgControls()}>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
           <div class="field suffix border middle-align">
             <select
               value={controls.viewMode}
@@ -53,6 +58,8 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             </select>
             <output>View</output>
           </div>
+
+          <hr class="divider vertical max no-margin no-padding" />
 
           {/* Max hubs */}
           <Show when={controls.viewMode === "aggregated"}>
@@ -69,6 +76,8 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             </div>
           </Show>
         </Show>
+
+        <hr class="divider vertical max no-margin no-padding" />
 
         {/* Top N */}
         <div class="field middle-align">
@@ -91,6 +100,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         {/* Hub spread */}
         <Show when={props.includeHubSpread}>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
           <div class="field middle-align">
             <div class="slider tiny">
               <input
@@ -106,7 +118,6 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <span />
               <span class="tooltip bottom" />
             </div>
-
             <output class="small-padding top-padding">
               Hub spread {controls.hubSpread.toFixed(2)}
             </output>
@@ -115,6 +126,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         {/* Min similarity */}
         <Show when={fdgControls() && controls.viewMode === "aggregated"}>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
           <div class="field middle-align">
             <div class="slider tiny">
               <input
@@ -137,6 +151,8 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           </div>
         </Show>
 
+        <hr class="divider vertical max no-margin no-padding" />
+
         {/* Year mode */}
         <div class="field suffix border middle-align">
           <select
@@ -156,15 +172,15 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         {/* Single year mode */}
         <Show when={controls.yearMode === "single"}>
-          <nav class="no-space">
 
-            <button
-              class="circle chip secondary no-space large-margin bottom-margin"
+          <hr class="divider vertical max no-margin no-padding" />
+
+          <nav class="no-space">
+            <button class="circle chip tiny no-space large-margin bottom-margin"
               onClick={() => A.stepYear(-1)}
             >
               <i>remove</i>
             </button>
-
             <div class="field middle-align">
               <div class="slider tiny">
                 <input
@@ -179,24 +195,24 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                 />
                 <span class="tooltip bottom" />
               </div>
-
               <output class="small-padding top-padding">
                 {controls.fromYear} ({getYearFiltered().length} events)
               </output>
             </div>
 
-            <button
-              class="circle chip secondary no-space large-margin bottom-margin"
+            <button class="circle chip tiny no-space large-margin bottom-margin"
               onClick={() => A.stepYear(+1)}
             >
               <i>add</i>
             </button>
-
           </nav>
         </Show>
 
         {/* Range mode */}
         <Show when={controls.yearMode === "range"}>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
           <div class="field middle-align">
             <div class="slider tiny">
 
@@ -237,7 +253,6 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <span />
               <span class="tooltip bottom" />
               <span class="tooltip bottom" />
-
             </div>
 
             <output class="small-padding top-padding">
@@ -254,6 +269,8 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         </Show>
 
         {/* <Show when={fdgControls()}>
+        <hr class="divider vertical max no-margin no-padding" />
+
           <label>
             <input
               type="checkbox"
