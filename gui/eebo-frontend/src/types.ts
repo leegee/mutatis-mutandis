@@ -1,2 +1,2 @@
 export * from './types/search-engine';
-export * from './types/events';
+export * from './types/context-graph.types';
