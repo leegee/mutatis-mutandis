@@ -1,7 +1,6 @@
 export default function ConceptGraphGuide() {
   return (
     <section>
-      <h1>Comos Graph</h1>
       <h2>User Guide</h2>
 
       <h3>Events view</h3>

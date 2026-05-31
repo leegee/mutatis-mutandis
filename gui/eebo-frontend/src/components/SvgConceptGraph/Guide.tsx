@@ -1,7 +1,6 @@
 export default function ConceptGraphGuide() {
   return (
     <section>
-      <h1>Concept Graph</h1>
       <h2>User Guide</h2>
 
       <p>

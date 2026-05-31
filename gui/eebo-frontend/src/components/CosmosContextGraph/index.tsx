@@ -27,17 +27,6 @@ import { showDocument } from "../../services/documentApi";
 
 const MAX_TOP_N = 20;
 
-const HUB_COLOR_LOW_RGBA: [number, number, number, number] = [0.35, 0.53, 0.73, 0.4];
-const HUB_COLOR_HIGH_RGBA: [number, number, number, number] = [0.91, 0.95, 0.99, 0.87];
-const EVENT_RGBA: [number, number, number, number] = [0.47, 0.82, 0.51, 0.75];
-const NB_RGBA: [number, number, number, number] = [1.0, 0.75, 0.31, 0.65];
-const HH_LINK_BASE_RGBA: [number, number, number, number] = [0.55, 0.75, 0.95, 0.95];
-const SPOKE_LINK_RGBA: [number, number, number, number] = [1.0, 0.75, 0.31, 0.9];
-const SPOKE_ALPHA_MIN = 0.5; // 0.15;
-const SPOKE_ALPHA_MAX = 0.9; // 0.45;
-const SPOKE_WIDTH_MIN = 1; // 0.5;
-const SPOKE_WIDTH_MAX = 2.5;
-
 const BASE_REPULSION = 0.8;
 const BASE_LINK_SPRING = 1.0;
 const BASE_FRICTION = 0.4;
@@ -51,6 +40,34 @@ const EVENT_SIZE = 12;
 
 // How many px a node must move before we bother updating labels.
 const LABEL_MOVE_THRESHOLD = 0.5;
+
+const HUB_COLOR_LOW_RGBA: [number, number, number, number] = [0.35, 0.53, 0.73, 0.4];
+const HUB_COLOR_HIGH_RGBA: [number, number, number, number] = [0.91, 0.95, 0.99, 0.87];
+const EVENT_RGBA: [number, number, number, number] = [0.47, 0.82, 0.51, 0.75];
+const NB_RGBA: [number, number, number, number] = [1.0, 0.75, 0.31, 0.65];
+const HH_LINK_BASE_RGBA: [number, number, number, number] = [0.55, 0.75, 0.95, 0.95];
+const SPOKE_LINK_RGBA: [number, number, number, number] = [1.0, 0.75, 0.31, 0.9];
+
+// Hub–Hub edge styling (similarity links between hubs)
+// Minimum visual thickness (line width) for weak hub–hub similarity
+const HH_WIDTH_MIN = 2;
+// Maximum visual thickness for strong hub–hub similarity
+const HH_WIDTH_MAX = 3;
+// Minimum opacity (alpha) for weak hub–hub similarity links
+const HH_ALPHA_MIN = 0.75;
+// Maximum opacity for strong hub–hub similarity links
+const HH_ALPHA_MAX = 1;
+
+// Hub / Event → Neighbour edges ("spokes")
+// Minimum opacity for low-weight spoke connections
+const SPOKE_ALPHA_MIN = 0.75; // was tuned down from 0.15 in earlier version
+// Maximum opacity for high-weight spoke connections
+const SPOKE_ALPHA_MAX = 0.99; // was tuned down from 0.45 in earlier version
+// Minimum width for spoke edges (even weak associations stay visible)
+const SPOKE_WIDTH_MIN = 2; // previously 0.5 (made more visible)
+// Maximum width for strong spoke edges
+const SPOKE_WIDTH_MAX = 3;
+
 
 const EMPTY_GRAPH: ContextGraphData = {
   nodes: [],
@@ -376,22 +393,10 @@ class GraphWorld {
   }
 
   private rebuildScales(gd: ContextGraphData) {
-    this.hubColorScale = d3
-      .scaleLinear<[number, number, number, number]>()
-      .domain([0, Math.max(1, gd.maxHubDegree)])
-      .range([HUB_COLOR_LOW_RGBA, HUB_COLOR_HIGH_RGBA]);
-    this.hubSizeScale = d3
-      .scaleSqrt()
-      .domain([0, gd.maxEventCount])
-      .range([HUB_MIN_SIZE, HUB_MAX_SIZE]);
-    this.hhAlphaScale = d3
-      .scaleLinear()
-      .domain([0, gd.maxHubHubWeight])
-      .range([0.05, 0.25]);
-    this.hhWidthScale = d3
-      .scaleLinear()
-      .domain([0, gd.maxHubHubWeight])
-      .range([0.5, 2.5]);
+    this.hubColorScale = d3.scaleLinear<[number, number, number, number]>().domain([0, Math.max(1, gd.maxHubDegree)]).range([HUB_COLOR_LOW_RGBA, HUB_COLOR_HIGH_RGBA]);
+    this.hubSizeScale = d3.scaleSqrt().domain([0, gd.maxEventCount]).range([HUB_MIN_SIZE, HUB_MAX_SIZE]);
+    this.hhAlphaScale = d3.scaleLinear().domain([0, gd.maxHubHubWeight]).range([HH_ALPHA_MIN, HH_ALPHA_MAX]);
+    this.hhWidthScale = d3.scaleLinear().domain([0, gd.maxHubHubWeight]).range([HH_WIDTH_MIN, HH_WIDTH_MAX]);
     this.spokeAlpha = d3.scaleLinear().domain([0, 1]).range([SPOKE_ALPHA_MIN, SPOKE_ALPHA_MAX]);
     this.spokeWidth = d3.scaleLinear().domain([0, 1]).range([SPOKE_WIDTH_MIN, SPOKE_WIDTH_MAX]);
   }
@@ -690,7 +695,7 @@ const CosmosComponent: Component = () => {
     if (!tooltipEl) {
       tooltipEl = document.createElement("div");
       tooltipEl.className =
-        "cg-tooltip surface-container-high border large-elevate padding";
+        "cg-tooltip surface-container-highest border large-elevate padding";
       document.body.appendChild(tooltipEl);
     }
     return tooltipEl;
@@ -701,6 +706,7 @@ const CosmosComponent: Component = () => {
   function showTooltip(wn: WorldNode) {
     const tip = getTooltip();
     let html = "";
+    console.log(wn);
     if (wn.kind === "hub") {
       const bin = untrack(tokenBins).get(wn.id);
       const years = bin ? [...bin.years].sort((a, b) => a - b) : [];
@@ -1037,7 +1043,7 @@ const CosmosComponent: Component = () => {
 
           {/* -- Drill-down aside -- */}
           <Show when={controls.selectedNode}>
-            <aside class="cg-aside surface-container-high padding border">
+            <aside class="cg-aside surface-container-high medium-elevate padding no-border">
               <div class="cg-header-row">
                 <h2>{controls.selectedNode}</h2>
                 <button
@@ -1155,15 +1161,10 @@ const CosmosComponent: Component = () => {
                   <div>Shared by {sharedByHubs().length} source(s)</div>
                 </div>
                 <h3 class="bottom-padding">
-                  {controls.viewMode === "aggregated"
-                    ? "Hub contexts"
-                    : "Event contexts"}
+                  {controls.viewMode === "aggregated" ? "Hub contexts" : "Event contexts"}
                 </h3>
-                <Show
-                  when={sharedByHubs().length > 0}
-                  fallback={
-                    <div class="error">Not in any top-N list</div>
-                  }
+                <Show when={sharedByHubs().length > 0}
+                  fallback={<div class="error">Not in any top-N list</div>}
                 >
                   {(_) => {
                     const maxFreq = sharedByHubs()[0]?.freq ?? 1;

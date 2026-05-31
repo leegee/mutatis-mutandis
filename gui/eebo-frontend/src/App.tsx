@@ -128,12 +128,16 @@ export default function App() {
 
       <Transition name="slide-fade">
         <Show when={openHelp()}>
-          <article class="helpContainer right surface-container-high padding  high-elevate border">
+          <article class="helpContainer right surface-container-high padding  high-elevate border" style='z-index:999 !important'>
             <Switch fallback={<article>To do...</article>}>
               <Match when={view() === "graph"}>
+                <header class="fixed top fill max" style="z-index:9999">
+                  <h1>SVG Graph</h1>
+                </header>
                 <ConceptGraphGuide />
               </Match>
               <Match when={view() == "cosmos"}>
+                <h1>Cosmos Graph</h1>
                 <CosmosContextGraphGuide />
               </Match>
             </Switch>
