@@ -28,8 +28,10 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const yearBoundsMemo = createMemo(() => getYearBounds());
 
   return (
-    <header class="center-align max surface-container-low small-padding top-padding">
+    <header class="left-align max surface-container-low small-padding top-padding">
       <nav>
+        <hr style="width: 3em; background: transparent" />
+
         <div class="field suffix border middle-align">
           <select
             value={controls.concept}

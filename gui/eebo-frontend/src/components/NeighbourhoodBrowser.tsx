@@ -10,9 +10,6 @@
  *
  *
  * STATE MODEL
- *  concept          : which concept word to browse
- *  fromYear/toYear  : temporal filter applied to events
- *  yearMode         : single | range
  *  selectedEventId  : event whose neighbour list fills the centre panel
  *  focusToken       : neighbour token highlighted globally; when set:
  *                       - left panel dims events that lack it
@@ -41,15 +38,15 @@ import {
   For,
   Show,
   type Component,
-  createEffect,
 } from "solid-js";
-import Sparkline from "./NeighbourhoodBrowser/SparkLine";
-import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
-import { tier2Data } from "../state/tier2data.store";
-import type { ConceptData, Neighbour } from "../types/context-graph.types";
-import type { ConceptEvent } from "./CosmosContextGraph/types";
-import { createTokenWindowResource } from "../services/tokenWindowApi";
 
+import type { ConceptEvent, Neighbour } from "../types/context-graph.types";
+import { createTokenWindowResource } from "../services/tokenWindowApi";
+import { showDocument } from "../services/documentApi";
+import { controls } from "../state/controls.store";
+import { getYearBounds, getYearFiltered } from "../state/selectors";
+import ControlsHeader from "./ControlsHeader";
+import Sparkline from "./NeighbourhoodBrowser/SparkLine";
 
 /**
  * Aggregated view of a neighbour token across all events in the current
@@ -68,7 +65,7 @@ interface NeighbourSummary {
   /**
    * doc_id : pub_year pairs from events carrying this token.
    * Stored directly during index construction to avoid re-scanning
-   * yearFiltered() in rightPanelDocs.
+   * getYearFiltered() in rightPanelDocs.
    */
   docYears: Map<string, number | undefined>;
   /** event_id keys (or idx:N fallbacks) of events carrying this token. */
@@ -77,29 +74,6 @@ interface NeighbourSummary {
 
 /** Map from token string : NeighbourSummary. */
 type NeighbourIndex = Map<string, NeighbourSummary>;
-
-
-function scanYearRange(cd: ConceptData): [number, number] {
-  let min = CORPUS_END_YEAR;
-  let max = CORPUS_START_YEAR;
-  for (const e of cd.events) {
-    if (e.pub_year === undefined) continue;
-    if (e.pub_year < min) min = e.pub_year;
-    if (e.pub_year > max) max = e.pub_year;
-  }
-  if (min > max) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
-  return [min, max];
-}
-
-function filterByYearRange(
-  events: ConceptEvent[],
-  from: number,
-  to: number,
-): ConceptEvent[] {
-  return events.filter(
-    (e) => e.pub_year !== undefined && e.pub_year >= from && e.pub_year <= to
-  );
-}
 
 function eventKey(event: ConceptEvent, idx: number): string {
   return event.event_id !== undefined ? String(event.event_id) : `idx:${ idx }`;
@@ -162,9 +136,6 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
 }
 
 
-const showDocument = (docId: string) =>
-  window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
-
 /** Convert a score in [scoreMin, scoreMax] to an opacity in [minOp, maxOp]. */
 function scoreToOpacity(
   score: number,
@@ -180,44 +151,11 @@ function scoreToOpacity(
 
 
 const NeighbourhoodBrowser: Component = () => {
-  const concepts = Object.keys(tier2Data);
-
-  const [concept, setConcept] = createSignal(concepts[0] ?? "");
-  const [fromYear, setFromYear] = createSignal<number>(-1);
-  const [toYear, setToYear] = createSignal<number>(-1);
-  const [yearMode, setYearMode] = createSignal<"single" | "range">("single");
   const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
-  const yearBounds = createMemo<[number, number]>(() => {
-    const cd = tier2Data[concept()];
-    if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
-    return scanYearRange(cd);
-  });
-
-  // Reset sliders when concept or mode changes - move to the onChange event to avoid reactivty loop
-  createEffect(() => {
-    const [min, max] = yearBounds();
-    if (yearMode() === "single") {
-      const mid = Math.floor((min + max) / 2);
-      setFromYear(mid);
-      setToYear(mid);
-    } else {
-      setFromYear(min);
-      setToYear(max);
-    }
-  });
-
-  const yearFiltered = createMemo<ConceptEvent[]>(() => {
-    const cd = tier2Data[concept()];
-    if (!cd) return [];
-    const [min, max] = yearBounds();
-    if (fromYear() <= min && toYear() >= max) return cd.events;
-    return filterByYearRange(cd.events, fromYear(), toYear());
-  });
-
   const neighbourIndex = createMemo<NeighbourIndex>(() =>
-    buildNeighbourIndex(yearFiltered())
+    buildNeighbourIndex(getYearFiltered())
   );
 
   // Neighbour summaries sorted by (eventCount desc, meanScore desc)
@@ -228,11 +166,10 @@ const NeighbourhoodBrowser: Component = () => {
       )
   );
 
-
   const selectedEvent = createMemo<{ event: ConceptEvent; key: string } | null>(() => {
     const id = selectedEventId();
     if (!id) return null;
-    const events = yearFiltered();
+    const events = getYearFiltered();
     for (let idx = 0; idx < events.length; idx++) {
       const k = eventKey(events[idx], idx);
       if (k === id) return { event: events[idx], key: k };
@@ -302,7 +239,7 @@ const NeighbourhoodBrowser: Component = () => {
   // Temporal profile
 
   const tokenTemporalProfile = createMemo(() => {
-    const events = yearFiltered();
+    const events = getYearFiltered();
     const map = new Map<string, Map<number, Set<string>>>();
 
     for (let idx = 0; idx < events.length; idx++) {
@@ -350,81 +287,10 @@ const NeighbourhoodBrowser: Component = () => {
   // UI
 
   return (
-    <div style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
+    <article style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
 
       {/* Header */}
-      <header class="center-align max surface-container-low small-padding top-padding">
-        <nav>
-
-          {/* Concept */}
-          <div class="field suffix border middle-align">
-            <select
-              value={concept()}
-              onChange={(e) => { setConcept(e.currentTarget.value); setSelectedEventId(null); setFocusToken(null); }}
-            >
-              <For each={concepts}>{(c) => <option value={c}>{c}</option>}</For>
-            </select>
-            <output>Concept</output>
-          </div>
-
-          {/* Year mode */}
-          <div class="field suffix border middle-align">
-            <select
-              value={yearMode()}
-              onChange={(e) => setYearMode(e.currentTarget.value as "single" | "range")}
-            >
-              <option value="single">Single year</option>
-              <option value="range">Year range</option>
-            </select>
-            <output>Year mode</output>
-          </div>
-
-          {/* Single-year slider */}
-          <Show when={yearMode() === "single"}>
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input
-                  type="range" min={CORPUS_START_YEAR} max={CORPUS_END_YEAR} step={1}
-                  value={fromYear()}
-                  onInput={(e) => { const v = Number(e.currentTarget.value); setFromYear(v); setToYear(v); }}
-                />
-                <span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">
-                {fromYear()} ({yearFiltered().length} events)
-              </output>
-            </div>
-          </Show>
-
-          {/* Year-range sliders */}
-          <Show when={yearMode() === "range"}>
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input
-                  type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                  value={fromYear()}
-                  onInput={(e) => setFromYear(Math.min(Number(e.currentTarget.value), toYear()))}
-                />
-                <input
-                  type="range" min={yearBounds()[0]} max={yearBounds()[1]} step={1}
-                  value={toYear()}
-                  onInput={(e) => setToYear(Math.max(Number(e.currentTarget.value), fromYear()))}
-                />
-                <span />
-                <span class="tooltip bottom" />
-                <span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">
-                <span>{fromYear()}–{toYear()}</span>
-                <span class="left-padding">
-                  {yearFiltered().length}/{tier2Data[concept()]?.n_events ?? 0} events
-                </span>
-              </output>
-            </div>
-          </Show>
-
-        </nav>
-      </header>
+      <ControlsHeader />
 
       {/* Three-column main area */}
       <div class="grid background no-margin" style={{ display: "flex", flex: "1", overflow: "hidden" }} >
@@ -436,11 +302,11 @@ const NeighbourhoodBrowser: Component = () => {
           <div class="padding small-text bold" >
             Events
             <span class="right-align small-text left-padding medium-opacity">
-              {yearFiltered().length}
+              {getYearFiltered().length}
             </span>
           </div>
 
-          <For each={yearFiltered()}>
+          <For each={getYearFiltered()}>
             {(event, idx) => {
               const key = () => eventKey(event, idx());
               const hasFocus = () => {
@@ -579,7 +445,7 @@ const NeighbourhoodBrowser: Component = () => {
                     >
                       <span>{summary.token}</span>
 
-                      <Show when={yearMode() == "range"}>
+                      <Show when={controls.yearMode == "range"}>
                         <Sparkline data={sparklineData} color={isFocus() ? "var(--on-primary)" : "var(--tertiary)"} />
                       </Show>
 
@@ -645,7 +511,7 @@ const NeighbourhoodBrowser: Component = () => {
         class="fixed max center-align small-padding surface-container-low"
         style={{ "flex-shrink": "0" }}
       >
-        {yearFiltered().length} events
+        {getYearFiltered().length} events
         {" • "}
         {neighbourIndex().size} event-linked tokens
         {" • "}
@@ -658,13 +524,13 @@ const NeighbourhoodBrowser: Component = () => {
           {" "}
           {neighbourIndex().get(focusToken()!)?.docIds.size ?? 0} docs)
         </Show>
-        <Show when={fromYear() !== yearBounds()[0] || toYear() !== yearBounds()[1]}>
+        <Show when={controls.fromYear !== getYearBounds()[0] || controls.toYear !== getYearBounds()[1]}>
           {" • "}
-          {fromYear()}–{toYear()}
+          {controls.fromYear}-{controls.toYear}
         </Show>
       </footer>
 
-    </div>
+    </article>
   );
 };
 
