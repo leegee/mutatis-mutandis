@@ -93,7 +93,7 @@ from itertools import combinations
 import numpy as np
 import zarr
 
-from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, ZARR_ROOT
+from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_INDEX_DIR,  ZARR_ROOT
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
@@ -519,7 +519,7 @@ def main():
     parser.add_argument("--concept", type=str, default=None)
     args = parser.parse_args()
 
-    faiss_index_path = INDEXES_DIR / "faiss" / "tier1.index"
+    faiss_index_path = FAISS_INDEX_DIR / "tier1.index"
 
     index  = EeboFaissIndex.load(faiss_index_path)
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
