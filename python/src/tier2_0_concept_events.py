@@ -402,10 +402,10 @@ def main():
 
     faiss_index_path = INDEXES_DIR / "faiss" / "tier1.index"
 
-    logger.info('--------------------------------------------------------')
-
     index = EeboFaissIndex.load(faiss_index_path)
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
+
+    logger.info('--------------------------------------------------------')
 
     knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
     knn_diagnostics(lookup, index, CONCEPT_SETS["LAW"]["forms"])
