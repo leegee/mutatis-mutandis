@@ -203,10 +203,11 @@ def load_doc_metadata(conn) -> dict:
         FROM pamphlet_tokens
         ORDER BY doc_id
     """)
+
     return {
         row[0]: {
-            "pub_year":    row[1],
-            "title":       row[4],
+            "pub_year": row[1],
+            "title": row[2],
         }
         for row in cur.fetchall()
     }
@@ -225,9 +226,7 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
     if not event_ids:
         return {"concept": concept_name, "empty": True}
 
-    # ------------------------------------------------------------
     # Build query matrix
-    # ------------------------------------------------------------
     query_vecs = np.stack(
         [lookup.get_event(eid)["embedding"] for eid in event_ids]
     )
@@ -236,9 +235,7 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
     logger.info(f"[tier2] sample_event_id={event_ids[0] if event_ids else None}")
     logger.info(f"[tier2] sample_embedding_shape={query_vecs.shape}")
 
-    # ------------------------------------------------------------
     # EMBEDDING DIAGNOSTIC (correct cosine computation)
-    # ------------------------------------------------------------
     logger.info("[tier2] EMBEDDING DIVERSITY AUDIT START")
 
     sample_n = min(50, len(query_vecs))
@@ -272,9 +269,7 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
             "(near-constant semantic neighbourhood geometry)"
         )
 
-    # ------------------------------------------------------------
     # FAISS SEARCH
-    # ------------------------------------------------------------
     all_scores, all_neigh_ids = index.search(query_vecs, K)
 
     token_counter = Counter()
@@ -283,9 +278,7 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
 
     results = []
 
-    # ------------------------------------------------------------
     # DEBUG: neighbour identity entropy (cheap + very informative)
-    # ------------------------------------------------------------
     flat_ids = all_neigh_ids.flatten()
     if len(flat_ids):
         from collections import Counter as _C
@@ -407,7 +400,11 @@ def main():
     args.add_argument("--concept", type=str, default=None)
     args = args.parse_args()
 
-    index = EeboFaissIndex.load(INDEXES_DIR / "faiss" / "tier1.index")
+    faiss_index_path = INDEXES_DIR / "faiss" / "tier1.index"
+
+    logger.info('--------------------------------------------------------')
+
+    index = EeboFaissIndex.load(faiss_index_path)
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
 
     knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
