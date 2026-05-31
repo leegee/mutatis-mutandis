@@ -15,7 +15,7 @@ import * as d3 from "d3";
 import "./styles.css";
 
 import type {
-  AnyEdge, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, TokenBin,
+  AnyEdge, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, TokenBin,
 } from "./types";
 
 import { controls, setControls } from "../../state/controls.store";
@@ -24,6 +24,7 @@ import { tier2Data } from "../../state/tier2data.store";
 import { aggregateByToken, cosineSimilarity } from "../../lib/contextGraphUtils";
 import { getYearBounds, getYearFiltered } from "../../state/selectors";
 import { showDocument } from "../../services/documentApi";
+import type { ConceptEvent } from "../../types/context-graph.types";
 
 const MAX_TOP_N = 20;
 
