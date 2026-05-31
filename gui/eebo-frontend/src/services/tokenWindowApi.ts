@@ -1,8 +1,7 @@
 import { createResource } from "solid-js";
-import type { ConceptEvent } from "../types";
 
 export function createTokenWindowResource(
-  event: () => ConceptEvent | null
+  event: () => { doc_id: string; token_idx: number } | null
 ) {
   return createResource(event, async (e) => {
     if (!e) return null;

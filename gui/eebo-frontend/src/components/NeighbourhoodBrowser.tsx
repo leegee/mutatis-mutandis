@@ -42,7 +42,6 @@ import {
 
 import type { ConceptEvent, Neighbour } from "../types/context-graph.types";
 import { createTokenWindowResource } from "../services/tokenWindowApi";
-import { showDocument } from "../services/documentApi";
 import { controls } from "../state/controls.store";
 import { getYearBounds, getYearFiltered } from "../state/selectors";
 import ControlsHeader from "./ControlsHeader";
@@ -155,6 +154,8 @@ function scoreToOpacity(
 const NeighbourhoodBrowser: Component = () => {
   const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
+  const [rightPanelEvent, setRightPanelEvent] = createSignal<{ doc_id: string; token_idx: number } | null>(null);
+
 
   const neighbourIndex = createMemo<NeighbourIndex>(() =>
     buildNeighbourIndex(getYearFiltered())
@@ -179,9 +180,10 @@ const NeighbourhoodBrowser: Component = () => {
     return null;
   });
 
-  const [windowText] = createTokenWindowResource(
-    () => selectedEvent()?.event ?? null
+  const activeWindowEvent = createMemo(() =>
+    rightPanelEvent() ?? selectedEvent()?.event ?? null
   );
+  const [windowText] = createTokenWindowResource(activeWindowEvent);
 
   const selectedEventNeighbours = createMemo<Neighbour[]>(() => {
     const sel = selectedEvent();
@@ -211,19 +213,19 @@ const NeighbourhoodBrowser: Component = () => {
    * - Else: empty.
    *
    */
-  const rightPanelDocs = createMemo<Array<{ docId: string; year?: number }>>(() => {
-    const ft = focusToken();
-    if (ft) {
-      const summary = neighbourIndex().get(ft);
+  const rightPanelDocs = createMemo<Array<{ docId: string; year?: number; token_idx: number }>>(() => {
+    const focusedToken = focusToken();
+    if (focusedToken) {
+      const summary = neighbourIndex().get(focusedToken);
       if (!summary) return [];
       return [...summary.docYears.entries()]
-        .map(([docId, year]) => ({ docId, year }))
+        .map(([docId, year]) => ({ docId, year, token_idx: Number(summary.token_idx) }))
         .sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
     }
 
     const sel = selectedEvent();
     if (sel?.event.doc_id) {
-      return [{ docId: sel.event.doc_id, year: sel.event.pub_year }];
+      return [{ docId: sel.event.doc_id, year: sel.event.pub_year, token_idx: sel.event.token_idx }];
     }
 
     return [];
@@ -321,7 +323,11 @@ const NeighbourhoodBrowser: Component = () => {
                 <button
                   class={`chip tiny-padding left-padding right-padding no-round no-margin ${ isSelected() ? "primary" : "transparent" }`}
                   style={{ opacity: hasFocus() ? 1 : 0.35, transition: "opacity 0.15s" }}
-                  onClick={() => setSelectedEventId((prev) => prev === key() ? null : key())}
+                  onClick={() => {
+                    setRightPanelEvent(null);
+                    setFocusToken(null);
+                    setSelectedEventId((prev) => prev === key() ? null : key());
+                  }}
                 >
                   <span class="tooltip top">
                     eid:{event.event_id}
@@ -348,11 +354,11 @@ const NeighbourhoodBrowser: Component = () => {
         >
 
           {/* event window token text */}
-          <Show when={selectedEvent()}>
+          <Show when={activeWindowEvent()}>
             <aside class="center-align small-padding border small-round">
               <Show when={windowText()} fallback={<div><p>Loading context…</p><progress /></div>}>
-                {(windowText) => (
-                  <blockquote innerHTML={windowText()}></blockquote>
+                {(text) => (
+                  <blockquote innerHTML={text()}></blockquote>
                 )}
               </Show>
             </aside>
@@ -404,7 +410,10 @@ const NeighbourhoodBrowser: Component = () => {
                         opacity: op,
                         transition: "background 0.1s",
                       }}
-                      onClick={() => setFocusToken((prev) => prev === nb.token ? null : nb.token)}
+                      onClick={() => {
+                        setRightPanelEvent(null);
+                        setFocusToken((prev) => prev === nb.token ? null : nb.token);
+                      }}
                     >
                       {/* Score bar */}
                       <div style={{ width: "20%", "flex-shrink": "0", position: "relative", height: "6px", background: "rgba(255,255,255,0.08)", "border-radius": "3px" }}>
@@ -443,7 +452,10 @@ const NeighbourhoodBrowser: Component = () => {
                     <button
                       class={`chip ${ isFocus() ? "primary" : "" }`}
                       style={{ "font-size": `${ sizePx.toFixed(1) }px`, cursor: "pointer" }}
-                      onClick={() => setFocusToken((prev) => prev === summary.token ? null : summary.token)}
+                      onClick={() => setFocusToken((prev) => {
+                        setRightPanelEvent(null);
+                        return prev === summary.token ? null : summary.token;
+                      })}
                     >
                       <span>{summary.token}</span>
 
@@ -485,11 +497,14 @@ const NeighbourhoodBrowser: Component = () => {
           >
             <div style={{ padding: "0.5rem" }}>
               <For each={rightPanelDocs()}>
-                {({ docId, year }) => (
+                {({ docId, year, token_idx }) => (
                   <button
                     class="chip small-margin"
                     style={{ display: "flex", "justify-content": "space-between", width: "calc(100% - 0.5rem)", cursor: "pointer" }}
-                    onClick={() => showDocument(docId)}
+                    // onClick={() => showDocument(docId)}
+                    onClick={() => setRightPanelEvent((prev) =>
+                      prev?.doc_id === docId ? null : { doc_id: docId, token_idx }
+                    )}
                   >
                     <span style={{ "font-family": "'IBM Plex Mono', monospace", "font-size": "0.78rem", overflow: "hidden", "text-overflow": "ellipsis" }}>
                       {docId}
