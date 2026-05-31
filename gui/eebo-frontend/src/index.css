@@ -95,4 +95,6 @@ main,
 
 mark {
   background-color: aqua;
+  color: black;
+  padding: 0.1em 0.2em;
 }
