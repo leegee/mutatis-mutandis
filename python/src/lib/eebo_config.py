@@ -192,7 +192,9 @@ CONCEPT_SETS: CanonicalRules = {
     },
     "LIBERTY": {
         "forms": {
-            "liberty", "libertie", "libertye", "liberte",
+            "liberty",
+            "libe_ty",
+            "libertie", "libertye", "liberte",
             "libertyes", "libert", "liberties",
             "liliberty", "libertv", "libertty", "lyliberty",
             "libery", "libertly", "fulliberty", "lilibertyis",
