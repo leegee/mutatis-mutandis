@@ -38,6 +38,8 @@ import {
   For,
   Show,
   type Component,
+  onMount,
+  onCleanup,
 } from "solid-js";
 
 import type { ConceptEvent, Neighbour } from "../types/context-graph.types";
@@ -153,12 +155,14 @@ function scoreToOpacity(
 
 const NeighbourhoodBrowser: Component = () => {
   const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
+  const eventButtonRefs = new Map<string, HTMLButtonElement>();
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
   const [rightPanelEvent, setRightPanelEvent] = createSignal<{ doc_id: string; token_idx: number } | null>(null);
 
+  const yearFilteredMemo = createMemo(() => getYearFiltered());
 
   const neighbourIndex = createMemo<NeighbourIndex>(() =>
-    buildNeighbourIndex(getYearFiltered())
+    buildNeighbourIndex(yearFilteredMemo())
   );
 
   // Neighbour summaries sorted by (eventCount desc, meanScore desc)
@@ -172,7 +176,7 @@ const NeighbourhoodBrowser: Component = () => {
   const selectedEvent = createMemo<{ event: ConceptEvent; key: string } | null>(() => {
     const id = selectedEventId();
     if (!id) return null;
-    const events = getYearFiltered();
+    const events = yearFilteredMemo();
     for (let idx = 0; idx < events.length; idx++) {
       const k = eventKey(events[idx], idx);
       if (k === id) return { event: events[idx], key: k };
@@ -243,7 +247,7 @@ const NeighbourhoodBrowser: Component = () => {
   // Temporal profile
 
   const tokenTemporalProfile = createMemo(() => {
-    const events = getYearFiltered();
+    const events = yearFilteredMemo();
     const map = new Map<string, Map<number, Set<string>>>();
 
     for (let idx = 0; idx < events.length; idx++) {
@@ -288,8 +292,52 @@ const NeighbourhoodBrowser: Component = () => {
       .sort((a, b) => a.year - b.year);
   }
 
-  // UI
+  // Keybindings:
 
+  const selectedIndex = createMemo(() => {
+    const id = selectedEventId();
+    if (!id) return -1;
+
+    return yearFilteredMemo().findIndex((e, idx) => eventKey(e, idx) === id);
+  });
+
+  function moveSelection(delta: number) {
+    const list = yearFilteredMemo();
+    const next = selectedIndex() + delta;
+
+    if (next < 0 || next >= list.length) return;
+
+    const key = eventKey(list[next], next);
+
+    setSelectedEventId(key);
+
+    queueMicrotask(() => {
+      eventButtonRefs.get(key)?.focus();
+    });
+  }
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (selectedEventId() == null) return;
+
+    switch (e.key) {
+      case "ArrowUp":
+      case "ArrowLeft":
+        e.preventDefault();
+        moveSelection(-1);
+        break;
+
+      case "ArrowDown":
+      case "ArrowRight":
+        e.preventDefault();
+        moveSelection(1);
+        break;
+    }
+  };
+
+  onMount(() => window.addEventListener("keydown", handleKeyDown));
+  onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+
+  // UI
   return (
     <article style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
 
@@ -306,11 +354,11 @@ const NeighbourhoodBrowser: Component = () => {
           <div class="padding small-text bold" >
             Events
             <span class="right-align small-text left-padding medium-opacity">
-              {getYearFiltered().length}
+              {yearFilteredMemo().length}
             </span>
           </div>
 
-          <For each={getYearFiltered()}>
+          <For each={yearFilteredMemo()}>
             {(event, idx) => {
               const key = () => eventKey(event, idx());
               const hasFocus = () => {
@@ -323,6 +371,7 @@ const NeighbourhoodBrowser: Component = () => {
                 <button
                   class={`chip tiny-padding left-padding right-padding no-round no-margin ${ isSelected() ? "primary" : "transparent" }`}
                   style={{ opacity: hasFocus() ? 1 : 0.35, transition: "opacity 0.15s" }}
+                  ref={(el) => eventButtonRefs.set(key(), el)}
                   onClick={() => {
                     setRightPanelEvent(null);
                     setFocusToken(null);
@@ -528,7 +577,7 @@ const NeighbourhoodBrowser: Component = () => {
         class="fixed max center-align small-padding surface-container-low"
         style={{ "flex-shrink": "0" }}
       >
-        {getYearFiltered().length} events
+        {yearFilteredMemo().length} events
         {" • "}
         {neighbourIndex().size} event-linked tokens
         {" • "}

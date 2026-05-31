@@ -500,14 +500,17 @@ const CosmosComponent: Component = () => {
   >(() => {
     const id = controls.selectedNode;
     if (!id || selectedKind() !== "neighbour") return [];
+
     if (controls.viewMode === "aggregated") {
       const result: Array<{ hub: string; freq: number; meanScore: number }> = [];
       for (const [hubKey, bin] of tokenBins()) {
         const nb = bin.topNeighbours.find((n) => n.token === id);
+        console.log('sharedByHubs', nb)
         if (nb) result.push({ hub: hubKey, freq: nb.freq, meanScore: nb.meanScore });
       }
       return result.sort((a, b) => b.freq - a.freq);
     }
+
     return graphData()
       .hubNbEdges.filter((e) => e.targetId === id)
       .map((e) => ({ hub: e.sourceId, freq: e.weight, meanScore: e.weight }))
@@ -552,7 +555,8 @@ const CosmosComponent: Component = () => {
       html = `<aside><h6 class="bottom-padding">${ wn.id }</h6>Events: ${ wn.eventCount }<br/>Connections: ${ wn.hubDegree }<br/>Documents: ${ bin?.docs.size ?? "—" }<br/>Years: ${ yStr }</aside>`;
     } else if (wn.kind === "event") {
       html = `<aside><h6 class="bottom-padding">${ wn.token ?? wn.id }</h6>Doc: ${ wn.doc_id ?? "—" }<br/>Year: ${ wn.pub_year ?? "—" }</aside>`;
-    } else {
+    }
+    else {
       // For neighbour tooltips we need a snapshot of sharedByHubs without
       // subscribing to its reactive dependency chain.  We compute it directly
       // from the current untracked graph state instead of calling the memo.
@@ -580,7 +584,11 @@ const CosmosComponent: Component = () => {
           .map((h) => `${ h.hub } (${ h.freq.toFixed(3) })`)
           .join("<br/>")
         : "—";
-      html = `<aside><h6 class="bottom-padding">${ wn.id }</h6>Shared by ${ wn.degree } source(s):<br/>${ lines }</aside>`;
+      html = `<aside>
+      <h6 class="bottom-padding"> ${ wn.id }</h6>
+      Shared by ${ wn.degree } source(s):
+      <br/>${ lines }
+      </aside>`;
     }
     tip.innerHTML = html;
     Object.assign(tip.style, {
@@ -1017,7 +1025,10 @@ const CosmosComponent: Component = () => {
                                   }}
                                 />
                               </div>
-                              <span class="cg-nb-token">{h.hub}</span>
+                              <span class="cg-nb-token">
+                                {h.hub}
+                                {/* We could be good to replace h.hub whith text from a call to createTokenWindowResource(doc_id, token_idx) */}
+                              </span>
                               <span class="cg-nb-score">
                                 {h.meanScore.toFixed(3)}
                               </span>
