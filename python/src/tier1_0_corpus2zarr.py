@@ -9,7 +9,7 @@ Core invariant
 - Postgres defines corpus identity
 - concept_id defines stable lexical occurrence identity
 - event_id defines contextual embedding observation identity
-- FAISS indexes event_id space ONLY
+- Later, FAISS indexes event_id space ONLY
 
 Check the minimal STOPWORDS list
 
