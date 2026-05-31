@@ -68,6 +68,7 @@ This guarantees stable geometric interpretation across:
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Sequence, Tuple
 
@@ -100,6 +101,27 @@ class EeboFaissIndex:
             base.metric_type = faiss.METRIC_INNER_PRODUCT
 
         self._index = faiss.IndexIDMap(base)
+
+    @staticmethod
+    def wipe_faiss_index(path: Path) -> None:
+        """
+        Deletes persisted FAISS index from disk.
+
+        Failure mode:
+            - if file is in use, OS will raise
+            - if path is wrong, silent mismatch risk upstream
+
+        This must always be followed by rebuild_from_tier1().
+        """
+
+        path = Path(path)
+        logger.info(f"[faiss] deleting index={path}")
+
+        if path.is_file():
+            path.unlink()
+        elif path.exists():
+            shutil.rmtree(path)
+        logger.info(f"[faiss] deleted index={path}")
 
     @staticmethod
     def _normalize(

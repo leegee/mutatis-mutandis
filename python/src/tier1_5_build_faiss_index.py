@@ -109,27 +109,19 @@ def build_index(stream: ZarrEventStream) -> EeboFaissIndex:
 
     return index
 
-
-def clear_faiss_output():
-    path = INDEXES_DIR / "faiss"
-
-    if path.exists():
-        shutil.rmtree(path)
-
-    path.mkdir(parents=True, exist_ok=True)
-
-
 def main():
     logger.info("[faiss-build] loading Tier1 observation stream")
     stream = ZarrEventStream(str(ZARR_ROOT / "tier1"))
 
+    FAISS_INDEX_DIR = INDEXES_DIR / "faiss"
+
     logger.info("[faiss-build] clearing existing FAISS indexes")
-    clear_faiss_output()
+    EeboFaissIndex.wipe_faiss_index(FAISS_INDEX_DIR)
 
     logger.info("[faiss-build] building FAISS observation index")
     index = build_index(stream)
 
-    out_path = INDEXES_DIR / "faiss" / "tier1.index"
+    out_path = FAISS_INDEX_DIR / "tier1.index"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     index.save(out_path)
