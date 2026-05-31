@@ -57,7 +57,7 @@ from __future__ import annotations
 import shutil
 import numpy as np
 
-from lib.eebo_config import ZARR_ROOT, INDEXES_DIR
+from lib.eebo_config import ZARR_ROOT, FAISS_INDEX_DIR
 from lib.eebo_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 from lib.zarr_event_stream import ZarrEventStream
@@ -65,10 +65,6 @@ from lib.zarr_event_stream import ZarrEventStream
 
 BATCH_SIZE = 8192
 
-
-# ---------------------------------------------------------------------
-# FAISS construction
-# ---------------------------------------------------------------------
 
 def build_index(stream: ZarrEventStream) -> EeboFaissIndex:
     """
@@ -97,7 +93,6 @@ def build_index(stream: ZarrEventStream) -> EeboFaissIndex:
             index = EeboFaissIndex(dim=dim, exact=True)
 
         index.add(vecs, obs_ids)
-
         total += len(obs_ids)
 
     if index is None:
@@ -112,8 +107,6 @@ def build_index(stream: ZarrEventStream) -> EeboFaissIndex:
 def main():
     logger.info("[faiss-build] loading Tier1 observation stream")
     stream = ZarrEventStream(str(ZARR_ROOT / "tier1"))
-
-    FAISS_INDEX_DIR = INDEXES_DIR / "faiss"
 
     logger.info("[faiss-build] clearing existing FAISS indexes")
     EeboFaissIndex.wipe_faiss_index(FAISS_INDEX_DIR)

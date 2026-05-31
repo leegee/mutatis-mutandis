@@ -29,18 +29,16 @@ from __future__ import annotations
 import numpy as np
 
 from lib.eebo_logging import logger
-from lib.eebo_config import ZARR_ROOT, INDEXES_DIR
+from lib.eebo_config import ZARR_ROOT, FAISS_INDEX_DIR
 from lib.zarr_event_stream import ZarrEventStream
 from lib.eebo_faiss import EeboFaissIndex
 
 
-FAISS_PATH = INDEXES_DIR / "faiss" / "tier1.index"
+FAISS_PATH = FAISS_INDEX_DIR / "tier1.index"
 BATCH_SIZE = 8192
 
 
-# ------------------------------------------------------------
 # Zarr sanity
-# ------------------------------------------------------------
 
 def check_zarr(stream: ZarrEventStream) -> int:
     total = 0
@@ -65,9 +63,7 @@ def check_zarr(stream: ZarrEventStream) -> int:
     return total
 
 
-# ------------------------------------------------------------
 # FAISS sanity
-# ------------------------------------------------------------
 
 def check_faiss(index: EeboFaissIndex, expected_n: int) -> None:
     if index.ntotal != expected_n:
@@ -91,9 +87,7 @@ def check_faiss(index: EeboFaissIndex, expected_n: int) -> None:
         raise AssertionError("FAISS returned empty neighbour set")
 
 
-# ------------------------------------------------------------
 # stream consistency check (sampled)
-# ------------------------------------------------------------
 
 def check_stream_consistency(stream: ZarrEventStream, index: EeboFaissIndex) -> None:
     """
@@ -114,9 +108,7 @@ def check_stream_consistency(stream: ZarrEventStream, index: EeboFaissIndex) -> 
         break  # single probe is sufficient
 
 
-# ------------------------------------------------------------
 # main
-# ------------------------------------------------------------
 
 def main():
     logger.info("[integrity] loading stream")

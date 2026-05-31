@@ -14,6 +14,7 @@ Tier 2:
 FAISS is a geometric operator only.
 FAISS ids are event_ids (stable, globally unique observation identity).
 vector_id is lexical identity only and is NOT used as a lookup key.
+doc_id, token_idx binds to the source text in the db
 
 No aggregation or centroid reconstruction is performed.
 Events remain atomic observations with full provenance.
@@ -61,54 +62,43 @@ become incorrect without raising an error.
 
 from __future__ import annotations
 
-from collections import Counter
+import argparse
 import json
+import random
+from collections import Counter
+from itertools import combinations
+
 import numpy as np
 import zarr
-import argparse
-import random
-import numpy as np
-from itertools import combinations
-from collections import Counter
 
-from lib.eebo_config import (
-    CONCEPT_SETS,
-    INDEXES_DIR,
-    ZARR_ROOT,
-)
+from lib.eebo_config import CONCEPT_SETS, FAISS_INDEX_DIR, INDEXES_DIR, ZARR_ROOT
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
 
-K = 25
+
+K          = 25
 BATCH_SIZE = 8192
 OUTPUT_PATH = INDEXES_DIR / "tier2_concept_neighbours.json"
 
-
-
-# Event metadata + embedding index
+#
+# TODO Move Zarr routines into lib
+#
 class ZarrEventLookup:
     """
-    In-memory index of all Tier 1 observation events.
+    In-memory index of all Tier 1 observation events, keyed by event_id.
 
-    Key invariant:
-        Keyed by event_id (stable, globally unique observation identity).
-        vector_id is stored as metadata only - NOT used as key.
+    vector_id is stored as metadata only — NOT used as a lookup key.
 
-    Embeddings are loaded alongside metadata so that FAISS queries
-    can be issued using the canonical Zarr vector rather than relying
-    on FAISS internal vector storage. See module docstring for the
-    trade-offs and the deferred migration path to EeboFaissIndex.reconstruct().
-
-    Read strategy:
-        Each Zarr dataset is read as a contiguous numpy slice per batch.
-        Iterating over pre-loaded numpy arrays avoids per-element Zarr
-        decompression overhead, which is significant at corpus scale.
+    Embeddings are loaded alongside metadata so that FAISS queries can be
+    issued using the canonical Zarr vector rather than relying on FAISS
+    internal vector storage. See module docstring for trade-offs and the
+    deferred migration path to EeboFaissIndex.reconstruct().
     """
 
     def __init__(self, root):
-        self.root = root
+        self.root        = root
         self.by_event_id = {}
         self._build()
 
@@ -124,75 +114,63 @@ class ZarrEventLookup:
             if "events" not in g:
                 continue
 
-            e = g["events"]
-
-            if "event_id" not in e:
-                raise KeyError(f"Missing event_id in {slice_dir} - rebuild Tier 1")
-
-            eids = e["event_id"]
-            vids = e["vector_id"]
-            docs = e["doc_id"]
-            toks = e["token"]
-            idxs = e["token_idx"]
-            wins = e["window_id"]
-            embs = e["emb_raw"]
-            wpos = e["window_token_pos"] if "window_token_pos" in e else None
-
-            n = eids.shape[0]
-
-            for start in range(0, n, BATCH_SIZE):
-                end = min(start + BATCH_SIZE, n)
-
-                # Read each dataset once per batch as a contiguous numpy
-                # array. Indexing into these numpy arrays in the inner loop
-                # is cheap; indexing into the Zarr datasets directly would
-                # trigger one decompressed read per element.
-                b_eids = eids[start:end]
-                b_vids = vids[start:end]
-                b_docs = docs[start:end]
-                b_toks = toks[start:end]
-                b_idxs = idxs[start:end]
-                b_wins = wins[start:end]
-                b_embs = embs[start:end]
-                b_wpos = wpos[start:end] if wpos is not None else None
-
-                for i in range(end - start):
-                    eid = int(b_eids[i])
-
-                    self.by_event_id[eid] = {
-                        "event_id": eid,
-                        "vector_id": int(b_vids[i]),
-                        "doc_id": str(b_docs[i]),
-                        "token": str(b_toks[i]),
-                        "token_idx": int(b_idxs[i]),
-                        "window_id": int(b_wins[i]),
-                        "window_token_pos": int(b_wpos[i]) if b_wpos is not None else None,
-                        # NOTE: storing embeddings here holds the full corpus
-                        # embedding matrix in memory. See module docstring for
-                        # the deferred migration to EeboFaissIndex.reconstruct().
-                        "embedding": np.asarray(b_embs[i], dtype=np.float32),
-                    }
+            self._load_slice(g["events"], slice_dir)
 
         logger.info(f"[tier2] events={len(self.by_event_id)}")
 
-    def get_event(self, event_id: int):
+    def _load_slice(self, e, slice_dir):
+        if "event_id" not in e:
+            raise KeyError(f"Missing event_id in {slice_dir} - rebuild Tier 1")
+
+        wpos = e["window_token_pos"] if "window_token_pos" in e else None
+        n    = e["event_id"].shape[0]
+
+        for start in range(0, n, BATCH_SIZE):
+            end = min(start + BATCH_SIZE, n)
+
+            # Read each dataset as a contiguous numpy array per batch.
+            # Indexing into numpy in the inner loop is cheap; indexing
+            # directly into Zarr would trigger per-element decompression.
+            b_eids = e["event_id"][start:end]
+            b_vids = e["vector_id"][start:end]
+            b_docs = e["doc_id"][start:end]
+            b_toks = e["token"][start:end]
+            b_idxs = e["token_idx"][start:end]
+            b_wins = e["window_id"][start:end]
+            b_embs = e["emb_raw"][start:end]
+            b_wpos = wpos[start:end] if wpos is not None else None
+
+            for i in range(end - start):
+                eid = int(b_eids[i])
+                self.by_event_id[eid] = {
+                    "event_id":         eid,
+                    "vector_id":        int(b_vids[i]),
+                    "doc_id":           str(b_docs[i]),
+                    "token":            str(b_toks[i]),
+                    "token_idx":        int(b_idxs[i]),
+                    "window_id":        int(b_wins[i]),
+                    "window_token_pos": int(b_wpos[i]) if b_wpos is not None else None,
+                    # NOTE: storing embeddings here holds the full corpus
+                    # embedding matrix in memory. See module docstring for
+                    # the deferred migration to EeboFaissIndex.reconstruct().
+                    "embedding":        np.asarray(b_embs[i], dtype=np.float32),
+                }
+
+    def get_event(self, event_id: int) -> dict:
         return self.by_event_id[int(event_id)]
 
     def iter_matching_event_ids(self, forms):
         forms = {f.lower() for f in forms}
-
         for eid, event in self.by_event_id.items():
             if event["token"].lower() in forms:
                 yield eid
 
 
-# Additional metadata
+
 def load_doc_metadata(conn) -> dict:
     """
     Build a doc_id -> metadata mapping from pamphlet_tokens.
-
-    pub_year, are stable per doc_id so
-    we take the first occurrence of each.
+    pub_year and title are stable per doc_id; we take the first occurrence.
     """
     cur = conn.cursor()
     cur.execute("""
@@ -203,57 +181,30 @@ def load_doc_metadata(conn) -> dict:
         FROM pamphlet_tokens
         ORDER BY doc_id
     """)
-
     return {
-        row[0]: {
-            "pub_year": row[1],
-            "title": row[2],
-        }
+        row[0]: {"pub_year": row[1], "title": row[2]}
         for row in cur.fetchall()
     }
 
-# Concept analysis
-def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
-    """
-    Compute neighbourhood structure for all events matching a concept.
-    """
-
-    forms = set(concept["forms"])
-    logger.info(f"[tier2] concept={concept_name}")
-
-    event_ids = list(lookup.iter_matching_event_ids(forms))
-
-    if not event_ids:
-        return {"concept": concept_name, "empty": True}
-
-    # Build query matrix
-    query_vecs = np.stack(
-        [lookup.get_event(eid)["embedding"] for eid in event_ids]
-    )
-
-    logger.info(f"[tier2] query_events={len(event_ids)}")
-    logger.info(f"[tier2] sample_event_id={event_ids[0] if event_ids else None}")
-    logger.info(f"[tier2] sample_embedding_shape={query_vecs.shape}")
-
-    # EMBEDDING DIAGNOSTIC (correct cosine computation)
+#
+# Diagnostics - extrapolate
+#
+def _audit_embedding_diversity(concept_name, query_vecs):
+    """Log embedding norm and cosine diversity stats; warn on collapse."""
     logger.info("[tier2] EMBEDDING DIVERSITY AUDIT START")
 
-    sample_n = min(50, len(query_vecs))
-    sample = query_vecs[:sample_n]
+    sample   = query_vecs[:min(50, len(query_vecs))]
+    sample_n = len(sample)
 
-    # L2 norm stats
     norms = np.linalg.norm(sample, axis=1)
     logger.info(
         f"[tier2] norms: mean={norms.mean():.6f} std={norms.std():.6f} "
         f"min={norms.min():.6f} max={norms.max():.6f}"
     )
 
-    # true cosine similarity (normalised)
-    normed = sample / (np.linalg.norm(sample, axis=1, keepdims=True) + 1e-12)
+    normed     = sample / (np.linalg.norm(sample, axis=1, keepdims=True) + 1e-12)
     sim_matrix = normed @ normed.T
-
-    mask = ~np.eye(sample_n, dtype=bool)
-    off_diag = sim_matrix[mask]
+    off_diag   = sim_matrix[~np.eye(sample_n, dtype=bool)]
 
     logger.info(
         f"[tier2] cosine: mean={off_diag.mean():.6f} "
@@ -262,125 +213,56 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=25):
         f"max={off_diag.max():.6f}"
     )
 
-    collapse_score = off_diag.std()
-    if collapse_score < 1e-3:
+    if off_diag.std() < 1e-3:
         logger.warning(
             "[tier2] EMBEDDING COLLAPSE SUSPECTED "
             "(near-constant semantic neighbourhood geometry)"
         )
 
-    # FAISS SEARCH
-    all_scores, all_neigh_ids = index.search(query_vecs, K)
 
-    token_counter = Counter()
-    doc_counter = Counter()
-    window_counter = Counter()
-
-    results = []
-
-    # DEBUG: neighbour identity entropy (cheap + very informative)
+def _audit_neighbour_identity(all_neigh_ids):
+    """Log the most frequently returned neighbour ids across all queries."""
     flat_ids = all_neigh_ids.flatten()
-    if len(flat_ids):
-        from collections import Counter as _C
-        freq = _C(flat_ids)
-        top10 = freq.most_common(10)
+    if not len(flat_ids):
+        return
 
-        logger.info("[tier2] TOP NEIGHBOUR IDS (frequency)")
-        for k, v in top10:
-            logger.info(f"[tier2] id={k} freq={v}")
+    freq   = Counter(flat_ids)
+    top10  = freq.most_common(10)
 
-    # ------------------------------------------------------------
-    # main loop
-    # ------------------------------------------------------------
-    for i, eid in enumerate(event_ids):
-        event = lookup.get_event(eid)
+    logger.info("[tier2] TOP NEIGHBOUR IDS (frequency)")
+    for k, v in top10:
+        logger.info(f"[tier2] id={k} freq={v}")
 
-        neighbours = []
-
-        for nid, score in zip(all_neigh_ids[i], all_scores[i]):
-
-            if nid == -1:
-                continue
-
-            if int(nid) == int(eid):
-                continue
-
-            n_event = lookup.get_event(int(nid))
-
-            token_counter[n_event["token"]] += 1
-            doc_counter[n_event["doc_id"]] += 1
-            window_counter[(n_event["doc_id"], n_event["window_id"])] += 1
-
-            neighbours.append({
-                "event_id": int(nid),
-                "vector_id": n_event["vector_id"],
-                "token": n_event["token"],
-                "doc_id": n_event["doc_id"],
-                "pub_year": doc_meta.get(event["doc_id"], {}).get("pub_year"),
-                "token_idx": n_event["token_idx"],
-                "window_id": n_event["window_id"],
-                "window_token_pos": n_event["window_token_pos"],
-                "score": float(score),
-            })
-
-        results.append({
-            "event_id": int(eid),
-            "vector_id": event["vector_id"],
-            "token": event["token"],
-            "doc_id": event["doc_id"],
-            "pub_year": doc_meta.get(event["doc_id"], {}).get("pub_year"),
-            "token_idx": event["token_idx"],
-            "window_id": event["window_id"],
-            "window_token_pos": event["window_token_pos"],
-            "neighbours": neighbours,
-        })
-
-    return {
-        "concept": concept_name,
-        "n_events": len(event_ids),
-        "aggregate": {
-            "top_tokens": token_counter.most_common(top_n),
-            "top_docs": doc_counter.most_common(top_n),
-            "top_windows": window_counter.most_common(top_n),
-        },
-        "events": results,
-    }
 
 def knn_diagnostics(lookup, index, concept_forms, sample_n=25, k=25):
-    forms = {f.lower() for f in concept_forms}
-
-    # collect event ids
+    """Dev utility: print kNN overlap and Jaccard stats for a concept's events."""
+    forms     = {f.lower() for f in concept_forms}
     event_ids = list(lookup.iter_matching_event_ids(forms))
+
     if len(event_ids) < 5:
         print("Too few events")
         return
 
     event_ids = event_ids[:sample_n]
-
-    # get embeddings
-    vecs = np.stack([lookup.get_event(eid)["embedding"] for eid in event_ids])
-
+    vecs      = np.stack([lookup.get_event(eid)["embedding"] for eid in event_ids])
     _, nn_ids = index.search(vecs, k)
+    knn_sets  = [set(map(int, row)) for row in nn_ids]
 
-    knn_sets = [set(map(int, row)) for row in nn_ids]
-
-    overlaps = []
-    jaccards = []
+    overlaps  = []
+    jaccards  = []
     entropies = []
 
     for i, j in combinations(range(len(knn_sets)), 2):
-        a, b = knn_sets[i], knn_sets[j]
-
+        a, b  = knn_sets[i], knn_sets[j]
         inter = len(a & b)
         union = len(a | b)
-
         overlaps.append(inter)
         jaccards.append(inter / union if union else 0)
 
     for s in knn_sets:
-        flat = list(s)
-        freq = Counter(flat)
-        p = np.array(list(freq.values())) / len(flat)
+        flat    = list(s)
+        freq    = Counter(flat)
+        p       = np.array(list(freq.values())) / len(flat)
         entropy = -(p * np.log(p + 1e-9)).sum()
         entropies.append(entropy)
 
@@ -389,33 +271,119 @@ def knn_diagnostics(lookup, index, concept_forms, sample_n=25, k=25):
     print(f"mean overlap: {np.mean(overlaps):.3f} ± {np.std(overlaps):.3f}")
     print(f"mean jaccard: {np.mean(jaccards):.3f} ± {np.std(jaccards):.3f}")
     print(f"mean entropy: {np.mean(entropies):.3f}")
-
     print("\noverlap quantiles:", np.percentile(overlaps, [0, 25, 50, 75, 100]))
     print("jaccard quantiles:", np.percentile(jaccards, [0, 25, 50, 75, 100]))
+
+#
+# Concept analysis
+#
+def _event_record(event, doc_meta):
+    """Serialisable dict for one query event (without neighbours)."""
+    return {
+        "event_id":         int(event["event_id"]),
+        "vector_id":        event["vector_id"],
+        "token":            event["token"],
+        "doc_id":           event["doc_id"],
+        "pub_year":         doc_meta.get(event["doc_id"], {}).get("pub_year"),
+        "token_idx":        event["token_idx"],
+        "window_id":        event["window_id"],
+        "window_token_pos": event["window_token_pos"],
+    }
+
+
+def _neighbour_record(n_event, query_event, doc_meta, score):
+    """Serialisable dict for one neighbour of a query event."""
+    return {
+        "event_id":         int(n_event["event_id"]),
+        "vector_id":        n_event["vector_id"],
+        "token":            n_event["token"],
+        "doc_id":           n_event["doc_id"],
+        "pub_year":         doc_meta.get(query_event["doc_id"], {}).get("pub_year"),
+        "token_idx":        n_event["token_idx"],
+        "window_id":        n_event["window_id"],
+        "window_token_pos": n_event["window_token_pos"],
+        "score":            float(score),
+    }
+
+
+def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K):
+    """Compute neighbourhood structure for all events matching a concept."""
+    forms     = set(concept["forms"])
+    event_ids = list(lookup.iter_matching_event_ids(forms))
+
+    logger.info(f"[tier2] concept={concept_name}")
+
+    if not event_ids:
+        return {"concept": concept_name, "empty": True}
+
+    query_vecs = np.stack([lookup.get_event(eid)["embedding"] for eid in event_ids])
+
+    logger.info(f"[tier2] query_events={len(event_ids)}")
+    logger.info(f"[tier2] sample_event_id={event_ids[0]}")
+    logger.info(f"[tier2] sample_embedding_shape={query_vecs.shape}")
+
+    _audit_embedding_diversity(concept_name, query_vecs)
+
+    all_scores, all_neigh_ids = index.search(query_vecs, K)
+
+    _audit_neighbour_identity(all_neigh_ids)
+
+    token_counter  = Counter()
+    doc_counter    = Counter()
+    window_counter = Counter()
+    results        = []
+
+    for i, eid in enumerate(event_ids):
+        event      = lookup.get_event(eid)
+        neighbours = []
+
+        for nid, score in zip(all_neigh_ids[i], all_scores[i]):
+            if nid == -1 or int(nid) == int(eid):
+                continue
+
+            n_event = lookup.get_event(int(nid))
+
+            token_counter[n_event["token"]]                              += 1
+            doc_counter[n_event["doc_id"]]                               += 1
+            window_counter[(n_event["doc_id"], n_event["window_id"])]    += 1
+
+            neighbours.append(_neighbour_record(n_event, event, doc_meta, score))
+
+        results.append({**_event_record(event, doc_meta), "neighbours": neighbours})
+
+    return {
+        "concept":   concept_name,
+        "n_events":  len(event_ids),
+        "aggregate": {
+            "top_tokens":  token_counter.most_common(top_n),
+            "top_docs":    doc_counter.most_common(top_n),
+            "top_windows": window_counter.most_common(top_n),
+        },
+        "events": results,
+    }
+
+
 
 def main():
     logger.info("[tier2] init")
 
-    args = argparse.ArgumentParser()
-    args.add_argument("--concept", type=str, default=None)
-    args = args.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--concept", type=str, default=None)
+    args = parser.parse_args()
 
-    faiss_index_path = INDEXES_DIR / "faiss" / "tier1.index"
+    faiss_index_path = FAISS_INDEX_DIR / "tier1.index"
 
-    index = EeboFaissIndex.load(faiss_index_path)
+    index  = EeboFaissIndex.load(faiss_index_path)
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
 
-    logger.info('--------------------------------------------------------')
-
+    logger.info("--------------------------------------------------------")
     knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
     knn_diagnostics(lookup, index, CONCEPT_SETS["LAW"]["forms"])
+    logger.info("--------------------------------------------------------")
 
-    logger.info('--------------------------------------------------------')
-
-    conn = get_connection()
+    conn     = get_connection()
     doc_meta = load_doc_metadata(conn)
-
-    output = {}
+    output   = {}
 
     for concept_name, concept in resolve_concepts(args):
         output[concept_name] = analyse_concept(

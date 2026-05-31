@@ -13,14 +13,14 @@ Core invariant
 
 Check the minimal STOPWORDS list
 
-Refactor this to OO
-
 """
 
 from __future__ import annotations
 
 import argparse
 import shutil
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 import xxhash
@@ -54,326 +54,252 @@ STOPWORDS = {
     "this", "these", "those", "all", "no", "any",
 }
 
+
 def stable_hash(key: str) -> np.int64:
     h = xxhash.xxh64(key, seed=0).intdigest()
     return np.int64(h & 0x7FFFFFFFFFFFFFFF)
 
 
 def is_content_token(token: str) -> bool:
-    """
-    Reject tokens that are purely punctuation, whitespace, or
-    single non-alphabetic characters. Early modern texts include
-    many
-    """
+    """Reject punctuation, whitespace, stopwords, and bare symbols.
+    Early modern texts include many non-lexical characters."""
     stripped = token.strip().lower()
-    if not stripped:
+    if not stripped or stripped in STOPWORDS:
         return False
-    if stripped in STOPWORDS:
-        return False
-    if all(unicodedata.category(c).startswith(("P", "S", "Z"))
-           for c in stripped):
+    if all(unicodedata.category(c).startswith(("P", "S", "Z")) for c in stripped):
         return False
     return True
 
-# Stable textual locus in corpus space.
-# Must remain invariant across contextual embedding passes.
-def make_concept_id(doc_id, token_idx):
-    return stable_hash(f"{doc_id}:{token_idx}")
 
+#
+# TODO Extrapolate
+#
+@dataclass(slots=True)
+class Event:
+    event_id:         np.int64    # unique contextual observation
+    concept_id:       np.int64    # stable corpus token identity
+    doc_id:           str
+    token_idx:        int         # original corpus token position
+    window_start:     int         # contextual frame origin
+    window_token_pos: int         # intra-window transformer position
+    token:            str
+    vector_id:        int
+    vec:              np.ndarray
 
-# Unique contextual embedding observation.
-# One event_id MUST correspond to exactly one emitted vector.
-def make_event_id(doc_id, token_idx, window_start, window_token_pos):
-    return stable_hash(
-        f"{doc_id}:{token_idx}:{window_start}:{window_token_pos}"
-    )
-
-
-def encode_doc(tokens, tokenizer):
-    enc = tokenizer(
-        tokens,
-        is_split_into_words=True,
-        truncation=False,
-        return_tensors="pt"
-    )
-
-    input_ids = enc["input_ids"][0].tolist()
-    attention_mask = enc["attention_mask"][0].tolist()
-    word_ids = enc.word_ids()
-
-    if word_ids is None:
-        word_ids = [None] * len(input_ids)
-
-    return input_ids, attention_mask, word_ids
-
-
-def iter_windows(input_ids, attention_mask, word_ids):
-    n = len(input_ids)
-    start = 0
-
-    while start < n:
-        end = min(start + WINDOW_SIZE, n)
-
-        yield (
-            start,
-            input_ids[start:end],
-            attention_mask[start:end],
-            word_ids[start:end]
+    @staticmethod
+    def make(doc_id, corpus_token_idx, window_start, window_token_pos, token, vector_id, vec):
+        concept_id = stable_hash(f"{doc_id}:{corpus_token_idx}")
+        event_id   = stable_hash(f"{doc_id}:{corpus_token_idx}:{window_start}:{window_token_pos}")
+        return Event(
+            event_id         = event_id,
+            concept_id       = concept_id,
+            doc_id           = doc_id,
+            token_idx        = corpus_token_idx,
+            window_start     = window_start,
+            window_token_pos = window_token_pos,
+            token            = token,
+            vector_id        = vector_id,
+            vec              = vec.astype(np.float32),
         )
 
-        if end == n:
-            break
-
-        start += STRIDE
 
 
-def forward(model, device, batch):
-    max_len = max(len(x["input_ids"]) for x in batch)
+@dataclass
+class DocBuffer:
+    """Accumulates content tokens for one document before embedding."""
+    doc_id:     str
+    tokens:     list = None
+    vector_ids: list = None
+    token_idxs: list = None  # original corpus positions
 
-    def pad(seq):
-        return seq + [0] * (max_len - len(seq))
+    def __post_init__(self):
+        self.tokens     = []
+        self.vector_ids = []
+        self.token_idxs = []
 
-    input_ids = torch.tensor(
-        [pad(x["input_ids"]) for x in batch],
-        dtype=torch.long
-    ).to(device)
+    def append(self, token, vector_id, token_idx):
+        self.tokens.append(token)
+        self.vector_ids.append(vector_id)
+        self.token_idxs.append(token_idx)
 
-    mask = torch.tensor(
-        [pad(x["mask"]) for x in batch],
-        dtype=torch.long
-    ).to(device)
+    def __bool__(self):
+        return bool(self.tokens)
 
-    with torch.inference_mode():
-        out = model(
-            input_ids=input_ids,
-            attention_mask=mask,
-            return_dict=True
+
+
+class EmbeddingPipeline:
+    def __init__(self, tokenizer, model, device):
+        self.tokenizer = tokenizer
+        self.model     = model
+        self.device    = device
+
+    def embed_doc(self, buf: DocBuffer) -> list[Event]:
+        """Encode, window, batch-forward, and extract events for one document."""
+        input_ids, attention_mask, word_ids = self._encode(buf.tokens)
+
+        events = []
+        batch  = []
+
+        for window_start, ids, mask, wids in self._iter_windows(input_ids, attention_mask, word_ids):
+            batch.append({
+                "input_ids":    ids,
+                "mask":         mask,
+                "word_ids":     wids,
+                "window_start": window_start,
+            })
+            if len(batch) >= EMBED_BATCH_SIZE:
+                events.extend(self._flush_batch(buf, batch))
+                batch.clear()
+
+        if batch:
+            events.extend(self._flush_batch(buf, batch))
+
+        return events
+
+    def _encode(self, tokens):
+        enc = self.tokenizer(
+            tokens,
+            is_split_into_words=True,
+            truncation=False,
+            return_tensors="pt",
         )
+        word_ids = enc.word_ids() or [None] * len(enc["input_ids"][0])
+        return enc["input_ids"][0].tolist(), enc["attention_mask"][0].tolist(), word_ids
 
-    return out.last_hidden_state.cpu().numpy()
+    @staticmethod
+    def _iter_windows(input_ids, attention_mask, word_ids):
+        n, start = len(input_ids), 0
+        while start < n:
+            end = min(start + WINDOW_SIZE, n)
+            yield start, input_ids[start:end], attention_mask[start:end], word_ids[start:end]
+            if end == n:
+                break
+            start += STRIDE
 
+    def _flush_batch(self, buf: DocBuffer, batch: list) -> list[Event]:
+        hidden_states = self._forward(batch)
+        events = []
+        for item, hidden in zip(batch, hidden_states):
+            events.extend(self._extract_events(buf, item, hidden))
+        return events
 
-def process_windows_events(
-    doc_id,
-    tokens,
-    vector_ids,
-    corpus_token_idxs,
-    tokenizer,
-    model,
-    device
-):
-    input_ids, attention_mask, word_ids = encode_doc(tokens, tokenizer)
+    def _forward(self, batch: list) -> np.ndarray:
+        max_len = max(len(x["input_ids"]) for x in batch)
 
-    events = []
-    batch = []
+        def pad(seq):
+            return seq + [0] * (max_len - len(seq))
 
-    def flush(batch):
-        if not batch:
-            return []
+        input_ids = torch.tensor(
+            [pad(x["input_ids"]) for x in batch], dtype=torch.long
+        ).to(self.device)
 
-        hidden = forward(model, device, batch)
+        mask = torch.tensor(
+            [pad(x["mask"]) for x in batch], dtype=torch.long
+        ).to(self.device)
 
-        out = []
+        with torch.inference_mode():
+            out = self.model(input_ids=input_ids, attention_mask=mask, return_dict=True)
 
-        for b, h in zip(batch, hidden):
-            out.extend(
-                extract_events(
-                    doc_id,
-                    tokens,
-                    vector_ids,
-                    corpus_token_idxs,
-                    b,
-                    h
-                )
+        return out.last_hidden_state.cpu().numpy()
+
+    @staticmethod
+    def _extract_events(buf: DocBuffer, item: dict, hidden: np.ndarray) -> list[Event]:
+        window_start = item["window_start"]
+        return [
+            Event.make(
+                doc_id           = buf.doc_id,
+                corpus_token_idx = buf.token_idxs[wid],
+                window_start     = window_start,
+                window_token_pos = i,
+                token            = buf.tokens[wid],
+                vector_id        = buf.vector_ids[wid],
+                vec              = hidden[i],
             )
-
-        return out
-
-    for window_start, ids, mask, wids in iter_windows(
-        input_ids,
-        attention_mask,
-        word_ids
-    ):
-        batch.append({
-            "input_ids": ids,
-            "mask": mask,
-            "word_ids": wids,
-            "window_start": window_start
-        })
-
-        if len(batch) >= EMBED_BATCH_SIZE:
-            events.extend(flush(batch))
-            batch.clear()
-
-    if batch:
-        events.extend(flush(batch))
-
-    return events if events else None
+            for i, wid in enumerate(item["word_ids"])
+            if wid is not None and wid >= 0
+        ]
 
 
-def extract_events(doc_id, tokens, vector_ids, corpus_token_idxs, batch_item, hidden):
-    window_start = batch_item["window_start"]
-    word_ids = batch_item["word_ids"]
 
-    events = []
+class SliceProcessor:
+    def __init__(self, conn, pipeline: EmbeddingPipeline):
+        self.conn     = conn
+        self.pipeline = pipeline
 
-    for i, wid in enumerate(word_ids):
-        if wid is None or wid < 0:
-            continue
+    def process(self, slice_range):
+        slice_id = f"{slice_range[0]}-{slice_range[1]}"
+        logger.info(f"[SLICE START] {slice_id}")
 
-        # Use the original corpus token_idx (not the buffer-local wid)
-        # to ensure concept_id and event_id are stable across runs.
-        corpus_token_idx = corpus_token_idxs[wid]
-
-        concept_id = make_concept_id(
-            doc_id,
-            corpus_token_idx
+        store = ZarrEmbeddingObservationStore(
+            path=str(ZARR_ROOT / "tier1" / slice_id),
+            dim=self.pipeline.model.config.hidden_size,
         )
 
-        event_id = make_event_id(
-            doc_id,
-            corpus_token_idx,
-            int(window_start),
-            int(i)
-        )
+        cur = self.conn.cursor(name=f"tier1_{slice_id}")
+        cur.itersize = 10000
+        cur.execute("""
+            SELECT doc_id, token_idx, vector_id, token
+            FROM pamphlet_tokens
+            WHERE pub_year BETWEEN %s AND %s
+            ORDER BY doc_id, token_idx
+        """, slice_range)
 
-        events.append((
-            event_id,                  # unique contextual observation
-            concept_id,               # stable corpus token identity
-            doc_id,
-            corpus_token_idx,         # original corpus token position
-            int(window_start),        # contextual frame origin
-            int(i),                   # intra-window transformer position
-            tokens[wid],
-            int(vector_ids[wid]),
-            hidden[i].astype(np.float32)
-        ))
+        buf = None
 
-    return events
+        for doc_id, token_idx, vid, token in cur:
+            if buf is None or doc_id != buf.doc_id:
+                if buf:
+                    self._flush(buf, store)
+                buf = DocBuffer(doc_id=doc_id)
 
+            if is_content_token(token):
+                buf.append(token, vid, token_idx)
 
-def process_slice(conn, slice_range, tokenizer, model, device):
-    slice_id = f"{slice_range[0]}-{slice_range[1]}"
+        if buf:
+            self._flush(buf, store)
 
-    logger.info(f"[SLICE START] {slice_id}")
+        logger.info(f"[SLICE COMPLETE] {slice_id}")
 
-    store = ZarrEmbeddingObservationStore(
-        path=str(ZARR_ROOT / "tier1" / slice_id),
-        dim=model.config.hidden_size,
-    )
-
-    cur = conn.cursor(name=f"tier1_{slice_id}")
-    cur.itersize = 10000
-
-    cur.execute("""
-        SELECT doc_id, token_idx, vector_id, token
-        FROM pamphlet_tokens
-        WHERE pub_year BETWEEN %s AND %s
-        ORDER BY doc_id, token_idx
-    """, slice_range)
-
-    current_doc = None
-    buf_tokens = []
-    buf_vids = []
-    buf_token_idxs = []  # original corpus token_idx for each buffered token
-
-    def flush():
-        nonlocal buf_tokens, buf_vids, buf_token_idxs
-
-        if not buf_tokens:
+    def _flush(self, buf: DocBuffer, store: ZarrEmbeddingObservationStore):
+        if not buf:
             return
 
-        result = process_windows_events(
-            current_doc,
-            buf_tokens,
-            buf_vids,
-            buf_token_idxs,
-            tokenizer,
-            model,
-            device,
-        )
-
-        if result is None:
+        events = self.pipeline.embed_doc(buf)
+        if not events:
             return
 
-        event_ids = []
-        concept_ids = []
-        doc_ids = []
-        token_idxs = []
-        window_ids = []
-        window_pos = []
-        tokens_out = []
-        vector_ids_out = []
-        vecs = []
-
-        for (
-            eid,
-            cid,
-            d_id,
-            t_idx,
-            w_id,
-            w_pos,
-            tok,
-            v_id,
-            vec
-        ) in result:
-            event_ids.append(eid)
-            concept_ids.append(cid)
-            doc_ids.append(d_id)
-            token_idxs.append(t_idx)
-            window_ids.append(w_id)
-            window_pos.append(w_pos)
-            tokens_out.append(tok)
-            vector_ids_out.append(v_id)
-            vecs.append(vec)
+        (event_ids, concept_ids, doc_ids, token_idxs,
+         window_starts, window_token_pos, tokens, vector_ids, vecs) = zip(*[
+            (e.event_id, e.concept_id, e.doc_id, e.token_idx,
+             e.window_start, e.window_token_pos, e.token, e.vector_id, e.vec)
+            for e in events
+        ])
 
         store.append_events(
-            event_id=np.asarray(event_ids, dtype=np.int64),
-            concept_id=np.asarray(concept_ids, dtype=np.int64),
-            emb_raw=np.stack(vecs),
-            vector_id=np.asarray(vector_ids_out, dtype=np.int64),
-            doc_id=np.asarray(doc_ids, dtype="U32"),
-            token_idx=np.asarray(token_idxs, dtype=np.int32),
-            window_id=np.asarray(window_ids, dtype=np.int32),
-            window_token_pos=np.asarray(window_pos, dtype=np.int32),
-            token=np.asarray(tokens_out, dtype=object),
+            event_id         = np.asarray(event_ids,        dtype=np.int64),
+            concept_id       = np.asarray(concept_ids,      dtype=np.int64),
+            emb_raw          = np.stack(vecs),
+            vector_id        = np.asarray(vector_ids,       dtype=np.int64),
+            doc_id           = np.asarray(doc_ids,          dtype="U32"),
+            token_idx        = np.asarray(token_idxs,       dtype=np.int32),
+            window_id        = np.asarray(window_starts,    dtype=np.int32),
+            window_token_pos = np.asarray(window_token_pos, dtype=np.int32),
+            token            = np.asarray(tokens,           dtype=object),
         )
 
-    for doc_id, token_idx, vid, token in cur:
-        if current_doc is None:
-            current_doc = doc_id
-
-        if doc_id != current_doc:
-            flush()
-            buf_tokens.clear()
-            buf_vids.clear()
-            buf_token_idxs.clear()
-            current_doc = doc_id
-
-        if is_content_token(token):
-            buf_tokens.append(token)
-            buf_vids.append(vid)
-            buf_token_idxs.append(token_idx)  # preserve original corpus position
-
-    flush()
-    logger.info(f"[SLICE COMPLETE] {slice_id}")
 
 
 def clear_output_dir():
     path = ZARR_ROOT / "tier1"
-
     if path.exists():
         shutil.rmtree(path)
-
     path.mkdir(parents=True, exist_ok=True)
 
 
 def parse_args():
     p = argparse.ArgumentParser()
-
     p.add_argument("--no-clear", action="store_true")
-    p.add_argument("--first", action="store_true")
-
+    p.add_argument("--first",    action="store_true")
     return p.parse_args()
 
 
@@ -384,19 +310,15 @@ def main():
         logger.info("Clearing Tier 1 output")
         clear_output_dir()
 
-    conn = get_connection()
-    mac = load_macberth()
+    conn     = get_connection()
+    mac      = load_macberth()
+    pipeline = EmbeddingPipeline(mac.tokenizer, mac.model, mac.device)
+    proc     = SliceProcessor(conn, pipeline)
 
     slices = SLICES[:1] if args.first else SLICES
 
     for s in slices:
-        process_slice(
-            conn,
-            s,
-            mac.tokenizer,
-            mac.model,
-            mac.device
-        )
+        proc.process(s)
 
     conn.close()
 
