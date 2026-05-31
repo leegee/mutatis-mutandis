@@ -181,35 +181,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           </output>
         </div>
 
-        {/* Hub spread */}
-        <Show when={props.includeHubSpread}>
-
-          <hr class="divider vertical max no-margin no-padding" />
-
-          <div class="field middle-align">
-            <div class="slider tiny">
-              <input
-                type="range"
-                min={0.2}
-                max={2.0}
-                step={0.05}
-                value={controls.hubSpread}
-                onInput={(e) =>
-                  A.setHubSpread(Number(e.currentTarget.value))
-                }
-              />
-              <span />
-              <span class="tooltip bottom" />
-            </div>
-            <output class="small-padding top-padding">
-              Hub spread {controls.hubSpread.toFixed(2)}
-            </output>
-          </div>
-        </Show>
-
-        {/* Min similarity */}
         <Show when={fdgControls()}>
-
           <hr class="divider vertical max no-margin no-padding" />
 
           <div class="field suffix border middle-align">
@@ -228,8 +200,6 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           <hr class="divider vertical max no-margin no-padding" />
 
           <Show when={controls.viewMode === "aggregated"}>
-
-            <hr class="divider vertical max no-margin no-padding" />
 
             <div class="field middle-align">
               <div class="slider tiny">
@@ -272,6 +242,29 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         </Show>
 
         <hr class="divider vertical max no-margin no-padding" />
+
+        {/* Hub spread */}
+        <Show when={props.includeHubSpread}>
+          <div class="field middle-align">
+            <div class="slider tiny">
+              <input
+                type="range"
+                min={0.2}
+                max={2.0}
+                step={0.05}
+                value={controls.hubSpread}
+                onInput={(e) =>
+                  A.setHubSpread(Number(e.currentTarget.value))
+                }
+              />
+              <span />
+              <span class="tooltip bottom" />
+            </div>
+            <output class="small-padding top-padding">
+              Hub spread {controls.hubSpread.toFixed(2)}
+            </output>
+          </div>
+        </Show>
 
         {/* <Show when={fdgControls()}>
         <hr class="divider vertical max no-margin no-padding" />
