@@ -227,24 +227,6 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
           <hr class="divider vertical max no-margin no-padding" />
 
-          {/* Max hubs */}
-          <Show when={controls.viewMode === "aggregated"}>
-
-            <hr class="divider vertical max no-margin no-padding" />
-
-            <div class="field suffix border middle-align">
-              <select
-                value={controls.maxHubs}
-                onChange={(e) => A.setMaxHubs(Number(e.currentTarget.value))}
-              >
-                <For each={[10, 20, 50, 100]}>
-                  {(n) => <option value={n}>{n}</option>}
-                </For>
-              </select>
-              <output>Max hubs</output>
-            </div>
-          </Show>
-
           <Show when={controls.viewMode === "aggregated"}>
 
             <hr class="divider vertical max no-margin no-padding" />
@@ -268,6 +250,22 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <output class="small-padding top-padding">
                 Min sim {controls.minSimilarity.toFixed(2)}
               </output>
+            </div>
+          </Show>
+
+          {/* Max hubs */}
+          <Show when={controls.viewMode === "aggregated"}>
+
+            <div class="field suffix border middle-align">
+              <select
+                value={controls.maxHubs}
+                onChange={(e) => A.setMaxHubs(Number(e.currentTarget.value))}
+              >
+                <For each={[10, 20, 50, 100]}>
+                  {(n) => <option value={n}>{n}</option>}
+                </For>
+              </select>
+              <output>Max hubs</output>
             </div>
           </Show>
 

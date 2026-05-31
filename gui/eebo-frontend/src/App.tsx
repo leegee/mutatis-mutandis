@@ -9,12 +9,10 @@ import {
   loadTier2Data
 } from "./state/tier2data.store";
 
-import ConceptGraphGuide from "./components/SvgConceptGraph/Guide";
 const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"));
 
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
-const SvgContextGraph5 = lazy(() => import("./components/SvgConceptGraph"));
 const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
 
 export default function App() {
@@ -23,12 +21,11 @@ export default function App() {
   const [openHelp, setOpenHelp] = createSignal(false);
   const [open, setOpen] = createSignal(false);
   const [view, setView] = createSignal<
-    "graph" | "table" | "help" | "diachronic" | "cosmos"
-  >("cosmos");
+    "table" | "help" | "diachronic" | "cosmos"
+  >("table");
 
   const navItems = [
     { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
-    { key: "graph", icon: "graph_5", label: "Force graph (SVG)" },
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
     { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
   ] as const;
@@ -45,9 +42,9 @@ export default function App() {
 
   return (
     <>
-      <nav id="app-nav" class={`surface-container-low left scroll ${ open() ? "max" : "small" }`} >
-        <header class="center-align ">
-          <button class="extra transparent" onClick={() => setOpen(!open())} >
+      <nav id="app-nav" class={`surface-container-low left scroll small-elevate ${ open() ? "max" : "small" }`} >
+        <header class="center-align top-margin no-padding">
+          <button class="extra transparent no-padding" onClick={() => setOpen(!open())} >
             <Switch>
               <Match when={open()}> <i>menu_open</i> </Match>
               <Match when={!open()}> <i>menu</i> </Match>
@@ -105,10 +102,6 @@ export default function App() {
             }
           >
             <Switch>
-              <Match when={view() === "graph"}>
-                <SvgContextGraph5 />
-              </Match>
-
               <Match when={view() === "table"}>
                 <NeighbourhoodBrowser />
               </Match>
@@ -130,14 +123,10 @@ export default function App() {
         <Show when={openHelp()}>
           <article class="helpContainer right surface-container-high padding  high-elevate border" style='z-index:999 !important'>
             <Switch fallback={<article>To do...</article>}>
-              <Match when={view() === "graph"}>
+              <Match when={view() == "cosmos"}>
                 <header class="fixed top fill max" style="z-index:9999">
                   <h1>SVG Graph</h1>
                 </header>
-                <ConceptGraphGuide />
-              </Match>
-              <Match when={view() == "cosmos"}>
-                <h1>Cosmos Graph</h1>
                 <CosmosContextGraphGuide />
               </Match>
             </Switch>
