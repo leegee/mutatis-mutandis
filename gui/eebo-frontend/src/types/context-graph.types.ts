@@ -1,27 +1,26 @@
 export type ViewMode = "aggregated" | "events";
 
 export interface Neighbour {
-  token: string;
-  score: number;
   event_id?: number;
+  vector_id?: number;
+  token: string;
   doc_id?: string;
   pub_year?: number;
+  token_idx: string;
   window_id?: number;
+  window_token_pos: number;
+  score: number;
 }
 
 export interface ConceptEvent {
-  event_id?: number;
-  vector_id?: number;
-
-  token?: string;
-  token_idx?: number;
-
-  doc_id?: string;
-  pub_year?: number;
-
-  window_id?: number;
-  window_token_pos?: number;
-
+  event_id: number;
+  vector_id: number;
+  token: string;
+  token_idx: number;
+  doc_id: string;
+  pub_year: number;
+  window_id: number;
+  window_token_pos: number;
   neighbours: Neighbour[];
 }
 

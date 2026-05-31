@@ -54,6 +54,7 @@ import Sparkline from "./NeighbourhoodBrowser/SparkLine";
  */
 interface NeighbourSummary {
   token: string;
+  token_idx: string;
   /** raw neighbour occurrences across corpus slice */
   occurrenceCount: number;
   /** Number of distinct events in which this token appears as a neighbour. */
@@ -95,6 +96,7 @@ function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
       if (!summary) {
         summary = {
           token: nb.token,
+          token_idx: nb.token_idx,
           occurrenceCount: 0,
           eventCount: 0,
           meanScore: 0,
@@ -465,7 +467,7 @@ const NeighbourhoodBrowser: Component = () => {
           <div class="padding small-text bold" style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}>
             <Show when={focusToken()} fallback="Documents">
               <span>
-                Documents for "{focusToken()}"
+                Documents for <q>{focusToken()}</q>
                 <span class="small-text left-padding medium-opacity">
                   {rightPanelDocs().length}
                 </span>
