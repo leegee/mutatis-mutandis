@@ -1,9 +1,7 @@
 // src/lib/contextGraphUtils.ts
+import type { AnyEdge, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, TokenBin } from "../components/CosmosContextGraph/types";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
-import type {
-    ConceptData, ContextNode, HubHubEdge, HubNbEdge, AnyEdge,
-    ConceptEvent, TokenBin, ContextGraphData
-} from "../types/context-graph.types";
+import type { ConceptData, ConceptEvent, } from "../types/context-graph.types";
 
 export function scanYearRange(cd: ConceptData): [number, number] {
     let min = CORPUS_END_YEAR;
@@ -119,47 +117,37 @@ export function buildContextualGraph(
     topN: number,
     minSimilarity: number,
     maxHubs: number,
-    EMPTY_GRAPH: any,
+    EMPTY_GRAPH: ContextGraphData,
 ): ContextGraphData {
     const hubKeys = [...bins.keys()];
     if (hubKeys.length === 0) return EMPTY_GRAPH;
 
-    // 1. Hub-hub edges: pairwise cosine
     const rawHubHub: Array<[string, string, number]> = [];
     for (let i = 0; i < hubKeys.length; i++) {
         for (let j = i + 1; j < hubKeys.length; j++) {
             const sim = cosineSimilarity(
                 bins.get(hubKeys[i])!.neighbourFreq,
-                bins.get(hubKeys[j])!.neighbourFreq,
+                bins.get(hubKeys[j])!.neighbourFreq
             );
             if (sim >= minSimilarity) rawHubHub.push([hubKeys[i], hubKeys[j], sim]);
         }
     }
-    // TODO layer 2: inject temporal continuity edges here?
-    // TODO layer 3: inject shared-unusual-neighbour edges here?
 
-    // Hub degree from hub-hub edges only.
     const hubHubDegree = new Map<string, number>();
     for (const [a, b] of rawHubHub) {
         hubHubDegree.set(a, (hubHubDegree.get(a) ?? 0) + 1);
         hubHubDegree.set(b, (hubHubDegree.get(b) ?? 0) + 1);
     }
 
-    // Retain all hubs but prefer the most contextually connected ones when
-    // truncating: sort by hub-hub degree desc, then eventCount desc.
     const sortedHubs = hubKeys
         .sort((a, b) => {
             const dd = (hubHubDegree.get(b) ?? 0) - (hubHubDegree.get(a) ?? 0);
-            if (dd !== 0) return dd;
-            return bins.get(b)!.eventCount - bins.get(a)!.eventCount;
+            return dd !== 0 ? dd : bins.get(b)!.eventCount - bins.get(a)!.eventCount;
         })
         .slice(0, maxHubs);
 
     const hubSet = new Set(sortedHubs);
-
-    // 2. Hub nodes---
     const nodeMap = new Map<string, ContextNode>();
-
     for (const key of sortedHubs) {
         nodeMap.set(key, {
             id: key,
@@ -170,21 +158,20 @@ export function buildContextualGraph(
         });
     }
 
-    // 3. Neighbour nodes + hub-neighbour edges
     const spokeTriples: Array<[string, string, number]> = [];
-
-    for (const hubKey of sortedHubs) {
-        const bin = bins.get(hubKey)!;
-        for (const nb of bin.topNeighbours.slice(0, topN)) {
+    for (const hubKey of sortedHubs)
+        for (const nb of bins.get(hubKey)!.topNeighbours.slice(0, topN)) {
             if (!nodeMap.has(nb.token)) {
                 nodeMap.set(nb.token, {
-                    id: nb.token, kind: "neighbour",
-                    eventCount: 0, hubDegree: 0, degree: 0,
+                    id: nb.token,
+                    kind: "neighbour",
+                    eventCount: 0,
+                    hubDegree: 0,
+                    degree: 0,
                 });
             }
             spokeTriples.push([hubKey, nb.token, nb.freq]);
         }
-    }
 
     for (const [hubKey, nbToken] of spokeTriples) {
         nodeMap.get(hubKey)!.degree += 1;
@@ -192,48 +179,51 @@ export function buildContextualGraph(
     }
 
     const nodes = [...nodeMap.values()];
-
-    // 4. Materialise edges
     const hubHubEdges: HubHubEdge[] = rawHubHub
         .filter(([a, b]) => hubSet.has(a) && hubSet.has(b))
         .map(([a, b, weight]) => ({
             kind: "hub-hub" as const,
-            source: nodeMap.get(a)!,
-            target: nodeMap.get(b)!,
+            sourceId: a,
+            targetId: b,
             weight,
         }));
 
-    const hubNbEdges: HubNbEdge[] = spokeTriples.map(([hubKey, nbToken, weight]) => ({
+    const hubNbEdges: HubNbEdge[] = spokeTriples.map(([s, t, w]) => ({
         kind: "hub-neighbour" as const,
-        source: nodeMap.get(hubKey)!,
-        target: nodeMap.get(nbToken)!,
-        weight,
+        sourceId: s,
+        targetId: t,
+        weight: w,
     }));
 
     const allEdges: AnyEdge[] = [...hubNbEdges, ...hubHubEdges];
+    const maxEventCount = Math.max(
+        1,
+        ...nodes.filter((n) => n.kind === "hub").map((n) => n.eventCount)
+    );
 
-    const maxEventCount = Math.max(1, ...nodes.filter(n => n.kind === "hub").map(n => n.eventCount));
-    const maxHubDegree = Math.max(1, ...nodes.filter(n => n.kind === "hub").map(n => n.hubDegree));
-    const maxHubHubWeight = Math.max(1, ...hubHubEdges.map(e => e.weight));
+    const maxHubDegree = Math.max(
+        1,
+        ...nodes.filter((n) => n.kind === "hub").map((n) => n.hubDegree)
+    );
 
-    console.log("[ctx-graph] hubs:", sortedHubs.length,
-        "| nb nodes:", nodes.filter(n => n.kind === "neighbour").length,
-        "| hub-hub edges:", hubHubEdges.length,
-        "| spoke edges:", hubNbEdges.length);
+    const maxHubHubWeight = Math.max(1, ...hubHubEdges.map((e) => e.weight));
 
-    return { nodes, hubHubEdges, hubNbEdges, allEdges, maxHubHubWeight, maxEventCount, maxHubDegree };
+    return {
+        nodes,
+        hubHubEdges,
+        hubNbEdges,
+        allEdges,
+        maxHubHubWeight,
+        maxEventCount,
+        maxHubDegree,
+    };
 }
 
 
-/**
- * Build a raw event graph: one node per ConceptEvent, linked to their top-N
- * neighbour tokens.  Neighbour nodes are shared across events.
- * No hub-hub edges.
- */
 export function buildPureEventGraph(
     events: ConceptEvent[],
     topN: number,
-    EMPTY_GRAPH: any
+    EMPTY_GRAPH: ContextGraphData
 ): ContextGraphData {
     if (events.length === 0) return EMPTY_GRAPH;
 
@@ -256,36 +246,34 @@ export function buildPureEventGraph(
             doc_id: event.doc_id,
             pub_year: event.pub_year,
         };
+
         nodeMap.set(nodeId, eventNode);
 
-        const top = [...event.neighbours]
+        for (const nb of [...event.neighbours]
             .sort((a, b) => b.score - a.score)
-            .slice(0, topN);
-
-        for (const nb of top) {
+            .slice(0, topN)
+        ) {
             if (!nodeMap.has(nb.token)) {
                 nodeMap.set(nb.token, {
-                    id: nb.token, kind: "neighbour",
-                    eventCount: 0, hubDegree: 0, degree: 0,
+                    id: nb.token,
+                    kind: "neighbour",
+                    eventCount: 0,
+                    hubDegree: 0,
+                    degree: 0,
                 });
             }
-            const nbNode = nodeMap.get(nb.token)!;
             hubNbEdges.push({
                 kind: "hub-neighbour" as const,
-                source: eventNode,
-                target: nbNode,
+                sourceId: nodeId,
+                targetId: nb.token,
                 weight: nb.score,
             });
             eventNode.degree += 1;
-            nbNode.degree += 1;
+            nodeMap.get(nb.token)!.degree += 1;
         }
     }
 
     const nodes = [...nodeMap.values()];
-
-    console.log("[ctx-graph/events] event nodes:", events.length,
-        "| nb nodes:", nodes.filter(n => n.kind === "neighbour").length,
-        "| spoke edges:", hubNbEdges.length);
 
     return {
         nodes,

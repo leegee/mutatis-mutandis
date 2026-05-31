@@ -15,16 +15,15 @@ import * as d3 from "d3";
 import "./styles.css";
 
 import type {
-  AnyEdge, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, TokenBin,
+  AnyEdge, ContextGraphData, ContextNode, TokenBin,
 } from "./types";
 
 import { controls, setControls } from "../../state/controls.store";
 import ControlsHeader from "../ControlsHeader";
 import { tier2Data } from "../../state/tier2data.store";
-import { aggregateByToken, cosineSimilarity } from "../../lib/contextGraphUtils";
+import { aggregateByToken, buildContextualGraph, buildPureEventGraph, } from "../../lib/contextGraphUtils";
 import { getYearBounds, getYearFiltered } from "../../state/selectors";
 import { showDocument } from "../../services/documentApi";
-import type { ConceptEvent } from "../../types/context-graph.types";
 
 const MAX_TOP_N = 20;
 
@@ -80,176 +79,6 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubDegree: 1,
 };
 
-function buildContextualGraph(
-  bins: Map<string, TokenBin>,
-  topN: number,
-  minSimilarity: number,
-  maxHubs: number
-): ContextGraphData {
-  const hubKeys = [...bins.keys()];
-  if (hubKeys.length === 0) return EMPTY_GRAPH;
-
-  const rawHubHub: Array<[string, string, number]> = [];
-  for (let i = 0; i < hubKeys.length; i++) {
-    for (let j = i + 1; j < hubKeys.length; j++) {
-      const sim = cosineSimilarity(
-        bins.get(hubKeys[i])!.neighbourFreq,
-        bins.get(hubKeys[j])!.neighbourFreq
-      );
-      if (sim >= minSimilarity) rawHubHub.push([hubKeys[i], hubKeys[j], sim]);
-    }
-  }
-
-  const hubHubDegree = new Map<string, number>();
-  for (const [a, b] of rawHubHub) {
-    hubHubDegree.set(a, (hubHubDegree.get(a) ?? 0) + 1);
-    hubHubDegree.set(b, (hubHubDegree.get(b) ?? 0) + 1);
-  }
-
-  const sortedHubs = hubKeys
-    .sort((a, b) => {
-      const dd = (hubHubDegree.get(b) ?? 0) - (hubHubDegree.get(a) ?? 0);
-      return dd !== 0 ? dd : bins.get(b)!.eventCount - bins.get(a)!.eventCount;
-    })
-    .slice(0, maxHubs);
-
-  const hubSet = new Set(sortedHubs);
-  const nodeMap = new Map<string, ContextNode>();
-  for (const key of sortedHubs) {
-    nodeMap.set(key, {
-      id: key,
-      kind: "hub",
-      eventCount: bins.get(key)!.eventCount,
-      hubDegree: hubHubDegree.get(key) ?? 0,
-      degree: hubHubDegree.get(key) ?? 0,
-    });
-  }
-
-  const spokeTriples: Array<[string, string, number]> = [];
-  for (const hubKey of sortedHubs)
-    for (const nb of bins.get(hubKey)!.topNeighbours.slice(0, topN)) {
-      if (!nodeMap.has(nb.token)) {
-        nodeMap.set(nb.token, {
-          id: nb.token,
-          kind: "neighbour",
-          eventCount: 0,
-          hubDegree: 0,
-          degree: 0,
-        });
-      }
-      spokeTriples.push([hubKey, nb.token, nb.freq]);
-    }
-
-  for (const [hubKey, nbToken] of spokeTriples) {
-    nodeMap.get(hubKey)!.degree += 1;
-    nodeMap.get(nbToken)!.degree += 1;
-  }
-
-  const nodes = [...nodeMap.values()];
-  const hubHubEdges: HubHubEdge[] = rawHubHub
-    .filter(([a, b]) => hubSet.has(a) && hubSet.has(b))
-    .map(([a, b, weight]) => ({
-      kind: "hub-hub" as const,
-      sourceId: a,
-      targetId: b,
-      weight,
-    }));
-
-  const hubNbEdges: HubNbEdge[] = spokeTriples.map(([s, t, w]) => ({
-    kind: "hub-neighbour" as const,
-    sourceId: s,
-    targetId: t,
-    weight: w,
-  }));
-
-  const allEdges: AnyEdge[] = [...hubNbEdges, ...hubHubEdges];
-  const maxEventCount = Math.max(
-    1,
-    ...nodes.filter((n) => n.kind === "hub").map((n) => n.eventCount)
-  );
-
-  const maxHubDegree = Math.max(
-    1,
-    ...nodes.filter((n) => n.kind === "hub").map((n) => n.hubDegree)
-  );
-
-  const maxHubHubWeight = Math.max(1, ...hubHubEdges.map((e) => e.weight));
-
-  return {
-    nodes,
-    hubHubEdges,
-    hubNbEdges,
-    allEdges,
-    maxHubHubWeight,
-    maxEventCount,
-    maxHubDegree,
-  };
-}
-
-function buildPureEventGraph(
-  events: ConceptEvent[],
-  topN: number
-): ContextGraphData {
-  if (events.length === 0) return EMPTY_GRAPH;
-
-  const nodeMap = new Map<string, ContextNode>();
-  const hubNbEdges: HubNbEdge[] = [];
-
-  for (let idx = 0; idx < events.length; idx++) {
-    const event = events[idx];
-    const nodeId = event.event_id !== undefined
-      ? `event_${ event.event_id }`
-      : `event_idx:${ idx }`;
-
-    const eventNode: ContextNode = {
-      id: nodeId,
-      kind: "event",
-      eventCount: 1,
-      hubDegree: 0,
-      degree: 0,
-      token: event.token,
-      doc_id: event.doc_id,
-      pub_year: event.pub_year,
-    };
-
-    nodeMap.set(nodeId, eventNode);
-
-    for (const nb of [...event.neighbours]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topN)
-    ) {
-      if (!nodeMap.has(nb.token)) {
-        nodeMap.set(nb.token, {
-          id: nb.token,
-          kind: "neighbour",
-          eventCount: 0,
-          hubDegree: 0,
-          degree: 0,
-        });
-      }
-      hubNbEdges.push({
-        kind: "hub-neighbour" as const,
-        sourceId: nodeId,
-        targetId: nb.token,
-        weight: nb.score,
-      });
-      eventNode.degree += 1;
-      nodeMap.get(nb.token)!.degree += 1;
-    }
-  }
-
-  const nodes = [...nodeMap.values()];
-
-  return {
-    nodes,
-    hubHubEdges: [],
-    hubNbEdges,
-    allEdges: hubNbEdges,
-    maxHubHubWeight: 1,
-    maxEventCount: 1,
-    maxHubDegree: 1,
-  };
-}
 
 // GraphWorld
 
@@ -623,12 +452,18 @@ const CosmosComponent: Component = () => {
 
   const graphData = createMemo<ContextGraphData>(() =>
     controls.viewMode === "events"
-      ? buildPureEventGraph(getYearFiltered(), controls.topN)
-      : buildContextualGraph(
+      ? buildPureEventGraph(
+        getYearFiltered(),
+        controls.topN,
+        EMPTY_GRAPH
+      )
+      :
+      buildContextualGraph(
         tokenBins(),
         controls.topN,
         controls.minSimilarity,
-        controls.maxHubs
+        controls.maxHubs,
+        EMPTY_GRAPH
       )
   );
 
