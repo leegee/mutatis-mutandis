@@ -119,8 +119,13 @@ class EeboFaissIndex:
 
         if path.is_file():
             path.unlink()
+            logger.info(f"[faiss] deleted file index={path}")
         elif path.exists():
             shutil.rmtree(path)
+            logger.info(f"[faiss] deleted directory index={path}")
+        else:
+            logger.info(f"[faiss] no index found at={path}")
+
         logger.info(f"[faiss] deleted index={path}")
 
     @staticmethod
