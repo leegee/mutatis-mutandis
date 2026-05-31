@@ -13,21 +13,17 @@ import { Graph } from "@cosmos.gl/graph";
 import * as d3 from "d3";
 
 import "./styles.css";
-import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
 
 import type {
-  AnyEdge,
-  ConceptData,
-  ConceptEvent,
-  ContextGraphData,
-  ContextNode,
-  HubHubEdge,
-  HubNbEdge,
-  TokenBin,
+  AnyEdge, ConceptEvent, ContextGraphData, ContextNode, HubHubEdge, HubNbEdge, TokenBin,
 } from "./types";
+
 import { controls, setControls } from "../../state/controls.store";
 import ControlsHeader from "../ControlsHeader";
 import { tier2Data } from "../../state/tier2data.store";
+import { aggregateByToken, cosineSimilarity } from "../../lib/contextGraphUtils";
+import { getYearBounds, getYearFiltered } from "../../state/selectors";
+import { showDocument } from "../../services/documentApi";
 
 const MAX_TOP_N = 20;
 
@@ -66,100 +62,6 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubDegree: 1,
 };
 
-// ─── Data functions ────────────────────────────────────────────────────────────
-
-function scanYearRange(cd: ConceptData): [number, number] {
-  let min = CORPUS_END_YEAR,
-    max = CORPUS_START_YEAR;
-  for (const e of cd.events) {
-    if (e.pub_year === undefined) continue;
-    if (e.pub_year < min) min = e.pub_year;
-    if (e.pub_year > max) max = e.pub_year;
-  }
-  return min <= max ? [min, max] : [CORPUS_START_YEAR, CORPUS_END_YEAR];
-}
-
-function filterByYearRange(
-  events: ConceptEvent[],
-  from: number,
-  to: number
-): ConceptEvent[] {
-  return events.filter(
-    (e) => e.pub_year !== undefined && e.pub_year >= from && e.pub_year <= to
-  );
-}
-
-function aggregateByToken(events: ConceptEvent[]): Map<string, TokenBin> {
-  const bins = new Map<string, TokenBin>();
-  for (const event of events) {
-    const binKey = event.token;
-    if (!binKey) continue;
-    let bin = bins.get(binKey);
-    if (!bin) {
-      bin = {
-        token: binKey,
-        eventCount: 0,
-        neighbourFreq: new Map(),
-        neighbourScoreSum: new Map(),
-        topNeighbours: [],
-        docs: new Map(),
-        years: new Set(),
-      };
-      bins.set(binKey, bin);
-    }
-    bin.eventCount += 1;
-    if (event.doc_id) bin.docs.set(event.doc_id, event.pub_year);
-    if (event.pub_year !== undefined) bin.years.add(event.pub_year);
-    for (const nb of event.neighbours) {
-      bin.neighbourFreq.set(nb.token, (bin.neighbourFreq.get(nb.token) ?? 0) + 1);
-      bin.neighbourScoreSum.set(
-        nb.token,
-        (bin.neighbourScoreSum.get(nb.token) ?? 0) + nb.score
-      );
-    }
-  }
-  for (const bin of bins.values()) {
-    const total = [...bin.neighbourFreq.values()].reduce((a, b) => a + b, 0);
-    const normFreq = new Map<string, number>();
-    for (const [tok, count] of bin.neighbourFreq)
-      normFreq.set(tok, total > 0 ? count / total : 0);
-    bin.neighbourFreq = normFreq;
-    bin.topNeighbours = [...normFreq.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30)
-      .map(([tok, freq]) => {
-        const rawCount = Math.round(freq * total);
-        return {
-          token: tok,
-          freq,
-          meanScore:
-            rawCount > 0 ? (bin.neighbourScoreSum.get(tok) ?? 0) / rawCount : 0,
-        };
-      });
-  }
-  return bins;
-}
-
-function cosineSimilarity(
-  a: Map<string, number>,
-  b: Map<string, number>
-): number {
-  let normA = 0;
-  for (const v of a.values()) normA += v * v;
-  let normB = 0;
-  for (const v of b.values()) normB += v * v;
-  normA = Math.sqrt(normA);
-  normB = Math.sqrt(normB);
-  if (normA === 0 || normB === 0) return 0;
-  const [smaller, larger] = a.size <= b.size ? [a, b] : [b, a];
-  let dot = 0;
-  for (const [tok, v] of smaller) {
-    const u = larger.get(tok);
-    if (u !== undefined) dot += v * u;
-  }
-  return Math.min(1, Math.max(0, dot / (normA * normB)));
-}
-
 function buildContextualGraph(
   bins: Map<string, TokenBin>,
   topN: number,
@@ -168,8 +70,9 @@ function buildContextualGraph(
 ): ContextGraphData {
   const hubKeys = [...bins.keys()];
   if (hubKeys.length === 0) return EMPTY_GRAPH;
+
   const rawHubHub: Array<[string, string, number]> = [];
-  for (let i = 0; i < hubKeys.length; i++)
+  for (let i = 0; i < hubKeys.length; i++) {
     for (let j = i + 1; j < hubKeys.length; j++) {
       const sim = cosineSimilarity(
         bins.get(hubKeys[i])!.neighbourFreq,
@@ -177,20 +80,24 @@ function buildContextualGraph(
       );
       if (sim >= minSimilarity) rawHubHub.push([hubKeys[i], hubKeys[j], sim]);
     }
+  }
+
   const hubHubDegree = new Map<string, number>();
   for (const [a, b] of rawHubHub) {
     hubHubDegree.set(a, (hubHubDegree.get(a) ?? 0) + 1);
     hubHubDegree.set(b, (hubHubDegree.get(b) ?? 0) + 1);
   }
+
   const sortedHubs = hubKeys
     .sort((a, b) => {
       const dd = (hubHubDegree.get(b) ?? 0) - (hubHubDegree.get(a) ?? 0);
       return dd !== 0 ? dd : bins.get(b)!.eventCount - bins.get(a)!.eventCount;
     })
     .slice(0, maxHubs);
+
   const hubSet = new Set(sortedHubs);
   const nodeMap = new Map<string, ContextNode>();
-  for (const key of sortedHubs)
+  for (const key of sortedHubs) {
     nodeMap.set(key, {
       id: key,
       kind: "hub",
@@ -198,10 +105,12 @@ function buildContextualGraph(
       hubDegree: hubHubDegree.get(key) ?? 0,
       degree: hubHubDegree.get(key) ?? 0,
     });
+  }
+
   const spokeTriples: Array<[string, string, number]> = [];
   for (const hubKey of sortedHubs)
     for (const nb of bins.get(hubKey)!.topNeighbours.slice(0, topN)) {
-      if (!nodeMap.has(nb.token))
+      if (!nodeMap.has(nb.token)) {
         nodeMap.set(nb.token, {
           id: nb.token,
           kind: "neighbour",
@@ -209,12 +118,15 @@ function buildContextualGraph(
           hubDegree: 0,
           degree: 0,
         });
+      }
       spokeTriples.push([hubKey, nb.token, nb.freq]);
     }
+
   for (const [hubKey, nbToken] of spokeTriples) {
     nodeMap.get(hubKey)!.degree += 1;
     nodeMap.get(nbToken)!.degree += 1;
   }
+
   const nodes = [...nodeMap.values()];
   const hubHubEdges: HubHubEdge[] = rawHubHub
     .filter(([a, b]) => hubSet.has(a) && hubSet.has(b))
@@ -224,22 +136,27 @@ function buildContextualGraph(
       targetId: b,
       weight,
     }));
+
   const hubNbEdges: HubNbEdge[] = spokeTriples.map(([s, t, w]) => ({
     kind: "hub-neighbour" as const,
     sourceId: s,
     targetId: t,
     weight: w,
   }));
+
   const allEdges: AnyEdge[] = [...hubNbEdges, ...hubHubEdges];
   const maxEventCount = Math.max(
     1,
     ...nodes.filter((n) => n.kind === "hub").map((n) => n.eventCount)
   );
+
   const maxHubDegree = Math.max(
     1,
     ...nodes.filter((n) => n.kind === "hub").map((n) => n.hubDegree)
   );
+
   const maxHubHubWeight = Math.max(1, ...hubHubEdges.map((e) => e.weight));
+
   return {
     nodes,
     hubHubEdges,
@@ -256,14 +173,16 @@ function buildPureEventGraph(
   topN: number
 ): ContextGraphData {
   if (events.length === 0) return EMPTY_GRAPH;
+
   const nodeMap = new Map<string, ContextNode>();
   const hubNbEdges: HubNbEdge[] = [];
+
   for (let idx = 0; idx < events.length; idx++) {
     const event = events[idx];
-    const nodeId =
-      event.event_id !== undefined
-        ? `event_${ event.event_id }`
-        : `event_idx:${ idx }`;
+    const nodeId = event.event_id !== undefined
+      ? `event_${ event.event_id }`
+      : `event_idx:${ idx }`;
+
     const eventNode: ContextNode = {
       id: nodeId,
       kind: "event",
@@ -274,11 +193,14 @@ function buildPureEventGraph(
       doc_id: event.doc_id,
       pub_year: event.pub_year,
     };
+
     nodeMap.set(nodeId, eventNode);
+
     for (const nb of [...event.neighbours]
       .sort((a, b) => b.score - a.score)
-      .slice(0, topN)) {
-      if (!nodeMap.has(nb.token))
+      .slice(0, topN)
+    ) {
+      if (!nodeMap.has(nb.token)) {
         nodeMap.set(nb.token, {
           id: nb.token,
           kind: "neighbour",
@@ -286,6 +208,7 @@ function buildPureEventGraph(
           hubDegree: 0,
           degree: 0,
         });
+      }
       hubNbEdges.push({
         kind: "hub-neighbour" as const,
         sourceId: nodeId,
@@ -296,7 +219,9 @@ function buildPureEventGraph(
       nodeMap.get(nb.token)!.degree += 1;
     }
   }
+
   const nodes = [...nodeMap.values()];
+
   return {
     nodes,
     hubHubEdges: [],
@@ -308,18 +233,20 @@ function buildPureEventGraph(
   };
 }
 
-// ─── GraphWorld ────────────────────────────────────────────────────────────────
+// GraphWorld
 
 interface WorldNode extends ContextNode {
   cosmosIndex: number;
   cachedX: number;
   cachedY: number;
 }
+
 interface WorldEdge {
   key: string;
   edge: AnyEdge;
   cosmosRow: number;
 }
+
 type DiffResult = {
   addedNodes: ContextNode[];
   removedIds: string[];
@@ -341,7 +268,7 @@ class GraphWorld {
   private totalSlots = 0;
   private cosmos: Graph;
 
-  // ── Pre-allocated TypedArrays — grown only when slot count exceeds capacity.
+  // Pre-allocated TypedArrays — grown only when slot count exceeds capacity.
   // Reusing the same buffer avoids GC churn on every topology/visual update.
   private _pointPositions = new Float32Array(0);
   private _pointColors = new Float32Array(0);
@@ -384,8 +311,7 @@ class GraphWorld {
         : null;
 
     for (const cn of diff.addedNodes) {
-      const idx =
-        this.indexPool.length > 0 ? this.indexPool.pop()! : this.nextIndex++;
+      const idx = this.indexPool.length > 0 ? this.indexPool.pop()! : this.nextIndex++;
       this.totalSlots = Math.max(this.totalSlots, idx + 1);
       const [ix, iy] = this.initialPosition(cn, gd, adjIndex!);
       const wn: WorldNode = { ...cn, cosmosIndex: idx, cachedX: ix, cachedY: iy };
@@ -449,8 +375,6 @@ class GraphWorld {
     return this.nodeRegistry.values();
   }
 
-  // ── Private ──────────────────────────────────────────────────────────────
-
   private rebuildScales(gd: ContextGraphData) {
     this.hubColorScale = d3
       .scaleLinear<[number, number, number, number]>()
@@ -497,8 +421,7 @@ class GraphWorld {
 
     // Early-exit edge diff: bail out on first mismatch rather than building
     // two full Sets and diffing them.
-    let edgesChanged =
-      gd.allEdges.length !== this.edgeRegistry.size;
+    let edgesChanged = gd.allEdges.length !== this.edgeRegistry.size;
     if (!edgesChanged) {
       for (const edge of gd.allEdges) {
         if (!this.edgeRegistry.has(edgeKey(edge))) {
@@ -508,8 +431,7 @@ class GraphWorld {
       }
     }
 
-    const onlyVisuals =
-      addedNodes.length === 0 && removedIds.length === 0 && !edgesChanged;
+    const onlyVisuals = addedNodes.length === 0 && removedIds.length === 0 && !edgesChanged;
     return { addedNodes, removedIds, updatedNodes, edgesChanged, onlyVisuals };
   }
 
@@ -544,10 +466,8 @@ class GraphWorld {
 
     const jitter = () => (Math.random() - 0.5) * SPACE * 0.04;
     if (knownPositions.length > 0) {
-      const cx =
-        knownPositions.reduce((s, p) => s + p[0], 0) / knownPositions.length;
-      const cy =
-        knownPositions.reduce((s, p) => s + p[1], 0) / knownPositions.length;
+      const cx = knownPositions.reduce((s, p) => s + p[0], 0) / knownPositions.length;
+      const cy = knownPositions.reduce((s, p) => s + p[1], 0) / knownPositions.length;
       return [cx + jitter(), cy + jitter()];
     }
     const angle = Math.random() * Math.PI * 2;
@@ -661,11 +581,6 @@ class GraphWorld {
   }
 }
 
-// ─── Component ─────────────────────────────────────────────────────────────────
-
-const showDocument = (docId: string) =>
-  window.open(`/api/doc/${ docId }`, "_blank", "noopener,noreferrer");
-
 const CosmosComponent: Component = () => {
   const [labelPositions, setLabelPositions] = createSignal<
     Array<{ id: string; label: string; kind: string; x: number; y: number }>
@@ -696,49 +611,13 @@ const CosmosComponent: Component = () => {
     simTimeoutHandle = window.setTimeout(() => stopSimulating(generation), ms);
   }
 
-  // ── Year bounds ──────────────────────────────────────────────────────────
-
-  const yearBounds = createMemo<[number, number]>(() => {
-    const cd = tier2Data[controls.concept];
-    if (!cd) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
-    return scanYearRange(cd);
-  });
-
-  // Guard year-bounds effect against cascading reactive updates: only write
-  // to controls when the values actually change, and untrack the reads of the
-  // current control values to avoid a reactive loop.
-  createEffect(() => {
-    const [min, max] = yearBounds();
-    if (controls.yearMode === "single") {
-      const mid = Math.floor((min + max) / 2);
-      untrack(() => {
-        if (controls.fromYear !== mid) setControls("fromYear", mid);
-        if (controls.toYear !== mid) setControls("toYear", mid);
-      });
-    } else {
-      untrack(() => {
-        if (controls.fromYear !== min) setControls("fromYear", min);
-        if (controls.toYear !== max) setControls("toYear", max);
-      });
-    }
-  });
-
-  const yearFiltered = createMemo(() => {
-    const cd = tier2Data[controls.concept];
-    if (!cd) return [];
-    const [min, max] = yearBounds();
-    return controls.fromYear <= min && controls.toYear >= max
-      ? cd.events
-      : filterByYearRange(cd.events, controls.fromYear, controls.toYear);
-  });
-
   const tokenBins = createMemo<Map<string, TokenBin>>(() =>
-    aggregateByToken(yearFiltered())
+    aggregateByToken(getYearFiltered())
   );
 
   const graphData = createMemo<ContextGraphData>(() =>
     controls.viewMode === "events"
-      ? buildPureEventGraph(yearFiltered(), controls.topN)
+      ? buildPureEventGraph(getYearFiltered(), controls.topN)
       : buildContextualGraph(
         tokenBins(),
         controls.topN,
@@ -747,7 +626,7 @@ const CosmosComponent: Component = () => {
       )
   );
 
-  // ── Drill-down memos ─────────────────────────────────────────────────────
+  // -- Drill-down memos -----------------------------------------------------
 
   const selectedKind = createMemo<"hub" | "neighbour" | "event" | null>(() => {
     const id = controls.selectedNode;
@@ -794,7 +673,7 @@ const CosmosComponent: Component = () => {
       .sort((a, b) => b.freq - a.freq);
   });
 
-  // ── Cosmos + GraphWorld refs ─────────────────────────────────────────────
+  // -- Cosmos + GraphWorld refs ---------------------------------------------
 
   let wrapRef!: HTMLDivElement;
   let cosmosGraph: Graph | null = null;
@@ -804,7 +683,7 @@ const CosmosComponent: Component = () => {
   let mouseClientX = 0;
   let mouseClientY = 0;
 
-  // ── Tooltip ──────────────────────────────────────────────────────────────
+  // -- Tooltip --------------------------------------------------------------
 
   let tooltipEl: HTMLDivElement | null = null;
   const getTooltip = (): HTMLDivElement => {
@@ -869,7 +748,7 @@ const CosmosComponent: Component = () => {
     });
   }
 
-  // ── Label rAF loop ────────────────────────────────────────────────────────
+  // -- Label rAF loop --------------------------------------------------------
   //
   // Changed from original:
   //  1. We keep a stable cache of the previous frame's label positions keyed
@@ -944,7 +823,7 @@ const CosmosComponent: Component = () => {
     rafHandle = requestAnimationFrame(tick);
   }
 
-  // ── Initialise cosmos (once) ─────────────────────────────────────────────
+  // -- Initialise cosmos (once) ---------------------------------------------
 
   function ensureCosmosInitialised() {
     if (cosmosGraph) return;
@@ -996,7 +875,7 @@ const CosmosComponent: Component = () => {
     startLabelLoop();
   }
 
-  // ── Effect 1: diff on graphData / concept change ─────────────────────────
+  // -- Effect 1: diff on graphData / concept change -------------------------
 
   let lastConcept = "";
 
@@ -1049,7 +928,7 @@ const CosmosComponent: Component = () => {
     }
   });
 
-  // ── Effect 2: hubSpread force tweak ──────────────────────────────────────
+  // -- Effect 2: hubSpread force tweak --------------------------------------
   // Reads graphData() via untrack so topology changes don't re-run this
   // effect — only hubSpread changes should.
 
@@ -1099,7 +978,7 @@ const CosmosComponent: Component = () => {
           includeHubSpread={true}
         />
 
-        {/* ── Main canvas + aside ── */}
+        {/* -- Main canvas + aside -- */}
         <div class="cg-main background">
           <div ref={wrapRef!} class="cg-canvas-wrap surface-container" style={{ visibility: simulating() ? "hidden" : "visible" }}>
             {/* Label overlay */}
@@ -1156,7 +1035,7 @@ const CosmosComponent: Component = () => {
             </div>
           </Show>
 
-          {/* ── Drill-down aside ── */}
+          {/* -- Drill-down aside -- */}
           <Show when={controls.selectedNode}>
             <aside class="cg-aside surface-container-high padding border">
               <div class="cg-header-row">
@@ -1317,7 +1196,7 @@ const CosmosComponent: Component = () => {
           </Show>
         </div>
 
-        {/* ── Footer legend ── */}
+        {/* -- Footer legend -- */}
         <footer class="fixed max center-align small-padding surface-container-low">
           <span class="cg-legend">
             <Show when={controls.viewMode === "aggregated"}>
@@ -1338,11 +1217,11 @@ const CosmosComponent: Component = () => {
             </Show>
             {" • "}
             {graphData().hubNbEdges.length} spokes{" • "}
-            {yearFiltered().length} events
+            {getYearFiltered().length} events
             <Show
               when={
-                controls.fromYear !== yearBounds()[0] ||
-                controls.toYear !== yearBounds()[1]
+                controls.fromYear !== getYearBounds()[0] ||
+                controls.toYear !== getYearBounds()[1]
               }
             >
               {" • "}
