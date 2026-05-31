@@ -77,7 +77,6 @@ from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
 
-
 K          = 25
 BATCH_SIZE = 8192
 OUTPUT_PATH = INDEXES_DIR / "tier2_concept_neighbours.json"
