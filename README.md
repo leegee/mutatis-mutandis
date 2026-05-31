@@ -245,59 +245,22 @@ Clean up:
 
 For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup so fastText over MacBERTh.
 
-## Notes
-
-Aligned diachornic vectors naturally detect semantic drift.
-
-The reconfiguration of Koselleckian poles is structural shift so requires some kind of imposed axis, or can it be seen emerging?
-
 ## To Do
+
+### Data
+
+1. Use SQLite and/or DuckDB in the client
 
 ### Visualisations
 
 1. Share a JSON config for constants such as corpus year range, window size, etc
 1. Cosmos animation - compute the cosmos for all years and fade out those not currently in the animation frame.
-1. New: 3D with x/y being current FDG or heatmap, z being time
-
-### Promote JSD to primary signal
-
-* Treat `js_divergence` as the main drift measure
-* Use cluster drift as supporting evidence
-
-Plot together:
-
-* JSD
-* entropy
-* cluster count
-
-Distributional change is more stable than centroid movement.
-
-### Stabilize neighbor sampling
-
-* Revisit:
-
-  * `K_NEIGHBORS * 5`
-  * similarity threshold `0.6`
-
-Consider:
-
-  * fixed top-k without threshold, or
-  * adaptive threshold per slice
-
-Current sampling introduces inconsistent noise.
+1. 3D with x/y being current FDG or heatmap, z being time
 
 ### DB
 
 - Tidy MV `pamphlet_tokens` and use a join rather than cutting corners
 - Tidy schema
-
-### Cosmos
-
-Do properly
-
-### UI
-
-Consolidate types, share more UI
 
 ## Screenshots
 
