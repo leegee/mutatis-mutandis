@@ -23,14 +23,13 @@ export default function App() {
   const [open, setOpen] = createSignal(false);
   const [view, setView] = createSignal<
     "table" | "help" | "diachronic" | "cosmos"
-  >("table");
+  >("cosmos");
 
   const navItems = [
     { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
     { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
   ] as const;
-
 
   return (
     <>

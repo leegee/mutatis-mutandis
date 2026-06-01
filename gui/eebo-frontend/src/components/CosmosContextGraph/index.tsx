@@ -20,10 +20,11 @@ import type {
 } from "./types";
 
 import { controls, setControls } from "../../state/controls.store";
-import ControlsHeader from "../ControlsHeader";
 import { aggregateByToken, buildContextualGraph, buildPureEventGraph, } from "../../lib/contextGraphUtils";
 import { getYearFiltered, getYearBounds, totalEventsForConcept } from "../../state/selectors";
 import { showDocument } from "../../services/documentApi";
+import ControlsHeader from "../ControlsHeader";
+import EventContext from "../EventContext";
 
 const MAX_TOP_N = 20;
 
@@ -57,10 +58,7 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubHubWeight: 1, maxEventCount: 1, maxHubDegree: 1,
 };
 
-// ---------------------------------------------------------------------------
 // GraphWorld — unchanged from original
-// ---------------------------------------------------------------------------
-
 interface WorldNode extends ContextNode { cosmosIndex: number; cachedX: number; cachedY: number; }
 interface WorldEdge { key: string; edge: AnyEdge; cosmosRow: number; }
 type DiffResult = { addedNodes: ContextNode[]; removedIds: string[]; updatedNodes: ContextNode[]; edgesChanged: boolean; onlyVisuals: boolean; };
@@ -210,9 +208,9 @@ class GraphWorld {
   }
 }
 
-// ---------------------------------------------------------------------------
+// -----------
 // Component
-// ---------------------------------------------------------------------------
+// -----------
 
 const CosmosComponent: Component = () => {
   const [labelPositions, setLabelPositions] = createSignal<Array<{ id: string; label: string; kind: string; x: number; y: number }>>([]);
@@ -233,7 +231,7 @@ const CosmosComponent: Component = () => {
     simTimeoutHandle = window.setTimeout(() => stopSimulating(generation), ms);
   }
 
-  // ── Resources ─────────────────────────────────────────────────────────────
+  // Resources -------------------------------------------------------------
 
   const [filteredEventsResource] = createResource(
     () => [controls.concept, controls.fromYear, controls.toYear] as const,
@@ -253,7 +251,7 @@ const CosmosComponent: Component = () => {
   );
   const totalEvents = () => totalEventsResource() ?? 0;
 
-  // ── Derived memos ─────────────────────────────────────────────────────────
+  // Derived memos ---------------------------------------------------------
 
   const tokenBins = createMemo<Map<string, TokenBin>>(() => aggregateByToken(filteredEvents()));
 
@@ -296,7 +294,7 @@ const CosmosComponent: Component = () => {
     return graphData().hubNbEdges.filter((e) => e.targetId === id).map((e) => ({ hub: e.sourceId, freq: e.weight, meanScore: e.weight })).sort((a, b) => b.freq - a.freq);
   });
 
-  // ── Cosmos refs ───────────────────────────────────────────────────────────
+  // Cosmos refs -----------------------------------------------------------
 
   let wrapRef!: HTMLDivElement;
   let cosmosGraph: Graph | null = null;
@@ -426,7 +424,6 @@ const CosmosComponent: Component = () => {
     cosmosGraph?.pause(); tooltipEl?.remove(); tooltipEl = null;
   });
 
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -490,8 +487,16 @@ const CosmosComponent: Component = () => {
               <Show when={selectedKind() === "event" && selectedEventNode()}>
                 {(_) => {
                   const node = selectedEventNode()!; return (<>
-                    <div class="bottom-padding"><div>Token: {node.token ?? "—"}</div><div>Year: {node.pub_year ?? "—"}</div><div>token_idx: {node.token_idx ?? "—"}</div>
-                      <Show when={node.doc_id}><div><button class="chip small-margin cg-chip-mono" onClick={() => showDocument(node.doc_id!)}><span>{node.doc_id}</span></button></div></Show>
+                    <div class="bottom-padding">
+                      <div>Token: {node.token ?? "—"}</div>
+                      <div>Year: {node.pub_year ?? "—"}</div>
+                      <div>token_idx: {node.token_idx ?? "—"}</div>
+                      <Show when={node.doc_id}>
+                        <div>
+                          <button class="chip small-margin cg-chip-mono" onClick={() => showDocument(node.doc_id!)}><span>{node.doc_id}</span>
+                          </button>
+                        </div>
+                      </Show>
                     </div>
                     <div class="bottom-padding small-text" style={{ opacity: 0.6 }}>Select a neighbour to see which sources share it.</div>
                   </>);
@@ -513,25 +518,32 @@ const CosmosComponent: Component = () => {
                               ? graphData().nodes.find((n) => n.id === h.hub)
                               : null;
                             return (
-                              <div class="row">
-                                <div class="cg-nb-bar-wrap">
-                                  <div class="cg-nb-bar-fill neighbour" style={{ width: `${ (h.freq / maxFreq) * 100 }%` }} />
-                                </div>
-                                <span>
-                                  {sourceNode()?.token ?? h.hub}
-                                </span>
-                                <Show when={sourceNode()}>
-                                  {(n) => <>
-                                    <Show when={n().doc_id}>
-                                      <span class="small-text" style={{ opacity: 0.6 }}>{n().doc_id}</span>
-                                    </Show>
-                                    <span class="tooltip bottom">
-                                      idx:{n().token_idx ?? '//'}
+                              <>
+                                <article>
+                                  <div class="row">
+                                    <div class="cg-nb-bar-wrap">
+                                      <div class="cg-nb-bar-fill neighbour" style={{ width: `${ (h.freq / maxFreq) * 100 }%` }} />
+                                    </div>
+                                    <span>
+                                      {sourceNode()?.token ?? h.hub}
                                     </span>
-                                  </>}
-                                </Show>
-                                <span class="right-align">{h.meanScore.toFixed(3)}</span>
-                              </div>
+                                  </div>
+                                  <Show when={sourceNode()}>
+                                    {(neighbourToken) => <>
+                                      <div class="row">
+                                        <span class="small-text" style={{ opacity: 0.6 }}>{neighbourToken().doc_id}</span>
+                                        <span class="tooltip bottom">
+                                          idx:{neighbourToken().token_idx ?? '//'}
+                                        </span>
+                                      </div>
+                                      <div class="row">
+                                        <EventContext open={true} docId={neighbourToken().doc_id!} tokenIdx={neighbourToken().token_idx!} />
+                                      </div>
+                                    </>}
+                                  </Show>
+                                  <span class="tooltip bottom">{h.meanScore.toFixed(3)}</span>
+                                </article>
+                              </>
                             );
                           }}
                         </For>

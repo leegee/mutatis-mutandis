@@ -22,7 +22,6 @@ import {
   createResource,
   For,
   Show,
-  Suspense,
   type Component,
   onMount,
   onCleanup,
@@ -36,10 +35,7 @@ import { dbReady, dbError } from "../state/tier2data.store";
 import ControlsHeader from "./ControlsHeader";
 import Sparkline from "./NeighbourhoodBrowser/SparkLine";
 
-// ---------------------------------------------------------------------------
 // Types (unchanged)
-// ---------------------------------------------------------------------------
-
 interface NeighbourSummary {
   token: string;
   token_idx: string;
@@ -53,10 +49,7 @@ interface NeighbourSummary {
 
 type NeighbourIndex = Map<string, NeighbourSummary>;
 
-// ---------------------------------------------------------------------------
 // Pure helpers (unchanged)
-// ---------------------------------------------------------------------------
-
 function eventKey(event: ConceptEvent, idx: number): string {
   return event.event_id !== undefined ? String(event.event_id) : `idx:${ idx }`;
 }
@@ -124,9 +117,7 @@ function scoreToOpacity(
   return minOp + ((score - scoreMin) / range) * (maxOp - minOp);
 }
 
-// ---------------------------------------------------------------------------
 // Component
-// ---------------------------------------------------------------------------
 
 const NeighbourhoodBrowser: Component = () => {
   const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
@@ -137,15 +128,13 @@ const NeighbourhoodBrowser: Component = () => {
     token_idx: number;
   } | null>(null);
 
-  // ── Data resource ──────────────────────────────────────────────────────────
-  //
+
   // The resource key is a tuple of the three values that should trigger a
   // refetch.  createResource re-runs the fetcher whenever the key changes.
   //
   // We do NOT reset selectedEventId / focusToken here — that would cause a
   // cascade.  The selected id will simply fail to match in selectedEvent()
   // and fall back to null gracefully.
-
   const resourceKey = () =>
     [controls.concept, controls.fromYear, controls.toYear] as const;
 
@@ -160,7 +149,7 @@ const NeighbourhoodBrowser: Component = () => {
   // Stable empty array so memos don't need to handle undefined.
   const yearFiltered = (): ConceptEvent[] => yearFilteredResource() ?? [];
 
-  // ── Year bounds resource (for footer display) ──────────────────────────────
+  //  Year bounds resource (for footer display)
 
   const [yearBoundsResource] = createResource(
     () => controls.concept,
@@ -170,7 +159,7 @@ const NeighbourhoodBrowser: Component = () => {
   const yearBounds = (): [number, number] =>
     yearBoundsResource() ?? [controls.fromYear, controls.toYear];
 
-  // ── Derived memos (unchanged logic, now over yearFiltered()) ──────────────
+  //  Derived memos (unchanged logic, now over yearFiltered())
 
   const neighbourIndex = createMemo<NeighbourIndex>(() =>
     buildNeighbourIndex(yearFiltered()),
@@ -282,7 +271,7 @@ const NeighbourhoodBrowser: Component = () => {
       .sort((a, b) => a.year - b.year);
   }
 
-  // ── Keyboard navigation (unchanged) ───────────────────────────────────────
+  //  Keyboard navigation (unchanged)
 
   const selectedIndex = createMemo(() => {
     const id = selectedEventId();
@@ -314,7 +303,7 @@ const NeighbourhoodBrowser: Component = () => {
   onMount(() => window.addEventListener("keydown", handleKeyDown));
   onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  //  Render
 
   return (
     <article style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
