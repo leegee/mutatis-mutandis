@@ -1,12 +1,6 @@
 import { render } from "solid-js/web";
-import 'beercss';
-// import App from "./OldEventsApp";
+import "beercss";
 import App from "./App";
-import "./index.css"
+import "./index.css";
 
-render(
-    () => (
-        <App />
-    ),
-    document.getElementById("root")!
-);
+render(() => <App />, document.getElementById("root")!);

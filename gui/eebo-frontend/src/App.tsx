@@ -16,13 +16,13 @@ import { dbReady, loadTier2Data } from "./state/tier2data.store";
 const CosmosContextGraphGuide = lazy(
   () => import("./components/CosmosContextGraph/Guide"),
 );
+
 const NeighbourhoodBrowser = lazy(
   () => import("./components/NeighbourhoodBrowser"),
 );
+
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
 const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
-
-loadTier2Data();
 
 export default function App() {
   const [error, setError] = createSignal<string | null>(null);
@@ -31,6 +31,12 @@ export default function App() {
   const [view, setView] = createSignal<
     "table" | "help" | "diachronic" | "cosmos"
   >("cosmos");
+
+  try {
+    loadTier2Data();
+  } catch (e) {
+    setError((e as Error).message);
+  }
 
   const navItems = [
     { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },

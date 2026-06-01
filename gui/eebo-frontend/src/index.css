@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IM+Fell+English:ital@0;1&display=swap');
-@import url('./fonts.css');
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IM+Fell+English:ital@0;1&display=swap");
+@import url("./fonts.css");
 
 :root {
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
+  color: rgba(143, 74, 74, 0.87);
   background-color: var(--background);
 
   font-synthesis: none;
@@ -53,8 +53,6 @@ main,
   min-height: 0;
 }
 
-
-
 .helpContainer {
   z-index: 100;
   width: 32rem;
@@ -94,7 +92,6 @@ mark {
   color: black;
   padding: 0.1em 0.2em;
 }
-
 
 /* BeerCSS resets */
 .field {
