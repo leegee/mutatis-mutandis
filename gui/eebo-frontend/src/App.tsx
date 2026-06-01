@@ -15,7 +15,7 @@ const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowse
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
 const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
 
-loadTier2Data(); // fire and forget — dbReady() goes true when done
+loadTier2Data();
 
 export default function App() {
   const [error, setError] = createSignal<string | null>(null);
@@ -77,8 +77,7 @@ export default function App() {
             </article>
           )}
         >
-          <Show
-            when={dbReady()}
+          <Show when={dbReady()}
             fallback={
               <article class="max small-round padding border medium no-padding" style="min-height:100vh">
                 <section class="padding absolute center middle">
