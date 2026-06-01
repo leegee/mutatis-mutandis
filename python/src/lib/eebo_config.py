@@ -32,8 +32,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 TMP_DIR = OUT_DIR / "tmp"
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-SLICES_DIR = OUT_DIR / "slices-raw-text"
-SLICES_DIR.mkdir(parents=True, exist_ok=True)
+SQLITE_DB_PATH     = Path(OUT_DIR / '..' / 'gui' / 'eebo-frontend' / 'public' / 'data' / 'tier2_concept_neighbours.db')
 
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
@@ -42,23 +41,6 @@ ZARR_ROOT = OUT_DIR / "zarr"
 
 MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-FASTTEXT_SLICE_MODEL_DIR = MODELS_DIR / "fastTextSlices"
-FASTTEXT_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-
-MACBERTH_SLICE_MODEL_DIR = MODELS_DIR / "macberth" / "slices"
-MACBERTH_SLICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-
-MACBERTH_FINE_TUNED_DIR = MODELS_DIR / "macberth" / "finetuned"
-
-FASTTEXT_UNALIGNED_VECTORS_DIR = INDEXES_DIR / "fasttext" /  "unaligned_vectors"
-FASTTEXT_UNALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
-
-FASTTEXT_ALIGNED_VECTORS_DIR = INDEXES_DIR / "fasttext" / "aligned_vectors"
-FASTTEXT_ALIGNED_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
-
-MACBERTH_VECTORS_DIR = INDEXES_DIR / "macberth" / "aligned_vectors"
-MACBERTH_VECTORS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -81,29 +63,8 @@ NUM_WORKERS = 4
 STOPWORD_FILE = EEBO_SRC_DIR / "stopwords" / "english_basic.txt"
 TOP_K = 30
 
-QUICKIE_FASTTEXT_PARAMS: FastTextParams = {
-    "model": "skipgram",      # Skip-gram model
-    "dim": 100,               # Word vector dimensionality - 200
-    "epoch": 5,               # Number of epochs           - 10
-    "ws": 5,                  # Context window size        - 10
-    "minCount": 1,            # Keep all words
-    "thread": 6,              # Adjust to for this CPU
-    "minn": 2,                # Subword ngram min length   - 3
-    "maxn": 5,                # Subword ngram max length   - 6
-}
-
-FASTTEXT_PARAMS: FastTextParams = {
-    "model": "skipgram",
-    "dim": 200,
-    "epoch": 10,
-    "ws": 7,
-    "minCount": 1,
-    "thread": 6,
-    "minn": 3,
-    "maxn": 6,
-}
-
-# Mirror in JSON file gui\eebo-frontend\src\services\SLICES.json
+# For now, mirror in JSON file gui/eebo-frontend/corpus_config.ts
+# These are no longer used.
 SLICES = [
     (1625, 1629),
     (1630, 1634),
