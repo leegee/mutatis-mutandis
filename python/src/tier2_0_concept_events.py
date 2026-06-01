@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-tier2_0_concept_events.py - Tier2: neighbourhood analysis over event-space substrate
+tier2_0_sql_concept_events.py - Tier2: neighbourhood analysis over event-space substrate
 
 Core invariant
 --------------
@@ -14,7 +14,6 @@ Tier 2:
 FAISS is a geometric operator only.
 FAISS ids are event_ids (stable, globally unique observation identity).
 vector_id is lexical identity only and is NOT used as a lookup key.
-doc_id, token_idx binds to the source text in the db
 
 No aggregation or centroid reconstruction is performed.
 Events remain atomic observations with full provenance.
@@ -58,32 +57,55 @@ from different documents that happen to share the same offset. This
 invariant is enforced in Tier 1 but is not re-checked here; if Tier 1
 were ever rebuilt with a global window_id scheme this counter would
 become incorrect without raising an error.
+
+SQLite schema
+-------------
+
+Four tables:
+
+    events
+        One row per query event (globally unique by event_id).
+
+    neighbours
+        One row per (query event, neighbour) pair.
+        Foreign key: event_id -> events.event_id.
+
+    concept_aggregate
+        Flattened top_tokens / top_docs / top_windows rows.
+        kind = 'token' | 'doc' | 'window'.
+        For token/doc rows: value holds the token or doc_id; window_doc_id
+        and window_id are NULL.
+        For window rows: window_doc_id and window_id hold the tuple
+        components; value is NULL.
+
+    concepts
+        One row per concept with n_events summary.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import random
+import sqlite3
 from collections import Counter
 from itertools import combinations
+from pathlib import Path
 
 import numpy as np
 import zarr
 
-from lib.eebo_config import CONCEPT_SETS, FAISS_INDEX_DIR, INDEXES_DIR, ZARR_ROOT
+from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_INDEX_DIR,  ZARR_ROOT, OUT_DIR, SQLITE_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
 
-K          = 25
-BATCH_SIZE = 8192
+
+K           = 25
+BATCH_SIZE  = 8192
 OUTPUT_PATH = INDEXES_DIR / "tier2_concept_neighbours.json"
 
-#
-# TODO Move Zarr routines into lib
-#
+# Event lookup
 class ZarrEventLookup:
     """
     In-memory index of all Tier 1 observation events, keyed by event_id.
@@ -165,7 +187,7 @@ class ZarrEventLookup:
                 yield eid
 
 
-
+# Document metadata
 def load_doc_metadata(conn) -> dict:
     """
     Build a doc_id -> metadata mapping from pamphlet_tokens.
@@ -185,9 +207,9 @@ def load_doc_metadata(conn) -> dict:
         for row in cur.fetchall()
     }
 
-#
-# Diagnostics - extrapolate
-#
+
+# Diagnostics
+# TODO: Extrapolate
 def _audit_embedding_diversity(concept_name, query_vecs):
     """Log embedding norm and cosine diversity stats; warn on collapse."""
     logger.info("[tier2] EMBEDDING DIVERSITY AUDIT START")
@@ -225,8 +247,8 @@ def _audit_neighbour_identity(all_neigh_ids):
     if not len(flat_ids):
         return
 
-    freq   = Counter(flat_ids)
-    top10  = freq.most_common(10)
+    freq  = Counter(flat_ids)
+    top10 = freq.most_common(10)
 
     logger.info("[tier2] TOP NEIGHBOUR IDS (frequency)")
     for k, v in top10:
@@ -273,9 +295,8 @@ def knn_diagnostics(lookup, index, concept_forms, sample_n=25, k=25):
     print("\noverlap quantiles:", np.percentile(overlaps, [0, 25, 50, 75, 100]))
     print("jaccard quantiles:", np.percentile(jaccards, [0, 25, 50, 75, 100]))
 
-#
+
 # Concept analysis
-#
 def _event_record(event, doc_meta):
     """Serialisable dict for one query event (without neighbours)."""
     return {
@@ -342,9 +363,9 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K):
 
             n_event = lookup.get_event(int(nid))
 
-            token_counter[n_event["token"]]                              += 1
-            doc_counter[n_event["doc_id"]]                               += 1
-            window_counter[(n_event["doc_id"], n_event["window_id"])]    += 1
+            token_counter[n_event["token"]]                           += 1
+            doc_counter[n_event["doc_id"]]                            += 1
+            window_counter[(n_event["doc_id"], n_event["window_id"])] += 1
 
             neighbours.append(_neighbour_record(n_event, event, doc_meta, score))
 
@@ -362,7 +383,134 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K):
     }
 
 
+# SQLite writer
+# TODO: Extrapolate schema?
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS concepts (
+    concept  TEXT PRIMARY KEY,
+    n_events INTEGER NOT NULL
+);
 
+CREATE TABLE IF NOT EXISTS events (
+    event_id         INTEGER PRIMARY KEY,
+    concept          TEXT    NOT NULL,
+    vector_id        INTEGER,
+    token            TEXT,
+    doc_id           TEXT,
+    pub_year         INTEGER,
+    token_idx        INTEGER,
+    window_id        INTEGER,
+    window_token_pos INTEGER,
+    FOREIGN KEY (concept) REFERENCES concepts(concept)
+);
+
+CREATE TABLE IF NOT EXISTS neighbours (
+    event_id             INTEGER NOT NULL,
+    neighbour_event_id   INTEGER NOT NULL,
+    vector_id            INTEGER,
+    token                TEXT,
+    doc_id               TEXT,
+    pub_year             INTEGER,
+    token_idx            INTEGER,
+    window_id            INTEGER,
+    window_token_pos     INTEGER,
+    score                REAL,
+    PRIMARY KEY (event_id, neighbour_event_id),
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+);
+
+-- Flattened aggregate rows for top_tokens, top_docs, top_windows.
+-- kind    = 'token' | 'doc' | 'window'
+-- token/doc rows : value = token string or doc_id; window columns NULL
+-- window rows    : window_doc_id + window_id set; value NULL
+CREATE TABLE IF NOT EXISTS concept_aggregate (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    concept       TEXT    NOT NULL,
+    kind          TEXT    NOT NULL,
+    rank          INTEGER NOT NULL,
+    value         TEXT,
+    window_doc_id TEXT,
+    window_id     INTEGER,
+    count         INTEGER NOT NULL,
+    FOREIGN KEY (concept) REFERENCES concepts(concept)
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_concept       ON events(concept);
+CREATE INDEX IF NOT EXISTS idx_events_token         ON events(token);
+CREATE INDEX IF NOT EXISTS idx_events_doc_id        ON events(doc_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
+CREATE INDEX IF NOT EXISTS idx_aggregate_concept    ON concept_aggregate(concept, kind);
+"""
+
+
+def _aggregate_rows(concept_name, aggregate):
+    """Yield concept_aggregate row tuples from an analyse_concept aggregate dict."""
+    for rank, (token, count) in enumerate(aggregate["top_tokens"]):
+        yield (concept_name, "token", rank, token, None, None, count)
+
+    for rank, (doc_id, count) in enumerate(aggregate["top_docs"]):
+        yield (concept_name, "doc", rank, doc_id, None, None, count)
+
+    for rank, ((doc_id, window_id), count) in enumerate(aggregate["top_windows"]):
+        yield (concept_name, "window", rank, None, doc_id, window_id, count)
+
+
+def write_sqlite(output: dict, SQLITE_DB_PATH):
+    """Write the full analyse_concept output dict to a normalised SQLite database."""
+    logger.info(f"[tier2] writing sqlite -> {SQLITE_DB_PATH}")
+
+    con = sqlite3.connect(SQLITE_DB_PATH)
+    con.executescript(_SCHEMA)
+
+    for concept_name, data in output.items():
+        if data.get("empty"):
+            continue
+
+        con.execute(
+            "INSERT OR REPLACE INTO concepts VALUES (?, ?)",
+            (concept_name, data["n_events"]),
+        )
+
+        con.executemany(
+            """INSERT OR REPLACE INTO events
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    e["event_id"], concept_name, e["vector_id"], e["token"],
+                    e["doc_id"], e["pub_year"], e["token_idx"],
+                    e["window_id"], e["window_token_pos"],
+                )
+                for e in data["events"]
+            ],
+        )
+
+        con.executemany(
+            """INSERT OR REPLACE INTO neighbours
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    e["event_id"], n["event_id"], n["vector_id"], n["token"],
+                    n["doc_id"], n["pub_year"], n["token_idx"],
+                    n["window_id"], n["window_token_pos"], n["score"],
+                )
+                for e in data["events"]
+                for n in e["neighbours"]
+            ],
+        )
+
+        con.executemany(
+            """INSERT INTO concept_aggregate
+               (concept, kind, rank, value, window_doc_id, window_id, count)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            list(_aggregate_rows(concept_name, data["aggregate"])),
+        )
+
+    con.commit()
+    con.close()
+    logger.info("[tier2] sqlite write complete")
+
+
+# Entry point
 def main():
     logger.info("[tier2] init")
 
@@ -371,6 +519,8 @@ def main():
     args = parser.parse_args()
 
     faiss_index_path = FAISS_INDEX_DIR / "tier1.index"
+
+    logger.info(f"[tier2] SQLITE_DB_PATH: {SQLITE_DB_PATH}")
 
     index  = EeboFaissIndex.load(faiss_index_path)
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
@@ -393,6 +543,8 @@ def main():
         json.dump(output, f, indent=2)
 
     logger.info(f"[tier2] written -> {OUTPUT_PATH}")
+
+    write_sqlite(output, SQLITE_DB_PATH)
 
 
 if __name__ == "__main__":
