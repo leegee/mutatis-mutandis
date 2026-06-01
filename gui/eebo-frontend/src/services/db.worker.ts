@@ -30,7 +30,12 @@ async function init(url: string): Promise<void> {
     const buf = await res.arrayBuffer();
     console.log(`[db.worker] fetched ${ buf.byteLength } bytes`);
 
-    if ("opfs" in sqlite3) {
+    const hasOPFS =
+        typeof navigator !== "undefined" &&
+        "storage" in navigator &&
+        typeof navigator.storage.getDirectory === "function";
+
+    if (hasOPFS) {
         // Write bytes into OPFS then open as a persistent file.
         const root = await navigator.storage.getDirectory();
         const handle = await root.getFileHandle("tier2.db", { create: true });
@@ -44,6 +49,8 @@ async function init(url: string): Promise<void> {
     } else {
         // Deserialize bytes into a transient in-memory database.
         // This is the correct fallback — opens with full schema and data.
+        // But not what I want!
+        throw new Error("[db.worker] OPFS unavailable");
         console.warn("[db.worker] OPFS unavailable, using in-memory database");
         const p = sqlite3.wasm.allocFromTypedArray(new Uint8Array(buf));
         const _db = new sqlite3.oo1.DB();
@@ -70,12 +77,6 @@ async function init(url: string): Promise<void> {
         callback: (row: unknown[]) => { tables.push(row[0] as string); },
     });
     console.log("[db.worker] tables:", tables);
-
-    if (!tables.includes("events")) {
-        throw new Error(
-            `[db.worker] 'events' table missing. Found: [${ tables.join(", ") }]`
-        );
-    }
 }
 
 function execRows(
