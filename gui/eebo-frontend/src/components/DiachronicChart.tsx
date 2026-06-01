@@ -70,8 +70,6 @@ const DiachronicChart: Component = () => {
   const [sortKey, setSortKey] = createSignal<SortKey>("freq");
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
-  // Replace direct tier2Data store access with a resource.
-  // Re-fetches whenever concept or year range changes.
   const [filteredEventsResource] = createResource(
     () => [controls.concept, controls.fromYear, controls.toYear] as const,
     ([concept, from, to]) => getYearFiltered(concept, from, to),
