@@ -3,7 +3,10 @@ import {
     createMemo,
     Show,
     type Component,
+    Match,
+    Switch,
 } from "solid-js";
+
 import { createTokenWindowResource } from "../services/tokenWindowApi";
 
 interface EventContextProps {
@@ -15,6 +18,7 @@ interface EventContextProps {
 const EventContext: Component<EventContextProps> = (props) => {
     const [open, setOpen] = createSignal(props.open ?? true);
 
+    // Only produce a fetch source when open
     const source = createMemo(() =>
         open()
             ? {
@@ -27,22 +31,29 @@ const EventContext: Component<EventContextProps> = (props) => {
     const [window] = createTokenWindowResource(source);
 
     return (
-        <details
-            open={props.open}
-            onToggle={(e) => setOpen(e.currentTarget.open)}
-        >
-            <summary>Context</summary>
+        <>
+            <button class="chip tiny" onClick={() => setOpen(v => !v)} >
+                <Switch>
+                    <Match when={!open()}>
+                        <i>arrow_drop_down</i>
+                        <span class="tooltip bottom">View Context</span>
+                    </Match>
+                    <Match when={open()}>
+                        <i>arrow_drop_up</i>
+                        <span class="tooltip bottom">Hide Context</span>
+                    </Match>
+                </Switch>
+            </button>
 
             <Show when={open()}>
-                <Show when={!window.loading} fallback={<progress class="light-green-text" />}>
-                    <Show when={!window.error} fallback={
-                        <div class="error">Failed to load context</div>
-                    }>
-                        <blockquote>{window()}</blockquote>
+                <Show when={!window.loading} fallback={<progress class="light-green-text" />} >
+                    <Show when={!window.error} fallback={<div class="error">Failed to load context</div>} >
+                        <blockquote innerHTML={window() || ""} class="border" />
                     </Show>
                 </Show>
             </Show>
-        </details>
+
+        </>
     );
 };
 

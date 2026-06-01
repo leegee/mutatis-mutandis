@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IM+Fell+English:ital@0;1&display=swap');
+@import url('./fonts.css');
 
 :root {
   color-scheme: dark;
@@ -88,13 +89,19 @@ main,
   transform: translateX(0);
 }
 
-/* BeerCSS */
-.field {
-  --_input: 1rem;
-}
-
 mark {
   background-color: aqua;
   color: black;
   padding: 0.1em 0.2em;
+}
+
+
+/* BeerCSS resets */
+.field {
+  --_input: 1rem;
+}
+
+blockquote {
+  border-left: none;
+  font-family: Junicode !important;
 }

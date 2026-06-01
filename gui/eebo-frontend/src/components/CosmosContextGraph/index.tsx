@@ -452,7 +452,7 @@ const CosmosComponent: Component = () => {
           </Show>
 
           <Show when={controls.selectedNode}>
-            <aside class="cg-aside surface-container-high medium-elevate padding no-border">
+            <aside class="cg-aside surface-container-high medium-elevate padding no-border min" style="max-width: 30vw; min-width: 30rem">
               <div class="cg-header-row">
                 <h2>{controls.selectedNode}</h2>
                 <button class="link border" onClick={() => setControls("selectedNode", null)}>✕</button>
@@ -524,24 +524,20 @@ const CosmosComponent: Component = () => {
                                     <div class="cg-nb-bar-wrap">
                                       <div class="cg-nb-bar-fill neighbour" style={{ width: `${ (h.freq / maxFreq) * 100 }%` }} />
                                     </div>
-                                    <span>
-                                      {sourceNode()?.token ?? h.hub}
-                                    </span>
+                                    <span class="tooltip bottom">Mean score: {h.meanScore.toFixed(3)}</span>
                                   </div>
+
+
                                   <Show when={sourceNode()}>
                                     {(neighbourToken) => <>
-                                      <div class="row">
-                                        <span class="small-text" style={{ opacity: 0.6 }}>{neighbourToken().doc_id}</span>
-                                        <span class="tooltip bottom">
-                                          idx:{neighbourToken().token_idx ?? '//'}
-                                        </span>
-                                      </div>
-                                      <div class="row">
-                                        <EventContext open={true} docId={neighbourToken().doc_id!} tokenIdx={neighbourToken().token_idx!} />
-                                      </div>
+                                      <span>{sourceNode()?.token ?? h.hub}</span>
+                                      {" "}
+                                      <span class="small-text" style={{ opacity: 0.6 }}>
+                                        {neighbourToken().doc_id}/{neighbourToken().token_idx}
+                                      </span>
+                                      <EventContext open={true} docId={neighbourToken().doc_id!} tokenIdx={neighbourToken().token_idx!} />
                                     </>}
                                   </Show>
-                                  <span class="tooltip bottom">{h.meanScore.toFixed(3)}</span>
                                 </article>
                               </>
                             );
