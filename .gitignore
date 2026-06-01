@@ -67,3 +67,4 @@ python/eebo_env/
 status.md
 docs/cv.*
 docs/proposal_*
+gui/eebo-frontend/public/data/
