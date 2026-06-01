@@ -1,22 +1,23 @@
 // src/App.tsx
 
-import { createSignal, ErrorBoundary, lazy, Match, onMount, Show, Switch, } from "solid-js";
+import { createSignal, ErrorBoundary, lazy, Match, Show, Switch, } from "solid-js";
 import { Transition } from "solid-transition-group";
 
 import "./App.css";
 import {
-  tier2Data,
+  dbReady,
   loadTier2Data
 } from "./state/tier2data.store";
 
-const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"));
 
+const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
 const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
 
+loadTier2Data(); // fire and forget — dbReady() goes true when done
+
 export default function App() {
-  const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [openHelp, setOpenHelp] = createSignal(false);
   const [open, setOpen] = createSignal(false);
@@ -30,15 +31,6 @@ export default function App() {
     { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
   ] as const;
 
-  onMount(async () => {
-    try {
-      await loadTier2Data();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  });
 
   return (
     <>
@@ -87,7 +79,7 @@ export default function App() {
           )}
         >
           <Show
-            when={!loading() && Object.keys(tier2Data).length > 0}
+            when={dbReady()}
             fallback={
               <article class="max small-round padding border medium no-padding" style="min-height:100vh">
                 <section class="padding absolute center middle">

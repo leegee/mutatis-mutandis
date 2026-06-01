@@ -1,19 +1,46 @@
-// src/state/tier2data.store.ts
+/**
+ * src/state/tier2data.store.ts
+ *
+ * Replaced implementation: loads the SQLite .db asset instead of JSON.
+ *
+ * The store no longer holds concept data in memory.  It only tracks
+ * initialisation state.  All data access goes through selectors.ts which
+ * issues SQL queries on demand.
+ *
+ * CORPUS_TIER2_DB_URL should point to the .db file served as a static asset,
+ * e.g. "/data/tier2_concept_neighbours.db".  Add it to corpus_config.ts.
+ */
 
-import { createStore } from "solid-js/store";
+import { createSignal } from "solid-js";
+import { initDb } from "../services/db";
+import { CORPUS_TIER2_DB_URL } from "../corpus_config";
 
-import type { Tier2Data } from "../types/context-graph.types";
-import { CORPUS_TIER2_URL } from "../corpus_config";
+// ---------------------------------------------------------------------------
+// Public signals
+// ---------------------------------------------------------------------------
 
-export const [tier2Data, setTier2Data] = createStore<Tier2Data>({});
+/** True once the database file has been fetched and opened. */
+export const [dbReady, setDbReady] = createSignal(false);
 
-export async function loadTier2Data() {
-  const res = await fetch(CORPUS_TIER2_URL);
+/** Non-null when initialisation fails. */
+export const [dbError, setDbError] = createSignal<string | null>(null);
 
-  if (!res.ok) {
-    throw new Error(`Failed to load semantic events: ${ res.status } ${ res.statusText }`);
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the .db asset, write to OPFS, and open it.
+ * Call once at app startup (e.g. in App.tsx before rendering).
+ * Safe to call multiple times — the underlying initDb is idempotent.
+ */
+export async function loadTier2Data(): Promise<void> {
+  try {
+    await initDb(CORPUS_TIER2_DB_URL);
+    setDbReady(true);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setDbError(msg);
+    console.error("[tier2] failed to load database:", msg);
   }
-
-  const json = await res.json();
-  setTier2Data(json as Tier2Data);
 }

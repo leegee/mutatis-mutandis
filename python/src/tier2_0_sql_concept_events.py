@@ -89,11 +89,12 @@ import json
 import sqlite3
 from collections import Counter
 from itertools import combinations
+from pathlib import Path
 
 import numpy as np
 import zarr
 
-from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_INDEX_DIR,  ZARR_ROOT
+from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_INDEX_DIR,  ZARR_ROOT, OUT_DIR
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
@@ -103,7 +104,9 @@ from lib.eebo_db import get_connection
 K           = 25
 BATCH_SIZE  = 8192
 OUTPUT_PATH = INDEXES_DIR / "tier2_concept_neighbours.json"
-DB_PATH     = INDEXES_DIR / "tier2_concept_neighbours.db"
+# DB_PATH     = INDEXES_DIR / "tier2_concept_neighbours.db"
+DB_PATH     = Path(OUT_DIR / '..' / 'gui' / 'eebo-frontend' / 'public' / 'data' / 'tier2_concept_neighbours.db')
+
 
 
 # Event lookup
@@ -520,6 +523,8 @@ def main():
     args = parser.parse_args()
 
     faiss_index_path = FAISS_INDEX_DIR / "tier1.index"
+
+    logger.info(f"[tier2] DB_PATH: {DB_PATH}")
 
     index  = EeboFaissIndex.load(faiss_index_path)
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")

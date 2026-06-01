@@ -1,12 +1,13 @@
 import {
     createSignal,
     createMemo,
+    createResource,
     For,
     type Component,
 } from "solid-js";
 
-import { buildYearSlices, classifyStatus, filterByYearRange, type SortKey, type TokenStatus, type YearSlices, } from "../lib/contextGraphUtils";
-import { tier2Data } from "../state/tier2data.store";
+import { buildYearSlices, classifyStatus, type SortKey, type TokenStatus, type YearSlices, } from "../lib/contextGraphUtils";
+import { getYearFiltered } from "../state/selectors";
 import ControlsHeader from "./ControlsHeader";
 import { controls } from "../state/controls.store";
 
@@ -35,7 +36,6 @@ function yearLabel(year: number, window: number): string {
     return `${ year - window }–${ year + window }`;
 }
 
-
 function statusColor(s: TokenStatus): string {
     if (s === "birth") return C_BIRTH;
     if (s === "death") return C_DEATH;
@@ -61,28 +61,20 @@ const DiachronicChart: Component = () => {
     const [sortKey, setSortKey] = createSignal<SortKey>("freq");
     const [focusToken, setFocusToken] = createSignal<string | null>(null);
 
-    const filteredEvents = createMemo(() => {
-        const cd = tier2Data[controls.concept];
-        if (!cd) return [];
-        return filterByYearRange(cd.events, controls.fromYear, controls.toYear);
-    });
+    // Replace direct tier2Data store access with a resource.
+    // Re-fetches whenever concept or year range changes.
+    const [filteredEventsResource] = createResource(
+        () => [controls.concept, controls.fromYear, controls.toYear] as const,
+        ([concept, from, to]) => getYearFiltered(concept, from, to),
+    );
+    const filteredEvents = () => filteredEventsResource() ?? [];
 
     const displaySlices = createMemo<YearSlices>(() =>
-        buildYearSlices(
-            filteredEvents(),
-            controls.topN,
-            smoothWindow(),
-            sortKey()
-        )
+        buildYearSlices(filteredEvents(), controls.topN, smoothWindow(), sortKey())
     );
 
     const rawSlices = createMemo<YearSlices>(() =>
-        buildYearSlices(
-            filteredEvents(),
-            controls.topN,
-            0,
-            sortKey()
-        )
+        buildYearSlices(filteredEvents(), controls.topN, 0, sortKey())
     );
 
     const years = createMemo<number[]>(() =>
@@ -135,9 +127,7 @@ const DiachronicChart: Component = () => {
                 for (let i = 0; i < yrs.length; i++) {
                     const yrX = yrs[i];
                     const col = sl.get(yrX) ?? [];
-                    if (col.some(t => t.token === token)) {
-                        positions.push(i);
-                    }
+                    if (col.some(t => t.token === token)) positions.push(i);
                 }
 
                 for (let i = 0; i < positions.length - 1; i++) {
@@ -166,7 +156,6 @@ const DiachronicChart: Component = () => {
                     });
                 }
             }
-
         }
 
         return out;
@@ -191,7 +180,7 @@ const DiachronicChart: Component = () => {
     });
 
     return (
-        <article class="background  no-padding no-margin">
+        <article class="background no-padding no-margin">
             <ControlsHeader title="Diachronic Neighbours" fdgControls={false}>
 
                 <hr class="divider vertical max no-margin no-padding" />
@@ -217,14 +206,11 @@ const DiachronicChart: Component = () => {
                         />
                         <span class="tooltip bottom" />
                     </div>
-                    <output class="small-padding top-padding">
-                        Smoothing
-                    </output>
+                    <output class="small-padding top-padding">Smoothing</output>
                 </div>
             </ControlsHeader>
 
             <div class="scroll">
-
                 <svg width={svgWidth()} height={svgHeight()}>
 
                     <For each={years()}>
@@ -261,13 +247,9 @@ const DiachronicChart: Component = () => {
                             <For each={displaySlices().get(yr) ?? []}>
                                 {rt => {
                                     const key = `${ yr }:${ rt.token }`;
-                                    const status = () =>
-                                        cellStatus().get(key) ?? "continuation";
+                                    const status = () => cellStatus().get(key) ?? "continuation";
                                     const color = () => statusColor(status());
-
-                                    const isFocused = () =>
-                                        !focusToken() || focusToken() === rt.token;
-
+                                    const isFocused = () => !focusToken() || focusToken() === rt.token;
                                     const x = () => colX(ci()) - CELL_WIDTH / 2;
                                     const y = () => HEADER_H + rt.rank * ROW_HEIGHT;
 
@@ -289,7 +271,6 @@ const DiachronicChart: Component = () => {
                                                 stroke-width={focusToken() === rt.token ? 1.2 : 0}
                                                 fill-opacity={isFocused() ? 0.18 : 0.04}
                                             />
-
                                             <text
                                                 x={x() + LABEL_PAD}
                                                 y={y() + CELL_H / 2}
@@ -309,7 +290,7 @@ const DiachronicChart: Component = () => {
 
                 </svg>
             </div>
-        </article >
+        </article>
     );
 };
 
