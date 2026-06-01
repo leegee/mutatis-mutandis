@@ -1,7 +1,8 @@
 import {
   children,
   createResource,
-  For, Show,
+  For,
+  Show,
   type ParentComponent,
 } from "solid-js";
 import { controls } from "../state/controls.store";
@@ -11,6 +12,7 @@ import { getYearBounds, getYearFiltered } from "../state/selectors";
 import { queryConcepts } from "../services/db";
 
 import "./ControlsHeader.css";
+import { Icon } from "./Icon";
 
 interface Props {
   children?: any;
@@ -46,18 +48,18 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const filteredCount = () => yearFilteredResource()?.length ?? 0;
 
   return (
-    <header class="left-align max surface-container-low small-padding top-padding">
+    <header class="left-align max surface-container-low tiny-padding bottom-padding top-padding no-margin">
       <nav>
-        <hr style="width: 3em; background: transparent" />
+        <Icon class="circle large fill no-padding no-margin no-space" />
+
+        {/* <hr style="width: 3em; background: transparent" /> */}
 
         <div class="field suffix border middle-align">
           <select
             value={controls.concept}
             onChange={(e) => A.setConcept(e.currentTarget.value)}
           >
-            <For each={concepts()}>
-              {(c) => <option value={c}>{c}</option>}
-            </For>
+            <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
           <output>Concept</output>
         </div>
@@ -96,7 +98,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                   max={yearBounds()[1]}
                   step={1}
                   value={controls.fromYear}
-                  onInput={(e) => A.setSingleYear(Number(e.currentTarget.value))}
+                  onInput={(e) =>
+                    A.setSingleYear(Number(e.currentTarget.value))
+                  }
                 />
                 <span class="tooltip bottom" />
               </div>
@@ -149,7 +153,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <span class="tooltip bottom" />
             </div>
             <output class="small-padding top-padding">
-              <span>{controls.fromYear}–{controls.toYear}</span>
+              <span>
+                {controls.fromYear}–{controls.toYear}
+              </span>
               <Show when={props.totalEvents}>
                 <span class="left-padding">
                   {filteredCount()} / {props.totalEvents!()} events
@@ -173,7 +179,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             <span />
             <span class="tooltip bottom" />
           </div>
-          <output class="small-padding top-padding">Top N {controls.topN}</output>
+          <output class="small-padding top-padding">
+            Top N {controls.topN}
+          </output>
         </div>
 
         <Show when={fdgControls()}>
@@ -201,7 +209,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                   max={0.95}
                   step={0.05}
                   value={controls.minSimilarity}
-                  onInput={(e) => A.setMinSimilarity(Number(e.currentTarget.value))}
+                  onInput={(e) =>
+                    A.setMinSimilarity(Number(e.currentTarget.value))
+                  }
                 />
                 <span />
                 <span class="tooltip bottom" />

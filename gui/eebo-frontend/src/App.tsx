@@ -1,17 +1,24 @@
 // src/App.tsx
 
-import { createSignal, ErrorBoundary, lazy, Match, Show, Switch, } from "solid-js";
+import {
+  createSignal,
+  ErrorBoundary,
+  lazy,
+  Match,
+  Show,
+  Switch,
+} from "solid-js";
 import { Transition } from "solid-transition-group";
 
 import "./App.css";
-import {
-  dbReady,
-  loadTier2Data
-} from "./state/tier2data.store";
+import { dbReady, loadTier2Data } from "./state/tier2data.store";
 
-
-const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"));
-const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
+const CosmosContextGraphGuide = lazy(
+  () => import("./components/CosmosContextGraph/Guide"),
+);
+const NeighbourhoodBrowser = lazy(
+  () => import("./components/NeighbourhoodBrowser"),
+);
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
 const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
 
@@ -33,26 +40,41 @@ export default function App() {
 
   return (
     <>
-      <nav id="app-nav" class={`surface-container-low left scroll small-elevate ${ open() ? "max" : "small" }`} >
-        <header class="center-align top-margin no-padding">
-          <button class="extra transparent no-padding" onClick={() => setOpen(!open())} >
+      <nav
+        id="app-nav"
+        class={`surface-container-low left no-margin top-padding scroll small-elevate ${open() ? "max" : "small"}`}
+      >
+        <header class="center-align top-margin tiny-margin no-padding">
+          <button
+            class="extra transparent no-padding"
+            onClick={() => setOpen(!open())}
+          >
             <Switch>
-              <Match when={open()}> <i>menu_open</i> </Match>
-              <Match when={!open()}> <i>menu</i> </Match>
+              <Match when={open()}>
+                {" "}
+                <i>menu_open</i>
+              </Match>
+              <Match when={!open()}>
+                {" "}
+                <i>menu</i>{" "}
+              </Match>
             </Switch>
           </button>
         </header>
 
         {navItems.map((item) => (
-          <a onClick={() => setView(item.key)} classList={{
-            active: view() === item.key,
-            button: true,
-            transparent: true,
-            "no-border": true,
-            "no-padding": true,
-            "no-margin": true,
-            "no-space": true,
-          }} >
+          <a
+            onClick={() => setView(item.key)}
+            classList={{
+              active: view() === item.key,
+              button: true,
+              transparent: true,
+              "no-border": true,
+              "no-padding": true,
+              "no-margin": true,
+              "no-space": true,
+            }}
+          >
             <i>{item.icon}</i>
             <span>{item.label}</span>
           </a>
@@ -66,7 +88,7 @@ export default function App() {
         </a>
       </nav>
 
-      <main class="responsive max no-padding full" >
+      <main class="responsive max no-padding full">
         <ErrorBoundary
           fallback={(err) => (
             <article>
@@ -77,13 +99,15 @@ export default function App() {
             </article>
           )}
         >
-          <Show when={dbReady()}
+          <Show
+            when={dbReady()}
             fallback={
-              <article class="max small-round padding border medium no-padding" style="min-height:100vh">
+              <article
+                class="max small-round padding border medium no-padding"
+                style="min-height:100vh"
+              >
                 <section class="padding absolute center middle">
-                  <h4>
-                    {error() ?? "Loading text events..."}
-                  </h4>
+                  <h4>{error() ?? "Loading text events..."}</h4>
                   <Show when={!error()}>
                     <progress class="wavy green-text" />
                   </Show>
@@ -103,7 +127,6 @@ export default function App() {
               <Match when={view() === "cosmos"}>
                 <Cosmos />
               </Match>
-
             </Switch>
           </Show>
         </ErrorBoundary>
@@ -111,7 +134,10 @@ export default function App() {
 
       <Transition name="slide-fade">
         <Show when={openHelp()}>
-          <article class="helpContainer right surface-container-high padding  high-elevate border" style='z-index:999 !important'>
+          <article
+            class="helpContainer right surface-container-high padding  high-elevate border"
+            style="z-index:999 !important"
+          >
             <Switch fallback={<article>To do...</article>}>
               <Match when={view() == "cosmos"}>
                 <header class="fixed top fill max" style="z-index:9999">

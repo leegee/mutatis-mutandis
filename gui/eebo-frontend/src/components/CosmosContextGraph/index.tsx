@@ -775,10 +775,10 @@ const CosmosComponent: Component = () => {
 
   return (
     <>
-      <div class="cg-layout">
+      <div>
         <ControlsHeader totalEvents={totalEvents} includeHubSpread={true} />
 
-        <div class="cg-main background">
+        <div class="background">
           <div
             ref={wrapRef!}
             class="cg-canvas-wrap surface-container"
