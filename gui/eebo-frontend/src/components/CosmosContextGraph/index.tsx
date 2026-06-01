@@ -547,7 +547,7 @@ const CosmosComponent: Component = () => {
       </aside>`;
     } else if (wn.kind === "event") {
       html = `<aside>
-        <h6 class="bottom-padding">${wn.token ?? wn.id}</h6>
+        <h6 class="bottom-padding"><q>${wn.token ?? wn.id}</q></h6>
         Year: ${wn.pub_year ?? "—"}<br/>
         Doc: ${wn.doc_id ?? "—"}<br/>
         token_idx: ${wn.token_idx ?? "—"}
@@ -775,10 +775,10 @@ const CosmosComponent: Component = () => {
 
   return (
     <>
-      <div>
+      <div class="background cg-layout">
         <ControlsHeader totalEvents={totalEvents} includeHubSpread={true} />
 
-        <div class="background">
+        <div class="cg-main">
           <div
             ref={wrapRef!}
             class="cg-canvas-wrap surface-container"
@@ -834,11 +834,13 @@ const CosmosComponent: Component = () => {
 
           <Show when={controls.selectedNode}>
             <aside
-              class="cg-aside surface-container-high medium-elevate padding no-border min"
+              class="min surface-container-high medium-elevate padding border small-margin no-top-padding"
               style="max-width: 30vw; min-width: 30rem"
             >
               <div class="cg-header-row">
-                <h2>{controls.selectedNode}</h2>
+                <h2>
+                  <q>{controls.selectedNode}</q>
+                </h2>
                 <button
                   class="link border"
                   onClick={() => setControls("selectedNode", null)}
@@ -876,8 +878,8 @@ const CosmosComponent: Component = () => {
                       <div class="bottom-padding">
                         <For each={bin.topNeighbours.slice(0, MAX_TOP_N)}>
                           {(nb) => (
-                            <div class="cg-nb-row">
-                              <div class="cg-nb-bar-wrap">
+                            <div class="row max">
+                              <div class="cg-nb-bar-wrap" style="width: 33%">
                                 <div
                                   class="cg-nb-bar-fill hub"
                                   style={{
@@ -885,7 +887,9 @@ const CosmosComponent: Component = () => {
                                   }}
                                 />
                               </div>
-                              <span class="cg-nb-token">{nb.token}</span>
+                              <span class="cg-nb-token">
+                                <q>{nb.token}</q>
+                              </span>
                               <span class="cg-nb-score">
                                 {nb.meanScore.toFixed(3)}
                               </span>
@@ -923,7 +927,9 @@ const CosmosComponent: Component = () => {
                   return (
                     <>
                       <div class="bottom-padding">
-                        <div>Token: {node.token ?? "—"}</div>
+                        <div>
+                          Token: <q>{node.token ?? "—"}</q>
+                        </div>
                         <div>Year: {node.pub_year ?? "—"}</div>
                         <div>
                           Document: {node.doc_id} token {node.token_idx ?? "—"}

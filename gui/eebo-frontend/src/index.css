@@ -98,7 +98,26 @@ mark {
   --_input: 1rem;
 }
 
+q,
 blockquote {
   border-left: none;
   font-family: Junicode !important;
+}
+
+h1 {
+  font-size: 2rem;
+}
+h2 {
+  font-size: 1.8rem;
+  q {
+    font-size: 2.3rem;
+  }
+}
+h3 {
+  font-size: 1.4rem;
+}
+h4,
+h5,
+h6 {
+  font-size: 1.2rem;
 }
