@@ -243,6 +243,7 @@ export function buildPureEventGraph(
             hubDegree: 0,
             degree: 0,
             token: event.token,
+            token_idx: event.token_idx,
             doc_id: event.doc_id,
             pub_year: event.pub_year,
         };

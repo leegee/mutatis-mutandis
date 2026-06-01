@@ -318,7 +318,7 @@ const CosmosComponent: Component = () => {
       const yStr = years.length ? `${ years[0] }${ years.length > 1 ? `–${ years[years.length - 1] }` : "" }` : "—";
       html = `<aside><h6 class="bottom-padding">${ wn.id }</h6>Events: ${ wn.eventCount }<br/>Connections: ${ wn.hubDegree }<br/>Documents: ${ bin?.docs.size ?? "—" }<br/>Years: ${ yStr }</aside>`;
     } else if (wn.kind === "event") {
-      html = `<aside><h6 class="bottom-padding">${ wn.token ?? wn.id }</h6>Doc: ${ wn.doc_id ?? "—" }<br/>Year: ${ wn.pub_year ?? "—" }</aside>`;
+      html = `<aside><h6 class="bottom-padding">${ wn.token ?? wn.id }</h6>Doc: ${ wn.doc_id ?? "—" }<br/>Year: ${ wn.pub_year ?? "—" }<br/>token_idx: ${ wn.token_idx ?? "—" }</aside>`;
     } else {
       const id = wn.id; const viewMode = untrack(() => controls.viewMode); const bins = untrack(tokenBins); const gd = untrack(graphData);
       let hubs: Array<{ hub: string; freq: number }>;
@@ -490,7 +490,7 @@ const CosmosComponent: Component = () => {
               <Show when={selectedKind() === "event" && selectedEventNode()}>
                 {(_) => {
                   const node = selectedEventNode()!; return (<>
-                    <div class="bottom-padding"><div>Token: {node.token ?? "—"}</div><div>Year: {node.pub_year ?? "—"}</div>
+                    <div class="bottom-padding"><div>Token: {node.token ?? "—"}</div><div>Year: {node.pub_year ?? "—"}</div><div>token_idx: {node.token_idx ?? "—"}</div>
                       <Show when={node.doc_id}><div><button class="chip small-margin cg-chip-mono" onClick={() => showDocument(node.doc_id!)}><span>{node.doc_id}</span></button></div></Show>
                     </div>
                     <div class="bottom-padding small-text" style={{ opacity: 0.6 }}>Select a neighbour to see which sources share it.</div>
@@ -506,7 +506,34 @@ const CosmosComponent: Component = () => {
                     const maxFreq = sharedByHubs()[0]?.freq ?? 1; return (
                       <div class="bottom-padding">
                         <For each={sharedByHubs()}>
-                          {(h) => (<div class="cg-nb-row"><div class="cg-nb-bar-wrap"><div class="cg-nb-bar-fill neighbour" style={{ width: `${ (h.freq / maxFreq) * 100 }%` }} /></div><span class="cg-nb-token">{h.hub}</span><span class="cg-nb-score">{h.meanScore.toFixed(3)}</span></div>)}
+                          {(h) => {
+                            // In events view h.hub is a synthetic event node id —
+                            // look up the node to get its token_idx and doc_id.
+                            const sourceNode = () => controls.viewMode === "events"
+                              ? graphData().nodes.find((n) => n.id === h.hub)
+                              : null;
+                            return (
+                              <div class="row">
+                                <div class="cg-nb-bar-wrap">
+                                  <div class="cg-nb-bar-fill neighbour" style={{ width: `${ (h.freq / maxFreq) * 100 }%` }} />
+                                </div>
+                                <span>
+                                  {sourceNode()?.token ?? h.hub}
+                                </span>
+                                <Show when={sourceNode()}>
+                                  {(n) => <>
+                                    <Show when={n().doc_id}>
+                                      <span class="small-text" style={{ opacity: 0.6 }}>{n().doc_id}</span>
+                                    </Show>
+                                    <span class="tooltip bottom">
+                                      idx:{n().token_idx ?? '//'}
+                                    </span>
+                                  </>}
+                                </Show>
+                                <span class="right-align">{h.meanScore.toFixed(3)}</span>
+                              </div>
+                            );
+                          }}
                         </For>
                       </div>
                     );

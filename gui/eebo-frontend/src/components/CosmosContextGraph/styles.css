@@ -18,12 +18,6 @@
     overflow: hidden;
   }
 
-  .cg-aside {
-    width: 22rem;
-    flex-shrink: 0;
-    overflow-y: auto;
-  }
-
   .cg-header-row {
     display: flex;
     justify-content: space-between;
