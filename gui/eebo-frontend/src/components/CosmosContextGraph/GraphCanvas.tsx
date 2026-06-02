@@ -1,7 +1,5 @@
 import {
   createSignal,
-  createMemo,
-  createResource,
   createEffect,
   onCleanup,
   untrack,
@@ -11,26 +9,27 @@ import {
 } from "solid-js";
 
 import { Graph } from "@cosmos.gl/graph";
-import * as d3 from "d3";
+import * as d3 from "d3"; // For scales
 
 import "./styles.css";
 
 import type { ContextGraphData, ContextNode, TokenBin } from "./types";
 
-import { controls, setControls } from "../../state/controls.store";
-import {
-  aggregateByToken,
-  buildContextualGraph,
-  buildPureEventGraph,
-} from "../../lib/contextGraphUtils";
-import { getYearFiltered } from "../../state/selectors";
-
-interface GraphCanvasProps {
+export type GraphFrame = {
   graphData: ContextGraphData;
+  concept: string;
   viewMode: "events" | "aggregated";
   hubSpread: number;
-  selectedNode: string | null;
   showEventLabels: boolean;
+  fromYear: number;
+  toYear: number;
+  selectedNode: string | null;
+  onSelectNode?: (id: string | null) => void;
+  tokenBins: Map<string, TokenBin>;
+};
+
+interface GraphCanvasProps {
+  frame: GraphFrame;
 }
 
 const BASE_REPULSION = 0.8;
@@ -69,16 +68,6 @@ const SPOKE_ALPHA_MIN = 0.75;
 const SPOKE_ALPHA_MAX = 0.99;
 const SPOKE_WIDTH_MIN = 2;
 const SPOKE_WIDTH_MAX = 6;
-
-const EMPTY_GRAPH: ContextGraphData = {
-  nodes: [],
-  hubHubEdges: [],
-  hubNbEdges: [],
-  allEdges: [],
-  maxHubHubWeight: 1,
-  maxEventCount: 1,
-  maxHubDegree: 1,
-};
 
 interface WorldNode extends ContextNode {
   cosmosIndex: number;
@@ -324,16 +313,6 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
     simTimeoutHandle = window.setTimeout(() => stopSimulating(generation), ms);
   }
 
-  const [filteredEventsResource] = createResource(
-    () => [controls.concept, controls.fromYear, controls.toYear] as const,
-    ([concept, from, to]) => getYearFiltered(concept, from, to),
-  );
-  const filteredEvents = () => filteredEventsResource() ?? [];
-
-  const tokenBins = createMemo<Map<string, TokenBin>>(() =>
-    aggregateByToken(filteredEvents()),
-  );
-
   let wrapRef!: HTMLDivElement;
   let cosmosGraph: Graph | null = null;
   let world: GraphWorld | null = null;
@@ -356,7 +335,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
     const tip = getTooltip();
     let html = "";
     if (wn.kind === "hub") {
-      const bin = untrack(tokenBins).get(wn.id);
+      const bin = props.frame.tokenBins.get(wn.id);
       const years = bin ? [...bin.years].sort((a, b) => a - b) : [];
       const yStr = years.length
         ? `${years[0]}${years.length > 1 ? `–${years[years.length - 1]}` : ""}`
@@ -378,9 +357,9 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
         </aside>`;
     } else {
       const id = wn.id;
-      const viewMode = untrack(() => controls.viewMode);
-      const bins = untrack(tokenBins);
-      const gd = props.graphData;
+      const viewMode = untrack(() => props.frame.viewMode);
+      const bins = props.frame.tokenBins;
+      const gd = props.frame.graphData;
       let hubs: Array<{ hub: string; freq: number }>;
 
       if (viewMode === "aggregated") {
@@ -429,8 +408,8 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
       const posMap = cosmosGraph.getTrackedPointPositionsMap();
       if (posMap && posMap.size > 0) {
         const hid = hoveredId();
-        const currentConcept = untrack(() => controls.concept);
-        const showEventLabels = controls.showEventLabels;
+        const currentConcept = props.frame.concept;
+        const showEventLabels = props.frame.showEventLabels;
         let dirty = posMap.size !== prevLabelCache.size;
         const nextLabels: Array<{
           id: string;
@@ -503,13 +482,19 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
         if (tooltipEl) tooltipEl.style.opacity = "0";
       },
       onClick: (index: number | undefined) => {
+        console.log("[graph click]", index);
         if (index === undefined) {
-          setControls("selectedNode", null);
+          props.frame.onSelectNode?.(null);
           return;
         }
+
         const wn = world?.getNodeByIndex(index);
+        console.log("[graph click]", index, wn?.id);
         if (!wn) return;
-        setControls("selectedNode", (prev) => (prev === wn.id ? null : wn.id));
+
+        props.frame.onSelectNode?.(
+          props.frame.selectedNode === wn.id ? null : wn.id,
+        );
       },
     });
 
@@ -524,7 +509,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
 
   // Major updates (concept, view mode, topN, etc.)
   createEffect(() => {
-    const gd = props.graphData;
+    const gd = props.frame.graphData;
     if (!wrapRef) return;
 
     ensureCosmosInitialised();
@@ -551,7 +536,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
       spaceSize: SPACE,
       simulationRepulsion: isDegenerate
         ? 0
-        : BASE_REPULSION * (0.6 + controls.hubSpread * 0.4),
+        : BASE_REPULSION * (0.6 + props.frame.hubSpread * 0.4),
       simulationLinkSpring: isDegenerate ? 0 : BASE_LINK_SPRING,
       simulationGravity: isDegenerate ? 0.8 : BASE_GRAVITY,
       simulationFriction: BASE_FRICTION,
@@ -568,7 +553,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
 
   // Fast timeline updates
   createEffect(() => {
-    const gd = props.graphData;
+    const gd = props.frame.graphData;
     if (!world || gd.nodes.length === 0) return;
     world.updateTimeSlice(gd, false);
   });
@@ -611,7 +596,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
           </For>
         </div>
 
-        <Show when={props.graphData.nodes.length === 0}>
+        <Show when={props.frame.graphData.nodes.length === 0}>
           <div
             style={{
               position: "absolute",
@@ -627,9 +612,9 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
               <h4>
                 No data to graph for
                 <span style="text-transform:capitalize">
-                  "{controls.concept.toLocaleLowerCase()}"
+                  "{props.frame.concept.toLocaleLowerCase()}"
                 </span>{" "}
-                from {controls.fromYear}
+                from {props.frame.fromYear}
               </h4>
               <p>
                 Try reducing the minimum similarity threshold, or increasing the

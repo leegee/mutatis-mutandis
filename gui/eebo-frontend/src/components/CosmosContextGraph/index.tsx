@@ -17,7 +17,7 @@ import {
 } from "../../state/selectors";
 import ControlsHeader from "../ControlsHeader";
 import ContextGraphSidebar from "./ContextGraphSidebar";
-import GraphCanvas from "./GraphCanvas";
+import GraphCanvas, { type GraphFrame } from "./GraphCanvas";
 
 const MAX_TOP_N = 20;
 
@@ -114,7 +114,21 @@ const CosmosComponent: Component = () => {
       .sort((a, b) => b.freq - a.freq);
   });
 
-  const graphDataMemo = createMemo(() => graphData());
+  const graphCanvasFrame = createMemo<GraphFrame>(() => ({
+    graphData: graphData(),
+    tokenBins: tokenBins(),
+    concept: controls.concept,
+    viewMode: controls.viewMode,
+    hubSpread: controls.hubSpread,
+    showEventLabels: controls.showEventLabels,
+    toYear: controls.toYear,
+    fromYear: controls.fromYear,
+    selectedNode: controls.selectedNode,
+    onSelectNode: (id: string | null) => {
+      setControls("selectedNode", (prev) => (prev === id ? null : id));
+      console.log("[graph index onSelectNode]", id);
+    },
+  }));
 
   return (
     <>
@@ -130,13 +144,7 @@ const CosmosComponent: Component = () => {
         </ControlsHeader>
 
         <div class="cg-main">
-          <GraphCanvas
-            graphData={graphDataMemo()}
-            viewMode={controls.viewMode}
-            selectedNode={controls.selectedNode}
-            hubSpread={controls.hubSpread}
-            showEventLabels={controls.showEventLabels}
-          />
+          <GraphCanvas frame={graphCanvasFrame()} />
 
           <Show when={controls.selectedNode}>
             <Show when={controls.selectedNode}>
