@@ -34,24 +34,28 @@
 
 import type { ConceptEvent, Neighbour } from "../types/context-graph.types";
 
-// ---------------------------------------------------------------------------
-// Worker setup
-// ---------------------------------------------------------------------------
-
+// WORKER SETUP
 // Vite handles ?worker imports and bundles the worker correctly.
 // The worker file must be in the same origin.
 import DbWorker from "./db.worker?worker";
 
 let _worker: Worker | null = null;
-let _pending = new Map<string, { resolve: (v: unknown[][]) => void; reject: (e: Error) => void }>();
+let _pending = new Map<
+  string,
+  { resolve: (v: unknown[][]) => void; reject: (e: Error) => void }
+>();
 let _msgId = 0;
 
 function getWorker(): Worker {
-  if (!_worker) throw new Error("[db] worker not initialised — call initDb() first");
+  if (!_worker)
+    throw new Error("[db] worker not initialised — call initDb() first");
   return _worker;
 }
 
-function send(type: string, payload: Record<string, unknown> = {}): Promise<unknown[][]> {
+function send(
+  type: string,
+  payload: Record<string, unknown> = {},
+): Promise<unknown[][]> {
   return new Promise((resolve, reject) => {
     const id = String(++_msgId);
     _pending.set(id, { resolve, reject });
@@ -59,10 +63,7 @@ function send(type: string, payload: Record<string, unknown> = {}): Promise<unkn
   });
 }
 
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
-
+// INIT
 let _initPromise: Promise<void> | null = null;
 
 export async function initDb(url: string): Promise<void> {
@@ -94,10 +95,7 @@ export async function initDb(url: string): Promise<void> {
   return _initPromise;
 }
 
-// ---------------------------------------------------------------------------
-// exec helper
-// ---------------------------------------------------------------------------
-
+// General exec helper
 async function execRows(
   sql: string,
   bind?: (string | number | null)[],
@@ -105,10 +103,7 @@ async function execRows(
   return send("exec", { sql, bind });
 }
 
-// ---------------------------------------------------------------------------
-// Typed query helpers (all async — cross worker boundary)
-// ---------------------------------------------------------------------------
-
+// Typed query helpers
 export async function queryConcepts(): Promise<string[]> {
   const rows = await execRows("SELECT concept FROM concepts ORDER BY concept");
   return rows.map((r) => r[0] as string);
@@ -172,7 +167,7 @@ export async function queryEvents(
             doc_id, pub_year, token_idx, window_id,
             window_token_pos, score
      FROM   neighbours
-     WHERE  event_id IN (${ ids })
+     WHERE  event_id IN (${ids})
      ORDER  BY event_id, score DESC`,
   );
 
@@ -217,7 +212,12 @@ export async function queryAggregate(concept: string, topN = 25) {
 
   for (const r of rows) {
     const [kind, , value, windowDocId, windowId, count] = r as [
-      string, number, string | null, string | null, number | null, number,
+      string,
+      number,
+      string | null,
+      string | null,
+      number | null,
+      number,
     ];
     if (kind === "token" && value != null) top_tokens.push([value, count]);
     if (kind === "doc" && value != null) top_docs.push([value, count]);
