@@ -715,10 +715,16 @@ const CosmosComponent: Component = () => {
                 }}
               >
                 <span class="padding error fade-in-1s">
-                  <h4>No data to graph</h4>
+                  <h4>
+                    No data to graph for
+                    <span style="text-transform:capitalize">
+                      "{controls.concept.toLocaleLowerCase()}"
+                    </span>{" "}
+                    from {controls.fromYear}
+                  </h4>
                   <p>
                     Try reducing the minimum similarity threshold, or increasing
-                    the value of top N
+                    the value of top N, or changing the year you are viewing.
                   </p>
                 </span>
               </div>
