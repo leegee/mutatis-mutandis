@@ -5,7 +5,7 @@
 
 ## Conceptual Synopsis
 
-Ontological Topology: the study of semantic space as a structured geometric object, where meaning is defined by relative positions, continuity, and deformation of distributions across time rather than discrete sense inventories. Nice idea but requires 2-5 days GPU or about  6 weeks of CPU...
+Ontological Topology: the study of semantic space as a structured geometric object, where meaning is defined by relative positions, continuity, and deformation of distributions across time rather than discrete sense inventories. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...
 
 So: instead of corpus-wide embedding, I am trying a recursive probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
 
@@ -147,8 +147,8 @@ Don't forget to restart the Colab session when the IP changes.
 
 ## Abstract: About This Project
 
-* [Abstract](./ABSTRACT.md)
-* [Concise abstract](./ABSTRACT_concise.md)
+- [Abstract](./ABSTRACT.md)
+- [Concise abstract](./ABSTRACT_concise.md)
 
 ## Bibliography
 
@@ -156,17 +156,17 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 
 ## People and Projects
 
-* [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
-* [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
-* [McGillivray, Barbara](https://www.kcl.ac.uk/people/barbara-mcgillivray)
-* [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
-* [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
-* [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
-* [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
+- [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
+- [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
+- [McGillivray, Barbara](https://www.kcl.ac.uk/people/barbara-mcgillivray)
+- [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
+- [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
+- [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
+- [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
 
-* https://dhq.digitalhumanities.org/
-* https://openhumanitiesdata.metajnl.com/
-* https://www.openlibhums.org/
+- https://dhq.digitalhumanities.org/
+- https://openhumanitiesdata.metajnl.com/
+- https://www.openlibhums.org/
 
 In addition to EEBO-TCP:
 
@@ -179,7 +179,6 @@ In addition to EEBO-TCP:
 | **Evans‑TCP**                                         | American imprints               | Yes               | Wider corpus coverage              |
 | **EBBA**                                              | 17th‑c ballads                  | Structured text   | Genre adjacent to pamphlets        |
 | **HathiTrust Extracted Dataset**                      | Broad public domain texts       | Bulk data         | Pre‑processing into TEI            |
-
 
 ## Restoring the Database
 
@@ -249,13 +248,15 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 ### Data
 
-1. Use SQLite and/or DuckDB in the client
+1. Cleaner corpus text
+1. Fuller corpus date parsing
 
 ### Visualisations
 
 1. Share a JSON config for constants such as corpus year range, window size, etc
 1. Cosmos animation - compute the cosmos for all years and fade out those not currently in the animation frame.
 1. 3D with x/y being current FDG or heatmap, z being time
+1. api result paging
 
 ### DB
 

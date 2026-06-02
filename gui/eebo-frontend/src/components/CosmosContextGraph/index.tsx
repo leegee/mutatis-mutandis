@@ -81,7 +81,7 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubDegree: 1,
 };
 
-// GraphWorld — unchanged from original
+// GraphWorld - unchanged from original
 interface WorldNode extends ContextNode {
   cosmosIndex: number;
   cachedX: number;
@@ -235,7 +235,7 @@ class GraphWorld {
     this.spokeWidth = d3
       // .scaleLinear()
       .scalePow()
-      .exponent(0.5)
+      .exponent(0.25)
       .domain([0, 1])
       .range([SPOKE_WIDTH_MIN, SPOKE_WIDTH_MAX]);
   }
@@ -542,21 +542,21 @@ const CosmosComponent: Component = () => {
       const years = bin ? [...bin.years].sort((a, b) => a - b) : [];
       const yStr = years.length
         ? `${years[0]}${years.length > 1 ? `–${years[years.length - 1]}` : ""}`
-        : "—";
+        : "-";
 
       html = `<aside>
         <h6 class="bottom-padding">${wn.id}</h6>
         Events: ${wn.eventCount}<br/>
         Connections: ${wn.hubDegree}<br/>
-        Documents: ${bin?.docs.size ?? "—"}<br/>
+        Documents: ${bin?.docs.size ?? "-"}<br/>
         Years: ${yStr}
       </aside>`;
     } else if (wn.kind === "event") {
       html = `<aside>
         <h6 class="bottom-padding"><q>${wn.token ?? wn.id}</q></h6>
-        Year: ${wn.pub_year ?? "—"}<br/>
-        Doc: ${wn.doc_id ?? "—"}<br/>
-        token_idx: ${wn.token_idx ?? "—"}
+        Year: ${wn.pub_year ?? "-"}<br/>
+        Doc: ${wn.doc_id ?? "-"}<br/>
+        token_idx: ${wn.token_idx ?? "-"}
         </aside>`;
     } else {
       const id = wn.id;
@@ -591,7 +591,7 @@ const CosmosComponent: Component = () => {
                 .slice(0, 5)
                 .map((h) => `${h.hub} (${h.freq.toFixed(3)})`)
                 .join("<br/>")
-            : "—"
+            : "-"
         }
       </aside>`;
     }
@@ -706,18 +706,45 @@ const CosmosComponent: Component = () => {
     startLabelLoop();
   }
 
-  let lastConcept = "";
+  // Reset graph on changes
+  let lastGraph: Partial<{
+    concept: string;
+    fromYear: number;
+    toYear: number;
+    viewMode: string;
+    topN: number;
+    minSimilarity: number;
+    maxHubs: number;
+  }> = {};
 
   createEffect(() => {
     const gd = graphData();
-    const currentConcept = controls.concept;
+
     if (!wrapRef) return;
     ensureCosmosInitialised();
 
-    if (currentConcept !== lastConcept) {
+    // all inputs that affect graph topology
+    const currentGraphState = {
+      concept: controls.concept,
+      fromYear: controls.fromYear,
+      toYear: controls.toYear,
+      viewMode: controls.viewMode,
+      topN: controls.topN,
+      minSimilarity: controls.minSimilarity,
+      maxHubs: controls.maxHubs,
+    };
+
+    const changed = Object.entries(currentGraphState).some(
+      ([k, v]) => lastGraph[k as keyof typeof currentGraphState] !== v,
+    );
+
+    if (changed) {
+      setLabelPositions([]);
       world!.reset();
-      lastConcept = currentConcept;
+
+      Object.assign(lastGraph, currentGraphState);
     }
+
     if (gd.nodes.length === 0) {
       world!.reset();
       setLabelPositions([]);
@@ -727,8 +754,10 @@ const CosmosComponent: Component = () => {
     const hubCount = gd.nodes.filter(
       (n) => n.kind === "hub" || n.kind === "event",
     ).length;
+
     const isDegenerate =
       gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1;
+
     const { hubSpread } = untrack(() => controls);
 
     cosmosGraph!.setConfig({
@@ -746,6 +775,7 @@ const CosmosComponent: Component = () => {
     });
 
     const topologyChanged = world!.applyDiff(gd);
+
     if (topologyChanged) {
       startSimulating(gd.nodes.length);
       cosmosGraph!.start();
@@ -800,17 +830,6 @@ const CosmosComponent: Component = () => {
     <>
       <div class="background cg-layout">
         <ControlsHeader totalEvents={totalEvents} includeHubSpread={true}>
-          <label class="switch">
-            <input
-              type="checkbox"
-              checked={controls.showEventLabels}
-              onChange={(e) =>
-                setControls("showEventLabels", e.currentTarget.checked)
-              }
-            />
-            <span></span>
-          </label>
-
           <div class="field center-align">
             <button class="small transparent border" onclick={forceRedraw}>
               <i>redo</i>
@@ -879,8 +898,8 @@ const CosmosComponent: Component = () => {
 
           <Show when={controls.selectedNode}>
             <aside
-              class="min surface-container-high medium-elevate padding border small-margin no-top-padding"
-              style="max-width: 30vw; min-width: 30rem"
+              class="min surface-container-high scroll medium-elevate padding border small-margin no-top-padding"
+              style="max-width: 20vw; min-width: 20rem"
             >
               <div class="cg-header-row">
                 <h2>
@@ -910,7 +929,7 @@ const CosmosComponent: Component = () => {
                             ? years.length === 1
                               ? years[0]
                               : `${years[0]}–${years[years.length - 1]}`
-                            : "—"}
+                            : "-"}
                         </div>
                         <div>
                           Hub connections:{" "}
@@ -920,49 +939,55 @@ const CosmosComponent: Component = () => {
                         </div>
                       </div>
 
-                      <h3 class="bottom-padding">Top neighbours</h3>
-                      <div class="bottom-padding">
-                        <For each={bin.topNeighbours.slice(0, MAX_TOP_N)}>
-                          {(nb) => (
-                            <div class="row max">
-                              <div class="cg-nb-bar-wrap" style="width: 33%">
-                                <div
-                                  class="cg-nb-bar-fill hub"
-                                  style={{
-                                    width: `${(nb.freq / topMax) * 100}%`,
-                                  }}
-                                />
+                      <details open={true}>
+                        <summary>
+                          <h3 class="bottom-padding">Top neighbours</h3>
+                        </summary>
+                        <div class="bottom-padding">
+                          <For each={bin.topNeighbours.slice(0, MAX_TOP_N)}>
+                            {(nb) => (
+                              <div class="row max">
+                                <div class="cg-nb-bar-wrap" style="width: 33%">
+                                  <div
+                                    class="cg-nb-bar-fill hub"
+                                    style={{
+                                      width: `${(nb.freq / topMax) * 100}%`,
+                                    }}
+                                  />
+                                </div>
+                                <span class="cg-nb-token">
+                                  <q>{nb.token}</q>
+                                </span>
+                                <span class="cg-nb-score">
+                                  {nb.meanScore.toFixed(3)}
+                                </span>
                               </div>
-                              <span class="cg-nb-token">
-                                <q>{nb.token}</q>
-                              </span>
-                              <span class="cg-nb-score">
-                                {nb.meanScore.toFixed(3)}
-                              </span>
-                            </div>
-                          )}
-                        </For>
-                      </div>
+                            )}
+                          </For>
+                        </div>
+                      </details>
 
-                      <h3 class="bottom-padding">Sources</h3>
-                      <Show
-                        when={selectedDocs().length > 0}
-                        fallback={<div class="error">No documents found</div>}
-                      >
-                        <For each={selectedDocs()}>
-                          {([docId, pubYear]) => (
-                            <button
-                              class="chip small-margin cg-chip-mono"
-                              onClick={() => showDocument(docId)}
-                            >
-                              <span>{docId}</span>
-                              <Show when={pubYear !== undefined}>
+                      <details open={true}>
+                        <summary>
+                          <h3 class="bottom-padding">Sources</h3>
+                        </summary>
+                        <Show
+                          when={selectedDocs().length > 0}
+                          fallback={<div class="error">No documents found</div>}
+                        >
+                          <For each={selectedDocs()}>
+                            {([docId, pubYear]) => (
+                              <button
+                                class="chip small-margin cg-chip-mono"
+                                onClick={() => showDocument(docId)}
+                              >
+                                <span>{docId}</span>
                                 <span class="small-text"> {pubYear}</span>
-                              </Show>
-                            </button>
-                          )}
-                        </For>
-                      </Show>
+                              </button>
+                            )}
+                          </For>
+                        </Show>
+                      </details>
                     </>
                   );
                 }}
@@ -975,11 +1000,11 @@ const CosmosComponent: Component = () => {
                     <>
                       <div class="bottom-padding">
                         <div>
-                          Token: <q>{node.token ?? "—"}</q>
+                          Token: <q>{node.token ?? "-"}</q>
                         </div>
-                        <div>Year: {node.pub_year ?? "—"}</div>
+                        <div>Year: {node.pub_year ?? "-"}</div>
                         <div>
-                          Document: {node.doc_id} token {node.token_idx ?? "—"}
+                          Document: {node.doc_id} token {node.token_idx ?? "-"}
                           <EventContext
                             docId={node.doc_id!}
                             tokenIdx={node.token_idx!}
@@ -1027,8 +1052,7 @@ const CosmosComponent: Component = () => {
                       <div class="bottom-padding">
                         <For each={sharedByHubs()}>
                           {(h) => {
-                            // In events view h.hub is a synthetic event node id —
-                            // look up the node to get its token_idx and doc_id.
+                            // In events view h.hub is a synthetic event node id - look up the node to get its token_idx and doc_id.
                             const sourceNode = () =>
                               controls.viewMode === "events"
                                 ? graphData().nodes.find((n) => n.id === h.hub)

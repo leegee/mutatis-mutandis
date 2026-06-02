@@ -28,11 +28,11 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const resolved = children(() => props.children);
   const fdgControls = () => props.fdgControls ?? true;
 
-  // Concepts list — refetches if dbReady changes (i.e. once, on init)
+  // Concepts list - refetches if dbReady changes (i.e. once, on init)
   const [conceptsResource] = createResource(queryConcepts);
   const concepts = () => conceptsResource() ?? [];
 
-  // Year bounds — refetches when concept changes
+  // Year bounds - refetches when concept changes
   const [yearBoundsResource] = createResource(
     () => controls.concept,
     (concept) => getYearBounds(concept),
@@ -40,7 +40,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const yearBounds = (): [number, number] =>
     yearBoundsResource() ?? [controls.fromYear, controls.toYear];
 
-  // Filtered event count — refetches when concept or year range changes
+  // Filtered event count - refetches when concept or year range changes
   const [yearFilteredResource] = createResource(
     () => [controls.concept, controls.fromYear, controls.toYear] as const,
     ([concept, from, to]) => getYearFiltered(concept, from, to),
