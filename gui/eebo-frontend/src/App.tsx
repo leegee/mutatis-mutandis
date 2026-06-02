@@ -12,6 +12,7 @@ import { Transition } from "solid-transition-group";
 
 import "./App.css";
 import { dbReady, loadTier2Data } from "./state/tier2data.store";
+import AppError from "./components/AppError";
 
 const CosmosContextGraphGuide = lazy(
   () => import("./components/CosmosContextGraph/Guide"),
@@ -25,7 +26,7 @@ const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
 const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
 
 export default function App() {
-  const [error, setError] = createSignal<string | null>(null);
+  const [dbLoadingError, setDbLoadingError] = createSignal<string | null>(null);
   const [openHelp, setOpenHelp] = createSignal(false);
   const [open, setOpen] = createSignal(false);
   const [view, setView] = createSignal<
@@ -35,7 +36,7 @@ export default function App() {
   try {
     loadTier2Data();
   } catch (e) {
-    setError((e as Error).message);
+    setDbLoadingError((e as Error).message);
   }
 
   const navItems = [
@@ -96,14 +97,9 @@ export default function App() {
 
       <main class="responsive max no-padding full">
         <ErrorBoundary
-          fallback={(err) => (
-            <article>
-              <section>
-                <h3>Error</h3>
-                <div class="error padding center middle">{err.message}</div>
-              </section>
-            </article>
-          )}
+          fallback={(err, reset) => {
+            <AppError err={err as Error} reset={reset} />;
+          }}
         >
           <Show
             when={dbReady()}
@@ -113,8 +109,8 @@ export default function App() {
                 style="min-height:100vh"
               >
                 <section class="padding absolute center middle">
-                  <h4>{error() ?? "Loading text events..."}</h4>
-                  <Show when={!error()}>
+                  <h4>{dbLoadingError() ?? "Loading text events..."}</h4>
+                  <Show when={!dbLoadingError()}>
                     <progress class="wavy green-text" />
                   </Show>
                 </section>
@@ -146,9 +142,6 @@ export default function App() {
           >
             <Switch fallback={<article>To do...</article>}>
               <Match when={view() == "cosmos"}>
-                <header class="fixed top fill max" style="z-index:9999">
-                  <h1>SVG Graph</h1>
-                </header>
                 <CosmosContextGraphGuide />
               </Match>
             </Switch>
