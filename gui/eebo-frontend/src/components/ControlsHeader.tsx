@@ -89,10 +89,10 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           <hr class="divider vertical max no-margin no-padding" />
           <nav class="no-space">
             <button
-              class="circle chip tiny no-space large-margin bottom-margin"
+              class="circle chip tiny no-space large-margin bottom-margin no-border"
               onClick={() => A.stepYear(-1)}
             >
-              <i>remove</i>
+              <i>chevron_left</i>
               <span class="tooltip bottom">Retreat by one year</span>
             </button>
             <div class="field middle-align">
@@ -114,10 +114,10 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               </output>
             </div>
             <button
-              class="circle chip tiny no-space large-margin bottom-margin"
+              class="circle chip tiny no-space large-margin bottom-margin no-border"
               onClick={() => A.stepYear(+1)}
             >
-              <i>add</i>
+              <i>chevron_right</i>
               <span class="tooltip bottom">Advance by one year</span>
             </button>
           </nav>
