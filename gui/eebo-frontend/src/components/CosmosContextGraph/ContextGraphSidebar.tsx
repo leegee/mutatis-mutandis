@@ -209,7 +209,7 @@ const ContextGraphSidebar: Component<Props> = (props) => {
                                   {neighbourToken().token_idx}
                                 </span>
                                 <EventContext
-                                  open={true}
+                                  open={false}
                                   docId={neighbourToken().doc_id!}
                                   tokenIdx={neighbourToken().token_idx!}
                                 />
