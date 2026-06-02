@@ -81,43 +81,14 @@ const EMPTY_GRAPH: ContextGraphData = {
   maxHubDegree: 1,
 };
 
-// GraphWorld - unchanged from original
 interface WorldNode extends ContextNode {
   cosmosIndex: number;
-  cachedX: number;
-  cachedY: number;
-}
-interface WorldEdge {
-  key: string;
-  edge: AnyEdge;
-  cosmosRow: number;
-}
-type DiffResult = {
-  addedNodes: ContextNode[];
-  removedIds: string[];
-  updatedNodes: ContextNode[];
-  edgesChanged: boolean;
-  onlyVisuals: boolean;
-};
-
-function edgeKey(e: AnyEdge): string {
-  return `${e.sourceId}→${e.targetId}`;
 }
 
 class GraphWorld {
   private nodeRegistry = new Map<string, WorldNode>();
   private reverseIndex = new Map<number, WorldNode>();
-  private edgeRegistry = new Map<string, WorldEdge>();
-  private indexPool: number[] = [];
-  private nextIndex = 0;
-  private totalSlots = 0;
   private cosmos: Graph;
-  private _pointPositions = new Float32Array(0);
-  private _pointColors = new Float32Array(0);
-  private _pointSizes = new Float32Array(0);
-  private _links = new Float32Array(0);
-  private _linkColors = new Float32Array(0);
-  private _linkWidths = new Float32Array(0);
   private hubColorScale!: d3.ScaleLinear<
     [number, number, number, number],
     [number, number, number, number]
@@ -132,81 +103,104 @@ class GraphWorld {
     this.cosmos = cosmos;
   }
 
-  applyDiff(gd: ContextGraphData): boolean {
-    this.rebuildScales(gd);
-    this.snapshotPositions();
-    const diff = this.computeDiff(gd);
-    for (const id of diff.removedIds) {
-      const wn = this.nodeRegistry.get(id)!;
-      this.reverseIndex.delete(wn.cosmosIndex);
-      this.indexPool.push(wn.cosmosIndex);
-      this.nodeRegistry.delete(id);
-    }
-    const adjIndex =
-      diff.addedNodes.length > 0 ? this.buildAdjacencyIndex(gd.allEdges) : null;
-    for (const cn of diff.addedNodes) {
-      const idx =
-        this.indexPool.length > 0 ? this.indexPool.pop()! : this.nextIndex++;
-      this.totalSlots = Math.max(this.totalSlots, idx + 1);
-      const [ix, iy] = this.initialPosition(cn, gd, adjIndex!);
-      const wn: WorldNode = {
-        ...cn,
-        cosmosIndex: idx,
-        cachedX: ix,
-        cachedY: iy,
-      };
-      this.nodeRegistry.set(cn.id, wn);
-      this.reverseIndex.set(idx, wn);
-    }
-    for (const cn of diff.updatedNodes)
-      Object.assign(this.nodeRegistry.get(cn.id)!, cn);
-    if (diff.edgesChanged) {
-      this.edgeRegistry.clear();
-      gd.allEdges.forEach((edge, row) =>
-        this.edgeRegistry.set(edgeKey(edge), {
-          key: edgeKey(edge),
-          edge,
-          cosmosRow: row,
-        }),
-      );
-    }
-    this.flushToCosmosArrays(gd.allEdges);
-    this.cosmos.trackPointPositionsByIndices(
-      [...this.nodeRegistry.values()].map((wn) => wn.cosmosIndex),
-    );
-    return !diff.onlyVisuals;
-  }
-
-  reset() {
+  rebuild(gd: ContextGraphData) {
     this.nodeRegistry.clear();
     this.reverseIndex.clear();
-    this.edgeRegistry.clear();
-    this.indexPool = [];
-    this.nextIndex = 0;
-    this.totalSlots = 0;
-    this.cosmos.setPointPositions(new Float32Array(0));
-    this.cosmos.setLinks(new Float32Array(0));
-    this.cosmos.render();
-  }
 
-  snapshotPositions() {
-    const posMap = this.cosmos.getTrackedPointPositionsMap();
-    if (!posMap) return;
-    posMap.forEach(([x, y], idx) => {
-      const wn = this.reverseIndex.get(idx);
-      if (wn) {
-        wn.cachedX = x;
-        wn.cachedY = y;
-      }
+    if (gd.nodes.length === 0) {
+      this.cosmos.setPointPositions(new Float32Array(0));
+      this.cosmos.setLinks(new Float32Array(0));
+      this.cosmos.render();
+      return;
+    }
+
+    this.rebuildScales(gd);
+
+    // Assign each node a stable index by position in the array
+    gd.nodes.forEach((cn, idx) => {
+      const wn: WorldNode = { ...cn, cosmosIndex: idx };
+      this.nodeRegistry.set(cn.id, wn);
+      this.reverseIndex.set(idx, wn);
     });
+
+    const nodeCount = gd.nodes.length;
+    const edgeCount = gd.allEdges.length;
+
+    // Scatter nodes randomly across the space for fresh simulation
+    const pointPositions = new Float32Array(nodeCount * 2);
+    for (let i = 0; i < nodeCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.random() * SPACE * 0.3;
+      pointPositions[i * 2] = SPACE / 2 + Math.cos(angle) * r;
+      pointPositions[i * 2 + 1] = SPACE / 2 + Math.sin(angle) * r;
+    }
+
+    const pointColors = new Float32Array(nodeCount * 4);
+    const pointSizes = new Float32Array(nodeCount);
+    for (const wn of this.nodeRegistry.values()) {
+      const i = wn.cosmosIndex;
+      let rgba: [number, number, number, number];
+      let size: number;
+      if (wn.kind === "hub") {
+        rgba = this.hubColorScale(wn.hubDegree);
+        size = this.hubSizeScale(wn.eventCount);
+      } else if (wn.kind === "event") {
+        rgba = EVENT_RGBA;
+        size = EVENT_SIZE;
+      } else {
+        rgba = NB_RGBA;
+        size = NB_POINT_SIZE;
+      }
+      pointColors[i * 4] = rgba[0];
+      pointColors[i * 4 + 1] = rgba[1];
+      pointColors[i * 4 + 2] = rgba[2];
+      pointColors[i * 4 + 3] = rgba[3];
+      pointSizes[i] = size;
+    }
+
+    const links = new Float32Array(edgeCount * 2);
+    const linkColors = new Float32Array(edgeCount * 4);
+    const linkWidths = new Float32Array(edgeCount);
+    const zoom = this.cosmos.getZoomLevel() ?? 1;
+    const zoomFactor = Math.max(1, 2 / zoom);
+
+    for (let i = 0; i < edgeCount; i++) {
+      const edge = gd.allEdges[i];
+      links[i * 2] = this.nodeRegistry.get(edge.sourceId)?.cosmosIndex ?? 0;
+      links[i * 2 + 1] = this.nodeRegistry.get(edge.targetId)?.cosmosIndex ?? 0;
+      if (edge.kind === "hub-hub") {
+        linkColors[i * 4] = HH_LINK_BASE_RGBA[0];
+        linkColors[i * 4 + 1] = HH_LINK_BASE_RGBA[1];
+        linkColors[i * 4 + 2] = HH_LINK_BASE_RGBA[2];
+        linkColors[i * 4 + 3] = this.hhAlphaScale(edge.weight);
+        linkWidths[i] = this.hhWidthScale(edge.weight);
+      } else {
+        linkColors[i * 4] = SPOKE_LINK_RGBA[0];
+        linkColors[i * 4 + 1] = SPOKE_LINK_RGBA[1];
+        linkColors[i * 4 + 2] = SPOKE_LINK_RGBA[2];
+        linkColors[i * 4 + 3] = this.spokeAlpha(edge.weight);
+        linkWidths[i] = this.spokeWidth(edge.weight) * zoomFactor;
+      }
+    }
+
+    this.cosmos.setPointPositions(pointPositions);
+    this.cosmos.setPointColors(pointColors);
+    this.cosmos.setPointSizes(pointSizes);
+    this.cosmos.setLinks(links);
+    this.cosmos.setLinkColors(linkColors);
+    this.cosmos.setLinkWidths(linkWidths);
+    this.cosmos.trackPointPositionsByIndices(gd.nodes.map((_, idx) => idx));
+    this.cosmos.render();
   }
 
   getNodeByIndex(idx: number): WorldNode | undefined {
     return this.reverseIndex.get(idx);
   }
+
   getNodeById(id: string): WorldNode | undefined {
     return this.nodeRegistry.get(id);
   }
+
   get liveNodes(): IterableIterator<WorldNode> {
     return this.nodeRegistry.values();
   }
@@ -233,177 +227,10 @@ class GraphWorld {
       .domain([0, 1])
       .range([SPOKE_ALPHA_MIN, SPOKE_ALPHA_MAX]);
     this.spokeWidth = d3
-      // .scaleLinear()
       .scalePow()
       .exponent(0.25)
       .domain([0, 1])
       .range([SPOKE_WIDTH_MIN, SPOKE_WIDTH_MAX]);
-  }
-
-  private computeDiff(gd: ContextGraphData): DiffResult {
-    const incomingIds = new Set(gd.nodes.map((n) => n.id));
-    const addedNodes: ContextNode[] = [];
-    const removedIds: string[] = [];
-    const updatedNodes: ContextNode[] = [];
-    for (const cn of gd.nodes) {
-      if (!this.nodeRegistry.has(cn.id)) {
-        addedNodes.push(cn);
-      } else {
-        const wn = this.nodeRegistry.get(cn.id)!;
-        if (
-          wn.eventCount !== cn.eventCount ||
-          wn.hubDegree !== cn.hubDegree ||
-          wn.degree !== cn.degree ||
-          wn.kind !== cn.kind
-        )
-          updatedNodes.push(cn);
-      }
-    }
-    for (const id of this.nodeRegistry.keys())
-      if (!incomingIds.has(id)) removedIds.push(id);
-    let edgesChanged = gd.allEdges.length !== this.edgeRegistry.size;
-    if (!edgesChanged)
-      for (const edge of gd.allEdges)
-        if (!this.edgeRegistry.has(edgeKey(edge))) {
-          edgesChanged = true;
-          break;
-        }
-    return {
-      addedNodes,
-      removedIds,
-      updatedNodes,
-      edgesChanged,
-      onlyVisuals:
-        addedNodes.length === 0 && removedIds.length === 0 && !edgesChanged,
-    };
-  }
-
-  private buildAdjacencyIndex(edges: AnyEdge[]): Map<string, string[]> {
-    const adj = new Map<string, string[]>();
-    for (const edge of edges) {
-      let src = adj.get(edge.sourceId);
-      if (!src) {
-        src = [];
-        adj.set(edge.sourceId, src);
-      }
-      src.push(edge.targetId);
-      let tgt = adj.get(edge.targetId);
-      if (!tgt) {
-        tgt = [];
-        adj.set(edge.targetId, tgt);
-      }
-      tgt.push(edge.sourceId);
-    }
-    return adj;
-  }
-
-  private initialPosition(
-    cn: ContextNode,
-    gd: ContextGraphData,
-    adj: Map<string, string[]>,
-  ): [number, number] {
-    if (gd.nodes.length === 1) return [SPACE / 2, SPACE / 2];
-    const neighbours = adj.get(cn.id) ?? [];
-    const known: Array<[number, number]> = [];
-    for (const nbId of neighbours) {
-      const wn = this.nodeRegistry.get(nbId);
-      if (wn) known.push([wn.cachedX, wn.cachedY]);
-    }
-    const jitter = () => (Math.random() - 0.5) * SPACE * 0.04;
-    if (known.length > 0) {
-      const cx = known.reduce((s, p) => s + p[0], 0) / known.length;
-      const cy = known.reduce((s, p) => s + p[1], 0) / known.length;
-      return [cx + jitter(), cy + jitter()];
-    }
-    const angle = Math.random() * Math.PI * 2;
-    const r = Math.random() * SPACE * 0.08;
-    return [SPACE / 2 + Math.cos(angle) * r, SPACE / 2 + Math.sin(angle) * r];
-  }
-
-  private flushToCosmosArrays(edges: AnyEdge[]) {
-    const slots = this.totalSlots;
-    const edgeCount = edges.length;
-    const zoom = this.cosmos.getZoomLevel() ?? 1;
-    const zoomFactor = Math.max(1, 2 / zoom);
-
-    if (this._pointPositions.length < slots * 2) {
-      this._pointPositions = new Float32Array(slots * 2);
-      this._pointColors = new Float32Array(slots * 4);
-      this._pointSizes = new Float32Array(slots);
-    }
-    if (this._links.length < edgeCount * 2) {
-      this._links = new Float32Array(edgeCount * 2);
-      this._linkColors = new Float32Array(edgeCount * 4);
-      this._linkWidths = new Float32Array(edgeCount);
-    }
-
-    const pp = this._pointPositions;
-    const pc = this._pointColors;
-    const ps = this._pointSizes;
-
-    for (const wn of this.nodeRegistry.values()) {
-      const i = wn.cosmosIndex;
-      pp[i * 2] = wn.cachedX;
-      pp[i * 2 + 1] = wn.cachedY;
-      let rgba: [number, number, number, number];
-      let size: number;
-      if (wn.kind === "hub") {
-        rgba = this.hubColorScale(wn.hubDegree);
-        size = this.hubSizeScale(wn.eventCount);
-      } else if (wn.kind === "event") {
-        rgba = EVENT_RGBA;
-        size = EVENT_SIZE;
-      } else {
-        rgba = NB_RGBA;
-        size = NB_POINT_SIZE;
-      }
-      pc[i * 4] = rgba[0];
-      pc[i * 4 + 1] = rgba[1];
-      pc[i * 4 + 2] = rgba[2];
-      pc[i * 4 + 3] = rgba[3];
-      ps[i] = size;
-    }
-
-    const lk = this._links;
-    const lc = this._linkColors;
-    const lw = this._linkWidths;
-
-    for (let i = 0; i < edgeCount; i++) {
-      const edge = edges[i];
-      lk[i * 2] = this.nodeRegistry.get(edge.sourceId)?.cosmosIndex ?? 0;
-      lk[i * 2 + 1] = this.nodeRegistry.get(edge.targetId)?.cosmosIndex ?? 0;
-
-      if (edge.kind === "hub-hub") {
-        lc[i * 4] = HH_LINK_BASE_RGBA[0];
-        lc[i * 4 + 1] = HH_LINK_BASE_RGBA[1];
-        lc[i * 4 + 2] = HH_LINK_BASE_RGBA[2];
-        lc[i * 4 + 3] = this.hhAlphaScale(edge.weight);
-        lw[i] = this.hhWidthScale(edge.weight);
-      } else {
-        lc[i * 4] = SPOKE_LINK_RGBA[0];
-        lc[i * 4 + 1] = SPOKE_LINK_RGBA[1];
-        lc[i * 4 + 2] = SPOKE_LINK_RGBA[2];
-        lc[i * 4 + 3] = this.spokeAlpha(edge.weight);
-        lw[i] = this.spokeWidth(edge.weight) * zoomFactor;
-      }
-    }
-
-    const sub = <T extends Float32Array>(
-      arr: T,
-      count: number,
-      stride: number,
-    ): T =>
-      count * stride === arr.length
-        ? arr
-        : (arr.subarray(0, count * stride) as T);
-
-    this.cosmos.setPointPositions(sub(pp, slots, 2));
-    this.cosmos.setPointColors(sub(pc, slots, 4));
-    this.cosmos.setPointSizes(sub(ps, slots, 1));
-    this.cosmos.setLinks(sub(lk, edgeCount, 2));
-    this.cosmos.setLinkColors(sub(lc, edgeCount, 4));
-    this.cosmos.setLinkWidths(sub(lw, edgeCount, 1));
-    this.cosmos.render();
   }
 }
 
@@ -706,48 +533,16 @@ const CosmosComponent: Component = () => {
     startLabelLoop();
   }
 
-  // Reset graph on changes
-  let lastGraph: Partial<{
-    concept: string;
-    fromYear: number;
-    toYear: number;
-    viewMode: string;
-    topN: number;
-    minSimilarity: number;
-    maxHubs: number;
-  }> = {};
-
   createEffect(() => {
     const gd = graphData();
 
     if (!wrapRef) return;
     ensureCosmosInitialised();
 
-    // all inputs that affect graph topology
-    const currentGraphState = {
-      concept: controls.concept,
-      fromYear: controls.fromYear,
-      toYear: controls.toYear,
-      viewMode: controls.viewMode,
-      topN: controls.topN,
-      minSimilarity: controls.minSimilarity,
-      maxHubs: controls.maxHubs,
-    };
-
-    const changed = Object.entries(currentGraphState).some(
-      ([k, v]) => lastGraph[k as keyof typeof currentGraphState] !== v,
-    );
-
-    if (changed) {
-      setLabelPositions([]);
-      world!.reset();
-
-      Object.assign(lastGraph, currentGraphState);
-    }
+    setLabelPositions([]);
 
     if (gd.nodes.length === 0) {
-      world!.reset();
-      setLabelPositions([]);
+      world!.rebuild(gd);
       return;
     }
 
@@ -774,12 +569,9 @@ const CosmosComponent: Component = () => {
       renderHoveredPointRing: true,
     });
 
-    const topologyChanged = world!.applyDiff(gd);
-
-    if (topologyChanged) {
-      startSimulating(gd.nodes.length);
-      cosmosGraph!.start();
-    }
+    world!.rebuild(gd);
+    startSimulating(gd.nodes.length);
+    cosmosGraph!.start();
   });
 
   createEffect(() => {
@@ -815,14 +607,8 @@ const CosmosComponent: Component = () => {
 
   function forceRedraw() {
     if (!cosmosGraph || !world) return;
-
-    cosmosGraph.pause();
-
     const gd = graphData();
-
-    world.snapshotPositions();
-    world.applyDiff(gd);
-
+    world.rebuild(gd);
     cosmosGraph.start();
   }
 
