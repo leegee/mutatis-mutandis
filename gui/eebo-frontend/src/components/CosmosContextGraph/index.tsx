@@ -356,13 +356,16 @@ class GraphWorld {
       pc[i * 4 + 3] = rgba[3];
       ps[i] = size;
     }
+
     const lk = this._links;
     const lc = this._linkColors;
     const lw = this._linkWidths;
+
     for (let i = 0; i < edgeCount; i++) {
       const edge = edges[i];
       lk[i * 2] = this.nodeRegistry.get(edge.sourceId)?.cosmosIndex ?? 0;
       lk[i * 2 + 1] = this.nodeRegistry.get(edge.targetId)?.cosmosIndex ?? 0;
+
       if (edge.kind === "hub-hub") {
         lc[i * 4] = HH_LINK_BASE_RGBA[0];
         lc[i * 4 + 1] = HH_LINK_BASE_RGBA[1];
@@ -377,6 +380,7 @@ class GraphWorld {
         lw[i] = this.spokeWidth(edge.weight);
       }
     }
+
     const sub = <T extends Float32Array>(
       arr: T,
       count: number,
@@ -395,9 +399,7 @@ class GraphWorld {
   }
 }
 
-// -----------
-// Component
-// -----------
+// Actual Component
 
 const CosmosComponent: Component = () => {
   const [labelPositions, setLabelPositions] = createSignal<
@@ -423,8 +425,6 @@ const CosmosComponent: Component = () => {
     simTimeoutHandle = window.setTimeout(() => stopSimulating(generation), ms);
   }
 
-  // Resources -------------------------------------------------------------
-
   const [filteredEventsResource] = createResource(
     () => [controls.concept, controls.fromYear, controls.toYear] as const,
     ([concept, from, to]) => getYearFiltered(concept, from, to),
@@ -443,8 +443,6 @@ const CosmosComponent: Component = () => {
     (concept) => totalEventsForConcept(concept),
   );
   const totalEvents = () => totalEventsResource() ?? 0;
-
-  // Derived memos ---------------------------------------------------------
 
   const tokenBins = createMemo<Map<string, TokenBin>>(() =>
     aggregateByToken(filteredEvents()),
@@ -509,8 +507,7 @@ const CosmosComponent: Component = () => {
       .sort((a, b) => b.freq - a.freq);
   });
 
-  // Cosmos refs -----------------------------------------------------------
-
+  // Cosmos refs
   let wrapRef!: HTMLDivElement;
   let cosmosGraph: Graph | null = null;
   let world: GraphWorld | null = null;
@@ -538,6 +535,7 @@ const CosmosComponent: Component = () => {
       const yStr = years.length
         ? `${years[0]}${years.length > 1 ? `–${years[years.length - 1]}` : ""}`
         : "—";
+
       html = `<aside>
         <h6 class="bottom-padding">${wn.id}</h6>
         Events: ${wn.eventCount}<br/>
@@ -874,6 +872,7 @@ const CosmosComponent: Component = () => {
                           )?.hubDegree ?? 0}
                         </div>
                       </div>
+
                       <h3 class="bottom-padding">Top neighbours</h3>
                       <div class="bottom-padding">
                         <For each={bin.topNeighbours.slice(0, MAX_TOP_N)}>
@@ -897,6 +896,7 @@ const CosmosComponent: Component = () => {
                           )}
                         </For>
                       </div>
+
                       <h3 class="bottom-padding">Sources</h3>
                       <Show
                         when={selectedDocs().length > 0}
