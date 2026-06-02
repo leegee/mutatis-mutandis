@@ -62,6 +62,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
           <output>Concept</output>
+          <span class="tooltip bottom">Select a corpus probe.</span>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />
@@ -78,6 +79,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             <option value="range">Year range</option>
           </select>
           <output>Year mode</output>
+          <span class="tooltip bottom">
+            Show date for one year or a span of years.
+          </span>
         </div>
 
         {/* Single year mode */}
@@ -89,6 +93,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               onClick={() => A.stepYear(-1)}
             >
               <i>remove</i>
+              <span class="tooltip bottom">Retreat by one year</span>
             </button>
             <div class="field middle-align">
               <div class="slider tiny">
@@ -113,6 +118,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               onClick={() => A.stepYear(+1)}
             >
               <i>add</i>
+              <span class="tooltip bottom">Advance by one year</span>
             </button>
           </nav>
         </Show>
@@ -162,6 +168,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                 </span>
               </Show>
             </output>
+            <span class="tooltip bottom">Show data from these years.</span>
           </div>
         </Show>
 
@@ -180,8 +187,13 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             <span class="tooltip bottom" />
           </div>
           <output class="small-padding top-padding">
-            Top N {controls.topN}
+            Top Neighbours {controls.topN}
           </output>
+          <span class="tooltip bottom">
+            The number of top-ranked neighbours to display.
+            <br />
+            Reduce if the graph is too cluttered to read.
+          </span>
         </div>
 
         <Show when={fdgControls()}>
@@ -196,6 +208,10 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <option value="events">Events</option>
             </select>
             <output>View</output>
+            <span class="tooltip bottom">
+              Switches between aggregated hub-based view and raw event-level
+              graph view
+            </span>
           </div>
 
           <hr class="divider vertical max no-margin no-padding" />
@@ -219,6 +235,11 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <output class="small-padding top-padding">
                 Min sim {controls.minSimilarity.toFixed(2)}
               </output>
+              <span class="tooltip bottom">
+                Filters out weak connections by only showing relationships whose
+                <br />
+                similarity score is above the selected threshold.
+              </span>
             </div>
           </Show>
 
@@ -233,6 +254,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                 </For>
               </select>
               <output>Max hubs</output>
+              <span class="tooltip bottom">
+                The maximum number of hubs to generate
+              </span>
             </div>
           </Show>
         </Show>
@@ -256,6 +280,10 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             <output class="small-padding top-padding">
               Hub spread {controls.hubSpread.toFixed(2)}
             </output>
+            <span class="tooltip bottom">
+              Controls how strongly hub nodes repel each other, affecting how
+              clustered or spread out the layout becomes.
+            </span>
           </div>
         </Show>
 

@@ -69,7 +69,7 @@ const HH_ALPHA_MAX = 1;
 const SPOKE_ALPHA_MIN = 0.75;
 const SPOKE_ALPHA_MAX = 0.99;
 const SPOKE_WIDTH_MIN = 2;
-const SPOKE_WIDTH_MAX = 3;
+const SPOKE_WIDTH_MAX = 6;
 
 const EMPTY_GRAPH: ContextGraphData = {
   nodes: [],
@@ -233,7 +233,9 @@ class GraphWorld {
       .domain([0, 1])
       .range([SPOKE_ALPHA_MIN, SPOKE_ALPHA_MAX]);
     this.spokeWidth = d3
-      .scaleLinear()
+      // .scaleLinear()
+      .scalePow()
+      .exponent(0.5)
       .domain([0, 1])
       .range([SPOKE_WIDTH_MIN, SPOKE_WIDTH_MAX]);
   }
@@ -321,6 +323,9 @@ class GraphWorld {
   private flushToCosmosArrays(edges: AnyEdge[]) {
     const slots = this.totalSlots;
     const edgeCount = edges.length;
+    const zoom = this.cosmos.getZoomLevel() ?? 1;
+    const zoomFactor = Math.max(1, 2 / zoom);
+
     if (this._pointPositions.length < slots * 2) {
       this._pointPositions = new Float32Array(slots * 2);
       this._pointColors = new Float32Array(slots * 4);
@@ -331,9 +336,11 @@ class GraphWorld {
       this._linkColors = new Float32Array(edgeCount * 4);
       this._linkWidths = new Float32Array(edgeCount);
     }
+
     const pp = this._pointPositions;
     const pc = this._pointColors;
     const ps = this._pointSizes;
+
     for (const wn of this.nodeRegistry.values()) {
       const i = wn.cosmosIndex;
       pp[i * 2] = wn.cachedX;
@@ -377,7 +384,7 @@ class GraphWorld {
         lc[i * 4 + 1] = SPOKE_LINK_RGBA[1];
         lc[i * 4 + 2] = SPOKE_LINK_RGBA[2];
         lc[i * 4 + 3] = this.spokeAlpha(edge.weight);
-        lw[i] = this.spokeWidth(edge.weight);
+        lw[i] = this.spokeWidth(edge.weight) * zoomFactor;
       }
     }
 
@@ -389,6 +396,7 @@ class GraphWorld {
       count * stride === arr.length
         ? arr
         : (arr.subarray(0, count * stride) as T);
+
     this.cosmos.setPointPositions(sub(pp, slots, 2));
     this.cosmos.setPointColors(sub(pc, slots, 4));
     this.cosmos.setPointSizes(sub(ps, slots, 1));
@@ -608,7 +616,7 @@ const CosmosComponent: Component = () => {
       if (posMap && posMap.size > 0) {
         const hid = hoveredId();
         const currentConcept = untrack(() => controls.concept);
-        const showEventLabels = untrack(() => controls.showEventLabels);
+        const showEventLabels = controls.showEventLabels;
         let dirty = posMap.size !== prevLabelCache.size;
         const nextLabels: Array<{
           id: string;
@@ -637,6 +645,7 @@ const CosmosComponent: Component = () => {
               dirty = true;
           }
         });
+
         if (dirty) {
           prevLabelCache.clear();
           for (const lbl of nextLabels) {
@@ -704,6 +713,7 @@ const CosmosComponent: Component = () => {
     const currentConcept = controls.concept;
     if (!wrapRef) return;
     ensureCosmosInitialised();
+
     if (currentConcept !== lastConcept) {
       world!.reset();
       lastConcept = currentConcept;
@@ -713,6 +723,7 @@ const CosmosComponent: Component = () => {
       setLabelPositions([]);
       return;
     }
+
     const hubCount = gd.nodes.filter(
       (n) => n.kind === "hub" || n.kind === "event",
     ).length;
@@ -750,6 +761,7 @@ const CosmosComponent: Component = () => {
     ).length;
     if (gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1)
       return;
+
     cosmosGraph.setConfig({
       spaceSize: SPACE,
       simulationRepulsion: BASE_REPULSION * hubSpread,
@@ -771,10 +783,42 @@ const CosmosComponent: Component = () => {
     tooltipEl = null;
   });
 
+  function forceRedraw() {
+    if (!cosmosGraph || !world) return;
+
+    cosmosGraph.pause();
+
+    const gd = graphData();
+
+    world.snapshotPositions();
+    world.applyDiff(gd);
+
+    cosmosGraph.start();
+  }
+
   return (
     <>
       <div class="background cg-layout">
-        <ControlsHeader totalEvents={totalEvents} includeHubSpread={true} />
+        <ControlsHeader totalEvents={totalEvents} includeHubSpread={true}>
+          <label class="switch">
+            <input
+              type="checkbox"
+              checked={controls.showEventLabels}
+              onChange={(e) =>
+                setControls("showEventLabels", e.currentTarget.checked)
+              }
+            />
+            <span></span>
+          </label>
+
+          <div class="field center-align">
+            <button class="small transparent border" onclick={forceRedraw}>
+              <i>redo</i>
+            </button>
+            <output>Redraw</output>
+            <span class="tooltip bottom">Update the graph layout</span>
+          </div>
+        </ControlsHeader>
 
         <div class="cg-main">
           <div
@@ -787,7 +831,10 @@ const CosmosComponent: Component = () => {
                 {(lbl) => (
                   <span
                     class={`cg-label ${lbl.kind}`}
-                    style={{ left: `${lbl.x}px`, top: `${lbl.y + 14}px` }}
+                    style={{
+                      left: `${lbl.x}px`,
+                      top: `${lbl.y - (lbl.kind == "hub" ? 28 : 24)}px`,
+                    }}
                   >
                     {lbl.label}
                   </span>
