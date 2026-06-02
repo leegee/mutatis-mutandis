@@ -93,6 +93,21 @@ mark {
   padding: 0.1em 0.2em;
 }
 
+.fade-in-1s {
+  opacity: 0;
+  animation: fadeIn 1s ease-in-out forwards;
+  animation-delay: 1s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* BeerCSS resets */
 .field {
   --_input: 1rem;

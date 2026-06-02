@@ -118,7 +118,7 @@ class GraphWorld {
   initialize(gd: ContextGraphData) {
     this.nodeRegistry.clear();
     this.reverseIndex.clear();
-    this.persistentPositions.clear();
+    // this.persistentPositions.clear();
     this.nextIndex = 0;
 
     this.rebuildScales(gd);
@@ -134,10 +134,12 @@ class GraphWorld {
     const nodeCount = gd.nodes.length;
     const edgeCount = gd.allEdges.length;
 
-    // Update nodes
+    // NODES
     for (let i = 0; i < nodeCount; i++) {
       const cn = gd.nodes[i];
-      const wn = this.nodeRegistry.get(cn.id)!;
+      const wn = this.nodeRegistry.get(cn.id);
+      if (!wn) continue;
+
       const idx = wn.cosmosIndex;
 
       let rgba: [number, number, number, number];
@@ -162,33 +164,57 @@ class GraphWorld {
       this.pointSizes[idx] = size;
     }
 
-    // Update edges
+    // EDGES
     let linkIdx = 0;
+
+    const zoom = this.cosmos.getZoomLevel?.() ?? 1;
+    const zoomFactor = Math.max(1, 2 / zoom);
+    const zoomAlphaBoost = Math.min(1, zoom * 0.8);
+
     for (let i = 0; i < edgeCount; i++) {
       const edge = gd.allEdges[i];
-      const src = this.nodeRegistry.get(edge.sourceId)!;
-      const tgt = this.nodeRegistry.get(edge.targetId)!;
+
+      const src = this.nodeRegistry.get(edge.sourceId);
+      const tgt = this.nodeRegistry.get(edge.targetId);
+
+      if (!src || !tgt) continue;
 
       this.links[linkIdx * 2] = src.cosmosIndex;
       this.links[linkIdx * 2 + 1] = tgt.cosmosIndex;
 
+      let alpha: number;
+      let baseColor: [number, number, number, number];
+      let width: number;
+
       if (edge.kind === "hub-hub") {
-        const alpha = this.scales.hhAlpha(edge.weight);
-        this.linkColors[linkIdx * 4 + 3] = alpha;
-        this.linkWidths[linkIdx] = this.scales.hhWidth(edge.weight);
+        alpha = Math.max(0.25, this.scales.hhAlpha(edge.weight));
+        baseColor = HH_LINK_BASE_RGBA;
+        width = this.scales.hhWidth(edge.weight);
       } else {
-        const alpha = this.scales.spokeAlpha(edge.weight);
-        this.linkColors[linkIdx * 4 + 3] = alpha;
-        this.linkWidths[linkIdx] = this.scales.spokeWidth(edge.weight);
+        alpha = Math.max(0.25, this.scales.spokeAlpha(edge.weight));
+        baseColor = SPOKE_LINK_RGBA;
+        width = this.scales.spokeWidth(edge.weight);
       }
+
+      // RGBA
+      this.linkColors[linkIdx * 4] = baseColor[0];
+      this.linkColors[linkIdx * 4 + 1] = baseColor[1];
+      this.linkColors[linkIdx * 4 + 2] = baseColor[2];
+      this.linkColors[linkIdx * 4 + 3] = alpha * zoomAlphaBoost;
+
+      // width (zoom-aware)
+      this.linkWidths[linkIdx] = width * zoomFactor;
+
       linkIdx++;
     }
 
+    // COMMIT TO COSMOS
     this.cosmos.setPointColors(this.pointColors.subarray(0, nodeCount * 4));
     this.cosmos.setPointSizes(this.pointSizes.subarray(0, nodeCount));
-    this.cosmos.setLinks(this.links.subarray(0, edgeCount * 2));
-    this.cosmos.setLinkColors(this.linkColors.subarray(0, edgeCount * 4));
-    this.cosmos.setLinkWidths(this.linkWidths.subarray(0, edgeCount));
+
+    this.cosmos.setLinks(this.links.subarray(0, linkIdx * 2));
+    this.cosmos.setLinkColors(this.linkColors.subarray(0, linkIdx * 4));
+    this.cosmos.setLinkWidths(this.linkWidths.subarray(0, linkIdx));
 
     if (fullReset) {
       this.cosmos.setPointPositions(this.getActivePositions(gd));
@@ -211,11 +237,15 @@ class GraphWorld {
   private initializeRandomPositions(gd: ContextGraphData) {
     gd.nodes.forEach((cn) => {
       if (!this.persistentPositions.has(cn.id)) {
-        const angle = Math.random() * Math.PI * 2;
-        const r = Math.random() * SPACE * 0.35;
+        // const angle = Math.random() * Math.PI * 2;
+        // const r = Math.random() * SPACE * 0.35;
+        // this.persistentPositions.set(cn.id, [
+        //   SPACE / 2 + Math.cos(angle) * r,
+        //   SPACE / 2 + Math.sin(angle) * r,
+        // ]);
         this.persistentPositions.set(cn.id, [
-          SPACE / 2 + Math.cos(angle) * r,
-          SPACE / 2 + Math.sin(angle) * r,
+          SPACE / 2 + (Math.random() - 0.5) * 50,
+          SPACE / 2 + (Math.random() - 0.5) * 50,
         ]);
       }
     });
@@ -581,7 +611,12 @@ const CosmosComponent: Component = () => {
 
     if (gd.nodes.length === 0) {
       cosmosGraph!.setPointPositions(new Float32Array(0));
+      cosmosGraph!.setPointColors(new Float32Array(0));
+      cosmosGraph!.setPointSizes(new Float32Array(0));
       cosmosGraph!.setLinks(new Float32Array(0));
+      cosmosGraph!.setLinkColors(new Float32Array(0));
+      cosmosGraph!.setLinkWidths(new Float32Array(0));
+      cosmosGraph!.render();
       return;
     }
 
@@ -666,6 +701,7 @@ const CosmosComponent: Component = () => {
                 )}
               </For>
             </div>
+
             <Show when={graphData().nodes.length === 0}>
               <div
                 style={{
@@ -675,10 +711,15 @@ const CosmosComponent: Component = () => {
                   "align-items": "center",
                   "justify-content": "center",
                   "pointer-events": "none",
+                  "z-index": 999,
                 }}
               >
-                <span class="error">
-                  No graph: try reducing min similarity or increasing top N
+                <span class="padding error fade-in-1s">
+                  <h4>No data to graph</h4>
+                  <p>
+                    Try reducing the minimum similarity threshold, or increasing
+                    the value of top N
+                  </p>
                 </span>
               </div>
             </Show>
