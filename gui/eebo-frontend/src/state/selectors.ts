@@ -15,48 +15,51 @@ import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
 import type { ConceptData, ConceptEvent } from "../types/context-graph.types";
 
 export async function getConcepts(): Promise<string[]> {
-    return queryConcepts();
+  return queryConcepts();
 }
 
-export async function getYearBounds(concept?: string): Promise<[number, number]> {
-    const c = concept ?? controls.concept;
-    if (!c) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
-    return (await queryYearBounds(c)) ?? [CORPUS_START_YEAR, CORPUS_END_YEAR];
+export async function getYearBounds(
+  concept?: string,
+): Promise<[number, number]> {
+  const c = concept ?? controls.concept;
+  if (!c) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
+  return (await queryYearBounds(c)) ?? [CORPUS_START_YEAR, CORPUS_END_YEAR];
 }
 
 export async function getYearFiltered(
-    concept?: string,
-    fromYear?: number,
-    toYear?: number,
+  concept?: string,
+  fromYear?: number,
+  toYear?: number,
 ): Promise<ConceptEvent[]> {
-    const c = concept ?? controls.concept;
-    const fy = fromYear ?? controls.fromYear;
-    const ty = toYear ?? controls.toYear;
-    if (!c) return [];
-    return queryEvents(c, fy, ty);
+  console.debug(`[getYearFiltered] ${concept} ${fromYear} ${toYear}`);
+  const c = concept ?? controls.concept;
+  const fy = fromYear ?? controls.fromYear;
+  const ty = toYear ?? controls.toYear;
+  if (!c) return [];
+  return queryEvents(c, fy, ty);
 }
 
 export async function totalEventsForConcept(concept?: string): Promise<number> {
-    const c = concept ?? controls.concept;
-    if (!c) return 0;
-    return (await import("../services/db")).queryNEvents(c);
+  const c = concept ?? controls.concept;
+  if (!c) return 0;
+  return (await import("../services/db")).queryNEvents(c);
 }
 
 /** Synchronous — for callers that already hold a ConceptData object. */
 export function yearBoundsFrom(conceptData: ConceptData): [number, number] {
-    return scanYearRange(conceptData);
+  return scanYearRange(conceptData);
 }
 
 /** Synchronous — for callers that already hold a ConceptEvent[] in memory. */
 export function filterEvents(
-    events: ConceptEvent[],
-    from: number,
-    to: number,
-    bounds?: [number, number],
+  events: ConceptEvent[],
+  from: number,
+  to: number,
+  bounds?: [number, number],
 ): ConceptEvent[] {
-    if (bounds) {
-        const [min, max] = bounds;
-        if (from <= min && to >= max) return events;
-    }
-    return filterByYearRange(events, from, to);
+  if (bounds) {
+    const [min, max] = bounds;
+    if (from <= min && to >= max) return events;
+  }
+  return filterByYearRange(events, from, to);
 }

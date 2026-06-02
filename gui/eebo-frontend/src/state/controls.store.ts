@@ -30,8 +30,6 @@ export const [controls, setControls] = createStore<ControlsState>({
   selectedNode: null,
   yearMode: "single",
   fromYear: CORPUS_START_YEAR,
-  toYear: CORPUS_END_YEAR,
+  toYear: CORPUS_START_YEAR,
   showEventLabels: false,
 });
-
-

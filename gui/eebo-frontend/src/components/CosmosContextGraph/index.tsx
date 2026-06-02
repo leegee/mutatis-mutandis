@@ -15,7 +15,7 @@ import * as d3 from "d3";
 
 import "./styles.css";
 
-import type { AnyEdge, ContextGraphData, ContextNode, TokenBin } from "./types";
+import type { ContextGraphData, ContextNode, TokenBin } from "./types";
 
 import { controls, setControls } from "../../state/controls.store";
 import {
@@ -86,111 +86,185 @@ interface WorldNode extends ContextNode {
 }
 
 class GraphWorld {
+  private cosmos: Graph;
   private nodeRegistry = new Map<string, WorldNode>();
   private reverseIndex = new Map<number, WorldNode>();
-  private cosmos: Graph;
-  private hubColorScale!: d3.ScaleLinear<
-    [number, number, number, number],
-    [number, number, number, number]
-  >;
-  private hubSizeScale!: d3.ScalePower<number, number>;
-  private hhAlphaScale!: d3.ScaleLinear<number, number>;
-  private hhWidthScale!: d3.ScaleLinear<number, number>;
-  private spokeAlpha!: d3.ScaleLinear<number, number>;
-  private spokeWidth!: d3.ScaleLinear<number, number>;
+  private nextIndex = 0;
+
+  private maxNodes = 25000;
+  private maxEdges = 150000;
+
+  private persistentPositions = new Map<string, [number, number]>();
+  private pointColors = new Float32Array(this.maxNodes * 4);
+  private pointSizes = new Float32Array(this.maxNodes);
+
+  private links = new Float32Array(this.maxEdges * 2);
+  private linkColors = new Float32Array(this.maxEdges * 4);
+  private linkWidths = new Float32Array(this.maxEdges);
+
+  private scales = {
+    hubColor: null as any,
+    hubSize: null as any,
+    hhAlpha: null as any,
+    hhWidth: null as any,
+    spokeAlpha: null as any,
+    spokeWidth: null as any,
+  };
 
   constructor(cosmos: Graph) {
     this.cosmos = cosmos;
   }
 
-  rebuild(gd: ContextGraphData) {
+  initialize(gd: ContextGraphData) {
     this.nodeRegistry.clear();
     this.reverseIndex.clear();
-
-    if (gd.nodes.length === 0) {
-      this.cosmos.setPointPositions(new Float32Array(0));
-      this.cosmos.setLinks(new Float32Array(0));
-      this.cosmos.render();
-      return;
-    }
+    this.persistentPositions.clear();
+    this.nextIndex = 0;
 
     this.rebuildScales(gd);
+    this.assignPersistentIndices(gd);
+    this.initializeRandomPositions(gd);
 
-    // Assign each node a stable index by position in the array
-    gd.nodes.forEach((cn, idx) => {
-      const wn: WorldNode = { ...cn, cosmosIndex: idx };
-      this.nodeRegistry.set(cn.id, wn);
-      this.reverseIndex.set(idx, wn);
-    });
+    this.updateTimeSlice(gd, true);
+  }
+
+  updateTimeSlice(gd: ContextGraphData, fullReset = false) {
+    this.rebuildScales(gd);
 
     const nodeCount = gd.nodes.length;
     const edgeCount = gd.allEdges.length;
 
-    // Scatter nodes randomly across the space for fresh simulation
-    const pointPositions = new Float32Array(nodeCount * 2);
+    // Update nodes
     for (let i = 0; i < nodeCount; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const r = Math.random() * SPACE * 0.3;
-      pointPositions[i * 2] = SPACE / 2 + Math.cos(angle) * r;
-      pointPositions[i * 2 + 1] = SPACE / 2 + Math.sin(angle) * r;
-    }
+      const cn = gd.nodes[i];
+      const wn = this.nodeRegistry.get(cn.id)!;
+      const idx = wn.cosmosIndex;
 
-    const pointColors = new Float32Array(nodeCount * 4);
-    const pointSizes = new Float32Array(nodeCount);
-    for (const wn of this.nodeRegistry.values()) {
-      const i = wn.cosmosIndex;
       let rgba: [number, number, number, number];
       let size: number;
-      if (wn.kind === "hub") {
-        rgba = this.hubColorScale(wn.hubDegree);
-        size = this.hubSizeScale(wn.eventCount);
-      } else if (wn.kind === "event") {
+
+      if (cn.kind === "hub") {
+        rgba = this.scales.hubColor(cn.hubDegree);
+        size = this.scales.hubSize(cn.eventCount);
+      } else if (cn.kind === "event") {
         rgba = EVENT_RGBA;
         size = EVENT_SIZE;
       } else {
         rgba = NB_RGBA;
         size = NB_POINT_SIZE;
       }
-      pointColors[i * 4] = rgba[0];
-      pointColors[i * 4 + 1] = rgba[1];
-      pointColors[i * 4 + 2] = rgba[2];
-      pointColors[i * 4 + 3] = rgba[3];
-      pointSizes[i] = size;
+
+      const base = idx * 4;
+      this.pointColors[base] = rgba[0];
+      this.pointColors[base + 1] = rgba[1];
+      this.pointColors[base + 2] = rgba[2];
+      this.pointColors[base + 3] = rgba[3];
+      this.pointSizes[idx] = size;
     }
 
-    const links = new Float32Array(edgeCount * 2);
-    const linkColors = new Float32Array(edgeCount * 4);
-    const linkWidths = new Float32Array(edgeCount);
-    const zoom = this.cosmos.getZoomLevel() ?? 1;
-    const zoomFactor = Math.max(1, 2 / zoom);
-
+    // Update edges
+    let linkIdx = 0;
     for (let i = 0; i < edgeCount; i++) {
       const edge = gd.allEdges[i];
-      links[i * 2] = this.nodeRegistry.get(edge.sourceId)?.cosmosIndex ?? 0;
-      links[i * 2 + 1] = this.nodeRegistry.get(edge.targetId)?.cosmosIndex ?? 0;
+      const src = this.nodeRegistry.get(edge.sourceId)!;
+      const tgt = this.nodeRegistry.get(edge.targetId)!;
+
+      this.links[linkIdx * 2] = src.cosmosIndex;
+      this.links[linkIdx * 2 + 1] = tgt.cosmosIndex;
+
       if (edge.kind === "hub-hub") {
-        linkColors[i * 4] = HH_LINK_BASE_RGBA[0];
-        linkColors[i * 4 + 1] = HH_LINK_BASE_RGBA[1];
-        linkColors[i * 4 + 2] = HH_LINK_BASE_RGBA[2];
-        linkColors[i * 4 + 3] = this.hhAlphaScale(edge.weight);
-        linkWidths[i] = this.hhWidthScale(edge.weight);
+        const alpha = this.scales.hhAlpha(edge.weight);
+        this.linkColors[linkIdx * 4 + 3] = alpha;
+        this.linkWidths[linkIdx] = this.scales.hhWidth(edge.weight);
       } else {
-        linkColors[i * 4] = SPOKE_LINK_RGBA[0];
-        linkColors[i * 4 + 1] = SPOKE_LINK_RGBA[1];
-        linkColors[i * 4 + 2] = SPOKE_LINK_RGBA[2];
-        linkColors[i * 4 + 3] = this.spokeAlpha(edge.weight);
-        linkWidths[i] = this.spokeWidth(edge.weight) * zoomFactor;
+        const alpha = this.scales.spokeAlpha(edge.weight);
+        this.linkColors[linkIdx * 4 + 3] = alpha;
+        this.linkWidths[linkIdx] = this.scales.spokeWidth(edge.weight);
       }
+      linkIdx++;
     }
 
-    this.cosmos.setPointPositions(pointPositions);
-    this.cosmos.setPointColors(pointColors);
-    this.cosmos.setPointSizes(pointSizes);
-    this.cosmos.setLinks(links);
-    this.cosmos.setLinkColors(linkColors);
-    this.cosmos.setLinkWidths(linkWidths);
-    this.cosmos.trackPointPositionsByIndices(gd.nodes.map((_, idx) => idx));
+    this.cosmos.setPointColors(this.pointColors.subarray(0, nodeCount * 4));
+    this.cosmos.setPointSizes(this.pointSizes.subarray(0, nodeCount));
+    this.cosmos.setLinks(this.links.subarray(0, edgeCount * 2));
+    this.cosmos.setLinkColors(this.linkColors.subarray(0, edgeCount * 4));
+    this.cosmos.setLinkWidths(this.linkWidths.subarray(0, edgeCount));
+
+    if (fullReset) {
+      this.cosmos.setPointPositions(this.getActivePositions(gd));
+      this.cosmos.trackPointPositionsByIndices(gd.nodes.map((_, idx) => idx));
+    }
+
     this.cosmos.render();
+  }
+
+  private assignPersistentIndices(gd: ContextGraphData) {
+    gd.nodes.forEach((cn) => {
+      if (!this.nodeRegistry.has(cn.id)) {
+        const wn: WorldNode = { ...cn, cosmosIndex: this.nextIndex++ };
+        this.nodeRegistry.set(cn.id, wn);
+        this.reverseIndex.set(wn.cosmosIndex, wn);
+      }
+    });
+  }
+
+  private initializeRandomPositions(gd: ContextGraphData) {
+    gd.nodes.forEach((cn) => {
+      if (!this.persistentPositions.has(cn.id)) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.random() * SPACE * 0.35;
+        this.persistentPositions.set(cn.id, [
+          SPACE / 2 + Math.cos(angle) * r,
+          SPACE / 2 + Math.sin(angle) * r,
+        ]);
+      }
+    });
+  }
+
+  private getActivePositions(gd: ContextGraphData): Float32Array {
+    const nodeCount = gd.nodes.length;
+    const active = new Float32Array(nodeCount * 2);
+
+    gd.nodes.forEach((cn, i) => {
+      const pos = this.persistentPositions.get(cn.id)!;
+      active[i * 2] = pos[0];
+      active[i * 2 + 1] = pos[1];
+    });
+
+    return active;
+  }
+
+  private rebuildScales(gd: ContextGraphData) {
+    this.scales.hubColor = d3
+      .scaleLinear<[number, number, number, number]>()
+      .domain([0, Math.max(1, gd.maxHubDegree)])
+      .range([HUB_COLOR_LOW_RGBA, HUB_COLOR_HIGH_RGBA]);
+
+    this.scales.hubSize = d3
+      .scaleSqrt()
+      .domain([0, gd.maxEventCount])
+      .range([HUB_MIN_SIZE, HUB_MAX_SIZE]);
+
+    this.scales.hhAlpha = d3
+      .scaleLinear()
+      .domain([0, gd.maxHubHubWeight])
+      .range([HH_ALPHA_MIN, HH_ALPHA_MAX]);
+
+    this.scales.hhWidth = d3
+      .scaleLinear()
+      .domain([0, gd.maxHubHubWeight])
+      .range([HH_WIDTH_MIN, HH_WIDTH_MAX]);
+
+    this.scales.spokeAlpha = d3
+      .scaleLinear()
+      .domain([0, 1])
+      .range([SPOKE_ALPHA_MIN, SPOKE_ALPHA_MAX]);
+
+    this.scales.spokeWidth = d3
+      .scalePow()
+      .exponent(0.25)
+      .domain([0, 1])
+      .range([SPOKE_WIDTH_MIN, SPOKE_WIDTH_MAX]);
   }
 
   getNodeByIndex(idx: number): WorldNode | undefined {
@@ -200,41 +274,7 @@ class GraphWorld {
   getNodeById(id: string): WorldNode | undefined {
     return this.nodeRegistry.get(id);
   }
-
-  get liveNodes(): IterableIterator<WorldNode> {
-    return this.nodeRegistry.values();
-  }
-
-  private rebuildScales(gd: ContextGraphData) {
-    this.hubColorScale = d3
-      .scaleLinear<[number, number, number, number]>()
-      .domain([0, Math.max(1, gd.maxHubDegree)])
-      .range([HUB_COLOR_LOW_RGBA, HUB_COLOR_HIGH_RGBA]);
-    this.hubSizeScale = d3
-      .scaleSqrt()
-      .domain([0, gd.maxEventCount])
-      .range([HUB_MIN_SIZE, HUB_MAX_SIZE]);
-    this.hhAlphaScale = d3
-      .scaleLinear()
-      .domain([0, gd.maxHubHubWeight])
-      .range([HH_ALPHA_MIN, HH_ALPHA_MAX]);
-    this.hhWidthScale = d3
-      .scaleLinear()
-      .domain([0, gd.maxHubHubWeight])
-      .range([HH_WIDTH_MIN, HH_WIDTH_MAX]);
-    this.spokeAlpha = d3
-      .scaleLinear()
-      .domain([0, 1])
-      .range([SPOKE_ALPHA_MIN, SPOKE_ALPHA_MAX]);
-    this.spokeWidth = d3
-      .scalePow()
-      .exponent(0.25)
-      .domain([0, 1])
-      .range([SPOKE_WIDTH_MIN, SPOKE_WIDTH_MAX]);
-  }
 }
-
-// Actual Component
 
 const CosmosComponent: Component = () => {
   const [labelPositions, setLabelPositions] = createSignal<
@@ -252,6 +292,7 @@ const CosmosComponent: Component = () => {
     cosmosGraph?.pause();
     cosmosGraph?.fitView();
   }
+
   function startSimulating(nodeCount = 0) {
     clearTimeout(simTimeoutHandle);
     const generation = ++simGeneration;
@@ -342,7 +383,6 @@ const CosmosComponent: Component = () => {
       .sort((a, b) => b.freq - a.freq);
   });
 
-  // Cosmos refs
   let wrapRef!: HTMLDivElement;
   let cosmosGraph: Graph | null = null;
   let world: GraphWorld | null = null;
@@ -396,11 +436,7 @@ const CosmosComponent: Component = () => {
         hubs = [];
         for (const [hubKey, bin] of bins) {
           const nb = bin.topNeighbours.find((n) => n.token === id);
-          if (nb)
-            hubs.push({
-              hub: hubKey,
-              freq: nb.freq,
-            });
+          if (nb) hubs.push({ hub: hubKey, freq: nb.freq });
         }
         hubs.sort((a, b) => b.freq - a.freq);
       } else {
@@ -459,9 +495,11 @@ const CosmosComponent: Component = () => {
           if (wn.kind === "hub" && wn.id === currentConcept && wn.id !== hid)
             return;
           if (wn.kind === "event" && !showEventLabels && wn.id !== hid) return;
+
           const [x, y] = cosmosGraph!.spaceToScreenPosition([sx, sy]);
           const label = wn.kind === "event" ? (wn.token ?? wn.id) : wn.id;
           nextLabels.push({ id: wn.id, label, kind: wn.kind, x, y });
+
           if (!dirty) {
             const prev = prevLabelCache.get(idx);
             if (
@@ -533,68 +571,50 @@ const CosmosComponent: Component = () => {
     startLabelLoop();
   }
 
+  // Major updates (concept, view mode, topN, etc.)
   createEffect(() => {
     const gd = graphData();
-
     if (!wrapRef) return;
-    ensureCosmosInitialised();
 
+    ensureCosmosInitialised();
     setLabelPositions([]);
 
     if (gd.nodes.length === 0) {
-      world!.rebuild(gd);
+      cosmosGraph!.setPointPositions(new Float32Array(0));
+      cosmosGraph!.setLinks(new Float32Array(0));
       return;
     }
 
     const hubCount = gd.nodes.filter(
       (n) => n.kind === "hub" || n.kind === "event",
     ).length;
-
     const isDegenerate =
       gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1;
-
-    const { hubSpread } = untrack(() => controls);
 
     cosmosGraph!.setConfig({
       spaceSize: SPACE,
       simulationRepulsion: isDegenerate
         ? 0
-        : BASE_REPULSION * (0.6 + hubSpread * 0.4),
+        : BASE_REPULSION * (0.6 + controls.hubSpread * 0.4),
       simulationLinkSpring: isDegenerate ? 0 : BASE_LINK_SPRING,
       simulationGravity: isDegenerate ? 0.8 : BASE_GRAVITY,
       simulationFriction: BASE_FRICTION,
       enableDrag: true,
       fitViewPadding: FIT_VIEW_PADDING,
-      hoveredPointRingColor: "white",
-      renderHoveredPointRing: true,
     });
 
-    world!.rebuild(gd);
-    startSimulating(gd.nodes.length);
-    cosmosGraph!.start();
+    if (world) {
+      world.initialize(gd);
+      startSimulating(gd.nodes.length);
+      cosmosGraph!.start();
+    }
   });
 
+  // Fast timeline updates
   createEffect(() => {
-    const hubSpread = controls.hubSpread;
-    if (!cosmosGraph || !world) return;
-    const gd = untrack(graphData);
-    const hubCount = gd.nodes.filter(
-      (n) => n.kind === "hub" || n.kind === "event",
-    ).length;
-    if (gd.allEdges.length === 0 || gd.nodes.length <= 1 || hubCount <= 1)
-      return;
-
-    cosmosGraph.setConfig({
-      spaceSize: SPACE,
-      simulationRepulsion: BASE_REPULSION * hubSpread,
-      simulationLinkSpring: Math.min(0.92, BASE_FRICTION + hubSpread * 0.05),
-      simulationFriction: BASE_FRICTION,
-      simulationGravity: BASE_GRAVITY,
-      enableDrag: true,
-      fitViewPadding: FIT_VIEW_PADDING,
-      hoveredPointRingColor: "white",
-      renderHoveredPointRing: true,
-    });
+    const gd = graphData();
+    if (!world || gd.nodes.length === 0) return;
+    world.updateTimeSlice(gd, false);
   });
 
   onCleanup(() => {
@@ -608,7 +628,7 @@ const CosmosComponent: Component = () => {
   function forceRedraw() {
     if (!cosmosGraph || !world) return;
     const gd = graphData();
-    world.rebuild(gd);
+    world.initialize(gd);
     cosmosGraph.start();
   }
 
@@ -838,7 +858,6 @@ const CosmosComponent: Component = () => {
                       <div class="bottom-padding">
                         <For each={sharedByHubs()}>
                           {(h) => {
-                            // In events view h.hub is a synthetic event node id - look up the node to get its token_idx and doc_id.
                             const sourceNode = () =>
                               controls.viewMode === "events"
                                 ? graphData().nodes.find((n) => n.id === h.hub)
