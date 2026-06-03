@@ -496,15 +496,11 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     const nodeVisible = new Uint8Array(d.nodes.length);
     for (let i = 0; i < d.nodes.length; i++) {
       const n = d.nodes[i];
-
       const timeOk = isNodeVisibleByTime(n, yearMode, fromYear, toYear);
-
-      const degreeOk =
-        n.kind !== NODE_KIND.EVENT ||
-        (n.degree ?? 0) <= topN; // only apply threshold to event nodes
-
+      const degreeOk = n.kind !== NODE_KIND.EVENT || (n.degree ?? 0) <= topN; // only apply threshold to event nodes
       nodeVisible[i] = timeOk && degreeOk ? 1 : 0;
     }
+
     graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
     graph.setPointSizes(buildPointSizes(d.nodes));
 
