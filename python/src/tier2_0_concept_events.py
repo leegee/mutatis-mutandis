@@ -438,10 +438,11 @@ CREATE TABLE IF NOT EXISTS concept_aggregate (
 CREATE INDEX IF NOT EXISTS idx_events_concept       ON events(concept);
 CREATE INDEX IF NOT EXISTS idx_events_token         ON events(token);
 CREATE INDEX IF NOT EXISTS idx_events_doc_id        ON events(doc_id);
+CREATE INDEX IF NOT EXISTS idx_events_concept_year  ON events(concept, pub_year);
 CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_token     ON neighbours(token);
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept    ON concept_aggregate(concept, kind);
 """
-
 
 def _aggregate_rows(concept_name, aggregate):
     """Yield concept_aggregate row tuples from an analyse_concept aggregate dict."""
