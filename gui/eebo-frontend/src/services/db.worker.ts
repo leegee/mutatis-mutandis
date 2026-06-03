@@ -49,6 +49,10 @@ async function init(url: string): Promise<void> {
     await writer.close();
 
     db = new sqlite3.oo1.OpfsDb("/tier2.db", "r");
+    // db.run("PRAGMA journal_mode=OFF");
+    // db.run("PRAGMA synchronous=OFF");
+    // db.run("PRAGMA cache_size=-65536"); // 64 MB page cache
+    // db.run("PRAGMA temp_store=MEMORY");
     console.log("[db.worker] opened OPFS database");
   } else {
     throw new Error("[db.worker] OPFS unavailable");
