@@ -5,7 +5,7 @@ import {
   Show,
   type ParentComponent,
 } from "solid-js";
-import { controls } from "../state/controls.store";
+import { controls, MAX_TOP_N } from "../state/controls.store";
 import { controlsActions as A } from "../state/controls.actions";
 import type { ViewMode, YearMode } from "../state/controls.store";
 import { getYearBounds, getYearFiltered } from "../state/selectors";
@@ -21,8 +21,6 @@ interface Props {
   fdgControls?: boolean;
   totalEvents?: () => number;
 }
-
-const MAX_TOP_N = 100;
 
 const ControlsHeader: ParentComponent<Props> = (props) => {
   const resolved = children(() => props.children);
@@ -199,7 +197,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         <Show when={fdgControls()}>
           <hr class="divider vertical max no-margin no-padding" />
 
-          <div class="field suffix border middle-align">
+          {/* <div class="field suffix border middle-align">
             <select
               value={controls.viewMode}
               onChange={(e) => A.setViewMode(e.currentTarget.value as ViewMode)}
@@ -214,7 +212,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             </span>
           </div>
 
-          <hr class="divider vertical max no-margin no-padding" />
+          <hr class="divider vertical max no-margin no-padding" /> */}
 
           <Show when={controls.viewMode === "aggregated"}>
             <div class="field middle-align">

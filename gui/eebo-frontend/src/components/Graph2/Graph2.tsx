@@ -501,7 +501,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
       const degreeOk =
         n.kind !== NODE_KIND.EVENT ||
-        (n.degree ?? 0) >= topN; // only apply threshold to event nodes
+        (n.degree ?? 0) <= topN; // only apply threshold to event nodes
 
       nodeVisible[i] = timeOk && degreeOk ? 1 : 0;
     }

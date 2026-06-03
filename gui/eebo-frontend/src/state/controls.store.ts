@@ -1,10 +1,13 @@
 // src/state/controls.store.ts
 
 import { createStore } from "solid-js/store";
-import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
+import { CORPUS_START_YEAR } from "../corpus_config";
 
 export type ViewMode = "aggregated" | "events";
 export type YearMode = "single" | "range";
+
+export const MAX_TOP_N = 100;
+
 
 export type ControlsState = {
   concept: string;
@@ -22,9 +25,9 @@ export type ControlsState = {
 
 export const [controls, setControls] = createStore<ControlsState>({
   concept: "LIBERTY",
-  viewMode: "aggregated",
+  viewMode: "events",
   maxHubs: 50,
-  topN: 5,
+  topN: MAX_TOP_N,
   minSimilarity: 0.5,
   hubSpread: 1,
   selectedNode: null,
