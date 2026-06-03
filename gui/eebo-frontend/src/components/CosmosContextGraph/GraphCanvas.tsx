@@ -220,7 +220,9 @@ class GraphWorld {
     if (fullReset) {
       this.cosmos.setPointPositions(this.getActivePositions(gd));
       this.cosmos.trackPointPositionsByIndices(
-        gd.nodes.map((_, idx) => idx)
+        gd.nodes
+          .map(n => this.nodeRegistry.get(n.id)?.cosmosIndex)
+          .filter((x): x is number => x !== undefined)
       );
     }
 
