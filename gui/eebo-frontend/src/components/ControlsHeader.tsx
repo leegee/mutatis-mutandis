@@ -59,8 +59,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           >
             <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
-          <output>Concept</output>
-          <span class="tooltip bottom">Select a corpus probe.</span>
+          <span class="tooltip bottom">Concept</span>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />
@@ -76,7 +75,6 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             <option value="single">Single year</option>
             <option value="range">Year range</option>
           </select>
-          <output>Year mode</output>
           <span class="tooltip bottom">
             Show date for one year or a span of years.
           </span>
@@ -87,7 +85,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           <hr class="divider vertical max no-margin no-padding" />
           <nav class="no-space">
             <button
-              class="circle chip tiny no-space large-margin bottom-margin no-border"
+              class="circle chip tiny no-border"
               onClick={() => A.stepYear(-1)}
             >
               <i>chevron_left</i>
@@ -107,12 +105,12 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                 />
                 <span class="tooltip bottom" />
               </div>
-              <output class="small-padding top-padding">
+              <div class="tooltip bottom">
                 {controls.fromYear} ({filteredCount()} events)
-              </output>
+              </div>
             </div>
             <button
-              class="circle chip tiny no-space large-margin bottom-margin no-border"
+              class="circle chip tiny no-border"
               onClick={() => A.stepYear(+1)}
             >
               <i>chevron_right</i>
@@ -156,19 +154,18 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <span class="tooltip bottom" />
               <span class="tooltip bottom" />
             </div>
-            <output class="small-padding top-padding">
-              <span>
-                {controls.fromYear}–{controls.toYear}
-              </span>
+            <div class="tooltip bottom">
+              {controls.fromYear}&mdash;{controls.toYear}
               <Show when={props.totalEvents}>
                 <span class="left-padding">
                   {filteredCount()} / {props.totalEvents!()} events
                 </span>
               </Show>
-            </output>
-            <span class="tooltip bottom">Show data from these years.</span>
+            </div>
           </div>
         </Show>
+
+        <hr class="divider vertical max no-margin no-padding" />
 
         {/* Top N */}
         <div class="field middle-align">
@@ -184,10 +181,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
             <span />
             <span class="tooltip bottom" />
           </div>
-          <output class="small-padding top-padding">
-            Top Neighbours {controls.topN}
-          </output>
           <span class="tooltip bottom">
+            Top Neighbours {controls.topN}.
+            <br />
             The number of top-ranked neighbours to display.
             <br />
             Reduce if the graph is too cluttered to read.
@@ -195,9 +191,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         </div>
 
         <Show when={fdgControls()}>
-          <hr class="divider vertical max no-margin no-padding" />
-
           {/* <div class="field suffix border middle-align">
+            <hr class="divider vertical max no-margin no-padding" />
+
             <select
               value={controls.viewMode}
               onChange={(e) => A.setViewMode(e.currentTarget.value as ViewMode)}

@@ -6,7 +6,7 @@ import { CORPUS_START_YEAR } from "../corpus_config";
 export type ViewMode = "aggregated" | "events";
 export type YearMode = "single" | "range";
 
-export const MAX_TOP_N = 100;
+export const MAX_TOP_N = 1000;
 
 
 export type ControlsState = {

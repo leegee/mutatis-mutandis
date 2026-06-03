@@ -24,14 +24,15 @@
  *
  * Edge types
  * ----------
- *  kind 0  semantic  — event → neighbour, weight = FAISS cosine score
+ *  kind 0  semantic  — event to neighbour, weight = FAISS cosine score
  *  kind 1  cowindow  — event ↔ event sharing (doc_id, window_id)
- *  kind 2  concept   — event → concept node (only when showConceptNodes=true)
+ *  kind 2  concept   — event to concept node (only when showConceptNodes=true)
  */
 
 import {
   type Component,
   createEffect,
+  createMemo,
   createResource,
   createSignal,
   onCleanup,
@@ -84,22 +85,26 @@ interface GraphData {
 
 // ── Colours (normalised 0-1 RGBA) ────────────────────────────────────────────
 
-// kind → [r, g, b, a]
+// kind to [r, g, b, a]
 const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
-  [NODE_KIND.EVENT]: [0.99, 0.72, 0.07, 1.0],  // amber   — event
-  [NODE_KIND.NEIGHBOUR]: [0.42, 0.58, 0.93, 1.0],  // slate   — neighbour
-  [NODE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 1.0],  // emerald — concept
+  [NODE_KIND.EVENT]: [1, 0.65, 0.15, 1.0],  // amber   — event
+  [NODE_KIND.NEIGHBOUR]: [0.35, 0.55, 0.95, 1.0],  // slate   — neighbour
+  [NODE_KIND.CONCEPT]: [0.2, 0.8, 0.5, 1.0],  // emerald — concept
 };
 
 const EDGE_RGBA: Record<number, readonly [number, number, number, number]> = {
-  [EDGE_KIND.SEMANTIC]: [0.99, 0.72, 0.07, 0.75], // semantic
+  [EDGE_KIND.SEMANTIC]: [0.99, 0.72, 0.07, 0.5], // semantic
   [EDGE_KIND.COWINDOW]: [0.70, 0.85, 1.00, 0.90], // cowindow
   [EDGE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 0.80], // concept
 };
 
 const HIDDEN_RGBA = [0, 0, 0, 0];
 
-const NODE_SIZE: Record<number, number> = { 0: 6, 1: 3.5, 2: 12 };
+const NODE_SIZE: Record<number, number> = {
+  [NODE_KIND.EVENT]: 8,
+  [NODE_KIND.NEIGHBOUR]: 5,
+  [NODE_KIND.CONCEPT]: 12
+};
 
 // ── DB queries ────────────────────────────────────────────────────────────────
 
@@ -107,7 +112,8 @@ async function fetchGraphData(
   concept: string,
   showConceptNodes: boolean,
 ): Promise<GraphData> {
-  // node id string → array index
+  console.log('[graph2 fetchGraphData]', concept)
+  // node id string to array index
   const idToIdx = new Map<string, number>();
   const nodes: NodeMeta[] = [];
   const edges: EdgeMeta[] = [];
@@ -193,7 +199,7 @@ async function fetchGraphData(
 
   // 3. Co-window edges ─────────────────────────────────────────────────────────
   // Group event nodes by (doc_id, window_id) then connect all pairs (capped)
-  const buckets = new Map<string, number[]>(); // key → [nodeIdx, …]
+  const buckets = new Map<string, number[]>(); // key to [nodeIdx, …]
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     if (n.kind !== 0 || n.docId == null || n.windowId == null) continue;
@@ -311,39 +317,14 @@ function buildLinkColors(
 function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
   return new Float32Array(
     edges.map((e) =>
-      e.kind === EDGE_KIND.COWINDOW ? 1.3 : // cowindow — thin fixed
-        e.kind === EDGE_KIND.CONCEPT ? 1.0 : // concept  — thin fixed
-          Math.max(0.4, e.weight * 2.0), // semantic — weight-scaled
+      e.kind === EDGE_KIND.COWINDOW ? 2 : // cowindow — thin fixed
+        e.kind === EDGE_KIND.CONCEPT ? 2 : // concept  — thin fixed
+          Math.max(1, e.weight * 2.0), // semantic — weight-scaled
     ),
   );
 }
 
 // ── Overlay components ────────────────────────────────────────────────────────
-
-const Legend: Component<{ showConcept: boolean }> = (props) => (
-  <div style={{
-    position: "absolute", bottom: "16px", left: "16px",
-    background: "rgba(10,12,18,0.88)",
-    border: "1px solid rgba(255,255,255,0.07)",
-    "border-radius": "8px", padding: "10px 14px",
-    "font-family": "'IBM Plex Mono', monospace",
-    "font-size": "11px", color: "#c8ccd8",
-    "pointer-events": "none", "backdrop-filter": "blur(6px)",
-  }}>
-    <div style={{ "font-weight": "600", "margin-bottom": "7px", "letter-spacing": "0.06em", color: "#fff" }}>
-      LEGEND
-    </div>
-    <Dot color="#fdb811" label="event" />
-    <Dot color="#6b94ee" label="neighbour" />
-    {props.showConcept && <Dot color="#3dd98f" label="concept" />}
-    <div style={{ "margin-top": "8px", "margin-bottom": "5px", opacity: "0.55", "font-size": "10px", "letter-spacing": "0.08em" }}>
-      EDGES
-    </div>
-    <Line color="rgba(253,184,17,0.5)" label="semantic (FAISS)" />
-    <Line color="rgba(180,215,255,0.6)" label="co-window" />
-    {props.showConcept && <Line color="rgba(61,217,143,0.4)" label="concept" />}
-  </div>
-);
 
 const Dot: Component<{ color: string; label: string }> = (p) => (
   <div style={{ display: "flex", "align-items": "center", gap: "8px", "margin-bottom": "3px" }}>
@@ -360,42 +341,30 @@ const Line: Component<{ color: string; label: string }> = (p) => (
 );
 
 const StatsBar: Component<{ data: GraphData }> = (p) => (
-  <div style={{
-    position: "absolute", top: "16px", right: "16px",
-    background: "rgba(10,12,18,0.88)",
-    border: "1px solid rgba(255,255,255,0.07)",
-    "border-radius": "8px", padding: "10px 14px",
-    "font-family": "'IBM Plex Mono', monospace",
-    "font-size": "11px", color: "#c8ccd8",
-    "pointer-events": "none", "backdrop-filter": "blur(6px)",
-  }}>
+  <>
     <Stat label="events" value={p.data.nodes.filter(n => n.kind === NODE_KIND.EVENT).length} />
     <Stat label="neighbours" value={p.data.nodes.filter(n => n.kind === NODE_KIND.NEIGHBOUR).length} />
     <Stat label="semantic" value={p.data.edges.filter(e => e.kind === EDGE_KIND.SEMANTIC).length} />
     <Stat label="co-window" value={p.data.edges.filter(e => e.kind === EDGE_KIND.COWINDOW).length} />
-  </div>
+  </>
 );
 
 const Stat: Component<{ label: string; value: number }> = (p) => (
-  <div style={{ display: "flex", "justify-content": "space-between", gap: "20px", "margin-bottom": "2px" }}>
-    <span style={{ opacity: "0.5" }}>{p.label}</span>
-    <span style={{ color: "#fff", "font-weight": "600" }}>{p.value.toLocaleString()}</span>
-  </div>
+  <>
+    <span>{p.label}</span>
+    <span>{p.value.toLocaleString()}</span>
+  </>
 );
 
 interface TipData { node: NodeMeta; x: number; y: number }
 
 const Tooltip: Component<{ tip: TipData }> = (p) => (
-  <div style={{
+  <aside class="surface-container-highest border padding large-elevate" style={{
     position: "absolute",
-    left: `${ p.tip.x + 14 }px`, top: `${ p.tip.y - 10 }px`,
-    background: "rgba(10,12,18,0.96)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    "border-radius": "6px", padding: "8px 12px",
-    "font-family": "'IBM Plex Mono', monospace",
-    "font-size": "11px", color: "#e0e2ec",
-    "pointer-events": "none", "max-width": "240px",
-    "z-index": "10", "box-shadow": "0 4px 24px rgba(0,0,0,0.55)",
+    left: `${ p.tip.x + 14 }px`,
+    top: `${ p.tip.y - 10 }px`,
+    "max-width": "240px",
+    "z-index": "10",
   }}>
     <div style={{ "font-weight": "700", "font-size": "13px", color: "#fff", "margin-bottom": "5px" }}>
       {p.tip.node.label}
@@ -404,7 +373,7 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
     {p.tip.node.pubYear && <div><span style={{ opacity: "0.45" }}>year </span>{p.tip.node.pubYear}</div>}
     {p.tip.node.windowId != null && <div><span style={{ opacity: "0.45" }}>win  </span>{p.tip.node.windowId}</div>}
     <div style={{ "margin-top": "4px", opacity: "0.35", "font-size": "10px" }}>{p.tip.node.id}</div>
-  </div>
+  </aside>
 );
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -422,7 +391,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let graph: Graph | undefined;
 
-  // Keep a ref to current node list so onPointMouseOver can resolve index → meta
+  // Keep a ref to current node list so onPointMouseOver can resolve index to meta
   let nodeMeta: NodeMeta[] = [];
 
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
@@ -430,6 +399,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const [data] = createResource(
     () => [controls.concept, showConcept()] as [string, boolean],
     ([concept, showConcept]) => {
+      setTooltip(null);
       initialized = false;
       return fetchGraphData(concept, showConcept);
     },
@@ -442,7 +412,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     graph = new Graph(divRef, {
       // v2 flat config ────────────────────────────────────────────────────────
       renderLinks: true,
-      spaceSize: 1024,
+      spaceSize: 2048,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
       fitViewDelay: 20800,             // Give simulation time to settle before fitting
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
@@ -479,9 +449,23 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       mouseClientX = e.clientX;
       mouseClientY = e.clientY;
     });
-
   });
 
+  // Displayed in footer
+  const counts = createMemo(() => {
+    const d = data();
+    if (!d) return null;
+
+    return {
+      events: d.nodes.filter(n => n.kind === NODE_KIND.EVENT).length,
+      neighbours: d.nodes.filter(n => n.kind === NODE_KIND.NEIGHBOUR).length,
+      concepts: d.nodes.filter(n => n.kind === NODE_KIND.CONCEPT).length,
+
+      semantic: d.edges.filter(e => e.kind === EDGE_KIND.SEMANTIC).length,
+      cowindow: d.edges.filter(e => e.kind === EDGE_KIND.COWINDOW).length,
+      conceptEdges: d.edges.filter(e => e.kind === EDGE_KIND.CONCEPT).length,
+    };
+  });
 
   // Push data into cosmos whenever the resource resolves
   createEffect(() => {
@@ -527,8 +511,8 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     <article class="max surface-container" style={{
       position: "relative",
       overflow: "hidden",
-      "flex-direction": "column",
       display: "flex",
+      "flex-direction": "column",
       flex: 1,
       height: '100%'
     }}>
@@ -544,17 +528,37 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       </Show>
 
       <Show when={data.error}>
-        <div class="error" style={{
-          position: "absolute", inset: "0",
-          display: "flex", "align-items": "center", "justify-content": "center",
-        }}>
+        <div class="error border">
           {String(data.error)}
         </div>
       </Show>
 
-      <Show when={!data.loading && !data.error && data()}>
-        <StatsBar data={data()!} />
-        <Legend showConcept={showConcept()} />
+      <Show when={!data.loading && !data.error && data() && counts()}>
+        <footer class="surface-container tiny-padding fixed max">
+          <div class="row center-align tiny-padding">
+            <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}
+              label={`events (${ counts()!.events.toLocaleString() })`}
+            />
+            <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.NEIGHBOUR].map(_ => _ * 255).join(",") })`}
+              label={`neighbours (${ counts()!.neighbours.toLocaleString() })`}
+            />
+            <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.CONCEPT].map(_ => _ * 255).join(",") })`}
+              label={`concepts (${ counts()!.concepts.toLocaleString() })`}
+            />
+
+            <hr class="vertical" />
+
+            <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.SEMANTIC].map(_ => _ * 255).join(",") })`}
+              label={`semantic (${ counts()!.semantic.toLocaleString() })`}
+            />
+            <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.COWINDOW].map(_ => _ * 255).join(",") })`}
+              label={`co-window (${ counts()!.cowindow.toLocaleString() })`}
+            />
+            <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.CONCEPT].map(_ => _ * 255).join(",") })`}
+              label={`concept (${ counts()!.conceptEdges.toLocaleString() })`}
+            />
+          </div>
+        </footer>
       </Show>
 
       <Show when={tooltip()}>
