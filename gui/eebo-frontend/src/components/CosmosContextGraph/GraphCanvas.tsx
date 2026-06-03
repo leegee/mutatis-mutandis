@@ -78,7 +78,7 @@ class GraphWorld {
   private nodeRegistry = new Map<string, WorldNode>();
   private reverseIndex = new Map<number, WorldNode>();
   private nextIndex = 0;
-
+  private currentConcept: string | null = null;
   private maxNodes = 25000;
   private maxEdges = 150000;
 
@@ -103,11 +103,24 @@ class GraphWorld {
     this.cosmos = cosmos;
   }
 
-  initialize(gd: ContextGraphData) {
+  initialize(gd: ContextGraphData, concept: string) {
+    const conceptChanged = concept !== this.currentConcept;
+    this.currentConcept = concept;
     this.nodeRegistry.clear();
     this.reverseIndex.clear();
-    // this.persistentPositions.clear();
     this.nextIndex = 0;
+
+    if (conceptChanged) {
+      this.persistentPositions.clear();
+    } else {
+      // Prune positions for nodes no longer in the active graph
+      // so the map doesn't grow unboundedly across time-slice changes.
+      for (const key of this.persistentPositions.keys()) {
+        if (!gd.nodes.some((n) => n.id === key)) {
+          this.persistentPositions.delete(key);
+        }
+      }
+    }
 
     this.rebuildScales(gd);
     this.assignPersistentIndices(gd);
@@ -206,7 +219,9 @@ class GraphWorld {
 
     if (fullReset) {
       this.cosmos.setPointPositions(this.getActivePositions(gd));
-      this.cosmos.trackPointPositionsByIndices(gd.nodes.map((_, idx) => idx));
+      this.cosmos.trackPointPositionsByIndices(
+        gd.nodes.map((_, idx) => idx)
+      );
     }
 
     this.cosmos.render();
@@ -294,6 +309,9 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
   >([]);
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
   const [simulating, setSimulating] = createSignal(false);
+  const [initializedGd, setInitializedGd] =
+    createSignal<ContextGraphData | null>(null);
+
   let simTimeoutHandle = 0;
   let simGeneration = 0;
 
@@ -316,6 +334,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
   let wrapRef!: HTMLDivElement;
   let cosmosGraph: Graph | null = null;
   let world: GraphWorld | null = null;
+  let conceptChanged = true;
   let rafHandle = 0;
   let mouseClientX = 0;
   let mouseClientY = 0;
@@ -338,22 +357,22 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
       const bin = props.frame.tokenBins.get(wn.id);
       const years = bin ? [...bin.years].sort((a, b) => a - b) : [];
       const yStr = years.length
-        ? `${years[0]}${years.length > 1 ? `–${years[years.length - 1]}` : ""}`
+        ? `${ years[0] }${ years.length > 1 ? `–${ years[years.length - 1] }` : "" }`
         : "-";
 
       html = `<aside>
-        <h6 class="bottom-padding">${wn.id}</h6>
-        Events: ${wn.eventCount}<br/>
-        Connections: ${wn.hubDegree}<br/>
-        Documents: ${bin?.docs.size ?? "-"}<br/>
-        Years: ${yStr}
+        <h6 class="bottom-padding">${ wn.id }</h6>
+        Events: ${ wn.eventCount }<br/>
+        Connections: ${ wn.hubDegree }<br/>
+        Documents: ${ bin?.docs.size ?? "-" }<br/>
+        Years: ${ yStr }
       </aside>`;
     } else if (wn.kind === "event") {
       html = `<aside>
-        <h6 class="bottom-padding"><q>${wn.token ?? wn.id}</q></h6>
-        Year: ${wn.pub_year ?? "-"}<br/>
-        Doc: ${wn.doc_id ?? "-"}<br/>
-        token_idx: ${wn.token_idx ?? "-"}
+        <h6 class="bottom-padding"><q>${ wn.token ?? wn.id }</q></h6>
+        Year: ${ wn.pub_year ?? "-" }<br/>
+        Doc: ${ wn.doc_id ?? "-" }<br/>
+        token_idx: ${ wn.token_idx ?? "-" }
         </aside>`;
     } else {
       const id = wn.id;
@@ -376,23 +395,22 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
           .sort((a, b) => b.freq - a.freq);
       }
       html = `<aside>
-        <h6 class="bottom-padding">${wn.id}</h6>
-        Shared by ${wn.degree} source(s):<br/>
-        ${
-          hubs.length
-            ? hubs
-                .slice(0, 5)
-                .map((h) => `${h.hub} (${h.freq.toFixed(3)})`)
-                .join("<br/>")
-            : "-"
+        <h6 class="bottom-padding">${ wn.id }</h6>
+        Shared by ${ wn.degree } source(s):<br/>
+        ${ hubs.length
+          ? hubs
+            .slice(0, 5)
+            .map((h) => `${ h.hub } (${ h.freq.toFixed(3) })`)
+            .join("<br/>")
+          : "-"
         }
       </aside>`;
     }
     tip.innerHTML = html;
     Object.assign(tip.style, {
       opacity: "1",
-      left: `${mouseClientX + 14}px`,
-      top: `${mouseClientY - 10}px`,
+      left: `${ mouseClientX + 14 }px`,
+      top: `${ mouseClientY - 10 }px`,
     });
   }
 
@@ -507,7 +525,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
     startLabelLoop();
   }
 
-  // Major updates (concept, view mode, topN, etc.)
+  //  Major updates (concept, view mode, topN, etc)
   createEffect(() => {
     const gd = props.frame.graphData;
     if (!wrapRef) return;
@@ -523,6 +541,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
       cosmosGraph!.setLinkColors(new Float32Array(0));
       cosmosGraph!.setLinkWidths(new Float32Array(0));
       cosmosGraph!.render();
+      setInitializedGd(null);
       return;
     }
 
@@ -545,16 +564,27 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
     });
 
     if (world) {
-      world.initialize(gd);
+      world.initialize(gd, props.frame.concept);
       startSimulating(gd.nodes.length);
       cosmosGraph!.start();
+      // Signal to the timeline effect which gd was just initialized.
+      // Defer by one microtask so the timeline effect sees this as a
+      // separate reactive update, not the same one that triggered initialize().
+      Promise.resolve().then(() => setInitializedGd(gd));
     }
   });
 
-  // Fast timeline updates
+  //  Fast timeline updates
+  // Reads initializedGd (not graphData) so it never fires during the same
+  // flush as world.initialize() above — only on subsequent data changes.
   createEffect(() => {
     const gd = props.frame.graphData;
-    if (!world || gd.nodes.length === 0) return;
+    const lastInit = initializedGd();
+
+    // Skip if world isn't ready, graph is empty, or this is the gd that was
+    // just passed to world.initialize() (the major effect owns that render).
+    if (!world || gd.nodes.length === 0 || gd === lastInit) return;
+
     world.updateTimeSlice(gd, false);
   });
 
@@ -569,7 +599,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
   // function forceRedraw() {
   //   if (!cosmosGraph || !world) return;
   //   const gd = props.graphData;
-  //   world.initialize(gd);
+  //   world.initialize(gd, props.frame.concept);
   //   cosmosGraph.start();
   // }
 
@@ -584,10 +614,10 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
           <For each={labelPositions()}>
             {(lbl) => (
               <span
-                class={`cg-label ${lbl.kind}`}
+                class={`cg-label ${ lbl.kind }`}
                 style={{
-                  left: `${lbl.x}px`,
-                  top: `${lbl.y - (lbl.kind == "hub" ? 28 : 24)}px`,
+                  left: `${ lbl.x }px`,
+                  top: `${ lbl.y - (lbl.kind == "hub" ? 28 : 24) }px`,
                 }}
               >
                 {lbl.label}
