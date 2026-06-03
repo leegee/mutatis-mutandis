@@ -14,24 +14,19 @@ import "./App.css";
 import { dbReady, loadTier2Data } from "./state/tier2data.store";
 import AppError from "./components/AppError";
 
-const CosmosContextGraphGuide = lazy(
-  () => import("./components/CosmosContextGraph/Guide"),
-);
-
-const NeighbourhoodBrowser = lazy(
-  () => import("./components/NeighbourhoodBrowser"),
-);
-
+const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"),);
+const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"),);
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
-const Cosmos = lazy(() => import("./components/CosmosContextGraph/"));
+const Cosmos = lazy(() => import("./components/CosmosContextGraph"));
+const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 
 export default function App() {
   const [dbLoadingError, setDbLoadingError] = createSignal<string | null>(null);
   const [openHelp, setOpenHelp] = createSignal(false);
   const [open, setOpen] = createSignal(false);
   const [view, setView] = createSignal<
-    "table" | "help" | "diachronic" | "cosmos"
-  >("cosmos");
+    "table" | "help" | "diachronic" | "cosmos" | "graph2"
+  >("graph2");
 
   try {
     loadTier2Data();
@@ -40,6 +35,7 @@ export default function App() {
   }
 
   const navItems = [
+    { key: "graph2", icon: "orbit", label: "Exp" },
     { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
     { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
@@ -49,7 +45,7 @@ export default function App() {
     <>
       <nav
         id="app-nav"
-        class={`surface-container-low left no-margin top-padding scroll small-elevate ${open() ? "max" : "small"}`}
+        class={`surface-container-low left no-margin top-padding scroll small-elevate ${ open() ? "max" : "small" }`}
       >
         <header class="center-align top-margin tiny-margin no-padding">
           <button
@@ -128,6 +124,10 @@ export default function App() {
 
               <Match when={view() === "cosmos"}>
                 <Cosmos />
+              </Match>
+
+              <Match when={view() === "graph2"}>
+                <Graph2 concept="LIBERTY" />
               </Match>
             </Switch>
           </Show>

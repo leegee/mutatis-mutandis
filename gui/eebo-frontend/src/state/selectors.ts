@@ -10,7 +10,7 @@
 
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import { controls } from "./controls.store";
-import { queryYearBounds, queryEvents, queryConcepts } from "../services/db";
+import { queryYearBounds, queryEvents, queryConcepts } from "../services/db/dbh";
 import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
 import type { ConceptData, ConceptEvent } from "../types/context-graph.types";
 
@@ -31,7 +31,7 @@ export async function getYearFiltered(
   fromYear?: number,
   toYear?: number,
 ): Promise<ConceptEvent[]> {
-  console.debug(`[getYearFiltered] ${concept} ${fromYear} ${toYear}`);
+  console.debug(`[getYearFiltered] ${ concept } ${ fromYear } ${ toYear }`);
   const c = concept ?? controls.concept;
   const fy = fromYear ?? controls.fromYear;
   const ty = toYear ?? controls.toYear;
@@ -42,7 +42,7 @@ export async function getYearFiltered(
 export async function totalEventsForConcept(concept?: string): Promise<number> {
   const c = concept ?? controls.concept;
   if (!c) return 0;
-  return (await import("../services/db")).queryNEvents(c);
+  return (await import("../services/db/dbh")).queryNEvents(c);
 }
 
 /** Synchronous — for callers that already hold a ConceptData object. */

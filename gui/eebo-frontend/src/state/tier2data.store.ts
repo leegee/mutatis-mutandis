@@ -12,7 +12,7 @@
  */
 
 import { createSignal } from "solid-js";
-import { initDb } from "../services/db";
+import { initDb } from "../services/db/dbh";
 import { CORPUS_TIER2_DB_URL } from "../corpus_config";
 
 // ---------------------------------------------------------------------------
