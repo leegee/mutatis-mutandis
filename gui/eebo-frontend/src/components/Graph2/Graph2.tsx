@@ -46,19 +46,34 @@ import MsgSettingLayout from "../MsgSettingLayout";
 
 // ── Internal graph data model ─────────────────────────────────────────────────
 
+type NodeKind = 0 | 1 | 2;
+export const NODE_KIND = {
+  EVENT: 0,
+  NEIGHBOUR: 1,
+  CONCEPT: 2,
+} as const satisfies Record<string, NodeKind>;
+
 interface NodeMeta {
   id: string;       // stable string id used for index lookups
-  kind: 0 | 1 | 2; // 0=event 1=neighbour 2=concept
+  kind: NodeKind;
   label: string;
   docId?: string;
   pubYear?: number | null;
   windowId?: number | null;
+  degree?: number | null;
 }
+
+type EdgeKind = 0 | 1 | 2;
+export const EDGE_KIND = {
+  SEMANTIC: 0,
+  COWINDOW: 1,
+  CONCEPT: 2,
+} as const satisfies Record<string, NodeKind>;
 
 interface EdgeMeta {
   srcIdx: number; // index into nodes array
+  kind: EdgeKind;
   tgtIdx: number;
-  kind: 0 | 1 | 2; // 0=semantic, 1=cowindow, 2=concept
   weight: number; // 0–1
 }
 
@@ -71,15 +86,15 @@ interface GraphData {
 
 // kind → [r, g, b, a]
 const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
-  0: [0.99, 0.72, 0.07, 1.0],  // amber   — event
-  1: [0.42, 0.58, 0.93, 1.0],  // slate   — neighbour
-  2: [0.24, 0.85, 0.56, 1.0],  // emerald — concept
+  [NODE_KIND.EVENT]: [0.99, 0.72, 0.07, 1.0],  // amber   — event
+  [NODE_KIND.NEIGHBOUR]: [0.42, 0.58, 0.93, 1.0],  // slate   — neighbour
+  [NODE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 1.0],  // emerald — concept
 };
 
 const EDGE_RGBA: Record<number, readonly [number, number, number, number]> = {
-  0: [0.99, 0.72, 0.07, 0.35], // semantic
-  1: [0.70, 0.85, 1.00, 0.50], // cowindow
-  2: [0.24, 0.85, 0.56, 0.30], // concept
+  [EDGE_KIND.SEMANTIC]: [0.99, 0.72, 0.07, 0.75], // semantic
+  [EDGE_KIND.COWINDOW]: [0.70, 0.85, 1.00, 0.90], // cowindow
+  [EDGE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 0.80], // concept
 };
 
 const HIDDEN_RGBA = [0, 0, 0, 0];
@@ -163,6 +178,19 @@ async function fetchGraphData(
     edges.push({ srcIdx, tgtIdx, kind: 0, weight: Math.max(0, Number(score)) });
   }
 
+  // 2.5 Count neighbours --------------
+  const degree = new Uint32Array(nodes.length);
+  for (const e of edges) {
+    if (e.kind !== EDGE_KIND.SEMANTIC) continue;
+
+    degree[e.srcIdx]++;
+    degree[e.tgtIdx]++; // optional if undirected view
+  }
+
+  for (let i = 0; i < nodes.length; i++) {
+    (nodes[i] as any).degree = degree[i];
+  }
+
   // 3. Co-window edges ─────────────────────────────────────────────────────────
   // Group event nodes by (doc_id, window_id) then connect all pairs (capped)
   const buckets = new Map<string, number[]>(); // key → [nodeIdx, …]
@@ -188,7 +216,7 @@ async function fetchGraphData(
   if (showConceptNodes) {
     const cIdx = addNode({ id: `c:${ concept }`, kind: 2, label: concept });
     for (let i = 0; i < nodes.length; i++) {
-      if (nodes[i].kind === 0) {
+      if (nodes[i].kind === NODE_KIND.EVENT) {
         edges.push({ srcIdx: i, tgtIdx: cIdx, kind: 2, weight: 0.5 });
       }
     }
@@ -283,8 +311,8 @@ function buildLinkColors(
 function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
   return new Float32Array(
     edges.map((e) =>
-      e.kind === 1 ? 0.7 : // cowindow — thin fixed
-        e.kind === 2 ? 0.5 : // concept  — thin fixed
+      e.kind === EDGE_KIND.COWINDOW ? 1.3 : // cowindow — thin fixed
+        e.kind === EDGE_KIND.CONCEPT ? 1.0 : // concept  — thin fixed
           Math.max(0.4, e.weight * 2.0), // semantic — weight-scaled
     ),
   );
@@ -341,10 +369,10 @@ const StatsBar: Component<{ data: GraphData }> = (p) => (
     "font-size": "11px", color: "#c8ccd8",
     "pointer-events": "none", "backdrop-filter": "blur(6px)",
   }}>
-    <Stat label="events" value={p.data.nodes.filter(n => n.kind === 0).length} />
-    <Stat label="neighbours" value={p.data.nodes.filter(n => n.kind === 1).length} />
-    <Stat label="semantic" value={p.data.edges.filter(e => e.kind === 0).length} />
-    <Stat label="co-window" value={p.data.edges.filter(e => e.kind === 1).length} />
+    <Stat label="events" value={p.data.nodes.filter(n => n.kind === NODE_KIND.EVENT).length} />
+    <Stat label="neighbours" value={p.data.nodes.filter(n => n.kind === NODE_KIND.NEIGHBOUR).length} />
+    <Stat label="semantic" value={p.data.edges.filter(e => e.kind === EDGE_KIND.SEMANTIC).length} />
+    <Stat label="co-window" value={p.data.edges.filter(e => e.kind === EDGE_KIND.COWINDOW).length} />
   </div>
 );
 
@@ -388,6 +416,7 @@ export interface ConceptGraphProps {
 
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const showConcept = () => props.showConceptNodes ?? false;
+  let initialized = false;
 
   let divRef!: HTMLDivElement;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -400,7 +429,10 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
   const [data] = createResource(
     () => [controls.concept, showConcept()] as [string, boolean],
-    ([concept, showConcept]) => fetchGraphData(concept, showConcept),
+    ([concept, showConcept]) => {
+      initialized = false;
+      return fetchGraphData(concept, showConcept);
+    },
   );
 
   let mouseClientX = 0;
@@ -450,35 +482,43 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
   });
 
+
   // Push data into cosmos whenever the resource resolves
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
 
-    nodeMeta = d.nodes; // update ref for event handler
     const yearMode = controls.yearMode;
     const fromYear = controls.fromYear;
     const toYear = controls.toYear;
+    const topN = controls.topN;
 
     const nodeVisible = new Uint8Array(d.nodes.length);
-
     for (let i = 0; i < d.nodes.length; i++) {
-      nodeVisible[i] = isNodeVisibleByTime(d.nodes[i], yearMode, fromYear, toYear) ? 1 : 0;
-    }
+      const n = d.nodes[i];
 
+      const timeOk = isNodeVisibleByTime(n, yearMode, fromYear, toYear);
+
+      const degreeOk =
+        n.kind !== NODE_KIND.EVENT ||
+        (n.degree ?? 0) >= topN; // only apply threshold to event nodes
+
+      nodeVisible[i] = timeOk && degreeOk ? 1 : 0;
+    }
     graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
     graph.setPointSizes(buildPointSizes(d.nodes));
 
-    if (d.edges.length > 0) {
-      graph.setLinks(buildLinks(d.edges));
-      graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
-      graph.setLinkWidths(buildLinkWidths(d.edges));
-    }
+    graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
+    graph.setLinkWidths(buildLinkWidths(d.edges));
 
-    // setPointPositions with no arguments (or omitting) lets the simulation
-    // place nodes. We still need to call it to set the node count.
-    // Pass a zeroed array of the right size; simulation will move nodes.
-    graph.setPointPositions(new Float32Array(d.nodes.length * 2));
+    if (!initialized) {
+      // setPointPositions with no arguments (or omitting) lets the simulation
+      // place nodes. We still need to call it to set the node count.
+      // Pass a zeroed array of the right size; simulation will move nodes.
+      graph.setPointPositions(new Float32Array(d.nodes.length * 2));
+      graph.setLinks(buildLinks(d.edges));
+      initialized = true;
+    }
 
     graph.render();
   });
@@ -530,3 +570,4 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 };
 
 export default ConceptGraph;
+
