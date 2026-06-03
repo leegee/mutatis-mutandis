@@ -40,6 +40,9 @@ import {
 } from "solid-js";
 import { Graph } from "@cosmos.gl/graph";
 import { execRows } from "../../services/db";
+import ControlsHeader from "../ControlsHeader";
+import { controls } from "../../state/controls.store";
+import MsgSettingLayout from "../MsgSettingLayout";
 
 // ── Internal graph data model ─────────────────────────────────────────────────
 
@@ -55,7 +58,7 @@ interface NodeMeta {
 interface EdgeMeta {
   srcIdx: number; // index into nodes array
   tgtIdx: number;
-  kind: 0 | 1 | 2;
+  kind: 0 | 1 | 2; // 0=semantic, 1=cowindow, 2=concept
   weight: number; // 0–1
 }
 
@@ -78,6 +81,8 @@ const EDGE_RGBA: Record<number, readonly [number, number, number, number]> = {
   1: [0.70, 0.85, 1.00, 0.50], // cowindow
   2: [0.24, 0.85, 0.56, 0.30], // concept
 };
+
+const HIDDEN_RGBA = [0, 0, 0, 0];
 
 const NODE_SIZE: Record<number, number> = { 0: 6, 1: 3.5, 2: 12 };
 
@@ -113,6 +118,7 @@ async function fetchGraphData(
     const [event_id, token, doc_id, pub_year, window_id] = row as [
       number, string, string, number | null, number | null,
     ];
+    // console.log(token)
     addNode({
       id: `e:${ event_id }`,
       kind: 0,
@@ -191,17 +197,49 @@ async function fetchGraphData(
   return { nodes, edges };
 }
 
+function isNodeVisibleByTime(
+  n: NodeMeta,
+  yearMode: string,
+  fromYear: number,
+  toYear: number
+): boolean {
+  if (yearMode === 'single') {
+    return fromYear === n.pubYear;
+  }
+
+  return (
+    n.pubYear != null &&
+    n.pubYear >= fromYear &&
+    n.pubYear <= toYear
+  );
+}
+
+
 // ── Float32Array builders ─────────────────────────────────────────────────────
 
-function buildPointColors(nodes: NodeMeta[]): Float32Array {
+function buildPointColors(
+  nodes: NodeMeta[],
+  yearMode: string,
+  fromYear: number,
+  toYear: number
+): Float32Array {
   const buf = new Float32Array(nodes.length * 4);
+
   for (let i = 0; i < nodes.length; i++) {
-    const [r, g, b, a] = NODE_RGBA[nodes[i].kind] ?? NODE_RGBA[1];
-    buf[i * 4] = r;
-    buf[i * 4 + 1] = g;
-    buf[i * 4 + 2] = b;
-    buf[i * 4 + 3] = a;
+    const n = nodes[i];
+
+    const visible = isNodeVisibleByTime(n, yearMode, fromYear, toYear);
+
+    const rgba = visible
+      ? (NODE_RGBA[n.kind] ?? NODE_RGBA[1])
+      : HIDDEN_RGBA;
+
+    buf[i * 4] = rgba[0];
+    buf[i * 4 + 1] = rgba[1];
+    buf[i * 4 + 2] = rgba[2];
+    buf[i * 4 + 3] = rgba[3];
   }
+
   return buf;
 }
 
@@ -218,15 +256,27 @@ function buildLinks(edges: EdgeMeta[]): Float32Array {
   return buf;
 }
 
-function buildLinkColors(edges: EdgeMeta[]): Float32Array {
+function buildLinkColors(
+  edges: EdgeMeta[],
+  nodeVisible: Uint8Array
+): Float32Array {
   const buf = new Float32Array(edges.length * 4);
+
   for (let i = 0; i < edges.length; i++) {
-    const [r, g, b, a] = EDGE_RGBA[edges[i].kind] ?? EDGE_RGBA[0];
-    buf[i * 4] = r;
-    buf[i * 4 + 1] = g;
-    buf[i * 4 + 2] = b;
-    buf[i * 4 + 3] = a;
+    const e = edges[i];
+
+    const visible = nodeVisible[e.srcIdx] && nodeVisible[e.tgtIdx];
+
+    const rgba = visible
+      ? EDGE_RGBA[e.kind] ?? EDGE_RGBA[0]
+      : HIDDEN_RGBA;
+
+    buf[i * 4] = rgba[0];
+    buf[i * 4 + 1] = rgba[1];
+    buf[i * 4 + 2] = rgba[2];
+    buf[i * 4 + 3] = rgba[3];
   }
+
   return buf;
 }
 
@@ -334,13 +384,9 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
 export interface ConceptGraphProps {
   concept: string;
   showConceptNodes?: boolean;
-  width?: number;
-  height?: number;
 }
 
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
-  const width = () => props.width ?? '100%';
-  const height = () => props.height ?? '100%';
   const showConcept = () => props.showConceptNodes ?? false;
 
   let divRef!: HTMLDivElement;
@@ -353,8 +399,8 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
 
   const [data] = createResource(
-    () => [props.concept, showConcept()] as [string, boolean],
-    ([c, sc]) => fetchGraphData(c, sc),
+    () => [controls.concept, showConcept()] as [string, boolean],
+    ([concept, showConcept]) => fetchGraphData(concept, showConcept),
   );
 
   let mouseClientX = 0;
@@ -363,10 +409,10 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   onMount(() => {
     graph = new Graph(divRef, {
       // v2 flat config ────────────────────────────────────────────────────────
-      backgroundColor: "#0c0e14",
       renderLinks: true,
+      spaceSize: 1024,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
-      fitViewDelay: 800,             // Give simulation time to settle before fitting
+      fitViewDelay: 20800,             // Give simulation time to settle before fitting
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
       simulationRepulsion: 1.1,
       simulationLinkSpring: 0.45,
@@ -374,13 +420,17 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       simulationFriction: 0.88,
       simulationGravity: 0.12,
       enableDrag: true,
-      // ── Events (index-based in v2) ─────────────────────────────────────────
+      randomSeed: 12,
+      simulationDecay: 10_000,
+      // Colours etc
+      backgroundColor: "#0c0e14",
+      // pointGreyoutOpacity: 0.5,
+      // linkGreyoutOpacity: 0.5,
+      // Events
       onPointMouseOver: (index: number) => {
         const node = nodeMeta[index];
         if (!node) return;
-
         const rect = divRef.getBoundingClientRect();
-
         // Assuming Cosmos renders at full size of the div
         setTooltip({
           node,
@@ -389,6 +439,8 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
         });
       },
       onPointMouseOut: () => setTooltip(null),
+      onSimulationEnd: () => graph?.fitView(),
+      onPointClick: (index, pos) => console.log('[onPointClick]', index, pos)
     });
 
     divRef.addEventListener("mousemove", (e: MouseEvent) => {
@@ -404,13 +456,22 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     if (!d || !graph) return;
 
     nodeMeta = d.nodes; // update ref for event handler
+    const yearMode = controls.yearMode;
+    const fromYear = controls.fromYear;
+    const toYear = controls.toYear;
 
-    graph.setPointColors(buildPointColors(d.nodes));
+    const nodeVisible = new Uint8Array(d.nodes.length);
+
+    for (let i = 0; i < d.nodes.length; i++) {
+      nodeVisible[i] = isNodeVisibleByTime(d.nodes[i], yearMode, fromYear, toYear) ? 1 : 0;
+    }
+
+    graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
     graph.setPointSizes(buildPointSizes(d.nodes));
 
     if (d.edges.length > 0) {
       graph.setLinks(buildLinks(d.edges));
-      graph.setLinkColors(buildLinkColors(d.edges));
+      graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
       graph.setLinkWidths(buildLinkWidths(d.edges));
     }
 
@@ -420,10 +481,6 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     graph.setPointPositions(new Float32Array(d.nodes.length * 2));
 
     graph.render();
-
-    setTimeout(() => {
-      graph?.fitView?.(0.01);
-    }, 1000);
   });
 
   onCleanup(() => {
@@ -431,32 +488,29 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   });
 
   return (
-    <article style={{
+    <article class="max surface-container" style={{
       position: "relative",
-      width: `${ width() }px`,
-      height: `${ height() }px`,
-      "font-family": "'IBM Plex Mono', monospace",
       overflow: "hidden",
-      "border-radius": "12px",
+      "flex-direction": "column",
+      display: "flex",
+      flex: 1,
+      height: '100%'
     }}>
-      <div id="cosmos-mount-point" ref={divRef} class="max" />
+      <ControlsHeader />
+      <div id="cosmos-mount-point" ref={divRef} class="max" style={{
+        position: "relative",
+        overflow: "hidden",
+        height: '100%'
+      }}></div>
 
       <Show when={data.loading}>
-        <div style={{
-          position: "absolute", inset: "0",
-          display: "flex", "align-items": "center", "justify-content": "center",
-          background: "rgba(12,14,20,0.75)",
-          color: "#fdb811", "font-size": "13px", "letter-spacing": "0.12em",
-        }}>
-          LOADING {props.concept}…
-        </div>
+        <MsgSettingLayout />
       </Show>
 
       <Show when={data.error}>
-        <div style={{
+        <div class="error" style={{
           position: "absolute", inset: "0",
           display: "flex", "align-items": "center", "justify-content": "center",
-          color: "#ff6b6b", "font-size": "12px",
         }}>
           {String(data.error)}
         </div>
@@ -471,15 +525,6 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
         <Tooltip tip={tooltip()!} />
       </Show>
 
-      <div style={{
-        position: "absolute", top: "16px", left: "16px",
-        "font-size": "18px", "font-weight": "700",
-        "letter-spacing": "0.1em", color: "#fdb811",
-        "text-shadow": "0 0 20px rgba(253,184,17,0.4)",
-        "pointer-events": "none",
-      }}>
-        {props.concept}
-      </div>
     </article>
   );
 };

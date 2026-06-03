@@ -14,6 +14,7 @@ import * as d3 from "d3"; // For scales
 import "./styles.css";
 
 import type { ContextGraphData, ContextNode, TokenBin } from "./types";
+import MsgSettingLayout from "../MsgSettingLayout";
 
 export type GraphFrame = {
   graphData: ContextGraphData;
@@ -609,7 +610,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
     <>
       <div
         ref={wrapRef!}
-        class="cg-canvas-wrap surface-container"
+        class="surface-container"
         style={{ visibility: simulating() ? "hidden" : "visible" }}
       >
         <div class="cg-labels">
@@ -658,21 +659,7 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
       </div>
 
       <Show when={simulating()}>
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            "flex-direction": "column",
-            "align-items": "center",
-            "justify-content": "center",
-            gap: "1rem",
-            "pointer-events": "none",
-          }}
-        >
-          <h3>Settling layout…</h3>
-          <progress class="circle light-green-text" />
-        </div>
+        <MsgSettingLayout />
       </Show>
     </>
   );

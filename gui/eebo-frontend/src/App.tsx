@@ -92,46 +92,46 @@ export default function App() {
       </nav>
 
       <main class="responsive max no-padding full">
-        <ErrorBoundary
+        {/* <ErrorBoundary
           fallback={(err, reset) => {
             <AppError err={err as Error} reset={reset} />;
           }}
+        > */}
+        <Show
+          when={dbReady()}
+          fallback={
+            <article
+              class="max small-round padding border medium no-padding"
+              style="min-height:100vh"
+            >
+              <section class="padding absolute center middle">
+                <h4>{dbLoadingError() ?? "Loading text events..."}</h4>
+                <Show when={!dbLoadingError()}>
+                  <progress class="wavy green-text" />
+                </Show>
+              </section>
+            </article>
+          }
         >
-          <Show
-            when={dbReady()}
-            fallback={
-              <article
-                class="max small-round padding border medium no-padding"
-                style="min-height:100vh"
-              >
-                <section class="padding absolute center middle">
-                  <h4>{dbLoadingError() ?? "Loading text events..."}</h4>
-                  <Show when={!dbLoadingError()}>
-                    <progress class="wavy green-text" />
-                  </Show>
-                </section>
-              </article>
-            }
-          >
-            <Switch>
-              <Match when={view() === "table"}>
-                <NeighbourhoodBrowser />
-              </Match>
+          <Switch>
+            <Match when={view() === "table"}>
+              <NeighbourhoodBrowser />
+            </Match>
 
-              <Match when={view() === "diachronic"}>
-                <DiachronicChart />
-              </Match>
+            <Match when={view() === "diachronic"}>
+              <DiachronicChart />
+            </Match>
 
-              <Match when={view() === "cosmos"}>
-                <Cosmos />
-              </Match>
+            <Match when={view() === "cosmos"}>
+              <Cosmos />
+            </Match>
 
-              <Match when={view() === "graph2"}>
-                <Graph2 concept="LIBERTY" />
-              </Match>
-            </Switch>
-          </Show>
-        </ErrorBoundary>
+            <Match when={view() === "graph2"}>
+              <Graph2 />
+            </Match>
+          </Switch>
+        </Show>
+        {/* </ErrorBoundary> */}
       </main>
 
       <Transition name="slide-fade">
