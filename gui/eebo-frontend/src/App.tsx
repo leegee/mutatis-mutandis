@@ -16,10 +16,10 @@ import AppError from "./components/AppError";
 import { Icon } from "./components/Icon";
 
 const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"),);
-const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"),);
-const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
-const Cosmos = lazy(() => import("./components/CosmosContextGraph"));
-const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
+import NeighbourhoodBrowser from "./components/NeighbourhoodBrowser";
+import DiachronicChart from "./components/DiachronicChart";
+// const Cosmos = lazy(() => import("./components/CosmosContextGraph"));
+import Graph2 from "./components/Graph2/Graph2";
 
 export default function App() {
   const [dbLoadingError, setDbLoadingError] = createSignal<string | null>(null);
@@ -37,7 +37,7 @@ export default function App() {
 
   const navItems = [
     { key: "graph2", icon: "orbit", label: "Exp" },
-    { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
+    // { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
     { key: "diachronic", icon: "calendar_view_week", label: "Diachronic Chart" },
   ] as const;
@@ -109,7 +109,7 @@ export default function App() {
               <section class="padding absolute center middle">
                 <h4>{dbLoadingError() ?? "Loading text events..."}</h4>
                 <Show when={!dbLoadingError()}>
-                  <progress class="wavy green-text" />
+                  <progress class="circle" />
                 </Show>
               </section>
             </article>
@@ -124,9 +124,9 @@ export default function App() {
               <DiachronicChart />
             </Match>
 
-            <Match when={view() === "cosmos"}>
+            {/* <Match when={view() === "cosmos"}>
               <Cosmos />
-            </Match>
+            </Match> */}
 
             <Match when={view() === "graph2"}>
               <Graph2 />
