@@ -91,7 +91,7 @@ async function loadGraphData(
   concept: string,
   showConceptNodes: boolean,
 ): Promise<GraphData> {
-  console.log('[graph2 loadGraphData]', concept)
+  console.debug('[graph2 loadGraphData]', concept)
   // node id string to array index
   const idToIdx = new Map<string, number>();
   const nodes: NodeMeta[] = [];
@@ -120,7 +120,7 @@ async function loadGraphData(
     const [event_id, token, doc_id, pub_year, window_id, token_idx] = row as [
       number, string, string, number | null, number | null, number
     ];
-    // console.log(token)
+    // console.debug(token)
     addNode({
       id: `e:${ event_id }`,
       kind: NODE_KIND.EVENT,
@@ -376,6 +376,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const [data] = createResource(
     () => [controls.concept, showConcept()] as [string, boolean],
     ([concept, showConcept]) => {
+      if (graph) graph.destroy();
       return loadGraphData(concept, showConcept);
     },
   );
@@ -383,7 +384,12 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   let mouseClientX = 0;
   let mouseClientY = 0;
 
-  onMount(() => {
+  function setGraph() {
+    if (graph) {
+      console.debug("[graph2.setGraph] destroy old graph");
+      graph.destroy();
+    }
+
     graph = new Graph(divRef, {
       renderLinks: true,
       spaceSize: 2048 * 2,
@@ -414,7 +420,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       onSimulationTick: () => setGraphProgress(graph?.progress || 0),
 
       onClick: (index, pos) => {
-        console.log('[onClick]', index, pos);
+        console.debug('[onClick]', index, pos);
         if (index) {
           setSelectedNode(nodeMeta[index]);
           graph?.selectPointByIndex(index);
@@ -426,6 +432,11 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       }
     });
 
+    console.debug("[graph2.setGraph] created new graph");
+  }
+
+  onMount(() => {
+    console.debug("[graph2.onMount] enter");
     divRef.addEventListener("mousemove", (e: MouseEvent) => {
       const rect = divRef.getBoundingClientRect();
       mouseClientX = e.clientX - rect.left;
@@ -437,46 +448,54 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const counts = createMemo(() => {
     const d = data();
     if (!d) return null;
-
     return {
       yearBuckets: data()?.years,
-
       events: d.nodes.filter(n => n.kind === NODE_KIND.EVENT).length,
       neighbours: d.nodes.filter(n => n.kind === NODE_KIND.NEIGHBOUR).length,
       concepts: d.nodes.filter(n => n.kind === NODE_KIND.CONCEPT).length,
-
       semantic: d.edges.filter(e => e.kind === EDGE_KIND.SEMANTIC).length,
       cowindow: d.edges.filter(e => e.kind === EDGE_KIND.COWINDOW).length,
       conceptEdges: d.edges.filter(e => e.kind === EDGE_KIND.CONCEPT).length,
     };
   });
 
-  // Effect 1: structural — runs only when data (concept) changes ----------
+  // Effect 1: structural - runs only when data (concept) changes
   createEffect(() => {
     const d = data();
-    if (!d || !graph) return;
+    if (!d) return;
     if (data.loading || data.error) return;
     if (d !== data.latest) return;
 
-    setGraphProgress(0);
-    setTooltip(null);
-    setSelectedNode(null);
-    graph?.unselectPoints();
+    if (graph) {
+      console.debug("[graph2.effect 1] reset graph");
+      setGraphProgress(0);
+      setTooltip(null);
+      setSelectedNode(null);
+      graph?.unselectPoints();
+    }
 
-    graph.setPointPositions(new Float32Array(d.nodes.length * 2));
-    graph.setLinks(buildLinks(d.edges));
-    graph.setPointSizes(buildPointSizes(d.nodes));
-    graph.setLinkWidths(buildLinkWidths(d.edges));
+    setGraph()
+
+    console.debug("[graph2.effect 1] set graph structure");
+    graph!.setPointPositions(new Float32Array(d.nodes.length * 2));
+    graph!.setLinks(buildLinks(d.edges));
+    graph!.setPointSizes(buildPointSizes(d.nodes));
+    graph!.setLinkWidths(buildLinkWidths(d.edges));
     nodeMeta = d.nodes;
 
-    graph.render();
-    graph.unpause();
+    graph!.render();
+    graph!.unpause();
+    console.debug("[graph2.effect 1] unpause");
   });
 
   // Effect 2: visual-only — runs when filters change, no simulation reset --
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
+    if (data.loading || data.error) return;
+    if (d !== data.latest) return;
+
+    console.debug("[graph2.effect 2] enter");
 
     const { yearMode, fromYear, toYear, topN } = controls;
 
@@ -491,9 +510,11 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
     graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
     graph.render();
+    console.debug("[graph2.effect 2] rendered");
   });
 
   onCleanup(() => {
+    console.debug("[graph2.cleanup] enter");
     graph?.pause?.();
   });
 
