@@ -394,7 +394,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       renderLinks: true,
       spaceSize: 2048 * 2,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
-      fitViewDelay: 100,          // Give simulation time to settle before fitting
+      fitViewDelay: 1000,            // Give simulation time to settle before fitting
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
       simulationRepulsion: 0.8,
       simulationLinkSpring: 0.45,
@@ -568,31 +568,46 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       </Show>
 
       <Show when={!data.loading && !data.error && data() && counts()}>
-        <footer class="surface-container">
-          <div class="center-align small-margin" style="display:flex;gap:1em">
-            <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}
-              label={`events (${ counts()!.events.toLocaleString() })`}
-            />
-            <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.NEIGHBOUR].map(_ => _ * 255).join(",") })`}
-              label={`neighbours (${ counts()!.neighbours.toLocaleString() })`}
-            />
-            <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.CONCEPT].map(_ => _ * 255).join(",") })`}
-              label={`concepts (${ counts()!.concepts.toLocaleString() })`}
-            />
+        <footer class="surface-container-low">
+          <nav class="padding">
+            <div style="display:flex;gap:1em">
+              <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}
+                label={`events (${ counts()!.events.toLocaleString() })`}
+              />
+              <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.NEIGHBOUR].map(_ => _ * 255).join(",") })`}
+                label={`neighbours (${ counts()!.neighbours.toLocaleString() })`}
+              />
+              <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.CONCEPT].map(_ => _ * 255).join(",") })`}
+                label={`concepts (${ counts()!.concepts.toLocaleString() })`}
+              />
 
-            {/* <hr class="vertical" /> */}
-            {" "}&middot;{" "}
+              {/* <hr class="vertical" /> */}
+              {" "}&middot;{" "}
 
-            <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.SEMANTIC].map(_ => _ * 255).join(",") })`}
-              label={`semantic (${ counts()!.semantic.toLocaleString() })`}
-            />
-            <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.COWINDOW].map(_ => _ * 255).join(",") })`}
-              label={`co-window (${ counts()!.cowindow.toLocaleString() })`}
-            />
-            <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.CONCEPT].map(_ => _ * 255).join(",") })`}
-              label={`concept (${ counts()!.conceptEdges.toLocaleString() })`}
-            />
-          </div>
+              <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.SEMANTIC].map(_ => _ * 255).join(",") })`}
+                label={`semantic (${ counts()!.semantic.toLocaleString() })`}
+              />
+              <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.COWINDOW].map(_ => _ * 255).join(",") })`}
+                label={`co-window (${ counts()!.cowindow.toLocaleString() })`}
+              />
+              <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.CONCEPT].map(_ => _ * 255).join(",") })`}
+                label={`concept (${ counts()!.conceptEdges.toLocaleString() })`}
+              />
+            </div>
+
+            <div class="max"></div>
+            <div class="medium-opacity">
+              <h1>
+                <Show when={controls.yearMode === 'single'}>
+                  {controls.fromYear}
+                </Show>
+                <Show when={controls.yearMode === 'range'}>
+                  {controls.fromYear} &mdash; {controls.toYear}
+                </Show>
+              </h1>
+            </div>
+          </nav>
+
         </footer>
       </Show>
 

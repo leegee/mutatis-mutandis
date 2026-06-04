@@ -1,7 +1,7 @@
 // src/state/controls.store.ts
 
 import { createStore } from "solid-js/store";
-import { CORPUS_START_YEAR } from "../corpus_config";
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 
 export type ViewMode = "aggregated" | "events";
 export type YearMode = "single" | "range";
@@ -31,8 +31,8 @@ export const [controls, setControls] = createStore<ControlsState>({
   minSimilarity: 0.5,
   hubSpread: 1,
   selectedNode: null,
-  yearMode: "single",
+  yearMode: "range",
   fromYear: CORPUS_START_YEAR,
-  toYear: CORPUS_START_YEAR,
+  toYear: CORPUS_END_YEAR,
   showEventLabels: false,
 });
