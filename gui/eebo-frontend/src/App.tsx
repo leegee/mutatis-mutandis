@@ -13,6 +13,7 @@ import { Transition } from "solid-transition-group";
 import "./App.css";
 import { dbReady, loadTier2Data } from "./state/tier2data.store";
 import AppError from "./components/AppError";
+import { Icon } from "./components/Icon";
 
 const CosmosContextGraphGuide = lazy(() => import("./components/CosmosContextGraph/Guide"),);
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"),);
@@ -49,10 +50,11 @@ export default function App() {
       >
         <header class="center-align top-margin tiny-margin no-padding">
           <button
-            class="extra transparent no-padding"
+            class="extra transparent no-padding no-margin"
             onClick={() => setOpen(!open())}
           >
-            <Switch>
+            <Icon />
+            {/* <Switch>
               <Match when={open()}>
                 {" "}
                 <i>menu_open</i>
@@ -61,7 +63,7 @@ export default function App() {
                 {" "}
                 <i>menu</i>{" "}
               </Match>
-            </Switch>
+            </Switch> */}
           </button>
         </header>
 

@@ -42,7 +42,7 @@ const C_LINK_UNFOCUS_TEXT = 0.9;
 
 function yearLabel(year: number, window: number): string {
   if (window === 0) return String(year);
-  return `${year - window}-${year + window}`;
+  return `${ year - window }-${ year + window }`;
 }
 
 function statusColor(s: TokenStatus): string {
@@ -62,7 +62,7 @@ function colX(colIdx: number): number {
 
 function linkPath(x1: number, y1: number, x2: number, y2: number): string {
   const cx = (x1 + x2) / 2;
-  return `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`;
+  return `M ${ x1 } ${ y1 } C ${ cx } ${ y1 }, ${ cx } ${ y2 }, ${ x2 } ${ y2 }`;
 }
 
 const DiachronicChart: Component = () => {
@@ -176,7 +176,7 @@ const DiachronicChart: Component = () => {
 
     for (const yr of yrs) {
       for (const rt of sl.get(yr) ?? []) {
-        map.set(`${yr}:${rt.token}`, classifyStatus(rt.token, yr, yrs, sl));
+        map.set(`${ yr }:${ rt.token }`, classifyStatus(rt.token, yr, yrs, sl));
       }
     }
 
@@ -188,21 +188,21 @@ const DiachronicChart: Component = () => {
       <ControlsHeader title="Diachronic Neighbours" fdgControls={false}>
         <hr class="divider vertical max no-margin no-padding" />
 
-        <div class="field middle-align border">
+        <div class="field suffix border middle-align small">
           <select
             value={sortKey()}
             onChange={(e) => setSortKey(e.currentTarget.value as SortKey)}
           >
-            <option value="freq">frequency</option>
-            <option value="score">cosine score</option>
+            <option value="freq">Frequency</option>
+            <option value="score">Cosine score</option>
           </select>
-          <output>Rank by</output>
+          <span class="tooltip bottom">Rank by</span>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />
 
         <div class="field middle-align">
-          <div class="slider tiny">
+          <div class="slider">
             <input
               type="range"
               min={0}
@@ -212,7 +212,7 @@ const DiachronicChart: Component = () => {
             />
             <span class="tooltip bottom" />
           </div>
-          <output class="small-padding top-padding">Smoothing</output>
+          <span class="tooltip bottom">Smoothing</span>
         </div>
       </ControlsHeader>
 
@@ -253,7 +253,7 @@ const DiachronicChart: Component = () => {
             {(yr, ci) => (
               <For each={displaySlices().get(yr) ?? []}>
                 {(rt) => {
-                  const key = `${yr}:${rt.token}`;
+                  const key = `${ yr }:${ rt.token }`;
                   const status = () => cellStatus().get(key) ?? "continuation";
                   const color = () => statusColor(status());
                   const isFocused = () =>

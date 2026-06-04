@@ -49,6 +49,7 @@ import { controlsActions } from "../../state/controls.actions";
 
 import "./style.css";
 import Sidebar from "./SideBar";
+import { getYearBounds } from "../../state/selectors";
 
 // -- Internal graph data model -------------------------------------------------
 
@@ -390,13 +391,17 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
 // -- Main component ------------------------------------------------------------
 
 export interface ConceptGraphProps {
-  concept: string;
   showConceptNodes?: boolean;
 }
 
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
-  const showConcept = () => props.showConceptNodes ?? false;
+  const showConcept = () => props.showConceptNodes ?? true;
   const [selectedNode, setSelectedNode] = createSignal<NodeMeta | null>(null);
+  const [yearBoundsResource] = createResource(
+    () => controls.concept,
+    (concept) => getYearBounds(concept),
+  );
+  const yearBounds = (): [number, number] => yearBoundsResource() ?? [controls.fromYear, controls.toYear];
 
   let divRef!: HTMLDivElement;
   let graph: Graph | undefined;
@@ -560,7 +565,24 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       height: '100%'
     }}>
 
-      <ControlsHeader />
+      <Show when={!data.loading}>
+        <ControlsHeader noYears={true}>
+          <YearTimeline
+            years={counts()!.yearBuckets!}
+            yearMode={controls.yearMode}
+            fromYear={controls.fromYear}
+            toYear={controls.toYear}
+            tooltipPosition='bottom'
+            onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
+          />
+          <button class="circle chip tiny no-border small-text"
+            onClick={(e) => controlsActions.setYearMode('range', yearBounds())}
+          >
+            ALL
+            <span class="tooltip top">Show all years</span>
+          </button>
+        </ControlsHeader>
+      </Show>
 
       <div id="graph_sidebar_row" style={{
         display: "flex",
@@ -596,7 +618,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
       <Show when={!data.loading && !data.error && data() && counts()}>
         <footer class="surface-container">
-          <div class="center-align">
+          {/* <div class="center-align row">
             <YearTimeline
               years={counts()!.yearBuckets!}
               yearMode={controls.yearMode}
@@ -604,7 +626,13 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
               toYear={controls.toYear}
               onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
             />
-          </div>
+            <button class="circle chip tiny no-border small-text"
+              onClick={(e) => controlsActions.setYearMode('range', yearBounds())}
+            >
+              ALL
+              <span class="tooltip top">Show all years</span>
+            </button>
+          </div> */}
 
           <div class="center-align small-margin" style="display:flex;gap:1em">
             <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}

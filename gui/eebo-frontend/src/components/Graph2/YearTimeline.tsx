@@ -7,12 +7,10 @@ export interface YearBucket {
 
 interface YearTimelineProps {
   years: YearBucket[];
-
   yearMode: "single" | "range";
-
   fromYear: number;
   toYear: number;
-
+  tooltipPosition?: 'top' | 'bottom' | null;
   onSelect?: (year: number) => void;
 }
 
@@ -73,7 +71,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
                         : "var(--secondary)",
                 }}
               />
-              <div class="tooltip top">
+              <div class={`tooltip ${ props.tooltipPosition || 'top' }`}>
                 <span class="bold">{bucket.year} </span>
                 &mdash;
                 {bucket.count} events
