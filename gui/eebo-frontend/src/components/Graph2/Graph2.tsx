@@ -49,7 +49,7 @@ import { controlsActions } from "../../state/controls.actions";
 
 import "./style.css";
 
-// ── Internal graph data model ─────────────────────────────────────────────────
+// -- Internal graph data model -------------------------------------------------
 
 type NodeKind = 0 | 1 | 2;
 export const NODE_KIND = {
@@ -93,7 +93,7 @@ interface GraphData {
   years: YearBucket[];
 }
 
-// ── Colours (normalised 0-1 RGBA) ────────────────────────────────────────────
+// -- Colours (normalised 0-1 RGBA) --------------------------------------------
 
 // kind to [r, g, b, a]
 const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
@@ -116,7 +116,7 @@ const NODE_SIZE: Record<number, number> = {
   [NODE_KIND.CONCEPT]: 12
 };
 
-// ── DB queries ────────────────────────────────────────────────────────────────
+// -- DB queries ----------------------------------------------------------------
 
 async function loadGraphData(
   concept: string,
@@ -137,7 +137,7 @@ async function loadGraphData(
     return idx;
   }
 
-  // 1. Events ─────────────────────────────────────────────────────────────────
+  // 1. Events -----------------------------------------------------------------
   const eventRows = await execRows(
     `SELECT event_id, token, doc_id, pub_year, window_id
      FROM events
@@ -170,7 +170,7 @@ async function loadGraphData(
       count,
     }));
 
-  // 2. Neighbours + semantic edges ────────────────────────────────────────────
+  // 2. Neighbours + semantic edges --------------------------------------------
   const neighbourRows = await execRows(
     `SELECT n.event_id, n.neighbour_event_id, n.token, n.doc_id,
             n.pub_year, n.window_id, n.score
@@ -217,7 +217,7 @@ async function loadGraphData(
     (nodes[i] as any).degree = degree[i];
   }
 
-  // 3. Co-window edges ─────────────────────────────────────────────────────────
+  // 3. Co-window edges ---------------------------------------------------------
   // Group event nodes by (doc_id, window_id) then connect all pairs (capped)
   const buckets = new Map<string, number[]>(); // key to [nodeIdx, …]
   for (let i = 0; i < nodes.length; i++) {
@@ -238,7 +238,7 @@ async function loadGraphData(
     }
   }
 
-  // 4. Concept membership (optional) ──────────────────────────────────────────
+  // 4. Concept membership (optional) ------------------------------------------
   if (showConceptNodes) {
     const cIdx = addNode({ id: `c:${ concept }`, kind: 2, label: concept });
     for (let i = 0; i < nodes.length; i++) {
@@ -269,7 +269,7 @@ function isNodeVisibleByTime(
 }
 
 
-// ── Float32Array builders ─────────────────────────────────────────────────────
+// -- Float32Array builders -----------------------------------------------------
 
 function buildPointColors(
   nodes: NodeMeta[],
@@ -344,7 +344,7 @@ function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
   );
 }
 
-// ── Overlay components ────────────────────────────────────────────────────────
+// -- Overlay components --------------------------------------------------------
 
 const Dot: Component<{ color: string; label: string }> = (p) => (
   <div style={{ display: "inline-flex", "align-items": "center", gap: "8px", "margin-bottom": "3px" }}>
@@ -378,7 +378,7 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
   </aside>
 );
 
-// ── Main component ────────────────────────────────────────────────────────────
+// -- Main component ------------------------------------------------------------
 
 export interface ConceptGraphProps {
   concept: string;
@@ -387,11 +387,9 @@ export interface ConceptGraphProps {
 
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const showConcept = () => props.showConceptNodes ?? false;
-  // let initialized = false;
 
   let divRef!: HTMLDivElement;
   let graph: Graph | undefined;
-  let yearCounts: YearBucket[];
 
   // Keep a ref to current node list so onPointMouseOver can resolve index to meta
   let nodeMeta: NodeMeta[] = [];
@@ -411,11 +409,11 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
   onMount(() => {
     graph = new Graph(divRef, {
-      // v2 flat config ────────────────────────────────────────────────────────
+      // v2 flat config --------------------------------------------------------
       renderLinks: true,
       spaceSize: 2048,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
-      fitViewDelay: 20800,             // Give simulation time to settle before fitting
+      fitViewDelay: 20_800,             // Give simulation time to settle before fitting
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
       simulationRepulsion: 1.1,
       simulationLinkSpring: 0.45,
@@ -433,22 +431,16 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       onPointMouseOver: (index: number) => {
         const node = nodeMeta[index];
         if (!node) return;
-        const rect = divRef.getBoundingClientRect();
-        // Assuming Cosmos renders at full size of the div
-        setTooltip({
-          node,
-          x: rect.left + mouseClientX,
-          y: rect.top + mouseClientY,
-        });
+        setTooltip({ node, x: mouseClientX, y: mouseClientY });
       },
       onPointMouseOut: () => setTooltip(null),
       onSimulationEnd: () => graph?.fitView(),
       onPointClick: (index, pos) => console.log('[onPointClick]', index, pos)
     });
-
     divRef.addEventListener("mousemove", (e: MouseEvent) => {
-      mouseClientX = e.clientX;
-      mouseClientY = e.clientY;
+      const rect = divRef.getBoundingClientRect();
+      mouseClientX = e.clientX - rect.left;
+      mouseClientY = e.clientY - rect.top;
     });
   });
 
@@ -506,7 +498,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   //   graph.render();
   // });
 
-  // ── Effect 1: structural — runs only when data (concept) changes ──────────
+  // -- Effect 1: structural — runs only when data (concept) changes ----------
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
@@ -522,7 +514,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     graph.unpause();
   });
 
-  // ── Effect 2: visual-only — runs when filters change, no simulation reset ──
+  // -- Effect 2: visual-only — runs when filters change, no simulation reset --
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
