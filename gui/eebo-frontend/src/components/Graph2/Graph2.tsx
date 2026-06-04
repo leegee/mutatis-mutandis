@@ -47,6 +47,8 @@ import MsgSettingLayout from "../MsgSettingLayout";
 import { YearTimeline } from "./YearTimeline";
 import { controlsActions } from "../../state/controls.actions";
 
+import "./style.css";
+
 // ── Internal graph data model ─────────────────────────────────────────────────
 
 type NodeKind = 0 | 1 | 2;
@@ -345,15 +347,15 @@ function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
 // ── Overlay components ────────────────────────────────────────────────────────
 
 const Dot: Component<{ color: string; label: string }> = (p) => (
-  <div style={{ display: "flex", "align-items": "center", gap: "8px", "margin-bottom": "3px" }}>
-    <div style={{ width: "9px", height: "9px", "border-radius": "50%", background: p.color, "flex-shrink": "0" }} />
+  <div style={{ display: "inline-flex", "align-items": "center", gap: "8px", "margin-bottom": "3px" }}>
+    <div style={{ width: "0.7rem", height: "0.7rem", "border-radius": "50%", background: p.color, "flex-shrink": "0" }} />
     <span>{p.label}</span>
   </div>
 );
 
 const Line: Component<{ color: string; label: string }> = (p) => (
-  <div style={{ display: "flex", "align-items": "center", gap: "8px", "margin-bottom": "3px" }}>
-    <div style={{ width: "22px", height: "2px", "border-radius": "1px", background: p.color, "flex-shrink": "0" }} />
+  <div style={{ display: "inline-flex", "align-items": "center", gap: "8px", "margin-bottom": "3px" }}>
+    <div style={{ width: "1rem", height: "2px", "border-radius": "1px", background: p.color, "flex-shrink": "0" }} />
     <span>{p.label}</span>
   </div>
 );
@@ -571,16 +573,18 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       </Show>
 
       <Show when={!data.loading && !data.error && data() && counts()}>
-        <footer class="surface-container tiny-padding fixed max">
-          <YearTimeline
-            years={counts()!.yearBuckets!}
-            yearMode={controls.yearMode}
-            fromYear={controls.fromYear}
-            toYear={controls.toYear}
-            onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
-          />
+        <footer class="surface-container">
+          <div class="center-align">
+            <YearTimeline
+              years={counts()!.yearBuckets!}
+              yearMode={controls.yearMode}
+              fromYear={controls.fromYear}
+              toYear={controls.toYear}
+              onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
+            />
+          </div>
 
-          <div class="row center-align tiny-padding">
+          <div class="center-align small-margin" style="display:flex;gap:1em">
             <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}
               label={`events (${ counts()!.events.toLocaleString() })`}
             />
@@ -591,7 +595,8 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
               label={`concepts (${ counts()!.concepts.toLocaleString() })`}
             />
 
-            <hr class="vertical" />
+            {/* <hr class="vertical" /> */}
+            {" "}&middot;{" "}
 
             <Line color={`rgba(${ EDGE_RGBA[EDGE_KIND.SEMANTIC].map(_ => _ * 255).join(",") })`}
               label={`semantic (${ counts()!.semantic.toLocaleString() })`}

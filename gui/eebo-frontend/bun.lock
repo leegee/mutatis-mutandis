@@ -8,7 +8,7 @@
         "@cosmos.gl/graph": "^2.6.4",
         "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
         "@types/pg": "^8.20.0",
-        "beercss": "^4.0.20",
+        "beercss": "^4.0.21",
         "d3": "^7.9.0",
         "pg": "^8.21.0",
         "solid-js": "^1.9.10",
@@ -270,7 +270,7 @@
 
     "baseline-browser-mapping": ["baseline-browser-mapping@2.9.18", "", { "bin": { "baseline-browser-mapping": "dist/cli.js" } }, "sha512-e23vBV1ZLfjb9apvfPk4rHVu2ry6RIr2Wfs+O324okSidrX7pTAnEJPCh/O5BtRlr7QtZI7ktOP3vsqr7Z5XoA=="],
 
-    "beercss": ["beercss@4.0.20", "", { "dependencies": { "material-dynamic-colors": "^1.1.4" } }, "sha512-Gf9iGeT2Ne9pzDXBcHbsWBHGdhBOzFZ4CllnfSJmkmHWUsbhVrRRqTTCsX1r5jh+fp/ribuwr7y9WRORQVBcQg=="],
+    "beercss": ["beercss@4.0.21", "", { "dependencies": { "material-dynamic-colors": "^1.1.4" } }, "sha512-TAxCpJ6sSP5/qgdtt+2Jcb+orHxtemv13FGeFBEUtCree5wzKLqN+owf/DIsBGj9YohRsuvgjLK9xfWox5zZjQ=="],
 
     "browserslist": ["browserslist@4.28.1", "", { "dependencies": { "baseline-browser-mapping": "^2.9.0", "caniuse-lite": "^1.0.30001759", "electron-to-chromium": "^1.5.263", "node-releases": "^2.0.27", "update-browserslist-db": "^1.2.0" }, "bin": { "browserslist": "cli.js" } }, "sha512-ZC5Bd0LgJXgwGqUknZY/vkUQ04r8NXnJZ3yYi4vDmSiZmC/pdSN0NbNRPxZpbtO4uAfDUAFffO8IZoM3Gj8IkA=="],
 

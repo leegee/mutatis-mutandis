@@ -32,14 +32,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
   };
 
   return (
-    <div
-      class="row center-align small-padding"
-      style={{
-        gap: "2px",
-        height: "44px",
-        "align-items": "flex-end",
-      }}
-    >
+    <aside class="surface-container row center-align small-padding" style={{ gap: "0.5pt", }} >
       <For each={props.years}>
         {(bucket) => {
           const selected = () => isSelected(bucket.year);
@@ -53,10 +46,8 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
             );
 
           return (
-            <button
-              class={`no-border transparent ${ selected() ? "primary-container" : ""
-                }`}
-              title={`${ bucket.year } (${ bucket.count } events)`}
+            <button class={`no-border transparent ${ selected() ? "tertiary-container" : ""
+              }`}
               onClick={() => props.onSelect?.(bucket.year)}
               style={{
                 padding: "0",
@@ -82,10 +73,15 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
                         : "var(--secondary)",
                 }}
               />
+              <div class="tooltip top">
+                <span class="bold">{bucket.year} </span>
+                &mdash;
+                {bucket.count} events
+              </div>
             </button>
           );
         }}
       </For>
-    </div>
+    </aside>
   );
 };

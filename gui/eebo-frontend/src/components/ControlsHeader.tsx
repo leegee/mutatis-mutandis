@@ -52,7 +52,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         {/* <hr style="width: 3em; background: transparent" /> */}
 
-        <div class="field suffix border middle-align">
+        <div class="field suffix border middle-align small">
           <select
             value={controls.concept}
             onChange={(e) => A.setConcept(e.currentTarget.value)}
@@ -65,7 +65,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         <hr class="divider vertical max no-margin no-padding" />
 
         {/* Year mode */}
-        <div class="field suffix border middle-align">
+        <div class="field suffix border middle-align small">
           <select
             value={controls.yearMode}
             onChange={(e) =>
@@ -167,27 +167,24 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         <hr class="divider vertical max no-margin no-padding" />
 
-        {/* Top N */}
-        <div class="field middle-align">
-          <div class="slider tiny">
-            <input
-              type="range"
-              min={1}
-              max={MAX_TOP_N}
-              step={1}
-              value={controls.topN}
-              onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
-            />
-            <span />
-            <span class="tooltip bottom" />
-          </div>
-          <span class="tooltip bottom">
+        {/* Top N  .field>:is(input,select) */}
+        <div class="field middle-align prefix  border small">
+          <i class="tiny">tenancy</i>
+          <input
+            type="number"
+            min={1}
+            max={MAX_TOP_N}
+            step={1}
+            value={controls.topN}
+            onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
+          />
+          {/* <span class="tooltip bottom">
             Top Neighbours {controls.topN}.
             <br />
             The number of top-ranked neighbours to display.
             <br />
             Reduce if the graph is too cluttered to read.
-          </span>
+          </span> */}
         </div>
 
         <Show when={fdgControls()}>
