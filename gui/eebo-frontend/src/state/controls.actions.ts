@@ -1,8 +1,21 @@
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import { setControls, type ViewMode, type YearMode } from "./controls.store";
 
+const clampYear = (y: number) =>
+    Math.min(CORPUS_END_YEAR, Math.max(CORPUS_START_YEAR, y));
+
+const normalizeRange = (from: number, to: number) => {
+    const a = clampYear(from);
+    const b = clampYear(to);
+    return {
+        fromYear: Math.min(a, b),
+        toYear: Math.max(a, b),
+    };
+};
+
 export const controlsActions = {
     setConcept(concept: string) {
+        console.log('[actions] setConcept', concept);
         setControls({
             concept,
             selectedNode: null,
@@ -36,42 +49,82 @@ export const controlsActions = {
         setControls("minSimilarity", v);
     },
 
+    // YEAR API
     setYearMode(mode: YearMode, bounds: [number, number]) {
         const [min, max] = bounds;
-        const mid = Math.floor((min + max) / 2);
+
+        if (mode === "single") {
+            const mid = clampYear(Math.floor((min + max) / 2));
+
+            setControls({
+                yearMode: "single",
+                fromYear: mid,
+                toYear: mid,
+            });
+            return;
+        }
 
         setControls({
-            yearMode: mode,
-            fromYear: mode === "single" ? mid : min,
-            toYear: mode === "single" ? mid : max,
+            yearMode: "range",
+            fromYear: clampYear(min),
+            toYear: clampYear(max),
         });
     },
 
-    setSingleYear(v: number) {
+    setSingleYear(year: number) {
+        const v = clampYear(year);
+
         setControls({
+            yearMode: "single",
             fromYear: v,
             toYear: v,
         });
     },
 
-    stepYear(delta: number) {
-        setControls((s) => {
-            const v = Math.min(
-                CORPUS_END_YEAR,
-                Math.max(CORPUS_START_YEAR, s.fromYear + delta)
-            );
+    setRange(from: number, to: number) {
+        const { fromYear, toYear } = normalizeRange(from, to);
 
-            return {
-                fromYear: v,
-                toYear: v,
-            };
+        setControls({
+            yearMode: "range",
+            fromYear,
+            toYear,
         });
     },
 
-    setRange(from: number, to: number) {
+    setAllYears() {
         setControls({
-            fromYear: from,
-            toYear: to,
+            yearMode: "range",
+            fromYear: CORPUS_START_YEAR,
+            toYear: CORPUS_END_YEAR,
+        });
+    },
+
+    stepYear(delta: number) {
+        setControls((s) => {
+            const base =
+                s.yearMode === "single" ? s.fromYear : s.toYear;
+
+            const next = clampYear(base + delta);
+
+            if (s.yearMode === "single") {
+                return {
+                    yearMode: "single",
+                    fromYear: next,
+                    toYear: next,
+                };
+            }
+
+            // range mode: expand in direction
+            const { fromYear, toYear } =
+                delta < 0
+                    ? normalizeRange(next, s.toYear)
+                    : normalizeRange(s.fromYear, next);
+
+            return {
+                yearMode: "range",
+                fromYear,
+                toYear,
+            };
         });
     },
 

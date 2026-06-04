@@ -129,3 +129,23 @@ export async function queryAggregate(concept: string, topN = 25) {
     top_windows: top_windows.slice(0, topN),
   };
 }
+
+
+export async function queryYearCounts(
+  concept: string,
+): Promise<Map<number, number>> {
+  const rows = await execRows(
+    `SELECT pub_year, COUNT(*) as count
+     FROM events
+     WHERE concept = ?
+       AND pub_year IS NOT NULL
+     GROUP BY pub_year ORDER BY pub_year ASC`,
+    [concept],
+  );
+
+  const map = new Map<number, number>();
+  for (const [year, count] of rows as [number, number][]) {
+    map.set(year, count);
+  }
+  return map;
+}

@@ -10,7 +10,7 @@
 
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import { controls } from "./controls.store";
-import { queryYearBounds, queryEvents, queryConcepts, queryNEvents } from "../services/db/";
+import { queryYearBounds, queryEvents, queryConcepts, queryNEvents, queryYearCounts } from "../services/db/";
 import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
 import type { ConceptData, ConceptEvent } from "../types/context-graph.types";
 
@@ -62,4 +62,29 @@ export function filterEvents(
     if (from <= min && to >= max) return events;
   }
   return filterByYearRange(events, from, to);
+}
+
+
+/** Used by YearTimeline */
+interface YearBucket {
+  year: number;
+  count: number;
+}
+
+export async function getYearBuckets(
+  concept?: string,
+): Promise<YearBucket[]> {
+  const c = concept ?? controls.concept;
+  if (!c) return [];
+
+  const [[minYear, maxYear], tally] = await Promise.all([
+    getYearBounds(c),
+    queryYearCounts(c),
+  ]);
+
+  const buckets: YearBucket[] = [];
+  for (let year = minYear; year <= maxYear; year++) {
+    buckets.push({ year, count: tally.get(year) ?? 0 });
+  }
+  return buckets;
 }

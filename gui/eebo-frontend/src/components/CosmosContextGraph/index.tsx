@@ -126,7 +126,6 @@ const CosmosComponent: Component = () => {
     fromYear: controls.fromYear,
     selectedNode: controls.selectedNode,
     onSelectNode: (id: string | null) => {
-      // setControls("selectedNode", (prev) => (prev === id ? null : id));
       controlsActions.setSelectedNode(id);
       console.log("[graph index onSelectNode]", id);
     },

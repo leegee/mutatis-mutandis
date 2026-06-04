@@ -7,11 +7,10 @@ import {
 } from "solid-js";
 import { controls, MAX_TOP_N } from "../state/controls.store";
 import { controlsActions as A } from "../state/controls.actions";
-import type { YearMode } from "../state/controls.store";
-import { getYearBounds, getYearFiltered } from "../state/selectors";
 import { queryConcepts } from "../services/db";
 
 import "./ControlsHeader.css";
+import { YearTimeline } from "./Graph2/YearTimeline";
 
 interface Props {
   children?: any;
@@ -30,135 +29,24 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const [conceptsResource] = createResource(queryConcepts);
   const concepts = () => conceptsResource() ?? [];
 
-  // Year bounds - refetches when concept changes
-  const [yearBoundsResource] = createResource(
-    () => controls.concept,
-    (concept) => getYearBounds(concept),
-  );
-  const yearBounds = (): [number, number] => yearBoundsResource() ?? [controls.fromYear, controls.toYear];
-
-  // Filtered event count - refetches when concept or year range changes
-  const [yearFilteredResource] = createResource(
-    () => [controls.concept, controls.fromYear, controls.toYear] as const,
-    ([concept, from, to]) => getYearFiltered(concept, from, to),
-  );
-  const filteredCount = () => yearFilteredResource()?.length ?? 0;
-
   return (
     <header class="left-align max surface-container-low tiny-padding bottom-padding top-padding no-margin">
       <nav>
         <div class="field suffix border middle-align small">
-          <select
-            value={controls.concept}
-            onChange={(e) => A.setConcept(e.currentTarget.value)}
-          >
-            <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
-          </select>
+          <Show when={concepts().length > 0}>
+            <select
+              value={controls.concept}
+              onChange={(e) => A.setConcept(e.currentTarget.value)}
+            >
+              <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
+            </select>
+          </Show>
           <span class="tooltip bottom">Concept</span>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />
 
-        {/* Year mode */}
-        <Show when={!props.noYears}>
-          <div class="field suffix border middle-align small">
-            <select
-              value={controls.yearMode}
-              onChange={(e) => A.setYearMode(e.currentTarget.value as YearMode, yearBounds())}
-            >
-              <option value="single">Single year</option>
-              <option value="range">Year range</option>
-            </select>
-            <span class="tooltip bottom">
-              Show date for one year or a span of years.
-            </span>
-          </div>
-
-          {/* Single year mode */}
-          <Show when={controls.yearMode === "single"}>
-            <hr class="divider vertical max no-margin no-padding" />
-            <nav class="no-space">
-              <button
-                class="circle chip tiny no-border"
-                onClick={() => A.stepYear(-1)}
-              >
-                <i>chevron_left</i>
-                <span class="tooltip bottom">Retreat by one year</span>
-              </button>
-              <div class="field middle-align">
-                <div class="slider tiny">
-                  <input
-                    type="range"
-                    min={yearBounds()[0]}
-                    max={yearBounds()[1]}
-                    step={1}
-                    value={controls.fromYear}
-                    onInput={(e) =>
-                      A.setSingleYear(Number(e.currentTarget.value))
-                    }
-                  />
-                  <span class="tooltip bottom" />
-                </div>
-                <div class="tooltip bottom">
-                  {controls.fromYear} ({filteredCount()} events)
-                </div>
-              </div>
-              <button
-                class="circle chip tiny no-border"
-                onClick={() => A.stepYear(+1)}
-              >
-                <i>chevron_right</i>
-                <span class="tooltip bottom">Advance by one year</span>
-              </button>
-            </nav>
-          </Show>
-
-          {/* Range mode */}
-          <Show when={controls.yearMode === "range"}>
-            <hr class="divider vertical max no-margin no-padding" />
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input
-                  type="range"
-                  min={yearBounds()[0]}
-                  max={yearBounds()[1]}
-                  step={1}
-                  value={controls.fromYear}
-                  onInput={(e) =>
-                    A.setRange(
-                      Math.min(Number(e.currentTarget.value), controls.toYear),
-                      controls.toYear,
-                    )
-                  }
-                />
-                <input
-                  type="range"
-                  min={yearBounds()[0]}
-                  max={yearBounds()[1]}
-                  step={1}
-                  value={controls.toYear}
-                  onInput={(e) =>
-                    A.setRange(
-                      controls.fromYear,
-                      Math.max(Number(e.currentTarget.value), controls.fromYear),
-                    )
-                  }
-                />
-                <span />
-                <span class="tooltip bottom" />
-                <span class="tooltip bottom" />
-              </div>
-              <div class="tooltip bottom">
-                {controls.fromYear}&mdash;{controls.toYear}
-                <Show when={props.totalEvents}>
-                  <span class="left-padding">
-                    {filteredCount()} / {props.totalEvents!()} events
-                  </span>
-                </Show>
-              </div>
-            </div>
-          </Show>
-        </Show>
+        <YearTimeline tooltipPosition="bottom" />
 
         <hr class="divider vertical max no-margin no-padding" />
 

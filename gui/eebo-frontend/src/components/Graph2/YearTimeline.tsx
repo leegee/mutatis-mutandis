@@ -1,37 +1,41 @@
-import { type Component, For } from "solid-js";
-
-export interface YearBucket {
-  year: number;
-  count: number;
-}
+import { type Component, createResource, For } from "solid-js";
+import { getYearBuckets } from "../../state/selectors";
+import { controls } from "../../state/controls.store";
+import { controlsActions as A } from "../../state/controls.actions";
 
 interface YearTimelineProps {
-  years: YearBucket[];
-  yearMode: "single" | "range";
-  fromYear: number;
-  toYear: number;
   tooltipPosition?: 'top' | 'bottom' | null;
   onSelect?: (year: number) => void;
 }
 
 export const YearTimeline: Component<YearTimelineProps> = (props) => {
-  const maxCount = () =>
-    Math.max(...props.years.map(y => y.count), 1);
+  const [yearBucketsResource] = createResource(
+    () => controls.concept,
+    (concept) => getYearBuckets(concept),
+  );
+
+  const maxCount = () => Math.max(...(yearBucketsResource() ?? []).map(y => y.count), 1);
 
   const isSelected = (year: number) => {
-    if (props.yearMode === "single") {
-      return year === props.fromYear;
+    if (controls.yearMode === "single") {
+      return year === controls.fromYear;
     }
 
     return (
-      year >= props.fromYear &&
-      year <= props.toYear
+      year >= controls.fromYear &&
+      year <= controls.toYear
     );
   };
 
   return (
     <aside class="surface-container row center-align small-padding" style={{ gap: "0.5pt", }} >
-      <For each={props.years}>
+
+      <button class="circle chip tiny no-border" onClick={() => A.stepYear(-1)} >
+        <i>chevron_left</i>
+        <span class="tooltip bottom">Retreat by one year</span>
+      </button>
+
+      <For each={yearBucketsResource()}>
         {(bucket) => {
           const selected = () => isSelected(bucket.year);
 
@@ -44,17 +48,18 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
             );
 
           return (
-            <button class={`no-border transparent ${ selected() ? "tertiary-container" : ""
+            <button class={`no-border no-padding transparent ${ selected() ? "tertiary-container" : ""
               }`}
-              onClick={() => props.onSelect?.(bucket.year)}
+              onClick={() => {
+                A.setSingleYear(bucket.year);
+              }}
               style={{
-                padding: "0",
                 width: "12px",
                 height: "40px",
                 display: "flex",
                 "align-items": "flex-end",
                 "justify-content": "center",
-                cursor: "pointer",
+                cursor: "crosshair",
               }}
             >
               <div
@@ -80,6 +85,20 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
           );
         }}
       </For>
-    </aside>
+
+      <button class="circle chip tiny no-border" onClick={() => A.stepYear(1)} >
+        <i>chevron_right</i>
+        <span class="tooltip bottom">Advance by one year</span>
+      </button>
+
+      <button class="circle chip tiny no-border small-text no-line" style="font-size:0.5rem"
+        onClick={A.setAllYears}
+      >
+        ALL YEARS
+        <span class="tooltip bottom">Show all years</span>
+      </button>
+
+
+    </aside >
   );
 };

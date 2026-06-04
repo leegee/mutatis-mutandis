@@ -1,32 +1,6 @@
 /**
- * ConceptGraph.tsx — @cosmos.gl/graph v2 compatible
+ * ConceptGraph.tsx
  *
- * Key v2 API facts used here
- * --------------------------
- *  • new Graph(div, config)         — takes a div, not a canvas
- *  • setPointPositions(Float32Array)— [x1,y1, x2,y2,…]; omit to let simulation place nodes
- *  • setLinks(Float32Array)         — [srcIdx, tgtIdx, …] (integer indices into the point array)
- *  • setPointColors(Float32Array)   — [r,g,b,a, …] normalised 0-1 per point
- *  • setPointSizes(Float32Array)    — one float per point
- *  • setLinkColors(Float32Array)    — [r,g,b,a, …] per link
- *  • setLinkWidths(Float32Array)    — one float per link
- *  • graph.render()                 — must be called after every data / attribute update
- *  • setConfigPartial(…)            — partial update without resetting everything
- *  • onPointMouseOver(index, pos)   — index into the point array, not a node object
- *  • unpause()                      — was restart() in v1
- *  • Flat config (no nested simulation:{} block)
- *
- * Node types
- * ----------
- *  kind 0  event     — amber
- *  kind 1  neighbour — slate-blue
- *  kind 2  concept   — emerald  (optional)
- *
- * Edge types
- * ----------
- *  kind 0  semantic  — event to neighbour, weight = FAISS cosine score
- *  kind 1  cowindow  — event ↔ event sharing (doc_id, window_id)
- *  kind 2  concept   — event to concept node (only when showConceptNodes=true)
  */
 
 import {
@@ -44,14 +18,12 @@ import { execRows } from "../../services/db";
 import ControlsHeader from "../ControlsHeader";
 import { controls } from "../../state/controls.store";
 import MsgSettingLayout from "../MsgSettingLayout";
-import { YearTimeline } from "./YearTimeline";
-import { controlsActions } from "../../state/controls.actions";
 
 import "./style.css";
 import Sidebar from "./SideBar";
-import { getYearBounds } from "../../state/selectors";
+import type { YearBucket } from "../../types";
 
-// -- Internal graph data model -------------------------------------------------
+// Simple internal graph data model
 
 type NodeKind = 0 | 1 | 2;
 export const NODE_KIND = {
@@ -85,30 +57,25 @@ export interface EdgeMeta {
   weight: number; // 0–1
 }
 
-interface YearBucket {
-  year: number;
-  count: number;
-}
-
 export interface GraphData {
   nodes: NodeMeta[];
   edges: EdgeMeta[];
   years: YearBucket[];
 }
 
-// -- Colours (normalised 0-1 RGBA) --------------------------------------------
+// Colours (normalised 0-1 RGBA)
 
 // kind to [r, g, b, a]
 const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
-  [NODE_KIND.EVENT]: [1, 0.65, 0.15, 1.0],  // amber   — event
-  [NODE_KIND.NEIGHBOUR]: [0.35, 0.55, 0.95, 1.0],  // slate   — neighbour
-  [NODE_KIND.CONCEPT]: [0.2, 0.8, 0.5, 1.0],  // emerald — concept
+  [NODE_KIND.EVENT]: [1, 0.65, 0.15, 1.0],
+  [NODE_KIND.NEIGHBOUR]: [0.35, 0.55, 0.95, 1.0],
+  [NODE_KIND.CONCEPT]: [0.2, 0.8, 0.5, 1.0],
 };
 
 const EDGE_RGBA: Record<number, readonly [number, number, number, number]> = {
-  [EDGE_KIND.SEMANTIC]: [0.99, 0.72, 0.07, 0.5], // semantic
-  [EDGE_KIND.COWINDOW]: [0.70, 0.85, 1.00, 0.90], // cowindow
-  [EDGE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 0.80], // concept
+  [EDGE_KIND.SEMANTIC]: [0.99, 0.72, 0.07, 0.5],
+  [EDGE_KIND.COWINDOW]: [0.70, 0.85, 1.00, 0.90],
+  [EDGE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 0.80],
 };
 
 const HIDDEN_RGBA = [0, 0, 0, 0];
@@ -119,8 +86,7 @@ const NODE_SIZE: Record<number, number> = {
   [NODE_KIND.CONCEPT]: 12
 };
 
-// -- DB queries ----------------------------------------------------------------
-
+// DB queries
 async function loadGraphData(
   concept: string,
   showConceptNodes: boolean,
@@ -140,7 +106,7 @@ async function loadGraphData(
     return idx;
   }
 
-  // 1. Events -----------------------------------------------------------------
+  // 1. Events
   const eventRows = await execRows(
     `SELECT event_id, token, doc_id, pub_year, window_id, token_idx
      FROM events
@@ -174,7 +140,7 @@ async function loadGraphData(
       count,
     }));
 
-  // 2. Neighbours + semantic edges --------------------------------------------
+  // 2. Neighbours + semantic edges
   const neighbourRows = await execRows(
     `SELECT n.event_id, n.neighbour_event_id, n.token, n.doc_id,
             n.pub_year, n.window_id, n.score, n.token_idx
@@ -209,7 +175,7 @@ async function loadGraphData(
     edges.push({ srcIdx, tgtIdx, kind: 0, weight: Math.max(0, Number(score)) });
   }
 
-  // 2.5 Count neighbours --------------
+  // 3. Count neighbours
   const degree = new Uint32Array(nodes.length);
   for (const e of edges) {
     if (e.kind !== EDGE_KIND.SEMANTIC) continue;
@@ -222,7 +188,7 @@ async function loadGraphData(
     (nodes[i] as any).degree = degree[i];
   }
 
-  // 3. Co-window edges ---------------------------------------------------------
+  // 4. Co-window edges
   // Group event nodes by (doc_id, window_id) then connect all pairs (capped)
   const buckets = new Map<string, number[]>(); // key to [nodeIdx, …]
   for (let i = 0; i < nodes.length; i++) {
@@ -243,7 +209,7 @@ async function loadGraphData(
     }
   }
 
-  // 4. Concept membership (optional) ------------------------------------------
+  // 5. Concept membership
   if (showConceptNodes) {
     const cIdx = addNode({
       id: `c:${ concept }`,
@@ -279,7 +245,7 @@ function isNodeVisibleByTime(
 }
 
 
-// -- Float32Array builders -----------------------------------------------------
+// Float32Array builders
 
 function buildPointColors(
   nodes: NodeMeta[],
@@ -347,14 +313,14 @@ function buildLinkColors(
 function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
   return new Float32Array(
     edges.map((e) =>
-      e.kind === EDGE_KIND.COWINDOW ? 2 : // cowindow — thin fixed
-        e.kind === EDGE_KIND.CONCEPT ? 2 : // concept  — thin fixed
-          Math.max(1, e.weight * 2.0), // semantic — weight-scaled
+      e.kind === EDGE_KIND.COWINDOW ? 2 :
+        e.kind === EDGE_KIND.CONCEPT ? 2 :
+          Math.max(1, e.weight * 2.0), // weight-scaled
     ),
   );
 }
 
-// -- Overlay components --------------------------------------------------------
+// Overlay components
 
 const Dot: Component<{ color: string; label: string }> = (p) => (
   <div style={{ display: "inline-flex", "align-items": "center", gap: "8px", "margin-bottom": "3px" }}>
@@ -388,7 +354,7 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
   </aside>
 );
 
-// -- Main component ------------------------------------------------------------
+// Main component
 
 export interface ConceptGraphProps {
   showConceptNodes?: boolean;
@@ -397,11 +363,7 @@ export interface ConceptGraphProps {
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const showConcept = () => props.showConceptNodes ?? true;
   const [selectedNode, setSelectedNode] = createSignal<NodeMeta | null>(null);
-  const [yearBoundsResource] = createResource(
-    () => controls.concept,
-    (concept) => getYearBounds(concept),
-  );
-  const yearBounds = (): [number, number] => yearBoundsResource() ?? [controls.fromYear, controls.toYear];
+  const [graphProgress, setGraphProgress] = createSignal(0);
 
   let divRef!: HTMLDivElement;
   let graph: Graph | undefined;
@@ -414,7 +376,6 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const [data] = createResource(
     () => [controls.concept, showConcept()] as [string, boolean],
     ([concept, showConcept]) => {
-      // initialized = false;
       return loadGraphData(concept, showConcept);
     },
   );
@@ -425,22 +386,23 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   onMount(() => {
     graph = new Graph(divRef, {
       renderLinks: true,
-      spaceSize: 2048,
+      spaceSize: 2048 * 2,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
       fitViewDelay: 100,          // Give simulation time to settle before fitting
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
-      simulationRepulsion: 0.5,
+      simulationRepulsion: 0.8,
       simulationLinkSpring: 0.45,
       simulationLinkDistance: 65,
-      simulationFriction: 0.5,     // slow down
+      simulationFriction: 0.9,     // slow down
       simulationGravity: 0.12,
       enableDrag: true,
       // randomSeed: 12,
-      simulationDecay: 10_000,
+      simulationDecay: 500,
       // Colours etc
       backgroundColor: "#0c0e14",
-      pointGreyoutOpacity: 0.5,
-      linkGreyoutOpacity: 0.5,
+      pointGreyoutOpacity: 0.1,
+      linkGreyoutOpacity: 0.1,
+
       // Events
       onPointMouseOver: (index: number) => {
         const node = nodeMeta[index];
@@ -449,12 +411,21 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       },
       onPointMouseOut: () => setTooltip(null),
       onSimulationEnd: () => graph?.fitView(),
-      onPointClick: (index, pos) => {
-        console.log('[onPointClick]', index, pos);
-        setSelectedNode(null);
-        setSelectedNode(nodeMeta[index]);
+      onSimulationTick: () => setGraphProgress(graph?.progress || 0),
+
+      onClick: (index, pos) => {
+        console.log('[onClick]', index, pos);
+        if (index) {
+          setSelectedNode(nodeMeta[index]);
+          graph?.selectPointByIndex(index);
+        } else {
+          setSelectedNode(null);
+          graph?.unselectPoints();
+
+        }
       }
     });
+
     divRef.addEventListener("mousemove", (e: MouseEvent) => {
       const rect = divRef.getBoundingClientRect();
       mouseClientX = e.clientX - rect.left;
@@ -484,8 +455,14 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
+    if (data.loading || data.error) return;
+    if (d !== data.latest) return;
 
+    setGraphProgress(0);
     setTooltip(null);
+    setSelectedNode(null);
+    graph?.unselectPoints();
+
     graph.setPointPositions(new Float32Array(d.nodes.length * 2));
     graph.setLinks(buildLinks(d.edges));
     graph.setPointSizes(buildPointSizes(d.nodes));
@@ -531,22 +508,10 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     }}>
 
       <Show when={!data.loading}>
-        <ControlsHeader noYears={true}>
-          <YearTimeline
-            years={counts()!.yearBuckets!}
-            yearMode={controls.yearMode}
-            fromYear={controls.fromYear}
-            toYear={controls.toYear}
-            tooltipPosition='bottom'
-            onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
-          />
-          <button class="circle chip tiny no-border small-text no-line" style="font-size:0.5rem"
-            onClick={() => controlsActions.setYearMode('range', yearBounds())}
-          >
-            ALL YEARS
-            <span class="tooltip bottom">Show all years</span>
-          </button>
-        </ControlsHeader>
+        <ControlsHeader />
+        <Show when={graphProgress() < 1}>
+          <progress max={1} value={graphProgress()} />
+        </Show>
       </Show>
 
       <div id="graph_sidebar_row" style={{
@@ -576,7 +541,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       </Show>
 
       <Show when={data.error}>
-        <div class="error border">
+        <div class="error-container border">
           {String(data.error)}
         </div>
       </Show>

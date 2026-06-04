@@ -10,10 +10,11 @@ export default function MsgSettingLayout() {
                 "justify-content": "center",
                 gap: "1rem",
                 "pointer-events": "none",
+                "z-index": 999,
             }}
         >
-            <h3>Settling layout…</h3>
-            <progress class="circle light-green-text" />
+            <h3>Loading data...</h3>
+            <progress class="circle" />
         </div>
 
     )
