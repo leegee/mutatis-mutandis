@@ -149,20 +149,18 @@ const CosmosComponent: Component = () => {
           <GraphCanvas frame={graphCanvasFrame()} />
 
           <Show when={controls.selectedNode}>
-            <Show when={controls.selectedNode}>
-              <ContextGraphSidebar
-                maxTopN={MAX_TOP_N}
-                selectedNode={controls.selectedNode!}
-                selectedKind={selectedKind()}
-                graphData={graphData()}
-                selectedBin={selectedBin()}
-                selectedDocs={selectedDocs()}
-                selectedEventNode={selectedEventNode()}
-                sharedByHubs={sharedByHubs()}
-                viewMode={controls.viewMode}
-                onClose={() => setControls("selectedNode", null)}
-              />
-            </Show>
+            <ContextGraphSidebar
+              maxTopN={MAX_TOP_N}
+              selectedNode={controls.selectedNode!}
+              selectedKind={selectedKind()}
+              graphData={graphData()}
+              selectedBin={selectedBin()}
+              selectedDocs={selectedDocs()}
+              selectedEventNode={selectedEventNode()}
+              sharedByHubs={sharedByHubs()}
+              viewMode={controls.viewMode}
+              onClose={() => setControls("selectedNode", null)}
+            />
           </Show>
         </div>
 

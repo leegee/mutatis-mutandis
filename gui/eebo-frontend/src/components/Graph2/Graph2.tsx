@@ -48,6 +48,7 @@ import { YearTimeline } from "./YearTimeline";
 import { controlsActions } from "../../state/controls.actions";
 
 import "./style.css";
+import Sidebar from "./SideBar";
 
 // -- Internal graph data model -------------------------------------------------
 
@@ -58,7 +59,7 @@ export const NODE_KIND = {
   CONCEPT: 2,
 } as const satisfies Record<string, NodeKind>;
 
-interface NodeMeta {
+export interface NodeMeta {
   id: string;       // stable string id used for index lookups
   kind: NodeKind;
   label: string;
@@ -75,7 +76,7 @@ export const EDGE_KIND = {
   CONCEPT: 2,
 } as const satisfies Record<string, NodeKind>;
 
-interface EdgeMeta {
+export interface EdgeMeta {
   srcIdx: number; // index into nodes array
   kind: EdgeKind;
   tgtIdx: number;
@@ -87,7 +88,7 @@ interface YearBucket {
   count: number;
 }
 
-interface GraphData {
+export interface GraphData {
   nodes: NodeMeta[];
   edges: EdgeMeta[];
   years: YearBucket[];
@@ -387,6 +388,7 @@ export interface ConceptGraphProps {
 
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const showConcept = () => props.showConceptNodes ?? false;
+  const [selectedNode, setSelectedNode] = createSignal<NodeMeta | null>(null);
 
   let divRef!: HTMLDivElement;
   let graph: Graph | undefined;
@@ -434,7 +436,10 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       },
       onPointMouseOut: () => setTooltip(null),
       onSimulationEnd: () => graph?.fitView(),
-      onPointClick: (index, pos) => console.log('[onPointClick]', index, pos)
+      onPointClick: (index, pos) => {
+        console.log('[onPointClick]', index, pos);
+        setSelectedNode(nodeMeta[index]);
+      }
     });
     divRef.addEventListener("mousemove", (e: MouseEvent) => {
       const rect = divRef.getBoundingClientRect();
@@ -546,12 +551,30 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       flex: 1,
       height: '100%'
     }}>
+
       <ControlsHeader />
-      <div id="cosmos-mount-point" ref={divRef} class="max" style={{
-        position: "relative",
+
+      <div id="graph_sidebar_row" style={{
+        display: "flex",
+        flex: 1,
         overflow: "hidden",
-        height: '100%'
-      }}></div>
+      }}>
+        <div id="cosmos-mount-point" ref={divRef} class="max" style={{
+          position: "relative",
+          overflow: "hidden",
+          flex: 1,
+          height: '100%'
+        }}></div>
+
+
+        <Show when={selectedNode()}>
+          <Sidebar
+            selectedNode={selectedNode()}
+            graphData={data() ?? null}
+            onClose={() => setSelectedNode(null)}
+          />
+        </Show>
+      </div>
 
       <Show when={data.loading}>
         <MsgSettingLayout />

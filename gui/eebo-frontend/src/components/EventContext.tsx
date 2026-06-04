@@ -10,6 +10,7 @@ import {
 import { createTokenWindowResource } from "../services/tokenWindowApi";
 
 interface EventContextProps {
+    label?: string | null;
     docId: string;
     tokenIdx: number;
     open?: boolean;
@@ -32,18 +33,23 @@ const EventContext: Component<EventContextProps> = (props) => {
 
     return (
         <>
-            <button class="chip tiny" onClick={() => setOpen(v => !v)} >
-                <Switch>
-                    <Match when={!open()}>
-                        <i>arrow_drop_down</i>
-                        <span class="tooltip bottom">View Context</span>
-                    </Match>
-                    <Match when={open()}>
-                        <i>arrow_drop_up</i>
-                        <span class="tooltip bottom">Hide Context</span>
-                    </Match>
-                </Switch>
-            </button>
+            <div class="row">
+                <Show when={props.label}>
+                    <span class="max">{props.label}</span>
+                </Show>
+                <button class="chip tiny" onClick={() => setOpen(v => !v)} >
+                    <Switch>
+                        <Match when={!open()}>
+                            <i>arrow_drop_down</i>
+                            <span class="tooltip bottom">View Context</span>
+                        </Match>
+                        <Match when={open()}>
+                            <i>arrow_drop_up</i>
+                            <span class="tooltip bottom">Hide Context</span>
+                        </Match>
+                    </Switch>
+                </button>
+            </div>
 
             <Show when={open()}>
                 <Show when={!window.loading} fallback={<progress class="light-green-text" />} >

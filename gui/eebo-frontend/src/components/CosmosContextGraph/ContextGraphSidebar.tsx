@@ -38,7 +38,7 @@ const ContextGraphSidebar: Component<Props> = (props) => {
         </h2>
 
         <button class="link border" onClick={props.onClose}>
-          ✕
+          <i>close</i>
         </button>
       </div>
 
@@ -57,7 +57,7 @@ const ContextGraphSidebar: Component<Props> = (props) => {
                   {years.length
                     ? years.length === 1
                       ? years[0]
-                      : `${years[0]}–${years[years.length - 1]}`
+                      : `${ years[0] }–${ years[years.length - 1] }`
                     : "-"}
                 </div>
                 <div>
@@ -80,7 +80,7 @@ const ContextGraphSidebar: Component<Props> = (props) => {
                           <div
                             class="cg-nb-bar-fill hub"
                             style={{
-                              width: `${(nb.freq / topMax) * 100}%`,
+                              width: `${ (nb.freq / topMax) * 100 }%`,
                             }}
                           />
                         </div>
@@ -188,7 +188,7 @@ const ContextGraphSidebar: Component<Props> = (props) => {
                               <div
                                 class="cg-nb-bar-fill neighbour"
                                 style={{
-                                  width: `${(h.freq / maxFreq) * 100}%`,
+                                  width: `${ (h.freq / maxFreq) * 100 }%`,
                                 }}
                               />
                             </div>
