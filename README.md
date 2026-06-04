@@ -3,6 +3,17 @@
     git@github.com:leegee/mutatis-mutandis.git
     https://github.com/leegee/mutatis-mutandis.git
 
+## Code Synopsis
+
+To use the GUI on the final SQLite3 db:
+
+    gunzip -k public/data/tier2_concept_neighbours.db.gz
+
+To run the pipeline that produces the db:
+
+    conda activate eebo
+    ./pipeline --help
+
 ## Conceptual Synopsis
 
 Ontological Topology: the study of semantic space as a structured geometric object, where meaning is defined by relative positions, continuity, and deformation of distributions across time rather than discrete sense inventories. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...
@@ -127,11 +138,6 @@ class PG,ZS datastore;
 class FI index;
 class CP,TD,VI output;
 ```
-
-## Code Synopsis
-
-    conda activate eebo
-    ./pipeline --help
 
 ## Deps list
 
