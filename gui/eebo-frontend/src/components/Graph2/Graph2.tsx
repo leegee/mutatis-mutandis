@@ -409,11 +409,10 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
   onMount(() => {
     graph = new Graph(divRef, {
-      // v2 flat config --------------------------------------------------------
       renderLinks: true,
       spaceSize: 2048,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
-      fitViewDelay: 20_800,             // Give simulation time to settle before fitting
+      fitViewDelay: 20_800,          // Give simulation time to settle before fitting
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
       simulationRepulsion: 1.1,
       simulationLinkSpring: 0.45,
@@ -425,8 +424,8 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       simulationDecay: 10_000,
       // Colours etc
       backgroundColor: "#0c0e14",
-      // pointGreyoutOpacity: 0.5,
-      // linkGreyoutOpacity: 0.5,
+      pointGreyoutOpacity: 0.5,
+      linkGreyoutOpacity: 0.5,
       // Events
       onPointMouseOver: (index: number) => {
         const node = nodeMeta[index];

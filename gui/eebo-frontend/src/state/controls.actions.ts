@@ -9,6 +9,10 @@ export const controlsActions = {
         });
     },
 
+    setSelectedNode(id: string | null) {
+        setControls("selectedNode", (prev) => (prev === id ? null : id));
+    },
+
     setViewMode(mode: ViewMode) {
         setControls({
             viewMode: mode,

@@ -18,6 +18,7 @@ import {
 import ControlsHeader from "../ControlsHeader";
 import ContextGraphSidebar from "./ContextGraphSidebar";
 import GraphCanvas, { type GraphFrame } from "./GraphCanvas";
+import { controlsActions } from "../../state/controls.actions";
 
 const MAX_TOP_N = 20;
 
@@ -59,12 +60,12 @@ const CosmosComponent: Component = () => {
     controls.viewMode === "events"
       ? buildPureEventGraph(filteredEvents(), controls.topN, EMPTY_GRAPH)
       : buildContextualGraph(
-          tokenBins(),
-          controls.topN,
-          controls.minSimilarity,
-          controls.maxHubs,
-          EMPTY_GRAPH,
-        ),
+        tokenBins(),
+        controls.topN,
+        controls.minSimilarity,
+        controls.maxHubs,
+        EMPTY_GRAPH,
+      ),
   );
 
   const selectedKind = createMemo<"hub" | "neighbour" | "event" | null>(() => {
@@ -125,7 +126,8 @@ const CosmosComponent: Component = () => {
     fromYear: controls.fromYear,
     selectedNode: controls.selectedNode,
     onSelectNode: (id: string | null) => {
-      setControls("selectedNode", (prev) => (prev === id ? null : id));
+      // setControls("selectedNode", (prev) => (prev === id ? null : id));
+      controlsActions.setSelectedNode(id);
       console.log("[graph index onSelectNode]", id);
     },
   }));
