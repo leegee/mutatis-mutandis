@@ -67,6 +67,7 @@ export interface NodeMeta {
   pubYear?: number | null;
   windowId?: number | null;
   degree?: number | null;
+  tokenIdx: number;
 }
 
 type EdgeKind = 0 | 1 | 2;
@@ -140,7 +141,7 @@ async function loadGraphData(
 
   // 1. Events -----------------------------------------------------------------
   const eventRows = await execRows(
-    `SELECT event_id, token, doc_id, pub_year, window_id
+    `SELECT event_id, token, doc_id, pub_year, window_id, token_idx
      FROM events
      WHERE concept = ?`,
     [concept],
@@ -149,8 +150,8 @@ async function loadGraphData(
   const yearCounts = new Map<number, number>();
 
   for (const row of eventRows) {
-    const [event_id, token, doc_id, pub_year, window_id] = row as [
-      number, string, string, number | null, number | null,
+    const [event_id, token, doc_id, pub_year, window_id, token_idx] = row as [
+      number, string, string, number | null, number | null, number
     ];
     // console.log(token)
     addNode({
@@ -160,6 +161,7 @@ async function loadGraphData(
       docId: String(doc_id),
       pubYear: pub_year,
       windowId: window_id,
+      tokenIdx: token_idx
     });
     yearCounts.set(pub_year || 0, (yearCounts.get(pub_year || 0) ?? 0) + 1);
   }
@@ -174,7 +176,7 @@ async function loadGraphData(
   // 2. Neighbours + semantic edges --------------------------------------------
   const neighbourRows = await execRows(
     `SELECT n.event_id, n.neighbour_event_id, n.token, n.doc_id,
-            n.pub_year, n.window_id, n.score
+            n.pub_year, n.window_id, n.score, n.token_idx
      FROM neighbours n
      INNER JOIN events e ON e.event_id = n.event_id
      WHERE e.concept = ?`,
@@ -182,8 +184,8 @@ async function loadGraphData(
   );
 
   for (const row of neighbourRows) {
-    const [event_id, neighbour_event_id, token, doc_id, pub_year, window_id, score] =
-      row as [number, number, string, string, number | null, number | null, number];
+    const [event_id, neighbour_event_id, token, doc_id, pub_year, window_id, score, token_idx] =
+      row as [number, number, string, string, number | null, number | null, number, number];
 
     // Prefer the event-node id if this neighbour is also a concept event
     const nStringId = idToIdx.has(`e:${ neighbour_event_id }`)
@@ -197,6 +199,7 @@ async function loadGraphData(
       docId: String(doc_id),
       pubYear: pub_year,
       windowId: window_id,
+      tokenIdx: token_idx
     });
 
     const srcIdx = idToIdx.get(`e:${ event_id }`);
@@ -241,7 +244,12 @@ async function loadGraphData(
 
   // 4. Concept membership (optional) ------------------------------------------
   if (showConceptNodes) {
-    const cIdx = addNode({ id: `c:${ concept }`, kind: 2, label: concept });
+    const cIdx = addNode({
+      id: `c:${ concept }`,
+      kind: NODE_KIND.CONCEPT,
+      label: concept,
+      tokenIdx: -1 // TODO what?
+    });
     for (let i = 0; i < nodes.length; i++) {
       if (nodes[i].kind === NODE_KIND.EVENT) {
         edges.push({ srcIdx: i, tgtIdx: cIdx, kind: 2, weight: 0.5 });

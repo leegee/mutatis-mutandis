@@ -59,6 +59,7 @@ const ConceptGraphSidebar: Component<Props> = (props) => {
                 {node.pubYear && <div>Year: {node.pubYear}</div>}
                 {node.docId && <div>Document: {node.docId}</div>}
                 {node.windowId != null && <div>Window: {node.windowId}</div>}
+                {node.tokenIdx != null && <div>Token Index: {node.tokenIdx}</div>}
                 {node.degree != null && <div>Degree: {node.degree}</div>}
                 <div style={{ opacity: 0.35, "font-size": "10px", "margin-top": "4px" }}>{node.id}</div>
               </section>
@@ -69,7 +70,7 @@ const ConceptGraphSidebar: Component<Props> = (props) => {
                   <EventContext
                     label="Context"
                     docId={node.docId!}
-                    tokenIdx={node.windowId!}
+                    tokenIdx={node.tokenIdx!}
                     open={true}
                   />
                   <button
