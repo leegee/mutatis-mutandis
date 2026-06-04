@@ -39,7 +39,7 @@ export default function App() {
     { key: "graph2", icon: "orbit", label: "Exp" },
     { key: "cosmos", icon: "orbit", label: "Force graph (Cosmos GL)" },
     { key: "table", icon: "view_column", label: "Neighbourhood Table" },
-    { key: "diachronic", icon: "avg_time", label: "Diachronic Chart" },
+    { key: "diachronic", icon: "calendar_view_week", label: "Diachronic Chart" },
   ] as const;
 
   return (

@@ -34,6 +34,7 @@ import { getYearBounds, getYearFiltered } from "../state/selectors";
 import { dbReady, dbError } from "../state/tier2data.store";
 import ControlsHeader from "./ControlsHeader";
 import Sparkline from "./NeighbourhoodBrowser/SparkLine";
+import { showDocument } from "../services/documentApi";
 
 // Types (unchanged)
 interface NeighbourSummary {
@@ -377,19 +378,33 @@ const NeighbourhoodBrowser: Component = () => {
         </nav>
 
         {/* CENTRE: neighbour tokens */}
-        <section
-          class="s6 surface-container"
+        <section class="s6 surface-container"
           style={{ flex: "1", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
           <Show when={activeWindowEvent()}>
-            <aside class="center-align small-padding border small-round">
-              <Show
-                when={windowText()}
-                fallback={<div><p>Loading context…</p><progress /></div>}
-              >
-                {(text) => <blockquote innerHTML={text()} />}
-              </Show>
-            </aside>
+            {(event) => (
+              <aside class="center-align small-padding border small-round">
+                <Show
+                  when={windowText()}
+                  fallback={<div><p>Loading context…</p><progress /></div>}
+                >
+                  {(text) => (
+                    <>
+                      <blockquote innerHTML={text()} />
+                      <button
+                        class="chip"
+                        disabled={!event().doc_id}
+                        onClick={() => {
+                          if (event().doc_id) showDocument(event().doc_id, event().token_idx)
+                        }}
+                      >
+                        {event().doc_id ?? "No document"}
+                      </button>
+                    </>
+                  )}
+                </Show>
+              </aside>
+            )}
           </Show>
 
           <div
