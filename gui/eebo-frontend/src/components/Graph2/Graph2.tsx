@@ -44,6 +44,8 @@ import { execRows } from "../../services/db";
 import ControlsHeader from "../ControlsHeader";
 import { controls } from "../../state/controls.store";
 import MsgSettingLayout from "../MsgSettingLayout";
+import { YearTimeline } from "./YearTimeline";
+import { controlsActions } from "../../state/controls.actions";
 
 // ── Internal graph data model ─────────────────────────────────────────────────
 
@@ -78,9 +80,15 @@ interface EdgeMeta {
   weight: number; // 0–1
 }
 
+interface YearBucket {
+  year: number;
+  count: number;
+}
+
 interface GraphData {
   nodes: NodeMeta[];
   edges: EdgeMeta[];
+  years: YearBucket[];
 }
 
 // ── Colours (normalised 0-1 RGBA) ────────────────────────────────────────────
@@ -108,11 +116,11 @@ const NODE_SIZE: Record<number, number> = {
 
 // ── DB queries ────────────────────────────────────────────────────────────────
 
-async function fetchGraphData(
+async function loadGraphData(
   concept: string,
   showConceptNodes: boolean,
 ): Promise<GraphData> {
-  console.log('[graph2 fetchGraphData]', concept)
+  console.log('[graph2 loadGraphData]', concept)
   // node id string to array index
   const idToIdx = new Map<string, number>();
   const nodes: NodeMeta[] = [];
@@ -135,6 +143,8 @@ async function fetchGraphData(
     [concept],
   );
 
+  const yearCounts = new Map<number, number>();
+
   for (const row of eventRows) {
     const [event_id, token, doc_id, pub_year, window_id] = row as [
       number, string, string, number | null, number | null,
@@ -142,13 +152,21 @@ async function fetchGraphData(
     // console.log(token)
     addNode({
       id: `e:${ event_id }`,
-      kind: 0,
+      kind: NODE_KIND.EVENT,
       label: String(token),
       docId: String(doc_id),
       pubYear: pub_year,
       windowId: window_id,
     });
+    yearCounts.set(pub_year || 0, (yearCounts.get(pub_year || 0) ?? 0) + 1);
   }
+
+  const years = [...yearCounts.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([year, count]) => ({
+      year,
+      count,
+    }));
 
   // 2. Neighbours + semantic edges ────────────────────────────────────────────
   const neighbourRows = await execRows(
@@ -228,7 +246,7 @@ async function fetchGraphData(
     }
   }
 
-  return { nodes, edges };
+  return { nodes, edges, years };
 }
 
 function isNodeVisibleByTime(
@@ -340,22 +358,6 @@ const Line: Component<{ color: string; label: string }> = (p) => (
   </div>
 );
 
-const StatsBar: Component<{ data: GraphData }> = (p) => (
-  <>
-    <Stat label="events" value={p.data.nodes.filter(n => n.kind === NODE_KIND.EVENT).length} />
-    <Stat label="neighbours" value={p.data.nodes.filter(n => n.kind === NODE_KIND.NEIGHBOUR).length} />
-    <Stat label="semantic" value={p.data.edges.filter(e => e.kind === EDGE_KIND.SEMANTIC).length} />
-    <Stat label="co-window" value={p.data.edges.filter(e => e.kind === EDGE_KIND.COWINDOW).length} />
-  </>
-);
-
-const Stat: Component<{ label: string; value: number }> = (p) => (
-  <>
-    <span>{p.label}</span>
-    <span>{p.value.toLocaleString()}</span>
-  </>
-);
-
 interface TipData { node: NodeMeta; x: number; y: number }
 
 const Tooltip: Component<{ tip: TipData }> = (p) => (
@@ -366,9 +368,7 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
     "max-width": "240px",
     "z-index": "10",
   }}>
-    <div style={{ "font-weight": "700", "font-size": "13px", color: "#fff", "margin-bottom": "5px" }}>
-      {p.tip.node.label}
-    </div>
+    <h6> {p.tip.node.label} </h6>
     {p.tip.node.docId && <div><span style={{ opacity: "0.45" }}>doc  </span>{p.tip.node.docId.slice(0, 20)}</div>}
     {p.tip.node.pubYear && <div><span style={{ opacity: "0.45" }}>year </span>{p.tip.node.pubYear}</div>}
     {p.tip.node.windowId != null && <div><span style={{ opacity: "0.45" }}>win  </span>{p.tip.node.windowId}</div>}
@@ -385,11 +385,11 @@ export interface ConceptGraphProps {
 
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const showConcept = () => props.showConceptNodes ?? false;
-  let initialized = false;
+  // let initialized = false;
 
   let divRef!: HTMLDivElement;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let graph: Graph | undefined;
+  let yearCounts: YearBucket[];
 
   // Keep a ref to current node list so onPointMouseOver can resolve index to meta
   let nodeMeta: NodeMeta[] = [];
@@ -399,9 +399,8 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const [data] = createResource(
     () => [controls.concept, showConcept()] as [string, boolean],
     ([concept, showConcept]) => {
-      setTooltip(null);
-      initialized = false;
-      return fetchGraphData(concept, showConcept);
+      // initialized = false;
+      return loadGraphData(concept, showConcept);
     },
   );
 
@@ -457,6 +456,8 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     if (!d) return null;
 
     return {
+      yearBuckets: data()?.years,
+
       events: d.nodes.filter(n => n.kind === NODE_KIND.EVENT).length,
       neighbours: d.nodes.filter(n => n.kind === NODE_KIND.NEIGHBOUR).length,
       concepts: d.nodes.filter(n => n.kind === NODE_KIND.CONCEPT).length,
@@ -467,39 +468,75 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     };
   });
 
-  // Push data into cosmos whenever the resource resolves
+  // // Push data into cosmos whenever the resource resolves
+  // createEffect(() => {
+  //   const d = data();
+  //   if (!d || !graph) return;
+
+  //   const yearMode = controls.yearMode;
+  //   const fromYear = controls.fromYear;
+  //   const toYear = controls.toYear;
+  //   const topN = controls.topN;
+
+  //   const nodeVisible = new Uint8Array(d.nodes.length);
+  //   for (let i = 0; i < d.nodes.length; i++) {
+  //     const n = d.nodes[i];
+  //     const timeOk = isNodeVisibleByTime(n, yearMode, fromYear, toYear);
+  //     const degreeOk = n.kind !== NODE_KIND.EVENT || (n.degree ?? 0) <= topN; // only apply threshold to event nodes
+  //     nodeVisible[i] = timeOk && degreeOk ? 1 : 0;
+  //   }
+
+  //   graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
+  //   graph.setPointSizes(buildPointSizes(d.nodes));
+
+  //   graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
+  //   graph.setLinkWidths(buildLinkWidths(d.edges));
+
+  //   if (!initialized) {
+  //     // setPointPositions with no arguments (or omitting) lets the simulation
+  //     // place nodes. We still need to call it to set the node count.
+  //     // Pass a zeroed array of the right size; simulation will move nodes.
+  //     graph.setPointPositions(new Float32Array(d.nodes.length * 2));
+  //     graph.setLinks(buildLinks(d.edges));
+  //     initialized = true;
+  //   }
+
+  //   graph.render();
+  // });
+
+  // ── Effect 1: structural — runs only when data (concept) changes ──────────
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
 
-    const yearMode = controls.yearMode;
-    const fromYear = controls.fromYear;
-    const toYear = controls.toYear;
-    const topN = controls.topN;
+    setTooltip(null);
+    graph.setPointPositions(new Float32Array(d.nodes.length * 2));
+    graph.setLinks(buildLinks(d.edges));
+    graph.setPointSizes(buildPointSizes(d.nodes));
+    graph.setLinkWidths(buildLinkWidths(d.edges));
+    nodeMeta = d.nodes;
+
+    graph.render();
+    graph.unpause();
+  });
+
+  // ── Effect 2: visual-only — runs when filters change, no simulation reset ──
+  createEffect(() => {
+    const d = data();
+    if (!d || !graph) return;
+
+    const { yearMode, fromYear, toYear, topN } = controls;
 
     const nodeVisible = new Uint8Array(d.nodes.length);
     for (let i = 0; i < d.nodes.length; i++) {
       const n = d.nodes[i];
       const timeOk = isNodeVisibleByTime(n, yearMode, fromYear, toYear);
-      const degreeOk = n.kind !== NODE_KIND.EVENT || (n.degree ?? 0) <= topN; // only apply threshold to event nodes
+      const degreeOk = n.kind !== NODE_KIND.EVENT || (n.degree ?? 0) <= topN;
       nodeVisible[i] = timeOk && degreeOk ? 1 : 0;
     }
 
     graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
-    graph.setPointSizes(buildPointSizes(d.nodes));
-
     graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
-    graph.setLinkWidths(buildLinkWidths(d.edges));
-
-    if (!initialized) {
-      // setPointPositions with no arguments (or omitting) lets the simulation
-      // place nodes. We still need to call it to set the node count.
-      // Pass a zeroed array of the right size; simulation will move nodes.
-      graph.setPointPositions(new Float32Array(d.nodes.length * 2));
-      graph.setLinks(buildLinks(d.edges));
-      initialized = true;
-    }
-
     graph.render();
   });
 
@@ -535,6 +572,14 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
       <Show when={!data.loading && !data.error && data() && counts()}>
         <footer class="surface-container tiny-padding fixed max">
+          <YearTimeline
+            years={counts()!.yearBuckets!}
+            yearMode={controls.yearMode}
+            fromYear={controls.fromYear}
+            toYear={controls.toYear}
+            onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
+          />
+
           <div class="row center-align tiny-padding">
             <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}
               label={`events (${ counts()!.events.toLocaleString() })`}
