@@ -87,7 +87,7 @@ export default function App() {
 
         <hr class="max surface-container-low" />
 
-        <a onClick={() => setOpenHelp(!openHelp())}>
+        <a onClick={() => setOpenHelp(!openHelp())} class="extra-padding bottom-padding">
           <i>help</i>
           <span>Guide</span>
         </a>
