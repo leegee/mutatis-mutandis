@@ -10,7 +10,7 @@ import { controlsActions as A } from "../state/controls.actions";
 import { queryConcepts } from "../services/db";
 
 import "./ControlsHeader.css";
-import { YearTimeline } from "./Graph2/YearTimeline";
+import { YearTimeline } from "./YearTimeline";
 
 interface Props {
   children?: any;
