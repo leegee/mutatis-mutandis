@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void;
 }
 
+import "./Sidebar.css";
+
 const ConceptGraphSidebar: Component<Props> = (props) => {
   // Edges where this node is src or tgt, with the other end resolved
   const neighbourEdges = () => {
@@ -36,7 +38,7 @@ const ConceptGraphSidebar: Component<Props> = (props) => {
 
   return (
     <aside
-      class="min surface-container-high scroll medium-elevate padding border small-margin no-top-padding no-round"
+      class="min surface-container-high scroll medium-elevate border no-padding no-margin no-round"
       style="max-width: 20vw; min-width: 20rem"
     >
       <Show when={props.selectedNode} fallback={
@@ -48,7 +50,7 @@ const ConceptGraphSidebar: Component<Props> = (props) => {
             <article>
               <header>
                 <div class="row">
-                  <h4 class="max"><q>{node.label}</q></h4>
+                  <h2 class="max large"><q>{node.label}</q></h2>
                   <button class="link border" onClick={props.onClose}><i>close</i></button>
                 </div>
               </header>
@@ -61,7 +63,7 @@ const ConceptGraphSidebar: Component<Props> = (props) => {
                 {node.windowId != null && <div>Window: {node.windowId}</div>}
                 {node.tokenIdx != null && <div>Token Index: {node.tokenIdx}</div>}
                 {node.degree != null && <div>Degree: {node.degree}</div>}
-                <div style={{ opacity: 0.35, "font-size": "10px", "margin-top": "4px" }}>{node.id}</div>
+                <div style={{ opacity: 0.75, "font-size": "10px", "margin-top": "4px" }}>{node.id}</div>
               </section>
 
               {/*  EventContext (events and neighbours that have a doc + window)  */}
@@ -97,8 +99,8 @@ const ConceptGraphSidebar: Component<Props> = (props) => {
                             <div class="row max">
                               <div class="cg-nb-bar-wrap" style="width: 33%">
                                 <div
-                                  class="cg-nb-bar-fill hub"
-                                  style={{ width: `${ (edge.weight / maxWeight) * 100 }%` }}
+                                  class="cg-nb-bar-fill primary"
+                                  style={{ width: `${ (edge.weight / maxWeight) * 100 }%`, background: 'blue' }}
                                 />
                               </div>
                               <span class="cg-nb-token"><q>{neighbour.label}</q></span>

@@ -35,7 +35,7 @@ const EventContext: Component<EventContextProps> = (props) => {
         <>
             <div class="row">
                 <Show when={props.label}>
-                    <span class="max">{props.label}</span>
+                    <h4 class="max">{props.label}</h4>
                 </Show>
                 <button class="chip tiny" onClick={() => setOpen(v => !v)} >
                     <Switch>

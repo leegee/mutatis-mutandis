@@ -427,15 +427,15 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       renderLinks: true,
       spaceSize: 2048,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
-      fitViewDelay: 20_800,          // Give simulation time to settle before fitting
+      fitViewDelay: 100,          // Give simulation time to settle before fitting
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
-      simulationRepulsion: 1.1,
+      simulationRepulsion: 0.5,
       simulationLinkSpring: 0.45,
       simulationLinkDistance: 65,
-      simulationFriction: 0.88,
+      simulationFriction: 0.5,     // slow down
       simulationGravity: 0.12,
       enableDrag: true,
-      randomSeed: 12,
+      // randomSeed: 12,
       simulationDecay: 10_000,
       // Colours etc
       backgroundColor: "#0c0e14",
@@ -451,6 +451,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
       onSimulationEnd: () => graph?.fitView(),
       onPointClick: (index, pos) => {
         console.log('[onPointClick]', index, pos);
+        setSelectedNode(null);
         setSelectedNode(nodeMeta[index]);
       }
     });
@@ -479,43 +480,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     };
   });
 
-  // // Push data into cosmos whenever the resource resolves
-  // createEffect(() => {
-  //   const d = data();
-  //   if (!d || !graph) return;
-
-  //   const yearMode = controls.yearMode;
-  //   const fromYear = controls.fromYear;
-  //   const toYear = controls.toYear;
-  //   const topN = controls.topN;
-
-  //   const nodeVisible = new Uint8Array(d.nodes.length);
-  //   for (let i = 0; i < d.nodes.length; i++) {
-  //     const n = d.nodes[i];
-  //     const timeOk = isNodeVisibleByTime(n, yearMode, fromYear, toYear);
-  //     const degreeOk = n.kind !== NODE_KIND.EVENT || (n.degree ?? 0) <= topN; // only apply threshold to event nodes
-  //     nodeVisible[i] = timeOk && degreeOk ? 1 : 0;
-  //   }
-
-  //   graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
-  //   graph.setPointSizes(buildPointSizes(d.nodes));
-
-  //   graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
-  //   graph.setLinkWidths(buildLinkWidths(d.edges));
-
-  //   if (!initialized) {
-  //     // setPointPositions with no arguments (or omitting) lets the simulation
-  //     // place nodes. We still need to call it to set the node count.
-  //     // Pass a zeroed array of the right size; simulation will move nodes.
-  //     graph.setPointPositions(new Float32Array(d.nodes.length * 2));
-  //     graph.setLinks(buildLinks(d.edges));
-  //     initialized = true;
-  //   }
-
-  //   graph.render();
-  // });
-
-  // -- Effect 1: structural — runs only when data (concept) changes ----------
+  // Effect 1: structural — runs only when data (concept) changes ----------
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
@@ -531,7 +496,7 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
     graph.unpause();
   });
 
-  // -- Effect 2: visual-only — runs when filters change, no simulation reset --
+  // Effect 2: visual-only — runs when filters change, no simulation reset --
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
@@ -618,22 +583,6 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
 
       <Show when={!data.loading && !data.error && data() && counts()}>
         <footer class="surface-container">
-          {/* <div class="center-align row">
-            <YearTimeline
-              years={counts()!.yearBuckets!}
-              yearMode={controls.yearMode}
-              fromYear={controls.fromYear}
-              toYear={controls.toYear}
-              onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
-            />
-            <button class="circle chip tiny no-border small-text"
-              onClick={(e) => controlsActions.setYearMode('range', yearBounds())}
-            >
-              ALL
-              <span class="tooltip top">Show all years</span>
-            </button>
-          </div> */}
-
           <div class="center-align small-margin" style="display:flex;gap:1em">
             <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}
               label={`events (${ counts()!.events.toLocaleString() })`}
