@@ -352,6 +352,7 @@ export const ConceptGraph: Component = () => {
       </Show>
 
       <div id="graph_sidebar_row" style={{
+        position: 'relative',
         display: "flex",
         flex: 1,
         overflow: "hidden",
@@ -364,13 +365,15 @@ export const ConceptGraph: Component = () => {
         }}></div>
 
 
-        <Show when={selectedNode()}>
-          <Sidebar
-            selectedNode={selectedNode()}
-            graphData={data() ?? null}
-            onClose={() => setSelectedNode(null)}
-          />
-        </Show>
+        <div style="z-index:99; position: absolute; right: 0">
+          <Show when={selectedNode()}>
+            <Sidebar
+              selectedNode={selectedNode()}
+              graphData={data() ?? null}
+              onClose={() => setSelectedNode(null)}
+            />
+          </Show>
+        </div>
       </div>
 
       <Show when={data.loading}>
@@ -431,7 +434,7 @@ export const ConceptGraph: Component = () => {
         <Tooltip tip={tooltip()!} />
       </Show>
 
-    </article>
+    </article >
   );
 };
 
