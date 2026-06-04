@@ -32,7 +32,7 @@ export const NODE_KIND = {
   CONCEPT: 2,
 } as const satisfies Record<string, NodeKind>;
 
-export interface NodeMeta {
+export interface Graph2NodeMeta {
   id: string;       // stable string id used for index lookups
   kind: NodeKind;
   label: string;
@@ -50,16 +50,16 @@ export const EDGE_KIND = {
   CONCEPT: 2,
 } as const satisfies Record<string, NodeKind>;
 
-export interface EdgeMeta {
+export interface Graph2EdgeMeta {
   srcIdx: number; // index into nodes array
   kind: EdgeKind;
   tgtIdx: number;
   weight: number; // 0–1
 }
 
-export interface GraphData {
-  nodes: NodeMeta[];
-  edges: EdgeMeta[];
+export interface Graph2Data {
+  nodes: Graph2NodeMeta[];
+  edges: Graph2EdgeMeta[];
   years: YearBucket[];
 }
 
@@ -90,14 +90,14 @@ const NODE_SIZE: Record<number, number> = {
 async function loadGraphData(
   concept: string,
   showConceptNodes: boolean,
-): Promise<GraphData> {
+): Promise<Graph2Data> {
   console.debug('[graph2 loadGraphData]', concept)
   // node id string to array index
   const idToIdx = new Map<string, number>();
-  const nodes: NodeMeta[] = [];
-  const edges: EdgeMeta[] = [];
+  const nodes: Graph2NodeMeta[] = [];
+  const edges: Graph2EdgeMeta[] = [];
 
-  function addNode(n: NodeMeta): number {
+  function addNode(n: Graph2NodeMeta): number {
     const existing = idToIdx.get(n.id);
     if (existing !== undefined) return existing;
     const idx = nodes.length;
@@ -228,7 +228,7 @@ async function loadGraphData(
 }
 
 function isNodeVisibleByTime(
-  n: NodeMeta,
+  n: Graph2NodeMeta,
   yearMode: string,
   fromYear: number,
   toYear: number
@@ -248,7 +248,7 @@ function isNodeVisibleByTime(
 // Float32Array builders
 
 function buildPointColors(
-  nodes: NodeMeta[],
+  nodes: Graph2NodeMeta[],
   yearMode: string,
   fromYear: number,
   toYear: number
@@ -273,11 +273,11 @@ function buildPointColors(
   return buf;
 }
 
-function buildPointSizes(nodes: NodeMeta[]): Float32Array {
+function buildPointSizes(nodes: Graph2NodeMeta[]): Float32Array {
   return new Float32Array(nodes.map((n) => NODE_SIZE[n.kind] ?? 4));
 }
 
-function buildLinks(edges: EdgeMeta[]): Float32Array {
+function buildLinks(edges: Graph2EdgeMeta[]): Float32Array {
   const buf = new Float32Array(edges.length * 2);
   for (let i = 0; i < edges.length; i++) {
     buf[i * 2] = edges[i].srcIdx;
@@ -287,7 +287,7 @@ function buildLinks(edges: EdgeMeta[]): Float32Array {
 }
 
 function buildLinkColors(
-  edges: EdgeMeta[],
+  edges: Graph2EdgeMeta[],
   nodeVisible: Uint8Array
 ): Float32Array {
   const buf = new Float32Array(edges.length * 4);
@@ -310,7 +310,7 @@ function buildLinkColors(
   return buf;
 }
 
-function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
+function buildLinkWidths(edges: Graph2EdgeMeta[]): Float32Array {
   return new Float32Array(
     edges.map((e) =>
       e.kind === EDGE_KIND.COWINDOW ? 2 :
@@ -336,7 +336,7 @@ const Line: Component<{ color: string; label: string }> = (p) => (
   </div>
 );
 
-interface TipData { node: NodeMeta; x: number; y: number }
+interface TipData { node: Graph2NodeMeta; x: number; y: number }
 
 const Tooltip: Component<{ tip: TipData }> = (p) => (
   <aside class="surface-container-highest border padding large-elevate" style={{
@@ -362,14 +362,14 @@ export interface ConceptGraphProps {
 
 export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
   const showConcept = () => props.showConceptNodes ?? true;
-  const [selectedNode, setSelectedNode] = createSignal<NodeMeta | null>(null);
+  const [selectedNode, setSelectedNode] = createSignal<Graph2NodeMeta | null>(null);
   const [graphProgress, setGraphProgress] = createSignal(0);
 
   let divRef!: HTMLDivElement;
   let graph: Graph | undefined;
 
   // Keep a ref to current node list so onPointMouseOver can resolve index to meta
-  let nodeMeta: NodeMeta[] = [];
+  let nodeMeta: Graph2NodeMeta[] = [];
 
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
 

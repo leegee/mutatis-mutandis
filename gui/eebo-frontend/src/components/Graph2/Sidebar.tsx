@@ -2,12 +2,12 @@
 
 import { Show, For, type Component } from "solid-js";
 import { showDocument } from "../../services/documentApi";
-import { NODE_KIND, EDGE_KIND, type NodeMeta, type GraphData } from "./Graph2";
+import { NODE_KIND, EDGE_KIND, type Graph2NodeMeta, type Graph2Data } from "./Graph2";
 import EventContext from "../EventContext";
 
 interface Props {
-  selectedNode: NodeMeta | null;
-  graphData: GraphData | null;
+  selectedNode: Graph2NodeMeta | null;
+  graphData: Graph2Data | null;
   onClose: () => void;
 }
 
