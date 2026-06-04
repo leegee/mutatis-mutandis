@@ -2,7 +2,6 @@
 
 import { Show, For, type Component } from "solid-js";
 import { showDocument } from "../../services/documentApi";
-import { NODE_KIND, EDGE_KIND, type Graph2NodeMeta, type Graph2Data } from "./Graph2";
 import EventContext from "../EventContext";
 
 interface Props {
@@ -12,6 +11,7 @@ interface Props {
 }
 
 import "./Sidebar.css";
+import { type Graph2NodeMeta, type Graph2Data, EDGE_KIND, NODE_KIND } from "./types";
 
 const ConceptGraphSidebar: Component<Props> = (props) => {
   // Edges where this node is src or tgt, with the other end resolved
