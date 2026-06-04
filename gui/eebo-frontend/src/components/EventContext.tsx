@@ -29,7 +29,7 @@ const EventContext: Component<EventContextProps> = (props) => {
             : null
     );
 
-    const [window] = createTokenWindowResource(source);
+    const [window, { refetch }] = createTokenWindowResource(source);
 
     return (
         <>
@@ -53,7 +53,13 @@ const EventContext: Component<EventContextProps> = (props) => {
 
             <Show when={open()}>
                 <Show when={!window.loading} fallback={<progress class="light-green-text" />} >
-                    <Show when={!window.error} fallback={<div class="error">Failed to load context</div>} >
+                    <Show when={!window.error} fallback={
+                        <aside class="error-container border padding">Failed to load context.
+                            <button class="chip tiny no-border" onClick={refetch}>
+                                <i>refresh</i>
+                            </button>
+                        </aside>
+                    } >
                         <blockquote innerHTML={window() || ""} class="border" />
                     </Show>
                 </Show>
