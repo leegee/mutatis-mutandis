@@ -575,11 +575,11 @@ export const ConceptGraph: Component<ConceptGraphProps> = (props) => {
             tooltipPosition='bottom'
             onSelect={(year) => controlsActions.setYearMode("single", [year, year])}
           />
-          <button class="circle chip tiny no-border small-text"
-            onClick={(e) => controlsActions.setYearMode('range', yearBounds())}
+          <button class="circle chip tiny no-border small-text no-line" style="font-size:0.5rem"
+            onClick={() => controlsActions.setYearMode('range', yearBounds())}
           >
-            ALL
-            <span class="tooltip top">Show all years</span>
+            ALL YEARS
+            <span class="tooltip bottom">Show all years</span>
           </button>
         </ControlsHeader>
       </Show>
