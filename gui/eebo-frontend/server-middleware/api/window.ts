@@ -15,10 +15,10 @@ export function createWindowMiddleware(pool: Pool): Connect.NextHandleFunction {
     if (!match) return next();
 
     const docId = match[1];
-    const tokenId = Number(match[2]);
+    const tokenIdx = Number(match[2]);
 
     try {
-      if (!Number.isInteger(tokenId)) {
+      if (!Number.isInteger(tokenIdx)) {
         throw new RangeError("Invalid tokenId");
       }
 
@@ -30,16 +30,16 @@ export function createWindowMiddleware(pool: Pool): Connect.NextHandleFunction {
                 AND token_idx BETWEEN ($2::int - $3) AND ($2::int + $3)
                 ORDER BY token_idx
                 `,
-        [docId, tokenId, TOKEN_WINDOW_HALF],
+        [docId, tokenIdx, TOKEN_WINDOW_HALF],
       );
 
       const content = result.rows
         .map((row) =>
-          row.token_idx === tokenId ? `<mark>${row.token}</mark>` : row.token,
+          row.token_idx === tokenIdx ? `<mark>${ row.token }</mark>` : row.token,
         )
         .join(" ");
 
-      console.log(`[api/window] ${docId}/${tokenId}`);
+      console.log(`[api/window] ${ docId }/${ tokenIdx }`);
 
       return text(res, 200, content);
     } catch (error) {

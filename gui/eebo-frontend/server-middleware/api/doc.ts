@@ -46,9 +46,9 @@ export function createDocumentMiddleware(
 
       const relativePath = matchPath[1].replace(/\\/g, "/");
 
-      const redirectUrl = `/xml/${relativePath}`;
+      const redirectUrl = `/xml/${ relativePath }`;
 
-      console.log(`[api/doc] ${docId} -> ${redirectUrl}`);
+      console.log(`[api/doc] ${ docId } -> ${ redirectUrl } for ${ req.url }`);
 
       return redirect(res, redirectUrl);
     } catch (error) {
