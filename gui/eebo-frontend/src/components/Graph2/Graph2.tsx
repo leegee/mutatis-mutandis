@@ -243,7 +243,6 @@ export const ConceptGraph: Component = () => {
         } else {
           setSelectedNode(null);
           graph?.unselectPoints();
-
         }
       }
     });
@@ -358,7 +357,6 @@ export const ConceptGraph: Component = () => {
         console.debug("[graph2.effect 2] failed to find URL's token", params.token_idx);
       }
     }
-
   });
 
   onCleanup(() => {
