@@ -22,6 +22,7 @@ import "./style.css";
 import Sidebar from "./Sidebar";
 import { loadGraphData } from "./loadGraphData";
 import { EDGE_KIND, NODE_KIND, type Graph2EdgeMeta, type Graph2NodeMeta } from "./types";
+import { useParams } from "@solidjs/router";
 
 // Colours (normalised 0-1 RGBA)
 
@@ -39,6 +40,7 @@ const EDGE_RGBA: Record<number, readonly [number, number, number, number]> = {
 };
 
 const HIDDEN_RGBA = [0, 0, 0, 0];
+const HIGHLIGHTED_RGBA = [0.341, 0.980, 1, 1];
 
 const NODE_SIZE: Record<number, number> = {
   [NODE_KIND.EVENT]: 8,
@@ -78,12 +80,8 @@ function buildPointColors(
 
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
-
     const visible = isNodeVisibleByTime(n, yearMode, fromYear, toYear);
-
-    const rgba = visible
-      ? (NODE_RGBA[n.kind] ?? NODE_RGBA[1])
-      : HIDDEN_RGBA;
+    const rgba = visible ? (NODE_RGBA[n.kind] ?? NODE_RGBA[1]) : HIDDEN_RGBA;
 
     buf[i * 4] = rgba[0];
     buf[i * 4 + 1] = rgba[1];
@@ -178,19 +176,17 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
 // Main component
 
 export const ConceptGraph: Component = () => {
+  const params = useParams();
   const [graphProgress, setGraphProgress] = createSignal(0);
   const [selectedNode, setSelectedNode] = createSignal<Graph2NodeMeta | null>(null);
+  const [selectedPointIndex, setSelectedPointIndex] = createSignal<number | null>(null);
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
 
   let divRef!: HTMLDivElement;
   let graph: Graph | undefined;
-
   let mouseClientX = 0;
   let mouseClientY = 0;
-
-  // Keep a ref to current node list so onPointMouseOver can resolve index to meta
-  let nodeMeta: Graph2NodeMeta[] = [];
-
+  let nodeMeta: Graph2NodeMeta[] = []; // Keep a ref to current node list so onPointMouseOver can resolve index to meta
 
   const [data] = createResource(
     () => [controls.concept] as [string],
@@ -232,8 +228,11 @@ export const ConceptGraph: Component = () => {
         setTooltip({ node, x: mouseClientX, y: mouseClientY });
       },
       onPointMouseOut: () => setTooltip(null),
-      onSimulationEnd: () => graph?.fitView(),
       onSimulationTick: () => setGraphProgress(graph?.progress || 0),
+      onSimulationEnd: () => {
+        graph?.fitView();
+        if (selectedPointIndex() !== null) graph?.zoomToPointByIndex(selectedPointIndex()!, 100, 12);
+      },
 
       onClick: (index, pos) => {
         console.debug('[onClick]', index, pos);
@@ -325,8 +324,40 @@ export const ConceptGraph: Component = () => {
 
     graph.setPointColors(buildPointColors(d.nodes, yearMode, fromYear, toYear));
     graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
+
     graph.render();
     console.debug("[graph2.effect 2] rendered");
+
+    if (params.token_idx) {
+      console.debug("[graph2.effect 2] find URL's token", params.token_idx);
+      const paramsTokenIdx = Number(params.token_idx);
+      let foundPointIndex = -1;
+      const buf: Float32Array = graph.getPointColors();
+
+      for (let i = 0; i < d.nodes.length; i++) {
+        const n = d.nodes[i];
+        if (n.tokenIdx === paramsTokenIdx) {
+          foundPointIndex = i;
+          buf[i * 4] = HIGHLIGHTED_RGBA[0];
+          buf[i * 4 + 1] = HIGHLIGHTED_RGBA[1];
+          buf[i * 4 + 2] = HIGHLIGHTED_RGBA[2];
+          buf[i * 4 + 3] = HIGHLIGHTED_RGBA[3];
+          console.debug("[graph2.effect 2] found and highlighted", params.token_idx, 'at', i);
+          break;
+        }
+      }
+
+      if (foundPointIndex > -1) {
+        graph.setPointColors(buf);
+        setSelectedNode(nodeMeta[foundPointIndex]);
+        setSelectedPointIndex(foundPointIndex);
+        graph.render();
+        console.debug("[graph2.effect 2] rendered  URL's token", params.token_idx);
+      } else {
+        console.debug("[graph2.effect 2] failed to find URL's token", params.token_idx);
+      }
+    }
+
   });
 
   onCleanup(() => {

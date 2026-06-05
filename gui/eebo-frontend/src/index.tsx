@@ -15,7 +15,7 @@ render(
     () => (
         <Router root={App}>
             <Route path="/" component={Graph2} />
-            <Route path="/graph2" component={Graph2} />
+            <Route path="/graph2/:token_idx?" component={Graph2} />
             <Route path="/table" component={NeighbourhoodBrowser} />
             <Route path="/diachronic" component={DiachronicChart} />
         </Router>
