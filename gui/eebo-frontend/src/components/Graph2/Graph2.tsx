@@ -18,7 +18,7 @@ import { useParams } from "@solidjs/router";
 import { Graph } from "@cosmos.gl/graph";
 
 import "./style.css";
-import { EDGE_KIND, NODE_KIND, type Graph2EdgeMeta, type Graph2NodeMeta } from "./types";
+import { EDGE_KIND, NODE_KIND, type EdgeMeta, type NodeMeta } from "../../types/tier2_sqlite";
 import { controls } from "../../state/controls.store";
 import { loadGraphData } from "./loadGraphData";
 import MsgSettingLayout from "../MsgSettingLayout";
@@ -52,7 +52,7 @@ const NODE_SIZE: Record<number, number> = {
 // DB queries
 
 function isNodeVisibleByTime(
-  n: Graph2NodeMeta,
+  n: NodeMeta,
   yearMode: string,
   fromYear: number,
   toYear: number
@@ -72,7 +72,7 @@ function isNodeVisibleByTime(
 // Float32Array builders
 
 function buildPointColors(
-  nodes: Graph2NodeMeta[],
+  nodes: NodeMeta[],
   yearMode: string,
   fromYear: number,
   toYear: number
@@ -93,11 +93,11 @@ function buildPointColors(
   return buf;
 }
 
-function buildPointSizes(nodes: Graph2NodeMeta[]): Float32Array {
+function buildPointSizes(nodes: NodeMeta[]): Float32Array {
   return new Float32Array(nodes.map((n) => NODE_SIZE[n.kind] ?? 4));
 }
 
-function buildLinks(edges: Graph2EdgeMeta[]): Float32Array {
+function buildLinks(edges: EdgeMeta[]): Float32Array {
   const buf = new Float32Array(edges.length * 2);
   for (let i = 0; i < edges.length; i++) {
     buf[i * 2] = edges[i].srcIdx;
@@ -107,7 +107,7 @@ function buildLinks(edges: Graph2EdgeMeta[]): Float32Array {
 }
 
 function buildLinkColors(
-  edges: Graph2EdgeMeta[],
+  edges: EdgeMeta[],
   nodeVisible: Uint8Array
 ): Float32Array {
   const buf = new Float32Array(edges.length * 4);
@@ -130,7 +130,7 @@ function buildLinkColors(
   return buf;
 }
 
-function buildLinkWidths(edges: Graph2EdgeMeta[]): Float32Array {
+function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
   return new Float32Array(
     edges.map((e) =>
       e.kind === EDGE_KIND.COWINDOW ? 2 :
@@ -156,7 +156,7 @@ const Line: Component<{ color: string; label: string }> = (p) => (
   </div>
 );
 
-interface TipData { node: Graph2NodeMeta; x: number; y: number }
+interface TipData { node: NodeMeta; x: number; y: number }
 
 const Tooltip: Component<{ tip: TipData }> = (p) => (
   <aside class="surface-container-highest border padding large-elevate" style={{
@@ -179,7 +179,7 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
 export const ConceptGraph: Component = () => {
   const params = useParams();
   const [graphProgress, setGraphProgress] = createSignal(0);
-  const [selectedNode, setSelectedNode] = createSignal<Graph2NodeMeta | null>(null);
+  const [selectedNode, setSelectedNode] = createSignal<NodeMeta | null>(null);
   const [selectedPointIndex, setSelectedPointIndex] = createSignal<number | null>(null);
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
   const [paramsTokenIdx, setParamsTokenIdx] = createSignal<number | null>(params.token_idx ? Number(params.token_idx) : null);
@@ -188,7 +188,7 @@ export const ConceptGraph: Component = () => {
   let graph: Graph | undefined;
   let mouseClientX = 0;
   let mouseClientY = 0;
-  let nodeMeta: Graph2NodeMeta[] = []; // Keep a ref to current node list so onPointMouseOver can resolve index to meta
+  let nodeMeta: NodeMeta[] = []; // Keep a ref to current node list so onPointMouseOver can resolve index to meta
 
   const [data] = createResource(
     () => [controls.concept] as [string],

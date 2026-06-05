@@ -91,6 +91,7 @@ from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
+import umap
 import numpy as np
 import zarr
 
@@ -337,6 +338,12 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 
         results.append({**_event_record(event, doc_meta), "neighbours": neighbours})
 
+    umap_project_concept(
+        event_ids,
+        lookup,
+        output_path=f"umap_{concept_name}.json",
+    )
+
     return {
         "concept":   concept_name,
         "n_events":  len(event_ids),
@@ -475,6 +482,51 @@ def write_sqlite(output: dict, SQLITE_DB_PATH):
     con.commit()
     con.close()
     logger.info("[tier2] sqlite write complete")
+
+
+def umap_project_concept(
+    event_ids,
+    lookup,
+    output_path,
+    *,
+    n_neighbors=15,
+    min_dist=0.1,
+    n_components=2,
+    metric="cosine",
+):
+    """
+    Projects concept event embeddings into UMAP space and saves JSON.
+    """
+
+    if not event_ids:
+        return []
+
+    X = np.stack([
+        lookup.get_event(eid)["embedding"]
+        for eid in event_ids
+    ]).astype(np.float32)
+
+    reducer = umap.UMAP(
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        n_components=n_components,
+        metric=metric,
+    )
+
+    embedding_2d = reducer.fit_transform(X)
+
+    projected = [
+        {
+            "event_id": int(eid),
+            "umap": embedding_2d[i].tolist(),
+        }
+        for i, eid in enumerate(event_ids)
+    ]
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(projected, f, ensure_ascii=False, indent=2)
+
+    return projected
 
 
 # Entry point

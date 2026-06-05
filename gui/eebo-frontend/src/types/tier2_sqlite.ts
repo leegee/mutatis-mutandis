@@ -1,4 +1,4 @@
-import type { YearBucket } from "../../types";
+import type { YearBucket } from ".";
 
 export type NodeKind = 0 | 1 | 2;
 export const NODE_KIND = {
@@ -7,7 +7,7 @@ export const NODE_KIND = {
   CONCEPT: 2,
 } as const satisfies Record<string, NodeKind>;
 
-export interface Graph2NodeMeta {
+export interface NodeMeta {
   id: string;       // stable string id used for index lookups
   kind: NodeKind;
   label: string;
@@ -25,7 +25,7 @@ export const EDGE_KIND = {
   CONCEPT: 2,
 } as const satisfies Record<string, NodeKind>;
 
-export interface Graph2EdgeMeta {
+export interface EdgeMeta {
   srcIdx: number; // index into nodes array
   kind: EdgeKind;
   tgtIdx: number;
@@ -33,7 +33,7 @@ export interface Graph2EdgeMeta {
 }
 
 export interface Graph2Data {
-  nodes: Graph2NodeMeta[];
-  edges: Graph2EdgeMeta[];
+  nodes: NodeMeta[];
+  edges: EdgeMeta[];
   years: YearBucket[];
 }

@@ -1,4 +1,4 @@
-import { EDGE_KIND, NODE_KIND, type Graph2Data, type Graph2EdgeMeta, type Graph2NodeMeta } from "./types";
+import { EDGE_KIND, NODE_KIND, type Graph2Data, type EdgeMeta, type NodeMeta } from "../../types/tier2_sqlite";
 import { execRows } from "../../services/db";
 
 export async function loadGraphData(
@@ -7,10 +7,10 @@ export async function loadGraphData(
   console.debug('[graph2 loadGraphData]', concept)
   // node id string to array index
   const idToIdx = new Map<string, number>();
-  const nodes: Graph2NodeMeta[] = [];
-  const edges: Graph2EdgeMeta[] = [];
+  const nodes: NodeMeta[] = [];
+  const edges: EdgeMeta[] = [];
 
-  function addNode(n: Graph2NodeMeta): number {
+  function addNode(n: NodeMeta): number {
     const existing = idToIdx.get(n.id);
     if (existing !== undefined) return existing;
     const idx = nodes.length;

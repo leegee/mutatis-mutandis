@@ -5,13 +5,13 @@ import { showDocument } from "../../services/documentApi";
 import EventContext from "../EventContext";
 
 interface Props {
-  selectedNode: Graph2NodeMeta | null;
+  selectedNode: NodeMeta | null;
   graphData: Graph2Data | null;
   onClose: () => void;
 }
 
 import "./Sidebar.css";
-import { type Graph2NodeMeta, type Graph2Data, EDGE_KIND, NODE_KIND } from "./types";
+import { type NodeMeta, type Graph2Data, EDGE_KIND, NODE_KIND } from "../../types/tier2_sqlite";
 
 const ConceptGraphSidebar: Component<Props> = (props) => {
   // Edges where this node is src or tgt, with the other end resolved
