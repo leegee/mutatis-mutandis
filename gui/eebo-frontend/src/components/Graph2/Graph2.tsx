@@ -14,18 +14,18 @@ import {
   onMount,
   Show,
 } from "solid-js";
+import { useParams } from "@solidjs/router";
 import { Graph } from "@cosmos.gl/graph";
 
-import ControlsHeader from "../ControlsHeader";
-import { controls } from "../../state/controls.store";
-import MsgSettingLayout from "../MsgSettingLayout";
 import "./style.css";
-import Sidebar from "./Sidebar";
-import { loadGraphData } from "./loadGraphData";
 import { EDGE_KIND, NODE_KIND, type Graph2EdgeMeta, type Graph2NodeMeta } from "./types";
-import { useParams } from "@solidjs/router";
+import { controls } from "../../state/controls.store";
+import { loadGraphData } from "./loadGraphData";
+import MsgSettingLayout from "../MsgSettingLayout";
+import ControlsHeader from "../ControlsHeader";
+import Sidebar from "./Sidebar";
 
-const USE_FIT_INTERVAL = false;
+const USE_FIT_INTERVAL = true;
 
 // kind to [r, g, b, a]
 const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
@@ -182,6 +182,7 @@ export const ConceptGraph: Component = () => {
   const [selectedNode, setSelectedNode] = createSignal<Graph2NodeMeta | null>(null);
   const [selectedPointIndex, setSelectedPointIndex] = createSignal<number | null>(null);
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
+  const [paramsTokenIdx, setParamsTokenIdx] = createSignal<number | null>(params.token_idx ? Number(params.token_idx) : null);
 
   let divRef!: HTMLDivElement;
   let graph: Graph | undefined;
@@ -252,7 +253,7 @@ export const ConceptGraph: Component = () => {
       }
     });
 
-    if (USE_FIT_INTERVAL) fitViewIntervalId = setInterval(() => graph?.fitView(), 500);
+    if (USE_FIT_INTERVAL) fitViewIntervalId = setInterval(() => graph?.fitView(500), 1_000);
     console.debug("[graph2.setGraph] created new graph");
   }
 
@@ -334,15 +335,14 @@ export const ConceptGraph: Component = () => {
     graph.render();
     console.debug("[graph2.effect 2] rendered");
 
-    if (params.token_idx) {
+    if (paramsTokenIdx()) {
       console.debug("[graph2.effect 2] find URL's token", params.token_idx);
-      const paramsTokenIdx = Number(params.token_idx);
       let foundPointIndex = -1;
       const buf: Float32Array = graph.getPointColors();
 
       for (let i = 0; i < d.nodes.length; i++) {
         const n = d.nodes[i];
-        if (n.tokenIdx === paramsTokenIdx) {
+        if (n.tokenIdx === paramsTokenIdx()) {
           foundPointIndex = i;
           buf[i * 4] = HIGHLIGHTED_RGBA[0];
           buf[i * 4 + 1] = HIGHLIGHTED_RGBA[1];
@@ -406,7 +406,11 @@ export const ConceptGraph: Component = () => {
             <Sidebar
               selectedNode={selectedNode()}
               graphData={data() ?? null}
-              onClose={() => setSelectedNode(null)}
+              onClose={() => {
+                setSelectedNode(null);
+                setParamsTokenIdx(null);
+                graph?.fitView();
+              }}
             />
           </Show>
         </div>
