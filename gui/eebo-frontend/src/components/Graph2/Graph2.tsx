@@ -1,6 +1,7 @@
 /**
  * ConceptGraph.tsx
  *
+ * Will highlight with a number the token passed in URL params.token_idx
  */
 
 import {
