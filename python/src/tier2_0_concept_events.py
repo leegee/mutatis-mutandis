@@ -287,7 +287,7 @@ def _neighbour_record(n_event, query_event, doc_meta, score):
     }
 
 
-def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K):
+def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *,  diagnostics=False,):
     """Compute neighbourhood structure for all events matching a concept."""
     forms     = set(concept["forms"])
     event_ids = list(lookup.iter_matching_event_ids(forms))
@@ -297,19 +297,22 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K):
     if not event_ids:
         return {"concept": concept_name, "empty": True}
 
-    query_vecs = np.stack([lookup.get_event(eid)["embedding"] for eid in event_ids])
+    query_vecs = np.stack([
+        lookup.get_event(eid)["embedding"] for eid in event_ids
+    ])
 
     logger.info(f"[tier2] query_events={len(event_ids)}")
     logger.info(f"[tier2] sample_event_id={event_ids[0]}")
     logger.info(f"[tier2] sample_embedding_shape={query_vecs.shape}")
 
-    # _audit_embedding_diversity(concept_name, query_vecs)
-    # all_scores, all_neigh_ids = index.search(query_vecs, K)
-    # _audit_neighbour_identity(all_neigh_ids)
+    all_scores, all_neigh_ids = index.search(query_vecs, K)
 
-    if args.diagnostics:
-        diag.audit_embedding_diversity(concept_name, query_vecs)
-        diag.audit_neighbour_identity(all_neigh_ids)
+    if diagnostics:
+        audit_embedding_diversity(concept_name, query_vecs)
+        audit_embedding_isotropy(query_vecs)
+        audit_hubness(index, query_vecs, k=K)
+        audit_neighbour_identity(all_neigh_ids)
+        audit_knn_stability(index, lookup, event_ids, k=K)
 
     token_counter  = Counter()
     doc_counter    = Counter()
@@ -502,7 +505,8 @@ def main():
 
     for concept_name, concept in resolve_concepts(args):
         output[concept_name] = analyse_concept(
-            doc_meta, index, lookup, concept_name, concept
+            doc_meta, index, lookup, concept_name, concept,
+            diagnostics=args.diagnostics,
         )
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
