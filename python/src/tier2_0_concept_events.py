@@ -95,7 +95,7 @@ import umap
 import numpy as np
 import zarr
 
-from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_INDEX_DIR,  ZARR_ROOT, OUT_DIR, SQLITE_DB_PATH
+from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, SQLITE_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
@@ -359,12 +359,12 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 # SQLite writer
 # TODO: Extrapolate schema?
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS concepts (
+CREATE TABLE concepts (
     concept  TEXT PRIMARY KEY,
     n_events INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE events (
     event_id         INTEGER PRIMARY KEY,
     concept          TEXT    NOT NULL,
     vector_id        INTEGER,
@@ -377,7 +377,7 @@ CREATE TABLE IF NOT EXISTS events (
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
-CREATE TABLE IF NOT EXISTS neighbours (
+CREATE TABLE neighbours (
     event_id             INTEGER NOT NULL,
     neighbour_event_id   INTEGER NOT NULL,
     vector_id            INTEGER,
@@ -396,7 +396,7 @@ CREATE TABLE IF NOT EXISTS neighbours (
 -- kind    = 'token' | 'doc' | 'window'
 -- token/doc rows : value = token string or doc_id; window columns NULL
 -- window rows    : window_doc_id + window_id set; value NULL
-CREATE TABLE IF NOT EXISTS concept_aggregate (
+CREATE TABLE concept_aggregate (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     concept       TEXT    NOT NULL,
     kind          TEXT    NOT NULL,
@@ -408,13 +408,14 @@ CREATE TABLE IF NOT EXISTS concept_aggregate (
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_concept       ON events(concept);
-CREATE INDEX IF NOT EXISTS idx_events_token         ON events(token);
-CREATE INDEX IF NOT EXISTS idx_events_doc_id        ON events(doc_id);
-CREATE INDEX IF NOT EXISTS idx_events_concept_year  ON events(concept, pub_year);
-CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
-CREATE INDEX IF NOT EXISTS idx_neighbours_token     ON neighbours(token);
-CREATE INDEX IF NOT EXISTS idx_aggregate_concept    ON concept_aggregate(concept, kind);
+CREATE INDEX idx_events_concept       ON events(concept);
+CREATE INDEX idx_events_token         ON events(token);
+CREATE INDEX idx_events_event_id      ON events(event_id);
+CREATE INDEX idx_events_doc_id        ON events(doc_id);
+CREATE INDEX idx_events_concept_year  ON events(concept, pub_year);
+CREATE INDEX idx_neighbours_event_id  ON neighbours(event_id);
+CREATE INDEX idx_neighbours_token     ON neighbours(token);
+CREATE INDEX idx_aggregate_concept    ON concept_aggregate(concept, kind);
 """
 
 def _aggregate_rows(concept_name, aggregate):

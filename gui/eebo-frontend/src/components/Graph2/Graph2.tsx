@@ -18,7 +18,7 @@ import { useParams } from "@solidjs/router";
 import { Graph } from "@cosmos.gl/graph";
 
 import "./style.css";
-import { EDGE_KIND, NODE_KIND, type EdgeMeta, type NodeMeta } from "../../types/tier2_sqlite";
+import { EDGE_KIND, NODE_KIND, type EdgeMeta, type NodeMeta } from "../../types/tier2_comos_sqlite";
 import { controls } from "../../state/controls.store";
 import { loadGraphData } from "./loadGraphData";
 import MsgSettingLayout from "../MsgSettingLayout";

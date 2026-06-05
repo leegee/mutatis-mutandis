@@ -1,7 +1,9 @@
 import { createSignal, createResource, Show } from "solid-js";
-import UmapPlot from "./UmapPlot";
+
 import type { ConceptDataset, PointData, ViewBounds } from "./types";
+import UmapPlot from "./UmapPlot";
 import ControlsHeader from "../ControlsHeader";
+import { loadDatasets } from "./loadDatasets";
 
 const COLOR_FIELDS = ["doc_id", "token", "concept"];
 
@@ -11,24 +13,7 @@ export default function Umap() {
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
     const [datasets] = createResource<ConceptDataset[]>(async () => {
-        const [a, b] = await Promise.all([
-            fetch("/umap/concept/PREROGATIVE.json").then((r) => r.json()),
-            fetch("/umap/concept/CHURCH.json").then((r) => r.json()),
-        ]);
-        console.log("[Umap.index] loaded")
-
-        // Augment each point with its concept name so colorBy:"concept" works.
-        const augmented = (d: ConceptDataset) => ({
-            ...d,
-            points: d.points.map((p) => ({ ...p, concept: d.concept, doc_id: 'a', token: d.concept })),
-        });
-
-        console.log(augmented, "---")
-
-        const datasetsTagged = [a, b].map(augmented);
-        console.log("[Umap.index] augmented");
-
-        return datasetsTagged;
+        return loadDatasets();
     });
 
     function handleClick(point: PointData) {

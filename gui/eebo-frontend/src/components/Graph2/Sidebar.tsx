@@ -11,7 +11,7 @@ interface Props {
 }
 
 import "./Sidebar.css";
-import { type NodeMeta, type Graph2Data, EDGE_KIND, NODE_KIND } from "../../types/tier2_sqlite";
+import { type NodeMeta, type Graph2Data, EDGE_KIND, NODE_KIND } from "../../types/tier2_comos_sqlite";
 
 const ConceptGraphSidebar: Component<Props> = (props) => {
   // Edges where this node is src or tgt, with the other end resolved

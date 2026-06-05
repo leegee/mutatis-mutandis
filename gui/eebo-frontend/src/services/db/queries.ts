@@ -40,13 +40,13 @@ export async function queryEvents(
 
   if (eventRows.length === 0) return [];
 
-  const eventMap = new Map<number, ConceptEvent>();
+  const eventMap = new Map<string, ConceptEvent>();
   const events: ConceptEvent[] = [];
 
   for (const r of eventRows) {
     const e: ConceptEvent = {
-      event_id: r[0] as number,
-      vector_id: r[1] as number,
+      event_id: r[0] as string,
+      vector_id: r[1] as string,
       token: r[2] as string,
       doc_id: r[3] as string,
       pub_year: r[4] as number,
@@ -71,7 +71,7 @@ export async function queryEvents(
 
   for (const r of nbRows) {
     const nb: Neighbour = {
-      event_id: r[1] as number,
+      event_id: r[1] as string,
       vector_id: r[2] as number,
       token: r[3] as string,
       doc_id: r[4] as string,
@@ -81,7 +81,7 @@ export async function queryEvents(
       window_token_pos: r[8] as number,
       score: r[9] as number,
     };
-    eventMap.get(r[0] as number)?.neighbours.push(nb);
+    eventMap.get(r[0] as string)?.neighbours.push(nb);
   }
 
   return events;

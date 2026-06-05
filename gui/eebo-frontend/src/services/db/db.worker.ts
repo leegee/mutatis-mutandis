@@ -30,9 +30,9 @@ async function init(url: string): Promise<void> {
 
   const res = await fetch(url);
   if (!res.ok)
-    throw new Error(`[db.worker] fetch failed: ${res.status} ${url}`);
+    throw new Error(`[db.worker] fetch failed: ${ res.status } ${ url }`);
   const buf = await res.arrayBuffer();
-  console.log(`[db.worker] fetched ${buf.byteLength} bytes`);
+  console.log(`[db.worker] fetched ${ buf.byteLength } bytes`);
 
   const hasOPFS =
     typeof navigator !== "undefined" &&
@@ -70,7 +70,7 @@ async function init(url: string): Promise<void> {
   console.log("[db.worker] tables:", tables);
 }
 
-function execRows(sql: string, bind?: (string | number | null)[]): unknown[][] {
+function old_execRows(sql: string, bind?: (string | number | null)[]): unknown[][] {
   if (!db) throw new Error("[db.worker] database not initialised");
   const rows: unknown[][] = [];
   db.exec({
@@ -84,6 +84,21 @@ function execRows(sql: string, bind?: (string | number | null)[]): unknown[][] {
   return rows;
 }
 
+
+function execRows(sql: string, bind?: any[]): unknown[][] {
+  if (!db) throw new Error("not init");
+
+  const res = db.exec({
+    sql,
+    bind,
+    rowMode: "array",
+    returnValue: "resultRows",
+  });
+
+  return res as unknown[][];
+}
+
+
 self.onmessage = async (e: MessageEvent) => {
   const { id, type } = e.data;
 
@@ -95,7 +110,7 @@ self.onmessage = async (e: MessageEvent) => {
       const rows = execRows(e.data.sql as string, e.data.bind);
       self.postMessage({ id, result: rows });
     } else {
-      throw new Error(`[db.worker] unknown message type: ${type}`);
+      throw new Error(`[db.worker] unknown message type: ${ type }`);
     }
   } catch (err) {
     self.postMessage({

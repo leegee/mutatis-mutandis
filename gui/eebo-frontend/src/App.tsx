@@ -83,16 +83,13 @@ export default function App(props: any) {
         <Show
           when={dbReady()}
           fallback={
-            <article
-              class="max small-round padding border medium no-padding"
-              style="min-height:100vh"
-            >
-              <section class="padding absolute center middle">
-                <h4>{dbLoadingError() ?? "Loading text events..."}</h4>
+            <article class="small-round padding border medium no-padding" style="height: 100%">
+              <div class="padding fill absolute center middle">
+                <h4>{dbLoadingError() ?? "Loading database"}</h4>
                 <Show when={!dbLoadingError()}>
-                  <progress class="circle" />
+                  <progress />
                 </Show>
-              </section>
+              </div>
             </article>
           }
         >
