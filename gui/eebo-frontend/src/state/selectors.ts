@@ -10,12 +10,12 @@
 
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import { controls } from "./controls.store";
-import { queryYearBounds, queryEvents, queryConcepts, queryNEvents, queryYearCounts } from "../services/db/";
+import { queryYearBounds, queryEvents, listConcepts, queryNEvents, queryYearCounts } from "../services/db/";
 import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
 import type { ConceptData, ConceptEvent } from "../types/context-graph.types";
 
 export async function getConcepts(): Promise<string[]> {
-  return queryConcepts();
+  return listConcepts();
 }
 
 export async function getYearBounds(

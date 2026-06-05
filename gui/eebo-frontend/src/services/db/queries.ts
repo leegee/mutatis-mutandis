@@ -2,7 +2,7 @@ import type { ConceptEvent, Neighbour } from "../../types";
 import { execRows } from "./dbh";
 
 // Typed query helpers
-export async function queryConcepts(): Promise<string[]> {
+export async function listConcepts(): Promise<string[]> {
   const rows = await execRows("SELECT concept FROM concepts ORDER BY concept");
   return rows.map((r) => r[0] as string);
 }

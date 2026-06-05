@@ -7,7 +7,7 @@ import {
 } from "solid-js";
 import { controls, MAX_TOP_N } from "../state/controls.store";
 import { controlsActions as A } from "../state/controls.actions";
-import { queryConcepts } from "../services/db";
+import { listConcepts } from "../services/db";
 
 import "./ControlsHeader.css";
 import { YearTimeline } from "./YearTimeline";
@@ -26,7 +26,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const fdgControls = () => props.fdgControls ?? true;
 
   // Concepts list - refetches if dbReady changes (i.e. once, on init)
-  const [conceptsResource] = createResource(queryConcepts);
+  const [conceptsResource] = createResource(listConcepts);
   const concepts = () => conceptsResource() ?? [];
 
   return (

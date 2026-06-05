@@ -1,5 +1,3 @@
-// src/AppLayout.tsx
-
 import { createSignal, Show, lazy, ErrorBoundary } from "solid-js";
 import { A, useLocation } from "@solidjs/router";
 import { Transition } from "solid-transition-group";
@@ -27,7 +25,8 @@ export default function App(props: any) {
   }
 
   const navItems = [
-    { path: "/graph2", icon: "orbit", label: "Exp" },
+    { path: "/graph2", icon: "orbit", label: "FDG" },
+    { path: "/umap", icon: "scatter_plot", label: "UMAP" },
     { path: "/table", icon: "view_column", label: "Neighbourhood Table" },
     { path: "/diachronic", icon: "calendar_view_week", label: "Diachronic Chart" },
   ] as const;
@@ -76,30 +75,30 @@ export default function App(props: any) {
       </nav>
 
       <main class="responsive max no-padding full">
-        <ErrorBoundary
+        {/* <ErrorBoundary
           fallback={(err, reset) => (
             <AppError err={err as Error} reset={reset} />
           )}
+        > */}
+        <Show
+          when={dbReady()}
+          fallback={
+            <article
+              class="max small-round padding border medium no-padding"
+              style="min-height:100vh"
+            >
+              <section class="padding absolute center middle">
+                <h4>{dbLoadingError() ?? "Loading text events..."}</h4>
+                <Show when={!dbLoadingError()}>
+                  <progress class="circle" />
+                </Show>
+              </section>
+            </article>
+          }
         >
-          <Show
-            when={dbReady()}
-            fallback={
-              <article
-                class="max small-round padding border medium no-padding"
-                style="min-height:100vh"
-              >
-                <section class="padding absolute center middle">
-                  <h4>{dbLoadingError() ?? "Loading text events..."}</h4>
-                  <Show when={!dbLoadingError()}>
-                    <progress class="circle" />
-                  </Show>
-                </section>
-              </article>
-            }
-          >
-            {props.children}
-          </Show>
-        </ErrorBoundary>
+          {props.children}
+        </Show>
+        {/* </ErrorBoundary> */}
       </main>
 
       <Transition name="slide-fade">

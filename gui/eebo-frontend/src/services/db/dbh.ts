@@ -10,7 +10,7 @@
  * Usage
  * -----
  *   await initDb(url);   // once at startup
- *   queryConcepts();     // synchronous-feeling helpers (return Promises)
+ *   listConcepts();     // synchronous-feeling helpers (return Promises)
  *
  * Because the worker is async, all query helpers are async.  However,
  * inside a dbReady()-gated component they can be called from createMemo
