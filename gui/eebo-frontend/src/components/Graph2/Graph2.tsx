@@ -19,7 +19,7 @@ import ControlsHeader from "../ControlsHeader";
 import { controls } from "../../state/controls.store";
 import MsgSettingLayout from "../MsgSettingLayout";
 import "./style.css";
-import Sidebar from "./SideBar";
+import Sidebar from "./Sidebar";
 import { loadGraphData } from "./loadGraphData";
 import { EDGE_KIND, NODE_KIND, type Graph2EdgeMeta, type Graph2NodeMeta } from "./types";
 
