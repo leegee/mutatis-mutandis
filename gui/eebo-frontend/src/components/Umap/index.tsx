@@ -1,6 +1,6 @@
 import { createSignal, createResource, Show } from "solid-js";
 import UmapPlot from "./UmapPlot";
-import type { ConceptDataset, PointData, ViewBounds } from "./UmapPlot";
+import type { ConceptDataset, PointData, ViewBounds } from "./types";
 import ControlsHeader from "../ControlsHeader";
 
 const COLOR_FIELDS = ["doc_id", "token", "concept"];
@@ -35,7 +35,7 @@ export default function Umap() {
         console.log("[Umap.index] clicked", point.token_idx, point.token, point.doc_id);
     }
 
-    function handleBoundsChange(bounds: ViewBounds) {
+    function handleBoundsChange(_bounds: ViewBounds) {
         // parent store would receive this — ignored here
         // console.log("[Umap.index] bounds changed", bounds);
     }

@@ -9,47 +9,11 @@ import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./UmapPlot.css";
+import type { ConceptDataset, PointData, ViewBounds } from "./types";
 
 // Types
 
-export interface PointData {
-  event_id: number;
-  token_idx: string;   // stable GUID — use as React/Solid key and identity
-  doc_id: string;
-  token: string;
-  // local projection
-  nx: number;
-  ny: number;
-  // global projection
-  gnx: number;
-  gny: number;
-  // any additional augmented fields the parent has attached
-  [key: string]: unknown;
-}
-
-export interface ConceptDataset {
-  concept: string;
-  points: PointData[];
-  bounds: Bounds;
-  globalBounds: Bounds;
-}
-
-export interface Bounds {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
-
-export interface ViewBounds {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  zoom: number;
-}
-
-export interface UmapProps {
+interface UmapProps {
   // Data
   datasets: ConceptDataset[];
 
@@ -149,7 +113,7 @@ export default function UmapPlot(props: UmapProps) {
   let canvas!: HTMLCanvasElement;
   let deck: Deck<OrthographicView> | null = null;
 
-  const [viewState, setViewState] = createSignal<OrthographicViewState>(INITIAL_VIEW_STATE);
+  const [_viewState, setViewState] = createSignal<OrthographicViewState>(INITIAL_VIEW_STATE);
 
   // Flatten all points across all datasets for colour map derivation.
   const allPoints = createMemo<PointData[]>(() =>
