@@ -25,7 +25,7 @@ import { loadGraphData } from "./loadGraphData";
 import { EDGE_KIND, NODE_KIND, type Graph2EdgeMeta, type Graph2NodeMeta } from "./types";
 import { useParams } from "@solidjs/router";
 
-// Colours (normalised 0-1 RGBA)
+const USE_FIT_INTERVAL = false;
 
 // kind to [r, g, b, a]
 const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
@@ -235,7 +235,7 @@ export const ConceptGraph: Component = () => {
       onSimulationEnd: () => {
         graph?.fitView();
         if (selectedPointIndex() !== null) {
-          clearInterval(fitViewIntervalId);
+          if (fitViewIntervalId) clearInterval(fitViewIntervalId);
           graph?.zoomToPointByIndex(selectedPointIndex()!, 100, 12);
         }
       },
@@ -252,7 +252,7 @@ export const ConceptGraph: Component = () => {
       }
     });
 
-    fitViewIntervalId = setInterval(() => graph?.fitView(), 500);
+    if (USE_FIT_INTERVAL) fitViewIntervalId = setInterval(() => graph?.fitView(), 500);
     console.debug("[graph2.setGraph] created new graph");
   }
 
