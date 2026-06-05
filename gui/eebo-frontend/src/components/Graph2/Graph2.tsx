@@ -14,10 +14,10 @@ import {
   Show,
 } from "solid-js";
 import { Graph } from "@cosmos.gl/graph";
+
 import ControlsHeader from "../ControlsHeader";
 import { controls } from "../../state/controls.store";
 import MsgSettingLayout from "../MsgSettingLayout";
-
 import "./style.css";
 import Sidebar from "./SideBar";
 import { loadGraphData } from "./loadGraphData";
@@ -211,15 +211,15 @@ export const ConceptGraph: Component = () => {
       spaceSize: 2048 * 2,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
       fitViewDelay: 1000,            // Give simulation time to settle before fitting
+      simulationDecay: 500,          // >= slower
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
       simulationRepulsion: 0.8,
       simulationLinkSpring: 0.45,
       simulationLinkDistance: 65,
-      simulationFriction: 0.9,     // slow down
+      simulationFriction: 0.9,       // >= slower
       simulationGravity: 0.12,
-      enableDrag: true,
+      enableDrag: false,
       // randomSeed: 12,
-      simulationDecay: 500,
       // Colours etc
       backgroundColor: "#0c0e14",
       pointGreyoutOpacity: 0.1,
@@ -304,7 +304,7 @@ export const ConceptGraph: Component = () => {
     console.debug("[graph2.effect 1] unpause");
   });
 
-  // Effect 2: visual-only — runs when filters change, no simulation reset --
+  // Effect 2: visual-only, runs when filters change
   createEffect(() => {
     const d = data();
     if (!d || !graph) return;
@@ -434,7 +434,7 @@ export const ConceptGraph: Component = () => {
         <Tooltip tip={tooltip()!} />
       </Show>
 
-    </article >
+    </article>
   );
 };
 
