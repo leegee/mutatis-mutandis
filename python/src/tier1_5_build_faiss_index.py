@@ -114,7 +114,7 @@ def main():
     logger.info("[faiss-build] building FAISS observation index")
     index = build_index(stream)
 
-    out_path = FAISS_INDEX_DIR / "tier1.index"
+    out_path = FAISS_TIER1_INDEX
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     index.save(out_path)

@@ -538,7 +538,7 @@ def main():
     parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics" )
     args = parser.parse_args()
 
-    faiss_index_path = FAISS_INDEX_DIR / "tier1.index"
+    faiss_index_path = FAISS_TIER1_INDEX
 
     logger.info(f"[tier2] SQLITE_DB_PATH: {SQLITE_DB_PATH}")
 

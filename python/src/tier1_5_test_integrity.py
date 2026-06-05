@@ -34,7 +34,7 @@ from lib.zarr_event_stream import ZarrEventStream
 from lib.eebo_faiss import EeboFaissIndex
 
 
-FAISS_PATH = FAISS_INDEX_DIR / "tier1.index"
+FAISS_PATH = FAISS_TIER1_INDEX
 BATCH_SIZE = 8192
 
 
