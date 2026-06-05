@@ -68,3 +68,4 @@ status.md
 docs/cv.*
 docs/proposal_*
 gui/eebo-frontend/public/data/*.db
+gui/eebo-frontend/public/umap/
