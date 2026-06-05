@@ -198,6 +198,8 @@ export const ConceptGraph: Component = () => {
   );
 
   function setGraph() {
+    let fitViewIntervalId: number;
+
     if (graph) {
       console.debug("[graph2.setGraph] destroy old graph");
       graph.destroy();
@@ -232,7 +234,10 @@ export const ConceptGraph: Component = () => {
       onSimulationTick: () => setGraphProgress(graph?.progress || 0),
       onSimulationEnd: () => {
         graph?.fitView();
-        if (selectedPointIndex() !== null) graph?.zoomToPointByIndex(selectedPointIndex()!, 100, 12);
+        if (selectedPointIndex() !== null) {
+          clearInterval(fitViewIntervalId);
+          graph?.zoomToPointByIndex(selectedPointIndex()!, 100, 12);
+        }
       },
 
       onClick: (index, pos) => {
@@ -247,6 +252,7 @@ export const ConceptGraph: Component = () => {
       }
     });
 
+    fitViewIntervalId = setInterval(() => graph?.fitView(), 500);
     console.debug("[graph2.setGraph] created new graph");
   }
 
