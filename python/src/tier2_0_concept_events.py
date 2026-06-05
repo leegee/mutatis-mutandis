@@ -100,10 +100,18 @@ from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
 
+from lib.tier2_diagnostics import (
+    audit_embedding_diversity,
+    audit_embedding_isotropy,
+    audit_hubness,
+    audit_neighbour_identity,
+    audit_knn_stability,
+)
 
-K           = 25
-BATCH_SIZE  = 8192
-OUTPUT_PATH = INDEXES_DIR / "tier2_concept_neighbours.json"
+K               = 25
+BATCH_SIZE      = 8192
+OUTPUT_PATH     = INDEXES_DIR / "tier2_concept_neighbours.json"
+
 
 # Event lookup
 class ZarrEventLookup:
@@ -208,53 +216,6 @@ def load_doc_metadata(conn) -> dict:
     }
 
 
-# Diagnostics
-# TODO: Extrapolate
-def _audit_embedding_diversity(concept_name, query_vecs):
-    """Log embedding norm and cosine diversity stats; warn on collapse."""
-    logger.info("[tier2] EMBEDDING DIVERSITY AUDIT START")
-
-    sample   = query_vecs[:min(50, len(query_vecs))]
-    sample_n = len(sample)
-
-    norms = np.linalg.norm(sample, axis=1)
-    logger.info(
-        f"[tier2] norms: mean={norms.mean():.6f} std={norms.std():.6f} "
-        f"min={norms.min():.6f} max={norms.max():.6f}"
-    )
-
-    normed     = sample / (np.linalg.norm(sample, axis=1, keepdims=True) + 1e-12)
-    sim_matrix = normed @ normed.T
-    off_diag   = sim_matrix[~np.eye(sample_n, dtype=bool)]
-
-    logger.info(
-        f"[tier2] cosine: mean={off_diag.mean():.6f} "
-        f"std={off_diag.std():.6f} "
-        f"p95={np.percentile(off_diag, 95):.6f} "
-        f"max={off_diag.max():.6f}"
-    )
-
-    if off_diag.std() < 1e-3:
-        logger.warning(
-            "[tier2] EMBEDDING COLLAPSE SUSPECTED "
-            "(near-constant semantic neighbourhood geometry)"
-        )
-
-
-def _audit_neighbour_identity(all_neigh_ids):
-    """Log the most frequently returned neighbour ids across all queries."""
-    flat_ids = all_neigh_ids.flatten()
-    if not len(flat_ids):
-        return
-
-    freq  = Counter(flat_ids)
-    top10 = freq.most_common(10)
-
-    logger.info("[tier2] TOP NEIGHBOUR IDS (frequency)")
-    for k, v in top10:
-        logger.info(f"[tier2] id={k} freq={v}")
-
-
 def knn_diagnostics(lookup, index, concept_forms, sample_n=25, k=25):
     """Dev utility: print kNN overlap and Jaccard stats for a concept's events."""
     forms     = {f.lower() for f in concept_forms}
@@ -342,11 +303,13 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K):
     logger.info(f"[tier2] sample_event_id={event_ids[0]}")
     logger.info(f"[tier2] sample_embedding_shape={query_vecs.shape}")
 
-    _audit_embedding_diversity(concept_name, query_vecs)
+    # _audit_embedding_diversity(concept_name, query_vecs)
+    # all_scores, all_neigh_ids = index.search(query_vecs, K)
+    # _audit_neighbour_identity(all_neigh_ids)
 
-    all_scores, all_neigh_ids = index.search(query_vecs, K)
-
-    _audit_neighbour_identity(all_neigh_ids)
+    if args.diagnostics:
+        diag.audit_embedding_diversity(concept_name, query_vecs)
+        diag.audit_neighbour_identity(all_neigh_ids)
 
     token_counter  = Counter()
     doc_counter    = Counter()
@@ -517,6 +480,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--concept", type=str, default=None)
+    parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics" )
     args = parser.parse_args()
 
     faiss_index_path = FAISS_INDEX_DIR / "tier1.index"
@@ -526,10 +490,11 @@ def main():
     index  = EeboFaissIndex.load(faiss_index_path)
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
 
-    logger.info("--------------------------------------------------------")
-    knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
-    knn_diagnostics(lookup, index, CONCEPT_SETS["LAW"]["forms"])
-    logger.info("--------------------------------------------------------")
+    if args.diagnostics:
+        logger.info("--------------------------------------------------------")
+        knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
+        knn_diagnostics(lookup, index, CONCEPT_SETS["LAW"]["forms"])
+        logger.info("--------------------------------------------------------")
 
     conn     = get_connection()
     doc_meta = load_doc_metadata(conn)
