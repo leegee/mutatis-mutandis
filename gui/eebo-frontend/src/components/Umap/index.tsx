@@ -7,9 +7,11 @@ import { loadDatasets } from "./loadDatasets";
 import { controls } from "../../state/controls.store";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept"];
+const DATA_TYPES = ['concept_neighbours/', 'concept'];
 
 export default function Umap() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
+    const [dataType, setDataType] = createSignal("concept");
     const [colorBy, setColorBy] = createSignal("doc_id");
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
@@ -18,14 +20,16 @@ export default function Umap() {
             concepts: controls.conceptSelection,
             fromYear: controls.fromYear,
             toYear: controls.toYear,
-            yearMode: controls.yearMode
+            yearMode: controls.yearMode,
+            dataType: dataType()
         }),
-        async ({ concepts, fromYear, toYear, yearMode }) => {
+        async ({ concepts, fromYear, toYear, yearMode, dataType }) => {
             return loadDatasets({
                 concepts,
                 fromYear,
                 toYear,
-                yearMode
+                yearMode,
+                dataType
             });
         }
     );
@@ -44,6 +48,16 @@ export default function Umap() {
             {/* Map fills the screen */}
             <Show when={datasets()}>
                 <ControlsHeader multiConcept={true} noTopN={true} >
+                    <div class="field border middle-align">
+                        <select class="small-padding"
+                            value={dataType()}
+                            onChange={(e) => setDataType(e.currentTarget.value)}
+                        >
+                            {DATA_TYPES.map((t) => <option value={t}>{t}</option>)}
+                        </select>
+                        <span class="tooltip bottom">Colour by</span>
+                    </div>
+
                     <div class="field border middle-align">
                         <select class="small-padding"
                             value={projection()}
@@ -77,7 +91,7 @@ export default function Umap() {
                     onPointClick={handleClick}
                     onBoundsChange={handleBoundsChange}
                 />
-            </Show>
+            </Show >
 
             <Show when={hovered()}>
                 {(h) => (
@@ -96,6 +110,7 @@ export default function Umap() {
                             <span class="medium-opacity small-text padding-left">{h().point.concept}</span>
                         </div>
                         <div class="row small-text">Doc: {h().point.doc_id} Year: {h().point.pub_year}</div>
+                        <div class="row small-text small-opacity">Token Index: {h().point.token_idx}</div>
                     </aside>
                 )}
             </Show>

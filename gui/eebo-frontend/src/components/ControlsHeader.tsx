@@ -185,9 +185,11 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           </Show>
         </Show>
 
-        <hr class="divider vertical max no-margin no-padding" />
 
         <Show when={props.includeHubSpread}>
+
+          <hr class="divider vertical max no-margin no-padding" />
+
           <div class="field middle-align">
             <div class="slider tiny">
               <input

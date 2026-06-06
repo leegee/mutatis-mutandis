@@ -7,12 +7,13 @@ interface LoadDatasetsParams {
     fromYear: number;
     toYear: number;
     yearMode: YearMode;
+    dataType: string;
 }
 
-export async function loadDatasets(args: LoadDatasetsParams) {
+export async function loadDatasets(params: LoadDatasetsParams) {
     const conceptDatasetsRaw = await Promise.all(
-        args.concepts.map((c: string) => {
-            return fetch(`/umap/concept/${ c }.json`).then((r) => r.json());
+        params.concepts.map((c: string) => {
+            return fetch(`/umap/${ params.dataType }/${ c }.json`).then((r) => r.json());
         })
     );
 
@@ -38,11 +39,11 @@ export async function loadDatasets(args: LoadDatasetsParams) {
     );
 
     const matchesYear = (year: number) =>
-        args.yearMode === "single"
+        params.yearMode === "single"
             ? (y: number) => y === year
-            : (y: number) => y >= args.fromYear && y <= args.toYear;
+            : (y: number) => y >= params.fromYear && y <= params.toYear;
 
-    const yearCheck = matchesYear(args.fromYear);
+    const yearCheck = matchesYear(params.fromYear);
 
     const enrichedDatasets = datasetsTagged.map(d => ({
         ...d,
