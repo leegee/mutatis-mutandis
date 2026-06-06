@@ -73,14 +73,13 @@ export default function Umap() {
                     <aside class="surface-container-highest border large-elevate small-padding" style={{
                         position: "fixed",
                         left: `${ h().x + 14 }px`,
-                        top: `${ h().y - 100
-                            }px`,
+                        top: `${ h().y - 10 }px`,
                         "z-index": 20,
                         "pointer-events": "none",
                         "white-space": "nowrap",
                     }}>
                         <div class="bold">{h().point.token}</div>
-                        <div class="small-text">{h().point.doc_id}</div>
+                        <div class="small-text">Doc: {h().point.doc_id} Year: {h().point.pub_year}</div>
                     </aside>
                 )}
             </Show>

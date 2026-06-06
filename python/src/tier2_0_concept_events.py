@@ -359,11 +359,14 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 # SQLite writer
 # TODO: Extrapolate schema?
 _SCHEMA = """
+
+DROP TABLE IF EXISTS concepts;
 CREATE TABLE concepts (
     concept  TEXT PRIMARY KEY,
     n_events INTEGER NOT NULL
 );
 
+DROP TABLE IF EXISTS events;
 CREATE TABLE events (
     event_id         INTEGER PRIMARY KEY,
     concept          TEXT    NOT NULL,
@@ -377,6 +380,7 @@ CREATE TABLE events (
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
+DROP TABLE IF EXISTS neighbours;
 CREATE TABLE neighbours (
     event_id             INTEGER NOT NULL,
     neighbour_event_id   INTEGER NOT NULL,
@@ -396,6 +400,7 @@ CREATE TABLE neighbours (
 -- kind    = 'token' | 'doc' | 'window'
 -- token/doc rows : value = token string or doc_id; window columns NULL
 -- window rows    : window_doc_id + window_id set; value NULL
+DROP TABLE IF EXISTS concept_aggregate;
 CREATE TABLE concept_aggregate (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     concept       TEXT    NOT NULL,
@@ -442,12 +447,12 @@ def write_sqlite(output: dict, SQLITE_DB_PATH):
             continue
 
         con.execute(
-            "INSERT OR REPLACE INTO concepts VALUES (?, ?)",
+            "INSERT OR IGNORE INTO concepts VALUES (?, ?)",
             (concept_name, data["n_events"]),
         )
 
         con.executemany(
-            """INSERT OR REPLACE INTO events
+            """INSERT OR IGNORE INTO events
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
@@ -456,11 +461,12 @@ def write_sqlite(output: dict, SQLITE_DB_PATH):
                     e["window_id"], e["window_token_pos"],
                 )
                 for e in data["events"]
+                for n in e["neighbours"]
             ],
         )
 
         con.executemany(
-            """INSERT OR REPLACE INTO neighbours
+            """INSERT OR IGNORE INTO neighbours
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (

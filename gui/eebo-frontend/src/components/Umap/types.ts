@@ -1,8 +1,9 @@
 export interface PointData {
-  event_id: number;
-  token_idx: string;   // stable GUID — use as React/Solid key and identity
+  event_id: string;
+  token_idx: number;
   doc_id: string;
   token: string;
+  pub_year: string;
   // local projection
   nx: number;
   ny: number;
@@ -10,7 +11,7 @@ export interface PointData {
   gnx: number;
   gny: number;
   // any additional augmented fields the parent has attached
-  [key: string]: unknown;
+  // [key: string]: unknown;
 }
 
 export interface ConceptDataset {

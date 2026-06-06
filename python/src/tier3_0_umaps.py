@@ -50,6 +50,7 @@ from lib.eebo_config import ZARR_ROOT, FAISS_TIER1_INDEX, UMAP_DIR, SQLITE_DB_PA
 from lib.eebo_faiss import EeboFaissIndex
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_logging import logger
+from lib.eebo_db import get_connection
 
 from tier2_0_concept_events import ZarrEventLookup
 
@@ -59,23 +60,32 @@ BFS_DIR           = UMAP_DIR / "bfs_global"
 
 K = 25
 
+
+class EventUniverse:
+    def __init__(self):
+        self._ids = set()
+
+    def add(self, ids):
+        self._ids.update(ids)
+
+    def add_one(self, eid):
+        self._ids.add(eid)
+
+    def ids(self):
+        return self._ids
+
+    def snapshot(self):
+        return set(self._ids)
+
+
+
 def backfill_missing_events_from_zarr(lookup, event_ids):
-    """
-    Projection outputs may contain neighbour/BFS events that were never
-    inserted into the SQLite events table during concept indexing.
-
-    Ensure every projected event_id exists so the frontend can always
-    resolve metadata from SQLite.
-    """
-
-    conn = sqlite3.connect(SQLITE_DB_PATH)
+    sqlite_conn = sqlite3.connect(SQLITE_DB_PATH)
 
     try:
         existing = {
             row[0]
-            for row in conn.execute(
-                "SELECT event_id FROM events"
-            )
+            for row in sqlite_conn.execute("SELECT event_id FROM events")
         }
 
         missing_ids = list(set(event_ids) - existing)
@@ -84,53 +94,67 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
             logger.info("[tier3] no missing SQLite events")
             return
 
-        logger.info(
-            f"[tier3] inserting {len(missing_ids):,} missing events into SQLite"
-        )
+        logger.info(f"[tier3] backfilling {len(missing_ids):,} missing events")
+
+        # Gather doc_ids we need pub_year for
+        missing_doc_ids = set()
+        for eid in missing_ids:
+            event = lookup.get_event(eid)
+            if event is not None:
+                missing_doc_ids.add(event["doc_id"])
+
+        # Fetch pub_year from Postgres
+        pg_conn = get_connection()
+        try:
+            with pg_conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT doc_id, pub_year
+                    FROM pamphlet_tokens
+                    WHERE doc_id = ANY(%s)
+                    """,
+                    (list(missing_doc_ids),)
+                )
+                pub_year_map = {row[0]: row[1] for row in cur.fetchall()}
+        finally:
+            pg_conn.close()
 
         rows = []
-
         for eid in missing_ids:
             event = lookup.get_event(eid)
 
+            if event is None:
+                logger.warning(f"[tier3] missing Zarr event_id={eid}")
+                continue
+
             rows.append((
                 int(eid),
-                "__projection__",
-                event.get("vector_id"),
+                "__derived__",
+                int(event.get("vector_id", -1)),
                 event.get("token"),
                 event.get("doc_id"),
-                event.get("pub_year"),
-                event.get("token_idx"),
-                event.get("window_id"),
-                event.get("window_token_pos"),
+                pub_year_map.get(event.get("doc_id")),
+                int(event.get("token_idx", -1)),
+                int(event.get("window_id", -1)),
+                int(event.get("window_token_pos", -1)),
             ))
 
-        conn.executemany(
+        sqlite_conn.executemany(
             """
             INSERT OR IGNORE INTO events (
-                event_id,
-                concept,
-                vector_id,
-                token,
-                doc_id,
-                pub_year,
-                token_idx,
-                window_id,
-                window_token_pos
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                event_id, concept, vector_id, token, doc_id, pub_year,
+                token_idx, window_id, window_token_pos
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
+        sqlite_conn.commit()
 
-        conn.commit()
-
-        logger.info(
-            f"[tier3] inserted {len(rows):,} projection events"
-        )
+        logger.info(f"[tier3] inserted {len(rows):,} rows")
 
     finally:
-        conn.close()
+        sqlite_conn.close()
+
 
 # FAISS / BFS helpers
 def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
@@ -299,7 +323,7 @@ def assemble_points(event_ids, local_coords, global_coords,
         lx, ly = local_coords[eid]
         gx, gy = global_coords[eid]
         points.append({
-            "event_id": eid,
+            "event_id": str(eid),
             "x":   lx,
             "y":   ly,
             "nx":  (lx - lx0) / ldx,
@@ -385,16 +409,12 @@ def main():
         })
 
     # 3. BFS global (≤5 k, depth=2) — local fit
-    bfs_ids     = bfs_event_expansion(lookup, index, all_concept_events,
-                                      max_nodes=5000, depth=2)
+    bfs_ids     = bfs_event_expansion(lookup, index, all_concept_events, max_nodes=5000, depth=2)
     local_bfs   = fit_umap_local(lookup, bfs_ids)
 
     all_event_ids.update(bfs_ids)
 
-    backfill_missing_events_from_zarr(
-        lookup,
-        all_event_ids
-    )
+    backfill_missing_events_from_zarr(lookup, all_event_ids)
 
     # Pass 2 — fit the single joint global UMAP on the full union.
     global_coords = fit_umap_global(lookup, all_event_ids)
@@ -406,7 +426,6 @@ def main():
     logger.info(f"[tier3] global bounds (padded): {global_bounds_padded}")
 
     # Pass 3 — assemble and write all output files.
-
     for path, meta, event_ids, local_coords in buffered_concept + buffered_concept_neigh:
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[e] for e in event_ids])
