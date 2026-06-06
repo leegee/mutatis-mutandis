@@ -3,7 +3,7 @@ export interface PointData {
   token_idx: number;
   doc_id: string;
   token: string;
-  pub_year: string;
+  pub_year: number;
   // local projection
   nx: number;
   ny: number;
@@ -11,7 +11,7 @@ export interface PointData {
   gnx: number;
   gny: number;
   // any additional augmented fields the parent has attached
-  // [key: string]: unknown;
+  [key: string]: unknown;
 }
 
 export interface ConceptDataset {
