@@ -10,7 +10,7 @@ import App from "./App";
 const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
-const Umap = lazy(() => import("./components/Umap"));
+const Umap = lazy(() => import("./components/ScatterPlot"));
 
 render(
     () => (

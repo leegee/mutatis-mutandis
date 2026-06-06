@@ -1,7 +1,7 @@
 import { createSignal, createResource, Show } from "solid-js";
 
 import type { PointData, ViewBounds } from "./types";
-import UmapPlot from "./UmapPlot";
+import ScatterPlot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
 import { loadDatasets } from "./loadDatasets";
 import { controls } from "../../state/controls.store";
@@ -80,7 +80,7 @@ export default function Umap() {
                     </div>
                 </ControlsHeader>
 
-                <UmapPlot
+                <ScatterPlot
                     datasets={datasets()!}
                     projection={projection()}
                     colorBy={colorBy()}

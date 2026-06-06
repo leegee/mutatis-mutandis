@@ -8,7 +8,7 @@ import { ScatterplotLayer } from "@deck.gl/layers";
 import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
-import "./UmapPlot.css";
+import "./style.css";
 import type { ConceptDataset, PointData, ViewBounds } from "./types";
 
 interface UmapProps {
