@@ -1,9 +1,17 @@
 import { getEventsByIds } from "../../services/db/getEventsByIds";
+import { type YearMode } from "../../state/controls.store";
 import type { ConceptDataset } from "./types";
 
-export async function loadDatasets(concepts: string[]) {
+interface LoadDatasetsParams {
+    concepts: string[];
+    fromYear: number;
+    toYear: number;
+    yearMode: YearMode;
+}
+
+export async function loadDatasets(args: LoadDatasetsParams) {
     const conceptDatasetsRaw = await Promise.all(
-        concepts.map((c: string) => {
+        args.concepts.map((c: string) => {
             return fetch(`/umap/concept/${ c }.json`).then((r) => r.json());
         })
     );
@@ -29,18 +37,28 @@ export async function loadDatasets(concepts: string[]) {
         events.map(e => [String(e.event_id), e])
     );
 
-    // merge event fields into points
+    const matchesYear = (year: number) =>
+        args.yearMode === "single"
+            ? (y: number) => y === year
+            : (y: number) => y >= args.fromYear && y <= args.toYear;
+
+    const yearCheck = matchesYear(args.fromYear);
+
     const enrichedDatasets = datasetsTagged.map(d => ({
         ...d,
-        points: d.points.map(p => {
-            // Turn BigInt ids into strings
+        points: d.points.reduce<typeof d.points>((acc, p) => {
             const event = eventMap.get(String(p.event_id));
-            console.log(event?.pub_year)
-            return {
+            const pubYear = event?.pub_year;
+
+            if (pubYear == null || !yearCheck(pubYear)) return acc;
+
+            acc.push({
                 ...p,
-                ...(event ?? { whoops: true })
-            };
-        })
+                ...event,
+            });
+
+            return acc;
+        }, [])
     }));
 
     return enrichedDatasets;

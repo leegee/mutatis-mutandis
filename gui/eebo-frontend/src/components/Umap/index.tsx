@@ -14,9 +14,19 @@ export default function Umap() {
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
     const [datasets] = createResource(
-        () => controls.conceptSelection.slice(),
-        async (conceptSelection) => {
-            return loadDatasets(conceptSelection);
+        () => ({
+            concepts: controls.conceptSelection,
+            fromYear: controls.fromYear,
+            toYear: controls.toYear,
+            yearMode: controls.yearMode
+        }),
+        async ({ concepts, fromYear, toYear, yearMode }) => {
+            return loadDatasets({
+                concepts,
+                fromYear,
+                toYear,
+                yearMode
+            });
         }
     );
 
