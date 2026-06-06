@@ -222,8 +222,8 @@ export const ConceptGraph: Component = () => {
       // randomSeed: 12,
       // Colours etc
       backgroundColor: "#0c0e14",
-      pointGreyoutOpacity: 0.1,
-      linkGreyoutOpacity: 0.1,
+      pointGreyoutOpacity: 0.4,
+      linkGreyoutOpacity: 0.4,
 
       // Events
       onPointMouseOver: (index: number) => {
@@ -235,8 +235,8 @@ export const ConceptGraph: Component = () => {
       onSimulationTick: () => setGraphProgress(graph?.progress || 0),
       onSimulationEnd: () => {
         graph?.fitView();
+        if (fitViewIntervalId) clearInterval(fitViewIntervalId);
         if (selectedPointIndex() !== null) {
-          if (fitViewIntervalId) clearInterval(fitViewIntervalId);
           graph?.zoomToPointByIndex(selectedPointIndex()!, 100, 12);
         }
       },
