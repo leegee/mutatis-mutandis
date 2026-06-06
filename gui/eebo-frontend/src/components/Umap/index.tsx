@@ -1,9 +1,10 @@
 import { createSignal, createResource, Show } from "solid-js";
 
-import type { ConceptDataset, PointData, ViewBounds } from "./types";
+import type { PointData, ViewBounds } from "./types";
 import UmapPlot from "./UmapPlot";
 import ControlsHeader from "../ControlsHeader";
 import { loadDatasets } from "./loadDatasets";
+import { controls } from "../../state/controls.store";
 
 const COLOR_FIELDS = ["doc_id", "token", "concept"];
 
@@ -12,9 +13,12 @@ export default function Umap() {
     const [colorBy, setColorBy] = createSignal("doc_id");
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
-    const [datasets] = createResource<ConceptDataset[]>(async () => {
-        return loadDatasets();
-    });
+    const [datasets] = createResource(
+        () => controls.conceptSelection.slice(),
+        async (conceptSelection) => {
+            return loadDatasets(conceptSelection);
+        }
+    );
 
     function handleClick(point: PointData) {
         console.log("[Umap.index] clicked", point.token_idx, point.token, point.doc_id);
@@ -29,7 +33,7 @@ export default function Umap() {
         <>
             {/* Map fills the screen */}
             <Show when={datasets()}>
-                <ControlsHeader />
+                <ControlsHeader multiConcept={true} />
                 <UmapPlot
                     datasets={datasets()!}
                     projection={projection()}
@@ -78,8 +82,13 @@ export default function Umap() {
                         "pointer-events": "none",
                         "white-space": "nowrap",
                     }}>
-                        <div class="bold">{h().point.token}</div>
-                        <div class="small-text">Doc: {h().point.doc_id} Year: {h().point.pub_year}</div>
+                        <div class="row">
+                            <span class="bold max">
+                                {h().point.token}
+                            </span>
+                            <span class="medium-opacity small-text padding-left">{h().point.concept}</span>
+                        </div>
+                        <div class="row small-text">Doc: {h().point.doc_id} Year: {h().point.pub_year}</div>
                     </aside>
                 )}
             </Show>

@@ -1,11 +1,12 @@
 import { getEventsByIds } from "../../services/db/getEventsByIds";
 import type { ConceptDataset } from "./types";
 
-export async function loadDatasets() {
-    const [a, b] = await Promise.all([
-        fetch("/umap/concept/LIBERTY.json").then((r) => r.json()),
-        fetch("/umap/concept/PREROGATIVE.json").then((r) => r.json()),
-    ]);
+export async function loadDatasets(concepts: string[]) {
+    const conceptDatasetsRaw = await Promise.all(
+        concepts.map((c: string) => {
+            return fetch(`/umap/concept/${ c }.json`).then((r) => r.json());
+        })
+    );
 
     // Augment each point with its concept name so colorBy:"concept" works.
     const augmented = (d: ConceptDataset) => ({
@@ -16,7 +17,7 @@ export async function loadDatasets() {
         }))
     });
 
-    const datasetsTagged = [a, b].map(augmented);
+    const datasetsTagged = conceptDatasetsRaw.map(augmented);
     const allEventIds = [
         ...new Set(datasetsTagged.flatMap(d => d.points.map(p => p.event_id)))
     ];
@@ -34,6 +35,7 @@ export async function loadDatasets() {
         points: d.points.map(p => {
             // Turn BigInt ids into strings
             const event = eventMap.get(String(p.event_id));
+            console.log(event?.pub_year)
             return {
                 ...p,
                 ...(event ?? { whoops: true })

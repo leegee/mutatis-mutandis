@@ -11,6 +11,7 @@ export const MAX_TOP_N = 1000;
 
 export type ControlsState = {
   concept: string;
+  conceptSelection: string[];
   viewMode: ViewMode;
   maxHubs: number;
   topN: number;
@@ -25,6 +26,7 @@ export type ControlsState = {
 
 export const [controls, setControls] = createStore<ControlsState>({
   concept: "LIBERTY",
+  conceptSelection: ["LIBERTY"],
   viewMode: "events",
   maxHubs: 50,
   topN: MAX_TOP_N,

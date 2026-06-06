@@ -381,7 +381,7 @@ export const ConceptGraph: Component = () => {
     }}>
 
       <Show when={!data.loading}>
-        <ControlsHeader />
+        <ControlsHeader fdgControls={true} />
         <Show when={graphProgress() < 1}>
           <progress max={1} value={graphProgress()} />
         </Show>

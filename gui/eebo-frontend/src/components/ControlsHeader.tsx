@@ -17,8 +17,8 @@ interface Props {
   title?: string;
   includeHubSpread?: boolean;
   fdgControls?: boolean;
+  multiConcept?: boolean;
   totalEvents?: () => number;
-  noYears?: boolean;
 }
 
 const ControlsHeader: ParentComponent<Props> = (props) => {
@@ -34,14 +34,61 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
       <nav>
         <div class="field suffix border middle-align small">
           <Show when={concepts().length > 0}>
-            <select
-              value={controls.concept}
-              onChange={(e) => A.setConcept(e.currentTarget.value)}
-            >
-              <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
-            </select>
+            <Show when={props.multiConcept} fallback={
+              <select value={controls.concept} onChange={(e) => A.setConcept(e.currentTarget.value)} >
+                <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
+              </select>
+            }>
+              {/* <select multiple={true}
+                size={1}
+                value={controls.conceptSelection}
+                onChange={(e) => {
+                  const values = Array.from(e.currentTarget.selectedOptions).map(
+                    (o) => o.value
+                  );
+                  A.setConceptSelection(values);
+                }}
+              >
+                <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
+              </select> */}
+              <div class="field label border mid-align no-round suffix">
+                <button type="button" data-ui="#concept-menu">
+                  <span>
+                    {controls.conceptSelection.length === 0
+                      ? "None selected"
+                      : controls.conceptSelection.length === 1
+                        ? controls.conceptSelection[0] : (controls.conceptSelection.length + " selected")
+                    }
+                  </span>
+                  <i>arrow_drop_down</i>
+                </button>
+                <menu id="concept-menu">
+                  <For each={concepts()}>
+                    {(c) => (
+                      <li>
+                        <label class="checkbox small">
+                          <input type="checkbox"
+                            checked={controls.conceptSelection.includes(c)}
+                            value={c}
+                            onChange={(e) => {
+                              const checked = e.currentTarget.checked;
+                              A.setConceptSelection((prev) =>
+                                checked
+                                  ? [...prev, c]
+                                  : prev.filter((v) => v !== c)
+                              );
+                            }}
+                          />
+                          <span>{c}</span>
+                        </label>
+                      </li>
+                    )}
+                  </For>
+                </menu>
+              </div>
+            </Show>
           </Show>
-          <span class="tooltip bottom">Concept</span>
+          <span class="tooltip right">Concepts</span>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />

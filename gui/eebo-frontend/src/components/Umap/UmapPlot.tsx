@@ -11,8 +11,6 @@ import { COORDINATE_SYSTEM } from "@deck.gl/core";
 import "./UmapPlot.css";
 import type { ConceptDataset, PointData, ViewBounds } from "./types";
 
-// Types
-
 interface UmapProps {
   // Data
   datasets: ConceptDataset[];

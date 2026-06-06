@@ -10,6 +10,7 @@ export interface PointData {
   // global projection
   gnx: number;
   gny: number;
+  concept: string;
   // any additional augmented fields the parent has attached
   [key: string]: unknown;
 }

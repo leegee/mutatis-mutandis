@@ -22,6 +22,21 @@ export const controlsActions = {
         });
     },
 
+    // Sets concept if the concept selection is just one - deselects the current node
+    setConceptSelection(
+        conceptSelection: string[] | ((prev: string[]) => string[])
+    ) {
+        setControls((prev) => {
+            const nextConceptSelection = typeof conceptSelection === "function" ? conceptSelection(prev.conceptSelection) : conceptSelection;
+            return {
+                ...prev,
+                conceptSelection: nextConceptSelection,
+                concept: nextConceptSelection.length === 1 ? nextConceptSelection[0] : prev.concept, // null to clear it
+                selectedNode: null,
+            };
+        });
+    },
+
     setSelectedNode(id: string | null) {
         setControls("selectedNode", (prev) => (prev === id ? null : id));
     },

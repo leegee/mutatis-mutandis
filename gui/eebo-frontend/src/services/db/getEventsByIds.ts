@@ -2,7 +2,7 @@ import type { Event } from "../../types";
 import { execRows } from "./dbh";
 
 export async function getEventsByIds(
-  ids: number[],
+  ids: string[],
 ): Promise<Event[]> {
   if (!ids.length) return [];
 
