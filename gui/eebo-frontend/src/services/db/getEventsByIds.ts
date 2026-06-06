@@ -10,8 +10,6 @@ export async function getEventsByIds(
   const results: Event[] = [];
   let c = 0;
 
-  console.log('[getEventsByIds] enter', ids)
-
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);
 
@@ -39,6 +37,5 @@ export async function getEventsByIds(
     }
   }
 
-  console.log('[getEventsByIds]', c, results.length)
   return results as Event[];
 }
