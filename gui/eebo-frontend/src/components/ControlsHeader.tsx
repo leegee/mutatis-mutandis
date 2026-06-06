@@ -18,6 +18,7 @@ interface Props {
   includeHubSpread?: boolean;
   fdgControls?: boolean;
   multiConcept?: boolean;
+  noTopN?: boolean;
   totalEvents?: () => number;
 }
 
@@ -51,8 +52,8 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               >
                 <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
               </select> */}
-              <div class="field label border mid-align no-round suffix">
-                <button type="button" data-ui="#concept-menu">
+              <div class="field label border mid-align">
+                <button class="border no-round">
                   <span>
                     {controls.conceptSelection.length === 0
                       ? "None selected"
@@ -62,7 +63,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                   </span>
                   <i>arrow_drop_down</i>
                 </button>
-                <menu id="concept-menu">
+                <menu class="no-round">
                   <For each={concepts()}>
                     {(c) => (
                       <li>
@@ -98,24 +99,26 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         <hr class="divider vertical max no-margin no-padding" />
 
         {/* Top N  .field>:is(input,select) */}
-        <div class="field middle-align prefix border small">
-          <i class="tiny">tenancy</i>
-          <input
-            type="number"
-            min={1}
-            max={MAX_TOP_N}
-            step={1}
-            value={controls.topN}
-            onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
-          />
-          <span class="tooltip bottom">
-            Top Neighbours {controls.topN}.
-            <br />
-            The number of top-ranked neighbours to display.
-            <br />
-            Reduce if the graph is too cluttered to read.
-          </span>
-        </div>
+        <Show when={!props.noTopN}>
+          <div class="field middle-align prefix border small">
+            <i class="tiny">tenancy</i>
+            <input
+              type="number"
+              min={1}
+              max={MAX_TOP_N}
+              step={1}
+              value={controls.topN}
+              onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
+            />
+            <span class="tooltip bottom">
+              Top Neighbours {controls.topN}.
+              <br />
+              The number of top-ranked neighbours to display.
+              <br />
+              Reduce if the graph is too cluttered to read.
+            </span>
+          </div>
+        </Show>
 
         <Show when={fdgControls()}>
           {/* <div class="field suffix border middle-align">

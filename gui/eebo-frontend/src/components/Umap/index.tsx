@@ -6,7 +6,7 @@ import ControlsHeader from "../ControlsHeader";
 import { loadDatasets } from "./loadDatasets";
 import { controls } from "../../state/controls.store";
 
-const COLOR_FIELDS = ["doc_id", "token", "concept"];
+const COLOR_FIELDS = ["doc_id", "pub_year", "concept"];
 
 export default function Umap() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
@@ -43,7 +43,29 @@ export default function Umap() {
         <>
             {/* Map fills the screen */}
             <Show when={datasets()}>
-                <ControlsHeader multiConcept={true} />
+                <ControlsHeader multiConcept={true} noTopN={true} >
+                    <div class="field border middle-align">
+                        <select class="small-padding"
+                            value={projection()}
+                            onChange={(e) => setProjection(e.currentTarget.value as "local" | "global")}
+                        >
+                            <option value="global">Global</option>
+                            <option value="local">Local</option>
+                        </select>
+                        <span class="tooltip bottom">Projection space</span>
+                    </div>
+
+                    <div class="field border middle-align">
+                        <select class="small-padding"
+                            value={colorBy()}
+                            onChange={(e) => setColorBy(e.currentTarget.value)}
+                        >
+                            {COLOR_FIELDS.map((f) => <option value={f}>{f}</option>)}
+                        </select>
+                        <span class="tooltip bottom">Colour by</span>
+                    </div>
+                </ControlsHeader>
+
                 <UmapPlot
                     datasets={datasets()!}
                     projection={projection()}
@@ -56,31 +78,6 @@ export default function Umap() {
                     onBoundsChange={handleBoundsChange}
                 />
             </Show>
-
-            {/* Minimal HUD — in the real system these controls live in the parent store UI */}
-            <aside style={{
-                position: "fixed", top: "1rem", right: "1rem", "z-index": 10,
-                display: "flex", gap: "0.5rem", "flex-direction": "column",
-            }}>
-                <div class="field border middle-align">
-                    <select class="small-padding"
-                        value={projection()}
-                        onChange={(e) => setProjection(e.currentTarget.value as "local" | "global")}
-                    >
-                        <option value="global">Global</option>
-                        <option value="local">Local</option>
-                    </select>
-                </div>
-
-                <div class="field border middle-align">
-                    <select class="small-padding"
-                        value={colorBy()}
-                        onChange={(e) => setColorBy(e.currentTarget.value)}
-                    >
-                        {COLOR_FIELDS.map((f) => <option value={f}>{f}</option>)}
-                    </select>
-                </div>
-            </aside>
 
             <Show when={hovered()}>
                 {(h) => (
