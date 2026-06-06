@@ -47,11 +47,11 @@ STOPWORDS = {
     # conjunctions / prepositions
     "and", "or", "but", "of", "in", "to", "for", "with", "by",
     "at", "from", "as", "on", "into", "upon", "unto", "not",
-    "nor", "yet", "so", "if", "be", "is", "are", "was", "were",
+    "nor", "yet", "so", "if", "be", "is", "are", "was", "were", "where",
     "have", "hath", "hath", "do", "doth",
-    # "shall", "will", "may", "might", "should", "would", "could",
+    "shall", "will", "may",  "should", "would", "could", # "might",
     "than", "then", "when",
-    "this", "these", "those", "all", "no", "any",
+    "this", "these", "those", "all", "no", "any", "such", "many", "some",
 }
 
 

@@ -89,7 +89,10 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               </div>
             </Show>
           </Show>
-          <span class="tooltip right">Concepts</span>
+          <div class="tooltip right">
+            Concepts<br />
+            {controls.conceptSelection.join(", ")}
+          </div>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />

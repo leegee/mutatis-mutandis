@@ -22,6 +22,15 @@ export interface ConceptDataset {
   globalBounds: Bounds;
 }
 
+export interface BfsDataset {
+  points: any[];
+  type: "bfs_global";
+  bounds: any;
+  globalBounds: any;
+  depth: number;
+  k: number;
+}
+
 export interface Bounds {
   minX: number;
   maxX: number;

@@ -9,11 +9,12 @@ import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./style.css";
-import type { ConceptDataset, PointData, ViewBounds } from "./types";
+import type { BfsDataset, ConceptDataset, PointData, ViewBounds } from "./types";
 
-interface UmapProps {
+interface PlotProps {
   // Data
   datasets: ConceptDataset[];
+  bfsDataset?: BfsDataset;
 
   // Controlled display state — parent owns these
   projection: "local" | "global";
@@ -91,6 +92,8 @@ function hslToRgb(
 
 const GREY: [number, number, number, number] = [120, 120, 130, 140];
 
+const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
+
 function getPosition(
   p: PointData,
   projection: "local" | "global"
@@ -107,7 +110,7 @@ const INITIAL_VIEW_STATE: OrthographicViewState = {
   maxZoom: 20,
 };
 
-export default function UmapPlot(props: UmapProps) {
+export default function Plot(props: PlotProps) {
   let canvas!: HTMLCanvasElement;
   let deck: Deck<OrthographicView> | null = null;
 
@@ -132,6 +135,7 @@ export default function UmapPlot(props: UmapProps) {
       map.get(String(p[field] ?? "")) ?? GREY;
   });
 
+
   // One ScatterplotLayer per concept dataset so toggling visibility
   // per-concept is trivially available to the parent later.
   const layers = createMemo(() => {
@@ -140,13 +144,13 @@ export default function UmapPlot(props: UmapProps) {
     const radius = props.pointRadius ?? 4;
     const opacity = props.opacity ?? 0.85;
 
-    return props.datasets.map(
+    const conceptLayers = props.datasets.map(
       (dataset) =>
         new ScatterplotLayer<PointData>({
-          id: `eebo-${ dataset.concept }`,
+          id: `concept-${ dataset.concept }`,
           coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-          getPosition: (p) => getPosition(p, proj),
           data: dataset.points,
+          getPosition: (p) => getPosition(p, proj),
           getFillColor: colorFn,
           getRadius: radius,
           radiusUnits: "pixels",
@@ -154,32 +158,36 @@ export default function UmapPlot(props: UmapProps) {
           pickable: true,
           autoHighlight: true,
           highlightColor: [255, 255, 255, 80],
-
-          // Smooth animated transitions when projection or colour changes.
           transitions: {
             getPosition: { duration: 650, easing: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t },
             getFillColor: { duration: 300 },
           },
-
           updateTriggers: {
             getPosition: [proj],
             getFillColor: [props.colorBy, dataset.concept],
           },
-
-          onHover: (info: PickingInfo<PointData>) => {
-            props.onPointHover?.(
-              info.object ?? null,
-              info.object ? [info.x, info.y] : null
-            );
-          },
-
+          onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
           onClick: (info: PickingInfo<PointData>) => {
             if (info.object) props.onPointClick?.(info.object);
           },
         })
     );
-  });
 
+    const bfsLayer = props.bfsDataset && new ScatterplotLayer<PointData>({
+      id: "bfs-global",
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      data: props.bfsDataset.points,
+      getPosition: getBfsPosition,
+      getFillColor: () => [20, 20, 200, 100],
+      getRadius: radius * .5,
+      radiusUnits: "pixels",
+      pickable: true,
+      // opacity: 0.5,
+      onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
+    });
+
+    return bfsLayer ? [bfsLayer, ...conceptLayers] : conceptLayers;
+  });
 
   function fitZoom(): number {
     const size = Math.min(canvas.clientWidth, canvas.clientHeight) * 0.9;
@@ -218,51 +226,12 @@ export default function UmapPlot(props: UmapProps) {
       style: { width: "100%", height: "100%" },
     });
 
-    createEffect(() => {
-      const proj = props.projection;
-      const colorFn = getColor();
-      const radius = props.pointRadius ?? 4;
-      const opacity = props.opacity ?? 0.85;
-
-      deck!.setProps({
-        layers: props.datasets.map((dataset) =>
-          new ScatterplotLayer<PointData>({
-            coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-            id: `eebo-${ dataset.concept }`,
-            data: dataset.points,
-            getPosition: (p: PointData) => getPosition(p, proj),
-            getFillColor: colorFn,
-            getRadius: radius,
-            radiusUnits: "pixels",
-            opacity,
-            pickable: true,
-            autoHighlight: true,
-            highlightColor: [255, 255, 255, 80],
-            transitions: {
-              getPosition: { duration: 650, easing: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t },
-              getFillColor: { duration: 300 },
-            },
-            updateTriggers: {
-              getPosition: [proj],
-              getFillColor: [props.colorBy, dataset.concept],
-            },
-            onHover: (info: PickingInfo<PointData>) => {
-              props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null);
-            },
-            onClick: (info: PickingInfo<PointData>) => {
-              if (info.object) props.onPointClick?.(info.object);
-            },
-          })
-        ),
-      });
-
-      fitZoom();
-    });
+    fitZoom();
   });
 
-
+  // Single source of truth for all layers, including BFS.
   createEffect(() => {
-    deck!.setProps({ layers: layers() });
+    deck?.setProps({ layers: layers() });
   });
 
   onCleanup(() => {

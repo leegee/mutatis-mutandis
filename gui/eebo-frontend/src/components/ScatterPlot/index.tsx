@@ -1,15 +1,15 @@
 import { createSignal, createResource, Show } from "solid-js";
 
 import type { PointData, ViewBounds } from "./types";
-import ScatterPlot from "./Plot";
+import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
-import { loadDatasets } from "./loadDatasets";
+import { loadBfsDataset, loadDatasets } from "./loadDatasets";
 import { controls } from "../../state/controls.store";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept"];
 const DATA_TYPES = ['concept_neighbours/', 'concept'];
 
-export default function Umap() {
+export default function ScatterPlot() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
     const [dataType, setDataType] = createSignal("concept");
     const [colorBy, setColorBy] = createSignal("doc_id");
@@ -34,19 +34,31 @@ export default function Umap() {
         }
     );
 
+    const [bfs] = createResource(
+        () => ({
+            fromYear: controls.fromYear,
+            toYear: controls.toYear,
+            yearMode: controls.yearMode,
+        }),
+        async (params) => {
+            console.log("[ScatterPlot.index] loaded BFS")
+            return loadBfsDataset(params);
+        }
+    );
+
     function handleClick(point: PointData) {
-        console.log("[Umap.index] clicked", point.token_idx, point.token, point.doc_id);
+        console.log("[ScatterPlot.index] clicked", point.token_idx, point.token, point.doc_id);
     }
 
     function handleBoundsChange(_bounds: ViewBounds) {
         // parent store would receive this — ignored here
-        // console.log("[Umap.index] bounds changed", bounds);
+        // console.log("[ScatterPlot.index] bounds changed", bounds);
     }
 
     return (
         <>
             {/* Map fills the screen */}
-            <Show when={datasets()}>
+            <Show when={datasets() && bfs()}>
                 <ControlsHeader multiConcept={true} noTopN={true} >
                     <div class="field border middle-align">
                         <select class="small-padding"
@@ -80,8 +92,9 @@ export default function Umap() {
                     </div>
                 </ControlsHeader>
 
-                <ScatterPlot
+                <Plot
                     datasets={datasets()!}
+                    bfsDataset={bfs()}
                     projection={projection()}
                     colorBy={colorBy()}
                     colorByFields={COLOR_FIELDS}
@@ -98,7 +111,7 @@ export default function Umap() {
                     <aside class="surface-container-highest border large-elevate small-padding" style={{
                         position: "fixed",
                         left: `${ h().x + 14 }px`,
-                        top: `${ h().y - 10 }px`,
+                        top: `${ h().y - 52 }px`,
                         "z-index": 20,
                         "pointer-events": "none",
                         "white-space": "nowrap",
