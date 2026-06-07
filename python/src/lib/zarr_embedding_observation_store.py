@@ -142,10 +142,7 @@ class ZarrEmbeddingObservationStore:
             "int32",
         )
 
-    # ------------------------------------------------------------
     # dataset helper
-    # ------------------------------------------------------------
-
     def _ds(self, g, name, shape_suffix, compressor, dtype):
         if name in g:
             return g[name]
@@ -164,9 +161,10 @@ class ZarrEmbeddingObservationStore:
             compressor=compressor,
         )
 
-    # ------------------------------------------------------------
-    # write path
-    # ------------------------------------------------------------
+    def get_doc_ids(self) -> set[str]:
+        if self.doc_id.shape[0] == 0:
+            return set()
+        return set(self.doc_id[:])
 
     def append_events(
         self,
@@ -228,10 +226,6 @@ class ZarrEmbeddingObservationStore:
         self._append(self.window_id, window_id)
         self._append(self.window_token_pos, window_token_pos)
 
-    # ------------------------------------------------------------
-    # safety
-    # ------------------------------------------------------------
-
     def _check(self, arr, n):
         if len(arr) != n:
             raise ValueError(
@@ -251,9 +245,6 @@ class ZarrEmbeddingObservationStore:
 
         ds[old:new] = arr
 
-    # ------------------------------------------------------------
-    # introspection
-    # ------------------------------------------------------------
 
     @property
     def n_events(self) -> int:
