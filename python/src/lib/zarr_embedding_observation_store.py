@@ -161,11 +161,6 @@ class ZarrEmbeddingObservationStore:
             compressor=compressor,
         )
 
-    def get_doc_ids(self) -> set[str]:
-        if self.doc_id.shape[0] == 0:
-            return set()
-        return set(self.doc_id[:])
-
     def append_events(
         self,
         event_id,
@@ -249,6 +244,11 @@ class ZarrEmbeddingObservationStore:
     @property
     def n_events(self) -> int:
         return int(self.event_id.shape[0])
+
+    def get_doc_ids(self) -> set[str]:
+        if self.doc_id.shape[0] == 0:
+            return set()
+        return set(self.doc_id[:])
 
     def embedding_dim(self) -> int:
         if len(self.emb_raw.shape) <= 1:

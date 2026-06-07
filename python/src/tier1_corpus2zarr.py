@@ -28,7 +28,7 @@ import unicodedata
 
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
-from lib.eebo_config import ZARR_ROOT, SLICES, EMBED_BATCH_SIZE
+from lib.eebo_config import ZARR_ROOT, EMBED_BATCH_SIZE
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 
@@ -71,17 +71,14 @@ def is_content_token(token: str) -> bool:
     return True
 
 
-#
-# TODO Extrapolate
-#
 @dataclass(slots=True)
 class Event:
-    event_id:         np.int64    # unique contextual observation
-    concept_id:       np.int64    # stable corpus token identity
+    event_id:         np.int64
+    concept_id:       np.int64
     doc_id:           str
-    token_idx:        int         # original corpus token position
-    window_start:     int         # contextual frame origin
-    window_token_pos: int         # intra-window transformer position
+    token_idx:        int
+    window_start:     int
+    window_token_pos: int
     token:            str
     vector_id:        int
     vec:              np.ndarray
@@ -103,14 +100,13 @@ class Event:
         )
 
 
-
 @dataclass
 class DocBuffer:
     """Accumulates content tokens for one document before embedding."""
     doc_id:     str
     tokens:     list = None
     vector_ids: list = None
-    token_idxs: list = None  # original corpus positions
+    token_idxs: list = None
 
     def __post_init__(self):
         self.tokens     = []
@@ -124,7 +120,6 @@ class DocBuffer:
 
     def __bool__(self):
         return bool(self.tokens)
-
 
 
 class EmbeddingPipeline:
@@ -220,45 +215,72 @@ class EmbeddingPipeline:
         ]
 
 
-
-class SliceProcessor:
+class CorpusProcessor:
     def __init__(self, conn, pipeline: EmbeddingPipeline):
         self.conn     = conn
         self.pipeline = pipeline
 
-    def process(self, slice_range):
-        slice_id = f"{slice_range[0]}-{slice_range[1]}"
-        logger.info(f"[SLICE START] {slice_id}")
-
+    def process(self, doc_id: str | None = None):
         store = ZarrEmbeddingObservationStore(
-            path=str(ZARR_ROOT / "tier1" / slice_id),
+            path=str(ZARR_ROOT / "tier1"),
             dim=self.pipeline.model.config.hidden_size,
         )
 
-        cur = self.conn.cursor(name=f"tier1_{slice_id}")
+        already_processed = store.get_doc_ids()
+
+        if doc_id is not None:
+            if doc_id in already_processed:
+                logger.info(f"[SKIP] {doc_id} already in store")
+                return
+            self._process_query(store, already_processed, doc_id=doc_id)
+        else:
+            self._process_query(store, already_processed)
+
+    def _process_query(
+        self,
+        store: ZarrEmbeddingObservationStore,
+        already_processed: set[str],
+        doc_id: str | None = None,
+    ):
+        label = doc_id or "full corpus"
+        logger.info(f"[START] {label}")
+
+        cur = self.conn.cursor(name="tier1_cursor")
         cur.itersize = 10000
-        cur.execute("""
-            SELECT doc_id, token_idx, vector_id, token
-            FROM pamphlet_tokens
-            WHERE pub_year BETWEEN %s AND %s
-            ORDER BY doc_id, token_idx
-        """, slice_range)
+
+        if doc_id is not None:
+            cur.execute("""
+                SELECT doc_id, token_idx, vector_id, token
+                FROM pamphlet_tokens
+                WHERE doc_id = %s
+                ORDER BY token_idx
+            """, (doc_id,))
+        else:
+            cur.execute("""
+                SELECT doc_id, token_idx, vector_id, token
+                FROM pamphlet_tokens
+                ORDER BY doc_id, token_idx
+            """)
 
         buf = None
 
-        for doc_id, token_idx, vid, token in cur:
-            if buf is None or doc_id != buf.doc_id:
+        for row_doc_id, token_idx, vid, token in cur:
+            if row_doc_id in already_processed:
+                continue
+
+            if buf is None or row_doc_id != buf.doc_id:
                 if buf:
                     self._flush(buf, store)
-                buf = DocBuffer(doc_id=doc_id)
+                    already_processed.add(buf.doc_id)
+                buf = DocBuffer(doc_id=row_doc_id)
 
             if is_content_token(token):
                 buf.append(token, vid, token_idx)
 
-        if buf:
+        if buf and buf.doc_id not in already_processed:
             self._flush(buf, store)
 
-        logger.info(f"[SLICE COMPLETE] {slice_id}")
+        logger.info(f"[COMPLETE] {label}")
 
     def _flush(self, buf: DocBuffer, store: ZarrEmbeddingObservationStore):
         if not buf:
@@ -288,7 +310,6 @@ class SliceProcessor:
         )
 
 
-
 def clear_output_dir():
     path = ZARR_ROOT / "tier1"
     if path.exists():
@@ -298,27 +319,26 @@ def clear_output_dir():
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--no-clear", action="store_true")
-    p.add_argument("--first",    action="store_true")
+    p.add_argument("--clear", action="store_true",
+                   help="Remove existing store")
+    p.add_argument("--doc-id",   type=str, default=None,
+                   help="Embed a single document by doc_id and append to store")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
 
-    if not args.no_clear:
+    if args.clear:
         logger.info("Clearing Tier 1 output")
         clear_output_dir()
 
     conn     = get_connection()
     mac      = load_macberth()
     pipeline = EmbeddingPipeline(mac.tokenizer, mac.model, mac.device)
-    proc     = SliceProcessor(conn, pipeline)
+    proc     = CorpusProcessor(conn, pipeline)
 
-    slices = SLICES[:1] if args.first else SLICES
-
-    for s in slices:
-        proc.process(s)
+    proc.process(doc_id=args.doc_id)
 
     conn.close()
 

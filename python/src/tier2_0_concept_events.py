@@ -100,7 +100,7 @@ from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
-
+from lib.zarr_store_dirs import store_dirs
 from lib.tier2_diagnostics import (
     audit_embedding_diversity,
     audit_embedding_isotropy,
@@ -135,16 +135,13 @@ class ZarrEventLookup:
     def _build(self):
         logger.info("[tier2] building event lookup")
 
-        for slice_dir in sorted(self.root.iterdir()):
-            if not slice_dir.is_dir():
-                continue
-
-            g = zarr.open_group(str(slice_dir), mode="r")
+        for store_dir in store_dirs(self.root):
+            g = zarr.open_group(str(store_dir), mode="r")
 
             if "events" not in g:
                 continue
 
-            self._load_slice(g["events"], slice_dir)
+            self._load_slice(g["events"], store_dir)
 
         logger.info(f"[tier2] events={len(self.by_event_id)}")
 

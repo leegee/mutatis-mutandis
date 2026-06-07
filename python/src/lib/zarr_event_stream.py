@@ -3,7 +3,7 @@ import numpy as np
 import zarr
 
 from lib.eebo_logging import logger
-
+from lib.zarr_store_dirs import store_dirs
 
 class ZarrEventStream:
     """
@@ -39,22 +39,11 @@ class ZarrEventStream:
 
     def __init__(self, root: str):
         self.root = Path(root)
-
         self._token_by_id = None
         self._doc_by_id = None
 
     def _store_dirs(self) -> list[Path]:
-        """
-        Return the list of store directories to traverse.
-
-        If root is itself a single observation store (contains an 'events'
-        group directly), return it alone. Otherwise treat root as a
-        directory of stores and return its sorted subdirectories.
-        """
-        if (self.root / self.EXPECTED_GROUP).exists():
-            return [self.root]
-        return sorted(p for p in self.root.iterdir() if p.is_dir())
-
+        return store_dirs(self.root)
 
     def _build_lookup(self):
         if self._token_by_id is not None:
