@@ -7,9 +7,9 @@ Streaming FAISS construction over Tier 1 contextual observation stores.
 Architecture
 ------------
 
-Tier 1 is a multi-slice contextual observation layer:
+Tier 1 is a single contextual observation store:
 
-    ZARR_ROOT/tier1/<slice>/events/*
+    ZARR_ROOT/tier1/events/*
 
 Each stored row represents a contextual observation of a corpus token
 under a specific transformer window.
@@ -45,19 +45,17 @@ Key invariants
 
 4. Multiple contextual observations may share the same vector_id.
 
-5. Cross-slice aggregation is streaming-only.
+5. No full-corpus materialisation occurs during index construction.
 
-6. No full-corpus materialisation occurs during index construction.
-
-7. FAISS geometry operates over contextual observations, not corpus events.
+6. FAISS geometry operates over contextual observations, not corpus events.
 """
 
 from __future__ import annotations
 
-import shutil
+import argparse
 import numpy as np
 
-from lib.eebo_config import ZARR_ROOT, FAISS_INDEX_DIR
+from lib.eebo_config import ZARR_ROOT, FAISS_INDEX_DIR, FAISS_TIER1_INDEX
 from lib.eebo_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 from lib.zarr_event_stream import ZarrEventStream
@@ -66,59 +64,92 @@ from lib.zarr_event_stream import ZarrEventStream
 BATCH_SIZE = 8192
 
 
-def build_index(stream: ZarrEventStream) -> EeboFaissIndex:
+def get_indexed_ids(index: EeboFaissIndex) -> set[int]:
+    """Return the set of event_ids already present in the index."""
+    return set(faiss.vector_to_array(index._index.id_map).tolist())
+
+
+def build_index(
+    stream: ZarrEventStream,
+    index: EeboFaissIndex | None = None,
+    already_indexed: set[int] | None = None,
+) -> EeboFaissIndex:
     """
-    Build a global FAISS index over Tier 1 contextual observations.
+    Build or incrementally update a FAISS index over Tier 1 contextual
+    observations.
 
-    Observation identity is defined by stream position, not lexical identity.
-
-    Important:
-        vector_id is NOT unique at the embedding level because
-        overlapping transformer windows generate multiple contextual
-        observations for the same corpus token occurrence.
+    If index and already_indexed are provided, only event_ids not already
+    present are added. Otherwise a fresh index is constructed.
     """
+    total     = 0
+    skipped   = 0
+    incremental = already_indexed is not None
 
-    index = None
-    total = 0
-
-    logger.info("[faiss-build] streaming Tier1 observation stores")
+    logger.info("[faiss-build] streaming Tier1 observation store")
 
     for vecs, obs_ids in stream.iter_embeddings(batch_size=BATCH_SIZE):
-
         if vecs is None or len(vecs) == 0:
             continue
 
         if index is None:
-            dim = vecs.shape[1]
+            dim   = vecs.shape[1]
             index = EeboFaissIndex(dim=dim, exact=True)
 
-        index.add(vecs, obs_ids)
-        total += len(obs_ids)
+        if incremental:
+            new_mask = np.array([int(i) not in already_indexed for i in obs_ids])
+            if not new_mask.any():
+                skipped += len(obs_ids)
+                continue
+            vecs    = vecs[new_mask]
+            obs_ids = obs_ids[new_mask]
+            skipped += (~new_mask).sum()
+
+        try:
+            index.add(vecs, obs_ids)
+            total += len(obs_ids)
+        except Exception as e:
+            logger.error(f"[faiss-build] add failed: {e}", exc_info=True)
+            raise
 
     if index is None:
-        raise RuntimeError(
-            "No embeddings found in Tier1 observation stream"
-        )
+        raise RuntimeError("No embeddings found in Tier1 observation store")
 
-    logger.info(f"[faiss-build] complete ntotal={total}")
+    logger.info(f"[faiss-build] added={total} skipped={skipped}")
 
     return index
 
+
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--clear", action="store_true",
+                   help="Wipe existing FAISS index and rebuild from scratch")
+    return p.parse_args()
+
+
 def main():
-    logger.info("[faiss-build] loading Tier1 observation stream")
+    args = parse_args()
+
     stream = ZarrEventStream(str(ZARR_ROOT / "tier1"))
 
-    logger.info("[faiss-build] clearing existing FAISS indexes")
-    EeboFaissIndex.wipe_faiss_index(FAISS_INDEX_DIR)
+    if args.clear or not FAISS_TIER1_INDEX.is_file():
+        if args.clear:
+            logger.info("[faiss-build] clearing existing FAISS index")
+            EeboFaissIndex.wipe_faiss_index(FAISS_INDEX_DIR)
+        else:
+            logger.info("[faiss-build] no existing index found — building from scratch")
 
-    logger.info("[faiss-build] building FAISS observation index")
-    index = build_index(stream)
+        logger.info("[faiss-build] building FAISS observation index")
+        index = build_index(stream)
+    else:
+        logger.info("[faiss-build] incremental mode — loading existing index")
+        index          = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+        already_indexed = get_indexed_ids(index)
+        logger.info(f"[faiss-build] existing index ntotal={len(already_indexed)}")
+        index = build_index(stream, index=index, already_indexed=already_indexed)
 
-    out_path = FAISS_TIER1_INDEX
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    index.save(out_path)
-    logger.info(f"[faiss-build] done -> {out_path}")
+    FAISS_TIER1_INDEX.parent.mkdir(parents=True, exist_ok=True)
+    index.save(FAISS_TIER1_INDEX)
+    logger.info(f"[faiss-build] done -> {FAISS_TIER1_INDEX}")
 
 
 if __name__ == "__main__":

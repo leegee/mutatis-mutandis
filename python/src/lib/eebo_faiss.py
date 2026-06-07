@@ -93,14 +93,14 @@ class EeboFaissIndex:
         self.dim = dim
 
         if exact:
-            base = faiss.IndexFlatIP(dim)
+            self.base = faiss.IndexFlatIP(dim)
         else:
             # future-friendly approximate mode
             # M=32 is a good general-purpose HNSW default
-            base = faiss.IndexHNSWFlat(dim, 32)
-            base.metric_type = faiss.METRIC_INNER_PRODUCT
+            self.base = faiss.IndexHNSWFlat(dim, 32)
+            self.base.metric_type = faiss.METRIC_INNER_PRODUCT
 
-        self._index = faiss.IndexIDMap(base)
+        self._index = faiss.IndexIDMap(self.base)
 
     @staticmethod
     def wipe_faiss_index(path: Path) -> None:
@@ -169,19 +169,21 @@ class EeboFaissIndex:
         vectors = np.ascontiguousarray(vectors, dtype=np.float32)
         ids     = np.ascontiguousarray(event_ids, dtype=np.int64)
 
-        # ... existing shape/dim checks ...
+        if vectors.ndim != 2:
+            raise ValueError("vectors must have shape (n, dim)")
 
-        # Guard against cross-call duplicates
-        if self._index.ntotal > 0:
-            existing = set(self._index.id_map.numpy().tolist())
-            cross_dupes = [int(eid) for eid in ids if int(eid) in existing]
-            if cross_dupes:
-                raise ValueError(
-                    f"event_ids already present in index: {cross_dupes[:10]}"
-                    f"{'...' if len(cross_dupes) > 10 else ''}"
-                )
+        if vectors.shape[1] != self.dim:
+            raise ValueError(
+                f"vector dim mismatch: expected {self.dim}, got {vectors.shape[1]}"
+            )
 
-        # existing within-batch check
+        if vectors.shape[0] != ids.shape[0]:
+            raise ValueError("number of vectors must match number of event IDs")
+
+        if np.any(ids == -1):
+            raise ValueError("Invalid FAISS ids (-1) detected")
+
+        # Guard against within-batch duplicates
         seen = set()
         for eid in ids:
             eid = int(eid)
@@ -189,7 +191,18 @@ class EeboFaissIndex:
                 raise ValueError(f"Duplicate event_id in batch: {eid}")
             seen.add(eid)
 
-        # ... rest unchanged
+        # Guard against cross-call duplicates
+        if self._index.ntotal > 0:
+            existing    = set(faiss.vector_to_array(self._index.id_map).tolist())
+            cross_dupes = [int(eid) for eid in ids if int(eid) in existing]
+            if cross_dupes:
+                raise ValueError(
+                    f"event_ids already present in index: {cross_dupes[:10]}"
+                    f"{'...' if len(cross_dupes) > 10 else ''}"
+                )
+
+        vectors = self._normalize(vectors, event_ids=ids)
+        self._index.add_with_ids(vectors, ids)
 
     def search(
         self,
@@ -288,11 +301,8 @@ class EeboFaissIndex:
         Persistence invariant:
             metric geometry must survive round-trip.
         """
-
         path = Path(path)
-
-        logger.info(f"[faiss] saving index={path}")
-
+        logger.info(f"[faiss] saving index={path} ntotal={self._index.ntotal}")
         faiss.write_index(self._index, str(path))
 
     @classmethod
@@ -300,16 +310,13 @@ class EeboFaissIndex:
         """
         Load persisted FAISS index and validate geometry invariants.
         """
-
         path = Path(path)
 
         if not path.is_file():
             raise FileNotFoundError(f"FAISS index not found: {path}")
-
         logger.info(f"[faiss] loading index={path}")
 
         obj = cls.__new__(cls)
-
         obj._index = faiss.read_index(str(path))
 
         if not isinstance(obj._index, faiss.IndexIDMap):

@@ -216,9 +216,10 @@ class EmbeddingPipeline:
 
 
 class CorpusProcessor:
-    def __init__(self, conn, pipeline: EmbeddingPipeline):
-        self.conn     = conn
-        self.pipeline = pipeline
+    def __init__(self, conn, pipeline: EmbeddingPipeline, report_every: int = 100):
+        self.conn         = conn
+        self.pipeline     = pipeline
+        self.report_every = report_every
 
     def process(self, doc_id: str | None = None):
         store = ZarrEmbeddingObservationStore(
@@ -262,7 +263,8 @@ class CorpusProcessor:
                 ORDER BY doc_id, token_idx
             """)
 
-        buf = None
+        buf            = None
+        docs_processed = 0
 
         for row_doc_id, token_idx, vid, token in cur:
             if row_doc_id in already_processed:
@@ -272,6 +274,9 @@ class CorpusProcessor:
                 if buf:
                     self._flush(buf, store)
                     already_processed.add(buf.doc_id)
+                    docs_processed += 1
+                    if docs_processed % self.report_every == 0:
+                        logger.info(f"[PROGRESS] {docs_processed} documents processed")
                 buf = DocBuffer(doc_id=row_doc_id)
 
             if is_content_token(token):
@@ -279,8 +284,9 @@ class CorpusProcessor:
 
         if buf and buf.doc_id not in already_processed:
             self._flush(buf, store)
+            docs_processed += 1
 
-        logger.info(f"[COMPLETE] {label}")
+        logger.info(f"[COMPLETE] {label} — {docs_processed} documents processed")
 
     def _flush(self, buf: DocBuffer, store: ZarrEmbeddingObservationStore):
         if not buf:
@@ -319,24 +325,29 @@ def clear_output_dir():
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--clear", action="store_true",
-                   help="Remove existing store")
-    p.add_argument("--doc-id",   type=str, default=None,
+    p.add_argument("--clear",        action="store_true",
+                   help="Wipe existing store before processing")
+    p.add_argument("--doc-id",       type=str, default=None,
                    help="Embed a single document by doc_id and append to store")
+    p.add_argument("--report-every", type=int, default=100,
+                   help="Log progress every N documents (default: 100)")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
 
-    if args.clear:
+    if args.doc_id:
+        if args.clear:
+            logger.warning("--clear with --doc-id will wipe the store before adding one document")
+    elif args.clear:
         logger.info("Clearing Tier 1 output")
         clear_output_dir()
 
     conn     = get_connection()
     mac      = load_macberth()
     pipeline = EmbeddingPipeline(mac.tokenizer, mac.model, mac.device)
-    proc     = CorpusProcessor(conn, pipeline)
+    proc     = CorpusProcessor(conn, pipeline, report_every=args.report_every)
 
     proc.process(doc_id=args.doc_id)
 

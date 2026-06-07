@@ -21,10 +21,15 @@ Events remain atomic observations with full provenance.
 Performance model
 -----------------
 
-ZarrEventLookup._build reads each Zarr array slice-by-slice in batches,
+ZarrEventLookup._build reads the Tier 1 observation store in batches,
 materialising one numpy array per dataset per batch before iterating in
 Python. This avoids the element-by-element Zarr reads that would otherwise
 pay decompression overhead on every scalar access.
+
+When a single concept is queried (--concept), only events whose token
+matches one of the concept's forms are loaded into memory. This makes
+single-concept runs substantially faster and much lighter on memory than
+full-corpus loads. When no concept filter is active, all events are loaded.
 
 Embeddings are currently stored in ZarrEventLookup alongside metadata so
 that FAISS queries can be issued using the canonical Zarr vector rather than
@@ -32,7 +37,8 @@ relying on FAISS internal storage. This is correct and safe for IndexFlatIP,
 which stores vectors verbatim, but it has two consequences:
 
     1. Memory: all embeddings for the full corpus are resident in the lookup
-       dict. For a large corpus this can be several GB.
+       dict when no concept filter is active. For a large corpus this can
+       be several GB.
 
     2. Coupling: the lookup is responsible for both metadata and vector
        storage, which conflates two concerns.
@@ -109,15 +115,22 @@ from lib.tier2_diagnostics import (
     audit_knn_stability,
 )
 
-K               = 25
-BATCH_SIZE      = 8192
-OUTPUT_PATH     = INDEXES_DIR / "tier2_concept_neighbours.json"
-
+K           = 25
+BATCH_SIZE  = 8192
+# OUTPUT_DIR = INDEXES_DIR / "tier2"
+# OUTPUT_PATH = OUTPUT_DIR /  "tier2_concept_neighbours.json"
 
 # Event lookup
 class ZarrEventLookup:
     """
-    In-memory index of all Tier 1 observation events, keyed by event_id.
+    In-memory index of Tier 1 observation events, keyed by event_id.
+
+    When forms is provided, only events whose token matches one of the
+    supplied forms are loaded. This is the normal path for single-concept
+    runs and keeps memory use proportional to the concept, not the corpus.
+
+    When forms is None, all events are loaded. This is required when
+    querying across multiple concepts in a single run.
 
     vector_id is stored as metadata only — NOT used as a lookup key.
 
@@ -127,13 +140,19 @@ class ZarrEventLookup:
     deferred migration path to EeboFaissIndex.reconstruct().
     """
 
-    def __init__(self, root):
-        self.root        = root
-        self.by_event_id = {}
+    def __init__(self, root, forms: set[str] | None = None, false_positives: set[str] | None = None):
+        self.root            = root
+        self.forms           = {f.lower() for f in forms} if forms else None
+        self.false_positives = {f.lower() for f in false_positives} if false_positives else set()
+        self.by_event_id     = {}
         self._build()
 
     def _build(self):
         logger.info("[tier2] building event lookup")
+        if self.forms:
+            logger.info(f"[tier2] filtering to forms={self.forms}")
+        if self.false_positives:
+            logger.info(f"[tier2] excluding false_positives={self.false_positives}")
 
         for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
@@ -141,13 +160,25 @@ class ZarrEventLookup:
             if "events" not in g:
                 continue
 
-            self._load_slice(g["events"], store_dir)
+            self._load_store(g["events"], store_dir)
 
         logger.info(f"[tier2] events={len(self.by_event_id)}")
 
-    def _load_slice(self, e, slice_dir):
+
+    def _load_store(self, e, store_dir):
+        """
+        Load events from one Zarr store into by_event_id.
+
+        Reads each dataset as a contiguous numpy array per batch.
+        Indexing into numpy in the inner loop is cheap; indexing directly
+        into Zarr would trigger per-element decompression.
+
+        If self.forms is set, only tokens matching a known form are
+        retained, skipping all other rows without building Python objects
+        for them.
+        """
         if "event_id" not in e:
-            raise KeyError(f"Missing event_id in {slice_dir} - rebuild Tier 1")
+            raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
 
         wpos = e["window_token_pos"] if "window_token_pos" in e else None
         n    = e["event_id"].shape[0]
@@ -155,9 +186,6 @@ class ZarrEventLookup:
         for start in range(0, n, BATCH_SIZE):
             end = min(start + BATCH_SIZE, n)
 
-            # Read each dataset as a contiguous numpy array per batch.
-            # Indexing into numpy in the inner loop is cheap; indexing
-            # directly into Zarr would trigger per-element decompression.
             b_eids = e["event_id"][start:end]
             b_vids = e["vector_id"][start:end]
             b_docs = e["doc_id"][start:end]
@@ -168,28 +196,37 @@ class ZarrEventLookup:
             b_wpos = wpos[start:end] if wpos is not None else None
 
             for i in range(end - start):
+                token = str(b_toks[i])
+                token_lower = token.lower()
+                if self.forms and token_lower not in self.forms:
+                    continue
+                if token_lower in self.false_positives:
+                    continue
+
                 eid = int(b_eids[i])
                 self.by_event_id[eid] = {
                     "event_id":         eid,
                     "vector_id":        int(b_vids[i]),
                     "doc_id":           str(b_docs[i]),
-                    "token":            str(b_toks[i]),
+                    "token":            token,
                     "token_idx":        int(b_idxs[i]),
                     "window_id":        int(b_wins[i]),
                     "window_token_pos": int(b_wpos[i]) if b_wpos is not None else None,
-                    # NOTE: storing embeddings here holds the full corpus
-                    # embedding matrix in memory. See module docstring for
-                    # the deferred migration to EeboFaissIndex.reconstruct().
+                    # NOTE: storing embeddings here holds all matching
+                    # embeddings in memory. See module docstring for the
+                    # deferred migration to EeboFaissIndex.reconstruct().
                     "embedding":        np.asarray(b_embs[i], dtype=np.float32),
                 }
 
     def get_event(self, event_id: int) -> dict:
         return self.by_event_id[int(event_id)]
 
-    def iter_matching_event_ids(self, forms):
+    def iter_matching_event_ids(self, forms, false_positives=None):
         forms = {f.lower() for f in forms}
+        false_positives = {f.lower() for f in (false_positives or [])}
         for eid, event in self.by_event_id.items():
-            if event["token"].lower() in forms:
+            token = event["token"].lower()
+            if token in forms and token not in false_positives:
                 yield eid
 
 
@@ -285,12 +322,16 @@ def _neighbour_record(n_event, query_event, doc_meta, score):
     }
 
 
-def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *,  diagnostics=False,):
+def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, diagnostics=False):
     """Compute neighbourhood structure for all events matching a concept."""
-    forms     = set(concept["forms"])
-    event_ids = list(lookup.iter_matching_event_ids(forms))
+    forms           = set(concept["forms"])
+    false_positives = {f.lower() for f in concept.get("false_positives", [])}
+
+    event_ids = list(lookup.iter_matching_event_ids(forms, false_positives))
 
     logger.info(f"[tier2] concept={concept_name}")
+    if false_positives:
+        logger.info(f"[tier2] excluding false_positives={false_positives}")
 
     if not event_ids:
         return {"concept": concept_name, "empty": True}
@@ -327,6 +368,9 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 
             n_event = lookup.get_event(int(nid))
 
+            if n_event["token"].lower() in false_positives:
+                continue
+
             token_counter[n_event["token"]]                           += 1
             doc_counter[n_event["doc_id"]]                            += 1
             window_counter[(n_event["doc_id"], n_event["window_id"])] += 1
@@ -335,11 +379,11 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 
         results.append({**_event_record(event, doc_meta), "neighbours": neighbours})
 
-    umap_project_concept(
-        event_ids,
-        lookup,
-        output_path=f"umap_{concept_name}.json",
-    )
+    # umap_project_concept(
+    #     event_ids,
+    #     lookup,
+    #     output_path=OUTPUT_DIR / f"umap_{concept_name}.json",
+    # )
 
     return {
         "concept":   concept_name,
@@ -354,17 +398,15 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 
 
 # SQLite writer
-# TODO: Extrapolate schema?
-_SCHEMA = """
+# SQLite writer
 
-DROP TABLE IF EXISTS concepts;
-CREATE TABLE concepts (
+_SCHEMA_INIT = """
+CREATE TABLE IF NOT EXISTS concepts (
     concept  TEXT PRIMARY KEY,
     n_events INTEGER NOT NULL
 );
 
-DROP TABLE IF EXISTS events;
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
     event_id         INTEGER PRIMARY KEY,
     concept          TEXT    NOT NULL,
     vector_id        INTEGER,
@@ -377,8 +419,7 @@ CREATE TABLE events (
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
-DROP TABLE IF EXISTS neighbours;
-CREATE TABLE neighbours (
+CREATE TABLE IF NOT EXISTS neighbours (
     event_id             INTEGER NOT NULL,
     neighbour_event_id   INTEGER NOT NULL,
     vector_id            INTEGER,
@@ -397,8 +438,7 @@ CREATE TABLE neighbours (
 -- kind    = 'token' | 'doc' | 'window'
 -- token/doc rows : value = token string or doc_id; window columns NULL
 -- window rows    : window_doc_id + window_id set; value NULL
-DROP TABLE IF EXISTS concept_aggregate;
-CREATE TABLE concept_aggregate (
+CREATE TABLE IF NOT EXISTS concept_aggregate (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     concept       TEXT    NOT NULL,
     kind          TEXT    NOT NULL,
@@ -410,38 +450,62 @@ CREATE TABLE concept_aggregate (
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
-CREATE INDEX idx_events_concept       ON events(concept);
-CREATE INDEX idx_events_token         ON events(token);
-CREATE INDEX idx_events_event_id      ON events(event_id);
-CREATE INDEX idx_events_doc_id        ON events(doc_id);
-CREATE INDEX idx_events_concept_year  ON events(concept, pub_year);
-CREATE INDEX idx_neighbours_event_id  ON neighbours(event_id);
-CREATE INDEX idx_neighbours_token     ON neighbours(token);
-CREATE INDEX idx_aggregate_concept    ON concept_aggregate(concept, kind);
+CREATE INDEX IF NOT EXISTS idx_events_concept       ON events(concept);
+CREATE INDEX IF NOT EXISTS idx_events_token         ON events(token);
+CREATE INDEX IF NOT EXISTS idx_events_event_id      ON events(event_id);
+CREATE INDEX IF NOT EXISTS idx_events_doc_id        ON events(doc_id);
+CREATE INDEX IF NOT EXISTS idx_events_concept_year  ON events(concept, pub_year);
+CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_token     ON neighbours(token);
+CREATE INDEX IF NOT EXISTS idx_aggregate_concept    ON concept_aggregate(concept, kind);
 """
 
-def _aggregate_rows(concept_name, aggregate):
-    """Yield concept_aggregate row tuples from an analyse_concept aggregate dict."""
-    for rank, (token, count) in enumerate(aggregate["top_tokens"]):
-        yield (concept_name, "token", rank, token, None, None, count)
+_SCHEMA_CLEAR = """
+DROP TABLE IF EXISTS concept_aggregate;
+DROP TABLE IF EXISTS neighbours;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS concepts;
+"""
 
-    for rank, (doc_id, count) in enumerate(aggregate["top_docs"]):
-        yield (concept_name, "doc", rank, doc_id, None, None, count)
+_DELETE_CONCEPT = [
+    "DELETE FROM concept_aggregate WHERE concept = ?",
+    "DELETE FROM neighbours WHERE event_id IN (SELECT event_id FROM events WHERE concept = ?)",
+    "DELETE FROM events WHERE concept = ?",
+    "DELETE FROM concepts WHERE concept = ?",
+]
 
-    for rank, ((doc_id, window_id), count) in enumerate(aggregate["top_windows"]):
-        yield (concept_name, "window", rank, None, doc_id, window_id, count)
 
+def write_sqlite(output: dict, db_path, *, clear: bool = False):
+    """
+    Write analyse_concept output to a normalised SQLite database.
 
-def write_sqlite(output: dict, SQLITE_DB_PATH):
-    """Write the full analyse_concept output dict to a normalised SQLite database."""
-    logger.info(f"[tier2] writing sqlite -> {SQLITE_DB_PATH}")
+    If clear=True, all existing tables are dropped and recreated before
+    writing. Use this when rebuilding the full corpus analysis from scratch.
 
-    con = sqlite3.connect(SQLITE_DB_PATH)
-    con.executescript(_SCHEMA)
+    Otherwise, existing rows for each concept in output are deleted and
+    rewritten, leaving all other concepts intact. This is the correct path
+    for single-concept runs from the UI.
+    """
+    logger.info(f"[tier2] writing sqlite -> {db_path}")
+
+    con = sqlite3.connect(db_path)
+
+    if clear:
+        logger.info("[tier2] clearing sqlite database")
+        con.executescript(_SCHEMA_CLEAR)
+
+    con.executescript(_SCHEMA_INIT)
 
     for concept_name, data in output.items():
         if data.get("empty"):
             continue
+
+        con.execute("BEGIN")
+
+        # Remove existing rows for this concept in dependency order
+        # before rewriting, so a rerun of a single concept is idempotent.
+        for stmt in _DELETE_CONCEPT:
+            con.execute(stmt, (concept_name,))
 
         con.execute(
             "INSERT OR IGNORE INTO concepts VALUES (?, ?)",
@@ -483,94 +547,227 @@ def write_sqlite(output: dict, SQLITE_DB_PATH):
             list(_aggregate_rows(concept_name, data["aggregate"])),
         )
 
-    con.commit()
+        con.commit()
+
     con.close()
     logger.info("[tier2] sqlite write complete")
 
 
-def umap_project_concept(
-    event_ids,
-    lookup,
-    output_path,
-    *,
-    n_neighbors=15,
-    min_dist=0.1,
-    n_components=2,
-    metric="cosine",
-):
-    """
-    Projects concept event embeddings into UMAP space and saves JSON.
-    """
+def _aggregate_rows(concept_name, aggregate):
+    """Yield concept_aggregate row tuples from an analyse_concept aggregate dict."""
+    for rank, (token, count) in enumerate(aggregate["top_tokens"]):
+        yield (concept_name, "token", rank, token, None, None, count)
 
-    if not event_ids:
-        return []
+    for rank, (doc_id, count) in enumerate(aggregate["top_docs"]):
+        yield (concept_name, "doc", rank, doc_id, None, None, count)
 
-    X = np.stack([
-        lookup.get_event(eid)["embedding"]
-        for eid in event_ids
-    ]).astype(np.float32)
-
-    reducer = umap.UMAP(
-        n_neighbors=n_neighbors,
-        min_dist=min_dist,
-        n_components=n_components,
-        metric=metric,
-    )
-
-    embedding_2d = reducer.fit_transform(X)
-
-    projected = [
-        {
-            "event_id": int(eid),
-            "umap": embedding_2d[i].tolist(),
-        }
-        for i, eid in enumerate(event_ids)
-    ]
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(projected, f, ensure_ascii=False, indent=2)
-
-    return projected
+    for rank, ((doc_id, window_id), count) in enumerate(aggregate["top_windows"]):
+        yield (concept_name, "window", rank, None, doc_id, window_id, count)
 
 
-# Entry point
+# def umap_project_concept(
+#     event_ids,
+#     lookup,
+#     output_path,
+#     *,
+#     n_neighbors=15,
+#     min_dist=0.1,
+#     n_components=2,
+#     metric="cosine",
+# ):
+#     """
+#     Projects concept event embeddings into UMAP space and saves JSON.
+#     """
+#     if not event_ids:
+#         return []
+
+#     X = np.stack([
+#         lookup.get_event(eid)["embedding"]
+#         for eid in event_ids
+#     ]).astype(np.float32)
+
+#     reducer = umap.UMAP(
+#         n_neighbors=n_neighbors,
+#         min_dist=min_dist,
+#         n_components=n_components,
+#         metric=metric,
+#     )
+
+#     embedding_2d = reducer.fit_transform(X)
+
+#     projected = [
+#         {
+#             "event_id": int(eid),
+#             "umap":     embedding_2d[i].tolist(),
+#         }
+#         for i, eid in enumerate(event_ids)
+#     ]
+
+#     with open(output_path, "w", encoding="utf-8") as f:
+#         json.dump(projected, f, ensure_ascii=False, indent=2)
+
+#     return projected
+
+
+def get_processed_concepts(db_path) -> set[str]:
+    if not Path(db_path).is_file():
+        return set()
+    try:
+        con = sqlite3.connect(db_path)
+        cur = con.execute("SELECT concept FROM concepts")
+        result = {row[0] for row in cur.fetchall()}
+        con.close()
+        return result
+    except sqlite3.OperationalError:
+        # table doesn't exist yet
+        return set()
+
+
 def main():
     logger.info("[tier2] init")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--concept", type=str, default=None)
-    parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics" )
+    parser.add_argument(
+        "--concept",
+        type=str,
+        default=None,
+        help="Run analysis for a single concept (case-insensitive)",
+    )
+    parser.add_argument(
+        "--forms",
+        type=str,
+        default=None,
+        help="Comma-separated list of forms (required if --concept is not in CONCEPT_SETS)",
+    )
+    parser.add_argument(
+        "--false-positives",
+        type=str,
+        default=None,
+        help="Comma-separated list of false positive forms to exclude",
+    )
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Wipe and recreate SQLite database before writing",
+    )
+    parser.add_argument(
+        "-d",
+        "--diagnostics",
+        action="store_true",
+        help="Enable Tier2 diagnostics",
+    )
     args = parser.parse_args()
 
-    faiss_index_path = FAISS_TIER1_INDEX
+    if args.clear and args.concept:
+        logger.warning(
+            "[tier2] --clear with --concept will wipe all concepts before writing one"
+        )
 
     logger.info(f"[tier2] SQLITE_DB_PATH: {SQLITE_DB_PATH}")
 
-    index  = EeboFaissIndex.load(faiss_index_path)
-    lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
+    index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+
+    if index.ntotal == 0:
+        raise RuntimeError(
+            "FAISS index is empty — run tier1_5_build_faiss_index.py first"
+        )
+
+    # If a single concept is requested, restrict the lookup to its forms
+    # so that only matching events are loaded into memory.
+    target_forms = None
+    target_fps = None
+
+    if args.concept:
+        concept_name = args.concept.upper()
+
+        if args.forms:
+            target_forms = {
+                f.strip()
+                for f in args.forms.split(",")
+            }
+            target_fps = (
+                {f.strip() for f in args.false_positives.split(",")}
+                if args.false_positives
+                else None
+            )
+        else:
+            target_forms = set(CONCEPT_SETS[concept_name]["forms"])
+            target_fps = set(
+                CONCEPT_SETS[concept_name].get("false_positives", [])
+            )
+
+        logger.info(
+            f"[tier2] single-concept mode: {concept_name} forms={target_forms}"
+        )
+
+    conn = get_connection()
+    doc_meta = load_doc_metadata(conn)
+    output = {}
+
+    already_processed = (
+        set()
+        if args.clear
+        else get_processed_concepts(SQLITE_DB_PATH)
+    )
+
+    concepts_to_run = [
+        (concept_name, concept)
+        for concept_name, concept in resolve_concepts(args)
+        if concept_name not in already_processed
+    ]
+
+    if not concepts_to_run:
+        logger.info(
+            "[tier2] nothing to write — all concepts already processed"
+        )
+        return
+
+    # Only build the lookup once we know there is work to do.
+    # For single-concept runs, target_forms restricts loading to
+    # matching events only, keeping memory use proportional to the
+    # concept rather than the full corpus.
+    lookup = ZarrEventLookup(
+        ZARR_ROOT / "tier1",
+        forms=target_forms,
+        false_positives=target_fps,
+    )
 
     if args.diagnostics:
         logger.info("--------------------------------------------------------")
-        knn_diagnostics(lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"])
-        knn_diagnostics(lookup, index, CONCEPT_SETS["LAW"]["forms"])
+        knn_diagnostics(
+            lookup,
+            index,
+            CONCEPT_SETS["PREROGATIVE"]["forms"],
+        )
+        knn_diagnostics(
+            lookup,
+            index,
+            CONCEPT_SETS["LAW"]["forms"],
+        )
         logger.info("--------------------------------------------------------")
 
-    conn     = get_connection()
-    doc_meta = load_doc_metadata(conn)
-    output   = {}
-
-    for concept_name, concept in resolve_concepts(args):
+    for concept_name, concept in concepts_to_run:
         output[concept_name] = analyse_concept(
-            doc_meta, index, lookup, concept_name, concept,
+            doc_meta,
+            index,
+            lookup,
+            concept_name,
+            concept,
             diagnostics=args.diagnostics,
         )
 
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2)
+    # with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+    #     json.dump(output, f, indent=2)
 
-    logger.info(f"[tier2] written -> {OUTPUT_PATH}")
+    # logger.info(f"[tier2] wrote {OUTPUT_PATH}")
 
-    write_sqlite(output, SQLITE_DB_PATH)
+    write_sqlite(
+        output,
+        SQLITE_DB_PATH,
+        clear=args.clear,
+    )
+
+    logger.info(f"[tier2] wrote {SQLITE_DB_PATH}")
 
 
 if __name__ == "__main__":
