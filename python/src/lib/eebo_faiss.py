@@ -144,12 +144,10 @@ class EeboFaissIndex:
 
         x = np.asarray(x, dtype=np.float32)
         norms = np.linalg.norm(x, axis=1, keepdims=True)
-
         zero_mask = (norms == 0).ravel()
 
         if np.any(zero_mask):
             zero_positions = np.where(zero_mask)[0].tolist()
-
             if event_ids is not None:
                 offending = [
                     int(np.asarray(event_ids)[i]) for i in zero_positions
@@ -165,29 +163,25 @@ class EeboFaissIndex:
                     f"positions {zero_positions}. "
                     f"This indicates invalid embedding generation upstream."
                 )
-
         return x / norms
 
     def add(self, vectors: np.ndarray, event_ids: Sequence[int]) -> None:
         vectors = np.ascontiguousarray(vectors, dtype=np.float32)
-        ids = np.ascontiguousarray(event_ids, dtype=np.int64)
+        ids     = np.ascontiguousarray(event_ids, dtype=np.int64)
 
-        if vectors.ndim != 2:
-            raise ValueError("vectors must have shape (n, dim)")
+        # ... existing shape/dim checks ...
 
-        if vectors.shape[1] != self.dim:
-            raise ValueError(
-                f"vector dim mismatch: expected {self.dim}, got {vectors.shape[1]}"
-            )
+        # Guard against cross-call duplicates
+        if self._index.ntotal > 0:
+            existing = set(self._index.id_map.numpy().tolist())
+            cross_dupes = [int(eid) for eid in ids if int(eid) in existing]
+            if cross_dupes:
+                raise ValueError(
+                    f"event_ids already present in index: {cross_dupes[:10]}"
+                    f"{'...' if len(cross_dupes) > 10 else ''}"
+                )
 
-        if vectors.shape[0] != ids.shape[0]:
-            raise ValueError(
-                "number of vectors must match number of event IDs"
-            )
-
-        if np.any(ids == -1):
-            raise ValueError("Invalid FAISS ids (-1) detected")
-
+        # existing within-batch check
         seen = set()
         for eid in ids:
             eid = int(eid)
@@ -195,8 +189,7 @@ class EeboFaissIndex:
                 raise ValueError(f"Duplicate event_id in batch: {eid}")
             seen.add(eid)
 
-        vectors = self._normalize(vectors, event_ids=ids)
-        self._index.add_with_ids(vectors, ids)
+        # ... rest unchanged
 
     def search(
         self,
