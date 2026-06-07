@@ -253,7 +253,7 @@ export const ConceptGraph: Component = () => {
       }
     });
 
-    if (USE_FIT_INTERVAL) fitViewIntervalId = setInterval(() => graph?.fitView(500), 1_000);
+    if (USE_FIT_INTERVAL) fitViewIntervalId = setInterval(() => graph?.fitView(500), 1_000) as unknown as number;
     console.debug("[graph2.setGraph] created new graph");
   }
 
