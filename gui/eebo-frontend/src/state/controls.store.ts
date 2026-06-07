@@ -18,6 +18,7 @@ export type ControlsState = {
   minSimilarity: number;
   hubSpread: number;
   selectedNode: string | null;
+  selectedEventId: string | null;
   yearMode: YearMode;
   fromYear: number;
   toYear: number;
@@ -33,6 +34,7 @@ export const [controls, setControls] = createStore<ControlsState>({
   minSimilarity: 0.5,
   hubSpread: 1,
   selectedNode: null,
+  selectedEventId: null,
   yearMode: "range",
   fromYear: CORPUS_START_YEAR,
   toYear: CORPUS_END_YEAR,

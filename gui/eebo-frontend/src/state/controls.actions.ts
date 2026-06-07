@@ -41,6 +41,10 @@ export const controlsActions = {
         setControls("selectedNode", (prev) => (prev === id ? null : id));
     },
 
+    setSelectedEventId(id: string | null) {
+        setControls("selectedEventId", id);
+    },
+
     setViewMode(mode: ViewMode) {
         setControls({
             viewMode: mode,

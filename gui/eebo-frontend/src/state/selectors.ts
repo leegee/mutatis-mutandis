@@ -10,7 +10,7 @@
 
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import { controls } from "./controls.store";
-import { queryYearBounds, queryEvents, listConcepts, queryNEvents, queryYearCounts } from "../services/db/";
+import { queryYearBounds, queryEventsByConcept, listConcepts, queryNEvents, queryYearCounts } from "../services/db/";
 import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
 import type { ConceptData, ConceptEvent } from "../types/context-graph.types";
 
@@ -36,7 +36,7 @@ export async function getYearFiltered(
   const fy = fromYear ?? controls.fromYear;
   const ty = toYear ?? controls.toYear;
   if (!c) return [];
-  return queryEvents(c, fy, ty);
+  return queryEventsByConcept(c, fy, ty);
 }
 
 export async function totalEventsForConcept(concept?: string): Promise<number> {

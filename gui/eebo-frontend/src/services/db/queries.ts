@@ -1,4 +1,4 @@
-import type { ConceptEvent, Neighbour } from "../../types";
+import type { Event, ConceptEvent, Neighbour } from "../../types";
 import { execRows } from "./dbh";
 
 // Typed query helpers
@@ -22,7 +22,33 @@ export async function queryYearBounds(
   return [row[0] as number, row[1] as number];
 }
 
-export async function queryEvents(
+
+export async function queryEventById(id: string): Promise<Event | null> {
+  console.log("[query] queryEventById", id);
+
+  const eventRows = await execRows(
+    `SELECT * FROM events WHERE event_id = ?`,
+    [id],
+  );
+
+  if (eventRows.length === 0) return null;
+  const row = eventRows[0];
+
+  return {
+    event_id: String(row[0]),
+    concept: row[1] as string,
+    vector_id: row[2] != null ? String(row[2]) : null,
+    token: (row[3] as string) ?? null,
+    doc_id: (row[4] as string) ?? null,
+    pub_year: row[5] != null ? Number(row[5]) : null,
+    token_idx: row[6] != null ? Number(row[6]) : null,
+    window_id: row[7] != null ? Number(row[7]) : null,
+    window_token_pos: row[8] != null ? Number(row[8]) : null,
+  } as Event;
+}
+
+
+export async function queryEventsByConcept(
   concept: string,
   fromYear: number,
   toYear: number,

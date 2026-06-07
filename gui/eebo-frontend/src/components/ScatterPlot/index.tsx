@@ -5,6 +5,9 @@ import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
 import { loadBfsDataset, loadDatasets } from "./loadDatasets";
 import { controls } from "../../state/controls.store";
+import { controlsActions } from "../../state/controls.actions";
+import Sidebar from "./Sidebar";
+import { queryEventById } from "../../services/db";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept"];
 const DATA_TYPES = ['concept_neighbours/', 'concept'];
@@ -46,8 +49,9 @@ export default function ScatterPlot() {
         }
     );
 
-    function handleClick(point: PointData) {
-        console.log("[ScatterPlot.index] clicked", point.token_idx, point.token, point.doc_id);
+    async function handleClick(point: PointData) {
+        console.log("[ScatterPlot.index] clicked", point.event_id);
+        controlsActions.setSelectedEventId(point.event_id)
     }
 
     function handleBoundsChange(_bounds: ViewBounds) {
@@ -92,26 +96,33 @@ export default function ScatterPlot() {
                     </div>
                 </ControlsHeader>
 
-                <Plot
-                    datasets={datasets()!}
-                    bfsDataset={bfs()}
-                    projection={projection()}
-                    colorBy={colorBy()}
-                    colorByFields={COLOR_FIELDS}
-                    onPointHover={(pt, xy) =>
-                        setHovered(pt && xy ? { point: pt, x: xy[0], y: xy[1] } : null)
-                    }
-                    onPointClick={handleClick}
-                    onBoundsChange={handleBoundsChange}
-                />
-            </Show >
+                <div id="graph_sidebar_row">
+
+                    <div id="under_sidebar" class="max">
+                        <Plot
+                            datasets={datasets()!}
+                            bfsDataset={bfs()}
+                            projection={projection()}
+                            colorBy={colorBy()}
+                            colorByFields={COLOR_FIELDS}
+                            onPointHover={(pt, xy) =>
+                                setHovered(pt && xy ? { point: pt, x: xy[0], y: xy[1] } : null)
+                            }
+                            onPointClick={handleClick}
+                            onBoundsChange={handleBoundsChange}
+                        />
+                    </div>
+
+                    <Sidebar />
+                </div>
+            </Show>
 
             <Show when={hovered()}>
                 {(h) => (
                     <aside class="surface-container-highest border large-elevate small-padding" style={{
                         position: "fixed",
-                        left: `${ h().x + 14 }px`,
-                        top: `${ h().y - 52 }px`,
+                        left: `${ h().x - 72 }px`,
+                        top: `${ h().y - 72 }px`,
                         "z-index": 20,
                         "pointer-events": "none",
                         "white-space": "nowrap",

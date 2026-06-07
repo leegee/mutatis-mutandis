@@ -1,9 +1,7 @@
-export interface PointData {
-  event_id: string;
+import type { Event } from '../../types'
+
+export interface PointData extends Omit<Event, "vector_id"> {
   token_idx: number;
-  doc_id: string;
-  token: string;
-  pub_year: number;
   // local projection
   nx: number;
   ny: number;

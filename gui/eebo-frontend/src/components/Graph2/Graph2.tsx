@@ -387,21 +387,10 @@ export const ConceptGraph: Component = () => {
         </Show>
       </Show>
 
-      <div id="graph_sidebar_row" style={{
-        position: 'relative',
-        display: "flex",
-        flex: 1,
-        overflow: "hidden",
-      }}>
-        <div id="cosmos-mount-point" ref={divRef} class="max" style={{
-          position: "relative",
-          overflow: "hidden",
-          flex: 1,
-          height: '100%'
-        }}></div>
+      <div id="graph_sidebar_row">
+        <div id="under_sidebar" class="max" ref={divRef}></div>
 
-
-        <div style="z-index:99; position: absolute; right: 0">
+        <div id="sidebar_container">
           <Show when={selectedNode()}>
             <Sidebar
               selectedNode={selectedNode()}

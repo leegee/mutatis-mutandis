@@ -103,6 +103,7 @@ mark {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -122,17 +123,47 @@ blockquote {
 h1 {
   font-size: 2rem;
 }
+
 h2 {
   font-size: 1.8rem;
+
   q {
     font-size: 2.3rem;
   }
 }
+
 h3 {
   font-size: 1.4rem;
 }
+
 h4,
 h5,
 h6 {
   font-size: 1.2rem;
+}
+
+
+/* shared layouts */
+#graph_sidebar_row {
+  position: relative;
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+#under_sidebar {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  height: 100%;
+}
+
+#sidebar_container {
+  z-index: 99;
+  position: absolute;
+  right: 0;
+  max-width: 20vw;
+  min-width: 20rem;
 }
