@@ -7,7 +7,10 @@ from lib.eebo_logging import logger
 
 class ZarrEventStream:
     """
-    Cross-slice streaming abstraction over EEBO Tier1 Zarr event logs.
+    Streaming abstraction over EEBO Tier1 Zarr event logs.
+
+    Supports both a single observation store and a directory of stores
+    (legacy slice layout).
 
     This layer is intentionally *strict*:
         - schema mismatches fail loudly
@@ -40,9 +43,18 @@ class ZarrEventStream:
         self._token_by_id = None
         self._doc_by_id = None
 
-    # ------------------------------------------------------------
-    # lookup index (optional, used outside FAISS path)
-    # ------------------------------------------------------------
+    def _store_dirs(self) -> list[Path]:
+        """
+        Return the list of store directories to traverse.
+
+        If root is itself a single observation store (contains an 'events'
+        group directly), return it alone. Otherwise treat root as a
+        directory of stores and return its sorted subdirectories.
+        """
+        if (self.root / self.EXPECTED_GROUP).exists():
+            return [self.root]
+        return sorted(p for p in self.root.iterdir() if p.is_dir())
+
 
     def _build_lookup(self):
         if self._token_by_id is not None:
@@ -53,11 +65,8 @@ class ZarrEventStream:
         token_map = {}
         doc_map = {}
 
-        for slice_dir in sorted(self.root.iterdir()):
-            if not slice_dir.is_dir():
-                continue
-
-            g = zarr.open_group(str(slice_dir), mode="r")
+        for store_dir in self._store_dirs():
+            g = zarr.open_group(str(store_dir), mode="r")
 
             if self.EXPECTED_GROUP not in g:
                 continue
@@ -65,15 +74,11 @@ class ZarrEventStream:
             group = g[self.EXPECTED_GROUP]
 
             if self.EXPECTED_ID_KEY not in group:
-                raise KeyError(f"Missing event_id in {slice_dir}")
+                raise KeyError(f"Missing event_id in {store_dir}")
 
-            # Read entire arrays in one chunk-aware call rather than
-            # indexing element-by-element. The previous row-by-row loop
-            # bypassed Zarr's chunked I/O and was O(n) Python overhead.
-            eids = group[self.EXPECTED_ID_KEY][:]  # (n,) int64
-
-            docs = group["doc_id"][:] if "doc_id" in group else None
-            tokens = group["token"][:] if "token" in group else None
+            eids   = group[self.EXPECTED_ID_KEY][:]
+            docs   = group["doc_id"][:] if "doc_id" in group else None
+            tokens = group["token"][:]  if "token"  in group else None
 
             for i, eid in enumerate(eids):
                 eid = int(eid)
@@ -85,7 +90,7 @@ class ZarrEventStream:
                     token_map[eid] = str(tokens[i])
 
         self._token_by_id = token_map
-        self._doc_by_id = doc_map
+        self._doc_by_id   = doc_map
 
         logger.info(f"[stream] indexed events={len(token_map)}")
 
@@ -97,7 +102,6 @@ class ZarrEventStream:
         self._build_lookup()
         return self._doc_by_id.get(int(event_id))
 
-    # core FAISS stream
 
     def iter_embeddings(self, batch_size: int = 8192):
         """
@@ -106,28 +110,25 @@ class ZarrEventStream:
             ids:  (batch,) int64  -- event_id, NOT vector_id
         """
 
-        for slice_dir in sorted(self.root.iterdir()):
-            if not slice_dir.is_dir():
-                continue
-
-            g = zarr.open_group(str(slice_dir), mode="r")
+        for store_dir in self._store_dirs():
+            g = zarr.open_group(str(store_dir), mode="r")
 
             if self.EXPECTED_GROUP not in g:
-                raise KeyError(f"Missing 'events' group in {slice_dir}")
+                raise KeyError(f"Missing 'events' group in {store_dir}")
 
             group = g[self.EXPECTED_GROUP]
 
             if self.EXPECTED_EMB_KEY not in group:
                 raise KeyError(
-                    f"Missing embeddings key '{self.EXPECTED_EMB_KEY}' in {slice_dir}"
+                    f"Missing embeddings key '{self.EXPECTED_EMB_KEY}' in {store_dir}"
                 )
 
             if self.EXPECTED_ID_KEY not in group:
                 raise KeyError(
-                    f"Missing event_id key in {slice_dir}"
+                    f"Missing event_id key in {store_dir}"
                 )
 
-            emb = group[self.EXPECTED_EMB_KEY]
+            emb  = group[self.EXPECTED_EMB_KEY]
             eids = group[self.EXPECTED_ID_KEY]
 
             n = eids.shape[0]
@@ -138,12 +139,12 @@ class ZarrEventStream:
             for start in range(0, n, batch_size):
                 end = min(start + batch_size, n)
 
-                vecs = np.asarray(emb[start:end], dtype=np.float32)
-                ids = np.asarray(eids[start:end], dtype=np.int64)
+                vecs = np.asarray(emb[start:end],  dtype=np.float32)
+                ids  = np.asarray(eids[start:end], dtype=np.int64)
 
                 if len(vecs) != len(ids):
                     raise ValueError(
-                        f"Embedding/id mismatch in {slice_dir}: "
+                        f"Embedding/id mismatch in {store_dir}: "
                         f"{len(vecs)} vs {len(ids)}"
                     )
 
