@@ -29,6 +29,7 @@ export default function App(props: any) {
     { path: "/umap", icon: "scatter_plot", label: "UMAP" },
     { path: "/table", icon: "view_column", label: "Neighbourhood Table" },
     { path: "/diachronic", icon: "calendar_view_week", label: "Diachronic Chart" },
+    { path: "/aggregates", icon: "crowdsource", label: "Aggregates" },
   ] as const;
 
   const isActive = (path: string) => location.pathname === path;

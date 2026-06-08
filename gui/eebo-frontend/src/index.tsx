@@ -11,6 +11,7 @@ const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
 const Umap = lazy(() => import("./components/ScatterPlot"));
+const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 
 render(
     () => (
@@ -20,6 +21,7 @@ render(
             <Route path="/graph2/:token_idx?" component={Graph2} />
             <Route path="/table" component={NeighbourhoodBrowser} />
             <Route path="/diachronic" component={DiachronicChart} />
+            <Route path="/aggregates" component={ConceptAggregates} />
         </Router>
     ),
     document.getElementById("root")!
