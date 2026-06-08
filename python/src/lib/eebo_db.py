@@ -184,9 +184,9 @@ def drop_token_indexes(conn: Connection) -> None:
                 DROP INDEX IF EXISTS idx_tokens_token;
                 DROP INDEX IF EXISTS idx_tokens_doc;
                 DROP INDEX IF EXISTS idx_tokens_canonical;
-                DROP INDEX idx_tokens_token_lower;
-                DROP INDEX idx_documents_lang;
-                DROP INDEX idx_documents_filepath;
+                DROP INDEX IF EXISTS idx_tokens_token_lower;
+                DROP INDEX IF EXISTS idx_documents_lang;
+                DROP INDEX IF EXISTS idx_documents_filepath;
             """)
     logger.info("Token indexes dropped")
 
