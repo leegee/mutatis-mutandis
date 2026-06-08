@@ -51,6 +51,11 @@ interface LoadDatasetsParams {
 }
 
 export async function loadDatasets(params: LoadDatasetsParams) {
+
+    if (params.dataType === 'concept_clusters') {
+        return await loadConceptClusters(params.concepts);
+    }
+
     const conceptDatasetsRaw = await Promise.all(
         params.concepts.map((c: string) =>
             fetch(`/umap/${ params.dataType }/${ c }.json`).then(r => r.json())
@@ -119,4 +124,29 @@ export async function loadBfsDataset(params: LoadBfsParams) {
         ...bfs,
         points: enrichPoints(bfs.points, eventMap, yearCheck),
     };
+}
+
+// Add this helper
+export async function loadConceptClusters(concepts: string[] | string): Promise<any[]> {
+    const conceptList = Array.isArray(concepts) ? concepts : [concepts];
+    const results: any[] = [];
+
+    for (const concept of conceptList) {
+        try {
+            const filename = `${ concept.toLowerCase() }.json`;
+            const response = await fetch(`/data/clusters/${ filename }`); // adjust path if needed
+
+            if (!response.ok) {
+                console.warn(`No cluster file for ${ concept }`);
+                continue;
+            }
+
+            const data = await response.json();
+            results.push(data);
+        } catch (err) {
+            console.warn(`Failed to load clusters for ${ concept }:`, err);
+        }
+    }
+
+    return results;
 }
