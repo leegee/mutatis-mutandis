@@ -13,6 +13,13 @@
     "files.trimTrailingWhitespace": true,
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "cSpell.words": [
+        "Bpedia",
+        "ECCO",
+        "EEBO",
+        "FAISS",
+        "SBERT"
+    ],
     // "workbench.colorCustomizations": {
     // "editorWhitespace.foreground": "#FF00FF",
     // }
