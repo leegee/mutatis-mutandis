@@ -25,7 +25,6 @@ except ModuleNotFoundError:
 
 # Could use env var
 OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else BASE_DIR / "out"
-print(f"OUT_DIR = {OUT_DIR}")
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -88,7 +87,12 @@ SLICES = [
     (1652, 1654),
     (1655, 1657),
     (1658, 1660),
-    (1661, 1665),
+    (1661, 1664),
+    (1665, 1669),
+    (1670, 1674),
+    (1675, 1679),
+    (1680, 1684),
+    (1685, 1689),
 ]
 
 """
