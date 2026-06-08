@@ -7,7 +7,6 @@ import { loadBfsDataset, loadDatasets } from "./loadDatasets";
 import { controls } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import Sidebar from "./Sidebar";
-import { queryEventById } from "../../services/db";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept"];
 const DATA_TYPES = ['concept_neighbours/', 'concept'];
