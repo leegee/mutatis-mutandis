@@ -151,6 +151,8 @@ export default function Plot(props: PlotProps) {
     const radius = props.pointRadius ?? 4;
     const opacity = props.opacity ?? 0.85;
 
+    console.log("[Plot] bfsDataset points:", props.bfsDataset?.points?.length);
+
     const conceptLayers = props.datasets.map(
       (dataset) =>
         new ScatterplotLayer<PointData>({
@@ -185,11 +187,10 @@ export default function Plot(props: PlotProps) {
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       data: props.bfsDataset.points,
       getPosition: getBfsPosition,
-      getFillColor: () => [20, 20, 200, 100],
-      getRadius: radius * .5,
+      getFillColor: () => [150, 150, 150, 50],
+      getRadius: radius * 1.5,
       radiusUnits: "pixels",
       pickable: true,
-      // opacity: 0.5,
       onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
     });
 

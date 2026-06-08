@@ -26,12 +26,11 @@ export default function App(props: any) {
   }
 
   const navItems = [
+    { path: "/scatter", icon: "scatter_plot", label: "UMAP" },
+    { path: "/aggregates", icon: "crowdsource", label: "Aggregates" },
     { path: "/graph2", icon: "orbit", label: "FDG" },
-    { path: "/umap", icon: "scatter_plot", label: "UMAP" },
     { path: "/table", icon: "view_column", label: "Neighbourhood Table" },
     { path: "/diachronic", icon: "calendar_view_week", label: "Diachronic Chart" },
-    { path: "/aggregates", icon: "crowdsource", label: "Aggregates" },
-    { path: "/clusters", icon: "hive", label: "Clusters" },
   ] as const;
 
   const isActive = (path: string) => location.pathname === path;

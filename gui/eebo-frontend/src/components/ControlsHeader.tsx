@@ -40,53 +40,68 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                 <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
               </select>
             }>
-              {/* <select multiple={true}
-                size={1}
-                value={controls.conceptSelection}
-                onChange={(e) => {
-                  const values = Array.from(e.currentTarget.selectedOptions).map(
-                    (o) => o.value
-                  );
-                  A.setConceptSelection(values);
-                }}
-              >
-                <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
-              </select> */}
-              <div class="field label border mid-align">
-                <button class="border no-round">
-                  <span>
-                    {controls.conceptSelection.length === 0
-                      ? "None selected"
-                      : controls.conceptSelection.length === 1
-                        ? controls.conceptSelection[0] : (controls.conceptSelection.length + " selected")
-                    }
-                  </span>
-                  <i>arrow_drop_down</i>
-                </button>
-                <menu class="no-round">
-                  <For each={concepts()}>
-                    {(c) => (
-                      <li>
-                        <label class="checkbox small">
-                          <input type="checkbox"
-                            checked={controls.conceptSelection.includes(c)}
-                            value={c}
-                            onChange={(e) => {
-                              const checked = e.currentTarget.checked;
-                              A.setConceptSelection((prev) =>
-                                checked
-                                  ? [...prev, c]
-                                  : prev.filter((v) => v !== c)
-                              );
-                            }}
-                          />
-                          <span>{c}</span>
-                        </label>
-                      </li>
-                    )}
-                  </For>
-                </menu>
+
+              <div class="row no-space">
+
+                <div class="field label border mid-align">
+                  <div data-ui="#concept-menu">
+                    <button class="border no-round">
+                      <span>
+                        {controls.conceptSelection.length === 0
+                          ? "None selected"
+                          : controls.conceptSelection.length === 1
+                            ? controls.conceptSelection[0]
+                            : (controls.conceptSelection.length + " selected")
+                        }
+                      </span>
+                      <i>arrow_drop_down</i>
+                    </button>
+                    <menu id="concept-menu" class="no-round">
+                      <For each={concepts()}>
+                        {(c) => (
+                          <li>
+                            <label class="checkbox small">
+                              <input type="checkbox"
+                                checked={controls.conceptSelection.includes(c)}
+                                value={c}
+                                onChange={(e) => {
+                                  const checked = e.currentTarget.checked;
+                                  A.setConceptSelection((prev) =>
+                                    checked ? [...prev, c] : prev.filter((v) => v !== c)
+                                  );
+                                }}
+                              />
+                              <span>{c}</span>
+                            </label>
+                          </li>
+                        )}
+                      </For>
+                    </menu>
+                  </div>
+                </div>
+
+                <div class="no-round bottom">
+                  <button class="transparent circle">
+                    <i>more_vert</i>
+                  </button>
+                  <menu class="no-round  bottom left no-wrap">
+                    <li onClick={() => A.setConceptSelection(concepts())}>
+                      <i>select_all</i>
+                      <span>Select all</span>
+                    </li>
+                    <li onClick={() => A.setConceptSelection([])}>
+                      <i>deselect</i>
+                      <span>Select none</span>
+                    </li>
+                    <li onClick={() => A.setConceptSelection(concepts().filter(c => !controls.conceptSelection.includes(c)))}>
+                      <i>published_with_changes</i>
+                      <span>Invert</span>
+                    </li>
+                  </menu>
+                </div>
+
               </div>
+
             </Show>
           </Show>
           <div class="tooltip right">

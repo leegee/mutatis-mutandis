@@ -96,7 +96,6 @@ from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
-import umap
 import numpy as np
 import zarr
 
