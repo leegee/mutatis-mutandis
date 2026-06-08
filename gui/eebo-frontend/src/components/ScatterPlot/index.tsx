@@ -3,7 +3,7 @@ import { createSignal, createResource, Show } from "solid-js";
 import type { PointData, ViewBounds } from "./types";
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
-import { loadBfsDataset, loadDatasets } from "./loadDatasets";
+import { loadBfsDataset, loadDatasets } from "./loadScatterDatasets";
 import { controls } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import Sidebar from "./Sidebar";

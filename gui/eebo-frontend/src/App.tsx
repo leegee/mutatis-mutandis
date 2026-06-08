@@ -6,6 +6,7 @@ import "./App.css";
 import { dbReady, loadTier2Data } from "./state/tier2data.store";
 import AppError from "./components/AppError";
 import { Icon } from "./components/Icon";
+import GlobalMessageDisplay from "./components/GlobalMessageDisplay";
 
 const CosmosContextGraphGuide = lazy(
   () => import("./components/CosmosContextGraph/Guide"),
@@ -30,6 +31,7 @@ export default function App(props: any) {
     { path: "/table", icon: "view_column", label: "Neighbourhood Table" },
     { path: "/diachronic", icon: "calendar_view_week", label: "Diachronic Chart" },
     { path: "/aggregates", icon: "crowdsource", label: "Aggregates" },
+    { path: "/clusters", icon: "hive", label: "Clusters" },
   ] as const;
 
   const isActive = (path: string) => location.pathname === path;
@@ -84,14 +86,7 @@ export default function App(props: any) {
         <Show
           when={dbReady()}
           fallback={
-            <article class="small-round padding border medium no-padding" style="height: 100%">
-              <div class="padding fill absolute center middle">
-                <h4>{dbLoadingError() ?? "Loading database"}</h4>
-                <Show when={!dbLoadingError()}>
-                  <progress />
-                </Show>
-              </div>
-            </article>
+            <GlobalMessageDisplay title="Loading database" errorMessage={dbLoadingError()} />
           }
         >
           {props.children}

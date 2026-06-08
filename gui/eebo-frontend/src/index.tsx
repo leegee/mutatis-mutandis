@@ -12,6 +12,7 @@ const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowse
 const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
+const ConceptClusterPlot = lazy(() => import("./components/ScatterPlot/ConceptClusterPlot"));
 
 render(
     () => (
@@ -22,6 +23,7 @@ render(
             <Route path="/table" component={NeighbourhoodBrowser} />
             <Route path="/diachronic" component={DiachronicChart} />
             <Route path="/aggregates" component={ConceptAggregates} />
+            <Route path="/clusters" component={ConceptClusterPlot} />
         </Router>
     ),
     document.getElementById("root")!

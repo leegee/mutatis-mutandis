@@ -11,6 +11,12 @@ export interface PointData extends Omit<Event, "vector_id"> {
   concept: string;
   // any additional augmented fields the parent has attached
   [key: string]: unknown;
+
+  // Clustering
+  cluster_id?: number;
+  cluster_label?: string;
+  umap_x?: number;
+  umap_y?: number;
 }
 
 export interface ConceptDataset {
