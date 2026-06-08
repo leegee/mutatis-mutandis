@@ -42,9 +42,6 @@ class ZarrEventStream:
         self._token_by_id = None
         self._doc_by_id = None
 
-    def _store_dirs(self) -> list[Path]:
-        return store_dirs(self.root)
-
     def _build_lookup(self):
         if self._token_by_id is not None:
             return
@@ -54,7 +51,7 @@ class ZarrEventStream:
         token_map = {}
         doc_map = {}
 
-        for store_dir in self._store_dirs():
+        for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
 
             if self.EXPECTED_GROUP not in g:
@@ -99,7 +96,7 @@ class ZarrEventStream:
             ids:  (batch,) int64  -- event_id, NOT vector_id
         """
 
-        for store_dir in self._store_dirs():
+        for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
 
             if self.EXPECTED_GROUP not in g:

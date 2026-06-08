@@ -64,11 +64,6 @@ from lib.zarr_event_stream import ZarrEventStream
 BATCH_SIZE = 8192
 
 
-def get_indexed_ids(index: EeboFaissIndex) -> set[int]:
-    """Return the set of event_ids already present in the index."""
-    return set(faiss.vector_to_array(index._index.id_map).tolist())
-
-
 def build_index(
     stream: ZarrEventStream,
     index: EeboFaissIndex | None = None,
@@ -143,7 +138,7 @@ def main():
     else:
         logger.info("[faiss-build] incremental mode — loading existing index")
         index          = EeboFaissIndex.load(FAISS_TIER1_INDEX)
-        already_indexed = get_indexed_ids(index)
+        already_indexed = index.ids()
         logger.info(f"[faiss-build] existing index ntotal={len(already_indexed)}")
         index = build_index(stream, index=index, already_indexed=already_indexed)
 

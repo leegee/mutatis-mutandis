@@ -101,6 +101,7 @@ class EeboFaissIndex:
             self.base.metric_type = faiss.METRIC_INNER_PRODUCT
 
         self._index = faiss.IndexIDMap(self.base)
+        self._ids = set()
 
     @staticmethod
     def wipe_faiss_index(path: Path) -> None:
@@ -203,6 +204,10 @@ class EeboFaissIndex:
 
         vectors = self._normalize(vectors, event_ids=ids)
         self._index.add_with_ids(vectors, ids)
+        self._ids.update(int(i) for i in ids)
+
+    def ids(self) -> set[int]:
+        return self._ids
 
     def search(
         self,
@@ -316,7 +321,7 @@ class EeboFaissIndex:
             raise FileNotFoundError(f"FAISS index not found: {path}")
         logger.info(f"[faiss] loading index={path}")
 
-        obj = cls.__new__(cls)
+        obj = cls(dim=1)  # placeholder
         obj._index = faiss.read_index(str(path))
 
         if not isinstance(obj._index, faiss.IndexIDMap):
@@ -326,6 +331,7 @@ class EeboFaissIndex:
             )
 
         base = obj._index.index
+        obj.dim = base.d # replace placeholder
 
         if not hasattr(base, "metric_type"):
             raise TypeError(
