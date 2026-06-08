@@ -10,6 +10,8 @@ Outputs:
                 PREROGATIVE.json
             bfs_global/
                 global.json
+            concept_clusters/
+                PREROGATIVE.json
             manifest.json
 
 Each point carries six coordinates:
@@ -22,27 +24,20 @@ Each point carries six coordinates:
         gx,  gy  — raw global UMAP output
         gnx, gny — normalised within the shared global padded bounds  [0, 1]
 
-The local projection is optimised for within-file structure: cluster shapes,
-local density, and fine-grained neighbourhood relationships.
-
-The global projection places every point from every file into a single shared
-semantic space.  Points that are close in gnx/gny are semantically similar
-regardless of which file they appear in, making cross-file comparison and
-a unified canvas view meaningful.
-
-The joint UMAP is fit on the union of all event IDs across all three output
-types (concept samples + neighbour expansions + BFS expansion).  n_neighbors
-and min_dist are tuned globally, which gives a slightly coarser local
-structure than the independent fits — use nx/ny when local detail matters,
-gnx/gny when cross-file position matters.
+concept_clusters files additionally carry:
+    cluster_id      — integer HDBSCAN cluster id (-1 = noise)
+    cluster_label   — letter label A, B, C... (null for noise)
 """
 
 import argparse
 import json
+from collections import defaultdict, Counter
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import umap
+import hdbscan
 import pacmap
 import sqlite3
 
@@ -57,6 +52,7 @@ from tier2_0_concept_events import ZarrEventLookup
 CONCEPT_DIR       = UMAP_DIR / "concept"
 CONCEPT_NEIGH_DIR = UMAP_DIR / "concept_neighbours"
 BFS_DIR           = UMAP_DIR / "bfs_global"
+CLUSTER_DIR       = UMAP_DIR / "concept_clusters"
 
 K = 25
 
@@ -78,32 +74,26 @@ class EventUniverse:
         return set(self._ids)
 
 
-
 def backfill_missing_events_from_zarr(lookup, event_ids):
     sqlite_conn = sqlite3.connect(SQLITE_DB_PATH)
-
     try:
         existing = {
             row[0]
             for row in sqlite_conn.execute("SELECT event_id FROM events")
         }
-
         missing_ids = list(set(event_ids) - existing)
-
         if not missing_ids:
             logger.info("[tier3] no missing SQLite events")
             return
 
         logger.info(f"[tier3] backfilling {len(missing_ids):,} missing events")
 
-        # Gather doc_ids we need pub_year for
         missing_doc_ids = set()
         for eid in missing_ids:
             event = lookup.get_event(eid)
             if event is not None:
                 missing_doc_ids.add(event["doc_id"])
 
-        # Fetch pub_year from Postgres
         pg_conn = get_connection()
         try:
             with pg_conn.cursor() as cur:
@@ -122,11 +112,9 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
         rows = []
         for eid in missing_ids:
             event = lookup.get_event(eid)
-
             if event is None:
                 logger.warning(f"[tier3] missing Zarr event_id={eid}")
                 continue
-
             rows.append((
                 int(eid),
                 "__derived__",
@@ -149,14 +137,12 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
             rows,
         )
         sqlite_conn.commit()
-
         logger.info(f"[tier3] inserted {len(rows):,} rows")
-
     finally:
         sqlite_conn.close()
 
 
-# FAISS / BFS helpers
+
 def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
     visited  = set(seed_ids)
     frontier = set(seed_ids)
@@ -170,7 +156,6 @@ def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
             lookup.get_event(eid)["embedding"]
             for eid in frontier
         ])
-
         _, nn_ids = index.search(vecs, k)
 
         next_frontier = set()
@@ -185,7 +170,6 @@ def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
 
         all_nodes.update(next_frontier)
         frontier = next_frontier
-
         if not frontier:
             break
 
@@ -194,14 +178,11 @@ def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
 
 def expand_neighbors(index, lookup, event_ids, k=25, max_points=3000):
     ids = set(event_ids)
-
     vecs = np.stack([
         lookup.get_event(eid)["embedding"]
         for eid in event_ids
     ])
-
     _, nn_ids = index.search(vecs, k)
-
     for row in nn_ids:
         for nid in row:
             nid = int(nid)
@@ -209,23 +190,17 @@ def expand_neighbors(index, lookup, event_ids, k=25, max_points=3000):
                 ids.add(nid)
             if len(ids) >= max_points:
                 break
-
     return list(ids)[:max_points]
 
 
-def fit_umap_local(lookup, event_ids, n_neighbors=15, min_dist=0.1):
-    """Fit an independent UMAP on this set of points only.
 
-    Returns a dict {event_id -> (x, y)} using the local projection.
-    """
+def fit_umap_local(lookup, event_ids, n_neighbors=15, min_dist=0.1):
     if not event_ids:
         return {}
-
     X = np.stack([
         lookup.get_event(eid)["embedding"]
         for eid in event_ids
     ]).astype(np.float32)
-
     reducer = umap.UMAP(
         n_neighbors=n_neighbors,
         min_dist=min_dist,
@@ -234,34 +209,17 @@ def fit_umap_local(lookup, event_ids, n_neighbors=15, min_dist=0.1):
         metric="cosine",
     )
     emb = reducer.fit_transform(X)
-
     return {int(eid): (float(emb[i, 0]), float(emb[i, 1]))
             for i, eid in enumerate(event_ids)}
 
 
 def fit_umap_global(lookup, all_event_ids, n_neighbors=15, min_dist=0.1):
-    """Fit a single joint UMAP across all event IDs in the run.
-
-    Returns a dict {event_id -> (gx, gy)} using the shared projection.
-    Points that are semantically similar will be close in this space
-    regardless of which output file they belong to.
-    """
     event_ids = list(all_event_ids)
-
-    logger.info(f"[tier3] fitting global UMAP on {len(event_ids):,} points")
-
+    logger.info(f"[tier3] fitting global PaCMAP on {len(event_ids):,} points")
     X = np.stack([
         lookup.get_event(eid)["embedding"]
         for eid in event_ids
     ]).astype(np.float32)
-
-    # reducer = umap.UMAP(
-    #     n_neighbors=n_neighbors,
-    #     min_dist=min_dist,
-    #     n_components=2,
-    #     random_state=42,
-    #     metric="cosine",
-    # )
     reducer = pacmap.PaCMAP(
         n_components=2,
         n_neighbors=15,
@@ -270,14 +228,81 @@ def fit_umap_global(lookup, all_event_ids, n_neighbors=15, min_dist=0.1):
         random_state=42,
     )
     emb = reducer.fit_transform(X)
-
     return {int(eid): (float(emb[i, 0]), float(emb[i, 1]))
             for i, eid in enumerate(event_ids)}
 
 
-# Bounds helpers
+
+def fit_cluster_local(lookup, event_ids):
+    """
+    5-D UMAP for HDBSCAN, then a separate 2-D UMAP for the local display
+    coordinates (nx/ny).  Returns {event_id -> (x, y)} local coords and
+    the raw cluster labels list.
+    """
+    if len(event_ids) < 10:
+        return {int(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
+
+    X = np.stack([
+        lookup.get_event(eid)["embedding"]
+        for eid in event_ids
+    ]).astype(np.float32)
+
+    # 5-D reduction for clustering
+    reducer_5d = umap.UMAP(
+        n_components=5,
+        n_neighbors=15,
+        min_dist=0.0,
+        metric='cosine',
+        random_state=42,
+    )
+    reduced_5d = reducer_5d.fit_transform(X)
+
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=5,
+        min_samples=3,
+        metric='euclidean',
+        cluster_selection_method='eom',
+    )
+    labels = clusterer.fit_predict(reduced_5d).tolist()
+
+    # 2-D reduction for local display coords
+    reducer_2d = umap.UMAP(
+        n_components=2,
+        n_neighbors=15,
+        min_dist=0.1,
+        metric='cosine',
+        random_state=42,
+    )
+    emb_2d = reducer_2d.fit_transform(X)
+
+    local_coords = {
+        int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
+        for i, eid in enumerate(event_ids)
+    }
+    return local_coords, labels
+
+
+def compute_cluster_aggregates(event_ids, cluster_labels, lookup, top_n=25):
+    token_counters = defaultdict(Counter)
+    doc_counters   = defaultdict(Counter)
+
+    for eid, cid in zip(event_ids, cluster_labels):
+        if cid == -1:
+            continue
+        event = lookup.get_event(eid)
+        token_counters[cid][event["token"]] += 1
+        doc_counters[cid][event["doc_id"]]  += 1
+
+    return {
+        str(cid): {
+            "top_tokens": token_counters[cid].most_common(top_n),
+            "top_docs":   doc_counters[cid].most_common(top_n),
+        }
+        for cid in token_counters
+    }
+
+
 def compute_bounds_from_coords(coords):
-    """coords: list of (x, y) tuples."""
     xs = np.array([c[0] for c in coords], dtype=np.float32)
     ys = np.array([c[1] for c in coords], dtype=np.float32)
     return {
@@ -298,15 +323,11 @@ def add_padding(bounds, pad_ratio=0.1):
 
 
 def assemble_points(event_ids, local_coords, global_coords,
-                    local_bounds, global_bounds):
-    """Build the final point list for one output file.
-
-    Each point:
-        event_id            — event identifier
-        x,  y               — raw local UMAP coords
-        nx, ny              — local coords normalised to [0, 1]
-        gx, gy              — raw global UMAP coords
-        gnx, gny            — global coords normalised to [0, 1]
+                    local_bounds, global_bounds,
+                    extra_fields: dict[int, dict] | None = None):
+    """
+    extra_fields: optional {event_id -> {field: value}} merged into each point.
+    Used by the cluster output to attach cluster_id / cluster_label.
     """
     lx0, lx1 = local_bounds["minX"],  local_bounds["maxX"]
     ly0, ly1 = local_bounds["minY"],  local_bounds["maxY"]
@@ -322,7 +343,7 @@ def assemble_points(event_ids, local_coords, global_coords,
     for eid in event_ids:
         lx, ly = local_coords[eid]
         gx, gy = global_coords[eid]
-        points.append({
+        pt = {
             "event_id": str(eid),
             "x":   lx,
             "y":   ly,
@@ -332,7 +353,10 @@ def assemble_points(event_ids, local_coords, global_coords,
             "gy":  gy,
             "gnx": (gx - gx0) / gdx,
             "gny": (gy - gy0) / gdy,
-        })
+        }
+        if extra_fields and eid in extra_fields:
+            pt.update(extra_fields[eid])
+        points.append(pt)
     return points
 
 
@@ -341,6 +365,7 @@ def write_json(path, payload):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     logger.info(f"[tier3] Wrote {path}")
+
 
 
 def main():
@@ -357,23 +382,22 @@ def main():
 
     all_concept_events = []
 
-    # Pass 1 — collect all event ID sets; run local UMAP fits per file.
-    # We buffer everything because the joint global UMAP needs the full
-    # union of IDs, which isn't known until all concepts are processed.
+    # ------------------------------------------------------------------
+    # Pass 1 — per-concept: local UMAP + clustering local UMAP + HDBSCAN
+    # ------------------------------------------------------------------
 
-    # Each entry: (output_path, metadata_dict, ordered event_id list,
-    #              local_coords {eid -> (x,y)})
     buffered_concept       = []
     buffered_concept_neigh = []
+    buffered_clusters      = []   # (path, meta, event_ids, local_coords, cluster_labels)
 
-    all_event_ids = set()   # union for the joint global UMAP
+    all_event_ids = set()
 
     for concept_name, concept in resolve_concepts(args):
         logger.info(f"[tier3] processing concept={concept_name}")
 
         seed_ids = list(lookup.iter_matching_event_ids(set(concept["forms"])))
 
-        # 1. concept (≤1 k) — local fit
+        # 1a. concept (≤1 k) — local fit
         concept_sample = seed_ids[:1000]
         local_concept  = fit_umap_local(lookup, concept_sample)
 
@@ -383,12 +407,11 @@ def main():
             concept_sample,
             local_concept,
         ))
-
         all_event_ids.update(concept_sample)
 
-        # 2. concept + neighbours (≤3 k) — local fit
-        neigh_ids    = expand_neighbors(index, lookup, concept_sample, max_points=3000)
-        local_neigh  = fit_umap_local(lookup, neigh_ids)
+        # 1b. concept + neighbours (≤3 k) — local fit
+        neigh_ids   = expand_neighbors(index, lookup, concept_sample, max_points=3000)
+        local_neigh = fit_umap_local(lookup, neigh_ids)
 
         buffered_concept_neigh.append((
             CONCEPT_NEIGH_DIR / f"{concept_name}.json",
@@ -396,36 +419,50 @@ def main():
             neigh_ids,
             local_neigh,
         ))
-
         all_event_ids.update(neigh_ids)
 
-        # collect seed events for BFS
+        # 1c. clustering — independent local fit (5-D HDBSCAN + 2-D display)
+        logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)} points)")
+        cluster_local_coords, cluster_labels = fit_cluster_local(lookup, concept_sample)
+
+        buffered_clusters.append((
+            CLUSTER_DIR / f"{concept_name}.json",
+            {"type": "concept_clusters", "concept": concept_name},
+            concept_sample,
+            cluster_local_coords,
+            cluster_labels,
+        ))
+
         all_concept_events.extend(concept_sample)
 
         manifest["concepts"].append({
             "name":               concept_name,
             "concept":            f"/umap/concept/{concept_name}.json",
             "concept_neighbours": f"/umap/concept_neighbours/{concept_name}.json",
+            "concept_clusters":   f"/umap/concept_clusters/{concept_name}.json",
         })
 
     # 3. BFS global (≤5 k, depth=2) — local fit
-    bfs_ids     = bfs_event_expansion(lookup, index, all_concept_events, max_nodes=5000, depth=2)
-    local_bfs   = fit_umap_local(lookup, bfs_ids)
-
+    bfs_ids   = bfs_event_expansion(lookup, index, all_concept_events, max_nodes=5000, depth=2)
+    local_bfs = fit_umap_local(lookup, bfs_ids)
     all_event_ids.update(bfs_ids)
 
     backfill_missing_events_from_zarr(lookup, all_event_ids)
 
-    # Pass 2 — fit the single joint global UMAP on the full union.
-    global_coords = fit_umap_global(lookup, all_event_ids)
+    # ------------------------------------------------------------------
+    # Pass 2 — joint global projection across everything
+    # ------------------------------------------------------------------
 
-    # Global bounds from the joint projection (padded once, shared everywhere)
+    global_coords        = fit_umap_global(lookup, all_event_ids)
     global_bounds        = compute_bounds_from_coords(list(global_coords.values()))
     global_bounds_padded = add_padding(global_bounds)
 
     logger.info(f"[tier3] global bounds (padded): {global_bounds_padded}")
 
-    # Pass 3 — assemble and write all output files.
+    # ------------------------------------------------------------------
+    # Pass 3 — assemble and write
+    # ------------------------------------------------------------------
+
     for path, meta, event_ids, local_coords in buffered_concept + buffered_concept_neigh:
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[e] for e in event_ids])
@@ -439,6 +476,44 @@ def main():
             "bounds":       local_bounds,
             "globalBounds": global_bounds_padded,
             "points":       points,
+        })
+
+    # Cluster files — same structure, plus cluster_id / cluster_label per point
+    for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
+        concept_name = meta["concept"]
+        unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
+        label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
+
+        extra = {
+            int(eid): {
+                "cluster_id":    int(cluster_labels[i]),
+                "cluster_label": label_map.get(cluster_labels[i]),  # None for noise
+            }
+            for i, eid in enumerate(event_ids)
+        }
+
+        local_bounds = add_padding(
+            compute_bounds_from_coords([local_coords[e] for e in event_ids])
+        )
+        points = assemble_points(
+            event_ids, local_coords, global_coords,
+            local_bounds, global_bounds_padded,
+            extra_fields=extra,
+        )
+
+        aggregates = compute_cluster_aggregates(event_ids, cluster_labels, lookup)
+
+        write_json(path, {
+            **meta,
+            "generated_at": datetime.now().isoformat(),
+            "n_events":     len(event_ids),
+            "bounds":       local_bounds,
+            "globalBounds": global_bounds_padded,
+            "clusters": {
+                "label_map":  {str(k): v for k, v in label_map.items()},
+                "aggregates": aggregates,
+            },
+            "points": points,
         })
 
     # BFS global

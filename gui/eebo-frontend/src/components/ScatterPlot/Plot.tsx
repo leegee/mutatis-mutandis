@@ -117,8 +117,15 @@ export default function Plot(props: PlotProps) {
   const [_viewState, setViewState] = createSignal<OrthographicViewState>(INITIAL_VIEW_STATE);
 
   // Flatten all points across all datasets for colour map derivation.
+  // const allPoints = createMemo<PointData[]>(() =>
+  //   props.datasets.flatMap((d) => d.points)
+  // );
   const allPoints = createMemo<PointData[]>(() =>
-    props.datasets.flatMap((d) => d.points)
+    props.datasets.flatMap((d) =>
+      (d.points ?? []).filter(
+        (p): p is PointData => p != null
+      )
+    )
   );
 
   // Build colour map whenever the field or data changes.

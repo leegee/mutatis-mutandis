@@ -34,7 +34,6 @@ TMP_DIR.mkdir(parents=True, exist_ok=True)
 
 GUI_PUBLIC_DIR = Path(BASE_DIR / 'gui' / 'eebo-frontend' / 'public')
 SQLITE_DB_PATH = GUI_PUBLIC_DIR / 'data' / 'tier2_concept_neighbours.db'
-CLUSTER_JSON_PATH = GUI_PUBLIC_DIR / 'data' / 'clusters'
 
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
@@ -55,7 +54,7 @@ FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 FAISS_TIER1_INDEX = FAISS_INDEX_DIR / "tier1.index"
 FAISS_SLICE_DIR = FAISS_INDEX_DIR / "slices"
 
-UMAP_DIR = GUI_PUBLIC_DIR / "umap"
+UMAP_DIR = GUI_PUBLIC_DIR / "data" / "umap"
 UMAP_DIR.mkdir(parents=True, exist_ok=True)
 
 BATCH_DOCS = 100
