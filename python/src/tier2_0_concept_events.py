@@ -91,7 +91,6 @@ Four tables:
 from __future__ import annotations
 
 import argparse
-import json
 import sqlite3
 from collections import Counter
 from itertools import combinations
@@ -117,8 +116,6 @@ from lib.tier2_diagnostics import (
 
 K           = 25
 BATCH_SIZE  = 8192
-# OUTPUT_DIR = INDEXES_DIR / "tier2"
-# OUTPUT_PATH = OUTPUT_DIR /  "tier2_concept_neighbours.json"
 
 # Event lookup
 class ZarrEventLookup:
@@ -379,12 +376,6 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 
         results.append({**_event_record(event, doc_meta), "neighbours": neighbours})
 
-    # umap_project_concept(
-    #     event_ids,
-    #     lookup,
-    #     output_path=OUTPUT_DIR / f"umap_{concept_name}.json",
-    # )
-
     return {
         "concept":   concept_name,
         "n_events":  len(event_ids),
@@ -397,8 +388,6 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
     }
 
 
-# SQLite writer
-# SQLite writer
 
 _SCHEMA_INIT = """
 CREATE TABLE IF NOT EXISTS concepts (
@@ -564,51 +553,6 @@ def _aggregate_rows(concept_name, aggregate):
     for rank, ((doc_id, window_id), count) in enumerate(aggregate["top_windows"]):
         yield (concept_name, "window", rank, None, doc_id, window_id, count)
 
-
-# def umap_project_concept(
-#     event_ids,
-#     lookup,
-#     output_path,
-#     *,
-#     n_neighbors=15,
-#     min_dist=0.1,
-#     n_components=2,
-#     metric="cosine",
-# ):
-#     """
-#     Projects concept event embeddings into UMAP space and saves JSON.
-#     """
-#     if not event_ids:
-#         return []
-
-#     X = np.stack([
-#         lookup.get_event(eid)["embedding"]
-#         for eid in event_ids
-#     ]).astype(np.float32)
-
-#     reducer = umap.UMAP(
-#         n_neighbors=n_neighbors,
-#         min_dist=min_dist,
-#         n_components=n_components,
-#         metric=metric,
-#     )
-
-#     embedding_2d = reducer.fit_transform(X)
-
-#     projected = [
-#         {
-#             "event_id": int(eid),
-#             "umap":     embedding_2d[i].tolist(),
-#         }
-#         for i, eid in enumerate(event_ids)
-#     ]
-
-#     with open(output_path, "w", encoding="utf-8") as f:
-#         json.dump(projected, f, ensure_ascii=False, indent=2)
-
-#     return projected
-
-
 def get_processed_concepts(db_path) -> set[str]:
     if not Path(db_path).is_file():
         return set()
@@ -755,11 +699,6 @@ def main():
             concept,
             diagnostics=args.diagnostics,
         )
-
-    # with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-    #     json.dump(output, f, indent=2)
-
-    # logger.info(f"[tier2] wrote {OUTPUT_PATH}")
 
     write_sqlite(
         output,
