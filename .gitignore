@@ -70,3 +70,4 @@ docs/proposal_*
 gui/eebo-frontend/public/data/*.db
 gui/eebo-frontend/public/umap/
 python/umap_*
+gui/eebo-frontend/public/data/clusters/
