@@ -118,8 +118,8 @@ def to_doc_row(meta: dict) -> tuple:
         meta["pub_place"],
         meta["source_date_raw"],
         meta["token_count"],
-        meta["slice_start"],
-        meta["slice_end"],
+        # meta["slice_start"],
+        # meta["slice_end"],
     )
 
 
@@ -143,7 +143,7 @@ def process_file(xml_path: Path):
 
     date_raw = safe_text(date_elem)
 
-    slice_start, slice_end, pub_year = extract_year_and_slice(date_raw)
+    # slice_start, slice_end, pub_year = extract_year_and_slice(date_raw)
     if pub_year is None:
         return None
 
@@ -175,8 +175,8 @@ def process_file(xml_path: Path):
         "pub_place": safe_text(place_elem),
         "pub_year": pub_year,
         "source_date_raw": date_raw,
-        "slice_start": slice_start,
-        "slice_end": slice_end,
+        # "slice_start": slice_start,
+        # "slice_end": slice_end,
         "token_count": len(tokens),
     }
 
@@ -261,7 +261,7 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
             [
                 "doc_id", "title", "author", "pub_year",
                 "publisher", "pub_place", "source_date_raw",
-                "token_count", "slice_start", "slice_end"
+                "token_count", # "slice_start", "slice_end"
             ],
             rows,
         )
@@ -384,10 +384,9 @@ def main():
         eebo_db.create_tokens_fk(conn)
         eebo_db.create_token_indexes(conn)
         eebo_db.create_tiered_token_indexes(conn)
-        eebo_db.create_concurrent_indexes()
         eebo_db.refresh_views(conn)
-        conn.commit()
 
+    eebo_db.create_concurrent_indexes()
 
 if __name__ == "__main__":
     main()
