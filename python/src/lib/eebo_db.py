@@ -154,8 +154,6 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     pub_place TEXT,
                     source_date_raw TEXT,
                     token_count INTEGER,
-                    slice_start INTEGER,
-                    slice_end INTEGER,
                     lang CHAR(3) NOT NULL DEFAULT 'eng'
                 );
 
@@ -293,13 +291,14 @@ def create_tiered_token_indexes(conn: Connection) -> None:
 
     logger.info("create_tiered_token_indexes complete")
 
+
 def create_concurrent_indexes():
     logger.info("create_concurrent_indexes enter to create CONCURRENT indexes")
     with get_autocommit_connection() as conn:
         with conn.cursor() as cur:
             with conn.cursor() as cur:
                 cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_occurrence_id ON pamphlet_tokens(token_occurrence_id);")
-                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_start);")
+                # cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pamphlet_tokens_docid_pub_year ON pamphlet_tokens(doc_id, pub_year);")
                 cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(doc_id, token, token_idx);")
     logger.info("create_concurrent_indexes complete")
 
@@ -337,4 +336,4 @@ def refresh_views(conn: Connection) -> None:
                 cur.execute(
                     sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) )
                 )
-    logger.info("All views refreshed")
+    logger.info("All views refreshed and committed")
