@@ -91,6 +91,7 @@ function hslToRgb(
 }
 
 const GREY: [number, number, number, number] = [120, 120, 130, 140];
+const NEIGHBOURS: [number, number, number, number] = [120, 120, 170, 140];
 
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
 
@@ -138,8 +139,15 @@ export default function Plot(props: PlotProps) {
   const getColor = createMemo(() => {
     const field = props.colorBy;
     const map = colorMap();
-    return (p: PointData): [number, number, number, number] =>
-      map.get(String(p[field] ?? "")) ?? GREY;
+    return (p: PointData, origin?: string): [number, number, number, number] => {
+      if (origin === "neighbours") {
+        return NEIGHBOURS;
+        // Todo: maybe HSL manipulation? For now just change the alpha
+        // const [r, g, b, _a] = map.get(String(p[field] ?? "")) ?? GREY;
+        // return [r, g, b, 70] as [number, number, number, number];
+      }
+      return map.get(String(p[field] ?? "")) ?? GREY;
+    };
   });
 
 
@@ -153,14 +161,14 @@ export default function Plot(props: PlotProps) {
 
     console.log("[Plot] bfsDataset points:", props.bfsDataset?.points?.length);
 
-    const conceptLayers = props.datasets.map(
-      (dataset) =>
-        new ScatterplotLayer<PointData>({
-          id: `concept-${ dataset.concept }`,
+    const [neighbourLayers, conceptLayers] = props.datasets.reduce(
+      ([n, c], dataset) => {
+        const layer = new ScatterplotLayer<PointData>({
+          id: `${ dataset.origin ?? "concept" }-${ dataset.concept }`,
           coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
           data: dataset.points,
           getPosition: (p) => getPosition(p, proj),
-          getFillColor: colorFn,
+          getFillColor: (p) => colorFn(p, dataset.origin),
           getRadius: radius,
           radiusUnits: "pixels",
           opacity,
@@ -173,16 +181,21 @@ export default function Plot(props: PlotProps) {
           },
           updateTriggers: {
             getPosition: [proj],
-            getFillColor: [props.colorBy, dataset.concept],
+            getFillColor: [props.colorBy, dataset.concept, dataset.origin],
           },
           onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
           onClick: (info: PickingInfo<PointData>) => {
             if (info.object) props.onPointClick?.(info.object);
           },
-        })
+        });
+        return dataset.origin === "neighbours"
+          ? [[...n, layer], c]
+          : [n, [...c, layer]];
+      },
+      [[], []] as [ScatterplotLayer<PointData>[], ScatterplotLayer<PointData>[]]
     );
 
-    const bfsLayer = props.bfsDataset && new ScatterplotLayer<PointData>({
+    const bfsLayer = props.bfsDataset && props.projection === "global" && new ScatterplotLayer<PointData>({
       id: "bfs-global",
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       data: props.bfsDataset.points,
@@ -194,7 +207,11 @@ export default function Plot(props: PlotProps) {
       onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
     });
 
-    return bfsLayer ? [bfsLayer, ...conceptLayers] : conceptLayers;
+    return [
+      ...(bfsLayer ? [bfsLayer] : []),
+      ...neighbourLayers,
+      ...conceptLayers,
+    ];
   });
 
   function fitZoom(): number {

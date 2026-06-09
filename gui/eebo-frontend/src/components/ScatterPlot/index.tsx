@@ -10,27 +10,30 @@ import Sidebar from "./Sidebar";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
-const DATA_TYPES = ['concept_neighbours', 'concept', 'concept_clusters'];
 
 export default function ConceptClusterPlot() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
-    const [dataType, setDataType] = createSignal("concept_clusters");
+    const [showNeighbours, setShowNeighbours] = createSignal(false);
     const [colorBy, setColorBy] = createSignal("cluster_label");
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
-    const [datasets] = createResource(
-        () => ({
-            concepts: controls.conceptSelection,
-            fromYear: controls.fromYear,
-            toYear: controls.toYear,
-            yearMode: controls.yearMode,
-            dataType: dataType()
-        }),
+    const sharedKey = () => ({
+        concepts: controls.conceptSelection,
+        fromYear: controls.fromYear,
+        toYear: controls.toYear,
+        yearMode: controls.yearMode,
+    });
+
+    const [conceptDatasets] = createResource(
+        () => ({ ...sharedKey(), dataType: "concept" }),
         loadDatasets
     );
 
-    const loading = () => datasets.loading || bfs.loading;
-    const error = () => datasets.error || bfs.error;
+    // Only fetched once the toggle is flipped — null source skips the fetch.
+    const [neighbourDatasets] = createResource(
+        () => showNeighbours() ? { ...sharedKey(), dataType: "concept_neighbours" } : null,
+        loadDatasets
+    );
 
     const [bfs] = createResource(
         () => ({
@@ -40,6 +43,19 @@ export default function ConceptClusterPlot() {
         }),
         loadBfsDataset
     );
+
+    // Concept is always shown; neighbours are layered on top when toggled.
+    // BFS is always passed separately to Plot and rendered beneath.
+    const activeDatasets = () => {
+        const concept = (conceptDatasets() ?? []).map(d => ({ ...d, origin: "concept" }));
+        const neighbours = showNeighbours()
+            ? (neighbourDatasets() ?? []).map(d => ({ ...d, origin: "neighbours" }))
+            : [];
+        return [...concept, ...neighbours];
+    };
+
+    const loading = () => conceptDatasets.loading || bfs.loading;
+    const error = () => conceptDatasets.error || bfs.error;
 
     function handleClick(point: PointData) {
         console.log("[ConceptClusterPlot] clicked event:", point.event_id);
@@ -52,19 +68,24 @@ export default function ConceptClusterPlot() {
 
     return (
         <>
-            <Show when={datasets()}>
+            <Show when={conceptDatasets()}>
                 <Show when={!error()} fallback={
                     <GlobalMessageDisplay
                         title="Failed to load plot data"
-                        errorMessage={datasets.error?.message || bfs.error?.message}
+                        errorMessage={conceptDatasets.error?.message || bfs.error?.message}
                     />
                 }>
                     <ControlsHeader multiConcept={true} noTopN={true}>
-                        <div class="field border middle-align">
-                            <select class="small-padding" value={dataType()}
-                                onChange={e => setDataType(e.currentTarget.value)}>
-                                {DATA_TYPES.map(t => <option value={t}>{t}</option>)}
-                            </select>
+                        {/* Neighbours toggle */}
+                        <div class="field border middle-align" style="width: 10em">
+                            <label class="switch">
+                                <input type="checkbox"
+                                    checked={showNeighbours()}
+                                    onChange={() => setShowNeighbours(v => !v)}
+                                />
+                                <span class="left-padding">{showNeighbours() ? "Neighbours" : "Concept"}</span>
+                            </label>
+                            <span class="tooltip bottom">Toggle between concept points and their neighbours</span>
                         </div>
 
                         <div class="field border middle-align">
@@ -86,7 +107,7 @@ export default function ConceptClusterPlot() {
                     <div id="graph_sidebar_row">
                         <div id="under_sidebar" class="max">
                             <Plot
-                                datasets={datasets()!}
+                                datasets={activeDatasets()}
                                 bfsDataset={bfs()}
                                 projection={projection()}
                                 colorBy={colorBy()}
@@ -130,4 +151,3 @@ export default function ConceptClusterPlot() {
         </>
     );
 }
-

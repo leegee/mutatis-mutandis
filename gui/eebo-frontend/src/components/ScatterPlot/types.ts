@@ -21,6 +21,7 @@ export interface PointData extends Omit<Event, "vector_id"> {
 
 export interface ConceptDataset {
   concept: string;
+  origin?: string | undefined;
   points: PointData[];
   bounds: Bounds;
   globalBounds: Bounds;
