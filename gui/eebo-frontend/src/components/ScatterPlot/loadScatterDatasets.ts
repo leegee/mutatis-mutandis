@@ -3,7 +3,6 @@ import { getEventsByIds } from "../../services/db/getEventsByIds";
 import { type YearMode } from "../../state/controls.store";
 import type { ConceptDataset } from "./types";
 
-
 function matchesYearFactory(params: {
     yearMode: YearMode;
     fromYear: number;

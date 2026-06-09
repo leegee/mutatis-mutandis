@@ -13,7 +13,7 @@ const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
 export default function ConceptClusterPlot() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
-    const [showNeighbours, setShowNeighbours] = createSignal(false);
+    const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("concept");
     const [colorBy, setColorBy] = createSignal("cluster_label");
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
@@ -29,9 +29,13 @@ export default function ConceptClusterPlot() {
         loadDatasets
     );
 
-    // Only fetched once the toggle is flipped — null source skips the fetch.
     const [neighbourDatasets] = createResource(
-        () => showNeighbours() ? { ...sharedKey(), dataType: "concept_neighbours" } : null,
+        () => layerMode() === "neighbours" ? { ...sharedKey(), dataType: "concept_neighbours" } : null,
+        loadDatasets
+    );
+
+    const [clusterDatasets] = createResource(
+        () => layerMode() === "clusters" ? { ...sharedKey(), dataType: "concept_clusters" } : null,
         loadDatasets
     );
 
@@ -47,15 +51,18 @@ export default function ConceptClusterPlot() {
     // Concept is always shown; neighbours are layered on top when toggled.
     // BFS is always passed separately to Plot and rendered beneath.
     const activeDatasets = () => {
+        if (layerMode() === "clusters") {
+            return (clusterDatasets() ?? []).map(d => ({ ...d, origin: "clusters" }));
+        }
         const concept = (conceptDatasets() ?? []).map(d => ({ ...d, origin: "concept" }));
-        const neighbours = showNeighbours()
+        const neighbours = layerMode() === "neighbours"
             ? (neighbourDatasets() ?? []).map(d => ({ ...d, origin: "neighbours" }))
             : [];
         return [...concept, ...neighbours];
     };
 
-    const loading = () => conceptDatasets.loading || bfs.loading;
-    const error = () => conceptDatasets.error || bfs.error;
+    const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
+    const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
     function handleClick(point: PointData) {
         console.log("[ConceptClusterPlot] clicked event:", point.event_id);
@@ -76,16 +83,13 @@ export default function ConceptClusterPlot() {
                     />
                 }>
                     <ControlsHeader multiConcept={true} noTopN={true}>
-                        {/* Neighbours toggle */}
-                        <div class="field border middle-align" style="width: 10em">
-                            <label class="switch">
-                                <input type="checkbox"
-                                    checked={showNeighbours()}
-                                    onChange={() => setShowNeighbours(v => !v)}
-                                />
-                                <span class="left-padding">{showNeighbours() ? "Neighbours" : "Concept"}</span>
-                            </label>
-                            <span class="tooltip bottom">Toggle between concept points and their neighbours</span>
+                        <div class="field border middle-align">
+                            <select class="small-padding" value={layerMode()}
+                                onChange={e => setLayerMode(e.currentTarget.value as "concept" | "neighbours" | "clusters")}>
+                                <option value="concept">Concept</option>
+                                <option value="neighbours">Concept + Neighbours</option>
+                                <option value="clusters">Clusters</option>
+                            </select>
                         </div>
 
                         <div class="field border middle-align">
