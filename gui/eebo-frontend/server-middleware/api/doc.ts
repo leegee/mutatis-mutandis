@@ -7,11 +7,8 @@ export function createDocumentMiddleware(
 ): Connect.NextHandleFunction {
   return async (req, res, next) => {
     if (!req.url) return next();
-
     const match = req.url.match(/^\/api\/doc\/([^/]+)$/);
-
     if (!match) return next();
-
     const docId = match[1];
 
     try {
@@ -33,8 +30,11 @@ export function createDocumentMiddleware(
         });
       }
 
-      const filepath: string = row.filepath;
+      if (!row.filepath) {
+        throw new Error('No filepath in db for doc ' + docId)
+      }
 
+      const filepath: string = row.filepath;
       const matchPath = filepath.match(/eebo_all[\\/](.+)$/);
 
       if (!matchPath) {
