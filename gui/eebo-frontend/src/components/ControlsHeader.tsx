@@ -52,41 +52,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                     onChange={A.setConceptSelection}
                     onCreateOption={() => Promise.resolve(false)}
                   />
-
-                  {/* <div data-ui="#concept-menu">
-                    <button class="border no-round">
-                      <span>
-                        {controls.conceptSelection.length === 0
-                          ? "None selected"
-                          : controls.conceptSelection.length === 1
-                            ? controls.conceptSelection[0]
-                            : (controls.conceptSelection.length + " selected")
-                        }
-                      </span>
-                      <i>arrow_drop_down</i>
-                    </button>
-                    <menu id="concept-menu" class="no-round">
-                      <For each={concepts()}>
-                        {(c) => (
-                          <li>
-                            <label class="checkbox small">
-                              <input type="checkbox"
-                                checked={controls.conceptSelection.includes(c)}
-                                value={c}
-                                onChange={(e) => {
-                                  const checked = e.currentTarget.checked;
-                                  A.setConceptSelection((prev) =>
-                                    checked ? [...prev, c] : prev.filter((v) => v !== c)
-                                  );
-                                }}
-                              />
-                              <span>{c}</span>
-                            </label>
-                          </li>
-                        )}
-                      </For>
-                    </menu>
-                  </div> */}
+                  <div class="tooltip bottom">Select one or more concepts</div>
                 </div>
 
                 <div class="no-round bottom">
@@ -107,16 +73,13 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                       <span>Invert</span>
                     </li>
                   </menu>
+                  <div class="tooltip right">More...</div>
                 </div>
 
               </div>
 
             </Show>
           </Show>
-          <div class="tooltip right">
-            Concepts<br />
-            {controls.conceptSelection.join(", ")}
-          </div>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />
@@ -240,7 +203,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         {resolved()}
       </nav>
-    </header>
+    </header >
   );
 };
 

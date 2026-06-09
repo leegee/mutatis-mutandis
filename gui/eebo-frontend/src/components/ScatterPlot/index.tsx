@@ -90,6 +90,7 @@ export default function ConceptClusterPlot() {
                                 <option value="neighbours">Concept + Neighbours</option>
                                 <option value="clusters">Clusters</option>
                             </select>
+                            <div class="tooltip bottom">View mode</div>
                         </div>
 
                         <div class="field border middle-align">
@@ -98,6 +99,7 @@ export default function ConceptClusterPlot() {
                                 <option value="global">Global</option>
                                 <option value="local">Local</option>
                             </select>
+                            <div class="tooltip bottom">Projection mode</div>
                         </div>
 
                         <div class="field border middle-align">
@@ -105,6 +107,7 @@ export default function ConceptClusterPlot() {
                                 onChange={e => setColorBy(e.currentTarget.value)}>
                                 {COLOR_FIELDS.map(f => <option value={f}>{f}</option>)}
                             </select>
+                            <div class="tooltip bottom">Point colour mode</div>
                         </div>
                     </ControlsHeader>
 
