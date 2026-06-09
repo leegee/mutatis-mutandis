@@ -256,6 +256,20 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 1. Cleaner corpus text
 1. Fuller corpus date parsing
+1. Check:
+
+    <PROFILEDESC>
+        <LANGUSAGE ID="fre">
+            <LANGUAGE>fre</LANGUAGE>
+        </LANGUSAGE>
+    </PROFILEDESC>
+1. Check:
+    from langdetect import detect, DetectorFactory
+    DetectorFactory.seed = 0
+    try:
+        lang = detect(raw_text)
+            except Exception:
+                lang = None
 
 ### Visualisations
 
