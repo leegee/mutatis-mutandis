@@ -11,6 +11,7 @@ import { listConcepts } from "../services/db";
 
 import "./ControlsHeader.css";
 import { YearTimeline } from "./YearTimeline";
+import MultiCreatableSelect from "./CreatableSelect";
 
 interface Props {
   children?: any;
@@ -44,7 +45,15 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
               <div class="row no-space">
 
                 <div class="field label border mid-align">
-                  <div data-ui="#concept-menu">
+
+                  <MultiCreatableSelect
+                    selected={controls.conceptSelection}
+                    options={concepts()}
+                    onChange={A.setConceptSelection}
+                    onCreateOption={() => Promise.resolve(false)}
+                  />
+
+                  {/* <div data-ui="#concept-menu">
                     <button class="border no-round">
                       <span>
                         {controls.conceptSelection.length === 0
@@ -77,7 +86,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                         )}
                       </For>
                     </menu>
-                  </div>
+                  </div> */}
                 </div>
 
                 <div class="no-round bottom">

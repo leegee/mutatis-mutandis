@@ -73,7 +73,7 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
         }));
     }
     catch (error) {
-        console.log('xxxxxxxxxxxxxx', error)
+        console.error('xxxxxxxxxxxxxx', error)
     }
     return [];
 }
