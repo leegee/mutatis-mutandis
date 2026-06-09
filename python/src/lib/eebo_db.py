@@ -291,20 +291,17 @@ def create_tiered_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(doc_id);")
 
-    # Create CONCURRENT indexes outside transaction
-    logger.info("Creating CONCURRENT indexes")
-    # autocommit must be True to allow CONCURRENTLY
-    autocommit = conn.autocommit
-    conn.autocommit = True
-    try:
-        with conn.cursor() as cur:
-            cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_occurrence_id ON pamphlet_tokens(token_occurrence_id);")
-            cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_start);")
-            cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(doc_id, token, token_idx);")
-    finally:
-        conn.autocommit = autocommit
+    logger.info("create_tiered_token_indexes complete")
 
-    logger.info("Tiered token indexes created")
+def create_concurrent_indexes():
+    logger.info("create_concurrent_indexes enter to create CONCURRENT indexes")
+    with get_autocommit_connection() as conn:
+        with conn.cursor() as cur:
+            with conn.cursor() as cur:
+                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_occurrence_id ON pamphlet_tokens(token_occurrence_id);")
+                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pamphlet_tokens_docid_slice ON pamphlet_tokens(doc_id, slice_start);")
+                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(doc_id, token, token_idx);")
+    logger.info("create_concurrent_indexes complete")
 
 
 

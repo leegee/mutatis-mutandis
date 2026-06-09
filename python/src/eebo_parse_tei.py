@@ -384,6 +384,7 @@ def main():
         eebo_db.create_tokens_fk(conn)
         eebo_db.create_token_indexes(conn)
         eebo_db.create_tiered_token_indexes(conn)
+        eebo_db.create_concurrent_indexes()
         eebo_db.refresh_views(conn)
         conn.commit()
 
