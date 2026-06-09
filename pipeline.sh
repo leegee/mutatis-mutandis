@@ -43,7 +43,7 @@ case "$PHASE" in
         exit 0
         ;;
     0|in|ingest)
-        RUN_SCRIPTS+=("$SRC/eebo_parse_tei.py")
+        RUN_SCRIPTS+=("$SRC/tier0_0_eebo_parse_tei.py")
         RUN_ENVS+=("")
         ;;
     1|embed)
@@ -58,11 +58,16 @@ case "$PHASE" in
         RUN_SCRIPTS+=("$SRC/tier2_0_concept_events.py")
         RUN_ENVS+=("")
         ;;
+    4|plot)
+        RUN_SCRIPTS+=("$SRC/tier3_0_plots.py")
+        RUN_ENVS+=("")
+        ;;
     all)
         RUN_SCRIPTS+=(
             "$SRC/tier1_0_corpus2zarr.py"
             "$SRC/tier1_5_build_faiss_index.py"
             "$SRC/tier2_0_concept_events.py"
+            "$SRC/tier3_0_plots.py"
         )
         RUN_ENVS+=("" "" "")
         ;;
