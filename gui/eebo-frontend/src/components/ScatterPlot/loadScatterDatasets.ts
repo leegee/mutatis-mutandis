@@ -50,7 +50,7 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
         const rawDatasets = await Promise.all(
             params.concepts.map((c: string) =>
                 loadJson<ConceptDataset>(
-                    `/data/umap/${ params.dataType }/${ c }.json`,
+                    `/data/scatter/${ params.dataType }/${ c }.json`,
                     c
                 )
             )
@@ -87,7 +87,7 @@ interface LoadBfsParams {
 
 export async function loadBfsDataset(params: LoadBfsParams) {
     const bfs = await loadJson(
-        "/data/umap/bfs_global/global.json",
+        "/data/scatter/bfs_global/global.json",
         "bfs_global"
     );
 
