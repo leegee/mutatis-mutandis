@@ -33,22 +33,3 @@ export function serverError(res: ServerResponse, error: unknown): void {
     error: error instanceof Error ? error.message : String(error),
   });
 }
-
-// // The Plugin                                                                     */
-// export function temporaryMiddlewarePlugin(rootDir: string): Plugin {
-//   const pool = new Pool({
-//     database: "eebo",
-//   });
-
-//   return {
-//     name: "vite-serve-out-json",
-
-//     configureServer(server) {
-//       server.middlewares.use(createWindowMiddleware(pool));
-
-//       server.middlewares.use(createDocumentMiddleware(pool));
-
-//       server.middlewares.use(createStaticMiddleware(rootDir));
-//     },
-//   };
-// }
