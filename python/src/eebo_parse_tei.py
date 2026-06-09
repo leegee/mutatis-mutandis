@@ -53,30 +53,18 @@ def normalize_early_modern(text: str) -> str:
 
 
 def render_text(node):
-    """
-    Render EEBO XML into plain text while preserving editorial GAP markers.
-
-    Invariant:
-    - GAP elements contribute one "_" per missing letter.
-    - Element structure is flattened into continuous text.
-    - Child tails are always preserved.
-    """
-
+    """Render EEBO XML into plain text while preserving editorial GAP markers."""
     parts = []
 
     if node.text:
         parts.append(node.text)
 
     for child in node:
-
         if child.tag.upper() == "GAP":
             extent = child.attrib.get("EXTENT", "")
-
             m = re.search(r"(\d+)", extent)
             n = int(m.group(1)) if m else 1
-
             parts.append("_" * n)
-
         else:
             parts.append(render_text(child))
 
@@ -100,7 +88,6 @@ def extract_year_and_slice(date_raw: str | None):
         if start <= pub_year <= end:
             return start, end, pub_year
 
-    # year parsed but outside known slice coverage
     return None, None, None
 
 
@@ -118,6 +105,8 @@ def to_doc_row(meta: dict) -> tuple:
         meta["pub_place"],
         meta["source_date_raw"],
         meta["token_count"],
+        meta.get("filepath"),
+        meta.get("lang"),
         # meta["slice_start"],
         # meta["slice_end"],
     )
@@ -127,6 +116,7 @@ def process_file(xml_path: Path):
     try:
         tree = etree.parse(str(xml_path))
     except Exception:
+        logger.warning(f"Failed to parse {xml_path}")
         return None
 
     doc_id_elem = tree.find(".//HEADER//IDNO[@TYPE='DLPS']")
@@ -135,6 +125,14 @@ def process_file(xml_path: Path):
 
     doc_id = doc_id_elem.text.strip()
 
+    lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
+    # header_lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
+    # try:
+    #     detected_lang = detect(raw_text[:5000])
+    # except Exception:
+    #     detected_lang = None
+    # lang = header_lang or detected_lang
+
     title_elem = tree.find(".//HEADER//TITLESTMT/TITLE")
     author_elem = tree.find(".//HEADER//TITLESTMT/AUTHOR")
     pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
@@ -142,8 +140,8 @@ def process_file(xml_path: Path):
     date_elem = tree.find(".//HEADER//SOURCEDESC//DATE")
 
     date_raw = safe_text(date_elem)
+    slice_start, slice_end, pub_year = extract_year_and_slice(date_raw)
 
-    # slice_start, slice_end, pub_year = extract_year_and_slice(date_raw)
     if pub_year is None:
         return None
 
@@ -151,10 +149,7 @@ def process_file(xml_path: Path):
     if not body:
         return None
 
-    raw_text = " ".join(
-        render_text(b)
-        for b in body
-    )
+    raw_text = " ".join(render_text(b) for b in body)
 
     normalized = normalize_early_modern(
         eebo_ocr_fixes.apply_ocr_fixes(raw_text)
@@ -165,8 +160,6 @@ def process_file(xml_path: Path):
 
     tokens = re.findall(r"\w+|[^\w\s]", normalized)
 
-    token_rows = [(i, tok) for i, tok in enumerate(tokens)]
-
     meta = {
         "doc_id": doc_id,
         "title": safe_text(title_elem),
@@ -175,12 +168,12 @@ def process_file(xml_path: Path):
         "pub_place": safe_text(place_elem),
         "pub_year": pub_year,
         "source_date_raw": date_raw,
-        # "slice_start": slice_start,
-        # "slice_end": slice_end,
         "token_count": len(tokens),
+        "filepath": str(xml_path.relative_to(config.BASE_DIR)),
+        "lang": lang,
     }
 
-    return meta, token_rows
+    return meta, tokens
 
 
 def process_file_to_temp(xml_path: Path):
@@ -193,7 +186,7 @@ def process_file_to_temp(xml_path: Path):
     tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="", suffix=".tsv")
     writer = csv.writer(tmp, delimiter="\t")
 
-    for i, tok in tokens:
+    for i, tok in enumerate(tokens):          # Simplified
         writer.writerow([meta["doc_id"], i, tok])
 
     tmp.close()
@@ -237,7 +230,7 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
     docs_seen = 0
 
     def log_progress():
-        if docs_seen % LOG_EVERY_N_DOCS == 0:
+        if docs_seen % LOG_EVERY_N_DOCS == 0 and docs_seen > 0:
             logger.info(f"[worker {os.getpid()}] ingested {docs_seen} docs")
 
     def flush_docs():
@@ -249,7 +242,7 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
         doc_batch = []
 
         if not ingest_all:
-            rows = filter_existing_docs(rows)
+            rows = filter_existing_docs(rows)   # Make sure this function exists
 
         if not rows:
             return
@@ -261,7 +254,7 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
             [
                 "doc_id", "title", "author", "pub_year",
                 "publisher", "pub_place", "source_date_raw",
-                "token_count", # "slice_start", "slice_end"
+                "token_count", "filepath", "lang", # "slice_start", "slice_end"
             ],
             rows,
         )
@@ -274,14 +267,8 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
         rows = [t for t in token_batch if t[0] in inserted_doc_ids]
         token_batch = []
 
-        if not rows:
-            return
-
-        stream_copy(
-            "tokens",
-            ["doc_id", "token_idx", "token"],
-            rows,
-        )
+        if rows:
+            stream_copy("tokens", ["doc_id", "token_idx", "token"], rows)
 
     for fp in files:
         try:
@@ -292,8 +279,6 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
             meta, token_file, _ = result
 
             doc_batch.append(to_doc_row(meta))
-
-            nonlocal_docs_seen = docs_seen + 1
 
             with open(token_file, "r", encoding="utf-8") as f:
                 for line in f:
@@ -306,7 +291,7 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
             if len(token_batch) >= batch_tokens:
                 flush_tokens()
 
-            docs_seen = nonlocal_docs_seen
+            docs_seen += 1
             log_progress()
 
         except Exception:
@@ -315,7 +300,6 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
 
     flush_docs()
     flush_tokens()
-
     logger.info(f"[worker {os.getpid()}] finished: {docs_seen} docs processed")
 
 
@@ -332,7 +316,6 @@ def ingest_xml_parallel(xml_dir: Path, max_workers: int = 4, batch_docs: int = 5
             ex.submit(_worker_ingest, chunk, batch_docs, batch_tokens, INGEST_ALL)
             for chunk in chunks
         ]
-
         for f in futures:
             f.result()
 
@@ -367,14 +350,16 @@ def main():
             batch_docs=config.BATCH_DOCS,
             batch_tokens=config.BATCH_TOKENS,
         )
-        set_document_languages()
-        conn.commit()
+        # set_document_languages() - try to avoid this using lang detection above
 
+    # Wait for other connections to finish
     with eebo_db.get_connection() as conn:
         while True:
             cur = conn.execute("""
                 SELECT count(*) FROM pg_stat_activity
-                WHERE datname = 'eebo' AND pid <> pg_backend_pid() AND state IN ('active', 'idle in transaction');
+                WHERE datname = 'eebo'
+                  AND pid <> pg_backend_pid()
+                  AND state IN ('active', 'idle in transaction');
             """)
             n = cur.fetchone()[0]
             if n == 0:
@@ -387,6 +372,7 @@ def main():
         eebo_db.refresh_views(conn)
 
     eebo_db.create_concurrent_indexes()
+
 
 if __name__ == "__main__":
     main()
