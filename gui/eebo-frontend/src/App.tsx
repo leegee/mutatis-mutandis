@@ -26,7 +26,7 @@ export default function App(props: any) {
   }
 
   const navItems = [
-    { path: "/scatter", icon: "scatter_plot", label: "UMAP" },
+    { path: "/scatter", icon: "scatter_plot", label: "Scatter Plot" },
     { path: "/aggregates", icon: "crowdsource", label: "Aggregates" },
     { path: "/graph2", icon: "orbit", label: "FDG" },
     { path: "/table", icon: "view_column", label: "Neighbourhood Table" },
