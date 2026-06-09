@@ -368,9 +368,19 @@ def main():
             batch_tokens=config.BATCH_TOKENS,
         )
         set_document_languages()
+        conn.commit()
 
     with eebo_db.get_connection() as conn:
-        conn.commit()
+        while True:
+            cur = conn.execute("""
+                SELECT count(*) FROM pg_stat_activity
+                WHERE datname = 'eebo' AND pid <> pg_backend_pid() AND state IN ('active', 'idle in transaction');
+            """)
+            n = cur.fetchone()[0]
+            if n == 0:
+                break
+
+    with eebo_db.get_connection() as conn:
         eebo_db.create_tokens_fk(conn)
         eebo_db.create_token_indexes(conn)
         eebo_db.create_tiered_token_indexes(conn)
