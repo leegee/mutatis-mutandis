@@ -99,9 +99,7 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
             with pg_conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT DISTINCT doc_id, pub_year
-                    FROM pamphlet_tokens
-                    WHERE doc_id = ANY(%s)
+                    SELECT  doc_id, pub_year FROM pamphlet_corpus WHERE doc_id = ANY(%s)
                     """,
                     (list(missing_doc_ids),)
                 )
@@ -370,17 +368,15 @@ def write_json(path, payload):
 
 
 
-def main():
+def main_OLD():
     parser = argparse.ArgumentParser()
     parser.add_argument("--concept", type=str, default=None)
-    parser.add_argument(
-        "--mode",
-        type=str,
-        default="full",
-        choices=["full", "clustering"]
-    )
+    parser.add_argument( "--mode", type=str, default="full", choices=["full", "clustering"] )
+    parser.add_argument( "--false_positives", type=str, nargs="*", default=[] )
     args = parser.parse_args()
+    concept = args.concept
     mode = args.mode
+    false_positives = getattr(args, "false_positives", [])
 
     logger.info("[tier3] loading index + lookup")
 
@@ -397,16 +393,14 @@ def main():
 
     all_event_ids = set()
 
-    # ------------------------------------------------------------------
+    #
     # Pass 1 — concept + clustering inputs
-    # ------------------------------------------------------------------
-
+    #
     if mode == "full":
-        for concept_name, concept in resolve_concepts(args):
+        for concept_name, concept in resolve_concepts(concept=concept, false_positives=false_positives):
             logger.info(f"[tier3] processing concept={concept_name}")
 
             seed_ids = list(lookup.iter_matching_event_ids(set(concept["forms"])))
-
             concept_sample = seed_ids[:1000]
             local_concept  = fit_umap_local(lookup, concept_sample)
 
@@ -474,10 +468,7 @@ def main():
 
             all_concept_events.extend(concept_sample)
 
-    # ------------------------------------------------------------------
     # BFS (full only)
-    # ------------------------------------------------------------------
-
     if mode == "full":
         bfs_ids   = bfs_event_expansion(
             lookup, index, all_concept_events,
@@ -489,17 +480,11 @@ def main():
         bfs_ids = []
         local_bfs = {}
 
-    # ------------------------------------------------------------------
     # Backfill safety
-    # ------------------------------------------------------------------
-
     if all_event_ids:
         backfill_missing_events_from_zarr(lookup, all_event_ids)
 
-    # ------------------------------------------------------------------
     # Global projection (SAFE GUARD ADDED)
-    # ------------------------------------------------------------------
-
     if all_event_ids:
         global_coords = fit_umap_global(lookup, all_event_ids)
         global_bounds = compute_bounds_from_coords(list(global_coords.values()))
@@ -512,10 +497,9 @@ def main():
 
     logger.info(f"[tier3] global bounds (padded): {global_bounds_padded}")
 
-    # ------------------------------------------------------------------
+    #
     # Pass 3 — concept + neighbour outputs
-    # ------------------------------------------------------------------
-
+    #
     for path, meta, event_ids, local_coords in buffered_concept + buffered_concept_neigh:
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[e] for e in event_ids])
@@ -533,10 +517,9 @@ def main():
             "points": points,
         })
 
-    # ------------------------------------------------------------------
+    #
     # Cluster outputs
-    # ------------------------------------------------------------------
-
+    #
     for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
         unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
         label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
@@ -574,10 +557,9 @@ def main():
             "points": points,
         })
 
-    # ------------------------------------------------------------------
+    #
     # BFS output (SAFE GUARD ADDED)
-    # ------------------------------------------------------------------
-
+    #
     if bfs_ids:
         local_bounds_bfs = add_padding(
             compute_bounds_from_coords([local_bfs[e] for e in bfs_ids])
@@ -605,8 +587,275 @@ def main():
         manifest["global"] = None
 
     manifest["globalBounds"] = global_bounds_padded
-
     write_json(UMAP_DIR / "manifest.json", manifest)
+
+    logger.info("[tier3] complete")
+
+
+def run_tier3_core(
+    *,
+    index,
+    lookup,
+    concept=None,
+    false_positives=None,
+    mode="full",
+    emit=None,
+):
+    logger.info("[tier3 run_tier3_core] Enter")
+
+    false_positives = false_positives or []
+
+    manifest = {"concepts": [], "global": None, "globalBounds": None}
+    all_concept_events = []
+    buffered_concept       = []
+    buffered_concept_neigh = []
+    buffered_clusters      = []
+    all_event_ids = set()
+
+    #
+    # Pass 1 — concept + clustering inputs
+    #
+    if mode == "full":
+        for concept_name, concept_def in resolve_concepts(concept=concept, false_positives=false_positives):
+            logger.info(f"[tier3] processing concept={concept_name}")
+            if emit:
+                emit("concept_start", {"concept": concept_name})
+
+            seed_ids       = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
+            concept_sample = seed_ids[:1000]
+            local_concept  = fit_umap_local(lookup, concept_sample)
+
+            buffered_concept.append((
+                CONCEPT_DIR / f"{concept_name}.json",
+                {"type": "concept", "concept": concept_name},
+                concept_sample,
+                local_concept,
+            ))
+            all_event_ids.update(concept_sample)
+
+            neigh_ids   = expand_neighbors(index, lookup, concept_sample, max_points=3000)
+            local_neigh = fit_umap_local(lookup, neigh_ids)
+
+            buffered_concept_neigh.append((
+                CONCEPT_NEIGH_DIR / f"{concept_name}.json",
+                {"type": "concept_neighbours", "concept": concept_name},
+                neigh_ids,
+                local_neigh,
+            ))
+            all_event_ids.update(neigh_ids)
+
+            logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)} points)")
+            cluster_local_coords, cluster_labels = fit_cluster_local(lookup, concept_sample)
+
+            buffered_clusters.append((
+                CLUSTER_DIR / f"{concept_name}.json",
+                {"type": "concept_clusters", "concept": concept_name},
+                concept_sample,
+                cluster_local_coords,
+                cluster_labels,
+            ))
+
+            all_concept_events.extend(concept_sample)
+
+            manifest["concepts"].append({
+                "name":               concept_name,
+                "concept":            f"/umap/concept/{concept_name}.json",
+                "concept_neighbours": f"/umap/concept_neighbours/{concept_name}.json",
+                "concept_clusters":   f"/umap/concept_clusters/{concept_name}.json",
+            })
+
+            if emit:
+                emit("concept_done", {"concept": concept_name})
+
+    else:
+        logger.info("[tier3] clustering-only mode (loading concept outputs)")
+
+        for concept_file in CONCEPT_DIR.glob("*.json"):
+            concept_name = concept_file.stem
+
+            with open(concept_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            concept_sample = [int(p["event_id"]) for p in data["points"]]
+
+            logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)})")
+            if emit:
+                emit("concept_start", {"concept": concept_name})
+
+            cluster_local_coords, cluster_labels = fit_cluster_local(lookup, concept_sample)
+
+            buffered_clusters.append((
+                CLUSTER_DIR / f"{concept_name}.json",
+                {"type": "concept_clusters", "concept": concept_name},
+                concept_sample,
+                cluster_local_coords,
+                cluster_labels,
+            ))
+
+            all_concept_events.extend(concept_sample)
+
+            if emit:
+                emit("concept_done", {"concept": concept_name})
+
+    # BFS (full only)
+    if mode == "full":
+        if emit:
+            emit("bfs_start", {})
+        bfs_ids   = bfs_event_expansion(lookup, index, all_concept_events, max_nodes=5000, depth=2)
+        local_bfs = fit_umap_local(lookup, bfs_ids)
+        all_event_ids.update(bfs_ids)
+    else:
+        bfs_ids   = []
+        local_bfs = {}
+
+    # Backfill safety
+    if all_event_ids:
+        backfill_missing_events_from_zarr(lookup, all_event_ids)
+
+    # Global projection
+    if emit:
+        emit("global_projection_start", {"n_events": len(all_event_ids)})
+
+    if all_event_ids:
+        global_coords        = fit_umap_global(lookup, all_event_ids)
+        global_bounds        = compute_bounds_from_coords(list(global_coords.values()))
+        global_bounds_padded = add_padding(global_bounds)
+    else:
+        logger.warning("[tier3] no event ids — skipping global projection")
+        global_coords        = {}
+        global_bounds        = {"minX": 0, "maxX": 0, "minY": 0, "maxY": 0}
+        global_bounds_padded = global_bounds
+
+    logger.info(f"[tier3] global bounds (padded): {global_bounds_padded}")
+
+    #
+    # Pass 3 — concept + neighbour outputs
+    #
+    for path, meta, event_ids, local_coords in buffered_concept + buffered_concept_neigh:
+        local_bounds = add_padding(
+            compute_bounds_from_coords([local_coords[e] for e in event_ids])
+        )
+        points = assemble_points(
+            event_ids, local_coords, global_coords,
+            local_bounds, global_bounds_padded,
+        )
+        write_json(path, {
+            **meta,
+            "bounds":       local_bounds,
+            "globalBounds": global_bounds_padded,
+            "points":       points,
+        })
+
+    # Cluster outputs
+    for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
+        unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
+        label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
+
+        extra = {
+            int(eid): {
+                "cluster_id":    int(cluster_labels[i]),
+                "cluster_label": label_map.get(cluster_labels[i]),
+            }
+            for i, eid in enumerate(event_ids)
+        }
+
+        local_bounds = add_padding(
+            compute_bounds_from_coords([local_coords[e] for e in event_ids])
+        )
+        points = assemble_points(
+            event_ids, local_coords, global_coords,
+            local_bounds, global_bounds_padded,
+            extra_fields=extra,
+        )
+        aggregates = compute_cluster_aggregates(event_ids, cluster_labels, lookup)
+
+        write_json(path, {
+            **meta,
+            "generated_at": datetime.now().isoformat(),
+            "n_events":     len(event_ids),
+            "bounds":       local_bounds,
+            "globalBounds": global_bounds_padded,
+            "clusters": {
+                "label_map":  {str(k): v for k, v in label_map.items()},
+                "aggregates": aggregates,
+            },
+            "points": points,
+        })
+
+    # BFS output
+    if bfs_ids:
+        local_bounds_bfs = add_padding(
+            compute_bounds_from_coords([local_bfs[e] for e in bfs_ids])
+        )
+        points_bfs = assemble_points(
+            bfs_ids, local_bfs, global_coords,
+            local_bounds_bfs, global_bounds_padded,
+        )
+        write_json(
+            BFS_DIR / "global.json",
+            {
+                "type":         "bfs_global",
+                "bounds":       local_bounds_bfs,
+                "globalBounds": global_bounds_padded,
+                "depth":        2,
+                "k":            K,
+                "points":       points_bfs,
+            }
+        )
+        manifest["global"] = "/umap/bfs_global/global.json"
+    else:
+        manifest["global"] = None
+
+    manifest["globalBounds"] = global_bounds_padded
+    write_json(UMAP_DIR / "manifest.json", manifest)
+
+    if emit:
+        emit("tier3_done", {})
+    logger.info("[tier3 run_tier3_core] Complete")
+
+
+def run_tier3_service(
+    *,
+    index,
+    lookup,
+    concept=None,
+    false_positives=None,
+    mode="full",
+    emit=None,
+):
+    logger.info("[tier3 run_tier3_service] Enter")
+    return run_tier3_core(
+        index=index,
+        lookup=lookup,
+        concept=concept,
+        false_positives=false_positives,
+        mode=mode,
+        emit=emit,
+    )
+
+
+def main():
+    logger.info("[tier3 main] Enter")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--concept", type=str, default=None)
+    parser.add_argument("--mode", type=str, default="full", choices=["full", "clustering"])
+    parser.add_argument("--false_positives", type=str, nargs="*", default=[])
+    args = parser.parse_args()
+
+    logger.info("[tier3] loading index + lookup")
+
+    lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
+    index  = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+
+    run_tier3_core(
+        index=index,
+        lookup=lookup,
+        concept=args.concept,
+        false_positives=args.false_positives,
+        mode=args.mode,
+        emit=None,
+    )
 
     logger.info("[tier3] complete")
 

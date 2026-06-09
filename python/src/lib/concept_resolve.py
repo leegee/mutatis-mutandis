@@ -1,18 +1,18 @@
 from difflib import get_close_matches
 from lib.eebo_config import CONCEPT_SETS
 
-def resolve_concepts(args, concept_sets=CONCEPT_SETS):
-    if not args.concept:
+def resolve_concepts(*, concept, false_positives, concept_sets=CONCEPT_SETS):
+    if not concept:
         return concept_sets.items()
 
-    concept_name = args.concept.upper()
+    concept_name = concept.upper()
 
-    if hasattr(args, "forms") and args.forms:
+    if hasattr(args, "forms") and forms:
         # Ad-hoc concept — no config entry required
-        forms = {f.strip() for f in args.forms.split(",")}
+        forms = {f.strip() for f in forms.split(",")}
         false_positives = set()
-        if hasattr(args, "false_positives") and args.false_positives:
-            false_positives = {f.strip() for f in args.false_positives.split(",")}
+        if hasattr(args, "false_positives") and false_positives:
+            false_positives = {f.strip() for f in false_positives.split(",")}
         return [(concept_name, {"forms": forms, "false_positives": false_positives})]
 
     # Named concept from config
