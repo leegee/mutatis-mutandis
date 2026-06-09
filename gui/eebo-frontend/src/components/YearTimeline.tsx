@@ -30,7 +30,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
   return (
     <aside class="surface-container row center-align small-padding" style={{ gap: "0.5pt", }} >
 
-      <button class="circle chip tiny no-border" onClick={() => A.stepYear(-1)} >
+      <button class="circle chip tiny no-border" onClick={() => A.stepYear(-1)} disabled={controls.fromYear !== controls.toYear}>
         <i>chevron_left</i>
         <span class="tooltip bottom">Retreat by one year</span>
       </button>
@@ -50,8 +50,36 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
           return (
             <button class={`no-border no-padding transparent ${ selected() ? "tertiary-container" : ""
               }`}
-              onClick={() => {
-                A.setSingleYear(bucket.year);
+              // onClick={() => A.setSingleYear(bucket.year)}
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  if (selected()) {
+                    if (controls.yearMode === "single") {
+                      // no-op — can't shrink a single year
+                    } else if (bucket.year === controls.fromYear) {
+                      A.setSingleYear(controls.toYear);
+                    } else if (bucket.year === controls.toYear) {
+                      A.setSingleYear(controls.fromYear);
+                    } else {
+                      // Interior year: trim toward the nearer end
+                      const distFrom = bucket.year - controls.fromYear;
+                      const distTo = controls.toYear - bucket.year;
+                      if (distFrom <= distTo) {
+                        A.setRange(bucket.year + 1, controls.toYear);
+                      } else {
+                        A.setRange(controls.fromYear, bucket.year - 1);
+                      }
+                    }
+                  } else {
+                    // Extend to include this year
+                    A.setRange(
+                      Math.min(controls.fromYear, bucket.year),
+                      Math.max(controls.toYear, bucket.year),
+                    );
+                  }
+                } else {
+                  A.setSingleYear(bucket.year);
+                }
               }}
               style={{
                 width: "12px",
@@ -76,17 +104,19 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
                         : "var(--secondary)",
                 }}
               />
-              <div class={`tooltip ${ props.tooltipPosition || 'top' }`}>
+              <div class={`tooltip max ${ props.tooltipPosition || 'top' }`}>
                 <span class="bold">{bucket.year} </span>
                 &mdash;
                 {bucket.count} events
+                <br /><br />
+                Hold <kbd>SHIFT</kbd> and click to select a range.
               </div>
             </button>
           );
         }}
       </For>
 
-      <button class="circle chip tiny no-border" onClick={() => A.stepYear(1)} >
+      <button class="circle chip tiny no-border" onClick={() => A.stepYear(1)} disabled={controls.fromYear !== controls.toYear}>
         <i>chevron_right</i>
         <span class="tooltip bottom">Advance by one year</span>
       </button>
