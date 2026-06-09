@@ -46,7 +46,7 @@ import umap
 import pacmap
 import sqlite3
 
-from lib.eebo_config import ZARR_ROOT, FAISS_TIER1_INDEX, UMAP_DIR, SQLITE_DB_PATH
+from lib.eebo_config import ZARR_ROOT, FAISS_TIER1_INDEX, PLOT_DIR, SQLITE_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_logging import logger
@@ -54,9 +54,9 @@ from lib.eebo_db import get_connection
 
 from tier2_0_concept_events import ZarrEventLookup
 
-CONCEPT_DIR       = UMAP_DIR / "concept"
-CONCEPT_NEIGH_DIR = UMAP_DIR / "concept_neighbours"
-BFS_DIR           = UMAP_DIR / "bfs_global"
+CONCEPT_DIR       = PLOT_DIR / "concept"
+CONCEPT_NEIGH_DIR = PLOT_DIR / "concept_neighbours"
+BFS_DIR           = PLOT_DIR / "bfs_global"
 
 K = 25
 
@@ -464,10 +464,11 @@ def main():
     manifest["global"]       = "/umap/bfs_global/global.json"
     manifest["globalBounds"] = global_bounds_padded
 
-    write_json(UMAP_DIR / "manifest.json", manifest)
+    write_json(PLOT_DIR / "manifest.json", manifest)
 
     logger.info("[tier3] complete")
 
 
 if __name__ == "__main__":
     main()
+

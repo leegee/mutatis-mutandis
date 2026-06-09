@@ -53,8 +53,8 @@ FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 FAISS_TIER1_INDEX = FAISS_INDEX_DIR / "tier1.index"
 FAISS_SLICE_DIR = FAISS_INDEX_DIR / "slices"
 
-UMAP_DIR = GUI_PUBLIC_DIR / "data" / "umap"
-UMAP_DIR.mkdir(parents=True, exist_ok=True)
+PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
+PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 BATCH_DOCS = 100
 BATCH_TOKENS = 10000
