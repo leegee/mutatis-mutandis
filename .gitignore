@@ -73,3 +73,4 @@ python/umap_*
 gui/eebo-frontend/public/data/clusters/
 gui/eebo-frontend/public/data/umap/
 docs/proposal-*
+gui/eebo-frontend/public/data/scatter/
