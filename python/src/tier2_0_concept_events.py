@@ -570,50 +570,32 @@ def main():
     logger.info("[tier2] init")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--concept",
-        type=str,
-        default=None,
+    parser.add_argument( "--concept", type=str, default=None,
         help="Run analysis for a single concept (case-insensitive)",
     )
-    parser.add_argument(
-        "--forms",
-        type=str,
-        default=None,
+    parser.add_argument( "--forms", type=str, default=None,
         help="Comma-separated list of forms (required if --concept is not in CONCEPT_SETS)",
     )
-    parser.add_argument(
-        "--false-positives",
-        type=str,
-        default=None,
+    parser.add_argument( "--false-positives", type=str, default=None,
         help="Comma-separated list of false positive forms to exclude",
     )
-    parser.add_argument(
-        "--clear",
-        action="store_true",
+    parser.add_argument( "--clear", action="store_true",
         help="Wipe and recreate SQLite database before writing",
     )
-    parser.add_argument(
-        "-d",
-        "--diagnostics",
-        action="store_true",
+    parser.add_argument( "-d", "--diagnostics", action="store_true",
         help="Enable Tier2 diagnostics",
     )
     args = parser.parse_args()
 
     if args.clear and args.concept:
-        logger.warning(
-            "[tier2] --clear with --concept will wipe all concepts before writing one"
-        )
+        logger.warning( "[tier2] --clear with --concept will wipe all concepts before writing one" )
 
     logger.info(f"[tier2] SQLITE_DB_PATH: {SQLITE_DB_PATH}")
 
     index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
 
     if index.ntotal == 0:
-        raise RuntimeError(
-            "FAISS index is empty — run tier1_5_build_faiss_index.py first"
-        )
+        raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
 
     # If a single concept is requested, restrict the lookup to its forms
     # so that only matching events are loaded into memory.
@@ -677,16 +659,8 @@ def main():
 
     if args.diagnostics:
         logger.info("--------------------------------------------------------")
-        knn_diagnostics(
-            lookup,
-            index,
-            CONCEPT_SETS["PREROGATIVE"]["forms"],
-        )
-        knn_diagnostics(
-            lookup,
-            index,
-            CONCEPT_SETS["LAW"]["forms"],
-        )
+        knn_diagnostics( lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"], )
+        knn_diagnostics( lookup, index, CONCEPT_SETS["LAW"]["forms"], )
         logger.info("--------------------------------------------------------")
 
     for concept_name, concept in concepts_to_run:
