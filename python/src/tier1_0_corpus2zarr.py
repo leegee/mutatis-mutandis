@@ -486,7 +486,7 @@ def main():
     proc.process(doc_id=args.doc_id)
 
     conn.close()
-    logger.inf("[Tier1 done]")
+    logger.info("[Tier1 done]")
 
 
 if __name__ == "__main__":
