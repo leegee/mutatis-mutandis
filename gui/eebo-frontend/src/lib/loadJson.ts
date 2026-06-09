@@ -14,7 +14,7 @@ export async function loadJson<T = any>(url: string, label?: string): Promise<T>
   // detect Vite / HTML fallback issue
   if (!contentType?.includes("application/json")) {
     throw new Error(
-      `${ label ?? url }: expected JSON, got ${ contentType }\n${ text.slice(0, 120) }`
+      `${ label ?? url }: expected JSON from ${ url }, got ${ contentType }\n${ text.slice(0, 120) }`
     );
   }
 
