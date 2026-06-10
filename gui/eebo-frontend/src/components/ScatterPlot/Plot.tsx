@@ -23,6 +23,7 @@ interface PlotProps {
   pointRadius?: number;
   opacity?: number;
   bfsOpacity?: number
+  neighbourOpacity?: number;
 
   // Events
   onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
@@ -92,7 +93,7 @@ function hslToRgb(
 }
 
 const GREY: [number, number, number, number] = [120, 120, 130, 140];
-const NEIGHBOURS: [number, number, number, number] = [120, 120, 170, 140];
+const NEIGHBOURS: [number, number, number] = [120, 120, 170];
 
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
 
@@ -141,13 +142,9 @@ export default function Plot(props: PlotProps) {
     const field = props.colorBy;
     const map = colorMap();
     return (p: PointData, origin?: string): [number, number, number, number] => {
-      if (origin === "neighbours") {
-        return NEIGHBOURS;
-        // Todo: maybe HSL manipulation? For now just change the alpha
-        // const [r, g, b, _a] = map.get(String(p[field] ?? "")) ?? GREY;
-        // return [r, g, b, 70] as [number, number, number, number];
-      }
-      return map.get(String(p[field] ?? "")) ?? GREY;
+      return origin === "neighbours"
+        ? [...NEIGHBOURS, props.neighbourOpacity ?? 200]
+        : map.get(String(p[field] ?? "")) ?? GREY;
     };
   });
 
@@ -183,7 +180,7 @@ export default function Plot(props: PlotProps) {
           },
           updateTriggers: {
             getPosition: [proj],
-            getFillColor: [props.colorBy, dataset.concept, dataset.origin],
+            getFillColor: [props.neighbourOpacity, props.colorBy, dataset.concept, dataset.origin],
           },
           onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
           onClick: (info: PickingInfo<PointData>) => {

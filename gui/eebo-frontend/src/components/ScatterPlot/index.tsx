@@ -15,7 +15,8 @@ export default function ConceptClusterPlot() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
     const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("concept");
     const [colorBy, setColorBy] = createSignal("cluster_label");
-    const [bfsOpacity, setBfsOpacity] = createSignal(5);
+    const [bfsOpacity, setBfsOpacity] = createSignal(3);
+    const [neighbourOpacity, setNeighbourOpacity] = createSignal(200);
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
     const sharedKey = () => ({
@@ -119,6 +120,7 @@ export default function ConceptClusterPlot() {
                                 <i>more_vert</i>
                             </button>
                             <menu class="no-round  bottom left no-wrap">
+
                                 <li class="middle-align top-padding">
                                     <div class="field middle-align prefix suffix">
                                         <nav>
@@ -132,8 +134,24 @@ export default function ConceptClusterPlot() {
                                         </nav>
                                         <output>BFS Background Opacity</output>
                                     </div>
-
                                 </li>
+
+                                <li class="middle-align top-padding">
+                                    <div class="field middle-align prefix suffix">
+                                        <nav>
+                                            <div class="slider medium responsive">
+                                                <input type='range' min={1} max={255} step={1}
+                                                    disabled={layerMode() !== "neighbours"}
+                                                    value={neighbourOpacity()}
+                                                    onInput={(e) => setNeighbourOpacity(Number(e.currentTarget.value))}
+                                                />
+                                                <span><i>brightness_6</i></span>
+                                            </div>
+                                        </nav>
+                                        <output>Neighbour Opacity</output>
+                                    </div>
+                                </li>
+
                             </menu>
                             <span class="tooltip right">More...</span>
                         </div>
@@ -146,6 +164,7 @@ export default function ConceptClusterPlot() {
                                 datasets={activeDatasets()}
                                 bfsDataset={bfs()}
                                 bfsOpacity={bfsOpacity()}
+                                neighbourOpacity={neighbourOpacity()}
                                 colorBy={colorBy()}
                                 colorByFields={COLOR_FIELDS}
                                 onPointHover={(pt, xy) =>
