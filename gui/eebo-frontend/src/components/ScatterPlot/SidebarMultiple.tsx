@@ -44,41 +44,41 @@ export default function SidebarMultiple() {
             {(selectedEventIds) => (
 
                 <Show when={selectedEventIds().size > 1}>
-                    <aside id="sidebar_container" class="surface-container-high">
-
-                        {/* HEADER */}
+                    <aside id="sidebar_container" class="surface-container-high padding">
                         <header>
-                            <h2>
-                                {selectedEventIds().size} selected events
-                            </h2>
-
-                            <button onClick={() => controlsActions.setSelectedEventIds(null)}>
-                                clear
-                            </button>
+                            <nav>
+                                <h2>
+                                    {selectedEventIds().size} selected events
+                                </h2>
+                                <button class="small border" onClick={() => controlsActions.setSelectedEventIds(null)}>
+                                    <i>close</i>
+                                </button>
+                            </nav>
                         </header>
 
-                        {/* GROUPED BODY */}
-                        <section>
+                        <section class="large-height scroll surface">
                             <For each={grouped()}>
                                 {(group) => (
-                                    <div class="doc-group">
-
-                                        <h3>
-                                            {group.doc} ({group.events.length})
-                                        </h3>
+                                    <section class="doc-group">
+                                        <button class="chip">
+                                            <span class="large-text">
+                                                {group.doc}
+                                            </span>
+                                            <span class="badge none">{group.events.length}</span>
+                                        </button>
 
                                         <For each={group.events}>
                                             {(e) => (
-                                                <div class="event-row">
-                                                    <div>{e.token}</div>
+                                                <div class="row left-margin">
+                                                    <q>{e.token}</q>
                                                     <small>
-                                                        {e.pub_year} · idx {e.token_idx}
+                                                        {e.pub_year} · Token {e.token_idx}
                                                     </small>
                                                 </div>
                                             )}
                                         </For>
 
-                                    </div>
+                                    </section>
                                 )}
                             </For>
                         </section>
