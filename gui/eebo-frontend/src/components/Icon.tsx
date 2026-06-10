@@ -1,4 +1,8 @@
-export function Icon(props) {
+interface Props {
+  class?: string;
+}
+
+export function Icon(props: Props) {
   return (
     <svg
       width="512"
