@@ -1,7 +1,7 @@
 import { type Component, createResource, For } from "solid-js";
-import { getYearBuckets } from "../state/selectors";
-import { controls } from "../state/controls.store";
-import { controlsActions as A } from "../state/controls.actions";
+import { getYearBuckets } from "../../state/selectors";
+import { controls } from "../../state/controls.store";
+import { controlsActions as A } from "../../state/controls.actions";
 
 interface YearTimelineProps {
   tooltipPosition?: 'top' | 'bottom' | null;

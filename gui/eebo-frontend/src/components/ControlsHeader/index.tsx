@@ -5,9 +5,9 @@ import {
   Show,
   type ParentComponent,
 } from "solid-js";
-import { controls, MAX_TOP_N } from "../state/controls.store";
-import { controlsActions as A } from "../state/controls.actions";
-import { listConcepts } from "../services/db";
+import { controls, MAX_TOP_N } from "../../state/controls.store";
+import { controlsActions as A } from "../../state/controls.actions";
+import { listConcepts } from "../../services/db";
 
 import "./ControlsHeader.css";
 import { YearTimeline } from "./YearTimeline";

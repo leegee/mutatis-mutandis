@@ -1,4 +1,4 @@
-// UmapPlot.tsx
+// ScatterPlot/Plot.tsx
 // Full-screen WebGL scatter plot for EEBO event data.
 // Pure render component: all state lives in the parent.
 
