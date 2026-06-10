@@ -10,6 +10,7 @@ import {
   createMemo,
   createResource,
   createSignal,
+  For,
   onCleanup,
   onMount,
   Show,
@@ -24,6 +25,7 @@ import { loadGraphData } from "./loadGraphData";
 import MsgSettingLayout from "../MsgSettingLayout";
 import ControlsHeader from "../ControlsHeader";
 import Sidebar from "./Sidebar";
+import { controlsActions } from "../../state/controls.actions";
 
 const USE_FIT_INTERVAL = true;
 
@@ -381,7 +383,90 @@ export const ConceptGraph: Component = () => {
     }}>
 
       <Show when={!data.loading}>
-        <ControlsHeader fdgControls={true} />
+        <ControlsHeader>
+          <Show when={controls.viewMode === "aggregated"}>
+            <div class="field middle-align">
+              <div class="slider tiny">
+                <input type="range"
+                  min={0.01} max={0.95} step={0.05}
+                  value={controls.minSimilarity}
+                  onInput={(e) => controlsActions.setMinSimilarity(Number(e.currentTarget.value))}
+                />
+                <span />
+                <span class="tooltip bottom" />
+              </div>
+              <output class="small-padding top-padding">
+                Min sim {controls.minSimilarity.toFixed(2)}
+              </output>
+              <span class="tooltip bottom">
+                Filters out weak connections by only showing relationships whose
+                <br />
+                similarity score is above the selected threshold.
+              </span>
+            </div>
+          </Show>
+
+          <Show when={controls.viewMode === "aggregated"}>
+            <div class="field suffix border middle-align">
+              <select
+                value={controls.maxHubs}
+                onChange={(e) => controlsActions.setMaxHubs(Number(e.currentTarget.value))}
+              >
+                <For each={[10, 20, 50, 100]}>
+                  {(n) => <option value={n}>{n}</option>}
+                </For>
+              </select>
+              <output>Max hubs</output>
+              <span class="tooltip bottom">
+                The maximum number of hubs to generate
+              </span>
+            </div>
+          </Show>
+
+          <Show when={controls.viewMode === "aggregated"}>
+            <div class="field middle-align">
+              <div class="slider tiny">
+                <input
+                  type="range"
+                  min={0.01}
+                  max={0.95}
+                  step={0.05}
+                  value={controls.minSimilarity}
+                  onInput={(e) => controlsActions.setMinSimilarity(Number(e.currentTarget.value))}
+                />
+                <span />
+                <span class="tooltip bottom" />
+              </div>
+              <output class="small-padding top-padding">
+                Min sim {controls.minSimilarity.toFixed(2)}
+              </output>
+              <span class="tooltip bottom">
+                Filters out weak connections by only showing relationships whose
+                <br />
+                similarity score is above the selected threshold.
+              </span>
+            </div>
+          </Show>
+
+          <Show when={controls.viewMode === "aggregated"}>
+            <div class="field suffix border middle-align">
+              <select
+                value={controls.maxHubs}
+                onChange={(e) => controlsActions.setMaxHubs(Number(e.currentTarget.value))}
+              >
+                <For each={[10, 20, 50, 100]}>
+                  {(n) => <option value={n}>{n}</option>}
+                </For>
+              </select>
+              <output>Max hubs</output>
+              <span class="tooltip bottom">
+                The maximum number of hubs to generate
+              </span>
+            </div>
+          </Show>
+
+        </ControlsHeader>
+
         <Show when={graphProgress() < 1}>
           <progress max={1} value={graphProgress()} />
         </Show>

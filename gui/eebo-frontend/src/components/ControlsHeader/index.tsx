@@ -25,7 +25,6 @@ interface Props {
 
 const ControlsHeader: ParentComponent<Props> = (props) => {
   const resolved = children(() => props.children);
-  const fdgControls = () => props.fdgControls ?? true;
 
   // Concepts list - refetches if dbReady changes (i.e. once, on init)
   const [conceptsResource] = createResource(listConcepts);
@@ -84,7 +83,6 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         <hr class="divider vertical max no-margin no-padding" />
 
-        {/* Top N  .field>:is(input,select) */}
         <Show when={!props.noTopN}>
           <div class="field middle-align prefix border small">
             <i class="tiny">tenancy</i>
@@ -106,83 +104,13 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           </div>
         </Show>
 
-        <Show when={fdgControls()}>
-          {/* <div class="field suffix border middle-align">
-            <hr class="divider vertical max no-margin no-padding" />
-
-            <select
-              value={controls.viewMode}
-              onChange={(e) => A.setViewMode(e.currentTarget.value as ViewMode)}
-            >
-              <option value="aggregated">Aggregated</option>
-              <option value="events">Events</option>
-            </select>
-            <output>View</output>
-            <span class="tooltip bottom">
-              Switches between aggregated hub-based view and raw event-level
-              graph view
-            </span>
-          </div>
-
-          <hr class="divider vertical max no-margin no-padding" /> */}
-
-          <Show when={controls.viewMode === "aggregated"}>
-            <div class="field middle-align">
-              <div class="slider tiny">
-                <input
-                  type="range"
-                  min={0.01}
-                  max={0.95}
-                  step={0.05}
-                  value={controls.minSimilarity}
-                  onInput={(e) =>
-                    A.setMinSimilarity(Number(e.currentTarget.value))
-                  }
-                />
-                <span />
-                <span class="tooltip bottom" />
-              </div>
-              <output class="small-padding top-padding">
-                Min sim {controls.minSimilarity.toFixed(2)}
-              </output>
-              <span class="tooltip bottom">
-                Filters out weak connections by only showing relationships whose
-                <br />
-                similarity score is above the selected threshold.
-              </span>
-            </div>
-          </Show>
-
-          <Show when={controls.viewMode === "aggregated"}>
-            <div class="field suffix border middle-align">
-              <select
-                value={controls.maxHubs}
-                onChange={(e) => A.setMaxHubs(Number(e.currentTarget.value))}
-              >
-                <For each={[10, 20, 50, 100]}>
-                  {(n) => <option value={n}>{n}</option>}
-                </For>
-              </select>
-              <output>Max hubs</output>
-              <span class="tooltip bottom">
-                The maximum number of hubs to generate
-              </span>
-            </div>
-          </Show>
-        </Show>
-
-
         <Show when={props.includeHubSpread}>
 
           <hr class="divider vertical max no-margin no-padding" />
 
           <div class="field middle-align">
             <div class="slider tiny">
-              <input
-                type="range"
-                min={0.2}
-                max={2.0}
-                step={0.05}
+              <input type="range" min={0.2} max={2.0} step={0.05}
                 value={controls.hubSpread}
                 onInput={(e) => A.setHubSpread(Number(e.currentTarget.value))}
               />
