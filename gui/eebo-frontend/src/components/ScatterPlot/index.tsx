@@ -1,14 +1,16 @@
 import { createSignal, createResource, Show } from "solid-js";
 
 import type { PointData, ViewBounds } from "./types";
+import type { Id } from "./SelectionPlugin/types";
+
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
 import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets";
 import { controls } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
+import Sidebar from "./Sidebar";
 import SidebarMultiple from "./SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
-import type { Id } from "./SelectionPlugin/types";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
@@ -177,7 +179,12 @@ export default function ConceptClusterPlot() {
                             />
                         </div>
 
-                        <SidebarMultiple />
+                        <Show when={controls.selectedEventId}>
+                            <Sidebar />
+                        </Show>
+                        <Show when={controls.selectedEventIds && controls.selectedEventIds.size > 1} fallback={<Sidebar />}>
+                            <SidebarMultiple />
+                        </Show>
                     </div>
                 </Show>
             </Show>

@@ -1,71 +1,91 @@
-import { createResource, Show } from "solid-js";
+import { createMemo, createResource, For, Show } from "solid-js";
 import { controls } from "../../state/controls.store";
 import { queryEventById } from "../../services/db";
 import { controlsActions } from "../../state/controls.actions";
 
-async function fetchWindow(docId: string, tokenIdx: number) {
-    const res = await fetch(`/api/window/${ docId }/${ tokenIdx }`);
-    if (!res.ok) throw new Error("Failed to load window");
-    return res.text();
-}
-
 export default function SidebarMultiple() {
-    const [event] = createResource(
-        () => controls.selectedEventId,
-        (id) => (id ? queryEventById(id) : null)
-    );
 
-    const [windowHtml] = createResource(
-        event,
-        (e) => {
-            if (!e?.doc_id || e.token_idx == null) return null;
-            return fetchWindow(e.doc_id, e.token_idx);
+    // selection → stable array snapshot
+    const selectedIds = createMemo(() => controls.selectedEventIds ? [...controls.selectedEventIds] : []);
+
+    // load events in parallel
+    const [events] = createResource(selectedIds, async (ids) => {
+        if (!ids.length) return [];
+
+        return Promise.all(
+            ids.map((id) => queryEventById(id))
+        );
+    });
+
+    // group by document (corpus-first mode)
+    const grouped = createMemo(() => {
+        const evs = events();
+        if (!evs) return [];
+
+        const map = new Map<string, any[]>();
+
+        for (const e of evs) {
+            if (!e) continue;
+            const list = map.get(e.doc_id) ?? [];
+            list.push(e);
+            map.set(e.doc_id, list);
         }
-    );
+
+        // stable ordering: document → token_idx
+        return [...map.entries()]
+            .map(([doc, evs]) => ({
+                doc,
+                events: evs.sort((a, b) => a.token_idx - b.token_idx)
+            }));
+    });
 
     return (
-        <Show when={controls.selectedEventId}>
-            <Show when={event()} fallback={null}>
-                {(e) => (
-                    <aside
-                        id="sidebar_container"
-                        class="min surface-container-high scroll medium-elevate border no-padding no-margin no-round"
-                    >
-                        <article>
-                            <header>
-                                <div class="row">
-                                    <h2 class="max large">
-                                        <q>{e().token}</q>
-                                    </h2>
-                                    <button class="link border" onClick={() => controlsActions.setSelectedEventId(null)} >
-                                        <i>close</i>
-                                    </button>
-                                </div>
-                            </header>
+        <Show when={controls.selectedEventIds}>
+            {(selectedEventIds) => (
 
-                            <section class="small-padding">
-                                <div class="small-text">
-                                    <div><b>Event ID:</b> {e().event_id}</div>
-                                    <div><b>Doc:</b> {e().doc_id}</div>
-                                    <div><b>Year:</b> {e().pub_year}</div>
-                                    <div><b>Token Index:</b> {e().token_idx}</div>
-                                </div>
-                            </section>
+                <Show when={selectedEventIds().size > 1}>
+                    <aside id="sidebar_container" class="surface-container-high">
 
-                            <section class="small-padding">
-                                <Show
-                                    when={windowHtml()}
-                                    fallback={<span>Loading context...</span>}
-                                >
-                                    {(html) => (
-                                        <div innerHTML={html()} />
-                                    )}
-                                </Show>
-                            </section>
-                        </article>
+                        {/* HEADER */}
+                        <header>
+                            <h2>
+                                {selectedEventIds().size} selected events
+                            </h2>
+
+                            <button onClick={() => controlsActions.setSelectedEventIds(null)}>
+                                clear
+                            </button>
+                        </header>
+
+                        {/* GROUPED BODY */}
+                        <section>
+                            <For each={grouped()}>
+                                {(group) => (
+                                    <div class="doc-group">
+
+                                        <h3>
+                                            {group.doc} ({group.events.length})
+                                        </h3>
+
+                                        <For each={group.events}>
+                                            {(e) => (
+                                                <div class="event-row">
+                                                    <div>{e.token}</div>
+                                                    <small>
+                                                        {e.pub_year} · idx {e.token_idx}
+                                                    </small>
+                                                </div>
+                                            )}
+                                        </For>
+
+                                    </div>
+                                )}
+                            </For>
+                        </section>
+
                     </aside>
-                )}
-            </Show>
+                </Show>
+            )}
         </Show>
     );
 }
