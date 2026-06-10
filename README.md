@@ -270,7 +270,34 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 ### DB
 
 - Tidy MV `pamphlet_tokens` and use a join rather than cutting corners
-- Tidy schema
+- Tidy schema and put it in its own file!
+
+### EEBO-TCP Language Composition
+
+Within the activated corpus bounds prior to `langdetect`:
+
+```
+eebo=# SELECT lang, COUNT(*) AS count
+eebo-# FROM documents
+eebo-# GROUP BY lang
+eebo-# ORDER BY count DESC;
+ lang | count
+------+-------
+ eng  | 39623
+ lat  |   255
+ wel  |    83
+ fre  |    48
+ frm  |     8
+ dut  |     7
+ mul  |     2
+ sco  |     2
+ spa  |     2
+ ger  |     2
+ grc  |     1
+ gla  |     1
+ new  |     1
+ por  |     1
+ ```
 
 ## Screenshots
 

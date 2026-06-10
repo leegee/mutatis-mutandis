@@ -19,7 +19,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 from psycopg import sql
 import xml.etree.ElementTree as etree
-
+import langdetect
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
@@ -126,12 +126,14 @@ def process_file(xml_path: Path):
     doc_id = doc_id_elem.text.strip()
 
     lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
-    # header_lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
-    # try:
-    #     detected_lang = detect(raw_text[:5000])
-    # except Exception:
-    #     detected_lang = None
-    # lang = header_lang or detected_lang
+    if (lang == "en"):
+        lang = "eng"
+    elif not lang:
+        try:
+            detected_lang = langdetect.detect(raw_text[:5000])
+        except Exception:
+            detected_lang = None
+        lang = detected_lang
 
     title_elem = tree.find(".//HEADER//TITLESTMT/TITLE")
     author_elem = tree.find(".//HEADER//TITLESTMT/AUTHOR")
