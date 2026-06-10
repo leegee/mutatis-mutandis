@@ -312,14 +312,6 @@ export default function Plot(props: PlotProps) {
     deck?.setProps({ layers: layers() });
   });
 
-  // Debug
-  createEffect(() => {
-    console.log(
-      "[ConceptClusterPlot] selected changed",
-      selected().size
-    );
-  });
-
   onCleanup(() => {
     deck?.finalize();
     deck = null;
