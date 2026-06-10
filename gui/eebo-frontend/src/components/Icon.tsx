@@ -1,5 +1,6 @@
 interface Props {
   class?: string;
+  style?: string;
 }
 
 export function Icon(props: Props) {
@@ -10,6 +11,7 @@ export function Icon(props: Props) {
       viewBox="0 0 512 512"
       xmlns="http://www.w3.org/2000/svg"
       class={props.class}
+      style={props.style}
     >
       <rect width="512" height="512" rx="96" fill="#0F172A" />
 
