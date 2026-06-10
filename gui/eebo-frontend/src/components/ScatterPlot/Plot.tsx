@@ -293,13 +293,13 @@ export default function Plot(props: PlotProps) {
       .use(new CanvasDragPlugin(canvas, deck, controller));
 
     canvas.addEventListener("pointerup", async (e) => {
-      const pick = deck?.pickObjectsAsync({
+      const pick = await deck?.pickObjectsAsync({
         x: e.offsetX,
         y: e.offsetY,
       });
 
-      if (pick?.object) {
-        controller?.dispatch({ type: "click", payload: pick.object });
+      if (pick) {
+        controller?.dispatch({ type: "click", payload: pick });
       } else {
         controller?.dispatch({ type: "background-click", payload: null });
       }
