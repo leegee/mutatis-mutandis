@@ -27,7 +27,7 @@ import {
   onCleanup,
 } from "solid-js";
 
-import type { ConceptEvent, Neighbour } from "../types/context-graph.types";
+import type { ConceptEvent, Neighbour } from "../types";
 import { createTokenWindowResource } from "../services/tokenWindowApi";
 import { controls } from "../state/controls.store";
 import { getYearBounds, getYearFiltered } from "../state/selectors";
