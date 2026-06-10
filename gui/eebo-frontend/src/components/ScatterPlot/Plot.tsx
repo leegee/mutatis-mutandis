@@ -213,12 +213,6 @@ export default function Plot(props: PlotProps) {
             getFillColor: [props.neighbourOpacity, props.colorBy, dataset.concept, dataset.origin, selected()],
           },
           onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-          // onClick: (info) => {
-          //   controller?.dispatch({
-          //     type: "click",
-          //     payload: info.object ?? null,
-          //   });
-          // }
         });
 
         return dataset.origin === "neighbours"
@@ -299,7 +293,7 @@ export default function Plot(props: PlotProps) {
       .use(new CanvasDragPlugin(canvas, deck, controller));
 
     canvas.addEventListener("pointerup", async (e) => {
-      const pick = deck?.pickObject({
+      const pick = deck?.pickObjectsAsync({
         x: e.offsetX,
         y: e.offsetY,
       });
