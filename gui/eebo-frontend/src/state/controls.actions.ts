@@ -43,6 +43,12 @@ export const controlsActions = {
 
     setSelectedEventId(id: string | null) {
         setControls("selectedEventId", id);
+        if (id === null) setControls("selectedEventIds", null);
+    },
+
+    setSelectedEventIds(ids: Set<string> | null) {
+        setControls("selectedEventIds", ids);
+        if (ids === null || ids.size === 0) setControls("selectedEventId", null);
     },
 
     setViewMode(mode: ViewMode) {

@@ -6,8 +6,9 @@ import ControlsHeader from "../ControlsHeader";
 import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets";
 import { controls } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
-import Sidebar from "./Sidebar";
+import SidebarMultiple from "./SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
+import type { Id } from "./SelectionPlugin/types";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
@@ -66,9 +67,9 @@ export default function ConceptClusterPlot() {
     const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
-    function handleClick(point: PointData) {
-        console.log("[ConceptClusterPlot] clicked event:", point.event_id);
-        controlsActions.setSelectedEventId(point.event_id);
+    function handleSelectionChange(event_ids: Id[]) {
+        console.log("[ConceptClusterPlot] handleSelectionChange event:", event_ids.map(_ => _));
+        controlsActions.setSelectedEventIds(new Set(event_ids))
     }
 
     function handleBoundsChange(_bounds: ViewBounds) {
@@ -170,12 +171,13 @@ export default function ConceptClusterPlot() {
                                 onPointHover={(pt, xy) =>
                                     setHovered(pt && xy ? { point: pt, x: xy[0], y: xy[1] } : null)
                                 }
-                                onPointClick={handleClick}
                                 onBoundsChange={handleBoundsChange}
+                                selected={controls.selectedEventIds}
+                                onSelectionChange={handleSelectionChange}
                             />
                         </div>
 
-                        <Sidebar />
+                        <SidebarMultiple />
                     </div>
                 </Show>
             </Show>

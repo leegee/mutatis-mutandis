@@ -10,6 +10,10 @@ import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./style.css";
 import type { BfsDataset, ConceptDataset, PointData, ViewBounds } from "./types";
+import { CanvasDragPlugin } from "./SelectionPlugin/CanvasDragPlugin";
+import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
+import { SelectionController } from "./SelectionPlugin/SelectionController";
+import type { Id, ScreenRect } from "./SelectionPlugin/types";
 
 interface PlotProps {
   // Data
@@ -24,14 +28,25 @@ interface PlotProps {
   opacity?: number;
   bfsOpacity?: number
   neighbourOpacity?: number;
+  selected?: Set<Id> | null;
 
   // Events
   onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
-  onPointClick?: (point: PointData) => void;
   onPointRightClick?: (point: PointData) => void;
   onBoundsChange?: (bounds: ViewBounds) => void;
   onSelectionChange?: (ids: string[]) => void;
 }
+
+
+const GREY: [number, number, number, number] = [120, 120, 130, 140];
+const NEIGHBOURS: [number, number, number] = [120, 120, 170];
+const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
+const INITIAL_VIEW_STATE: OrthographicViewState = {
+  target: [0.5, 0.5, 0],
+  zoom: 10,
+  minZoom: -2,
+  maxZoom: 20,
+};
 
 // Deterministic hash so the same value always maps to the same colour,
 // regardless of dataset load order or concept switching.
@@ -92,11 +107,6 @@ function hslToRgb(
   ];
 }
 
-const GREY: [number, number, number, number] = [120, 120, 130, 140];
-const NEIGHBOURS: [number, number, number] = [120, 120, 170];
-
-const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
-
 function getPosition(
   p: PointData,
   projection: "local" | "global"
@@ -106,18 +116,13 @@ function getPosition(
     : [p.nx, p.ny, 0];
 }
 
-const INITIAL_VIEW_STATE: OrthographicViewState = {
-  target: [0.5, 0.5, 0],
-  zoom: 10,
-  minZoom: -2,
-  maxZoom: 20,
-};
-
 export default function Plot(props: PlotProps) {
   let canvas!: HTMLCanvasElement;
   let deck: Deck<OrthographicView> | null = null;
+  let controller: SelectionController<PointData> | undefined;
 
   const [_viewState, setViewState] = createSignal<OrthographicViewState>(INITIAL_VIEW_STATE);
+  const [dragRect, setDragRect] = createSignal<ScreenRect | null>(null);
 
   // Flatten all points across all datasets for colour map derivation.
   // const allPoints = createMemo<PointData[]>(() =>
@@ -138,14 +143,39 @@ export default function Plot(props: PlotProps) {
     return buildColorMap(values);
   });
 
+  const selected = createMemo(() => props.selected ?? new Set<Id>());
+
   const getColor = createMemo(() => {
     const field = props.colorBy;
     const map = colorMap();
+    const sel = selected();
+
     return (p: PointData, origin?: string): [number, number, number, number] => {
-      return origin === "neighbours"
-        ? [...NEIGHBOURS, props.neighbourOpacity ?? 200]
-        : map.get(String(p[field] ?? "")) ?? GREY;
-    };
+      const base =
+        origin === "neighbours"
+          ? [...NEIGHBOURS, props.neighbourOpacity ?? 200]
+          : map.get(String(p[field] ?? "")) ?? GREY;
+
+      // selection emphasis
+      if (sel.size > 0) {
+        if (sel.has(p.event_id)) {
+          return [
+            Math.min(base[0] * 1.25, 255),
+            Math.min(base[1] * 1.25, 255),
+            Math.min(base[2] * 1.25, 255),
+            255
+          ];
+        } else {
+          return [
+            Math.min(base[0] * .5, base[0]),
+            Math.min(base[1] * .5, base[1]),
+            Math.min(base[2] * .5, base[2]),
+            Math.min(base[3]),
+          ]
+        }
+      }
+      return base as [number, number, number, number];
+    }
   });
 
 
@@ -180,13 +210,17 @@ export default function Plot(props: PlotProps) {
           },
           updateTriggers: {
             getPosition: [proj],
-            getFillColor: [props.neighbourOpacity, props.colorBy, dataset.concept, dataset.origin],
+            getFillColor: [props.neighbourOpacity, props.colorBy, dataset.concept, dataset.origin, selected()],
           },
           onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-          onClick: (info: PickingInfo<PointData>) => {
-            if (info.object) props.onPointClick?.(info.object);
-          },
+          onClick: (info) => {
+            controller?.dispatch({
+              type: "click",
+              payload: info.object ?? null,
+            });
+          }
         });
+
         return dataset.origin === "neighbours"
           ? [[...n, layer], c]
           : [n, [...c, layer]];
@@ -253,12 +287,37 @@ export default function Plot(props: PlotProps) {
       style: { width: "100%", height: "100%" },
     });
 
+    controller = new SelectionController<PointData>({
+      mode: "additive",
+      multiKey: "Shift",
+    });
+
+    controller.setChangeHandler((set) => {
+      props.onSelectionChange?.([...set]);
+    });
+
+    controller.setDragPreview = (rect) => {
+      setDragRect(rect);
+    };
+
+    controller
+      .use(new DeckClickPlugin(deck, controller))
+      .use(new CanvasDragPlugin(canvas, deck, controller));
+
     fitZoom();
   });
 
   // Single source of truth for all layers, including BFS.
   createEffect(() => {
     deck?.setProps({ layers: layers() });
+  });
+
+  // Debug
+  createEffect(() => {
+    console.log(
+      "[ConceptClusterPlot] selected changed",
+      selected().size
+    );
   });
 
   onCleanup(() => {
@@ -269,6 +328,23 @@ export default function Plot(props: PlotProps) {
   return (
     <article id="UmapPlot">
       <canvas ref={canvas} />
+
+      {dragRect() && (
+        <div
+          style={{
+            position: "absolute",
+            "z-index": 10,
+            left: `${ dragRect()!.x }px`,
+            top: `${ dragRect()!.y }px`,
+            width: `${ dragRect()!.width }px`,
+            height: `${ dragRect()!.height }px`,
+            border: "2px solid rgba(120,160,255,1)",
+            "background-color": "rgba(120,160,255,0.15)",
+            "pointer-events": "none",
+          }}
+        />
+      )}
+
     </article>
   );
 }

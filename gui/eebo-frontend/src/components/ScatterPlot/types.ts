@@ -1,6 +1,7 @@
 import type { Event } from '../../types'
 
 export interface PointData extends Omit<Event, "vector_id"> {
+  event_id: string;
   token_idx: number;
   // local projection
   nx: number;
