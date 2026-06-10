@@ -44,16 +44,12 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
               <div class="row no-space">
 
-                <div class="field label border mid-align">
-
-                  <MultiCreatableSelect
-                    selected={controls.conceptSelection}
-                    options={concepts()}
-                    onChange={A.setConceptSelection}
-                    onCreateOption={() => Promise.resolve(false)}
-                  />
-                  <div class="tooltip bottom">Select one or more concepts</div>
-                </div>
+                <MultiCreatableSelect
+                  selected={controls.conceptSelection}
+                  options={concepts()}
+                  onChange={A.setConceptSelection}
+                  onCreateOption={() => Promise.resolve(false)}
+                />
 
                 <div class="no-round bottom">
                   <button class="transparent circle">
