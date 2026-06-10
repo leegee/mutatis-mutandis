@@ -3,6 +3,8 @@ import { getYearBuckets } from "../../state/selectors";
 import { controls } from "../../state/controls.store";
 import { controlsActions as A } from "../../state/controls.actions";
 
+import "./YearTimeline.css";
+
 interface YearTimelineProps {
   tooltipPosition?: 'top' | 'bottom' | null;
   onSelect?: (year: number) => void;
@@ -28,7 +30,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
   };
 
   return (
-    <aside class="surface-container row center-align small-padding" style={{ gap: "0.5pt", }} >
+    <aside class="year-timeilne surface-container row center-align small-padding">
 
       <button class="circle chip tiny no-border" onClick={() => A.stepYear(-1)} disabled={controls.fromYear !== controls.toYear}>
         <i>chevron_left</i>
@@ -48,9 +50,8 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
             );
 
           return (
-            <button class={`no-border no-padding transparent ${ selected() ? "tertiary-container" : ""
+            <button class={`year no-border no-padding transparent ${ selected() ? "tertiary-container" : ""
               }`}
-              // onClick={() => A.setSingleYear(bucket.year)}
               onClick={(e) => {
                 if (e.shiftKey) {
                   if (selected()) {
@@ -81,28 +82,17 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
                   A.setSingleYear(bucket.year);
                 }
               }}
-              style={{
-                width: "12px",
-                height: "40px",
-                display: "flex",
-                "align-items": "flex-end",
-                "justify-content": "center",
-                cursor: "crosshair",
-              }}
             >
-              <div
-                style={{
-                  width: "8px",
-                  height: `${ height() }px`,
-                  "border-radius": "2px",
-                  opacity: bucket.count === 0 ? 0.15 : 1,
-                  background:
-                    bucket.count === 0
-                      ? "var(--outline)"
-                      : selected()
-                        ? "var(--primary)"
-                        : "var(--secondary)",
-                }}
+              <div class="year-data" style={{
+                height: `${ height() }px`,
+                opacity: bucket.count === 0 ? 0.15 : 1,
+                background:
+                  bucket.count === 0
+                    ? "var(--outline)"
+                    : selected()
+                      ? "var(--primary)"
+                      : "var(--secondary)",
+              }}
               />
               <div class={`tooltip max ${ props.tooltipPosition || 'top' }`}>
                 <span class="bold">{bucket.year} </span>
@@ -128,7 +118,6 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
         <span class="tooltip bottom">Show all years</span>
       </button>
 
-
-    </aside >
+    </aside>
   );
 };

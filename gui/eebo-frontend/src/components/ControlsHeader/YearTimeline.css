@@ -1,0 +1,24 @@
+.year-timeilne {
+    gap: 0;
+
+    button.year {
+        width: 12px;
+        height: 40px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        cursor: crosshair;
+        border-radius: 0;
+
+        .year-data {
+            width: 8px;
+            border-radius: 0;
+
+        }
+
+        &:hover {
+            background-color: var(--on-primary) !important;
+        }
+    }
+
+}

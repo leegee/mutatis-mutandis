@@ -5,7 +5,7 @@ import { controlsActions } from "../../state/controls.actions";
 
 export default function SidebarMultiple() {
 
-    // selection → stable array snapshot
+    // selection to stable array snapshot
     const selectedIds = createMemo(() => controls.selectedEventIds ? [...controls.selectedEventIds] : []);
 
     // load events in parallel
@@ -31,7 +31,7 @@ export default function SidebarMultiple() {
             map.set(e.doc_id, list);
         }
 
-        // stable ordering: document → token_idx
+        // stable ordering: document to token_idx
         return [...map.entries()]
             .map(([doc, evs]) => ({
                 doc,
