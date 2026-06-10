@@ -49,6 +49,7 @@ export const controlsActions = {
     setSelectedEventIds(ids: Set<string> | null) {
         setControls("selectedEventIds", ids);
         if (ids === null || ids.size === 0) setControls("selectedEventId", null);
+        else this.setSelectedEventId(ids?.values().next().value ?? null)
     },
 
     setViewMode(mode: ViewMode) {
