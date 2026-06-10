@@ -43,7 +43,7 @@ export default function App(props: any) {
             class="extra transparent no-padding no-margin"
             onClick={() => setOpen(!open())}
           >
-            <Icon style="scale:3; margin-top: -.2rem" />
+            <Icon style="scale:3; margin-top: -.2rem; opacity: 0.5" />
           </button>
         </header>
 
