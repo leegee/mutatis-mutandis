@@ -222,7 +222,7 @@ export default function Plot(props: PlotProps) {
       [[], []] as [ScatterplotLayer<PointData>[], ScatterplotLayer<PointData>[]]
     );
 
-    const bfsLayer = props.bfsDataset && props.projection === "global" && new ScatterplotLayer<PointData>({
+    const bfsLayer = props.bfsDataset && bfsOpacity && props.projection === "global" && new ScatterplotLayer<PointData>({
       id: "bfs-global",
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       data: props.bfsDataset.points,

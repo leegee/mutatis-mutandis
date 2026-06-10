@@ -17,7 +17,7 @@ const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 export default function ConceptClusterPlot() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
     const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("concept");
-    const [colorBy, setColorBy] = createSignal("cluster_label");
+    const [colorBy, setColorBy] = createSignal("pub_year");
     const [bfsOpacity, setBfsOpacity] = createSignal(3);
     const [neighbourOpacity, setNeighbourOpacity] = createSignal(200);
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
@@ -110,10 +110,12 @@ export default function ConceptClusterPlot() {
                         <div class="field border middle-align">
                             <select class="small-padding" value={colorBy()}
                                 onChange={e => setColorBy(e.currentTarget.value)}>
-                                {COLOR_FIELDS.map(
-                                    f => <option value={f}>{
-                                        f.replace('_', ' ').replace(/^(.)/, _ => _.toLocaleUpperCase())
-                                    }</option>)}
+                                {COLOR_FIELDS
+                                    .filter(clrMode => !(clrMode.includes('cluster') && layerMode() !== 'clusters'))
+                                    .map(
+                                        v => <option value={v}>{
+                                            v.replace('_', ' ').replace(/^(.)/, _ => _.toLocaleUpperCase())
+                                        }</option>)}
                             </select>
                             <div class="tooltip bottom">Point colour mode</div>
                         </div>
