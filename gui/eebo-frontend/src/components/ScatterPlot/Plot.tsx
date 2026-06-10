@@ -297,12 +297,7 @@ export default function Plot(props: PlotProps) {
         x: e.offsetX,
         y: e.offsetY,
       });
-
-      if (pick) {
-        controller?.dispatch({ type: "click", payload: pick });
-      } else {
-        controller?.dispatch({ type: "background-click", payload: null });
-      }
+      controller?.dispatch({ type: pick ? "click" : "background-click", payload: pick });
     });
 
     fitZoom();
