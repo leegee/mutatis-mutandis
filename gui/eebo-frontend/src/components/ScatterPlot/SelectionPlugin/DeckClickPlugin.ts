@@ -15,6 +15,9 @@ export class DeckClickPlugin<T extends { event_id: Id }> {
     private onClick = (info: PickingInfo<T>) => {
         if (!info.object) return;
 
+        // background-click
+        console.log(info);
+
         this.controller.dispatch({
             type: "click",
             payload: info.object,

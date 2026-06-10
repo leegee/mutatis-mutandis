@@ -1,3 +1,4 @@
+import type { PointData } from "../types";
 import type { Id, ScreenRect, SelectionEvent, SelectionOptions, SelectionPlugin } from "./types";
 
 export class SelectionController<T extends { event_id: Id }> {
@@ -18,17 +19,18 @@ export class SelectionController<T extends { event_id: Id }> {
         window.addEventListener("keyup", this.onKeyUp);
     }
 
-
-    // Plugin system
     use(plugin: SelectionPlugin) {
         this.plugins.push(plugin);
         return this;
     }
 
-
     // Event entry point
     dispatch(event: SelectionEvent<any>) {
         switch (event.type) {
+            case "background-click":
+                this.handleBgClick();
+                break;
+
             case "click":
                 this.handleClick(event.payload as T);
                 break;
@@ -39,16 +41,18 @@ export class SelectionController<T extends { event_id: Id }> {
         }
     }
 
-
     // Core logic
+
+    private handleBgClick() {
+        this.clear();
+    }
+
     private handleClick(obj: T) {
         const id = obj.event_id;
-
-        const additive =
-            this.options.mode === "additive" && this.multiKeyDown;
+        const additive = this.options.mode === "additive" && this.multiKeyDown;
 
         if (!additive) {
-            this.selected.clear();
+            this.clear();
         }
 
         if (additive && this.selected.has(id)) {
@@ -67,7 +71,7 @@ export class SelectionController<T extends { event_id: Id }> {
             this.options.mode === "additive" && this.multiKeyDown;
 
         if (!additive) {
-            this.selected.clear();
+            this.clear();
         }
 
         for (const hit of hits) {
@@ -98,7 +102,6 @@ export class SelectionController<T extends { event_id: Id }> {
     setDragPreview?: (rect: ScreenRect | null) => void;
 
     setDragStart?: (p: { x: number; y: number }) => void;
-
 
     // Internals
     private emit() {

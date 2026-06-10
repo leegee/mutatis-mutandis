@@ -69,8 +69,8 @@ export default function ConceptClusterPlot() {
     const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
-    function handleSelectionChange(event_ids: Id[]) {
-        console.log("[ConceptClusterPlot] handleSelectionChange event:", event_ids.map(_ => _));
+    function handleSelectionChange(event_ids: Id[] | null) {
+        console.log("[ConceptClusterPlot] handleSelectionChange event:", event_ids ? event_ids.map(_ => _) : null);
         controlsActions.setSelectedEventIds(new Set(event_ids))
     }
 

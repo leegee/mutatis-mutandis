@@ -34,7 +34,7 @@ interface PlotProps {
   onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
   onPointRightClick?: (point: PointData) => void;
   onBoundsChange?: (bounds: ViewBounds) => void;
-  onSelectionChange?: (ids: string[]) => void;
+  onSelectionChange?: (ids: string[] | null) => void;
 }
 
 
@@ -213,12 +213,12 @@ export default function Plot(props: PlotProps) {
             getFillColor: [props.neighbourOpacity, props.colorBy, dataset.concept, dataset.origin, selected()],
           },
           onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-          onClick: (info) => {
-            controller?.dispatch({
-              type: "click",
-              payload: info.object ?? null,
-            });
-          }
+          // onClick: (info) => {
+          //   controller?.dispatch({
+          //     type: "click",
+          //     payload: info.object ?? null,
+          //   });
+          // }
         });
 
         return dataset.origin === "neighbours"
@@ -292,17 +292,24 @@ export default function Plot(props: PlotProps) {
       multiKey: "Shift",
     });
 
-    controller.setChangeHandler((set) => {
-      props.onSelectionChange?.([...set]);
-    });
-
-    controller.setDragPreview = (rect) => {
-      setDragRect(rect);
-    };
-
+    controller.setChangeHandler((set) => props.onSelectionChange?.(set ? [...set] : null));
+    controller.setDragPreview = (rect) => setDragRect(rect);
     controller
       .use(new DeckClickPlugin(deck, controller))
       .use(new CanvasDragPlugin(canvas, deck, controller));
+
+    canvas.addEventListener("pointerup", async (e) => {
+      const pick = deck?.pickObject({
+        x: e.offsetX,
+        y: e.offsetY,
+      });
+
+      if (pick?.object) {
+        controller?.dispatch({ type: "click", payload: pick.object });
+      } else {
+        controller?.dispatch({ type: "background-click", payload: null });
+      }
+    });
 
     fitZoom();
   });
