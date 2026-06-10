@@ -5,14 +5,10 @@
 
 ## Code Synopsis
 
-To use the GUI on the final SQLite3 db:
-
-    gunzip -k public/data/tier2_concept_neighbours.db.gz
-
-To run the pipeline that produces the db:
-
-    conda activate eebo
-    ./pipeline --help
+    conda activate eebo_env             # Load Python environment
+    ./pipeline --all                    # Ingest the XML corpus from eebo_all
+    ./run-ws.sh                         # Run the WebSocket service for diachronic search
+    cd gui/eebo-frontend && bun dev     # Run the frontend dev server
 
 ## Conceptual Synopsis
 
@@ -256,13 +252,6 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 1. Cleaner corpus text
 1. Fuller corpus date parsing
-1. Check:
-
-    <PROFILEDESC>
-        <LANGUSAGE ID="fre">
-            <LANGUAGE>fre</LANGUAGE>
-        </LANGUSAGE>
-    </PROFILEDESC>
 1. Check:
     from langdetect import detect, DetectorFactory
     DetectorFactory.seed = 0

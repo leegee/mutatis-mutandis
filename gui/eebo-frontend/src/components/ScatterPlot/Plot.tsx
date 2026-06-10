@@ -22,6 +22,7 @@ interface PlotProps {
   colorByFields: string[];
   pointRadius?: number;
   opacity?: number;
+  bfsOpacity?: number
 
   // Events
   onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
@@ -158,6 +159,7 @@ export default function Plot(props: PlotProps) {
     const colorFn = getColor();
     const radius = props.pointRadius ?? 4;
     const opacity = props.opacity ?? 0.85;
+    const bfsOpacity = props.bfsOpacity ?? 100;
 
     console.log("[Plot] bfsDataset points:", props.bfsDataset?.points?.length);
 
@@ -200,7 +202,10 @@ export default function Plot(props: PlotProps) {
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       data: props.bfsDataset.points,
       getPosition: getBfsPosition,
-      getFillColor: () => [150, 150, 150, 50],
+      getFillColor: () => [150, 150, 150, bfsOpacity],
+      updateTriggers: {
+        getFillColor: bfsOpacity,
+      },
       getRadius: radius * 1.5,
       radiusUnits: "pixels",
       pickable: true,

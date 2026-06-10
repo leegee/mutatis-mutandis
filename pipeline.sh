@@ -64,10 +64,10 @@ case "$PHASE" in
         ;;
     all)
         RUN_SCRIPTS+=(
-            "$SRC/tier1_0_corpus2zarr.py"
-            "$SRC/tier1_5_build_faiss_index.py"
-            "$SRC/tier2_0_concept_events.py"
-            "$SRC/tier3_0_plots.py"
+            "$SRC/tier1_0_corpus2zarr.py --clear"
+            "$SRC/tier1_5_build_faiss_index.py  --clear"
+            "$SRC/tier2_0_concept_events.py  --clear"
+            "$SRC/tier3_0_plots.py  --clear"
         )
         RUN_ENVS+=("" "" "")
         ;;

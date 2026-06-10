@@ -15,6 +15,7 @@ export default function ConceptClusterPlot() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
     const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("concept");
     const [colorBy, setColorBy] = createSignal("cluster_label");
+    const [bfsOpacity, setBfsOpacity] = createSignal(5);
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
     const sharedKey = () => ({
@@ -87,7 +88,7 @@ export default function ConceptClusterPlot() {
                             <select class="small-padding" value={layerMode()}
                                 onChange={e => setLayerMode(e.currentTarget.value as "concept" | "neighbours" | "clusters")}>
                                 <option value="concept">Concept</option>
-                                <option value="neighbours">Concept + Neighbours</option>
+                                <option value="neighbours">+ Neighbours</option>
                                 <option value="clusters">Clusters</option>
                             </select>
                             <div class="tooltip bottom">View mode</div>
@@ -105,18 +106,46 @@ export default function ConceptClusterPlot() {
                         <div class="field border middle-align">
                             <select class="small-padding" value={colorBy()}
                                 onChange={e => setColorBy(e.currentTarget.value)}>
-                                {COLOR_FIELDS.map(f => <option value={f}>{f}</option>)}
+                                {COLOR_FIELDS.map(
+                                    f => <option value={f}>{
+                                        f.replace('_', ' ').replace(/^(.)/, _ => _.toLocaleUpperCase())
+                                    }</option>)}
                             </select>
                             <div class="tooltip bottom">Point colour mode</div>
+                        </div>
+
+                        <div class="no-round bottom">
+                            <button class="transparent circle">
+                                <i>more_vert</i>
+                            </button>
+                            <menu class="no-round  bottom left no-wrap">
+                                <li class="middle-align top-padding">
+                                    <div class="field middle-align prefix suffix">
+                                        <nav>
+                                            <div class="slider medium responsive">
+                                                <input type='range' min={0} max={25} step={1}
+                                                    value={bfsOpacity()}
+                                                    onInput={(e) => setBfsOpacity(Number(e.currentTarget.value))}
+                                                />
+                                                <span><i>brightness_6</i></span>
+                                            </div>
+                                        </nav>
+                                        <output>BFS Background Opacity</output>
+                                    </div>
+
+                                </li>
+                            </menu>
+                            <span class="tooltip right">More...</span>
                         </div>
                     </ControlsHeader>
 
                     <div id="graph_sidebar_row">
                         <div id="under_sidebar" class="max">
                             <Plot
+                                projection={projection()}
                                 datasets={activeDatasets()}
                                 bfsDataset={bfs()}
-                                projection={projection()}
+                                bfsOpacity={bfsOpacity()}
                                 colorBy={colorBy()}
                                 colorByFields={COLOR_FIELDS}
                                 onPointHover={(pt, xy) =>
