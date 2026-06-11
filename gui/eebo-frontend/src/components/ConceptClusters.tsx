@@ -174,9 +174,9 @@ export default function ConceptClusters() {
                 {/* Selected cluster detail */}
                 <Show when={selectedAgg()}>
                     <div class="grid">
-                        <div class="s6">
+                        <div class="s3">
                             <section>
-                                <h3>Top tokens — cluster {clusterFile()!.clusters.label_map[selectedCluster()!]}</h3>
+                                <h3>Top tokens</h3>
                                 <div class="large-height scroll surface">
                                     <table class="stripes no-border scroll max">
                                         <thead class="fixed">
@@ -198,10 +198,9 @@ export default function ConceptClusters() {
                             </section>
                         </div>
 
-                        {/* Top documents — exemplars + window text rendered under each doc */}
-                        <div class="s6">
+                        <div class="s9">
                             <section>
-                                <h3>Top documents — cluster {clusterFile()!.clusters.label_map[selectedCluster()!]}</h3>
+                                <h3>Top documents</h3>
                                 <div class="large-height scroll surface">
                                     <table class="stripes no-border scroll max">
                                         <thead class="fixed">
