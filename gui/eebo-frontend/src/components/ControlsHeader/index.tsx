@@ -19,6 +19,7 @@ interface Props {
   includeHubSpread?: boolean;
   fdgControls?: boolean;
   multiConcept?: boolean;
+  noYearTimeline?: boolean;
   noTopN?: boolean;
   totalEvents?: () => number;
 }
@@ -77,9 +78,11 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           </Show>
         </div>
 
-        <hr class="divider vertical max no-margin no-padding" />
+        <Show when={!props.noYearTimeline}>
+          <hr class="divider vertical max no-margin no-padding" />
+          <YearTimeline tooltipPosition="bottom" />
+        </Show>
 
-        <YearTimeline tooltipPosition="bottom" />
 
         <hr class="divider vertical max no-margin no-padding" />
 

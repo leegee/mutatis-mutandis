@@ -565,50 +565,6 @@ def _aggregate_rows(concept_name, aggregate):
         yield (concept_name, "window", rank, None, doc_id, window_id, count)
 
 
-# def umap_project_concept(
-#     event_ids,
-#     lookup,
-#     output_path,
-#     *,
-#     n_neighbors=15,
-#     min_dist=0.1,
-#     n_components=2,
-#     metric="cosine",
-# ):
-#     """
-#     Projects concept event embeddings into UMAP space and saves JSON.
-#     """
-#     if not event_ids:
-#         return []
-
-#     X = np.stack([
-#         lookup.get_event(eid)["embedding"]
-#         for eid in event_ids
-#     ]).astype(np.float32)
-
-#     reducer = umap.UMAP(
-#         n_neighbors=n_neighbors,
-#         min_dist=min_dist,
-#         n_components=n_components,
-#         metric=metric,
-#     )
-
-#     embedding_2d = reducer.fit_transform(X)
-
-#     projected = [
-#         {
-#             "event_id": int(eid),
-#             "umap":     embedding_2d[i].tolist(),
-#         }
-#         for i, eid in enumerate(event_ids)
-#     ]
-
-#     with open(output_path, "w", encoding="utf-8") as f:
-#         json.dump(projected, f, ensure_ascii=False, indent=2)
-
-#     return projected
-
-
 def get_processed_concepts(db_path) -> set[str]:
     if not Path(db_path).is_file():
         return set()
