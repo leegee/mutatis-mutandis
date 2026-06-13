@@ -1,7 +1,6 @@
 import { createSignal } from "solid-js";
-import { fetchWindow } from "../services/tokenWindowApi";
+import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
 
-// Cache persists for the lifetime of the component instance
 const windowCache = new Map<string, string>();
 
 export function useClusterWindowCache() {
@@ -16,19 +15,31 @@ export function useClusterWindowCache() {
 
     setLoading(prev => new Set([...prev, ...missing.map(p => p.event_id)]));
 
-    await Promise.all(
-      missing.map(async (p) => {
-        try {
-          const text = await fetchWindow({ doc_id: p.doc_id, token_idx: p.token_idx });
-          windowCache.set(p.event_id, text);
-        } catch (e) {
-          console.warn("[useClusterWindowCache] failed", p.event_id, e);
-        }
-      })
-    );
+    try {
+      const res = await fetchWindowBatch(
+        missing.map(p => ({
+          doc_id: p.doc_id,
+          token_idx: p.token_idx,
+        }))
+      );
 
-    // Replace the signal value so consumers react
+      // map results back using local event_id list
+      for (const r of res.results) {
+        // find matching event(s)
+        const match = missing.find(
+          p => p.doc_id === r.docId && p.token_idx === r.tokenIdx
+        );
+
+        if (match) {
+          windowCache.set(match.event_id, r.content);
+        }
+      }
+    } catch (e) {
+      console.warn("[useClusterWindowCache] batch failed", e);
+    }
+
     setCache(new Map(windowCache));
+
     setLoading(prev => {
       const next = new Set(prev);
       missing.forEach(p => next.delete(p.event_id));

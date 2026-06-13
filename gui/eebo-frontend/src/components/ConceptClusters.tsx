@@ -1,7 +1,8 @@
 import { createSignal, createEffect, createMemo, Show, For, createResource, onCleanup } from "solid-js";
-import { queryEventById } from "../services/db";
 import { controls, setControls } from "../state/controls.store";
-import { fetchWindow } from "../services/tokenWindowApi";
+import { queryEventById } from "../services/db";
+import { fetchWindowBatch, type TextWindowItem } from "../services/tokenWindowBatchApi";
+import { setWindowCache, getWindow } from "../services/windowCache";
 import { loadJson } from "../lib/loadJson";
 import ControlsHeader from "./ControlsHeader";
 
@@ -238,6 +239,44 @@ function DocRow(props: {
     let rowRef: HTMLTableRowElement | undefined;
     const [visible, setVisible] = createSignal(false);
 
+
+    type Event = NonNullable<Awaited<ReturnType<typeof queryEventById>>>;
+
+    const eventIds = createMemo(() => {
+        if (!visible()) return null;
+        return props.points.map((p) => p.event_id);
+    });
+
+    const [resolved] = createResource(
+        eventIds,
+        async (ids: string[] | null): Promise<Event[]> => {
+            if (!ids) return [];
+
+            const events = await Promise.all(
+                ids.map((id: string) => queryEventById(id))
+            );
+
+            const valid = events.filter(
+                (e): e is Event => e !== null
+            );
+
+            const batch = valid.map((e) => ({
+                eventId: e.event_id,
+                docId: e.doc_id,
+                tokenIdx: e.token_idx,
+            }));
+
+            const res = await fetchWindowBatch(batch);
+
+            res.results.forEach((r: TextWindowItem, idx: number) => {
+                const ev = valid[idx];
+                setWindowCache(ev.event_id, r.content);
+            });
+
+            return valid;
+        }
+    );
+
     createEffect(() => {
         if (!rowRef || visible()) return;
         const observer = new IntersectionObserver(
@@ -252,16 +291,6 @@ function DocRow(props: {
         observer.observe(rowRef);
         onCleanup(() => observer.disconnect());
     });
-
-    const [resolved] = createResource(
-        () => (visible() ? props.points.map(p => p.event_id) : null),
-        async (eventIds) => {
-            const events = await Promise.all(
-                eventIds.map(id => queryEventById(id))
-            );
-            return events.filter((e): e is NonNullable<typeof e> => e !== null);
-        }
-    );
 
     const exemplarsForDoc = createMemo(() => {
         const events = resolved();
@@ -293,13 +322,13 @@ function DocRow(props: {
 }
 
 
-
-function ExemplarSubRow(props: { event: NonNullable<Awaited<ReturnType<typeof queryEventById>>> }) {
+function ExemplarSubRow(props: { event: any }) {
     let rowRef: HTMLTableRowElement | undefined;
     const [visible, setVisible] = createSignal(false);
 
     createEffect(() => {
         if (!rowRef || visible()) return;
+
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting) {
@@ -309,41 +338,40 @@ function ExemplarSubRow(props: { event: NonNullable<Awaited<ReturnType<typeof qu
             },
             { rootMargin: "100px" }
         );
+
         observer.observe(rowRef);
         onCleanup(() => observer.disconnect());
     });
 
-    const [windowText] = createResource(
-        () => (visible() ? { doc_id: props.event.doc_id, token_idx: props.event.token_idx } : null),
-        (e) => fetchWindow(e)
-    );
+    const windowText = createMemo(() => getWindow(props.event.event_id));
 
     return (
         <tr
             ref={rowRef}
             onClick={() => setControls("selectedEventId", props.event.event_id)}
+            class="bottom-padding"
             style={{
-                background: controls.selectedEventId === props.event.event_id
-                    ? "var(--color-background-info)"
-                    : "transparent",
+                background:
+                    controls.selectedEventId === props.event.event_id
+                        ? "var(--color-background-info)" : "transparent",
             }}
         >
             <td colspan="3">
                 <div>
                     token_idx {props.event.token_idx} · {props.event.token}
                 </div>
+
                 <div>
                     <Show when={!visible()}>
                         &mdash;
                     </Show>
-                    <Show when={visible() && windowText.loading}>
+
+                    <Show when={visible() && !windowText()}>
                         <progress />
                     </Show>
-                    <Show when={windowText.error}>
-                        <span class="error-container">Failed to load window: {String(windowText.error)}</span>
-                    </Show>
-                    <Show when={windowText() && !windowText.loading}>
-                        <span innerHTML={windowText()} />
+
+                    <Show when={windowText()}>
+                        <span innerHTML={windowText()!} />
                     </Show>
                 </div>
             </td>
