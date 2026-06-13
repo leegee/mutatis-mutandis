@@ -128,7 +128,7 @@ class ZarrEventLookup:
     When forms is None, all events are loaded. This is required when
     querying across multiple concepts in a single run.
 
-    vector_id is stored as metadata only - NOT used as a lookup key.
+    vector_id is stored as metadata only — NOT used as a lookup key.
 
     Embeddings are loaded alongside metadata so that FAISS queries can be
     issued using the canonical Zarr vector rather than relying on FAISS
@@ -228,8 +228,19 @@ class ZarrEventLookup:
 
 # Document metadata
 def load_doc_metadata(conn) -> dict:
+    """
+    Build a doc_id -> metadata mapping from pamphlet_tokens.
+    pub_year and title are stable per doc_id; we take the first occurrence.
+    """
     cur = conn.cursor()
-    cur.execute("SELECT doc_id, pub_year, title FROM pamphlet_corpus")
+    cur.execute("""
+        SELECT DISTINCT ON (doc_id)
+            doc_id,
+            pub_year,
+            title
+        FROM pamphlet_tokens
+        ORDER BY doc_id
+    """)
     return {
         row[0]: {"pub_year": row[1], "title": row[2]}
         for row in cur.fetchall()
@@ -555,7 +566,7 @@ def get_processed_concepts(db_path) -> set[str]:
         return set()
 
 
-def main_OLD():
+def main():
     logger.info("[tier2] init")
 
     parser = argparse.ArgumentParser()
@@ -584,7 +595,7 @@ def main_OLD():
     index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
 
     if index.ntotal == 0:
-        raise RuntimeError( "FAISS index is empty - run tier1_5_build_faiss_index.py first" )
+        raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
 
     # If a single concept is requested, restrict the lookup to its forms
     # so that only matching events are loaded into memory.
@@ -626,13 +637,13 @@ def main_OLD():
 
     concepts_to_run = [
         (concept_name, concept)
-        for concept_name, concept in resolve_concepts( concept=args.concept, false_positives=args.false_positives )
+        for concept_name, concept in resolve_concepts(args)
         if concept_name not in already_processed
     ]
 
     if not concepts_to_run:
         logger.info(
-            "[tier2] nothing to write - all concepts already processed"
+            "[tier2] nothing to write — all concepts already processed"
         )
         return
 
@@ -669,170 +680,6 @@ def main_OLD():
     )
 
     logger.info(f"[tier2] wrote {SQLITE_DB_PATH}")
-
-
-def run_tier2_core(
-    *,
-    conn,
-    index,
-    forms=None,
-    false_positives=None,
-    clear=False,
-    diagnostics=False,
-    emit=None,
-):
-    logger.info("[tier2 run_tier2_core] Enter")
-    if emit:
-        emit("tier2_start")
-
-    doc_meta = load_doc_metadata(conn)
-
-    already_processed = (
-        set()
-        if clear
-        else get_processed_concepts(SQLITE_DB_PATH)
-    )
-
-    concepts_to_run = [
-        (concept_name, concept)
-        for concept_name, concept in resolve_concepts(concept=None, false_positives=set())
-        if concept_name not in already_processed
-    ]
-
-    if not concepts_to_run:
-        logger.info("[tier2] nothing to write - all concepts already processed")
-        if emit:
-            emit("tier2_exit", {reason: "Nothing to write - all concepts already processed"})
-        return
-
-    if emit:
-        emit("tier2_lookup_zarr", {"concept": concept_name})
-
-    lookup = ZarrEventLookup(
-        ZARR_ROOT / "tier1",
-        forms=forms,
-        false_positives=false_positives,
-    )
-
-    output = {}
-
-    for concept_name, concept in concepts_to_run:
-        if emit:
-            emit("concept_start", {"concept": concept_name})
-
-        output[concept_name] = analyse_concept(
-            doc_meta,
-            index,
-            lookup,
-            concept_name,
-            concept,
-            diagnostics=diagnostics,
-        )
-
-        if emit:
-            emit("concept_done", {"concept": concept_name})
-
-    write_sqlite(output, SQLITE_DB_PATH, clear=clear)
-
-    if emit:
-        emit("tier2_done", {"concept": concept_name})
-    logger.info("[tier2 run_tier2_core] Complete")
-
-
-def run_tier2_service(
-    *,
-    conn,
-    index,
-    forms,
-    false_positives,
-    emit=None,
-):
-    logger.info("[tier2 run_tier2_service] Enter")
-    return run_tier2_core(
-        conn=conn,
-        index=index,
-        forms=forms,
-        false_positives=false_positives,
-        clear=False,
-        diagnostics=False,
-        emit=emit,
-    )
-
-
-def main():
-    logger.info("[tier2 main] Enter")
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--concept", type=str, default=None,
-        help="Run analysis for a single concept (case-insensitive)",
-    )
-    parser.add_argument(
-        "--forms", type=str, default=None,
-        help="Comma-separated list of forms (required if --concept is not in CONCEPT_SETS)",
-    )
-    parser.add_argument(
-        "--false-positives", type=str, default=None,
-        help="Comma-separated list of false positive forms to exclude",
-    )
-    parser.add_argument(
-        "--clear", action="store_true",
-        help="Wipe and recreate SQLite database before writing",
-    )
-    parser.add_argument(
-        "-d", "--diagnostics", action="store_true",
-        help="Enable Tier2 diagnostics",
-    )
-
-    args = parser.parse_args()
-
-    if args.clear and args.concept:
-        logger.warning( "[tier2] --clear with --concept will wipe all concepts before writing one" )
-
-    logger.info(f"[tier2 main] SQLITE_DB_PATH: {SQLITE_DB_PATH}")
-
-    index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
-
-    if index.ntotal == 0:
-        raise RuntimeError( "FAISS index is empty - run tier1_5_build_faiss_index.py first" )
-
-    # Resolve forms/false positives (CLI responsibility only)
-    target_forms = None
-    target_fps = None
-
-    if args.concept:
-        concept_name = args.concept.upper()
-
-        if args.forms:
-            target_forms = {f.strip() for f in args.forms.split(",")}
-            target_fps = (
-                {f.strip() for f in args.false_positives.split(",")}
-                if args.false_positives
-                else set()
-            )
-        else:
-            target_forms = set(CONCEPT_SETS[concept_name]["forms"])
-            target_fps = set(
-                CONCEPT_SETS[concept_name].get("false_positives", [])
-            )
-
-        logger.info( f"[tier2] single-concept mode: {concept_name} forms={target_forms}" )
-
-    conn = get_connection()
-
-    run_tier2_core(
-        conn=conn,
-        index=index,
-        forms=target_forms,
-        false_positives=target_fps,
-        clear=args.clear,
-        diagnostics=args.diagnostics,
-        emit=None,
-    )
-
-    conn.close()
-    logger.info(f"[tier2] wrote {SQLITE_DB_PATH}")
-
 
 
 if __name__ == "__main__":
