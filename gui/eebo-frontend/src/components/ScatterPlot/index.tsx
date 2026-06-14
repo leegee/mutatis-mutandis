@@ -11,6 +11,7 @@ import { controlsActions } from "../../state/controls.actions";
 import Sidebar from "./Sidebar";
 import SidebarMultiple from "./SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
+import TextWindow from "../TextWindow";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
@@ -99,15 +100,6 @@ export default function ConceptClusterPlot() {
                         </div>
 
                         <div class="field border middle-align">
-                            <select class="small-padding" value={projection()}
-                                onChange={e => setProjection(e.currentTarget.value as "local" | "global")}>
-                                <option value="global">Global</option>
-                                <option value="local">Local</option>
-                            </select>
-                            <div class="tooltip bottom">Projection mode</div>
-                        </div>
-
-                        <div class="field border middle-align">
                             <select class="small-padding" value={colorBy()}
                                 onChange={e => setColorBy(e.currentTarget.value)}>
                                 {COLOR_FIELDS
@@ -118,6 +110,15 @@ export default function ConceptClusterPlot() {
                                         }</option>)}
                             </select>
                             <div class="tooltip bottom">Point colour mode</div>
+                        </div>
+
+                        <div class="field border middle-align">
+                            <select class="small-padding" value={projection()}
+                                onChange={e => setProjection(e.currentTarget.value as "local" | "global")}>
+                                <option value="global">Global</option>
+                                <option value="local">Local</option>
+                            </select>
+                            <div class="tooltip bottom">Projection mode</div>
                         </div>
 
                         <div class="no-round bottom">
@@ -197,11 +198,13 @@ export default function ConceptClusterPlot() {
                     <aside class="surface-container-highest border large-elevate small-padding"
                         style={{
                             position: "fixed",
-                            left: `${ h().x - 80 }px`,
-                            top: `${ h().y - 80 }px`,
+                            left: `${ h().x + 100 }px`,
+                            top: `${ h().y + 70 }px`,
                             "z-index": 20,
                             "pointer-events": "none",
-                            "white-space": "nowrap"
+                            "white-space": "nowrap",
+                            "width": "15em",
+                            "max-width": "15em",
                         }}>
                         <div class="row">
                             <span class="bold max">{h().point.token}</span>
@@ -209,8 +212,15 @@ export default function ConceptClusterPlot() {
                                 {h().point.concept} • {h().point.cluster_label ? `Cluster ${ h().point.cluster_label }` : 'Noise'}
                             </span>
                         </div>
-                        <div class="row small-text">Doc: {h().point.doc_id} • Year: {h().point.pub_year}</div>
-                        <div class="row small-text">Win: {h().point.window_id} • Win token pos: {h().point.window_token_pos}</div>
+                        <div class="row">
+                            <div class="row small-text">Doc: {h().point.doc_id} • Year: {h().point.pub_year}</div>
+                        </div>
+                        <div class="row">
+                            <div class="row small-text">Win: {h().point.window_id} • Win token pos: {h().point.window_token_pos}</div>
+                        </div>
+                        <div class="row">
+                            <TextWindow eventid={h().point.event_id} />
+                        </div>
                     </aside>
                 )}
             </Show>
