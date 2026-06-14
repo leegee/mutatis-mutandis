@@ -74,6 +74,81 @@ class EventUniverse:
         return set(self._ids)
 
 
+class EmbeddingCache:
+    """
+    Single point of access for embeddings.
+
+    Fetches each event's embedding from the lookup at most once and keeps
+    it in memory as a row in a contiguous float32 matrix, so repeated
+    np.stack([lookup.get_event(eid)["embedding"] for eid in ids]) calls
+    across fit_umap_local / fit_cluster_local / expand_neighbors /
+    bfs_event_expansion collapse into cheap array slicing.
+
+    Does not change any numeric results — same embeddings, same dtype,
+    same ordering semantics (callers still build their own X via
+    `matrix(event_ids)`, which preserves the order of `event_ids`).
+    """
+
+    def __init__(self, lookup):
+        self._lookup = lookup
+        self._row_of = {}      # event_id -> row index in _mat
+        self._mat = None       # (N, D) float32, grows as needed
+        self._cap = 0
+
+    def _ensure_capacity(self, extra):
+        needed = len(self._row_of) + extra
+        if self._mat is None:
+            cap = max(needed, 1024)
+            self._mat = np.empty((cap, self._dim), dtype=np.float32)
+            self._cap = cap
+            return
+        if needed > self._cap:
+            new_cap = max(needed, self._cap * 2)
+            new_mat = np.empty((new_cap, self._mat.shape[1]), dtype=np.float32)
+            new_mat[: self._mat.shape[0]] = self._mat
+            self._mat = new_mat
+            self._cap = new_cap
+
+    def _fetch(self, eid):
+        emb = self._lookup.get_event(eid)["embedding"]
+        return np.asarray(emb, dtype=np.float32)
+
+    def warm(self, event_ids):
+        """Fetch and cache any embeddings not already cached."""
+        missing = [eid for eid in event_ids if eid not in self._row_of]
+        if not missing:
+            return
+
+        if self._mat is None:
+            first = self._fetch(missing[0])
+            self._dim = first.shape[0]
+            self._ensure_capacity(len(missing))
+            row = len(self._row_of)
+            self._mat[row] = first
+            self._row_of[missing[0]] = row
+            missing = missing[1:]
+
+        if missing:
+            self._ensure_capacity(len(missing))
+            for eid in missing:
+                row = len(self._row_of)
+                self._mat[row] = self._fetch(eid)
+                self._row_of[eid] = row
+
+    def matrix(self, event_ids):
+        """
+        Return an (len(event_ids), D) float32 array with rows in the same
+        order as event_ids, fetching/caching as needed.
+        """
+        self.warm(event_ids)
+        idx = np.fromiter((self._row_of[eid] for eid in event_ids), dtype=np.int64, count=len(event_ids))
+        return self._mat[idx]
+
+    def vector(self, event_id):
+        self.warm([event_id])
+        return self._mat[self._row_of[event_id]]
+
+
 def backfill_missing_events_from_zarr(lookup, event_ids):
     sqlite_conn = sqlite3.connect(SQLITE_DB_PATH)
     try:
@@ -141,7 +216,7 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
 
 
 
-def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
+def bfs_event_expansion(lookup, index, seed_ids, emb_cache, k=25, max_nodes=5000, depth=2):
     visited  = set(seed_ids)
     frontier = set(seed_ids)
     all_nodes = set(seed_ids)
@@ -150,10 +225,8 @@ def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
         if len(all_nodes) >= max_nodes:
             break
 
-        vecs = np.stack([
-            lookup.get_event(eid)["embedding"]
-            for eid in frontier
-        ])
+        frontier_list = list(frontier)
+        vecs = emb_cache.matrix(frontier_list)
         _, nn_ids = index.search(vecs, k)
 
         next_frontier = set()
@@ -174,31 +247,27 @@ def bfs_event_expansion(lookup, index, seed_ids, k=25, max_nodes=5000, depth=2):
     return list(all_nodes)[:max_nodes]
 
 
-def expand_neighbors(index, lookup, event_ids, k=25, max_points=3000):
+def expand_neighbors(index, lookup, event_ids, emb_cache, k=25, max_points=3000):
     ids = set(event_ids)
-    vecs = np.stack([
-        lookup.get_event(eid)["embedding"]
-        for eid in event_ids
-    ])
+    vecs = emb_cache.matrix(list(event_ids))
     _, nn_ids = index.search(vecs, k)
     for row in nn_ids:
         for nid in row:
             nid = int(nid)
             if nid != -1:
                 ids.add(nid)
-            if len(ids) >= max_points:
-                break
+        if len(ids) >= max_points:
+            break
     return list(ids)[:max_points]
 
 
 
-def fit_umap_local(lookup, event_ids, n_neighbors=15, min_dist=0.1):
+def fit_umap_local(X, event_ids, n_neighbors=15, min_dist=0.1):
+    """
+    X: (len(event_ids), D) float32 matrix, rows aligned to event_ids.
+    """
     if not event_ids:
         return {}
-    X = np.stack([
-        lookup.get_event(eid)["embedding"]
-        for eid in event_ids
-    ]).astype(np.float32)
     reducer = umap.UMAP(
         n_neighbors=n_neighbors,
         min_dist=min_dist,
@@ -211,16 +280,54 @@ def fit_umap_local(lookup, event_ids, n_neighbors=15, min_dist=0.1):
             for i, eid in enumerate(event_ids)}
 
 
-def fit_cluster_local(lookup, event_ids):
+def fit_umap_global(X, event_ids):
+    """
+    X: (len(event_ids), D) float32 matrix, rows aligned to event_ids.
+    """
+    logger.info(f"[tier3] fitting global PaCMAP on {len(event_ids):,} points")
+    reducer = pacmap.PaCMAP(
+        n_components=2,
+        n_neighbors=15,
+        MN_ratio=0.5,
+        FP_ratio=2.0,
+        random_state=42,
+    )
+    emb = reducer.fit_transform(X)
+    return {int(eid): (float(emb[i, 0]), float(emb[i, 1]))
+            for i, eid in enumerate(event_ids)}
+
+
+
+def fit_cluster_local(X, event_ids, local_concept_coords=None):
+    """
+    Clustering pipeline:
+
+    1. 5-D UMAP reduction of the embeddings for HDBSCAN (restores the
+       structure-finding behaviour of the original 5D pipeline; raw
+       high-D cosine embeddings are too uniform under euclidean HDBSCAN
+       and tend to collapse to one cluster + noise).
+    2. HDBSCAN on the 5D reduction.
+    3. Conservative semantic merge of near-duplicate clusters only
+       (sim > 0.97), so genuinely distinct senses stay separate.
+    4. Local 2D coords for display: reuse `local_concept_coords` if the
+       caller already computed a 2D UMAP for this same point set (e.g.
+       the concept's own local projection), instead of fitting a second,
+       near-identical 2D UMAP.
+
+    X: (len(event_ids), D) float32 matrix, rows aligned to event_ids.
+    local_concept_coords: optional {event_id -> (x, y)} from an existing
+        2D UMAP fit on the same event_ids (same params: n_neighbors=15,
+        min_dist=0.1, metric='cosine'). If provided, skips the redundant
+        2D UMAP fit inside this function.
+    """
     if len(event_ids) < 10:
         return {int(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
 
-    X = np.stack([
-        lookup.get_event(eid)["embedding"]
-        for eid in event_ids
-    ]).astype(np.float32)
+    # normalize embeddings for cosine stability (used for clustering input
+    # and for centroid similarity in the merge step)
+    X_norm = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-12)
 
-    # 5D UMAP reduction for clustering (restores prior behavior)
+    # 1. 5D UMAP reduction for clustering
     reducer_5d = umap.UMAP(
         n_components=5,
         n_neighbors=15,
@@ -230,130 +337,24 @@ def fit_cluster_local(lookup, event_ids):
     )
     X_5d = reducer_5d.fit_transform(X)
 
+    # 2. HDBSCAN on the 5D reduction
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=max(5, len(event_ids) // 200),
         min_samples=3,
         metric='euclidean',
         cluster_selection_method='eom',
-        cluster_selection_epsilon=0.0,  # let EOM decide, don't force merges
+        cluster_selection_epsilon=0.0,
     )
     labels = clusterer.fit_predict(X_5d).tolist()
 
-    # 2D UMAP for visualization
-    reducer_2d = umap.UMAP(
-        n_components=2,
-        n_neighbors=15,
-        min_dist=0.1,
-        metric='cosine',
-        random_state=42,
-    )
-    emb_2d = reducer_2d.fit_transform(X)
-
-    local_coords = {
-        int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
-        for i, eid in enumerate(event_ids)
-    }
-    return local_coords, labels
-
-
-def fit_cluster_local_with_5d_reduction(lookup, event_ids):
-    """
-    5-D UMAP for HDBSCAN, then a separate 2-D UMAP for the local display
-    coordinates (nx/ny).  Returns {event_id -> (x, y)} local coords and
-    the raw cluster labels list.
-    """
-    if len(event_ids) < 10:
-        return {int(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
-
-    X = np.stack([
-        lookup.get_event(eid)["embedding"]
-        for eid in event_ids
-    ]).astype(np.float32)
-
-    # 5-D reduction for clustering
-    reducer_5d = umap.UMAP(
-        n_components=5,
-        n_neighbors=15,
-        min_dist=0.0,
-        metric='cosine',
-        random_state=42,
-    )
-    reduced_5d = reducer_5d.fit_transform(X)
-
-    clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=5,
-        min_samples=3,
-        metric='euclidean',
-        cluster_selection_method='eom',
-        cluster_selection_epsilon=0.5,  # merge clusters closer than this distance
-    )
-    labels = clusterer.fit_predict(reduced_5d).tolist()
-
-    # 2-D reduction for local display coords
-    reducer_2d = umap.UMAP(
-        n_components=2,
-        n_neighbors=15,
-        min_dist=0.1,
-        metric='cosine',
-        random_state=42,
-    )
-    emb_2d = reducer_2d.fit_transform(X)
-
-    local_coords = {
-        int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
-        for i, eid in enumerate(event_ids)
-    }
-    return local_coords, labels
-
-def fit_cluster_local(lookup, event_ids):
-    """
-    Improved clustering pipeline:
-
-    1. Cluster directly on embeddings (no 5D UMAP)
-    2. Use stronger HDBSCAN parameters (fewer micro-clusters)
-    3. Post-merge semantically similar clusters using centroid similarity
-    4. Compute separate 2D UMAP for visualization only
-    """
-
-    if len(event_ids) < 10:
-        return {int(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
-
-
-    # 1. Load embeddings
-
-    X = np.stack([
-        lookup.get_event(eid)["embedding"]
-        for eid in event_ids
-    ]).astype(np.float32)
-
-    # normalize embeddings for cosine stability
-    X_norm = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-12)
-
-
-    # 2. HDBSCAN clustering (direct on embeddings)
-    clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=max(10, len(event_ids) // 200),  # adaptive
-        min_samples=8,
-        metric='euclidean',
-        cluster_selection_method='eom',
-        cluster_selection_epsilon=0.2,  # tighter = fewer micro-clusters
-    )
-
-    labels = clusterer.fit_predict(X_norm)
-    labels = labels.tolist()
-
-
     # 3. Build cluster structures
-
     clusters = {}
     for i, cid in enumerate(labels):
         if cid == -1:
             continue
         clusters.setdefault(cid, []).append(i)
 
-
     # 4. Compute centroids (normalized)
-
     centroids = {}
     for cid, idxs in clusters.items():
         vecs = X_norm[idxs]
@@ -361,9 +362,7 @@ def fit_cluster_local(lookup, event_ids):
         centroid /= (np.linalg.norm(centroid) + 1e-12)
         centroids[cid] = centroid
 
-
-    # 5. Merge similar clusters (semantic consolidation)
-
+    # 5. Merge near-duplicate clusters only (conservative threshold)
     def cosine(a, b):
         return float(np.dot(a, b))
 
@@ -385,41 +384,36 @@ def fit_cluster_local(lookup, event_ids):
     for i in range(len(cluster_ids)):
         for j in range(i + 1, len(cluster_ids)):
             a, b = cluster_ids[i], cluster_ids[j]
-
-            # semantic similarity check
             sim = cosine(centroids[a], centroids[b])
-
-            if sim > 0.92:  # main merge threshold
+            if sim > 0.97:  # near-duplicate merge only
                 union(a, b)
 
-    # rebuild merged clusters
     merged = {}
     for cid in cluster_ids:
         root = find(cid)
         merged.setdefault(root, []).extend(clusters[cid])
 
-    # reassign final cluster ids
     final_labels = [-1] * len(event_ids)
     for new_cid, idxs in enumerate(merged.values()):
         for idx in idxs:
             final_labels[idx] = new_cid
 
-
-    # 6. 2D UMAP for visualization ONLY
-    reducer_2d = umap.UMAP(
-        n_components=2,
-        n_neighbors=15,
-        min_dist=0.1,
-        metric='cosine',
-        random_state=42,
-    )
-
-    emb_2d = reducer_2d.fit_transform(X)
-
-    local_coords = {
-        int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
-        for i, eid in enumerate(event_ids)
-    }
+    # 6. 2D coords for visualization — reuse if already computed
+    if local_concept_coords is not None:
+        local_coords = {int(eid): local_concept_coords[int(eid)] for eid in event_ids}
+    else:
+        reducer_2d = umap.UMAP(
+            n_components=2,
+            n_neighbors=15,
+            min_dist=0.1,
+            metric='cosine',
+            random_state=42,
+        )
+        emb_2d = reducer_2d.fit_transform(X)
+        local_coords = {
+            int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
+            for i, eid in enumerate(event_ids)
+        }
 
     return local_coords, final_labels
 
@@ -509,232 +503,6 @@ def write_json(path, payload):
     logger.info(f"[tier3] Wrote {path}")
 
 
-
-
-def main_OLD():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--concept", type=str, default=None)
-    parser.add_argument( "--mode", type=str, default="full", choices=["full", "clustering"] )
-    parser.add_argument( "--false_positives", type=str, nargs="*", default=[] )
-    args = parser.parse_args()
-    concept = args.concept
-    mode = args.mode
-    false_positives = getattr(args, "false_positives", [])
-
-    logger.info("[tier3] loading index + lookup")
-
-    lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
-    index  = EeboFaissIndex.load(FAISS_TIER1_INDEX)
-
-    manifest = {"concepts": [], "global": None, "globalBounds": None}
-
-    all_concept_events = []
-
-    buffered_concept       = []
-    buffered_concept_neigh = []
-    buffered_clusters      = []
-
-    all_event_ids = set()
-
-    #
-    # Pass 1 — concept + clustering inputs
-    #
-    if mode == "full":
-        for concept_name, concept in resolve_concepts(concept=concept, false_positives=false_positives):
-            logger.info(f"[tier3] processing concept={concept_name}")
-
-            seed_ids = list(lookup.iter_matching_event_ids(set(concept["forms"])))
-            concept_sample = seed_ids[:1000]
-            local_concept  = fit_umap_local(lookup, concept_sample)
-
-            buffered_concept.append((
-                CONCEPT_DIR / f"{concept_name}.json",
-                {"type": "concept", "concept": concept_name},
-                concept_sample,
-                local_concept,
-            ))
-            all_event_ids.update(concept_sample)
-
-            neigh_ids   = expand_neighbors(index, lookup, concept_sample, max_points=3000)
-            local_neigh = fit_umap_local(lookup, neigh_ids)
-
-            buffered_concept_neigh.append((
-                CONCEPT_NEIGH_DIR / f"{concept_name}.json",
-                {"type": "concept_neighbours", "concept": concept_name},
-                neigh_ids,
-                local_neigh,
-            ))
-            all_event_ids.update(neigh_ids)
-
-            logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)} points)")
-            cluster_local_coords, cluster_labels = fit_cluster_local(lookup, concept_sample)
-
-            buffered_clusters.append((
-                CLUSTER_DIR / f"{concept_name}.json",
-                {"type": "concept_clusters", "concept": concept_name},
-                concept_sample,
-                cluster_local_coords,
-                cluster_labels,
-            ))
-
-            all_concept_events.extend(concept_sample)
-
-            manifest["concepts"].append({
-                "name":               concept_name,
-                "concept":            f"/umap/concept/{concept_name}.json",
-                "concept_neighbours": f"/umap/concept_neighbours/{concept_name}.json",
-                "concept_clusters":   f"/umap/concept_clusters/{concept_name}.json",
-            })
-
-    else:
-        logger.info("[tier3] clustering-only mode (loading concept outputs)")
-
-        for concept_file in CONCEPT_DIR.glob("*.json"):
-            concept_name = concept_file.stem
-
-            with open(concept_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            concept_sample = [int(p["event_id"]) for p in data["points"]]
-
-            logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)})")
-
-            cluster_local_coords, cluster_labels = fit_cluster_local(lookup, concept_sample)
-
-            buffered_clusters.append((
-                CLUSTER_DIR / f"{concept_name}.json",
-                {"type": "concept_clusters", "concept": concept_name},
-                concept_sample,
-                cluster_local_coords,
-                cluster_labels,
-            ))
-
-            all_concept_events.extend(concept_sample)
-
-    # BFS (full only)
-    if mode == "full":
-        bfs_ids   = bfs_event_expansion(
-            lookup, index, all_concept_events,
-            max_nodes=5000, depth=2
-        )
-        local_bfs = fit_umap_local(lookup, bfs_ids)
-        all_event_ids.update(bfs_ids)
-    else:
-        bfs_ids = []
-        local_bfs = {}
-
-    # Backfill safety
-    if all_event_ids:
-        backfill_missing_events_from_zarr(lookup, all_event_ids)
-
-    # Global projection (SAFE GUARD ADDED)
-    if all_event_ids:
-        global_coords = fit_umap_global(lookup, all_event_ids)
-        global_bounds = compute_bounds_from_coords(list(global_coords.values()))
-        global_bounds_padded = add_padding(global_bounds)
-    else:
-        logger.warning("[tier3] no event ids — skipping global projection")
-        global_coords = {}
-        global_bounds = {"minX": 0, "maxX": 0, "minY": 0, "maxY": 0}
-        global_bounds_padded = global_bounds
-
-    logger.info(f"[tier3] global bounds (padded): {global_bounds_padded}")
-
-    #
-    # Pass 3 — concept + neighbour outputs
-    #
-    for path, meta, event_ids, local_coords in buffered_concept + buffered_concept_neigh:
-        local_bounds = add_padding(
-            compute_bounds_from_coords([local_coords[e] for e in event_ids])
-        )
-
-        points = assemble_points(
-            event_ids, local_coords, global_coords,
-            local_bounds, global_bounds_padded,
-        )
-
-        write_json(path, {
-            **meta,
-            "bounds": local_bounds,
-            "globalBounds": global_bounds_padded,
-            "points": points,
-        })
-
-    #
-    # Cluster outputs
-    #
-    for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
-        unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
-        label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
-
-        extra = {
-            int(eid): {
-                "cluster_id":    int(cluster_labels[i]),
-                "cluster_label": label_map.get(cluster_labels[i]),
-            }
-            for i, eid in enumerate(event_ids)
-        }
-
-        local_bounds = add_padding(
-            compute_bounds_from_coords([local_coords[e] for e in event_ids])
-        )
-
-        points = assemble_points(
-            event_ids, local_coords, global_coords,
-            local_bounds, global_bounds_padded,
-            extra_fields=extra,
-        )
-
-        aggregates = compute_cluster_aggregates(event_ids, cluster_labels, lookup)
-
-        write_json(path, {
-            **meta,
-            "generated_at": datetime.now().isoformat(),
-            "n_events": len(event_ids),
-            "bounds": local_bounds,
-            "globalBounds": global_bounds_padded,
-            "clusters": {
-                "label_map": {str(k): v for k, v in label_map.items()},
-                "aggregates": aggregates,
-            },
-            "points": points,
-        })
-
-    #
-    # BFS output (SAFE GUARD ADDED)
-    #
-    if bfs_ids:
-        local_bounds_bfs = add_padding(
-            compute_bounds_from_coords([local_bfs[e] for e in bfs_ids])
-        )
-
-        points_bfs = assemble_points(
-            bfs_ids, local_bfs, global_coords,
-            local_bounds_bfs, global_bounds_padded,
-        )
-
-        write_json(
-            BFS_DIR / "global.json",
-            {
-                "type": "bfs_global",
-                "bounds": local_bounds_bfs,
-                "globalBounds": global_bounds_padded,
-                "depth": 2,
-                "k": K,
-                "points": points_bfs,
-            }
-        )
-
-        manifest["global"] = "/umap/bfs_global/global.json"
-    else:
-        manifest["global"] = None
-
-    manifest["globalBounds"] = global_bounds_padded
-    write_json(PLOT_DIR / "manifest.json", manifest)
-
-    logger.info("[tier3] complete")
-
-
 def run_tier3_core(
     *,
     index,
@@ -747,6 +515,7 @@ def run_tier3_core(
     logger.info("[tier3 run_tier3_core] Enter")
 
     false_positives = false_positives or []
+    emb_cache = EmbeddingCache(lookup)
 
     manifest = {"concepts": [], "global": None, "globalBounds": None}
     all_concept_events = []
@@ -766,7 +535,11 @@ def run_tier3_core(
 
             seed_ids       = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
             concept_sample = seed_ids[:1000]
-            local_concept  = fit_umap_local(lookup, concept_sample)
+
+            # one embedding fetch for the concept sample, reused below
+            X_concept = emb_cache.matrix(concept_sample)
+
+            local_concept = fit_umap_local(X_concept, concept_sample)
 
             buffered_concept.append((
                 CONCEPT_DIR / f"{concept_name}.json",
@@ -776,8 +549,9 @@ def run_tier3_core(
             ))
             all_event_ids.update(concept_sample)
 
-            neigh_ids   = expand_neighbors(index, lookup, concept_sample, max_points=3000)
-            local_neigh = fit_umap_local(lookup, neigh_ids)
+            neigh_ids = expand_neighbors(index, lookup, concept_sample, emb_cache, max_points=3000)
+            X_neigh   = emb_cache.matrix(neigh_ids)
+            local_neigh = fit_umap_local(X_neigh, neigh_ids)
 
             buffered_concept_neigh.append((
                 CONCEPT_NEIGH_DIR / f"{concept_name}.json",
@@ -788,7 +562,11 @@ def run_tier3_core(
             all_event_ids.update(neigh_ids)
 
             logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)} points)")
-            cluster_local_coords, cluster_labels = fit_cluster_local(lookup, concept_sample)
+            # reuse X_concept and the 2D local_concept coords — avoids a
+            # second embedding fetch and a second near-identical 2D UMAP fit
+            cluster_local_coords, cluster_labels = fit_cluster_local(
+                X_concept, concept_sample, local_concept_coords=local_concept
+            )
 
             buffered_clusters.append((
                 CLUSTER_DIR / f"{concept_name}.json",
@@ -825,7 +603,13 @@ def run_tier3_core(
             if emit:
                 emit("concept_start", {"concept": concept_name})
 
-            cluster_local_coords, cluster_labels = fit_cluster_local(lookup, concept_sample)
+            X_concept = emb_cache.matrix(concept_sample)
+
+            # In clustering-only mode we don't have a freshly computed
+            # local_concept 2D projection in hand (it was written to disk
+            # by a previous "full" run), so fit_cluster_local computes its
+            # own 2D UMAP for display coords here.
+            cluster_local_coords, cluster_labels = fit_cluster_local(X_concept, concept_sample)
 
             buffered_clusters.append((
                 CLUSTER_DIR / f"{concept_name}.json",
@@ -844,8 +628,9 @@ def run_tier3_core(
     if mode == "full":
         if emit:
             emit("bfs_start", {})
-        bfs_ids   = bfs_event_expansion(lookup, index, all_concept_events, max_nodes=5000, depth=2)
-        local_bfs = fit_umap_local(lookup, bfs_ids)
+        bfs_ids   = bfs_event_expansion(lookup, index, all_concept_events, emb_cache, max_nodes=5000, depth=2)
+        X_bfs     = emb_cache.matrix(bfs_ids)
+        local_bfs = fit_umap_local(X_bfs, bfs_ids)
         all_event_ids.update(bfs_ids)
     else:
         bfs_ids   = []
@@ -860,9 +645,11 @@ def run_tier3_core(
         emit("global_projection_start", {"n_events": len(all_event_ids)})
 
     if all_event_ids:
-        global_coords        = fit_umap_global(lookup, all_event_ids)
-        global_bounds        = compute_bounds_from_coords(list(global_coords.values()))
-        global_bounds_padded = add_padding(global_bounds)
+        all_event_ids_list   = list(all_event_ids)
+        X_global              = emb_cache.matrix(all_event_ids_list)
+        global_coords         = fit_umap_global(X_global, all_event_ids_list)
+        global_bounds         = compute_bounds_from_coords(list(global_coords.values()))
+        global_bounds_padded  = add_padding(global_bounds)
     else:
         logger.warning("[tier3] no event ids — skipping global projection")
         global_coords        = {}
