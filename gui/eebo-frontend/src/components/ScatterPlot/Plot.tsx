@@ -163,7 +163,7 @@ export default function Plot(props: PlotProps) {
       [[], []] as [ScatterplotLayer<PointData>[], ScatterplotLayer<PointData>[]]
     );
 
-    const bfsLayer = props.bfsDataset && bfsOpacity && props.projection === "global" && new ScatterplotLayer<PointData>({
+    const bfsLayer = props.bfsDataset && bfsOpacity && props.bfsDataset?.points?.length && props.projection === "global" && new ScatterplotLayer<PointData>({
       id: "bfs-global",
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       data: props.bfsDataset.points,
@@ -238,7 +238,13 @@ export default function Plot(props: PlotProps) {
         x: e.offsetX,
         y: e.offsetY,
       });
-      controller?.dispatch({ type: pick ? "click" : "background-click", payload: pick });
+
+      const cleanPick = pick?.map(p => p.object)
+        .filter((o): o is PointData => !!o?.event_id) ?? [];
+
+      if (cleanPick.length) {
+        controller?.dispatch({ type: cleanPick ? "click" : "background-click", payload: cleanPick });
+      }
     });
 
     fitZoom();
