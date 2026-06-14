@@ -111,6 +111,7 @@ from lib.tier2_diagnostics import (
     audit_hubness,
     audit_neighbour_identity,
     audit_knn_stability,
+    knn_diagnostics,
 )
 
 K           = 25
@@ -238,54 +239,13 @@ def load_doc_metadata(conn) -> dict:
             doc_id,
             pub_year,
             title
-        FROM pamphlet_tokens
+        FROM documents
         ORDER BY doc_id
     """)
     return {
         row[0]: {"pub_year": row[1], "title": row[2]}
         for row in cur.fetchall()
     }
-
-
-def knn_diagnostics(lookup, index, concept_forms, sample_n=25, k=25):
-    """Dev utility: print kNN overlap and Jaccard stats for a concept's events."""
-    forms     = {f.lower() for f in concept_forms}
-    event_ids = list(lookup.iter_matching_event_ids(forms))
-
-    if len(event_ids) < 5:
-        print("Too few events")
-        return
-
-    event_ids = event_ids[:sample_n]
-    vecs      = np.stack([lookup.get_event(eid)["embedding"] for eid in event_ids])
-    _, nn_ids = index.search(vecs, k)
-    knn_sets  = [set(map(int, row)) for row in nn_ids]
-
-    overlaps  = []
-    jaccards  = []
-    entropies = []
-
-    for i, j in combinations(range(len(knn_sets)), 2):
-        a, b  = knn_sets[i], knn_sets[j]
-        inter = len(a & b)
-        union = len(a | b)
-        overlaps.append(inter)
-        jaccards.append(inter / union if union else 0)
-
-    for s in knn_sets:
-        flat    = list(s)
-        freq    = Counter(flat)
-        p       = np.array(list(freq.values())) / len(flat)
-        entropy = -(p * np.log(p + 1e-9)).sum()
-        entropies.append(entropy)
-
-    print("\n--- KNN DIAGNOSTICS ---")
-    print(f"events sampled: {len(event_ids)}")
-    print(f"mean overlap: {np.mean(overlaps):.3f} ± {np.std(overlaps):.3f}")
-    print(f"mean jaccard: {np.mean(jaccards):.3f} ± {np.std(jaccards):.3f}")
-    print(f"mean entropy: {np.mean(entropies):.3f}")
-    print("\noverlap quantiles:", np.percentile(overlaps, [0, 25, 50, 75, 100]))
-    print("jaccard quantiles:", np.percentile(jaccards, [0, 25, 50, 75, 100]))
 
 
 # Concept analysis
@@ -637,7 +597,10 @@ def main():
 
     concepts_to_run = [
         (concept_name, concept)
-        for concept_name, concept in resolve_concepts(args)
+        for concept_name, concept in resolve_concepts(
+            concept=args.concept,
+            false_positives=args.false_positives,
+        )
         if concept_name not in already_processed
     ]
 
