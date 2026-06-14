@@ -74,8 +74,8 @@ case "$PHASE" in
             "$SRC/tier2_0_concept_events.py"
             "$SRC/tier3_0_plots.py"
         )
-        RUN_ARGS+=("--clear" "--clear" "--clear" "--clear")
-        RUN_ENVS+=("" "" "" "")
+        RUN_ARGS+=("--clear" "--clear" "--clear" "")
+        RUN_ENVS+=("" "" "" "" "")
         ;;
     *)
         echo "! Invalid phase: $PHASE"
