@@ -354,6 +354,7 @@ CREATE TABLE IF NOT EXISTS concepts (
     n_events INTEGER NOT NULL
 );
 
+-- Should probably split into concept_events
 CREATE TABLE IF NOT EXISTS events (
     event_id         INTEGER PRIMARY KEY,
     concept          TEXT    NOT NULL,
@@ -462,15 +463,20 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
 
         con.executemany(
             """INSERT OR IGNORE INTO events
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
-                    e["event_id"], concept_name, e["vector_id"], e["token"],
-                    e["doc_id"], e["pub_year"], e["token_idx"],
-                    e["window_id"], e["window_token_pos"],
+                    e["event_id"],
+                    concept_name,
+                    e["vector_id"],
+                    e["token"],
+                    e["doc_id"],
+                    e["pub_year"],
+                    e["token_idx"],
+                    e["window_id"],
+                    e["window_token_pos"],
                 )
                 for e in data["events"]
-                for n in e["neighbours"]
             ],
         )
 
