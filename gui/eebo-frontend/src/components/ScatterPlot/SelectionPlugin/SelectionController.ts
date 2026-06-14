@@ -1,4 +1,3 @@
-import type { PointData } from "../types";
 import type { Id, ScreenRect, SelectionEvent, SelectionOptions, SelectionPlugin } from "./types";
 
 export class SelectionController<T extends { event_id: Id }> {

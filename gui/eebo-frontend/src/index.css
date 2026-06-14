@@ -93,6 +93,12 @@ mark {
   padding: 0.1em 0.2em;
 }
 
+.scroll-parent {
+  height: 90%;
+  display: flex;
+  flex-direction: column;
+}
+
 .fade-in-1s {
   opacity: 0;
   animation: fadeIn 1s ease-in-out forwards;

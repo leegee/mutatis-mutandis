@@ -1,7 +1,6 @@
 import { createResource } from "solid-js";
 
 export type WindowQuery = {
-  eventId: string;
   docId: string;
   tokenIdx: number;
 };

@@ -16,8 +16,7 @@
  * OUT:
  * {
  *  "results": [
- *    { "docId": "A", "tokenIdx": 12, "content": "..." },
- *    { "docId": "A", "tokenIdx": 88, "content": "..." }
+ *    { "docId": "A", "tokenIdx": 12, "content": "...", token: "T" },
  *  ]
  * }
  */
@@ -25,7 +24,7 @@ import type { Connect } from "vite";
 import { Pool } from "pg";
 import { serverError, text } from "../lib/middleware";
 
-const TOKEN_WINDOW_HALF = 30;
+const TOKEN_WINDOW_HALF = 10;
 
 type QueryItem = {
   docId: string;
@@ -106,6 +105,7 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
             docId,
             tokenIdx: item.tokenIdx,
             content,
+            token: result.rows.find(r => r.token_idx === item.tokenIdx)?.token
           });
         }
       }

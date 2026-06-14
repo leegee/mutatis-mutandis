@@ -1,88 +1,68 @@
-import { createMemo, createResource, For, Show } from "solid-js";
+import { createResource, Show, For } from "solid-js";
 import { controls } from "../../state/controls.store";
 import { queryEventById } from "../../services/db";
 import { controlsActions } from "../../state/controls.actions";
-import { createTokenWindowBatchResource } from "../../services/tokenWindowBatchApi";
+import { fetchWindowBatch } from "../../services/tokenWindowBatchApi";
 
 export default function SidebarMultiple() {
-    // selection snapshot
-    const selectedIds = createMemo(() =>
-        controls.selectedEventIds
-            ? [...controls.selectedEventIds]
-            : []
-    );
+    // stable selection
+    const selectedEventIds = () => controls.selectedEventIds ? Array.from(controls.selectedEventIds) : [];
 
-    // load events
-    const [events] = createResource(selectedIds, async (ids) => {
-        if (!ids.length) return [];
-        return Promise.all(ids.map((id) => queryEventById(id)));
-    });
+    const [sidebarData] = createResource(selectedEventIds, async (ids) => {
+        if (!ids.length) return null;
 
-    // group by document
-    const grouped = createMemo(() => {
-        const evs = events();
-        if (!evs) return [];
+        // Get events by selection IDs
+        const events = await Promise.all(
+            ids.map((id) => queryEventById(id))
+        );
 
-        const map = new Map<string, any[]>();
+        const cleanEvents = events.filter(Boolean);
 
-        for (const e of evs) {
-            if (!e) continue;
-            const list = map.get(e.doc_id) ?? [];
-            list.push(e);
-            map.set(e.doc_id, list);
+        // Get window-text snippets
+        const windowRes = await fetchWindowBatch(
+            cleanEvents.map((e: any) => ({
+                docId: e.doc_id,
+                tokenIdx: Number(e.token_idx),
+            }))
+        );
+
+        const windowMap = new Map<string, any>();
+        for (const w of windowRes.results) {
+            windowMap.set(`${ w.docId }:${ Number(w.tokenIdx) }`, w);
         }
 
-        return [...map.entries()].map(([doc, evs]) => ({
+        // Group events for rendering
+        const groupedMap = new Map<string, any[]>();
+
+        for (const e of cleanEvents) {
+            if (e) { // todo
+                const list = groupedMap.get(e.doc_id) ?? [];
+                list.push(e);
+                groupedMap.set(e.doc_id, list);
+            }
+        }
+
+        const grouped = [...groupedMap.entries()].map(([doc, evs]) => ({
             doc,
             events: evs.sort((a, b) => a.token_idx - b.token_idx),
         }));
-    });
-
-    // window queries
-    const windowQueries = createMemo(() => {
-        const evs = events();
-        if (!evs) return null;
-
-        return evs
-            .filter(Boolean)
-            .map(e => ({
-                eventId: String(e.event_id),
-                docId: e.doc_id,
-                tokenIdx: e.token_idx,
-            }));
-    });
-
-    const [windows] = createTokenWindowBatchResource(windowQueries);
-
-    // explicit window state (loading + map separated)
-    const windowsState = createMemo(() => {
-        const w = windows();
-
-        const map = w?.results
-            ? new Map(w.results.map(x => [x.eventId, x]))
-            : null;
-
-        console.log("[windowsState] loading:", windows.loading);
-        console.log("[windowsState] keys:", map ? [...map.keys()] : []);
-        console.log("[windowsState] sample eventId:", w?.results?.[0]?.eventId);
 
         return {
-            loading: windows.loading,
-            map
+            events: cleanEvents,
+            windowMap,
+            grouped,
         };
     });
-
-    const getWindow = (eventId: string) =>
-        windowsState().map?.get(eventId);
 
     return (
         <Show when={controls.selectedEventIds}>
             {(selectedEventIds) => (
                 <Show when={selectedEventIds().size > 1}>
-                    <aside id="sidebar_container" class="surface-container-high padding">
+                    <aside class="surface-container padding scroll-parent"
+                        style={{ "max-width": "clamp(30rem, 30rem, 30vw)" }}>
                         <header>
                             <nav>
-                                <h2>
+                                <h2 class="max">
                                     {selectedEventIds().size} selected events
                                 </h2>
                                 <button
@@ -95,50 +75,39 @@ export default function SidebarMultiple() {
                                 </button>
                             </nav>
                         </header>
-
-                        <section class="large-height scroll surface">
-                            <For each={grouped()}>
+                        <section style={{ overflow: "auto" }}>
+                            <For each={sidebarData()?.grouped}>
                                 {(group) => (
-                                    <section class="doc-group">
-                                        <button class="chip">
-                                            <span class="large-text">
+                                    <fieldset class="no-padding">
+                                        <legend>
+                                            <button class="chip">
                                                 {group.doc}
-                                            </span>
-                                            <span class="badge none">
-                                                {group.events.length}
-                                            </span>
-                                        </button>
+                                                <span class="none"> (x {group.events.length}) </span>
+                                            </button>
+                                        </legend>
 
                                         <For each={group.events}>
                                             {(e) => {
-                                                const w = getWindow(String(e.event_id));
+                                                const data = sidebarData();
+                                                const key = `${ e.doc_id }:${ Number(e.token_idx) }`;
+                                                const w = data?.windowMap.get(key);
 
                                                 return (
                                                     <>
-                                                        <div class="row left-margin">
+                                                        <h5 class="small left-margin no-padding">
                                                             <q>{e.token}</q>
-                                                            <small>
-                                                                {e.pub_year} · Token {e.token_idx}
-                                                            </small>
-                                                        </div>
+                                                            &nbsp;&mdash;
+                                                            <small> {e.pub_year} </small>
+                                                        </h5>
 
-                                                        <Show
-                                                            when={w}
-                                                            fallback={
-                                                                <div class="loading">
-                                                                    loading context…
-                                                                </div>
-                                                            }
-                                                        >
-                                                            <blockquote
-                                                                innerHTML={w!.content}
-                                                            />
+                                                        <Show when={w} fallback={<progress />}>
+                                                            <blockquote innerHTML={w.content} class="no-padding left-margin bottom-margin" />
                                                         </Show>
                                                     </>
                                                 );
                                             }}
                                         </For>
-                                    </section>
+                                    </fieldset>
                                 )}
                             </For>
                         </section>

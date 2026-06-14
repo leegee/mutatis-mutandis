@@ -66,7 +66,7 @@ export default function ConceptClusterPlot() {
         return [...concept, ...neighbours];
     };
 
-    const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
+    // const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
     function handleSelectionChange(event_ids: Id[] | null) {
