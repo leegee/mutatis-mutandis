@@ -133,7 +133,7 @@ const NeighbourhoodBrowser: Component = () => {
   // The resource key is a tuple of the three values that should trigger a
   // refetch.  createResource re-runs the fetcher whenever the key changes.
   //
-  // We do NOT reset selectedEventId / focusToken here — that would cause a
+  // We do NOT reset selectedEventId / focusToken here - that would cause a
   // cascade.  The selected id will simply fail to match in selectedEvent()
   // and fall back to null gracefully.
   const resourceKey = () =>
@@ -311,14 +311,12 @@ const NeighbourhoodBrowser: Component = () => {
 
       <ControlsHeader />
 
-      {/* Database error banner */}
       <Show when={dbError()}>
         <div class="padding error-container" role="alert">
           <span class="small-text">Database error: {dbError()}</span>
         </div>
       </Show>
 
-      {/* Loading overlay — shown while the SQL query is in flight */}
       <Show when={yearFilteredResource.loading}>
         <div class="padding center-align small-text medium-opacity">
           <progress />

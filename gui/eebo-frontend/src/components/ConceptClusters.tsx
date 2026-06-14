@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, Show, For, createResource, onCleanup } from "solid-js";
 import { controls, setControls } from "../state/controls.store";
-import { queryEventById } from "../services/db";
+import { queryEventById, queryEventsByIds } from "../services/db";
 import { fetchWindowBatch, type TextWindowItem } from "../services/tokenWindowBatchApi";
 import { setWindowCache, getWindow } from "../services/windowCache";
 import { loadJson } from "../lib/loadJson";
@@ -54,6 +54,10 @@ export default function ConceptClusters() {
     const [selectedCluster, setSelectedCluster] = createSignal<string | null>(null);
     const [clusterLoading, setClusterLoading] = createSignal(false);
     const [clusterError, setClusterError] = createSignal<string | null>(null);
+
+    const [exporting, setExporting] = createSignal(false);
+    const [exportError, setExportError] = createSignal<string | null>(null);
+    const [copyStatus, setCopyStatus] = createSignal<"idle" | "copied" | "failed">("idle");
 
     const runClusterFetch = async (concept: string) => {
         setClusterFile(null);
@@ -127,17 +131,21 @@ export default function ConceptClusters() {
         return f.points.filter(p => String(p.cluster_id) === cid);
     };
 
-    // Resolve every event in the selected cluster exactly ONCE (not per
-    // DocRow). This is the single source of `doc_id` for each event_id,
-    // since ClusterPoint itself doesn't carry doc_id.
+    // Resolve every event in the selected cluster in ONE batched query (not
+    // per DocRow, not one-by-one). This is the single source of `doc_id`
+    // for each event_id, since ClusterPoint itself doesn't carry doc_id.
     const [clusterEvents] = createResource(
         clusterPoints,
         async (points): Promise<ResolvedEvent[]> => {
             if (!points.length) return [];
-            const events = await Promise.all(
-                points.map((p) => queryEventById(p.event_id))
-            );
-            return events.filter((e): e is ResolvedEvent => e !== null);
+            const ids = points.map((p) => p.event_id);
+            const eventMap = await queryEventsByIds(ids);
+            const result: ResolvedEvent[] = [];
+            for (const id of ids) {
+                const ev = eventMap.get(id);
+                if (ev) result.push(ev);
+            }
+            return result;
         }
     );
 
@@ -156,6 +164,129 @@ export default function ConceptClusters() {
         }
         return map;
     });
+
+    // Build the full export payload: the loaded cluster file, with every
+    // cluster's top_docs annotated with resolved exemplar events (capped
+    // to MAX_EXEMPLARS_PER_DOC per doc, same as the live view).
+    //
+    // This resolves events for ALL clusters in the file, not just the
+    // currently selected one, since the export is meant to be a complete
+    // snapshot of "the whole cluster file with doc/exemplars resolved".
+    const buildExportPayload = async () => {
+        const f = clusterFile();
+        if (!f) return null;
+
+        // Resolve every event referenced anywhere in f.points, in one
+        // batched query, regardless of which cluster it belongs to.
+        const allEventIds = Array.from(new Set(f.points.map((p) => p.event_id)));
+        const eventById = await queryEventsByIds(allEventIds);
+
+        // doc_id -> exemplar events, capped per doc, across the whole file
+        const exemplarsByDoc = new Map<string, ResolvedEvent[]>();
+        for (const p of f.points) {
+            const ev = eventById.get(p.event_id);
+            if (!ev) continue;
+            const arr = exemplarsByDoc.get(ev.doc_id) ?? [];
+            if (arr.length < MAX_EXEMPLARS_PER_DOC) {
+                arr.push(ev);
+                exemplarsByDoc.set(ev.doc_id, arr);
+            }
+        }
+
+        const toExemplarPayload = (ev: ResolvedEvent) => ({
+            event_id: ev.event_id,
+            doc_id: ev.doc_id,
+            token_idx: ev.token_idx,
+            token: ev.token,
+            window: getWindow(ev.event_id) ?? null,
+        });
+
+        // Rebuild aggregates with resolved exemplars attached to each top_doc
+        const aggregates: Record<string, ClusterAggregate & {
+            top_docs_resolved: {
+                doc_id: string;
+                count: number;
+                exemplars: ReturnType<typeof toExemplarPayload>[];
+            }[];
+        }> = {};
+
+        for (const [cid, agg] of Object.entries(f.clusters.aggregates)) {
+            aggregates[cid] = {
+                ...agg,
+                top_docs_resolved: agg.top_docs.map(([doc_id, count]) => ({
+                    doc_id,
+                    count,
+                    exemplars: (exemplarsByDoc.get(doc_id) ?? []).map(toExemplarPayload),
+                })),
+            };
+        }
+
+        return {
+            type: f.type,
+            concept: f.concept,
+            generated_at: f.generated_at,
+            n_events: f.n_events,
+            bounds: f.bounds,
+            globalBounds: f.globalBounds,
+            clusters: {
+                label_map: f.clusters.label_map,
+                aggregates,
+            },
+            points: f.points,
+            exported_at: new Date().toISOString(),
+        };
+    };
+
+    const exportFilename = () => {
+        const f = clusterFile();
+        const concept = f?.concept ?? "cluster_export";
+        return `${ concept }_clusters_export.json`;
+    };
+
+    const handleCopyJson = async () => {
+        setExportError(null);
+        setCopyStatus("idle");
+        setExporting(true);
+        try {
+            const payload = await buildExportPayload();
+            if (!payload) return;
+            const text = JSON.stringify(payload, null, 2);
+            await navigator.clipboard.writeText(text);
+            setCopyStatus("copied");
+            setTimeout(() => setCopyStatus("idle"), 2000);
+        } catch (err) {
+            console.error(err);
+            setCopyStatus("failed");
+            setExportError(err instanceof Error ? err.message : "Failed to copy to clipboard");
+            setTimeout(() => setCopyStatus("idle"), 2000);
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleDownloadJson = async () => {
+        setExportError(null);
+        setExporting(true);
+        try {
+            const payload = await buildExportPayload();
+            if (!payload) return;
+            const text = JSON.stringify(payload, null, 2);
+            const blob = new Blob([text], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = exportFilename();
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            setExportError(err instanceof Error ? err.message : "Failed to build download");
+        } finally {
+            setExporting(false);
+        }
+    };
 
     return (
         <article class="concept-clusters">
@@ -182,6 +313,41 @@ export default function ConceptClusters() {
                     · {noiseCount().toLocaleString()} noise points
                     · generated {clusterFile()!.generated_at.slice(0, 10)}
                 </p>
+
+                {/* Export controls */}
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:1rem;">
+                    <button
+                        class="border small"
+                        disabled={exporting()}
+                        onClick={handleCopyJson}
+                    >
+                        <i>content_copy</i>
+                        <span>
+                            {copyStatus() === "copied"
+                                ? "Copied!"
+                                : copyStatus() === "failed"
+                                    ? "Copy failed"
+                                    : "Copy JSON"}
+                        </span>
+                    </button>
+
+                    <button
+                        class="border small"
+                        disabled={exporting()}
+                        onClick={handleDownloadJson}
+                    >
+                        <i>download</i>
+                        <span>Download JSON</span>
+                    </button>
+
+                    <Show when={exporting()}>
+                        <progress class="circle small" />
+                    </Show>
+
+                    <Show when={exportError()}>
+                        <span class="error-text">{exportError()}</span>
+                    </Show>
+                </div>
 
                 {/* Cluster selector pills */}
                 <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:1.5rem;">
@@ -235,12 +401,12 @@ export default function ConceptClusters() {
                         </div>
 
                         <div class="s9">
-                            <section>
+                            <section class="scroll-parent" style={{ height: '70vh' }}>
                                 <h3>Top documents</h3>
                                 <Show when={clusterEvents.loading}>
                                     <progress />
                                 </Show>
-                                <div class="large-height scroll surface">
+                                <div class="surface" style={{ overflow: "auto" }}>
                                     <table class="stripes no-border scroll max">
                                         <thead class="fixed">
                                             <tr><th>Rank</th><th>Document ID</th><th>Count</th></tr>

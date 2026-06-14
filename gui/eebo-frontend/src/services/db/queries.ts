@@ -1,6 +1,8 @@
 import type { Event, ConceptEvent, Neighbour } from "../../types";
 import { execRows } from "./dbh";
 
+const SQLITE_MAX_VARIABLES = 900; // stay safely under SQLite's ~999 limit
+
 // Typed query helpers
 export async function listConcepts(): Promise<string[]> {
   const rows = await execRows("SELECT concept FROM concepts ORDER BY concept");
@@ -47,6 +49,47 @@ export async function queryEventById(id: string): Promise<Event | null> {
   } as Event;
 }
 
+
+export async function queryEventsByIds(
+  ids: string[],
+): Promise<Map<string, Event>> {
+  const result = new Map<string, Event>();
+
+  // de-duplicate while preserving nothing in particular — order doesn't
+  // matter since we return a Map
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length === 0) return result;
+
+  console.log("[query] queryEventsByIds", uniqueIds.length);
+
+  for (let i = 0; i < uniqueIds.length; i += SQLITE_MAX_VARIABLES) {
+    const chunk = uniqueIds.slice(i, i + SQLITE_MAX_VARIABLES);
+    const placeholders = chunk.map(() => "?").join(",");
+
+    const rows = await execRows(
+      `SELECT * FROM events WHERE event_id IN (${ placeholders })`,
+      chunk,
+    );
+
+    for (const row of rows) {
+      const event: Event = {
+        event_id: String(row[0]),
+        concept: row[1] as string,
+        vector_id: row[2] != null ? String(row[2]) : null,
+        token: (row[3] as string) ?? null,
+        doc_id: (row[4] as string) ?? null,
+        pub_year: row[5] != null ? Number(row[5]) : null,
+        token_idx: row[6] != null ? Number(row[6]) : null,
+        window_id: row[7] != null ? Number(row[7]) : null,
+        window_token_pos: row[8] != null ? Number(row[8]) : null,
+      } as Event;
+
+      result.set(event.event_id, event);
+    }
+  }
+
+  return result;
+}
 
 export async function queryEventsByConcept(
   concept: string,
