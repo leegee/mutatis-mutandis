@@ -31,6 +31,10 @@ type QueryItem = {
   tokenIdx: number;
 };
 
+function format(text: string) {
+  return text.replace(/\s+([,.;:\)])/g, "$1").replace(/\(\s+/g, "(");
+}
+
 export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunction {
   return async (req, res, next) => {
     if (req.method !== "POST") return next();
@@ -104,7 +108,7 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
           results.push({
             docId,
             tokenIdx: item.tokenIdx,
-            content,
+            content: format(content),
             token: result.rows.find(r => r.token_idx === item.tokenIdx)?.token
           });
         }
