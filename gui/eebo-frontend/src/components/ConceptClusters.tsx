@@ -39,10 +39,15 @@ interface ClusterFile {
     points: ClusterPoint[];
 }
 
+type ResolvedEvent = NonNullable<Awaited<ReturnType<typeof queryEventById>>>;
+
 const CLUSTER_COLORS = [
     "#7F77DD", "#1D9E75", "#D85A30", "#D4537E",
     "#378ADD", "#BA7517", "#639922", "#E24B4A",
 ];
+
+// Max exemplar rows shown per document
+const MAX_EXEMPLARS_PER_DOC = 3;
 
 export default function ConceptClusters() {
     const [clusterFile, setClusterFile] = createSignal<ClusterFile | null>(null);
@@ -121,6 +126,36 @@ export default function ConceptClusters() {
         if (!f || cid === null) return [];
         return f.points.filter(p => String(p.cluster_id) === cid);
     };
+
+    // Resolve every event in the selected cluster exactly ONCE (not per
+    // DocRow). This is the single source of `doc_id` for each event_id,
+    // since ClusterPoint itself doesn't carry doc_id.
+    const [clusterEvents] = createResource(
+        clusterPoints,
+        async (points): Promise<ResolvedEvent[]> => {
+            if (!points.length) return [];
+            const events = await Promise.all(
+                points.map((p) => queryEventById(p.event_id))
+            );
+            return events.filter((e): e is ResolvedEvent => e !== null);
+        }
+    );
+
+    // Group resolved events by doc_id, capped to MAX_EXEMPLARS_PER_DOC per
+    // doc up front — so DocRow never has to fetch/filter the full cluster.
+    const eventsByDoc = createMemo(() => {
+        const events = clusterEvents();
+        const map = new Map<string, ResolvedEvent[]>();
+        if (!events) return map;
+        for (const e of events) {
+            const arr = map.get(e.doc_id) ?? [];
+            if (arr.length < MAX_EXEMPLARS_PER_DOC) {
+                arr.push(e);
+                map.set(e.doc_id, arr);
+            }
+        }
+        return map;
+    });
 
     return (
         <article class="concept-clusters">
@@ -202,6 +237,9 @@ export default function ConceptClusters() {
                         <div class="s9">
                             <section>
                                 <h3>Top documents</h3>
+                                <Show when={clusterEvents.loading}>
+                                    <progress />
+                                </Show>
                                 <div class="large-height scroll surface">
                                     <table class="stripes no-border scroll max">
                                         <thead class="fixed">
@@ -214,7 +252,7 @@ export default function ConceptClusters() {
                                                         rank={i()}
                                                         doc_id={doc_id}
                                                         count={count}
-                                                        points={clusterPoints()}
+                                                        events={eventsByDoc().get(doc_id) ?? []}
                                                     />
                                                 )}
                                             </For>
@@ -234,46 +272,37 @@ function DocRow(props: {
     rank: number;
     doc_id: string;
     count: number;
-    points: ClusterPoint[];
+    events: ResolvedEvent[];
 }) {
     let rowRef: HTMLTableRowElement | undefined;
     const [visible, setVisible] = createSignal(false);
 
-
-    type Event = NonNullable<Awaited<ReturnType<typeof queryEventById>>>;
-
-    const eventIds = createMemo(() => {
-        if (!visible()) return null;
-        return props.points.map((p) => p.event_id);
-    });
-
+    // events are pre-resolved and already capped to MAX_EXEMPLARS_PER_DOC
+    // by the parent — only fetch window text for these few ids, and only
+    // once this row is visible.
     const [resolved] = createResource(
-        eventIds,
-        async (ids: string[] | null): Promise<Event[]> => {
-            if (!ids) return [];
+        () => (visible() ? props.events : null),
+        async (events): Promise<ResolvedEvent[]> => {
+            if (!events || !events.length) return [];
 
-            const events = await Promise.all(
-                ids.map((id: string) => queryEventById(id))
-            );
+            // skip ids whose window content is already cached
+            const toFetch = events.filter((e) => !getWindow(e.event_id));
 
-            const valid = events.filter(
-                (e): e is Event => e !== null
-            );
+            if (toFetch.length) {
+                const batch = toFetch.map((e) => ({
+                    eventId: e.event_id,
+                    docId: e.doc_id,
+                    tokenIdx: e.token_idx,
+                }));
 
-            const batch = valid.map((e) => ({
-                eventId: e.event_id,
-                docId: e.doc_id,
-                tokenIdx: e.token_idx,
-            }));
+                const res = await fetchWindowBatch(batch);
 
-            const res = await fetchWindowBatch(batch);
+                res.results.forEach((r: TextWindowItem, idx: number) => {
+                    setWindowCache(toFetch[idx].event_id, r.content);
+                });
+            }
 
-            res.results.forEach((r: TextWindowItem, idx: number) => {
-                const ev = valid[idx];
-                setWindowCache(ev.event_id, r.content);
-            });
-
-            return valid;
+            return events;
         }
     );
 
@@ -292,14 +321,6 @@ function DocRow(props: {
         onCleanup(() => observer.disconnect());
     });
 
-    const exemplarsForDoc = createMemo(() => {
-        const events = resolved();
-        if (!events) return [];
-        return events
-            .filter(e => e.doc_id === props.doc_id)
-            .slice(0, 3);
-    });
-
     return (
         <>
             <tr ref={rowRef}>
@@ -314,7 +335,7 @@ function DocRow(props: {
                     </td>
                 </tr>
             </Show>
-            <For each={exemplarsForDoc()}>
+            <For each={props.events}>
                 {(ev) => <ExemplarSubRow event={ev} />}
             </For>
         </>
@@ -322,7 +343,7 @@ function DocRow(props: {
 }
 
 
-function ExemplarSubRow(props: { event: any }) {
+function ExemplarSubRow(props: { event: ResolvedEvent }) {
     let rowRef: HTMLTableRowElement | undefined;
     const [visible, setVisible] = createSignal(false);
 
