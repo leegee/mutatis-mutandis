@@ -340,26 +340,6 @@ class EmbeddingPipeline:
             events.extend(self._extract_events(buf, item, hidden))
         return events
 
-    @staticmethod
-    def _extract_events(buf: DocBuffer, item: dict, hidden: np.ndarray) -> list[Event]:
-        window_start = item["window_start"]
-        window_start_token_idx = buf.corpus_token_idxs[window_start]
-
-        return [
-            Event.make(
-                doc_id=buf.doc_id,
-                corpus_token_idx=buf.corpus_token_idxs[wid],        # ← key fix
-                window_start_token_idx=window_start_token_idx,
-                window_start=window_start,
-                window_token_pos=i,
-                token=buf.tokens[wid],
-                vector_id=buf.vector_ids[wid],
-                vec=hidden[i],
-            )
-            for i, wid in enumerate(item["word_ids"])
-            if wid is not None and wid >= 0
-        ]
-
 
 class CorpusProcessor:
     def __init__(self, conn, pipeline, report_every: int = 100):
