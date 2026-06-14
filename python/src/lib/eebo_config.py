@@ -196,27 +196,24 @@ CONCEPT_SETS: CanonicalRules = {
 
     "DIVINE": {
         "forms": {
-            "god", "divine", "heaven", "heavens", "eternal", "grace", "providence",
-            "sacred", "holy", "lord", "almighty", "creator", "eternity"
+            "divine",
+            # "god",  "heaven", "heavens", "eternal", "grace", "providence", "sacred", "holy", "lord", "almighty", "creator", "eternity"
         },
         "false_positives": {
-            "godly", "good", "goods", "gold", "glad"
+             "good", "goods", "gold", "glad" # "godly",
         }
     },
     "TEMPORAL": {
         "forms": {
-            "state", "civil", "political", "temporal", "commonwealth",
-            "kingdom", "government", "authority", "prince", "realm"
+            "temporal", # "state", "civil", "political",  "commonwealth", "kingdom", "government", "authority", "prince", "realm"
         },
-        "false_positives": {
-            "statue", "station", "temple"
-        }
+        "false_positives": set(), # { "statue", "station", "temple" }
     },
 
 
     # Rough political/legal
     "KING": {
-        "forms": {"king", "kings", "kinges", "monarch", "sovereign"},
+        "forms": {"king", "kings", "kinges", }, # "monarch", "sovereign"
         "false_positives": {"kin", "kine", "sink", "sing"}
     },
     "PARLIAMENT": {
@@ -224,11 +221,11 @@ CONCEPT_SETS: CanonicalRules = {
         "false_positives": {"parliamentary", "parlour"}
     },
     "OBEDIENCE": {
-        "forms": {"obedience", "obedient", "obedienc", "obey"},
+        "forms": {"obedience"}, # , "obedient", "obedienc", "obey"
         "false_positives": {"obscene", "obeyed", "obed"}
     },
     "PEOPLE": {
-        "forms": {"people", "peoples", "peple", "populace", "subjects"},
+        "forms": {"people", "peoples", "peple",}, #  "populace", "subjects"
         "false_positives": {"peep", "peeps", "pepla"}
     },
     "COMMONWEALTH": {
@@ -238,18 +235,18 @@ CONCEPT_SETS: CanonicalRules = {
 
     # Rough theology
     "CHURCH": {
-        "forms": {"church", "churches", "clergy", "ecclesia", "congregation"},
-        "false_positives": {"churchyard", "churchman"}
+        "forms": {"church"}, # , "churches", "clergy", "ecclesia", "congregation"
+        "false_positives": set(), # {"churchyard", "churchman"}
     },
     "RELIGION": {
-        "forms": {"religion", "religions", "faith", "doctrine", "creed"},
-        "false_positives": {"religious", "religionist"}
+        "forms": {"religion"}, # , "religions", "faith", "doctrine", "creed"
+        "false_positives": set(),  # {"religious", "religionist"}
     },
 
     # Neutral baselines
     "MAN": {
         "forms": {"man"},
-        "false_positives": {"woman"},
+        "false_positives": set()  # {"woman"},
     },
 
     "HOUSE": {
@@ -261,9 +258,7 @@ CONCEPT_SETS: CanonicalRules = {
         "forms": {
             "property", "propertie", "propriety"
         },
-        "false_positives": {
-            "properly"
-        }
+        "false_positives": set() # { "properly" }
     },
 
     # May 2026
@@ -271,25 +266,21 @@ CONCEPT_SETS: CanonicalRules = {
         "forms": {
             "revolution", "revolucion", "revolutio", "revolutions", "revolutión",
             "revolucon", "revolucionary", "revolucioners", "revolutioners",
-            "rebellion", "insurrection"  # Often semantically overlapping in period usage
+            # "rebellion", "insurrection"
         },
-        "false_positives": {
-            "revolution" : ["astronomical", "planetary", "celestial", "orb", "circle"]  # Pre-1688, often means literal 'turning/rotation'
-        }
+        "false_positives": set(), # { "astronomical", "planetary", "celestial", "orb", "circle" }
     },
     "INTEREST": {
         "forms": {
             "interest", "interesse", "intrest", "intrests", "interests",
-            "interestes", "interessed", "interessing", "publique interest",
-            "common interest", "particular interest"
+            "interestes", "interessed",
         },
         "false_positives": set(),
         # { "usury", "usance", "money", "profit", "compound" }
     },
     "FANATIC": {
         "forms": {
-            "fanatic", "fanatick", "fanatique", "fanaticks", "fanatiques",
-            "fanaticism", "fanaticisme", "phanatic", "phanatique"
+            "fanatic", "fanatick", "fanatique", # "fanaticism", "fanaticisme", "phanatic", "phanatique"
         },
         "false_positives": set(),
     },
