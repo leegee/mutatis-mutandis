@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-tier2_0_sql_concept_events.py - Tier2: neighbourhood analysis over event-space substrate
+tier2_0_concept_events.py - Tier2: neighbourhood analysis over event-space substrate
 
 Core invariant
 --------------
@@ -31,22 +31,48 @@ matches one of the concept's forms are loaded into memory. This makes
 single-concept runs substantially faster and much lighter on memory than
 full-corpus loads. When no concept filter is active, all events are loaded.
 
+STORAGE MODEL (struct-of-arrays)
+---------------------------------
+
+ZarrEventLookup stores event metadata as parallel numpy arrays (one array
+per field, indexed by row position), plus a single event_id -> row position
+dict (`_pos`). This replaces the earlier design of one Python dict per
+event (`by_event_id: dict[int, dict]`), which for a multi-million event
+corpus meant millions of small heap objects, dict-hashing overhead per
+field access, and poor cache locality.
+
+The struct-of-arrays layout means:
+
+    - _pos:        dict[int, int]      event_id -> row position (one dict)
+    - event_id:    np.ndarray[int64]
+    - vector_id:   np.ndarray[int64]
+    - doc_id:      np.ndarray[object]  (interned strings)
+    - token:       np.ndarray[object]  (interned strings)
+    - token_idx:   np.ndarray[int64]
+    - window_id:   np.ndarray[int64]
+    - window_token_pos: np.ndarray[int64]  (-1 where absent)
+    - embeddings:  np.ndarray[float32, shape=(n, dim)]
+
+A "row" is the same row position across all of these arrays. get_event()
+and get_pos() operate on row positions rather than per-event dicts, and
+record construction for SQLite reads directly from these arrays.
+
 Embeddings are currently stored in ZarrEventLookup alongside metadata so
 that FAISS queries can be issued using the canonical Zarr vector rather than
 relying on FAISS internal storage. This is correct and safe for IndexFlatIP,
 which stores vectors verbatim, but it has two consequences:
 
     1. Memory: all embeddings for the full corpus are resident in the lookup
-       dict when no concept filter is active. For a large corpus this can
+       when no concept filter is active. For a large corpus this can
        be several GB.
 
     2. Coupling: the lookup is responsible for both metadata and vector
        storage, which conflates two concerns.
 
-A cleaner long-term approach is to drop the "embedding" field from
-ZarrEventLookup.by_event_id entirely, and instead reconstruct vectors
-from the FAISS index at query time via EeboFaissIndex.reconstruct().
-See eebo_faiss.py for the reconstruct() method and usage notes.
+A cleaner long-term approach is to drop the embeddings array from
+ZarrEventLookup entirely, and instead reconstruct vectors from the FAISS
+index at query time via EeboFaissIndex.reconstruct(). See eebo_faiss.py
+for the reconstruct() method and usage notes.
 
 This migration is deferred until the index type (exact vs. approximate)
 is confirmed stable, because IndexHNSWFlat does not support vector
@@ -117,10 +143,17 @@ from lib.tier2_diagnostics import (
 K           = 25
 BATCH_SIZE  = 8192
 
+# Sentinel for absent window_token_pos in the int64 column. -1 is never a
+# valid token position, so it is unambiguous as "not present".
+_NO_WPOS = -1
+
+
 # Event lookup
 class ZarrEventLookup:
     """
-    In-memory index of Tier 1 observation events, keyed by event_id.
+    In-memory index of Tier 1 observation events, stored as parallel numpy
+    arrays (struct-of-arrays) keyed by row position, plus a single
+    event_id -> row position dict.
 
     When forms is provided, only events whose token matches one of the
     supplied forms are loaded. This is the normal path for single-concept
@@ -137,11 +170,30 @@ class ZarrEventLookup:
     deferred migration path to EeboFaissIndex.reconstruct().
     """
 
+    # Field name -> numpy dtype for the metadata columns (excludes
+    # embeddings, which are handled separately as a 2D float32 array).
+    _FIELDS = {
+        "event_id":         np.int64,
+        "vector_id":        np.int64,
+        "doc_id":           object,
+        "token":            object,
+        "token_idx":        np.int64,
+        "window_id":        np.int64,
+        "window_token_pos": np.int64,
+    }
+
     def __init__(self, root, forms: set[str] | None = None, false_positives: set[str] | None = None):
         self.root            = root
         self.forms           = {f.lower() for f in forms} if forms else None
         self.false_positives = {f.lower() for f in false_positives} if false_positives else set()
-        self.by_event_id     = {}
+
+        # event_id -> row position (single dict, replaces by_event_id)
+        self._pos: dict[int, int] = {}
+
+        # Per-batch staging lists, concatenated into arrays in _finalize.
+        self._chunks: dict[str, list[np.ndarray]] = {field: [] for field in self._FIELDS}
+        self._emb_chunks: list[np.ndarray] = []
+
         self._build()
 
     def _build(self):
@@ -159,20 +211,19 @@ class ZarrEventLookup:
 
             self._load_store(g["events"], store_dir)
 
-        logger.info(f"[tier2] events={len(self.by_event_id)}")
+        self._finalize()
 
+        logger.info(f"[tier2] events={len(self._pos)}")
 
     def _load_store(self, e, store_dir):
         """
-        Load events from one Zarr store into by_event_id.
+        Load events from one Zarr store into the staging columns.
 
-        Reads each dataset as a contiguous numpy array per batch.
-        Indexing into numpy in the inner loop is cheap; indexing directly
-        into Zarr would trigger per-element decompression.
-
-        If self.forms is set, only tokens matching a known form are
-        retained, skipping all other rows without building Python objects
-        for them.
+        Reads each dataset as a contiguous numpy array per batch, then
+        applies the forms/false_positives mask with vectorised numpy
+        boolean indexing (np.isin) rather than per-row Python checks.
+        Matching rows are appended to the staging arrays as whole arrays
+        (no per-event dicts are created).
         """
         if "event_id" not in e:
             raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
@@ -192,39 +243,124 @@ class ZarrEventLookup:
             b_embs = e["emb_raw"][start:end]
             b_wpos = wpos[start:end] if wpos is not None else None
 
-            for i in range(end - start):
-                token = str(b_toks[i])
-                token_lower = token.lower()
-                if self.forms and token_lower not in self.forms:
-                    continue
-                if token_lower in self.false_positives:
-                    continue
+            b_toks = b_toks.astype(str)
+            b_docs = b_docs.astype(str)
+            b_toks_lower = np.char.lower(b_toks)
 
-                eid = int(b_eids[i])
-                self.by_event_id[eid] = {
-                    "event_id":         eid,
-                    "vector_id":        int(b_vids[i]),
-                    "doc_id":           str(b_docs[i]),
-                    "token":            token,
-                    "token_idx":        int(b_idxs[i]),
-                    "window_id":        int(b_wins[i]),
-                    "window_token_pos": int(b_wpos[i]) if b_wpos is not None else None,
-                    # NOTE: storing embeddings here holds all matching
-                    # embeddings in memory. See module docstring for the
-                    # deferred migration to EeboFaissIndex.reconstruct().
-                    "embedding":        np.asarray(b_embs[i], dtype=np.float32),
-                }
+            if self.forms is not None:
+                keep = np.isin(b_toks_lower, list(self.forms))
+            else:
+                keep = np.ones(end - start, dtype=bool)
+
+            if self.false_positives:
+                keep &= ~np.isin(b_toks_lower, list(self.false_positives))
+
+            if not keep.any():
+                continue
+
+            if b_wpos is not None:
+                wpos_col = np.asarray(b_wpos, dtype=np.int64)[keep]
+            else:
+                wpos_col = np.full(int(keep.sum()), _NO_WPOS, dtype=np.int64)
+
+            self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
+            self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
+            self._chunks["doc_id"].append(b_docs[keep])
+            self._chunks["token"].append(b_toks[keep])
+            self._chunks["token_idx"].append(np.asarray(b_idxs, dtype=np.int64)[keep])
+            self._chunks["window_id"].append(np.asarray(b_wins, dtype=np.int64)[keep])
+            self._chunks["window_token_pos"].append(wpos_col)
+
+            self._emb_chunks.append(np.asarray(b_embs, dtype=np.float32)[keep])
+
+    def _finalize(self):
+        """
+        Concatenate staged per-batch arrays into the final columnar arrays
+        and build the event_id -> row position map.
+
+        If no events were loaded (e.g. an empty corpus or a concept with
+        no matches), all columns are initialised as empty arrays with the
+        correct dtype/shape so downstream code can operate uniformly.
+        """
+        n_total = sum(arr.shape[0] for arr in self._chunks["event_id"])
+
+        if n_total == 0:
+            for field, dtype in self._FIELDS.items():
+                setattr(self, field, np.empty(0, dtype=dtype))
+            self.embeddings = np.empty((0, 0), dtype=np.float32)
+            self._chunks = {}
+            self._emb_chunks = []
+            return
+
+        for field, dtype in self._FIELDS.items():
+            setattr(self, field, np.concatenate(self._chunks[field]).astype(dtype, copy=False))
+
+        self.embeddings = np.concatenate(self._emb_chunks, axis=0)
+
+        # event_id -> row position. event_id is globally unique (Tier 1
+        # invariant), so this is a straight bijection; last-write-wins is
+        # not expected to occur but if Tier 1 ever produced a duplicate
+        # this would silently keep the last row, matching prior dict
+        # behaviour (by_event_id[eid] = ... overwrote on duplicates too).
+        self._pos = {int(eid): pos for pos, eid in enumerate(self.event_id)}
+
+        # Free staging buffers now that the columnar arrays own the data.
+        self._chunks = {}
+        self._emb_chunks = []
+
+    # ------------------------------------------------------------
+    # Row access
+    # ------------------------------------------------------------
 
     def get_event(self, event_id: int) -> dict:
-        return self.by_event_id[int(event_id)]
+        """
+        Return a dict for one event, in the same shape as the previous
+        per-event dict representation (event_id, vector_id, doc_id, token,
+        token_idx, window_id, window_token_pos, embedding).
+
+        Kept for compatibility with code that wants a single event as a
+        dict (e.g. logging, one-off lookups). Hot loops should prefer
+        get_pos() plus direct array access to avoid per-call dict
+        allocation — see analyse_concept.
+        """
+        pos = self._pos[int(event_id)]
+        return self._row_to_dict(pos)
+
+    def get_pos(self, event_id: int) -> int:
+        """event_id -> row position. Raises KeyError if not present."""
+        return self._pos[int(event_id)]
+
+    def _row_to_dict(self, pos: int) -> dict:
+        wpos = int(self.window_token_pos[pos])
+        return {
+            "event_id":         int(self.event_id[pos]),
+            "vector_id":        int(self.vector_id[pos]),
+            "doc_id":           str(self.doc_id[pos]),
+            "token":            str(self.token[pos]),
+            "token_idx":        int(self.token_idx[pos]),
+            "window_id":        int(self.window_id[pos]),
+            "window_token_pos": None if wpos == _NO_WPOS else wpos,
+            "embedding":        self.embeddings[pos],
+        }
 
     def iter_matching_event_ids(self, forms, false_positives=None):
+        """
+        Yield event_ids whose token matches `forms` and is not in
+        `false_positives`. Vectorised over the token column.
+        """
         forms = {f.lower() for f in forms}
         false_positives = {f.lower() for f in (false_positives or [])}
-        for eid, event in self.by_event_id.items():
-            token = event["token"].lower()
-            if token in forms and token not in false_positives:
-                yield eid
+
+        if len(self.token) == 0:
+            return
+
+        tokens_lower = np.char.lower(self.token.astype(str))
+        mask = np.isin(tokens_lower, list(forms))
+        if false_positives:
+            mask &= ~np.isin(tokens_lower, list(false_positives))
+
+        for eid in self.event_id[mask]:
+            yield int(eid)
 
 
 # Document metadata
@@ -249,37 +385,20 @@ def load_doc_metadata(conn) -> dict:
 
 
 # Concept analysis
-def _event_record(event, doc_meta):
-    """Serialisable dict for one query event (without neighbours)."""
-    return {
-        "event_id":         int(event["event_id"]),
-        "vector_id":        event["vector_id"],
-        "token":            event["token"],
-        "doc_id":           event["doc_id"],
-        "pub_year":         doc_meta.get(event["doc_id"], {}).get("pub_year"),
-        "token_idx":        event["token_idx"],
-        "window_id":        event["window_id"],
-        "window_token_pos": event["window_token_pos"],
-    }
-
-
-def _neighbour_record(n_event, query_event, doc_meta, score):
-    """Serialisable dict for one neighbour of a query event."""
-    return {
-        "event_id":         int(n_event["event_id"]),
-        "vector_id":        n_event["vector_id"],
-        "token":            n_event["token"],
-        "doc_id":           n_event["doc_id"],
-        "pub_year":         doc_meta.get(query_event["doc_id"], {}).get("pub_year"),
-        "token_idx":        n_event["token_idx"],
-        "window_id":        n_event["window_id"],
-        "window_token_pos": n_event["window_token_pos"],
-        "score":            float(score),
-    }
-
-
 def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, diagnostics=False):
-    """Compute neighbourhood structure for all events matching a concept."""
+    """
+    Compute neighbourhood structure for all events matching a concept.
+
+    Record construction (event/neighbour rows) reads directly from the
+    columnar arrays in `lookup` via row positions, avoiding the
+    intermediate per-event/per-neighbour dicts (_event_record /
+    _neighbour_record) used in the previous implementation. The returned
+    "events"/"neighbours" entries are still plain dicts (one per query
+    event and one per surviving neighbour), since that shape is what
+    write_sqlite consumes — but no *extra* dicts are built beyond those,
+    and pub_year is looked up once per query event rather than once per
+    neighbour.
+    """
     forms           = set(concept["forms"])
     false_positives = {f.lower() for f in concept.get("false_positives", [])}
 
@@ -292,13 +411,17 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
     if not event_ids:
         return {"concept": concept_name, "empty": True}
 
-    query_vecs = np.stack([
-        lookup.get_event(eid)["embedding"] for eid in event_ids
-    ])
+    event_pos = np.fromiter(
+        (lookup.get_pos(eid) for eid in event_ids),
+        dtype=np.int64,
+        count=len(event_ids),
+    )
 
-    logger.info(f"[tier2] query_events={len(event_ids)}")
-    logger.info(f"[tier2] sample_event_id={event_ids[0]}")
-    logger.info(f"[tier2] sample_embedding_shape={query_vecs.shape}")
+    query_vecs = lookup.embeddings[event_pos]
+
+    logger.debug(f"[tier2] query_events={len(event_ids)}")
+    logger.debug(f"[tier2] sample_event_id={event_ids[0]}")
+    logger.debug(f"[tier2] sample_embedding_shape={query_vecs.shape}")
 
     all_scores, all_neigh_ids = index.search(query_vecs, K)
 
@@ -314,26 +437,67 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
     window_counter = Counter()
     results        = []
 
+    # Pull array references once; avoids repeated attribute lookups in the
+    # inner loop below.
+    L_event_id  = lookup.event_id
+    L_vector_id = lookup.vector_id
+    L_doc_id    = lookup.doc_id
+    L_token     = lookup.token
+    L_token_idx = lookup.token_idx
+    L_window_id = lookup.window_id
+    L_wpos      = lookup.window_token_pos
+
     for i, eid in enumerate(event_ids):
-        event      = lookup.get_event(eid)
+        q_pos = int(event_pos[i])
+        q_doc_id = str(L_doc_id[q_pos])
+        q_pub_year = doc_meta.get(q_doc_id, {}).get("pub_year")
+
         neighbours = []
 
         for nid, score in zip(all_neigh_ids[i], all_scores[i]):
             if nid == -1 or int(nid) == int(eid):
                 continue
 
-            n_event = lookup.get_event(int(nid))
+            n_pos = lookup.get_pos(int(nid))
+            n_token = str(L_token[n_pos])
 
-            if n_event["token"].lower() in false_positives:
+            if n_token.lower() in false_positives:
                 continue
 
-            token_counter[n_event["token"]]                           += 1
-            doc_counter[n_event["doc_id"]]                            += 1
-            window_counter[(n_event["doc_id"], n_event["window_id"])] += 1
+            n_doc_id = str(L_doc_id[n_pos])
+            n_window_id = int(L_window_id[n_pos])
 
-            neighbours.append(_neighbour_record(n_event, event, doc_meta, score))
+            token_counter[n_token]                  += 1
+            doc_counter[n_doc_id]                   += 1
+            window_counter[(n_doc_id, n_window_id)] += 1
 
-        results.append({**_event_record(event, doc_meta), "neighbours": neighbours})
+            n_wpos = int(L_wpos[n_pos])
+
+            neighbours.append({
+                "event_id":         int(L_event_id[n_pos]),
+                "vector_id":        int(L_vector_id[n_pos]),
+                "token":            n_token,
+                "doc_id":           n_doc_id,
+                "pub_year":         q_pub_year,
+                "token_idx":        int(L_token_idx[n_pos]),
+                "window_id":        n_window_id,
+                "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
+                "score":            float(score),
+            })
+
+        q_wpos = int(L_wpos[q_pos])
+
+        results.append({
+            "event_id":         int(L_event_id[q_pos]),
+            "vector_id":        int(L_vector_id[q_pos]),
+            "token":            str(L_token[q_pos]),
+            "doc_id":           q_doc_id,
+            "pub_year":         q_pub_year,
+            "token_idx":        int(L_token_idx[q_pos]),
+            "window_id":        int(L_window_id[q_pos]),
+            "window_token_pos": None if q_wpos == _NO_WPOS else q_wpos,
+            "neighbours":       neighbours,
+        })
 
     return {
         "concept":   concept_name,
@@ -435,7 +599,7 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
     rewritten, leaving all other concepts intact. This is the correct path
     for single-concept runs from the UI.
     """
-    logger.info(f"[tier2] writing sqlite -> {db_path}")
+    logger.debug(f"[tier2] writing sqlite -> {db_path}")
 
     con = sqlite3.connect(db_path)
 
@@ -504,7 +668,7 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
         con.commit()
 
     con.close()
-    logger.info("[tier2] sqlite write complete")
+    logger.info(f"[tier2] sqlite write complete: {db_path}")
 
 
 def _aggregate_rows(concept_name, aggregate):
@@ -536,30 +700,17 @@ def main():
     logger.info("[tier2] init")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--concept", type=str, default=None,
-        help="Run analysis for a single concept (case-insensitive)",
-    )
-    parser.add_argument( "--forms", type=str, default=None,
-        help="Comma-separated list of forms (required if --concept is not in CONCEPT_SETS)",
-    )
-    parser.add_argument( "--false-positives", type=str, default=None,
-        help="Comma-separated list of false positive forms to exclude",
-    )
-    parser.add_argument( "--clear", action="store_true",
-        help="Wipe and recreate SQLite database before writing",
-    )
-    parser.add_argument( "-d", "--diagnostics", action="store_true",
-        help="Enable Tier2 diagnostics",
-    )
+    parser.add_argument( "--concept", type=str, default=None, help="Run analysis for a single concept (case-insensitive)", )
+    parser.add_argument( "--forms", type=str, default=None, help="Comma-separated list of forms (required if --concept is not in CONCEPT_SETS)", )
+    parser.add_argument( "--false-positives", type=str, default=None, help="Comma-separated list of false positive forms to exclude", )
+    parser.add_argument( "--clear", action="store_true", help="Wipe and recreate SQLite database before writing", )
+    parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics", )
     args = parser.parse_args()
 
     if args.clear and args.concept:
         logger.warning( "[tier2] --clear with --concept will wipe all concepts before writing one" )
 
-    logger.info(f"[tier2] SQLITE_DB_PATH: {SQLITE_DB_PATH}")
-
     index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
-
     if index.ntotal == 0:
         raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
 
@@ -627,10 +778,10 @@ def main():
     )
 
     if args.diagnostics:
-        logger.info("--------------------------------------------------------")
+        logger.debug("--------------------------------------------------------")
         knn_diagnostics( lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"], )
         knn_diagnostics( lookup, index, CONCEPT_SETS["LAW"]["forms"], )
-        logger.info("--------------------------------------------------------")
+        logger.debug("--------------------------------------------------------")
 
     for concept_name, concept in concepts_to_run:
         output[concept_name] = analyse_concept(
@@ -648,7 +799,7 @@ def main():
         clear=args.clear,
     )
 
-    logger.info(f"[tier2] wrote {SQLITE_DB_PATH}")
+    logger.info(f"[tier2] Complete, wrote {SQLITE_DB_PATH}")
 
 
 if __name__ == "__main__":
