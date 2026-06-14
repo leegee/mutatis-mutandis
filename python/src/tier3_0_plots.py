@@ -211,27 +211,52 @@ def fit_umap_local(lookup, event_ids, n_neighbors=15, min_dist=0.1):
             for i, eid in enumerate(event_ids)}
 
 
-def fit_umap_global(lookup, all_event_ids, n_neighbors=15, min_dist=0.1):
-    event_ids = list(all_event_ids)
-    logger.info(f"[tier3] fitting global PaCMAP on {len(event_ids):,} points")
+def fit_cluster_local(lookup, event_ids):
+    if len(event_ids) < 10:
+        return {int(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
+
     X = np.stack([
         lookup.get_event(eid)["embedding"]
         for eid in event_ids
     ]).astype(np.float32)
-    reducer = pacmap.PaCMAP(
-        n_components=2,
+
+    # 5D UMAP reduction for clustering (restores prior behavior)
+    reducer_5d = umap.UMAP(
+        n_components=5,
         n_neighbors=15,
-        MN_ratio=0.5,
-        FP_ratio=2.0,
+        min_dist=0.0,
+        metric='cosine',
         random_state=42,
     )
-    emb = reducer.fit_transform(X)
-    return {int(eid): (float(emb[i, 0]), float(emb[i, 1]))
-            for i, eid in enumerate(event_ids)}
+    X_5d = reducer_5d.fit_transform(X)
+
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=max(5, len(event_ids) // 200),
+        min_samples=3,
+        metric='euclidean',
+        cluster_selection_method='eom',
+        cluster_selection_epsilon=0.0,  # let EOM decide, don't force merges
+    )
+    labels = clusterer.fit_predict(X_5d).tolist()
+
+    # 2D UMAP for visualization
+    reducer_2d = umap.UMAP(
+        n_components=2,
+        n_neighbors=15,
+        min_dist=0.1,
+        metric='cosine',
+        random_state=42,
+    )
+    emb_2d = reducer_2d.fit_transform(X)
+
+    local_coords = {
+        int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
+        for i, eid in enumerate(event_ids)
+    }
+    return local_coords, labels
 
 
-
-def fit_cluster_local(lookup, event_ids):
+def fit_cluster_local_with_5d_reduction(lookup, event_ids):
     """
     5-D UMAP for HDBSCAN, then a separate 2-D UMAP for the local display
     coordinates (nx/ny).  Returns {event_id -> (x, y)} local coords and
@@ -279,6 +304,124 @@ def fit_cluster_local(lookup, event_ids):
         for i, eid in enumerate(event_ids)
     }
     return local_coords, labels
+
+def fit_cluster_local(lookup, event_ids):
+    """
+    Improved clustering pipeline:
+
+    1. Cluster directly on embeddings (no 5D UMAP)
+    2. Use stronger HDBSCAN parameters (fewer micro-clusters)
+    3. Post-merge semantically similar clusters using centroid similarity
+    4. Compute separate 2D UMAP for visualization only
+    """
+
+    if len(event_ids) < 10:
+        return {int(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
+
+
+    # 1. Load embeddings
+
+    X = np.stack([
+        lookup.get_event(eid)["embedding"]
+        for eid in event_ids
+    ]).astype(np.float32)
+
+    # normalize embeddings for cosine stability
+    X_norm = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-12)
+
+
+    # 2. HDBSCAN clustering (direct on embeddings)
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=max(10, len(event_ids) // 200),  # adaptive
+        min_samples=8,
+        metric='euclidean',
+        cluster_selection_method='eom',
+        cluster_selection_epsilon=0.2,  # tighter = fewer micro-clusters
+    )
+
+    labels = clusterer.fit_predict(X_norm)
+    labels = labels.tolist()
+
+
+    # 3. Build cluster structures
+
+    clusters = {}
+    for i, cid in enumerate(labels):
+        if cid == -1:
+            continue
+        clusters.setdefault(cid, []).append(i)
+
+
+    # 4. Compute centroids (normalized)
+
+    centroids = {}
+    for cid, idxs in clusters.items():
+        vecs = X_norm[idxs]
+        centroid = vecs.mean(axis=0)
+        centroid /= (np.linalg.norm(centroid) + 1e-12)
+        centroids[cid] = centroid
+
+
+    # 5. Merge similar clusters (semantic consolidation)
+
+    def cosine(a, b):
+        return float(np.dot(a, b))
+
+    parent = {cid: cid for cid in clusters.keys()}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    cluster_ids = list(clusters.keys())
+
+    for i in range(len(cluster_ids)):
+        for j in range(i + 1, len(cluster_ids)):
+            a, b = cluster_ids[i], cluster_ids[j]
+
+            # semantic similarity check
+            sim = cosine(centroids[a], centroids[b])
+
+            if sim > 0.92:  # main merge threshold
+                union(a, b)
+
+    # rebuild merged clusters
+    merged = {}
+    for cid in cluster_ids:
+        root = find(cid)
+        merged.setdefault(root, []).extend(clusters[cid])
+
+    # reassign final cluster ids
+    final_labels = [-1] * len(event_ids)
+    for new_cid, idxs in enumerate(merged.values()):
+        for idx in idxs:
+            final_labels[idx] = new_cid
+
+
+    # 6. 2D UMAP for visualization ONLY
+    reducer_2d = umap.UMAP(
+        n_components=2,
+        n_neighbors=15,
+        min_dist=0.1,
+        metric='cosine',
+        random_state=42,
+    )
+
+    emb_2d = reducer_2d.fit_transform(X)
+
+    local_coords = {
+        int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
+        for i, eid in enumerate(event_ids)
+    }
+
+    return local_coords, final_labels
 
 
 def compute_cluster_aggregates(event_ids, cluster_labels, lookup, top_n=25):
