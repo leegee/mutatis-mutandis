@@ -10,7 +10,7 @@ export interface ScreenRect {
 }
 
 export interface SelectionEvent<T> {
-  type: "click" | "rect" | "background-click";
+  type: "click" | "rect" | "background-click" | "null-select";
   payload: T;
 }
 

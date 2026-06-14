@@ -181,9 +181,9 @@ export default function ConceptClusterPlot() {
                             />
                         </div>
 
-                        <Show when={controls.selectedEventId}>
+                        {/* <Show when={controls.selectedEventId}>
                             <Sidebar />
-                        </Show>
+                        </Show> */}
                         <Show when={controls.selectedEventIds && controls.selectedEventIds.size > 1} fallback={<Sidebar />}>
                             <SidebarMultiple />
                         </Show>

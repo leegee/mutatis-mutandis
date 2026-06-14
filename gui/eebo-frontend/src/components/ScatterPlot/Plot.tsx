@@ -244,6 +244,8 @@ export default function Plot(props: PlotProps) {
 
       if (cleanPick.length) {
         controller?.dispatch({ type: cleanPick ? "click" : "background-click", payload: cleanPick });
+      } else {
+        controller?.dispatch({ type: "null-select" });
       }
     });
 

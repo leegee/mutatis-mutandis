@@ -38,12 +38,19 @@ export class SelectionController<T extends { event_id: Id }> {
             case "rect":
                 this.handleRect(event.payload.rect, event.payload.deck);
                 break;
+            case "null-select":
+                this.handleNullSelect();
+                break;
         }
     }
 
     // Core logic
 
     private handleBgClick() {
+        this.clear();
+    }
+
+    private handleNullSelect() {
         this.clear();
     }
 
@@ -76,7 +83,7 @@ export class SelectionController<T extends { event_id: Id }> {
 
         for (const hit of hits) {
             const id = hit.object?.event_id;
-            if (id != null) {
+            if (id) {
                 this.selected.add(id);
             }
         }
