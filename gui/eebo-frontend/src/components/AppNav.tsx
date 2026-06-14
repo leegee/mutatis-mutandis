@@ -17,7 +17,7 @@ export default function AppNav() {
     const isActive = (path: string) => location.pathname === path;
 
     return (
-        <nav id="app-nav" class={`surface-container-low left no-margin top-padding scroll small-elevate ${ open() ? "max" : "small" }`} >
+        <nav id="app-nav" class={`surface-container-low left no-margin top-padding scroll small-elevate ${ open() ? "full" : "small" }`} >
             <header class="center-align top-margin tiny-margin no-padding">
                 <button
                     class="extra transparent no-padding no-margin"
