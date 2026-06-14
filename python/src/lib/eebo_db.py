@@ -244,6 +244,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     t.doc_id,
                     t.token_idx,
                     t.vector_id,
+                    d.pub_year,
                     t.token,
                     t.canonical
                 FROM tokens t
