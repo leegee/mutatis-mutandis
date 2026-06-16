@@ -3,6 +3,7 @@ import { controls } from "../../state/controls.store";
 import { queryEventById } from "../../services/db";
 import { controlsActions } from "../../state/controls.actions";
 import { fetchWindowBatch } from "../../services/tokenWindowBatchApi";
+import ExportSelectedEvents from "../ExportSelectedEvents";
 
 export default function SidebarMultiple() {
     // stable selection
@@ -62,19 +63,15 @@ export default function SidebarMultiple() {
                         style={{ "max-width": "clamp(30rem, 30rem, 30vw)" }}>
                         <header>
                             <nav>
-                                <h2 class="max">
-                                    {selectedEventIds().size} selected events
-                                </h2>
-                                <button
-                                    class="small border"
-                                    onClick={() =>
-                                        controlsActions.setSelectedEventIds(null)
-                                    }
-                                >
+                                <button class="small border no-margin no-padding circle" onClick={() => controlsActions.setSelectedEventIds(null)} >
                                     <i>close</i>
                                 </button>
+                                <h2 class="max"> {selectedEventIds().size} selected events </h2>
+                                <ExportSelectedEvents />
                             </nav>
                         </header>
+
+
                         <section style={{ overflow: "auto" }}>
                             <For each={sidebarData()?.grouped}>
                                 {(group) => (
