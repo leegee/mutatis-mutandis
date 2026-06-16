@@ -59,7 +59,7 @@ export default function SidebarMultiple() {
         <Show when={controls.selectedEventIds}>
             {(selectedEventIds) => (
                 <Show when={selectedEventIds().size > 1}>
-                    <aside class="surface-container padding scroll-parent"
+                    <aside class="surface-container padding scroll-parent  no-margin"
                         style={{ "max-width": "clamp(30rem, 30rem, 30vw)" }}>
                         <header>
                             <nav>
