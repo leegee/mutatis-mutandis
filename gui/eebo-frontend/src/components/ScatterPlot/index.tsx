@@ -91,7 +91,12 @@ export default function ConceptClusterPlot() {
                     <ControlsHeader multiConcept={true} noTopN={true}>
                         <div class="field  border middle-align">
                             <select class="small-padding" value={layerMode()}
-                                onChange={e => setLayerMode(e.currentTarget.value as "concept" | "neighbours" | "clusters")}>
+                                onChange={e => {
+                                    setLayerMode(e.currentTarget.value as "concept" | "neighbours" | "clusters");
+                                    if (e.currentTarget.value === 'clusters') {
+                                        setColorBy("cluster_label")
+                                    }
+                                }}>
                                 <option value="concept">Concept</option>
                                 <option value="neighbours">+ Neighbours</option>
                                 <option value="clusters">Clusters</option>

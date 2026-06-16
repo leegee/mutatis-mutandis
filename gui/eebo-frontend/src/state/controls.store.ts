@@ -1,11 +1,11 @@
 // src/state/controls.store.ts
 
 import { createStore } from "solid-js/store";
+import { makePersisted } from "@solid-primitives/storage";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 import type { ViewMode, YearMode } from "../types";
 
 export const MAX_TOP_N = 1000;
-
 
 export type ControlsState = {
   concept: string;
@@ -24,7 +24,7 @@ export type ControlsState = {
   showEventLabels: boolean;
 };
 
-export const [controls, setControls] = createStore<ControlsState>({
+const initialControls: ControlsState = {
   concept: "LIBERTY",
   conceptSelection: ["LIBERTY"],
   viewMode: "events",
@@ -39,4 +39,9 @@ export const [controls, setControls] = createStore<ControlsState>({
   fromYear: CORPUS_START_YEAR,
   toYear: CORPUS_END_YEAR,
   showEventLabels: false,
-});
+};
+
+export const [controls, setControls] = makePersisted(
+  createStore<ControlsState>(initialControls),
+  { name: "controls" }
+);
