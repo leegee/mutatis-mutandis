@@ -171,7 +171,7 @@ def process_file(xml_path: Path):
         "pub_year": pub_year,
         "source_date_raw": date_raw,
         "token_count": len(tokens),
-        "filepath": str(xml_path.relative_to(config.BASE_DIR)),
+        "filepath": str(xml_path.relative_to(config.XML_ROOT_DIR)),
         "lang": lang,
     }
 
@@ -347,7 +347,7 @@ def main():
 
     if not args.justindex:
         ingest_xml_parallel(
-            xml_dir=config.BASE_DIR / "eebo_all",
+            xml_dir=config.XML_ROOT_DIR,
             max_workers=config.NUM_WORKERS,
             batch_docs=config.BATCH_DOCS,
             batch_tokens=config.BATCH_TOKENS,
