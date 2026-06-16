@@ -190,7 +190,7 @@ const CosmosComponent: Component = () => {
               }
             >
               {" • "}
-              {controls.fromYear}–{controls.toYear}
+              {controls.fromYear}&mdash;{controls.toYear}
             </Show>
             {" • "}
             {totalEvents()} total

@@ -1,6 +1,5 @@
 import type { Event, Neighbour } from "./sqlite";
 
-export type ViewMode = "aggregated" | "events";
 
 export interface ConceptEvent extends Event {
   neighbours: Neighbour[];

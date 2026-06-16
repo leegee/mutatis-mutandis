@@ -35,6 +35,7 @@ export function createDocumentMiddleware(
       }
 
       const filepath: string = row.filepath;
+      console.log(filepath)
       const matchPath = filepath.match(/eebo_all[\\/](.+)$/);
 
       if (!matchPath) {

@@ -15,11 +15,12 @@ import "./styles.css";
 
 import type { ContextGraphData, ContextNode, TokenBin } from "./types";
 import MsgSettingLayout from "../MsgSettingLayout";
+import type { ViewMode } from "../../types";
 
 export type GraphFrame = {
   graphData: ContextGraphData;
   concept: string;
-  viewMode: "events" | "aggregated";
+  viewMode: ViewMode;
   hubSpread: number;
   showEventLabels: boolean;
   fromYear: number;
@@ -567,8 +568,8 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
     });
 
     if (world) {
-      world.initialize(gd, props.frame.concept);
       startSimulating(gd.nodes.length);
+      world.initialize(gd, props.frame.concept);
       cosmosGraph!.start();
       // Signal to the timeline effect which gd was just initialized.
       // Defer by one microtask so the timeline effect sees this as a
@@ -610,8 +611,13 @@ const GraphCanvas: Component<GraphCanvasProps> = (props: GraphCanvasProps) => {
     <>
       <div
         ref={wrapRef!}
-        class="surface-container"
-        style={{ visibility: simulating() ? "hidden" : "visible" }}
+        class="background"
+        // style={{ visibility: simulating() ? "hidden" : "visible" }}
+        style={{
+          opacity: simulating() ? "0" : "1",
+          "pointer-events": simulating() ? "none" : "auto",
+          transition: "opacity 0.15s ease-in",
+        }}
       >
         <div class="cg-labels">
           <For each={labelPositions()}>

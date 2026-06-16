@@ -2,9 +2,7 @@
 
 import { createStore } from "solid-js/store";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
-
-export type ViewMode = "aggregated" | "events";
-export type YearMode = "single" | "range";
+import type { ViewMode, YearMode } from "../types";
 
 export const MAX_TOP_N = 1000;
 

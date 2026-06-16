@@ -26,8 +26,9 @@ import MsgSettingLayout from "../MsgSettingLayout";
 import ControlsHeader from "../ControlsHeader";
 import Sidebar from "./Sidebar";
 import { controlsActions } from "../../state/controls.actions";
+import type { ViewMode, YearMode } from "../../types";
 
-const USE_FIT_INTERVAL = true;
+const USE_FIT_INTERVAL = false;
 
 // kind to [r, g, b, a]
 const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
@@ -55,7 +56,7 @@ const NODE_SIZE: Record<number, number> = {
 
 function isNodeVisibleByTime(
   n: NodeMeta,
-  yearMode: string,
+  yearMode: YearMode,
   fromYear: number,
   toYear: number
 ): boolean {
@@ -75,7 +76,7 @@ function isNodeVisibleByTime(
 
 function buildPointColors(
   nodes: NodeMeta[],
-  yearMode: string,
+  yearMode: YearMode,
   fromYear: number,
   toYear: number
 ): Float32Array {
@@ -180,13 +181,14 @@ const Tooltip: Component<{ tip: TipData }> = (p) => (
 
 export const ConceptGraph: Component = () => {
   const params = useParams();
+  const [simulating, setSimulating] = createSignal(false);
   const [graphProgress, setGraphProgress] = createSignal(0);
   const [selectedNode, setSelectedNode] = createSignal<NodeMeta | null>(null);
   const [selectedPointIndex, setSelectedPointIndex] = createSignal<number | null>(null);
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
   const [paramsTokenIdx, setParamsTokenIdx] = createSignal<number | null>(params.token_idx ? Number(params.token_idx) : null);
 
-  let divRef!: HTMLDivElement;
+  let graphDivRef!: HTMLDivElement;
   let graph: Graph | undefined;
   let mouseClientX = 0;
   let mouseClientY = 0;
@@ -208,7 +210,9 @@ export const ConceptGraph: Component = () => {
       graph.destroy();
     }
 
-    graph = new Graph(divRef, {
+    setSimulating(true);
+
+    graph = new Graph(graphDivRef, {
       renderLinks: true,
       spaceSize: 2048 * 2,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
@@ -234,8 +238,10 @@ export const ConceptGraph: Component = () => {
         setTooltip({ node, x: mouseClientX, y: mouseClientY });
       },
       onPointMouseOut: () => setTooltip(null),
+      onSimulationStart: () => { console.log('SIM START'); setSimulating(true) },
       onSimulationTick: () => setGraphProgress(graph?.progress || 0),
       onSimulationEnd: () => {
+        setSimulating(false);
         graph?.fitView();
         if (fitViewIntervalId) clearInterval(fitViewIntervalId);
         if (selectedPointIndex() !== null) {
@@ -244,7 +250,7 @@ export const ConceptGraph: Component = () => {
       },
 
       onClick: (index, pos) => {
-        console.debug('[onClick]', index, pos);
+        console.debug('[graph2.onClick]', index, pos);
         if (index) {
           setSelectedNode(nodeMeta[index]);
           graph?.selectPointByIndex(index);
@@ -261,8 +267,8 @@ export const ConceptGraph: Component = () => {
 
   onMount(() => {
     console.debug("[graph2.onMount] enter");
-    divRef.addEventListener("mousemove", (e: MouseEvent) => {
-      const rect = divRef.getBoundingClientRect();
+    graphDivRef.addEventListener("mousemove", (e: MouseEvent) => {
+      const rect = graphDivRef.getBoundingClientRect();
       mouseClientX = e.clientX - rect.left;
       mouseClientY = e.clientY - rect.top;
     });
@@ -384,6 +390,16 @@ export const ConceptGraph: Component = () => {
 
       <Show when={!data.loading}>
         <ControlsHeader>
+          <div class="field suffix border middle-align small">
+            <select
+              value={controls.viewMode}
+              onChange={(e) => controlsActions.setViewMode(e.currentTarget.value as ViewMode)}
+            >
+              <option>aggregated</option>
+              <option>events</option>
+            </select>
+          </div>
+
           <Show when={controls.viewMode === "aggregated"}>
             <div class="field middle-align">
               <div class="slider tiny">
@@ -473,7 +489,14 @@ export const ConceptGraph: Component = () => {
       </Show>
 
       <div id="graph_sidebar_row">
-        <div id="under_sidebar" class="max" ref={divRef}></div>
+        <div id="under_sidebar" class="max" ref={graphDivRef}
+          // style={{ visibility: simulating() ? "hidden" : "visible" }}
+          style={{
+            opacity: simulating() ? "0" : "1",
+            "pointer-events": simulating() ? "none" : "auto",
+            transition: "opacity 0.15s ease-in",
+          }}
+        ></div>
 
         <div id="sidebar_container">
           <Show when={selectedNode()}>
