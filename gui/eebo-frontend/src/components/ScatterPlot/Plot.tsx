@@ -234,16 +234,18 @@ export default function Plot(props: PlotProps) {
       .use(new CanvasDragPlugin(canvas, deck, controller));
 
     canvas.addEventListener("pointerup", async (e) => {
-      const pick = await deck?.pickObjectsAsync({
+      const pick = await deck?.pickObjects({
         x: e.offsetX,
         y: e.offsetY,
       });
 
-      const cleanPick = pick?.map(p => p.object)
+      const cleanPick = pick
+        ?.filter((p) => !p.sourceLayer?.id.startsWith("bfs-"))
+        .map((p) => p.object)
         .filter((o): o is PointData => !!o?.event_id) ?? [];
 
       if (cleanPick.length) {
-        controller?.dispatch({ type: cleanPick ? "click" : "background-click", payload: cleanPick });
+        controller?.dispatch({ type: "click", payload: cleanPick });
       } else {
         controller?.dispatch({ type: "null-select", payload: null });
       }

@@ -71,7 +71,8 @@ export class SelectionController<T extends { event_id: Id }> {
     }
 
     private handleRect(rect: ScreenRect, deck: any) {
-        const hits = deck.pickObjects(rect) as Array<{ object?: T }>;
+        type Hit = { object?: T; layer?: { id: string } };
+        const hits = deck.pickObjects(rect) as Array<Hit>;
 
         const additive =
             this.options.mode === "additive" && this.multiKeyDown;
@@ -81,6 +82,7 @@ export class SelectionController<T extends { event_id: Id }> {
         }
 
         for (const hit of hits) {
+            if (hit.layer?.id.startsWith("bfs-")) continue;
             const id = hit.object?.event_id;
             if (id) {
                 this.selected.add(id);
