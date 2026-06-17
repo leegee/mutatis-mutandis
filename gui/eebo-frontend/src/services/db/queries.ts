@@ -140,8 +140,8 @@ export async function queryEventsByConcept(
 
   for (const r of nbRows) {
     const nb: Neighbour = {
-      event_id: r[1] as string,
-      vector_id: r[2] as number,
+      event_id: String(r[1]),
+      vector_id: r[2] != null ? String(r[2]) : undefined,
       token: r[3] as string,
       doc_id: r[4] as string,
       pub_year: r[5] as number,

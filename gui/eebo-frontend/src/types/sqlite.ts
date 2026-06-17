@@ -1,6 +1,6 @@
 export interface Neighbour {
   event_id: string;
-  vector_id?: number;
+  vector_id?: string;
   token: string;
   doc_id?: string;
   pub_year?: number;
