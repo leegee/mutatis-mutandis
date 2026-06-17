@@ -171,7 +171,9 @@ def process_file(xml_path: Path):
         "pub_year": pub_year,
         "source_date_raw": date_raw,
         "token_count": len(tokens),
-        "filepath": str(xml_path.relative_to(config.XML_ROOT_DIR)),
+        "filepath": str(
+            xml_path.relative_to(config.XML_ROOT_DIR).as_posix()
+        ),
         "lang": lang,
     }
 

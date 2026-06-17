@@ -35,24 +35,12 @@ export function createDocumentMiddleware(
       }
 
       const filepath: string = row.filepath;
-      console.log(filepath)
-      const matchPath = filepath.match(/eebo_all[\\/](.+)$/);
-
-      if (!matchPath) {
-        return json(res, 500, {
-          error: "Invalid filepath format",
-          filepath,
-        });
-      }
-
-      const relativePath = matchPath[1].replace(/\\/g, "/");
-
-      const redirectUrl = `/xml/${ relativePath }`;
-
+      const redirectUrl = `/xml/${ filepath }`;
       console.log(`[api/doc] ${ docId } -> ${ redirectUrl } for ${ req.url }`);
-
       return redirect(res, redirectUrl);
-    } catch (error) {
+    }
+
+    catch (error) {
       return serverError(res, error);
     }
   };

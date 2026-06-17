@@ -4,6 +4,7 @@ import { queryEventById } from "../../services/db";
 import { controlsActions } from "../../state/controls.actions";
 import { fetchWindowBatch } from "../../services/tokenWindowBatchApi";
 import ExportSelectedEvents from "../ExportSelectedEvents";
+import { showDocument } from "../../services/documentApi";
 
 export default function SidebarMultiple() {
     // stable selection
@@ -77,7 +78,7 @@ export default function SidebarMultiple() {
                                 {(group) => (
                                     <fieldset class="no-padding">
                                         <legend>
-                                            <button class="chip">
+                                            <button class="chip" onClick={() => showDocument(group.doc)}>
                                                 {group.doc}
                                                 <span class="none"> (x {group.events.length}) </span>
                                             </button>
@@ -91,11 +92,11 @@ export default function SidebarMultiple() {
 
                                                 return (
                                                     <>
-                                                        <h5 class="small left-margin no-padding">
+                                                        <h6 class="small left-margin no-padding">
                                                             <q>{e.token}</q>
                                                             &nbsp;&mdash;
                                                             <small> {e.pub_year} </small>
-                                                        </h5>
+                                                        </h6>
 
                                                         <Show when={w} fallback={<progress />}>
                                                             <blockquote innerHTML={w.content} class="no-padding left-margin bottom-margin" />
