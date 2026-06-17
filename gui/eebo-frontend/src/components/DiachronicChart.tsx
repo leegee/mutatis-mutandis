@@ -4,7 +4,12 @@ import {
   createResource,
   For,
   type Component,
+  Show,
 } from "solid-js";
+
+import { getYearFiltered } from "../state/selectors";
+import ControlsHeader from "./ControlsHeader";
+import { controls } from "../state/controls.store";
 
 import {
   buildYearSlices,
@@ -13,9 +18,6 @@ import {
   type TokenStatus,
   type YearSlices,
 } from "../lib/contextGraphUtils";
-import { getYearFiltered } from "../state/selectors";
-import ControlsHeader from "./ControlsHeader";
-import { controls } from "../state/controls.store";
 
 const CELL_WIDTH = 92;
 const COL_GAP = 32;
@@ -39,6 +41,7 @@ const C_LINK_ALPHA = 0.6;
 const C_LINK_FOCUS = 0.85;
 const C_LINK_UNFOCUS = 0.05;
 const C_LINK_UNFOCUS_TEXT = 0.9;
+
 
 function yearLabel(year: number, window: number): string {
   if (window === 0) return String(year);
@@ -64,6 +67,7 @@ function linkPath(x1: number, y1: number, x2: number, y2: number): string {
   const cx = (x1 + x2) / 2;
   return `M ${ x1 } ${ y1 } C ${ cx } ${ y1 }, ${ cx } ${ y2 }, ${ x2 } ${ y2 }`;
 }
+
 
 const DiachronicChart: Component = () => {
   const [smoothWindow, setSmoothWindow] = createSignal(0);
@@ -215,6 +219,10 @@ const DiachronicChart: Component = () => {
           <span class="tooltip bottom">Smoothing</span>
         </div>
       </ControlsHeader>
+
+      <Show when={filteredEventsResource.loading}>
+        <progress />
+      </Show>
 
       <div class="scroll">
         <svg width={svgWidth()} height={svgHeight()}>
