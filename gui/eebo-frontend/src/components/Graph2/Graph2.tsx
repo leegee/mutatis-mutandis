@@ -38,21 +38,21 @@ const NODE_RGBA: Record<number, readonly [number, number, number, number]> = {
 };
 
 const EDGE_RGBA: Record<number, readonly [number, number, number, number]> = {
-  [EDGE_KIND.SEMANTIC]: [0.99, 0.72, 0.07, 0.5],
+  [EDGE_KIND.SEMANTIC]: [0.99, 0.72, 0.07, 0.75],
   [EDGE_KIND.COWINDOW]: [0.70, 0.85, 1.00, 0.90],
-  [EDGE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 0.80],
+  [EDGE_KIND.CONCEPT]: [0.24, 0.85, 0.56, 0.85],
 };
 
 const HIDDEN_RGBA = [0, 0, 0, 0];
 const HIGHLIGHTED_RGBA = [0.341, 0.980, 1, 1];
 
 const NODE_SIZE: Record<number, number> = {
-  [NODE_KIND.EVENT]: 8,
-  [NODE_KIND.NEIGHBOUR]: 5,
-  [NODE_KIND.CONCEPT]: 12
+  [NODE_KIND.EVENT]: 10,
+  [NODE_KIND.NEIGHBOUR]: 8,
+  [NODE_KIND.CONCEPT]: 16
 };
 
-// DB queries
+// queries
 
 function isNodeVisibleByTime(
   n: NodeMeta,
@@ -136,9 +136,9 @@ function buildLinkColors(
 function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
   return new Float32Array(
     edges.map((e) =>
-      e.kind === EDGE_KIND.COWINDOW ? 2 :
-        e.kind === EDGE_KIND.CONCEPT ? 2 :
-          Math.max(1, e.weight * 2.0), // weight-scaled
+      e.kind === EDGE_KIND.COWINDOW ? 2.2 :
+        e.kind === EDGE_KIND.CONCEPT ? 2.2 :
+          Math.max(2.2, e.weight * 2.6), // weight-scaled
     ),
   );
 }
@@ -390,7 +390,7 @@ export const ConceptGraph: Component = () => {
 
       <Show when={!data.loading}>
         <ControlsHeader>
-          <div class="field suffix border middle-align small">
+          {/* <div class="field suffix border middle-align small">
             <select
               value={controls.viewMode}
               onChange={(e) => controlsActions.setViewMode(e.currentTarget.value as ViewMode)}
@@ -398,7 +398,7 @@ export const ConceptGraph: Component = () => {
               <option>aggregated</option>
               <option>events</option>
             </select>
-          </div>
+          </div> */}
 
           <Show when={controls.viewMode === "aggregated"}>
             <div class="field middle-align">

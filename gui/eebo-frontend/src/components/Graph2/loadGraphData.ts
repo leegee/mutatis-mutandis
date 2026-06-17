@@ -31,7 +31,7 @@ export async function loadGraphData(
 
   for (const row of eventRows) {
     const [event_id, token, doc_id, pub_year, window_id, token_idx] = row as [
-      number, string, string, number | null, number | null, number
+      string, string, string, number | null, number | null, number
     ];
     // console.debug(token)
     addNode({
@@ -65,7 +65,7 @@ export async function loadGraphData(
 
   for (const row of neighbourRows) {
     const [event_id, neighbour_event_id, token, doc_id, pub_year, window_id, score, token_idx] =
-      row as [number, number, string, string, number | null, number | null, number, number];
+      row as [string, string, string, string, number | null, number | null, number, number];
 
     // Prefer the event-node id if this neighbour is also a concept event
     const nStringId = idToIdx.has(`e:${ neighbour_event_id }`)
@@ -83,7 +83,7 @@ export async function loadGraphData(
     });
 
     const srcIdx = idToIdx.get(`e:${ event_id }`);
-    if (srcIdx === undefined) continue; // guard: event must exist
+    if (srcIdx === undefined) continue; // event must exist
 
     edges.push({ srcIdx, tgtIdx, kind: 0, weight: Math.max(0, Number(score)) });
   }
