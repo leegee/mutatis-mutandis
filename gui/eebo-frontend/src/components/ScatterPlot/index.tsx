@@ -8,7 +8,6 @@ import ControlsHeader from "../ControlsHeader";
 import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets";
 import { controls } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
-import Sidebar from "./Sidebar";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import TextWindow from "../TextWindow";
@@ -71,7 +70,7 @@ export default function ConceptClusterPlot() {
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
     function handleSelectionChange(event_ids: Id[] | null) {
-        console.log("[ConceptClusterPlot] handleSelectionChange event:", event_ids ? event_ids.map(_ => _) : null);
+        // console.debug("[ConceptClusterPlot] handleSelectionChange event:", event_ids ? event_ids.map(_ => _) : null);
         controlsActions.setSelectedEventIds(new Set(event_ids))
     }
 
@@ -187,12 +186,7 @@ export default function ConceptClusterPlot() {
                             />
                         </div>
 
-                        {/* <Show when={controls.selectedEventId}>
-                            <Sidebar />
-                        </Show> */}
-                        <Show when={controls.selectedEventIds && controls.selectedEventIds.size > 1} fallback={<Sidebar />}>
-                            <SidebarMultiple />
-                        </Show>
+                        <SidebarMultiple />
                     </div>
                 </Show>
             </Show>

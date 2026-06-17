@@ -17,7 +17,6 @@ export default function SidebarMultiple() {
         const events = await Promise.all(
             ids.map((id) => queryEventById(id))
         );
-
         const cleanEvents = events.filter(Boolean);
 
         // Get window-text snippets
@@ -59,7 +58,7 @@ export default function SidebarMultiple() {
     return (
         <Show when={controls.selectedEventIds}>
             {(selectedEventIds) => (
-                <Show when={selectedEventIds().size > 1}>
+                <Show when={selectedEventIds().size > 0}>
                     <aside class="surface-container padding scroll-parent  no-margin"
                         style={{ "max-width": "clamp(30rem, 30rem, 30vw)" }}>
                         <header>
@@ -67,7 +66,9 @@ export default function SidebarMultiple() {
                                 <button class="small border no-margin no-padding circle" onClick={() => controlsActions.setSelectedEventIds(null)} >
                                     <i>close</i>
                                 </button>
-                                <h2 class="max"> {selectedEventIds().size} selected events </h2>
+                                <h2 class="max"> {selectedEventIds().size} selected event{
+                                    selectedEventIds().size !== 1 ? 's' : ''
+                                } </h2>
                                 <ExportSelectedEvents />
                             </nav>
                         </header>

@@ -129,7 +129,7 @@ export default function Plot(props: PlotProps) {
     const opacity = props.opacity ?? 0.85;
     const bfsOpacity = props.bfsOpacity ?? 100;
 
-    console.log("[Plot] bfsDataset points:", props.bfsDataset?.points?.length);
+    // console.debug("[Plot] bfsDataset points:", props.bfsDataset?.points?.length);
 
     const [neighbourLayers, conceptLayers] = props.datasets.reduce(
       ([n, c], dataset) => {
