@@ -27,6 +27,9 @@ Each point carries six coordinates:
 concept_clusters files additionally carry:
     cluster_id      — integer HDBSCAN cluster id (-1 = noise)
     cluster_label   — letter label A, B, C... (null for noise)
+
+Note: all event_id values are serialised as JSON strings to avoid JS/TS
+BigInt issues with integers exceeding Number.MAX_SAFE_INTEGER (2^53 - 1).
 """
 
 import argparse
@@ -215,7 +218,6 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
         sqlite_conn.close()
 
 
-
 def bfs_event_expansion(lookup, index, seed_ids, emb_cache, k=25, max_nodes=5000, depth=2):
     visited = set(map(str, seed_ids))
     frontier = set(map(str, seed_ids))
@@ -255,7 +257,7 @@ def expand_neighbors(index, lookup, event_ids, emb_cache, k=25, max_points=3000)
         for nid in row:
             nid = int(nid)
             if nid != -1:
-                ids.add(nid)
+                ids.add(str(nid))
         if len(ids) >= max_points:
             break
     return [str(x) for x in list(ids)[:max_points]]
@@ -264,6 +266,7 @@ def expand_neighbors(index, lookup, event_ids, emb_cache, k=25, max_points=3000)
 def fit_umap_local(X, event_ids, n_neighbors=15, min_dist=0.1):
     """
     X: (len(event_ids), D) float32 matrix, rows aligned to event_ids.
+    Returns a dict keyed by str(event_id) to avoid JS/TS BigInt issues.
     """
     if not event_ids:
         return {}
@@ -275,13 +278,14 @@ def fit_umap_local(X, event_ids, n_neighbors=15, min_dist=0.1):
         metric="cosine",
     )
     emb = reducer.fit_transform(X)
-    return {int(eid): (float(emb[i, 0]), float(emb[i, 1]))
+    return {str(eid): (float(emb[i, 0]), float(emb[i, 1]))
             for i, eid in enumerate(event_ids)}
 
 
 def fit_umap_global(X, event_ids):
     """
     X: (len(event_ids), D) float32 matrix, rows aligned to event_ids.
+    Returns a dict keyed by str(event_id) to avoid JS/TS BigInt issues.
     """
     logger.info(f"[tier3] fitting global PaCMAP on {len(event_ids):,} points")
     reducer = pacmap.PaCMAP(
@@ -292,9 +296,8 @@ def fit_umap_global(X, event_ids):
         random_state=42,
     )
     emb = reducer.fit_transform(X)
-    return {int(eid): (float(emb[i, 0]), float(emb[i, 1]))
+    return {str(eid): (float(emb[i, 0]), float(emb[i, 1]))
             for i, eid in enumerate(event_ids)}
-
 
 
 def fit_cluster_local(X, event_ids, local_concept_coords=None):
@@ -314,13 +317,15 @@ def fit_cluster_local(X, event_ids, local_concept_coords=None):
        near-identical 2D UMAP.
 
     X: (len(event_ids), D) float32 matrix, rows aligned to event_ids.
-    local_concept_coords: optional {event_id -> (x, y)} from an existing
+    local_concept_coords: optional {str(event_id) -> (x, y)} from an existing
         2D UMAP fit on the same event_ids (same params: n_neighbors=15,
         min_dist=0.1, metric='cosine'). If provided, skips the redundant
         2D UMAP fit inside this function.
+
+    Returns local_coords keyed by str(event_id).
     """
     if len(event_ids) < 10:
-        return {int(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
+        return {str(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
 
     # normalize embeddings for cosine stability (used for clustering input
     # and for centroid similarity in the merge step)
@@ -397,9 +402,10 @@ def fit_cluster_local(X, event_ids, local_concept_coords=None):
         for idx in idxs:
             final_labels[idx] = new_cid
 
-    # 6. 2D coords for visualization — reuse if already computed
+    # 6. 2D coords for visualization — reuse if already computed.
+    # local_concept_coords is expected to be str(event_id)-keyed.
     if local_concept_coords is not None:
-        local_coords = {int(eid): local_concept_coords[int(eid)] for eid in event_ids}
+        local_coords = {str(eid): local_concept_coords[str(eid)] for eid in event_ids}
     else:
         reducer_2d = umap.UMAP(
             n_components=2,
@@ -410,7 +416,7 @@ def fit_cluster_local(X, event_ids, local_concept_coords=None):
         )
         emb_2d = reducer_2d.fit_transform(X)
         local_coords = {
-            int(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
+            str(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
             for i, eid in enumerate(event_ids)
         }
 
@@ -459,10 +465,14 @@ def add_padding(bounds, pad_ratio=0.1):
 
 def assemble_points(event_ids, local_coords, global_coords,
                     local_bounds, global_bounds,
-                    extra_fields: dict[int, dict] | None = None):
+                    extra_fields: dict[str, dict] | None = None):
     """
-    extra_fields: optional {event_id -> {field: value}} merged into each point.
-    Used by the cluster output to attach cluster_id / cluster_label.
+    Assemble output point dicts for JSON serialisation.
+
+    All coord dicts (local_coords, global_coords) must be keyed by
+    str(event_id).  extra_fields must also be str(event_id)-keyed.
+    event_id is always written as a JSON string so JS/TS never
+    encounters a value that would be parsed as BigInt.
     """
     lx0, lx1 = local_bounds["minX"],  local_bounds["maxX"]
     ly0, ly1 = local_bounds["minY"],  local_bounds["maxY"]
@@ -476,10 +486,11 @@ def assemble_points(event_ids, local_coords, global_coords,
 
     points = []
     for eid in event_ids:
-        lx, ly = local_coords[eid]
-        gx, gy = global_coords[eid]
+        sid = str(eid)          # canonical string key used for all lookups
+        lx, ly = local_coords[sid]
+        gx, gy = global_coords[sid]
         pt = {
-            "event_id": str(eid),
+            "event_id": sid,    # always a string in JSON output
             "x":   lx,
             "y":   ly,
             "nx":  (lx - lx0) / ldx,
@@ -489,8 +500,8 @@ def assemble_points(event_ids, local_coords, global_coords,
             "gnx": (gx - gx0) / gdx,
             "gny": (gy - gy0) / gdy,
         }
-        if extra_fields and eid in extra_fields:
-            pt.update(extra_fields[eid])
+        if extra_fields and sid in extra_fields:
+            pt.update(extra_fields[sid])
         points.append(pt)
     return points
 
@@ -597,7 +608,8 @@ def run_tier3_core(
             with open(concept_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            concept_sample = [int(p["event_id"]) for p in data["points"]]
+            # event_id is a string in the JSON; keep it that way
+            concept_sample = [p["event_id"] for p in data["points"]]
 
             logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)})")
             if emit:
@@ -663,7 +675,7 @@ def run_tier3_core(
     #
     for path, meta, event_ids, local_coords in buffered_concept + buffered_concept_neigh:
         local_bounds = add_padding(
-            compute_bounds_from_coords([local_coords[e] for e in event_ids])
+            compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
         points = assemble_points(
             event_ids, local_coords, global_coords,
@@ -683,14 +695,14 @@ def run_tier3_core(
 
         extra = {
             str(eid): {
-                "cluster_id": int(cluster_labels[i]),
+                "cluster_id":    int(cluster_labels[i]),
                 "cluster_label": label_map.get(cluster_labels[i]),
             }
             for i, eid in enumerate(event_ids)
         }
 
         local_bounds = add_padding(
-            compute_bounds_from_coords([local_coords[e] for e in event_ids])
+            compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
         points = assemble_points(
             event_ids, local_coords, global_coords,
@@ -715,7 +727,7 @@ def run_tier3_core(
     # BFS output
     if bfs_ids:
         local_bounds_bfs = add_padding(
-            compute_bounds_from_coords([local_bfs[e] for e in bfs_ids])
+            compute_bounds_from_coords([local_bfs[str(e)] for e in bfs_ids])
         )
         points_bfs = assemble_points(
             bfs_ids, local_bfs, global_coords,
