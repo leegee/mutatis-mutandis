@@ -26,18 +26,31 @@ export async function queryYearBounds(
 
 
 export async function queryEventById(id: string): Promise<Event | null> {
-  // console.debug("[query] queryEventById", id);
-  if (typeof id !== 'string') console.trace('queryEventById received', typeof id)
+  console.debug("[query] queryEventById", id);
+  if (typeof id !== 'string') console.error('queryEventById received', typeof id)
 
+  let type = 'event';
   const eventRows = await execRows(
-    `SELECT * FROM events WHERE event_id = ?`,
+    "SELECT * FROM events WHERE event_id = ? LIMIT 1",
     [id],
   );
 
-  if (eventRows.length === 0) return null;
-  const row = eventRows[0];
+  let row = eventRows[0];
+
+  if (!row) {
+    type = 'neighbour';
+    const neighbourRow = await execRows(
+      "SELECT * FROM neighbours WHERE neighbour_event_id = ? LIMIT 1",
+      [id],
+    );
+
+    if (neighbourRow.length > 0) row = neighbourRow[0];
+  }
+
+  if (!row) return null;
 
   return {
+    type,
     event_id: String(row[0]),
     concept: row[1] as string,
     vector_id: row[2] != null ? String(row[2]) : null,
@@ -99,7 +112,6 @@ export async function getEventsByIds(
 
   const CHUNK_SIZE = 900;
   const results: Event[] = [];
-  let c = 0;
 
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);

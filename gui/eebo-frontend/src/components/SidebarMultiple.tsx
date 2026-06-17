@@ -1,4 +1,4 @@
-import { createResource, Show, For } from "solid-js";
+import { createResource, Show, For, createSignal } from "solid-js";
 import { controls } from "../state/controls.store";
 import { queryEventById } from "../services/db";
 import { controlsActions } from "../state/controls.actions";
@@ -6,7 +6,11 @@ import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
 import ExportSelectedEvents from "./ExportSelectedEvents";
 import { showDocument } from "../services/documentApi";
 
-export default function SidebarMultiple() {
+interface Props {
+    onClose?: () => void;
+}
+
+export default function SidebarMultiple(props: Props) {
     // stable selection
     const selectedEventIds = () => controls.selectedEventIds ? Array.from(controls.selectedEventIds) : [];
 
@@ -18,6 +22,7 @@ export default function SidebarMultiple() {
             ids.map((id) => queryEventById(id))
         );
         const cleanEvents = events.filter(Boolean);
+        console.log("[SidebarMultiple.sidebarData]", cleanEvents)
 
         // Get window-text snippets
         const windowRes = await fetchWindowBatch(
@@ -55,6 +60,11 @@ export default function SidebarMultiple() {
         };
     });
 
+    function handleOnClose() {
+        controlsActions.setSelectedEventIds(null);
+        if (props.onClose) props.onClose();
+    }
+
     return (
         <Show when={controls.selectedEventIds}>
             {(selectedEventIds) => (
@@ -63,16 +73,17 @@ export default function SidebarMultiple() {
                         style={{ "max-width": "clamp(30rem, 30rem, 30vw)" }}>
                         <header>
                             <nav>
-                                <button class="small border no-margin no-padding circle" onClick={() => controlsActions.setSelectedEventIds(null)} >
+                                <button class="small border no-margin no-padding circle" onClick={handleOnClose} >
                                     <i>close</i>
                                 </button>
-                                <h2 class="max"> {selectedEventIds().size} selected event{
-                                    selectedEventIds().size !== 1 ? 's' : ''
-                                } </h2>
+                                <h4 class="small max"> {selectedEventIds().size} selected event
+                                    {selectedEventIds().size !== 1 ? 's' : ''}
+                                </h4>
                                 <ExportSelectedEvents />
                             </nav>
                         </header>
 
+                        <Show when={sidebarData.loading}><progress /></Show>
 
                         <section style={{ overflow: "auto" }}>
                             <For each={sidebarData()?.grouped}>

@@ -18,15 +18,15 @@ import {
 import { useParams } from "@solidjs/router";
 import { Graph } from "@cosmos.gl/graph";
 
-import "./style.css";
-import { EDGE_KIND, NODE_KIND, type EdgeMeta, type NodeMeta } from "../../types/tier2_comos_sqlite";
+import type { YearMode } from "../../types";
 import { controls } from "../../state/controls.store";
+import { controlsActions } from "../../state/controls.actions";
 import { loadGraphData } from "./loadGraphData";
 import MsgSettingLayout from "../MsgSettingLayout";
 import ControlsHeader from "../ControlsHeader";
-import Sidebar from "./Sidebar";
-import { controlsActions } from "../../state/controls.actions";
-import type { ViewMode, YearMode } from "../../types";
+import SidebarMultiple from "../SidebarMultiple";
+
+import { EDGE_KIND, NODE_KIND, type EdgeMeta, type NodeMeta } from "../../types/tier2_comos_sqlite";
 
 const USE_FIT_INTERVAL = false;
 
@@ -183,7 +183,6 @@ export const ConceptGraph: Component = () => {
   const params = useParams();
   const [simulating, setSimulating] = createSignal(false);
   const [graphProgress, setGraphProgress] = createSignal(0);
-  const [selectedNode, setSelectedNode] = createSignal<NodeMeta | null>(null);
   const [selectedPointIndex, setSelectedPointIndex] = createSignal<number | null>(null);
   const [tooltip, setTooltip] = createSignal<TipData | null>(null);
   const [paramsTokenIdx, setParamsTokenIdx] = createSignal<number | null>(params.token_idx ? Number(params.token_idx) : null);
@@ -249,16 +248,7 @@ export const ConceptGraph: Component = () => {
         }
       },
 
-      onClick: (index, pos) => {
-        console.debug('[graph2.onClick]', index, pos);
-        if (index) {
-          setSelectedNode(nodeMeta[index]);
-          graph?.selectPointByIndex(index);
-        } else {
-          setSelectedNode(null);
-          graph?.unselectPoints();
-        }
-      }
+      onClick: handleCLick
     });
 
     if (USE_FIT_INTERVAL) fitViewIntervalId = setInterval(() => graph?.fitView(500), 1_000) as unknown as number;
@@ -273,6 +263,21 @@ export const ConceptGraph: Component = () => {
       mouseClientY = e.clientY - rect.top;
     });
   });
+
+  function nodeMeta2EventId(index: number) {
+    return nodeMeta[index].id.substring(2)
+  }
+
+  const handleCLick = (index: number | undefined) => {
+    if (index) {
+      console.debug('[graph2.onClick]', nodeMeta[index]);
+      controlsActions.setSelectedEventIds(new Set([nodeMeta2EventId(index)]));
+      graph?.selectPointByIndex(index);
+    } else {
+      controlsActions.setSelectedEventIds(null);
+      graph?.unselectPoints();
+    }
+  };
 
   // Displayed in footer
   const counts = createMemo(() => {
@@ -300,7 +305,7 @@ export const ConceptGraph: Component = () => {
       console.debug("[graph2.effect 1] reset graph");
       setGraphProgress(0);
       setTooltip(null);
-      setSelectedNode(null);
+      controlsActions.setSelectedEventIds(null);
       graph?.unselectPoints();
     }
 
@@ -363,7 +368,7 @@ export const ConceptGraph: Component = () => {
 
       if (foundPointIndex > -1) {
         graph.setPointColors(buf);
-        setSelectedNode(nodeMeta[foundPointIndex]);
+        controlsActions.setSelectedEventIds(new Set([nodeMeta2EventId(foundPointIndex)]));
         setSelectedPointIndex(foundPointIndex);
         graph.render();
         console.debug("[graph2.effect 2] rendered  URL's token", params.token_idx);
@@ -499,7 +504,13 @@ export const ConceptGraph: Component = () => {
         ></div>
 
         <div id="sidebar_container">
-          <Show when={selectedNode()}>
+          <SidebarMultiple onClose={() => {
+            controlsActions.setSelectedEventIds(null);
+            setParamsTokenIdx(null);
+            graph?.fitView();
+          }}
+          />
+          {/* <Show when={selectedNode()}>
             <Sidebar
               selectedNode={selectedNode()}
               graphData={data() ?? null}
@@ -509,7 +520,7 @@ export const ConceptGraph: Component = () => {
                 graph?.fitView();
               }}
             />
-          </Show>
+          </Show> */}
         </div>
       </div>
 
