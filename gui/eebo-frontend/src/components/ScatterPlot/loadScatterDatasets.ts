@@ -1,6 +1,6 @@
 import { loadJson } from "../../lib/loadJson";
 import { getEventsByIds } from "../../services/db/getEventsByIds";
-import { type YearMode } from "../../state/controls.store";
+import type { YearMode } from "../../types";
 import type { ConceptDataset } from "./types";
 
 function matchesYearFactory(params: {
@@ -12,7 +12,6 @@ function matchesYearFactory(params: {
         ? (y: number) => y === params.fromYear
         : (y: number) => y >= params.fromYear && y <= params.toYear;
 }
-
 
 async function buildEventMap(eventIds: string[]) {
     const events = await getEventsByIds([...new Set(eventIds)]);
