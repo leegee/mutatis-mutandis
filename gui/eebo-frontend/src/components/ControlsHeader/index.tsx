@@ -11,7 +11,7 @@ import { listConcepts } from "../../services/db";
 
 import "./ControlsHeader.css";
 import { YearTimeline } from "./YearTimeline";
-import MultiCreatableSelect from "./CreatableSelect";
+import MultiCreatableSelect from "./MultiCreatableSelect";
 
 interface Props {
   children?: any;

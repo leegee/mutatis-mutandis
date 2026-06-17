@@ -8,6 +8,7 @@ import {
   copyToClipboard,
 } from "../lib/eventExport";
 import { controls } from "../state/controls.store";
+import { cluster2groq } from "../services/groqApi";
 
 export default function ExportSelectedEvents() {
   const [isExporting, setIsExporting] = createSignal(false);
@@ -24,6 +25,7 @@ export default function ExportSelectedEvents() {
       }
     }
   };
+  const allText = () => exportedData()!.events.map((e) => e.windowText || "").filter(Boolean).join("\n\n");
 
   const noSelection = !controls.selectedEventIds || controls.selectedEventIds.size < 1;
 
@@ -53,10 +55,7 @@ export default function ExportSelectedEvents() {
             </li>
 
             <li onClick={() => {
-              const data = exportedData();
-              if (!data) return;
-              const allText = data.events.map((e) => e.windowText || "").filter(Boolean).join("\n\n---\n\n");
-              copyToClipboard(allText, "Window texts");
+              copyToClipboard(allText(), "Window texts");
             }}>
               <i>text_fields</i>
               <span>Text</span>
@@ -85,7 +84,12 @@ export default function ExportSelectedEvents() {
             </li>
           </menu>
         </li>
+
+        <li onClick={() => cluster2groq(exportedData()!.events[0].concept.toLocaleLowerCase(), allText())}>
+          <i>new_label</i>
+          <span>Label with Groq</span>
+        </li>
       </menu>
-    </div>
+    </div >
   );
 }

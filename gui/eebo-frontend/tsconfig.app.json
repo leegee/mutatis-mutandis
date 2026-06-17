@@ -11,7 +11,7 @@
       "DOM.Iterable"
     ],
     "types": [
-      "vite/client"
+      "vite/client",
     ],
     "skipLibCheck": true,
     /* Bundler mode */
@@ -30,6 +30,7 @@
     "noUncheckedSideEffectImports": true
   },
   "include": [
-    "src"
+    "src",
+    "server-middleware"
   ]
 }

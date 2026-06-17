@@ -15,19 +15,22 @@
     "@cosmos.gl/graph": "^2.6.4",
     "@deck.gl/core": "^9.3.3",
     "@deck.gl/layers": "^9.3.3",
+    "@google/genai": "^2.8.0",
     "@solid-primitives/storage": "^4.3.4",
     "@solidjs/router": "^0.16.1",
     "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
     "@types/pg": "^8.20.0",
     "beercss": "^4.0.21",
     "d3": "^7.9.0",
+    "dotenv": "^17.4.2",
+    "groq-sdk": "^1.2.1",
     "pg": "^8.21.0",
     "solid-js": "^1.9.10",
     "solid-transition-group": "^0.3.0"
   },
   "devDependencies": {
     "@types/d3": "^7.4.3",
-    "@types/node": "^24.10.1",
+    "@types/node": "^25.9.3",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
     "vite-plugin-solid": "^2.11.10"

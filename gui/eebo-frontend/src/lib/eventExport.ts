@@ -1,13 +1,12 @@
+import { type Event } from '../types';
 import { controls } from "../state/controls.store";
 import { queryEventById } from "../services/db";
 import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
-import {
-  setWindowCache,
-  getWindow,
-} from "../services/windowCache"; // adjust path as needed
+import { setWindowCache, getWindow, } from "../services/windowCache";
 
-export type EnrichedEvent = {
+export type EnrichedEvent = Event & {
   id: string;
+  concept: string;
   doc_id: string;
   token_idx: number;
   token: string;
