@@ -8,10 +8,6 @@ import AppError from "./components/AppError";
 import GlobalMessageDisplay from "./components/GlobalMessageDisplay";
 import AppNav from "./components/AppNav";
 
-const CosmosContextGraphGuide = lazy(
-  () => import("./components/CosmosContextGraph/Guide"),
-);
-
 export default function App(props: any) {
   const location = useLocation();
 
@@ -44,7 +40,7 @@ export default function App(props: any) {
         {/* </ErrorBoundary> */}
       </main>
 
-      <Transition name="slide-fade">
+      {/* <Transition name="slide-fade">
         <Show when={openHelp()}>
           <article
             class="helpContainer right surface-container-high padding high-elevate border"
@@ -55,7 +51,7 @@ export default function App(props: any) {
             </Show>
           </article>
         </Show>
-      </Transition>
+      </Transition> */}
     </>
   );
 }
