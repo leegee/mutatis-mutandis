@@ -2,7 +2,7 @@
 
 import { Show, For, type Component } from "solid-js";
 import { showDocument } from "../../services/documentApi";
-import EventContext from "../EventContext";
+import EventContextWindowText from "../EventContextWindowText";
 
 interface Props {
   selectedNode: NodeMeta | null;
@@ -69,7 +69,7 @@ const ConceptGraphSidebar: Component<Props> = (props) => {
               {/*  EventContext (events and neighbours that have a doc + window)  */}
               <Show when={node.kind !== NODE_KIND.CONCEPT && node.docId && node.windowId != null}>
                 <section class="bottom-padding">
-                  <EventContext
+                  <EventContextWindowText
                     label="Context"
                     docId={node.docId!}
                     tokenIdx={node.tokenIdx!}

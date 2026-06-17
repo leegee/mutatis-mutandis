@@ -2,7 +2,6 @@ import {
     createSignal,
     createMemo,
     Show,
-    type Component,
     Match,
     Switch,
 } from "solid-js";
@@ -16,7 +15,7 @@ interface EventContextProps {
     open?: boolean;
 }
 
-const EventContext: Component<EventContextProps> = (props) => {
+export default function EventContextWindowText(props: EventContextProps) {
     const [open, setOpen] = createSignal(props.open ?? true);
 
     // Only produce a fetch source when open
@@ -68,5 +67,3 @@ const EventContext: Component<EventContextProps> = (props) => {
         </>
     );
 };
-
-export default EventContext;

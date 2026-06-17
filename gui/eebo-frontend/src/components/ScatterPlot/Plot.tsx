@@ -277,7 +277,8 @@ export default function Plot(props: PlotProps) {
             top: `${ dragRect()!.y }px`,
             width: `${ dragRect()!.width }px`,
             height: `${ dragRect()!.height }px`,
-            border: "2px solid rgba(120,160,255,1)",
+            border: "1px solid rgba(120,160,255,0.8)",
+            "border-radius": 0,
             "background-color": "rgba(120,160,255,0.15)",
             "pointer-events": "none",
           }}

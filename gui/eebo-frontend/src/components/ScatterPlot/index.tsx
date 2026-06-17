@@ -87,7 +87,7 @@ export default function ConceptClusterPlot() {
                         errorMessage={conceptDatasets.error?.message || bfs.error?.message}
                     />
                 }>
-                    <ControlsHeader multiConcept={true} noTopN={true}>
+                    <ControlsHeader multiConcept={true}>
                         <div class="field  border middle-align">
                             <select class="small-padding" value={layerMode()}
                                 onChange={e => {

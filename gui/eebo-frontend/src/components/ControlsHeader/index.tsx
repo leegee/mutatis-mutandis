@@ -17,10 +17,9 @@ interface Props {
   children?: any;
   title?: string;
   includeHubSpread?: boolean;
-  fdgControls?: boolean;
   multiConcept?: boolean;
   noYearTimeline?: boolean;
-  noTopN?: boolean;
+  topN?: boolean;
   totalEvents?: () => number;
 }
 
@@ -86,7 +85,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         <hr class="divider vertical max no-margin no-padding" />
 
-        <Show when={!props.noTopN}>
+        <Show when={props.topN}>
           <div class="field middle-align prefix border small">
             <i class="tiny">tenancy</i>
             <input

@@ -389,7 +389,7 @@ export const ConceptGraph: Component = () => {
     }}>
 
       <Show when={!data.loading}>
-        <ControlsHeader>
+        <ControlsHeader topN={true}>
           {/* <div class="field suffix border middle-align small">
             <select
               value={controls.viewMode}

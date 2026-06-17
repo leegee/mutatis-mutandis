@@ -185,7 +185,7 @@ const DiachronicChart: Component = () => {
 
   return (
     <article class="background no-padding no-margin">
-      <ControlsHeader title="Diachronic Neighbours" fdgControls={false}>
+      <ControlsHeader title="Diachronic Neighbours" topN={true}>
         <hr class="divider vertical max no-margin no-padding" />
 
         <div class="field suffix border middle-align small">
