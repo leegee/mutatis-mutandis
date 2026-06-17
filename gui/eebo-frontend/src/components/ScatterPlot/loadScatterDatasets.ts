@@ -1,5 +1,5 @@
 import { loadJson } from "../../lib/loadJson";
-import { getEventsByIds } from "../../services/db/getEventsByIds";
+import { getEventsByIds } from "../../services/db";
 import type { YearMode } from "../../types";
 import type { ConceptDataset } from "./types";
 
@@ -64,11 +64,11 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
         const allEventIds = tagged.flatMap(d => d.points.map(p => String(p.event_id)));
         const eventMap = await buildEventMap(allEventIds);
         const yearCheck = matchesYearFactory(params);
-
-        return tagged.map(d => ({
+        const rv = tagged.map(d => ({
             ...d,
             points: enrichPoints(d.points, eventMap, yearCheck),
         }));
+        return rv;
     }
     catch (error) {
         console.error('xxxxxxxxxxxxxx', error)

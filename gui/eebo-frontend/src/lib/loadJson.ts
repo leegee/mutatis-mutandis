@@ -21,6 +21,7 @@ export async function loadJson<T = any>(url: string, label?: string): Promise<T>
   try {
     const json = JSON.parse(text);
     console.log(`Loaded ${ url } for ${ label ?? '-' }`);
+    // console.log('JSON', json)
     return json as T;
   } catch (e) {
     throw new Error(`${ label ?? url }: invalid JSON`);
