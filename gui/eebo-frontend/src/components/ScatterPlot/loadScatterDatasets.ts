@@ -61,7 +61,7 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
             points: d.points.map(p => ({ ...p, concept: d.concept })),
         }));
 
-        const allEventIds = tagged.flatMap(d => d.points.map(p => p.event_id));
+        const allEventIds = tagged.flatMap(d => d.points.map(p => String(p.event_id)));
         const eventMap = await buildEventMap(allEventIds);
         const yearCheck = matchesYearFactory(params);
 
@@ -89,7 +89,7 @@ export async function loadBfsDataset(params: LoadBfsParams) {
         "bfs_global"
     );
 
-    const eventIds = bfs.points.map((p: { event_id: string }) => p.event_id);
+    const eventIds = bfs.points.map((p: { event_id: string }) => String(p.event_id));
     const eventMap = await buildEventMap(eventIds);
     const yearCheck = matchesYearFactory(params);
 

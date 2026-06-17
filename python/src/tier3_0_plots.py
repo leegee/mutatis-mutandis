@@ -217,9 +217,9 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
 
 
 def bfs_event_expansion(lookup, index, seed_ids, emb_cache, k=25, max_nodes=5000, depth=2):
-    visited  = set(seed_ids)
-    frontier = set(seed_ids)
-    all_nodes = set(seed_ids)
+    visited = set(map(str, seed_ids))
+    frontier = set(map(str, seed_ids))
+    all_nodes = set(map(str, seed_ids))
 
     for _ in range(depth):
         if len(all_nodes) >= max_nodes:
@@ -236,8 +236,8 @@ def bfs_event_expansion(lookup, index, seed_ids, emb_cache, k=25, max_nodes=5000
                 if nid == -1:
                     continue
                 if nid not in visited:
-                    visited.add(nid)
-                    next_frontier.add(nid)
+                    visited.add(str(nid))
+                    next_frontier.add(str(nid))
 
         all_nodes.update(next_frontier)
         frontier = next_frontier
@@ -258,8 +258,7 @@ def expand_neighbors(index, lookup, event_ids, emb_cache, k=25, max_points=3000)
                 ids.add(nid)
         if len(ids) >= max_points:
             break
-    return list(ids)[:max_points]
-
+    return [str(x) for x in list(ids)[:max_points]]
 
 
 def fit_umap_local(X, event_ids, n_neighbors=15, min_dist=0.1):
@@ -534,6 +533,7 @@ def run_tier3_core(
                 emit("concept_start", {"concept": concept_name})
 
             seed_ids       = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
+            seed_ids       = [str(eid) for eid in seed_ids]
             concept_sample = seed_ids[:1000]
 
             # one embedding fetch for the concept sample, reused below
@@ -682,8 +682,8 @@ def run_tier3_core(
         label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
 
         extra = {
-            int(eid): {
-                "cluster_id":    int(cluster_labels[i]),
+            str(eid): {
+                "cluster_id": int(cluster_labels[i]),
                 "cluster_label": label_map.get(cluster_labels[i]),
             }
             for i, eid in enumerate(event_ids)
