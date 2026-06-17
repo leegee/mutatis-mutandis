@@ -1,10 +1,10 @@
 import { createResource, Show, For } from "solid-js";
-import { controls } from "../../state/controls.store";
-import { queryEventById } from "../../services/db";
-import { controlsActions } from "../../state/controls.actions";
-import { fetchWindowBatch } from "../../services/tokenWindowBatchApi";
-import ExportSelectedEvents from "../ExportSelectedEvents";
-import { showDocument } from "../../services/documentApi";
+import { controls } from "../state/controls.store";
+import { queryEventById } from "../services/db";
+import { controlsActions } from "../state/controls.actions";
+import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
+import ExportSelectedEvents from "./ExportSelectedEvents";
+import { showDocument } from "../services/documentApi";
 
 export default function SidebarMultiple() {
     // stable selection

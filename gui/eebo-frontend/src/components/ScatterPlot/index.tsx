@@ -9,7 +9,7 @@ import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets";
 import { controls } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import Sidebar from "./Sidebar";
-import SidebarMultiple from "./SidebarMultiple";
+import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import TextWindow from "../TextWindow";
 
