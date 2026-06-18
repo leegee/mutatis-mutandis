@@ -1,15 +1,9 @@
 import { createSignal } from "solid-js";
 import { A, useLocation } from "@solidjs/router";
 import { Icon } from "./Icon";
+import { routes } from "../routes";
+import { openHelp, setOpenHelp } from "../state/help";
 
-const navItems = [
-    { path: "/scatter", icon: "scatter_plot", label: "Scatter Plot" },
-    { path: "/aggregates", icon: "crowdsource", label: "Aggregates" },
-    { path: "/clusters", icon: "view_cozy", label: "Cluster Report" },
-    { path: "/graph2", icon: "orbit", label: "FDG" },
-    { path: "/table", icon: "view_column", label: "Neighbourhood Table" },
-    { path: "/diachronic", icon: "calendar_view_week", label: "Diachronic Chart" },
-] as const;
 
 export default function AppNav() {
     const location = useLocation();
@@ -27,7 +21,7 @@ export default function AppNav() {
                 </button>
             </header>
 
-            {navItems.map((item) => (
+            {routes.map((item) => (
                 <A
                     href={item.path}
                     classList={{
@@ -47,13 +41,13 @@ export default function AppNav() {
 
             <hr class="max surface-container-low" />
 
-            {/* <a
+            <a
                 onClick={() => setOpenHelp(!openHelp())}
                 class="extra-padding bottom-padding"
             >
                 <i>help</i>
                 <span>Guide</span>
-            </a> */}
+            </a>
         </nav>
     );
 }
