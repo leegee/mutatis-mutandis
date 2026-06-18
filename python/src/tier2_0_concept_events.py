@@ -116,6 +116,7 @@ Four tables:
 
 from __future__ import annotations
 
+import os
 import argparse
 import sqlite3
 from collections import Counter
@@ -385,7 +386,13 @@ def load_doc_metadata(conn) -> dict:
 
 
 # Concept analysis
-def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, diagnostics=False):
+def analyse_concept(
+    doc_meta, index, lookup, concept_name, concept,
+    *,
+    diagnostics     = False,
+    false_positives = None,
+    top_n: int      = K,
+):
     """
     Compute neighbourhood structure for all events matching a concept.
 
@@ -400,14 +407,15 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
     neighbour.
     """
     forms           = set(concept["forms"])
-    false_positives = {f.lower() for f in concept.get("false_positives", [])}
+    false_positives = {
+        f.lower() for f in (false_positives or concept.get("false_positives", []))
+    }
 
     event_ids = list(lookup.iter_matching_event_ids(forms, false_positives))
 
     logger.info(f"[tier2] concept={concept_name}")
     if false_positives:
         logger.info(f"[tier2] excluding false_positives={false_positives}")
-
     if not event_ids:
         return {"concept": concept_name, "empty": True}
 
@@ -419,9 +427,10 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
 
     query_vecs = lookup.embeddings[event_pos]
 
-    logger.debug(f"[tier2] query_events={len(event_ids)}")
-    logger.debug(f"[tier2] sample_event_id={event_ids[0]}")
-    logger.debug(f"[tier2] sample_embedding_shape={query_vecs.shape}")
+    if diagnostics:
+        logger.debug(f"[tier2] query_events={len(event_ids)}")
+        logger.debug(f"[tier2] sample_event_id={event_ids[0]}")
+        logger.debug(f"[tier2] sample_embedding_shape={query_vecs.shape}")
 
     all_scores, all_neigh_ids = index.search(query_vecs, K)
 
@@ -455,30 +464,26 @@ def analyse_concept(doc_meta, index, lookup, concept_name, concept, top_n=K, *, 
         neighbours = []
 
         for nid, score in zip(all_neigh_ids[i], all_scores[i]):
-            if nid == -1 or int(nid) == int(eid):
+            # Skip no match or self-matches:
+            nid_int = int(nid)
+            if nid_int == -1 or nid_int == eid:
                 continue
-
-            n_pos = lookup.get_pos(int(nid))
-            n_token = str(L_token[n_pos])
-
+            n_pos                                   = lookup.get_pos(int(nid))
+            n_token                                 = str(L_token[n_pos])
             if n_token.lower() in false_positives:
                 continue
-
-            n_doc_id = str(L_doc_id[n_pos])
-            n_window_id = int(L_window_id[n_pos])
-
+            n_doc_id                                = str(L_doc_id[n_pos])
+            n_window_id                             = int(L_window_id[n_pos])
             token_counter[n_token]                  += 1
             doc_counter[n_doc_id]                   += 1
             window_counter[(n_doc_id, n_window_id)] += 1
-
-            n_wpos = int(L_wpos[n_pos])
-
+            n_wpos                                  = int(L_wpos[n_pos])
             neighbours.append({
                 "event_id":         int(L_event_id[n_pos]),
                 "vector_id":        int(L_vector_id[n_pos]),
                 "token":            n_token,
                 "doc_id":           n_doc_id,
-                "pub_year":         q_pub_year,
+                "pub_year":         doc_meta.get(n_doc_id, {}).get("pub_year"),
                 "token_idx":        int(L_token_idx[n_pos]),
                 "window_id":        n_window_id,
                 "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
@@ -588,6 +593,14 @@ _DELETE_CONCEPT = [
 ]
 
 
+def sqlite3_connection(db_path):
+    con = sqlite3.connect(db_path)
+    con.execute("PRAGMA journal_mode=WAL;")
+    con.execute("PRAGMA synchronous=NORMAL;")
+    con.execute("PRAGMA busy_timeout=5000;")  # optional but very relevant in FastAPI context
+    return con
+
+
 def write_sqlite(output: dict, db_path, *, clear: bool = False):
     """
     Write analyse_concept output to a normalised SQLite database.
@@ -601,7 +614,7 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
     """
     logger.debug(f"[tier2] writing sqlite -> {db_path}")
 
-    con = sqlite3.connect(db_path)
+    con = sqlite3_connection(db_path)
 
     if clear:
         logger.info("[tier2] clearing sqlite database")
@@ -682,11 +695,12 @@ def _aggregate_rows(concept_name, aggregate):
     for rank, ((doc_id, window_id), count) in enumerate(aggregate["top_windows"]):
         yield (concept_name, "window", rank, None, doc_id, window_id, count)
 
+
 def get_processed_concepts(db_path) -> set[str]:
     if not Path(db_path).is_file():
         return set()
     try:
-        con = sqlite3.connect(db_path)
+        con = sqlite3_connection(db_path)
         cur = con.execute("SELECT concept FROM concepts")
         result = {row[0] for row in cur.fetchall()}
         con.close()
@@ -696,8 +710,75 @@ def get_processed_concepts(db_path) -> set[str]:
         return set()
 
 
+def run_tier2_service(
+    *,
+    doc_meta,
+    concepts_to_run,
+    db_path,
+    lookup=None,
+    false_positives=None,
+    clear=False,
+    diagnostics=False,
+    emit=None
+):
+    logger.info(f"[tier2.run_tier2_service] Enter")
+    index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+    if index.ntotal == 0:
+        raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
+
+    output = run_tier2_core(
+        index            = index,
+        doc_meta         = doc_meta,
+        concepts_to_run  = concepts_to_run,
+        lookup           = lookup,
+        false_positives  = false_positives,
+        diagnostics      = diagnostics,
+        emit             = emit
+    )
+    logger.info(f"[tier2.run_tier2_service] Write SQL")
+    write_sqlite( output, db_path, clear=clear, )
+    logger.info(f"[tier2.run_tier2_service] Done")
+    return output
+
+
+def run_tier2_core(
+    *,
+    index,
+    doc_meta,
+    concepts_to_run,
+    lookup          = None,
+    false_positives = None,
+    diagnostics     = False,
+    target_forms    = None,
+    emit            = None,
+):
+    logger.info("[tier2.run_tier2_core] Enter")
+    output = {}
+    lookup = ZarrEventLookup(
+        ZARR_ROOT / "tier1",
+        forms=target_forms,
+        false_positives=false_positives,
+    )
+
+    if diagnostics:
+        knn_diagnostics( lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"], )
+        knn_diagnostics( lookup, index, CONCEPT_SETS["LAW"]["forms"], )
+
+    for concept_name, concept in concepts_to_run:
+        output[concept_name] = analyse_concept(
+            doc_meta,
+            index,
+            lookup,
+            concept_name,
+            concept,
+            diagnostics=diagnostics,
+        )
+    logger.info("[tier2.run_tier2_core] Leave")
+    return output
+
+
 def main():
-    logger.info("[tier2] init")
+    logger.info("[tier2] Enter")
 
     parser = argparse.ArgumentParser()
     parser.add_argument( "--concept", type=str, default=None, help="Run analysis for a single concept (case-insensitive)", )
@@ -708,11 +789,15 @@ def main():
     args = parser.parse_args()
 
     if args.clear and args.concept:
-        logger.warning( "[tier2] --clear with --concept will wipe all concepts before writing one" )
+        logger.warning( "[tier2.main] --clear with --concept will wipe all concepts before writing one" )
 
-    index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
-    if index.ntotal == 0:
-        raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
+    if args.clear:
+        if SQLITE_DB_PATH.exists():
+            logger.warning(f"[tier2.main] deleting SQLite DB: {SQLITE_DB_PATH}")
+            os.remove(SQLITE_DB_PATH)
+        else:
+            logger.info("[tier2] reset-sqlite requested but DB does not exist")
+
 
     # If a single concept is requested, restrict the lookup to its forms
     # so that only matching events are loaded into memory.
@@ -739,7 +824,7 @@ def main():
             )
 
         logger.info(
-            f"[tier2] single-concept mode: {concept_name} forms={target_forms}"
+            f"[tier2.main] single-concept mode: {concept_name} forms={target_forms}"
         )
 
     conn = get_connection()
@@ -762,44 +847,20 @@ def main():
     ]
 
     if not concepts_to_run:
-        logger.info(
-            "[tier2] nothing to write — all concepts already processed"
-        )
+        logger.info( "[tier2.main] nothing to write — all concepts already processed" )
         return
 
-    # Only build the lookup once we know there is work to do.
-    # For single-concept runs, target_forms restricts loading to
-    # matching events only, keeping memory use proportional to the
-    # concept rather than the full corpus.
-    lookup = ZarrEventLookup(
-        ZARR_ROOT / "tier1",
-        forms=target_forms,
-        false_positives=target_fps,
+    run_tier2_service(
+        doc_meta        = doc_meta,
+        concepts_to_run = concepts_to_run,
+        db_path         = SQLITE_DB_PATH,
+        lookup          = None,
+        false_positives = target_fps,
+        clear           = args.clear,
+        diagnostics     = args.diagnostics,
+        emit            = None
     )
-
-    if args.diagnostics:
-        logger.debug("--------------------------------------------------------")
-        knn_diagnostics( lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"], )
-        knn_diagnostics( lookup, index, CONCEPT_SETS["LAW"]["forms"], )
-        logger.debug("--------------------------------------------------------")
-
-    for concept_name, concept in concepts_to_run:
-        output[concept_name] = analyse_concept(
-            doc_meta,
-            index,
-            lookup,
-            concept_name,
-            concept,
-            diagnostics=args.diagnostics,
-        )
-
-    write_sqlite(
-        output,
-        SQLITE_DB_PATH,
-        clear=args.clear,
-    )
-
-    logger.info(f"[tier2] Complete, wrote {SQLITE_DB_PATH}")
+    logger.info(f"[tier2.main] Complete, wrote {SQLITE_DB_PATH}")
 
 
 if __name__ == "__main__":
