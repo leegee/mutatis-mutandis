@@ -32,7 +32,7 @@ export const routes = [
   },
   {
     path: "/clusters",
-    icon: "view_cozy",
+    icon: "action_key",
     label: "Cluster Report",
     component: ConceptClusters,
     help: () => (
@@ -50,14 +50,14 @@ export const routes = [
   },
   {
     path: "/table",
-    icon: "view_column",
+    icon: "tenancy",
     label: "Neighbourhood Table",
     component: NeighbourhoodBrowser,
     help: () => <div>Table view of local neighborhoods.</div>
   },
   {
     path: "/diachronic",
-    icon: "calendar_view_week",
+    icon: "chronic",
     label: "Diachronic Chart",
     component: DiachronicChart,
     help: () => <div>Temporal evolution of concepts.</div>
