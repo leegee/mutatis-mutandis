@@ -19,8 +19,11 @@ export default function SidebarMultiple(props: Props) {
 
         // Get events by selection IDs
         const events = await Promise.all(
-            ids.map((id) => queryEventById(id))
+            ids
+                .filter((id): id is string => id !== null)
+                .map((id) => queryEventById(id))
         );
+
         const cleanEvents = events.filter(Boolean);
         // console.debug("[SidebarMultiple.sidebarData]", cleanEvents)
 

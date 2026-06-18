@@ -17,6 +17,7 @@ const normalizeRange = (from: number, to: number) => {
 export const controlsActions = {
     setConcept(concept: string) {
         console.log('[actions] setConcept', concept);
+        alert('woop')
         setControls({
             concept,
             selectedNode: null,
@@ -42,16 +43,11 @@ export const controlsActions = {
         setControls("selectedNode", (prev) => (prev === id ? null : id));
     },
 
-    setSelectedEventId(id: string | null) {
-        // setControls("selectedEventId", id);
-        // if (id === null) setControls("selectedEventIds", null);
-        this.setSelectedEventIds(id ? new Set([id]) : null);
-    },
-
-    setSelectedEventIds(ids: Set<string> | null) {
-        setControls("selectedEventIds", ids);
-        if (ids === null || ids.size === 0) setControls("selectedEventId", null);
-        else this.setSelectedEventId(ids?.values().next().value ?? null)
+    setSelectedEventIds(ids: Set<string | null> | string | null) {
+        if (typeof ids === 'string') return setControls("selectedEventIds", ids);
+        const hasNull = ids?.has(null) ?? false;
+        const resolved = (ids === null || hasNull) ? null : ids as Set<string>;
+        setControls("selectedEventIds", resolved);
     },
 
     setViewMode(mode: ViewMode) {

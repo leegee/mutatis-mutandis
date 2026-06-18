@@ -71,7 +71,7 @@ export default function ConceptClusterPlot() {
 
     function handleSelectionChange(event_ids: Id[] | null) {
         // console.debug("[ConceptClusterPlot] handleSelectionChange event:", event_ids ? event_ids.map(_ => _) : null);
-        controlsActions.setSelectedEventIds(new Set(event_ids))
+        controlsActions.setSelectedEventIds(event_ids ? new Set(event_ids) : null)
     }
 
     function handleBoundsChange(_bounds: ViewBounds) {
@@ -136,7 +136,7 @@ export default function ConceptClusterPlot() {
                                     <div class="field middle-align prefix suffix">
                                         <nav>
                                             <div class="slider medium responsive">
-                                                <input type='range' min={0} max={25} step={1}
+                                                <input type='range' min={0} max={4} step={0.5}
                                                     value={bfsOpacity()}
                                                     onInput={(e) => setBfsOpacity(Number(e.currentTarget.value))}
                                                 />

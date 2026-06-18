@@ -27,7 +27,7 @@ export async function queryYearBounds(
 
 export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   // console.trace("[query] queryEventById", id);
-  if (typeof id !== 'string') console.error('queryEventById received', typeof id)
+  if (typeof id !== 'string') return Promise.resolve(null);
 
   let type = 'event';
   const eventRows = await execRows(

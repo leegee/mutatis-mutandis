@@ -5,6 +5,7 @@ import { fetchWindowBatch, type TextWindowItem } from "../services/tokenWindowBa
 import { setWindowCache, getWindow } from "../services/windowCache";
 import { loadJson } from "../lib/loadJson";
 import ControlsHeader from "./ControlsHeader";
+import { controlsActions } from "../state/controls.actions";
 
 interface ClusterAggregate {
     top_tokens: [string, number][];
@@ -535,7 +536,7 @@ function ExemplarSubRow(props: { event: ResolvedEvent }) {
     return (
         <tr
             ref={rowRef}
-            onClick={() => setControls("selectedEventId", props.event.event_id)}
+            onClick={() => controlsActions.setSelectedEventIds(props.event.event_id)}
             class="bottom-padding"
             style={{
                 background:

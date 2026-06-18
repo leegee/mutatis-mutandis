@@ -36,7 +36,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         <div class="field suffix border middle-align small">
           <Show when={concepts().length > 0}>
             <Show when={props.multiConcept} fallback={
-              <select value={controls.concept} onChange={(e) => A.setConcept(e.currentTarget.value)} >
+              <select value={controls.concept} onChange={(e) => A.setConceptSelection([e.currentTarget.value])} >
                 <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
               </select>
             }>
