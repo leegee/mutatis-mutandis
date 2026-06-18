@@ -114,7 +114,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
       <button class="circle chip tiny no-border small-text no-line" style="font-size:0.5rem"
         onClick={A.setAllYears}
       >
-        ALL YEARS
+        <i>all_inclusive</i>
         <span class="tooltip bottom">Show all years</span>
       </button>
 
