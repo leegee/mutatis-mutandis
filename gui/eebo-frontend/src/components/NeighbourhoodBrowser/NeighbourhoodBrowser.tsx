@@ -22,7 +22,7 @@ const NeighbourhoodBrowser: Component = () => {
   function handleSelectEvent(key: string) {
     state.setRightPanelEvent(null);
     state.setFocusToken(null);
-    state.setSelectedEventId((prev) => (prev === key ? null : key));
+    state.setSelectedEventId((prev: string | null) => (prev === key ? null : key));
   }
 
   function handleFocusToken(token: string) {

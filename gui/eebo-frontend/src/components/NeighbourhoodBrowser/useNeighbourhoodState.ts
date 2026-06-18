@@ -11,6 +11,7 @@ import {
     createResource,
     onMount,
     onCleanup,
+    type Setter,
 } from "solid-js";
 
 import type { SqliteEventWithNeighbours, SqliteNeighbour } from "../../types";
@@ -50,7 +51,7 @@ export interface NeighbourhoodState {
     // Loading / error state
     isLoading: () => boolean;
     // Setters
-    setSelectedEventId: (id: string | null) => void;
+    setSelectedEventId: Setter<string | null>;
     setFocusToken: (updater: string | null | ((prev: string | null) => string | null)) => void;
     setRightPanelEvent: (
         updater:
