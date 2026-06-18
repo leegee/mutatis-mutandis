@@ -9,13 +9,12 @@ export type SemanticNeighbour = {
 export type SemanticEvent = {
   id: string;
 
-  vector_id: number;
+  vector_id: string;
   token: string;
   doc_id: string;
   filepath: string;
 
   concept: string;
-  slice: string;
 
   x: number;
   y: number;

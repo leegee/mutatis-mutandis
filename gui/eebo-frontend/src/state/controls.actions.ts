@@ -1,5 +1,6 @@
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
-import { setControls, type ViewMode, type YearMode } from "./controls.store";
+import type { ViewMode, YearMode } from "../types";
+import { setControls } from "./controls.store";
 
 const clampYear = (y: number) =>
     Math.min(CORPUS_END_YEAR, Math.max(CORPUS_START_YEAR, y));

@@ -25,8 +25,7 @@ import { loadGraphData } from "./loadGraphData";
 import MsgSettingLayout from "../MsgSettingLayout";
 import ControlsHeader from "../ControlsHeader";
 import SidebarMultiple from "../SidebarMultiple";
-
-import { EDGE_KIND, NODE_KIND, type EdgeMeta, type NodeMeta } from "../../types/tier2_comos_sqlite";
+import { NODE_KIND, EDGE_KIND, type NodeMeta, type EdgeMeta } from "./types";
 
 const USE_FIT_INTERVAL = false;
 

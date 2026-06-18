@@ -85,7 +85,10 @@ export default function ExportSelectedEvents() {
           </menu>
         </li>
 
-        <li onClick={() => cluster2groq(exportedData()!.events[0].concept.toLocaleLowerCase(), allText())}>
+        <li onClick={async () => {
+          const text = await cluster2groq(exportedData()!.events[0].concept.toLocaleLowerCase(), allText())
+          alert(text.results)
+        }}>
           <i>new_label</i>
           <span>Label with Groq</span>
         </li>

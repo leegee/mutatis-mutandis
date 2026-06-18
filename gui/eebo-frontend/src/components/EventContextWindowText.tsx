@@ -53,7 +53,8 @@ export default function EventContextWindowText(props: EventContextProps) {
             <Show when={open()}>
                 <Show when={!window.loading} fallback={<progress class="light-green-text" />} >
                     <Show when={!window.error} fallback={
-                        <aside class="error-container border padding">Failed to load context.
+                        <aside class="error-container border padding">
+                            Failed to load context.
                             <button class="chip tiny no-border" onClick={refetch}>
                                 <i>refresh</i>
                             </button>

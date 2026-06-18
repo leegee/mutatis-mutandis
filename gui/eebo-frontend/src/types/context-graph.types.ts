@@ -1,4 +1,4 @@
-import type { Event, Neighbour } from "./sqlite";
+import type { Event, Neighbour } from "./sqlite.types";
 
 
 export interface ConceptEvent extends Event {
@@ -20,7 +20,6 @@ export interface YearBucket {
   year: number;
   count: number;
 }
-
 
 
 

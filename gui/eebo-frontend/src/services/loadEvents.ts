@@ -2,7 +2,7 @@
 
 const URL = '/json/tier2_5_d3.json';
 
-import type { SemanticEvent } from "../types/events";
+import type { SemanticEvent } from "../types";
 
 export async function loadEvents(): Promise<SemanticEvent[]> {
     const res = await fetch(URL);
@@ -25,12 +25,11 @@ export async function loadEvents(): Promise<SemanticEvent[]> {
 
                 events.push({
                     id: String(inst.vector_id),
-                    vector_id: inst.vector_id,
-                    token: inst.token,
-                    doc_id: inst.doc_id,
-                    filepath: inst.filepath,
-                    concept: conceptName,
-                    slice: sliceId,
+                    vector_id: String(inst.vector_id),
+                    token: String(inst.token),
+                    doc_id: String(inst.doc_id),
+                    filepath: String(inst.filepath),
+                    concept: String(conceptName),
 
                     x: inst.xy.x,
                     y: inst.xy.y,

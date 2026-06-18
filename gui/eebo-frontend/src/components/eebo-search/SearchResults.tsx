@@ -1,4 +1,4 @@
-import type { Hit } from "../types";
+import type { Hit } from "../../types/search-engine";
 
 interface SearchResultsProps {
     results: Hit[];

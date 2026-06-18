@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, Show, Match, Switch } from "solid-js";
-import { documentXmlURL, fetchDocumentJson } from "../services/documentService";
-import type { MyDocument } from "../types";
+import { documentXmlURL, fetchDocumentJson } from "../../services/documentService";
+import type { MyDocument } from "../../types/search-engine";
 
 interface DocumentViewProps {
     docId: string | null; // null if nothing selected

@@ -39,7 +39,7 @@ export function createWindowMiddleware(pool: Pool): Connect.NextHandleFunction {
         )
         .join(" ");
 
-      console.log(`[api/window] ${ docId }/${ tokenIdx }`);
+      // console.debug(`[api/window] ${ docId }/${ tokenIdx }`);
 
       return text(res, 200, content);
     } catch (error) {

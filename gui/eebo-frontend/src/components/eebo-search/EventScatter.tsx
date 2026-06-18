@@ -1,7 +1,7 @@
 // src/components/EventScatter.tsx
 
-import { createEffect, createMemo } from "solid-js";
-import type { SemanticEvent } from "../../types/events";
+import { createMemo } from "solid-js";
+import type { SemanticEvent } from "../../types";
 import {
     hoveredEventId,
     selectedEventId,
@@ -53,9 +53,9 @@ export default function EventScatter(props: Props) {
         return ((y - minY) / (maxY - minY + 1e-9)) * HEIGHT;
     };
 
-    createEffect(() => {
-        console.log(props)
-    })
+    // createEffect(() => {
+    //     console.log(props)
+    // })
 
     return (
         <svg id="scatterplot"
@@ -85,7 +85,6 @@ export default function EventScatter(props: Props) {
                         }}
 
                         data-concept={e.concept}
-                        data-slice={e.slice}
 
                         onMouseEnter={() =>
                             setHoveredEventId(e.id)

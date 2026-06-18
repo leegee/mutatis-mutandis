@@ -1,4 +1,4 @@
-import { type MyDocument } from "../types";
+import type { MyDocument } from "../types/search-engine";
 
 export const documentURL = (docId: string) => `http://127.0.0.1:5000/documents/${ docId }`;
 

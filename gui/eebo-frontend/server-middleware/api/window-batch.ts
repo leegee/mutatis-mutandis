@@ -114,7 +114,7 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
         }
       }
 
-      console.log(`[api/window:batch] returning ${ results.length } results`);
+      // console.debug(`[api/window:batch] returning ${ results.length } results`);
       return text(res, 200, JSON.stringify({ results }));
     }
     catch (error) {

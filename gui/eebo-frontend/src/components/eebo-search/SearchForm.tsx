@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import type { Hit } from "../types";
+import type { Hit } from "../../types/search-engine";
 
 import styles from './SearchForm.module.css';
 
@@ -35,7 +35,7 @@ export default function SearchForm(props: SearchFormProps) {
             title: title()
         }));
 
-        const res = await fetch(`http://127.0.0.1:5000/search?${params}`);
+        const res = await fetch(`http://127.0.0.1:5000/search?${ params }`);
         const data = await res.json();
         props.onSearch(data.hits || []);
     };

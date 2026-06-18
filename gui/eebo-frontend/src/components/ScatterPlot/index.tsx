@@ -29,7 +29,7 @@ export default function ConceptClusterPlot() {
         yearMode: controls.yearMode,
     });
 
-    const [conceptDatasets] = createResource(
+    const [conceptDatasets, { refetch }] = createResource(
         () => ({ ...sharedKey(), dataType: "concept" }),
         loadDatasets
     );
@@ -85,6 +85,7 @@ export default function ConceptClusterPlot() {
                     <GlobalMessageDisplay
                         title="Failed to load plot data"
                         errorMessage={conceptDatasets.error?.message || bfs.error?.message}
+                        retry={refetch}
                     />
                 }>
                     <ControlsHeader multiConcept={true}>

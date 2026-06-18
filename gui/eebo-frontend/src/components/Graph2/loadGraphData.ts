@@ -1,5 +1,5 @@
-import { EDGE_KIND, NODE_KIND, type Graph2Data, type EdgeMeta, type NodeMeta } from "../../types/tier2_comos_sqlite";
 import { execRows } from "../../services/db";
+import { type EdgeMeta, type NodeMeta, type Graph2Data, EDGE_KIND, NODE_KIND } from "./types";
 
 export async function loadGraphData(
   concept: string

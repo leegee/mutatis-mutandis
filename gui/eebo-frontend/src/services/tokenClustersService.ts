@@ -1,6 +1,7 @@
 // src/services/tokenClustersService.ts
 
-import type { Tier2Data } from "../components/NeighbourhoodBrowser";
+import type { Tier2Data } from "../types";
+
 
 export async function fetchTokenClusters(path: string): Promise<Tier2Data> {
     const url = `/json/${ path }`;

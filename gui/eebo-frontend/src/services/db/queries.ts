@@ -26,7 +26,7 @@ export async function queryYearBounds(
 
 
 export async function queryEventById(id: string): Promise<Event | null> {
-  console.debug("[query] queryEventById", id);
+  // console.trace("[query] queryEventById", id);
   if (typeof id !== 'string') console.error('queryEventById received', typeof id)
 
   let type = 'event';

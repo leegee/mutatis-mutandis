@@ -8,7 +8,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export function createGroqMiddleware(): Connect.NextHandleFunction {
     return async (req, res, next) => {
-        console.log("[api/grok] enter");
+        // console.debug("[api/grok] enter");
         if (!req.url) return next();
 
         const match = req.url.match(/^\/api\/groq/);
@@ -29,7 +29,7 @@ export function createGroqMiddleware(): Connect.NextHandleFunction {
             }
 
             const results = await analyzeCluster(parsed.term, parsed.text);
-            console.log(`[api/grok] returning ${ results }`);
+            // console.log(`[api/grok] returning ${ results }`);
 
             return text(res, 200, JSON.stringify({ results }));
         }
@@ -48,7 +48,7 @@ export async function analyzeCluster(term: string, text: string) {
             },
             {
                 role: "user",
-                content: `Analyze this cluster of text snippets and identify the sense of the use of the word "${ term }":\n\n${ text }\n\nFocus ONLY on the following. Be concise and evidence-based. Do not write general historical essays. Just return the sense defined without preamble or postamble. No need to be polite.`,
+                content: `Analyze this cluster of text snippets and identify the sense of the use of the word "${ term }":\n\n${ text }\n\nFocus ONLY on the following. Be concise and evidence-based. Do not write general historical essays or broad definitions. Just return the sense defined by context without preamble or postamble. No need to be polite.`,
             },
         ],
         model: "llama-3.3-70b-versatile", // or mixtral, qwen, etc.

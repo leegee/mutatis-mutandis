@@ -1,4 +1,4 @@
-import type { SemanticEvent } from "../../types/events";
+import type { SemanticEvent } from "../../types";
 
 type Props = {
   event: SemanticEvent | null;
@@ -96,7 +96,6 @@ export default function EventInspector(props: Props) {
           </h3>
 
           <p>Concept set: {event()!.concept}</p>
-          <p>Slice: {event()!.slice}</p>
           <p>Vector ID: {event()!.vector_id}</p>
           <p>Document: <a target="_blank" href={`/xml/${ event()!.filepath }`}>{event()!.doc_id}</a></p>
 

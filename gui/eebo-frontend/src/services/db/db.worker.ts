@@ -70,6 +70,7 @@ async function init(url: string): Promise<void> {
   console.log("[db.worker] tables:", tables);
 }
 
+/*
 function old_execRows(sql: string, bind?: (string | number | null)[]): unknown[][] {
   if (!db) throw new Error("[db.worker] database not initialised");
   const rows: unknown[][] = [];
@@ -83,7 +84,7 @@ function old_execRows(sql: string, bind?: (string | number | null)[]): unknown[]
   });
   return rows;
 }
-
+*/
 
 function execRows(sql: string, bind?: any[]): unknown[][] {
   if (!db) throw new Error("not init");

@@ -18,8 +18,8 @@ export function useClusterWindowCache() {
     try {
       const res = await fetchWindowBatch(
         missing.map(p => ({
-          doc_id: p.doc_id,
-          token_idx: p.token_idx,
+          docId: p.doc_id,
+          tokenIdx: p.token_idx,
         }))
       );
 
