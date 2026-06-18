@@ -1,7 +1,8 @@
 import { lazy } from "solid-js";
 
 const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
-const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
+const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
+const NeighbourhoodBrowserGuide = lazy(() => import("./components/NeighbourhoodBrowser/Guide"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart/DiachronicChart"));
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
@@ -53,7 +54,7 @@ export const routes = [
     icon: "tenancy",
     label: "Neighbourhood Table",
     component: NeighbourhoodBrowser,
-    help: () => <div>Table view of local neighborhoods.</div>
+    help: () => <NeighbourhoodBrowserGuide />
   },
   {
     path: "/diachronic",

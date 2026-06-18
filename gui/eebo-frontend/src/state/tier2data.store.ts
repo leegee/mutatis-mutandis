@@ -15,19 +15,11 @@ import { createSignal } from "solid-js";
 import { initDb } from "../services/db/dbh";
 import { CORPUS_TIER2_DB_URL } from "../corpus_config";
 
-// ---------------------------------------------------------------------------
-// Public signals
-// ---------------------------------------------------------------------------
-
 /** True once the database file has been fetched and opened. */
 export const [dbReady, setDbReady] = createSignal(false);
 
 /** Non-null when initialisation fails. */
 export const [dbError, setDbError] = createSignal<string | null>(null);
-
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
 
 /**
  * Fetch the .db asset, write to OPFS, and open it.

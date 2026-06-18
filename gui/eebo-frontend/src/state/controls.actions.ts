@@ -43,8 +43,9 @@ export const controlsActions = {
     },
 
     setSelectedEventId(id: string | null) {
-        setControls("selectedEventId", id);
-        if (id === null) setControls("selectedEventIds", null);
+        // setControls("selectedEventId", id);
+        // if (id === null) setControls("selectedEventIds", null);
+        this.setSelectedEventIds(id ? new Set([id]) : null);
     },
 
     setSelectedEventIds(ids: Set<string> | null) {

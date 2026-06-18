@@ -14,7 +14,6 @@ export default function App(props: any) {
 
   const [dbLoadingError, setDbLoadingError] = createSignal<string | null>(null);
 
-  // basic matcher (works for static + param routes like /graph2/:id?)
   const matchRoute = (pattern: string, path: string) => {
     const clean = (p: string) => p.split("?")[0]; // ignore optional marker
 
