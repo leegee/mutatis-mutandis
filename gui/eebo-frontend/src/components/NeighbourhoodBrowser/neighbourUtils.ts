@@ -14,7 +14,7 @@ export interface NeighbourSummary {
   eventCount: number;
   meanScore: number;
   docIds: Set<string>;
-  docYears: Map<string, number | undefined>;
+  docYears: Map<string, { year: number | undefined; token_idx: number }>;
   eventKeys: Set<string>;
 }
 
@@ -52,7 +52,7 @@ export function buildNeighbourIndex(events: SqliteEventWithNeighbours[]): Neighb
           eventCount: 0,
           meanScore: 0,
           docIds: new Set(),
-          docYears: new Map(),
+          docYears: new Map<string, { year: number | undefined; token_idx: number }>,
           eventKeys: new Set(),
         };
         index.set(nb.token, summary);
@@ -71,7 +71,7 @@ export function buildNeighbourIndex(events: SqliteEventWithNeighbours[]): Neighb
       if (event.doc_id) {
         summary.docIds.add(event.doc_id);
         if (!summary.docYears.has(event.doc_id)) {
-          summary.docYears.set(event.doc_id, event.pub_year);
+          summary.docYears.set(event.doc_id, { year: event.pub_year, token_idx: event.token_idx });
         }
       }
     }

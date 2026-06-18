@@ -71,6 +71,7 @@ const NeighbourhoodBrowser: Component = () => {
           selectedEvent={state.selectedEvent}
           selectedEventNeighbours={state.selectedEventNeighbours}
           selectedScoreRange={state.selectedScoreRange}
+          rightPanelEvent={state.rightPanelEvent}
           sortedGlobalNeighbours={state.sortedGlobalNeighbours}
           focusToken={state.focusToken}
           tokenTemporalProfile={state.tokenTemporalProfile}

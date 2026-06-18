@@ -10,14 +10,13 @@ import type { SqliteEventWithNeighbours } from "../../types";
 import { showDocument } from "../../services/documentApi";
 
 interface Props {
-  event: () => SqliteEventWithNeighbours;
-  windowText: () => string | undefined;
+  event: () => Pick<SqliteEventWithNeighbours, "doc_id" | "token_idx">;
+  windowText: () => string | null | undefined;
 }
 
 const ContextAside: Component<Props> = (props) => (
   <aside class="center-align small-padding border small-round">
-    <Show
-      when={props.windowText()}
+    <Show when={props.windowText()}
       fallback={
         <div>
           <p>Loading context</p>
@@ -26,22 +25,16 @@ const ContextAside: Component<Props> = (props) => (
       }
     >
       {(text) => (
-        <>
+        <Show when={props.event().doc_id}>
           <blockquote innerHTML={text()} />
-          <button
-            class="chip"
-            disabled={!props.event().doc_id}
-            onClick={() => {
-              const { doc_id, token_idx } = props.event();
-              if (doc_id) showDocument(doc_id, token_idx);
-            }}
-          >
-            {props.event().doc_id ?? "No document"}
+          <button class="chip" onClick={() => showDocument(props.event().doc_id, props.event().token_idx)} >
+            <span> {props.event().doc_id}</span>
+            <i class="small medium-opacity"> open_in_new</i>
           </button>
-        </>
+        </Show>
       )}
     </Show>
-  </aside>
+  </aside >
 );
 
 export default ContextAside;

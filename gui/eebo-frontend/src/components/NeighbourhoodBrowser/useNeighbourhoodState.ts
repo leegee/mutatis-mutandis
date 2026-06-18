@@ -42,7 +42,7 @@ export interface NeighbourhoodState {
     focusEventKeys: () => Set<string>;
     tokenTemporalProfile: () => TemporalProfile;
     toSeries: (profile: TemporalProfile, token: string) => TemporalPoint[];
-    windowText: () => string | undefined;
+    windowText: () => string | null | undefined;
     // Signals (readable)
     selectedEventId: () => string | null;
     focusToken: () => string | null;
@@ -150,11 +150,7 @@ export function useNeighbourhoodState(): NeighbourhoodState {
             const summary = neighbourIndex().get(focusedToken);
             if (!summary) return [];
             return [...summary.docYears.entries()]
-                .map(([docId, year]) => ({
-                    docId,
-                    year,
-                    token_idx: Number(summary.token_idx),
-                }))
+                .map(([docId, { year, token_idx }]) => ({ docId, year, token_idx }))
                 .sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
         }
         const sel = selectedEvent();

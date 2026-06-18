@@ -21,11 +21,8 @@ interface Props {
 }
 
 const DocumentPanel: Component<Props> = (props) => (
-  <aside class="s3 surface-container">
-    <div
-      class="padding small-text bold"
-      style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}
-    >
+  <aside class="s3 surface-container" style="z-index:unset">
+    <div class="padding small-text bold">
       <Show when={props.focusToken()} fallback="Documents">
         <span>
           Documents for <q>{props.focusToken()}</q>
@@ -36,15 +33,10 @@ const DocumentPanel: Component<Props> = (props) => (
       </Show>
     </div>
 
-    <Show
-      when={props.docs().length > 0}
-      fallback={
-        <div class="padding small-opacity small-text">
-          Select an event or click a neighbour token
-        </div>
-      }
+    <Show when={props.docs().length > 0}
+      fallback={<div class="padding small-opacity small-text"> Select an event or click a neighbour token </div>}
     >
-      <div style={{ padding: "0.5rem" }}>
+      <div class="small-padding">
         <For each={props.docs()}>
           {({ docId, year, token_idx }) => {
             const isActive = () => props.rightPanelEvent()?.doc_id === docId;

@@ -29,8 +29,9 @@ interface Props {
   focusToken: () => string | null;
   tokenTemporalProfile: () => TemporalProfile;
   toSeries: (profile: TemporalProfile, token: string) => TemporalPoint[];
-  windowText: () => string | undefined;
+  windowText: () => string | null | undefined;
   onFocusToken: (token: string) => void;
+  rightPanelEvent: () => { doc_id: string; token_idx: number } | null;
 }
 
 function PanelHeading(props: {
@@ -41,8 +42,7 @@ function PanelHeading(props: {
     <div class="padding small-text bold"
       style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}
     >
-      <Show
-        when={props.selectedEvent()}
+      <Show when={props.selectedEvent()}
         fallback={
           <span>
             Neighbours: all events
@@ -197,8 +197,7 @@ function GlobalNeighbourChips(props: {
 // Composed panel
 
 const NeighbourPanel: Component<Props> = (props) => {
-  const activeEvent = () =>
-    props.selectedEvent()?.event ?? null;
+  const activeEvent = () => props.rightPanelEvent() ?? props.selectedEvent()?.event ?? null;
 
   return (
     <section
