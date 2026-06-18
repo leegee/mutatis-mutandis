@@ -1,5 +1,5 @@
 import { type Component, createResource, For } from "solid-js";
-import { getYearBuckets } from "../../state/selectors";
+import { getYearBuckets } from "../../state/controls.selectors";
 import { controls } from "../../state/controls.store";
 import { controlsActions as A } from "../../state/controls.actions";
 

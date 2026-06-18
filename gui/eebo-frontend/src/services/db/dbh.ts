@@ -1,5 +1,5 @@
 /**
- * src/services/db.ts
+ * src/services/dbh.ts
  *
  * Main-thread interface to the SQLite worker.
  *

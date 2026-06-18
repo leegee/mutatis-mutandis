@@ -7,7 +7,7 @@ import {
     selectedEventId,
     setHoveredEventId,
     setSelectedEventId
-} from "../../state/search-selection";
+} from "../../state/eebo-search-selection.store";
 import "./EventScatter.css";
 
 type Props = {

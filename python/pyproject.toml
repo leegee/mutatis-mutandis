@@ -1,3 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eebo"
+version = "0.4.0"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -5,11 +19,12 @@ target-version = "py311"
 [tool.ruff.lint]
 select = [
   "F",   # pyflakes (real bugs)
-  "E",   # syntax / indentation
-  "W",   # whitespace
-  "B",   # flake8-bugbear
-  "A",   # shadowing builtins
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "B",   # bugbear
+  "A",   # shadow builtins
 ]
+
 ignore = [
-  "E501",  # long lines
+  "E501",  # line length
 ]

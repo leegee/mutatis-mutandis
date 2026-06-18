@@ -10,7 +10,7 @@
 
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import { controls } from "./controls.store";
-import { queryYearBounds, queryEventsByConcept, listConcepts, queryNEvents, queryYearCounts } from "../services/db/";
+import { queryYearBounds, queryEventsByConcept, listConcepts, queryNEvents, queryYearCounts } from "../services/db";
 import { filterByYearRange, scanYearRange } from "../lib/yearUtils";
 import type { ConceptData, SqliteEventWithNeighbours } from "../types";
 

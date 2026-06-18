@@ -17,7 +17,7 @@ import {
 import type { SqliteEventWithNeighbours, SqliteNeighbour } from "../../types";
 import { createTokenWindowResource } from "../../services/tokenWindowApi";
 import { controls } from "../../state/controls.store";
-import { getYearBounds, getYearFiltered } from "../../state/selectors";
+import { getYearBounds, getYearFiltered } from "../../state/controls.selectors";
 import { dbReady } from "../../state/tier2data.store";
 import {
     eventKey,

@@ -7,7 +7,7 @@ import {
   Show,
 } from "solid-js";
 
-import { getYearFiltered } from "../../state/selectors";
+import { getYearFiltered } from "../../state/controls.selectors";
 import ControlsHeader from "../ControlsHeader";
 import { controls } from "../../state/controls.store";
 import { type SortKey, type YearSlices, buildYearSlices } from "../../lib/yearUtils";

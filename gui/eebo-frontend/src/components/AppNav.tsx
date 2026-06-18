@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import { A, useLocation } from "@solidjs/router";
 import { Icon } from "./Icon";
 import { routes } from "../routes";
-import { openHelp, setOpenHelp } from "../state/help";
+import { openHelp, setOpenHelp } from "../state/help.store";
 
 
 export default function AppNav() {

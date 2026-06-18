@@ -218,7 +218,7 @@ CONCEPT_SETS: CanonicalRules = {
     },
     "PARLIAMENT": {
         "forms": {"parliament", "parliment", "parliaments"},
-        "false_positives": {"parliamentary", "parlour"}
+        "false_positives": { "parlour"} # "parliamentary",
     },
     "OBEDIENCE": {
         "forms": {"obedience"}, # , "obedient", "obedienc", "obey"

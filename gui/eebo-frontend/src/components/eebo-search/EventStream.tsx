@@ -6,7 +6,7 @@ import {
     setSelectedConcept,
     setSelectedSlice,
     setSelectedEventId
-} from "../../state/search-selection";
+} from "../../state/eebo-search-selection.store";
 
 import "./EventStream.css";
 

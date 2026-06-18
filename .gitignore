@@ -75,3 +75,4 @@ gui/eebo-frontend/public/data/umap/
 docs/proposal-*
 gui/eebo-frontend/public/data/scatter/
 docs/BL.txt
+python/fastapi_jobs.sqlite3

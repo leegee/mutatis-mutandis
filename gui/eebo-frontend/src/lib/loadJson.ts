@@ -1,3 +1,4 @@
+// gui\eebo-frontend\src\lib\loadJson.ts
 export async function loadJson<T = any>(url: string, label?: string): Promise<T> {
   console.log(`Loading ${ url } for ${ label ?? '-' }`);
 

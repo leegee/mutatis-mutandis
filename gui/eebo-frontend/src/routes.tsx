@@ -1,4 +1,5 @@
 import { lazy } from "solid-js";
+import { JobsApiComponent } from "./components/jobs-api";
 
 const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
@@ -62,5 +63,13 @@ export const routes = [
     label: "Diachronic Chart",
     component: DiachronicChart,
     help: () => <div>Temporal evolution of concepts.</div>
+  },
+  {
+    path: "/jobs-api",
+    icon: "api",
+    label: "Job Admin",
+    component: JobsApiComponent,
+    help: () => <div>Temporal evolution of concepts.</div>
   }
+
 ] as const;

@@ -7,7 +7,7 @@ import { dbReady, loadTier2Data } from "./state/tier2data.store";
 import GlobalMessageDisplay from "./components/GlobalMessageDisplay";
 import AppNav from "./components/AppNav";
 import { routes } from "./routes";
-import { openHelp, setOpenHelp } from "./state/help";
+import { openHelp, setOpenHelp } from "./state/help.store";
 
 export default function App(props: any) {
   const location = useLocation();
