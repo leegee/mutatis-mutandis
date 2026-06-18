@@ -52,7 +52,7 @@ export const routes = [
   {
     path: "/table",
     icon: "tenancy",
-    label: "Neighbourhood Table",
+    label: "Neighbourhood Browser",
     component: NeighbourhoodBrowser,
     help: () => <NeighbourhoodBrowserGuide />
   },

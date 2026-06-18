@@ -41,10 +41,7 @@ export default function AppNav() {
 
             <hr class="max surface-container-low" />
 
-            <a
-                onClick={() => setOpenHelp(!openHelp())}
-                class="extra-padding bottom-padding"
-            >
+            <a class="no-margin no-space no-padding no-border button transparent" onClick={() => setOpenHelp(!openHelp())} >
                 <i>help</i>
                 <span>Guide</span>
             </a>

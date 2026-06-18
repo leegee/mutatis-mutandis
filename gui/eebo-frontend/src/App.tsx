@@ -7,7 +7,7 @@ import { dbReady, loadTier2Data } from "./state/tier2data.store";
 import GlobalMessageDisplay from "./components/GlobalMessageDisplay";
 import AppNav from "./components/AppNav";
 import { routes } from "./routes";
-import { openHelp } from "./state/help";
+import { openHelp, setOpenHelp } from "./state/help";
 
 export default function App(props: any) {
   const location = useLocation();
@@ -42,10 +42,15 @@ export default function App(props: any) {
     if (!route?.help) return null;
 
     return (
-      <article
-        class="helpContainer right surface-container-high padding high-elevate border"
+      <article class="helpContainer border no-round large-padding right surface-container-highest large-elevate border"
         style="z-index:999"
       >
+        <header>
+          <nav>
+            <button class="small border no-margin no-padding circle" onClick={() => setOpenHelp(false)}><i>close</i></button>
+            <h2 class="max">{route.label}</h2>
+          </nav>
+        </header>
         {route.help()}
       </article>
     );
