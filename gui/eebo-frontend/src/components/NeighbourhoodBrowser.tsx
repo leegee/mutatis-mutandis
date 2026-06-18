@@ -23,7 +23,6 @@ import ControlsHeader from "./ControlsHeader";
 import Sparkline from "./NeighbourhoodBrowser/SparkLine";
 import { showDocument } from "../services/documentApi";
 
-// Types (unchanged)
 interface NeighbourSummary {
   token: string;
   token_idx: string;
@@ -105,9 +104,8 @@ function scoreToOpacity(
   return minOp + ((score - scoreMin) / range) * (maxOp - minOp);
 }
 
-// Component
 
-const NeighbourhoodBrowser: Component = () => {
+export default function NeighbourhoodBrowser() {
   const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
   const eventButtonRefs = new Map<string, HTMLButtonElement>();
   const [focusToken, setFocusToken] = createSignal<string | null>(null);
@@ -138,7 +136,6 @@ const NeighbourhoodBrowser: Component = () => {
   const yearFiltered = (): SqliteEventWithNeighbours[] => yearFilteredResource() ?? [];
 
   //  Year bounds resource (for footer display)
-
   const [yearBoundsResource] = createResource(
     () => controls.concept,
     (concept) => getYearBounds(concept),
@@ -147,8 +144,7 @@ const NeighbourhoodBrowser: Component = () => {
   const yearBounds = (): [number, number] =>
     yearBoundsResource() ?? [controls.fromYear, controls.toYear];
 
-  //  Derived memos (unchanged logic, now over yearFiltered())
-
+  //  Derived memos
   const neighbourIndex = createMemo<NeighbourIndex>(() =>
     buildNeighbourIndex(yearFiltered()),
   );
@@ -170,9 +166,7 @@ const NeighbourhoodBrowser: Component = () => {
     return null;
   });
 
-  const activeWindowEvent = createMemo(() =>
-    rightPanelEvent() ?? selectedEvent()?.event ?? null,
-  );
+  const activeWindowEvent = createMemo(() => rightPanelEvent() ?? selectedEvent()?.event ?? null,);
   const [windowText] = createTokenWindowResource(activeWindowEvent);
 
   const selectedEventNeighbours = createMemo<SqliteNeighbour[]>(() => {
@@ -259,8 +253,7 @@ const NeighbourhoodBrowser: Component = () => {
       .sort((a, b) => a.year - b.year);
   }
 
-  //  Keyboard navigation (unchanged)
-
+  //  Keyboard navigation
   const selectedIndex = createMemo(() => {
     const id = selectedEventId();
     if (!id) return -1;
@@ -291,8 +284,6 @@ const NeighbourhoodBrowser: Component = () => {
   onMount(() => window.addEventListener("keydown", handleKeyDown));
   onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
 
-  //  Render
-
   return (
     <article style={{ display: "flex", "flex-direction": "column", height: "100%", width: "100%" }}>
 
@@ -307,18 +298,16 @@ const NeighbourhoodBrowser: Component = () => {
       <Show when={yearFilteredResource.loading}>
         <div class="padding center-align small-text medium-opacity">
           <progress />
-          <span style={{ "margin-left": "0.5rem" }}>Loading events…</span>
+          <span style={{ "margin-left": "0.5rem" }}>Loading events</span>
         </div>
       </Show>
 
-      <div
-        class="grid background no-margin"
+      <div class="grid background no-margin"
         style={{ display: "flex", flex: "1", overflow: "hidden" }}
       >
 
         {/* LEFT: event list */}
-        <nav
-          class="s3 surface-container"
+        <nav class="s3 surface-container"
           style={{ "flex-shrink": "0", "overflow-y": "auto", display: "flex", "flex-direction": "column" }}
         >
           <div class="padding small-text bold">
@@ -371,7 +360,7 @@ const NeighbourhoodBrowser: Component = () => {
               <aside class="center-align small-padding border small-round">
                 <Show
                   when={windowText()}
-                  fallback={<div><p>Loading context…</p><progress /></div>}
+                  fallback={<div><p>Loading context</p><progress /></div>}
                 >
                   {(text) => (
                     <>
@@ -392,12 +381,10 @@ const NeighbourhoodBrowser: Component = () => {
             )}
           </Show>
 
-          <div
-            class="padding small-text bold"
+          <div class="padding small-text bold"
             style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}
           >
-            <Show
-              when={selectedEvent()}
+            <Show when={selectedEvent()}
               fallback={
                 <span>
                   Neighbours: all events
@@ -538,8 +525,7 @@ const NeighbourhoodBrowser: Component = () => {
 
         {/* RIGHT: documents */}
         <aside class="s3 surface-container">
-          <div
-            class="padding small-text bold"
+          <div class="padding small-text bold"
             style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}
           >
             <Show when={focusToken()} fallback="Documents">
@@ -552,8 +538,7 @@ const NeighbourhoodBrowser: Component = () => {
             </Show>
           </div>
 
-          <Show
-            when={rightPanelDocs().length > 0}
+          <Show when={rightPanelDocs().length > 0}
             fallback={
               <div class="padding small-opacity small-text">
                 Select an event or click a neighbour token
@@ -603,8 +588,7 @@ const NeighbourhoodBrowser: Component = () => {
       </div>
 
       {/* Footer */}
-      <footer
-        class="fixed max center-align small-padding surface-container-low"
+      <footer class="fixed max center-align small-padding surface-container-low"
         style={{ "flex-shrink": "0" }}
       >
         {yearFiltered().length} events
@@ -633,4 +617,3 @@ const NeighbourhoodBrowser: Component = () => {
   );
 };
 
-export default NeighbourhoodBrowser;
