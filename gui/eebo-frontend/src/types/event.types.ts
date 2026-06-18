@@ -1,4 +1,4 @@
-// src/types/events.ts
+// src/types/event.types.ts
 
 export type SemanticNeighbour = {
   vector_id: number;

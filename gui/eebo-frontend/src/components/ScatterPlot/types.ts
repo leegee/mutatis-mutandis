@@ -1,6 +1,6 @@
-import type { Event } from '../../types'
+import type { SqliteEvent } from '../../types'
 
-export interface PointData extends Omit<Event, "vector_id"> {
+export interface PointData extends Omit<SqliteEvent, "vector_id"> {
   event_id: string;
   token_idx: number;
   // local projection

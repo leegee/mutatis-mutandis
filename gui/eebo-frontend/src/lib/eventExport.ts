@@ -1,10 +1,10 @@
-import { type Event } from '../types';
+import type { SemanticEvent } from '../types';
 import { controls } from "../state/controls.store";
 import { queryEventById } from "../services/db";
 import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
 import { setWindowCache, getWindow, } from "../services/windowCache";
 
-export type EnrichedEvent = Event & {
+export type EnrichedEvent = SemanticEvent & {
   id: string;
   concept: string;
   doc_id: string;

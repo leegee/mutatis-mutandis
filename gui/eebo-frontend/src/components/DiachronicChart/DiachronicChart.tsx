@@ -7,17 +7,10 @@ import {
   Show,
 } from "solid-js";
 
-import { getYearFiltered } from "../state/selectors";
-import ControlsHeader from "./ControlsHeader";
-import { controls } from "../state/controls.store";
-
-import {
-  buildYearSlices,
-  classifyStatus,
-  type SortKey,
-  type TokenStatus,
-  type YearSlices,
-} from "../lib/contextGraphUtils";
+import { getYearFiltered } from "../../state/selectors";
+import ControlsHeader from "../ControlsHeader";
+import { controls } from "../../state/controls.store";
+import { type SortKey, type YearSlices, buildYearSlices } from "../../lib/yearUtils";
 
 const CELL_WIDTH = 92;
 const COL_GAP = 32;
@@ -42,6 +35,60 @@ const C_LINK_FOCUS = 0.85;
 const C_LINK_UNFOCUS = 0.05;
 const C_LINK_UNFOCUS_TEXT = 0.9;
 
+export interface TokenBin {
+  token: string;
+  eventCount: number;
+  neighbourFreq: Map<string, number>;
+  neighbourScoreSum: Map<string, number>;
+  topNeighbours: Array<{ token: string; freq: number; meanScore: number }>;
+  docs: Map<string, number | undefined>;
+  years: Set<number>;
+}
+
+export interface ContextNode {
+  id: string;
+  kind: "hub" | "neighbour" | "event";
+  eventCount: number;
+  hubDegree: number;
+  degree: number;
+  token?: string;
+  doc_id?: string;
+  pub_year?: number;
+  token_idx?: number;   // present on event nodes; undefined on hub/neighbour
+}
+
+export interface HubHubEdge { kind: "hub-hub"; sourceId: string; targetId: string; weight: number; }
+export interface HubNbEdge { kind: "hub-neighbour"; sourceId: string; targetId: string; weight: number; }
+export type AnyEdge = HubHubEdge | HubNbEdge;
+
+
+export type TokenStatus = "birth" | "death" | "birth-death" | "continuation";
+
+export function classifyStatus(
+  token: string,
+  year: number,
+  years: number[],
+  slices: YearSlices,
+): TokenStatus {
+  const idx = years.indexOf(year);
+  const previousYears = years.slice(0, idx);
+  const futureYears = years.slice(idx + 1);
+
+  const existedBefore = previousYears.some((y) =>
+    slices.get(y)?.some((t) => t.token === token),
+  );
+  const existsLater = futureYears.some((y) =>
+    slices.get(y)?.some((t) => t.token === token),
+  );
+  const presentThisYear =
+    slices.get(year)?.some((t) => t.token === token) ?? false;
+
+  if (!presentThisYear) return "continuation";
+  if (!existedBefore && !existsLater) return "birth-death";
+  if (!existedBefore) return "birth";
+  if (!existsLater) return "death";
+  return "continuation";
+}
 
 function yearLabel(year: number, window: number): string {
   if (window === 0) return String(year);

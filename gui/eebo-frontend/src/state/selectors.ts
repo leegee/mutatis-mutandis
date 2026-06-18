@@ -11,8 +11,8 @@
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import { controls } from "./controls.store";
 import { queryYearBounds, queryEventsByConcept, listConcepts, queryNEvents, queryYearCounts } from "../services/db/";
-import { filterByYearRange, scanYearRange } from "../lib/contextGraphUtils";
-import type { ConceptData, ConceptEvent } from "../types/context-graph.types";
+import { filterByYearRange, scanYearRange } from "../lib/yearUtils";
+import type { ConceptData, SqliteEventWithNeighbours } from "../types";
 
 export async function getConcepts(): Promise<string[]> {
   return listConcepts();
@@ -30,7 +30,7 @@ export async function getYearFiltered(
   concept?: string,
   fromYear?: number,
   toYear?: number,
-): Promise<ConceptEvent[]> {
+): Promise<SqliteEventWithNeighbours[]> {
   console.debug(`[getYearFiltered] ${ concept } ${ fromYear } ${ toYear }`);
   const c = concept ?? controls.concept;
   const fy = fromYear ?? controls.fromYear;
@@ -52,11 +52,11 @@ export function yearBoundsFrom(conceptData: ConceptData): [number, number] {
 
 /** Synchronous — for callers that already hold a ConceptEvent[] in memory. */
 export function filterEvents(
-  events: ConceptEvent[],
+  events: SqliteEventWithNeighbours[],
   from: number,
   to: number,
   bounds?: [number, number],
-): ConceptEvent[] {
+): SqliteEventWithNeighbours[] {
   if (bounds) {
     const [min, max] = bounds;
     if (from <= min && to >= max) return events;

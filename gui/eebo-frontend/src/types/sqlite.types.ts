@@ -1,4 +1,4 @@
-export interface Neighbour {
+export interface SqliteNeighbour {
   event_id: string;
   vector_id?: string;
   token: string;
@@ -10,7 +10,7 @@ export interface Neighbour {
   score: number;
 }
 
-export interface Event {
+export interface SqliteEvent {
   event_id: string; // The integers are too large for JS?
   vector_id: string;
   token: string;
@@ -19,4 +19,8 @@ export interface Event {
   pub_year: number;
   window_id: number;
   window_token_pos: number;
+}
+
+export interface SqliteEventWithNeighbours extends SqliteEvent {
+  neighbours: SqliteNeighbour[];
 }

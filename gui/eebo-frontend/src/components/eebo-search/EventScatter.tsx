@@ -42,20 +42,14 @@ export default function EventScatter(props: Props) {
     });
 
     // stable scaling (dataset-relative, NOT view-relative)
-
     const scaleX = (x: number) => {
         const { minX, maxX } = bounds();
         return ((x - minX) / (maxX - minX + 1e-9)) * WIDTH;
     };
-
     const scaleY = (y: number) => {
         const { minY, maxY } = bounds();
         return ((y - minY) / (maxY - minY + 1e-9)) * HEIGHT;
     };
-
-    // createEffect(() => {
-    //     console.log(props)
-    // })
 
     return (
         <svg id="scatterplot"

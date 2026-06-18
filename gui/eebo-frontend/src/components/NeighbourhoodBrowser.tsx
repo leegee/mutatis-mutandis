@@ -1,19 +1,6 @@
 /**
  * NeighbourhoodBrowser.tsx
  *
- * Ported to SQLite backend.
- *
- * Changes from JSON version
- * -------------------------
- * - yearFilteredMemo (createMemo) → yearFilteredResource (createResource)
- *   because getYearFiltered() is now async (SQL query).
- * - getYearBounds is called inside the resource fetcher so year-range
- *   initialisation also goes through SQL.
- * - A top-level <Suspense> / error boundary wraps the three-column layout so
- *   loading and error states are handled cleanly.
- * - buildNeighbourIndex, scoreToOpacity, and all panel rendering are
- *   otherwise unchanged.
- * - tokenWindowApi, controls, ControlsHeader, Sparkline are untouched.
  */
 
 import {
@@ -27,7 +14,7 @@ import {
   onCleanup,
 } from "solid-js";
 
-import type { ConceptEvent, Neighbour } from "../types";
+import type { SqliteEventWithNeighbours, SqliteNeighbour } from "../types";
 import { createTokenWindowResource } from "../services/tokenWindowApi";
 import { controls } from "../state/controls.store";
 import { getYearBounds, getYearFiltered } from "../state/selectors";
@@ -51,11 +38,11 @@ interface NeighbourSummary {
 type NeighbourIndex = Map<string, NeighbourSummary>;
 
 // Pure helpers (unchanged)
-function eventKey(event: ConceptEvent, idx: number): string {
+function eventKey(event: SqliteEventWithNeighbours, idx: number): string {
   return event.event_id !== undefined ? String(event.event_id) : `idx:${ idx }`;
 }
 
-function buildNeighbourIndex(events: ConceptEvent[]): NeighbourIndex {
+function buildNeighbourIndex(events: SqliteEventWithNeighbours[]): NeighbourIndex {
   const index: NeighbourIndex = new Map();
 
   for (let idx = 0; idx < events.length; idx++) {
@@ -148,7 +135,7 @@ const NeighbourhoodBrowser: Component = () => {
   );
 
   // Stable empty array so memos don't need to handle undefined.
-  const yearFiltered = (): ConceptEvent[] => yearFilteredResource() ?? [];
+  const yearFiltered = (): SqliteEventWithNeighbours[] => yearFilteredResource() ?? [];
 
   //  Year bounds resource (for footer display)
 
@@ -172,7 +159,7 @@ const NeighbourhoodBrowser: Component = () => {
     ),
   );
 
-  const selectedEvent = createMemo<{ event: ConceptEvent; key: string } | null>(() => {
+  const selectedEvent = createMemo<{ event: SqliteEventWithNeighbours; key: string } | null>(() => {
     const id = selectedEventId();
     if (!id) return null;
     const events = yearFiltered();
@@ -188,7 +175,7 @@ const NeighbourhoodBrowser: Component = () => {
   );
   const [windowText] = createTokenWindowResource(activeWindowEvent);
 
-  const selectedEventNeighbours = createMemo<Neighbour[]>(() => {
+  const selectedEventNeighbours = createMemo<SqliteNeighbour[]>(() => {
     const sel = selectedEvent();
     if (!sel) return [];
     return [...sel.event.neighbours].sort((a, b) => b.score - a.score);

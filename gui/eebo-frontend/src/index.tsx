@@ -9,7 +9,7 @@ import App from "./App";
 
 const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser"));
-const DiachronicChart = lazy(() => import("./components/DiachronicChart"));
+const DiachronicChart = lazy(() => import("./components/DiachronicChart/DiachronicChart"));
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 const ConceptClusters = lazy(() => import("./components/ConceptClusters"));
