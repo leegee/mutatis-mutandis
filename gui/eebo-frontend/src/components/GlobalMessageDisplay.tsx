@@ -11,9 +11,8 @@ export default function GlobalMessageDisplay(params: Params) {
     <div class="background medium no-padding" style="height: 100%">
       <article class={"padding  absolute center middle no-round extra-margin " + (params.errorMessage ? 'error-container' : 'fill')} >
         <h4>{params.title ?? "Loading database"}</h4>
-        <Show when={params.errorMessage}>
+        <Show when={params.errorMessage} fallback={<progress />}>
           <p>
-            {params.errorMessage}
             <Show when={params.retry}>
               <button class="chip tiny no-border" onClick={params.retry}>
                 <i>refresh</i>
