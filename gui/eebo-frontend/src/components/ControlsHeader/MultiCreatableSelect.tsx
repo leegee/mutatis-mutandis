@@ -50,10 +50,11 @@ export default function MultiCreatableSelect(props: Props) {
   };
 
   return (
-    <div class="field middle-align">
+    <div class="field middle-align poo" style="min-width: 15em">
       {/* Trigger */}
       <button
         class="border no-round"
+        style="width:100%"
         onClick={() => setOpen(v => !v)}
       >
         <span>{displayLabel()}</span>
