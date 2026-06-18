@@ -783,12 +783,23 @@ def main():
     parser.add_argument("--concept", type=str, default=None)
     parser.add_argument("--mode", type=str, default="full", choices=["full", "clustering"])
     parser.add_argument("--false_positives", type=str, nargs="*", default=[])
+    parser.add_argument( "--clear", action="store_true", help="Delete SQLite DB at SQLITE_DB_PATH before running",
+)
     args = parser.parse_args()
 
     logger.info("[tier3] loading index + lookup")
 
     lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
     index  = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+
+    if args.clear:
+        import os
+
+        if SQLITE_DB_PATH.exists():
+            logger.warning(f"[tier3] deleting SQLite DB: {SQLITE_DB_PATH}")
+            os.remove(SQLITE_DB_PATH)
+        else:
+            logger.info("[tier3] reset-sqlite requested but DB does not exist")
 
     run_tier3_core(
         index=index,
