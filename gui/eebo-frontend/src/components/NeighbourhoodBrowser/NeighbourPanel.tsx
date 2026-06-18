@@ -14,9 +14,7 @@ import { controls } from "../../state/controls.store";
 import Sparkline from "./SparkLine";
 import ContextAside from "./ContextAside";
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 
 interface SelectedEventInfo {
   event: SqliteEventWithNeighbours;
@@ -35,17 +33,12 @@ interface Props {
   onFocusToken: (token: string) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function PanelHeading(props: {
   selectedEvent: () => SelectedEventInfo | null;
   neighbourCount: () => number;
 }) {
   return (
-    <div
-      class="padding small-text bold"
+    <div class="padding small-text bold"
       style={{ "border-bottom": "1px solid rgba(255,255,255,0.08)" }}
     >
       <Show
@@ -77,10 +70,7 @@ function PanelHeading(props: {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Selected-event rows
-// ---------------------------------------------------------------------------
-
 function SelectedNeighbourRows(props: {
   neighbours: () => SqliteNeighbour[];
   scoreRange: () => [number, number];
@@ -99,8 +89,7 @@ function SelectedNeighbourRows(props: {
           const isFocus = () => props.focusToken() === nb.token;
 
           return (
-            <button
-              class="responsive max no-round left-padding right-padding"
+            <button class="responsive max no-round left-padding right-padding"
               style={{
                 color: "oldlace",
                 display: "flex",
@@ -158,9 +147,7 @@ function SelectedNeighbourRows(props: {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Global chip cloud
-// ---------------------------------------------------------------------------
 
 function GlobalNeighbourChips(props: {
   sortedNeighbours: () => NeighbourSummary[];
@@ -176,6 +163,7 @@ function GlobalNeighbourChips(props: {
       "flex-wrap": "wrap",
       gap: "0.4rem",
       "align-content": "flex-start",
+      "justify-content": "space-between",
     }}>
       <For each={props.sortedNeighbours()}>
         {(summary) => {
@@ -206,9 +194,7 @@ function GlobalNeighbourChips(props: {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Composed panel
-// ---------------------------------------------------------------------------
 
 const NeighbourPanel: Component<Props> = (props) => {
   const activeEvent = () =>
