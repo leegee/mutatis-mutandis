@@ -1,4 +1,4 @@
-import { createResource, Show, For, createSignal } from "solid-js";
+import { createResource, Show, For } from "solid-js";
 import { controls } from "../state/controls.store";
 import { queryEventById } from "../services/db";
 import { controlsActions } from "../state/controls.actions";
@@ -22,7 +22,7 @@ export default function SidebarMultiple(props: Props) {
             ids.map((id) => queryEventById(id))
         );
         const cleanEvents = events.filter(Boolean);
-        console.log("[SidebarMultiple.sidebarData]", cleanEvents)
+        // console.debug("[SidebarMultiple.sidebarData]", cleanEvents)
 
         // Get window-text snippets
         const windowRes = await fetchWindowBatch(
