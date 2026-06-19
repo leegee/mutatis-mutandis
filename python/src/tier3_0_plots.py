@@ -44,7 +44,7 @@ import hdbscan
 import pacmap
 import sqlite3
 
-from lib.eebo_config import ZARR_ROOT, FAISS_TIER1_INDEX, PLOT_DIR, SQLITE_DB_PATH
+from lib.eebo_config import ZARR_ROOT, FAISS_TIER1_INDEX, PLOT_DIR, CORPUS_TIER2_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_logging import logger
@@ -153,7 +153,7 @@ class EmbeddingCache:
 
 
 def backfill_missing_events_from_zarr(lookup, event_ids):
-    sqlite_conn = sqlite3.connect(SQLITE_DB_PATH)
+    sqlite_conn = sqlite3.connect(CORPUS_TIER2_DB_PATH)
     try:
         existing = {
             row[0]

@@ -126,7 +126,7 @@ from pathlib import Path
 import numpy as np
 import zarr
 
-from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, SQLITE_DB_PATH
+from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, CORPUS_TIER2_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
@@ -406,11 +406,22 @@ def analyse_concept(
     and pub_year is looked up once per query event rather than once per
     neighbour.
     """
+    # CONCEPT_SET entry union with any args supplied to this routine
     forms           = set(concept["forms"])
-    false_positives = {
-        f.lower() for f in (false_positives or concept.get("false_positives", []))
+    forms           = {
+        f.lower()
+        for f in (
+            list(forms or [])
+            + list(concept.get("forms", []))
+        )
     }
-
+    false_positives = {
+        f.lower()
+        for f in (
+            list(false_positives or [])
+            + list(concept.get("false_positives", []))
+        )
+    }
     event_ids = list(lookup.iter_matching_event_ids(forms, false_positives))
 
     logger.info(f"[tier2] concept={concept_name}")
@@ -506,6 +517,7 @@ def analyse_concept(
 
     return {
         "concept":   concept_name,
+        "forms":     forms,
         "n_events":  len(event_ids),
         "aggregate": {
             "top_tokens":  token_counter.most_common(top_n),
@@ -522,6 +534,18 @@ CREATE TABLE IF NOT EXISTS concepts (
     concept  TEXT PRIMARY KEY,
     n_events INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS concept_forms (
+    concept           TEXT NOT NULL,
+    form              TEXT NOT NULL,
+    is_false_positive INTEGER DEFAULT 0,
+
+    PRIMARY KEY (concept, form),
+    FOREIGN KEY (concept) REFERENCES concepts(concept)
+);
+
+CREATE INDEX IF NOT EXISTS idx_concept_forms_concept ON concept_forms(concept);
+CREATE INDEX IF NOT EXISTS idx_concept_forms_form    ON concept_forms(form);
 
 -- Should probably split into concept_events
 CREATE TABLE IF NOT EXISTS events (
@@ -601,6 +625,18 @@ def sqlite3_connection(db_path):
     return con
 
 
+def load_concept_forms(conn, concept):
+    cur = conn.execute(
+        "SELECT form, is_false_positive FROM concept_forms WHERE concept = ?",
+        (concept,)
+    )
+    rows = cur.fetchall()
+
+    forms = {r[0].lower() for r in rows if not r[1]}
+    fps   = {r[0].lower() for r in rows if r[1]}
+
+    return forms, fps
+
 def write_sqlite(output: dict, db_path, *, clear: bool = False):
     """
     Write analyse_concept output to a normalised SQLite database.
@@ -637,6 +673,18 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
             "INSERT OR IGNORE INTO concepts VALUES (?, ?)",
             (concept_name, data["n_events"]),
         )
+
+        # concept + form
+        {con.execute(
+            "INSERT OR IGNORE INTO concept_forms VALUES (?, ?, ?)",
+            (concept_name, form, 0),
+        ) for form in forms}
+
+        # concept + false_positive
+        {con.execute(
+            "INSERT OR IGNORE INTO concept_forms VALUES (?, ?, ?)",
+            (concept_name, form, 1),
+        ) for form in false_positives}
 
         con.executemany(
             """INSERT OR IGNORE INTO events
@@ -735,8 +783,10 @@ def run_tier2_service(
         diagnostics      = diagnostics,
         emit             = emit
     )
+
     logger.info(f"[tier2.run_tier2_service] Write SQL")
     write_sqlite( output, db_path, clear=clear, )
+
     logger.info(f"[tier2.run_tier2_service] Done")
     return output
 
@@ -792,9 +842,9 @@ def main():
         logger.warning( "[tier2.main] --clear with --concept will wipe all concepts before writing one" )
 
     if args.clear:
-        if SQLITE_DB_PATH.exists():
-            logger.warning(f"[tier2.main] deleting SQLite DB: {SQLITE_DB_PATH}")
-            os.remove(SQLITE_DB_PATH)
+        if CORPUS_TIER2_DB_PATH.exists():
+            logger.warning(f"[tier2.main] deleting SQLite DB: {CORPUS_TIER2_DB_PATH}")
+            os.remove(CORPUS_TIER2_DB_PATH)
         else:
             logger.info("[tier2] reset-sqlite requested but DB does not exist")
 
@@ -834,7 +884,7 @@ def main():
     already_processed = (
         set()
         if args.clear
-        else get_processed_concepts(SQLITE_DB_PATH)
+        else get_processed_concepts(CORPUS_TIER2_DB_PATH)
     )
 
     concepts_to_run = [
@@ -853,14 +903,14 @@ def main():
     run_tier2_service(
         doc_meta        = doc_meta,
         concepts_to_run = concepts_to_run,
-        db_path         = SQLITE_DB_PATH,
+        db_path         = CORPUS_TIER2_DB_PATH,
         lookup          = None,
         false_positives = target_fps,
         clear           = args.clear,
         diagnostics     = args.diagnostics,
         emit            = None
     )
-    logger.info(f"[tier2.main] Complete, wrote {SQLITE_DB_PATH}")
+    logger.info(f"[tier2.main] Complete, wrote {CORPUS_TIER2_DB_PATH}")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import traceback
 
 from lib.eebo_logging import logger
 from lib.eebo_db import get_connection
+from lib.eebo_logging import logger
 
 from tier2_0_concept_events import (
     run_tier2_service,
@@ -12,7 +13,7 @@ from tier3_0_plots import (
     run_tier3_service,
 )
 
-from .jobs_db import (
+from .jobs_dao import (
     update_stage,
     mark_done,
     mark_error,
@@ -26,6 +27,7 @@ def run_job(
     index,
     lookup,
 ):
+    logger.info("fast_api.runner Enter")
     try:
         conn = get_connection()
 
@@ -39,9 +41,7 @@ def run_job(
             concepts_to_run=[
                 (
                     concept,
-                    {
-                        "forms": [concept],
-                    }
+                    { "forms": [concept], }
                 )
             ],
             lookup=lookup,

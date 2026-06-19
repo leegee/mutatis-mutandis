@@ -26,12 +26,8 @@ export function ConceptCreate(props: Props) {
   };
 
   return (
-    <article>
-      <header class="padding">
-        <h2>Create Concept</h2>
-      </header>
-
-      <div class="fieldset fill padding margin">
+    <section>
+      <div class="fieldset fill">
         <div class="row padding">
           <div class="field border large">
             <input type="text" aria-description="Concept name" onInput={(e) => setName(e.currentTarget.value)} />
@@ -80,6 +76,6 @@ export function ConceptCreate(props: Props) {
           <i>add_2</i>
         </button>
       </div>
-    </article>
+    </section>
   );
 }

@@ -11,15 +11,15 @@ import { openHelp, setOpenHelp } from "./state/help.store";
 
 export default function App(props: any) {
   const location = useLocation();
-
+  const currentRoute = () => routes.find(r => matchRoute(r.path, location.pathname));
   const [dbLoadingError, setDbLoadingError] = createSignal<string | null>(null);
 
-  const matchRoute = (pattern: string, path: string) => {
+  function matchRoute(
+    pattern: string, path: string
+  ) {
     const clean = (p: string) => p.split("?")[0]; // ignore optional marker
-
     const pParts = clean(pattern).split("/").filter(Boolean);
     const pathParts = path.split("/").filter(Boolean);
-
     if (pParts.length !== pathParts.length) return false;
 
     return pParts.every((p, i) => {
@@ -27,9 +27,6 @@ export default function App(props: any) {
       return p === pathParts[i];
     });
   };
-
-  const currentRoute = () =>
-    routes.find(r => matchRoute(r.path, location.pathname));
 
   try {
     loadTier2Data();
@@ -73,8 +70,6 @@ export default function App(props: any) {
           {props.children}
         </Show>
       </main>
-
-      {/* Help toggle button is assumed to live in AppNav or elsewhere */}
 
       <Transition name="slide-fade">
         <Show when={openHelp() && currentRoute()?.help}>

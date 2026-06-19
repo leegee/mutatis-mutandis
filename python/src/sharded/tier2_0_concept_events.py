@@ -101,7 +101,7 @@ import umap
 import numpy as np
 import zarr
 
-from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, SQLITE_DB_PATH
+from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, CORPUS_TIER2_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 from lib.concept_resolve import resolve_concepts
@@ -619,7 +619,7 @@ def main():
             "[tier2] --clear with --concept will wipe all concepts before writing one"
         )
 
-    logger.info(f"[tier2] SQLITE_DB_PATH: {SQLITE_DB_PATH}")
+    logger.info(f"[tier2] CORPUS_TIER2_DB_PATH: {CORPUS_TIER2_DB_PATH}")
 
     index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
 
@@ -663,7 +663,7 @@ def main():
     already_processed = (
         set()
         if args.clear
-        else get_processed_concepts(SQLITE_DB_PATH)
+        else get_processed_concepts(CORPUS_TIER2_DB_PATH)
     )
 
     concepts_to_run = [
@@ -719,11 +719,11 @@ def main():
 
     write_sqlite(
         output,
-        SQLITE_DB_PATH,
+        CORPUS_TIER2_DB_PATH,
         clear=args.clear,
     )
 
-    logger.info(f"[tier2] wrote {SQLITE_DB_PATH}")
+    logger.info(f"[tier2] wrote {CORPUS_TIER2_DB_PATH}")
 
 
 if __name__ == "__main__":

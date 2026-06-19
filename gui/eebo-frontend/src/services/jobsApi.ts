@@ -15,7 +15,7 @@ export const API = {
 
   concepts: {
     list: "/concepts",
-    create: "/concepts/create",
+    create: "/concepts/create_and_run",
     runTier2: "/concepts/run/tier2",
     runTier3: "/concepts/run/tier3",
   },

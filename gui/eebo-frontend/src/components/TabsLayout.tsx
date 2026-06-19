@@ -1,6 +1,7 @@
 // src/components/TabsLayout.tsx
 
-import { createSignal, Show } from "solid-js";
+import { children, createSignal, Show } from "solid-js";
+
 
 export type Tab = {
   key: string;
@@ -14,9 +15,9 @@ export function Tabs(props: { tabs: Tab[] }) {
 
   return (
     <div>
-      <nav class="tabs center-align">
+      <nav class="tabs center-align ">
         {props.tabs.map((t) => (
-          <a class={`tab ${ active() === t.key ? "active" : "" }`}
+          <a class={`tab vertical max ${ active() === t.key ? "active" : "background" }`}
             onClick={() => setActive(t.key)}
           >
             <i>{t.icon}</i>
@@ -28,10 +29,33 @@ export function Tabs(props: { tabs: Tab[] }) {
       <div class="page active">
         {props.tabs.map((t) => (
           <Show when={active() === t.key}>
-            <t.component tab={t} />
+            <ComponentWrapper tab={t}>
+              <t.component />
+            </ComponentWrapper>
           </Show>
         ))}
       </div>
     </div>
   );
+}
+
+
+interface ComponentWrapperProps {
+  children: any;
+  tab: Tab;
+}
+
+export default function ComponentWrapper(props: ComponentWrapperProps) {
+  const resolved = children(() => props.children);
+  return (
+    <article>
+      <header>
+        <nav>
+          <i>{props.tab.icon}</i>
+          <h2 class="max">{props.tab.label}</h2>
+        </nav>
+      </header>
+      {resolved()}
+    </article>
+  )
 }

@@ -2,13 +2,17 @@ import asyncio
 from uuid import uuid4
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from .jobs_db import ( init_db, create_job, get_job )
-from .worker import worker_loop
+from fast_api.jobs_dao import ( init_db, create_job, get_job )
+
+from fast_api.routes.jobs import router as jobs_router
+from fast_api.routes.concepts import router as concepts_router
+from fast_api.worker import worker_loop
 
 app = FastAPI()
-
-from fastapi.middleware.cors import CORSMiddleware
+app.include_router(concepts_router)
+app.include_router(jobs_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,7 +29,6 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-
     init_db()
 
     asyncio.create_task(

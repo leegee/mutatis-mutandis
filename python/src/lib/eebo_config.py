@@ -31,8 +31,10 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 TMP_DIR = OUT_DIR / "tmp"
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-GUI_PUBLIC_DIR = Path(BASE_DIR / 'gui' / 'eebo-frontend' / 'public')
-SQLITE_DB_PATH = GUI_PUBLIC_DIR / 'data' / 'tier2_concept_neighbours.db'
+GUI_PUBLIC_ROOT      = Path(BASE_DIR / 'gui' / 'eebo-frontend' )
+GUI_PUBLIC_DIR       = Path(GUI_PUBLIC_ROOT / 'public')
+CORPUS_TIER2_DB_URL  = str(Path('data') / 'tier2_concept_neighbours.db')
+CORPUS_TIER2_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_DB_URL)
 
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)

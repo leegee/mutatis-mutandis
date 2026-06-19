@@ -8,6 +8,8 @@ interface Props {
   tab: Tab;
 }
 
+export const POLLING_INTERVAL_MS = 10_000;
+
 export function JobPanel(props: Props) {
   const [jobs, setJobs] = createSignal<any[]>([]);
 
@@ -18,14 +20,11 @@ export function JobPanel(props: Props) {
 
   onMount(() => {
     refresh();
-    setInterval(refresh, 3000);
+    setInterval(refresh, POLLING_INTERVAL_MS);
   });
 
   return (
-    <article class="padding">
-      <header>
-        <h2>Jobs</h2>
-      </header>
+    <section class="padding">
 
       {jobs().map(job => (
         <div class="job row padding">
@@ -33,6 +32,6 @@ export function JobPanel(props: Props) {
           <div class='s4'>{job.status}</div>
         </div>
       ))}
-    </article>
+    </section>
   );
 }

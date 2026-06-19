@@ -1,22 +1,14 @@
 import asyncio
 
-from .jobs_db import (
-    claim_next_job,
-)
-
-from .runner import run_job
-from .state import (
-    init_state,
-    STATE,
-)
+from fast_api.jobs_dao import ( claim_next_job, )
+from fast_api.state import ( init_state, STATE, )
+from fast_api.runner import run_job
 
 
 async def worker_loop():
-
     init_state()
 
     while True:
-
         job = claim_next_job()
 
         if job is None:
