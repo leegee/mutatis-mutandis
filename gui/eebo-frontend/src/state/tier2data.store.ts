@@ -28,11 +28,13 @@ export const [dbError, setDbError] = createSignal<string | null>(null);
  */
 export async function loadTier2Data(): Promise<void> {
   try {
+    setDbReady(false);
+    console.info("[laodTier2Data]", CORPUS_TIER2_DB_URL)
     await initDb(CORPUS_TIER2_DB_URL);
     setDbReady(true);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    setDbError(msg);
-    console.error("[tier2] failed to load database:", msg);
+    console.error("[laodTier2Data] failed to load database:", msg);
+    throw new Error(msg);
   }
 }

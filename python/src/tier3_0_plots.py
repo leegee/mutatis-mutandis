@@ -143,6 +143,8 @@ class EmbeddingCache:
         Return an (len(event_ids), D) float32 array with rows in the same
         order as event_ids, fetching/caching as needed.
         """
+        if not event_ids:
+            raise ValueError("[EmbeddingCache] matrix() called with empty event_ids")
         self.warm(event_ids)
         idx = np.fromiter((self._row_of[eid] for eid in event_ids), dtype=np.int64, count=len(event_ids))
         return self._mat[idx]
@@ -219,6 +221,9 @@ def backfill_missing_events_from_zarr(lookup, event_ids):
 
 
 def bfs_event_expansion(lookup, index, seed_ids, emb_cache, k=25, max_nodes=5000, depth=2):
+    if not seed_ids:
+        logger.warning("[tier3] bfs_event_expansion called with empty seed_ids, skipping")
+        return []
     visited = set(map(str, seed_ids))
     frontier = set(map(str, seed_ids))
     all_nodes = set(map(str, seed_ids))
@@ -547,6 +552,12 @@ def run_tier3_core(
             seed_ids       = [str(eid) for eid in seed_ids]
             concept_sample = seed_ids[:1000]
 
+            if not concept_sample:
+                logger.warning(f"[tier3] no events found for concept={concept_name}, skipping")
+                if emit:
+                    emit("concept_done", {"concept": concept_name})
+                continue
+
             # one embedding fetch for the concept sample, reused below
             X_concept = emb_cache.matrix(concept_sample)
 
@@ -640,6 +651,7 @@ def run_tier3_core(
     if mode == "full":
         if emit:
             emit("bfs_start", {})
+        logger.info(f"[tier3] all_concept_events count: {len(all_concept_events)}")
         bfs_ids   = bfs_event_expansion(lookup, index, all_concept_events, emb_cache, max_nodes=5000, depth=2)
         X_bfs     = emb_cache.matrix(bfs_ids)
         local_bfs = fit_umap_local(X_bfs, bfs_ids)

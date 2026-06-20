@@ -674,17 +674,32 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
             (concept_name, data["n_events"]),
         )
 
-        # concept + form
-        {con.execute(
-            "INSERT OR IGNORE INTO concept_forms VALUES (?, ?, ?)",
-            (concept_name, form, 0),
-        ) for form in forms}
+        forms = set(data.get("forms", []))
+        false_positives = set(data.get("false_positives", []))
 
-        # concept + false_positive
-        {con.execute(
-            "INSERT OR IGNORE INTO concept_forms VALUES (?, ?, ?)",
-            (concept_name, form, 1),
-        ) for form in false_positives}
+        # normal forms
+        for form in forms:
+            con.execute(
+                """
+                INSERT INTO concept_forms (concept, form, is_false_positive)
+                VALUES (?, ?, 0)
+                ON CONFLICT(concept, form)
+                DO UPDATE SET is_false_positive = 0
+                """,
+                (concept_name, form),
+            )
+
+        # false positives override
+        for form in false_positives:
+            con.execute(
+                """
+                INSERT INTO concept_forms (concept, form, is_false_positive)
+                VALUES (?, ?, 1)
+                ON CONFLICT(concept, form)
+                DO UPDATE SET is_false_positive = 1
+                """,
+                (concept_name, form),
+            )
 
         con.executemany(
             """INSERT OR IGNORE INTO events
@@ -763,14 +778,15 @@ def run_tier2_service(
     doc_meta,
     concepts_to_run,
     db_path,
-    lookup=None,
-    false_positives=None,
-    clear=False,
-    diagnostics=False,
-    emit=None
+    index           = None,
+    lookup          = None,
+    false_positives = None,
+    clear           = False,
+    diagnostics     = False,
+    emit            = None
 ):
     logger.info(f"[tier2.run_tier2_service] Enter")
-    index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+    index = index or EeboFaissIndex.load(FAISS_TIER1_INDEX)
     if index.ntotal == 0:
         raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
 

@@ -1,10 +1,14 @@
+from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
-from fast_api.models import CreateConceptRequest
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
-from tier2_0_concept_events import sqlite3_connection as events_sqlite3_connection
 
-con = events_sqlite3_connection(CORPUS_TIER2_DB_PATH)
+from fast_api.models import CreateConceptRequest, CreateConceptAndRunRequest, RunJobRequest
+from fast_api.connections import get_corpus_tier2_conn
+from tier2_0_concept_events import sqlite3_connection as events_sqlite3_connection
+from fast_api.jobs_dao import create_job
+
+# con = events_sqlite3_connection(CORPUS_TIER2_DB_PATH)
 
 router = APIRouter(
     prefix="/concepts",
@@ -127,12 +131,46 @@ async def concepts_list():
     return load_concepts()
 
 
+from fast_api.jobs_dao import create_job
+from uuid import uuid4
+
+
+@router.post("/create_and_run")
+async def create_and_run(req: CreateConceptAndRunRequest):
+    concept_name = req.concept.upper().strip()
+
+    if not concept_name:
+        raise HTTPException(status_code=400, detail="Concept name required")
+
+    concepts = load_concepts()
+
+    # upsert — merge new forms/fps into existing ones
+    existing = concepts.get(concept_name, {"forms": [], "false_positives": []})
+
+    concepts[concept_name] = {
+        "forms": sorted(set(existing["forms"]) | set(req.forms)),
+        "false_positives": sorted(set(existing["false_positives"]) | set(req.false_positives)),
+    }
+
+    save_concepts(concepts)
+
+    job_id = str(uuid4())
+    create_job(job_id=job_id, concept=concept_name)
+
+    return {
+        "ok": True,
+        "concept": concept_name,
+        "job_id": job_id,
+        "status": "queued",
+    }
+
+
 @router.post("/create")
 async def create_concept(req: CreateConceptRequest):
 
     concepts = load_concepts()
 
-    concept_name = req.name.upper().strip()
+    concept_name = req.concept.upper().strip()
 
     if not concept_name:
         raise HTTPException(
@@ -157,3 +195,17 @@ async def create_concept(req: CreateConceptRequest):
         "ok": True,
         "concept": concept_name,
     }
+
+
+@router.post("/run/tier2")
+async def run_tier2(req: RunJobRequest):
+    job_id = str(uuid4())
+    create_job(job_id=job_id, concept=req.concept)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.post("/run/tier3")
+async def run_tier3(req: RunJobRequest):
+    job_id = str(uuid4())
+    create_job(job_id=job_id, concept=req.concept)
+    return {"job_id": job_id, "status": "queued"}

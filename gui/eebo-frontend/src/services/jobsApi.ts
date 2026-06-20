@@ -1,4 +1,4 @@
-// src/lib/api/client.ts
+// src/services/jobsApi.ts
 
 import { loadJson } from "../lib/loadJson";
 import { pushToast } from "../state/toast.store";
@@ -15,7 +15,7 @@ export const API = {
 
   concepts: {
     list: "/concepts",
-    create: "/concepts/create_and_run",
+    create_and_run: "/concepts/create_and_run",
     runTier2: "/concepts/run/tier2",
     runTier3: "/concepts/run/tier3",
   },
@@ -54,7 +54,7 @@ export async function postJson<T>(
     const text = await res.text();
 
     if (!res.ok) {
-      throw new Error(`${ label ?? path }: HTTP ${ res.status } ${ text }`);
+      throw new Error(`${ label ?? path }:\n HTTP ${ res.status } - ${ res.statusText } - ${ text }`);
     }
 
     const json = JSON.parse(text);

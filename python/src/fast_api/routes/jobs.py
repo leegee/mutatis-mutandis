@@ -32,7 +32,22 @@ async def run_job(req: RunJobRequest):
 
 @router.get("/list")
 async def jobs_list():
-    return list_jobs()
+    rows = list_jobs()
+    return [
+        {
+            "job_id":         row[0],
+            "concept":        row[1],
+            "status":         row[2],
+            "stage":          row[3],
+            "attempts":       row[4],
+            "created_at":     row[5],
+            "started_at":     row[6],
+            "finished_at":    row[7],
+            "last_heartbeat": row[8],
+            "error":          row[9],
+        }
+        for row in rows
+    ]
 
 
 @router.get("/{job_id}")

@@ -13,6 +13,7 @@ export default function GlobalMessageDisplay(params: Params) {
         <h4>{params.title ?? "Loading database"}</h4>
         <Show when={params.errorMessage} fallback={<progress />}>
           <p>
+            <code>{params.errorMessage}</code>
             <Show when={params.retry}>
               <button class="chip tiny no-border" onClick={params.retry}>
                 <i>refresh</i>

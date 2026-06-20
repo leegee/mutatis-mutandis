@@ -1,46 +1,7 @@
-/**
- * src/services/db.ts
- *
- * Main-thread interface to the SQLite worker.
- *
- * All SQLite work runs in db.worker.ts.  This module owns the Worker
- * instance and exposes typed query helpers that send messages and await
- * responses via a promise-per-message correlation map.
- *
- * Usage
- * -----
- *   await initDb(url);   // once at startup
- *   listConcepts();     // synchronous-feeling helpers (return Promises)
- *
- * Because the worker is async, all query helpers are async.  However,
- * inside a dbReady()-gated component they can be called from createMemo
- * only if you accept that the memo returns a Promise — prefer createResource
- * for data fetching, or call the helpers synchronously via a thin
- * bridge if you need true synchrony (see note below).
- *
- * Synchronous bridge note
- * -----------------------
- * The oo1 API is synchronous *inside the worker*.  The main↔worker boundary
- * is always async (postMessage).  If you need synchronous access in the main
- * thread, the recommended approach is to use the COOP+COEP + SharedArrayBuffer
- * Atomics.wait() pattern — but that adds complexity.  For this app, the
- * createResource() pattern in SolidJS is the clean solution.
- *
- * However — since this app gates all rendering behind dbReady(), and all
- * queries are fast (indexed reads, no aggregation), we use a simpler approach:
- * a synchronous-looking API backed by a pre-populated cache that is filled
- * once on init.  See the "query cache" section below.
- */
-
-
-// WORKER SETUP
-// Vite handles ?worker imports and bundles the worker correctly.
-// The worker file must be in the same origin.
 import DbWorker from "./db.worker?worker";
 
 let _worker: Worker | null = null;
-let _pending = new Map<
-  string,
+let _pending = new Map<string,
   { resolve: (v: unknown[][]) => void; reject: (e: Error) => void }
 >();
 let _msgId = 0;
@@ -62,11 +23,11 @@ function send(
   });
 }
 
-// INIT
 let _initPromise: Promise<void> | null = null;
 
 export async function initDb(url: string): Promise<void> {
   if (_initPromise) return _initPromise;
+  console.log("[dbh.initDb]", url);
 
   _initPromise = (async () => {
     _worker = new DbWorker();
@@ -100,4 +61,3 @@ export async function execRows(
 ): Promise<unknown[][]> {
   return send("exec", { sql, bind });
 }
-

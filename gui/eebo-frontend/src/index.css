@@ -148,6 +148,21 @@ h6 {
   font-size: 1.2rem;
 }
 
+pre,
+code,
+.mono {
+  font-family: ui-monospace,
+    Menlo, Monaco,
+    "Cascadia Mono", "Segoe UI Mono",
+    "Roboto Mono",
+    "Oxygen Mono",
+    "Ubuntu Mono",
+    "Source Code Pro",
+    "Fira Mono",
+    "Droid Sans Mono",
+    "Consolas", "Courier New", monospace !important;
+}
+
 
 /* shared layouts */
 #graph_sidebar_row {

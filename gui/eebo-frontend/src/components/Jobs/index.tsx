@@ -1,4 +1,4 @@
-// src/components/jobs-api/index.tsx
+// src/components/Jobs/index.tsx
 
 import { ConceptCreate } from "./ConceptCreate";
 import { Tabs } from "../TabsLayout";

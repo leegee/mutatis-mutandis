@@ -16,9 +16,10 @@ async def worker_loop():
             continue
 
         await asyncio.to_thread(
-            run_job,
-            job_id=job["job_id"],
-            concept=job["concept"],
-            index=STATE.index,
-            lookup=STATE.lookup,
+            lambda: run_job(
+                job_id  = job["job_id"],
+                concept = job["concept"],
+                index   = STATE.index,
+                lookup  = STATE.get_tier1_zarr_lookup(),
+            )
         )

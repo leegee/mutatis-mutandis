@@ -80,7 +80,7 @@ def build_index(
     skipped   = 0
     incremental = already_indexed is not None
 
-    logger.info("[faiss-build] streaming Tier1 observation store")
+    logger.info("[faiss-build] streaming Tier1 observation store Zarr")
 
     for vecs, obs_ids in stream.iter_embeddings(batch_size=BATCH_SIZE):
         if vecs is None or len(vecs) == 0:

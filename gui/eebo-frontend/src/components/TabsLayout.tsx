@@ -26,15 +26,15 @@ export function Tabs(props: { tabs: Tab[] }) {
         ))}
       </nav>
 
-      <div class="page active">
-        {props.tabs.map((t) => (
+      {props.tabs.map((t) => (
+        <div class={`page ${ active() === t.key ? "active" : "" }`}>
           <Show when={active() === t.key}>
             <ComponentWrapper tab={t}>
               <t.component />
             </ComponentWrapper>
           </Show>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }

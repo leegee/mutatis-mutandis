@@ -3,58 +3,37 @@ import { useLocation } from "@solidjs/router";
 import { Transition } from "solid-transition-group";
 
 import "./App.css";
-import { dbReady, loadTier2Data } from "./state/tier2data.store";
+import { dbError, dbReady, loadTier2Data } from "./state/tier2data.store";
 import GlobalMessageDisplay from "./components/GlobalMessageDisplay";
 import AppNav from "./components/AppNav";
 import { routes } from "./routes";
-import { openHelp, setOpenHelp } from "./state/help.store";
+import { matchRoute } from "./lib/matchRoute";
+import { openHelp } from "./state/help.store";
+import { HelpPanel } from "./Layout/HelpPanel";
+import { ToastHost } from "./components/ToastHost";
 
 export default function App(props: any) {
   const location = useLocation();
   const currentRoute = () => routes.find(r => matchRoute(r.path, location.pathname));
   const [dbLoadingError, setDbLoadingError] = createSignal<string | null>(null);
 
-  function matchRoute(
-    pattern: string, path: string
-  ) {
-    const clean = (p: string) => p.split("?")[0]; // ignore optional marker
-    const pParts = clean(pattern).split("/").filter(Boolean);
-    const pathParts = path.split("/").filter(Boolean);
-    if (pParts.length !== pathParts.length) return false;
 
-    return pParts.every((p, i) => {
-      if (p.startsWith(":")) return true;
-      return p === pathParts[i];
-    });
-  };
+  console.log("[app] now calling loadTier2Data")
 
-  try {
-    loadTier2Data();
-  } catch (e) {
-    setDbLoadingError((e as Error).message);
-  }
+  loadTier2Data()
+    .then(() => console.log("[app] loadTier2Data call resolved"))
+    .catch(
+      (e) => {
+        console.warn('[app] caught from loadTier2Data:' + e.message)
+        setDbLoadingError(e.message)
+      }
+    )
+    ;
 
-  const HelpPanel = () => {
-    const route = currentRoute();
-    if (!route?.help) return null;
-
-    return (
-      <article class="helpContainer border no-round large-padding right surface-container-highest large-elevate border"
-        style="z-index:999"
-      >
-        <header>
-          <nav>
-            <button class="small border no-margin no-padding circle" onClick={() => setOpenHelp(false)}><i>close</i></button>
-            <h2 class="max">{route.label}</h2>
-          </nav>
-        </header>
-        {route.help()}
-      </article>
-    );
-  };
 
   return (
     <>
+      <ToastHost />
       <AppNav />
 
       <main class="responsive max no-padding full">
@@ -73,7 +52,7 @@ export default function App(props: any) {
 
       <Transition name="slide-fade">
         <Show when={openHelp() && currentRoute()?.help}>
-          <HelpPanel />
+          <HelpPanel currentRoute={currentRoute} />
         </Show>
       </Transition>
     </>

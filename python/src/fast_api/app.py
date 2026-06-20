@@ -11,8 +11,10 @@ from fast_api.routes.concepts import router as concepts_router
 from fast_api.worker import worker_loop
 
 app = FastAPI()
-app.include_router(concepts_router)
-app.include_router(jobs_router)
+
+import fast_api.runner
+import inspect
+print(inspect.getfile(fast_api.runner))
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,6 +28,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(concepts_router)
+app.include_router(jobs_router)
 
 @app.on_event("startup")
 async def startup():

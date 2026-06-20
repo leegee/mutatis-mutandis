@@ -13,12 +13,11 @@ let id = 0;
 
 export function pushToast(t: Omit<Toast, "id">) {
   const toast: Toast = { id: ++id, ...t };
-
   setToasts((prev) => [...prev, toast]);
 
   setTimeout(() => {
     setToasts((prev) => prev.filter((x) => x.id !== toast.id));
-  }, 4000);
+  }, 4_000);
 }
 
 export { toasts };

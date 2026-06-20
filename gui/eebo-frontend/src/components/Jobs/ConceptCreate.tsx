@@ -1,35 +1,27 @@
-// src/components/jobs-api/ConceptCreate.tsx
+// src/components/Jobs/ConceptCreate.tsx
 
 import { createSignal } from "solid-js";
 import { postJson, API } from "../../services/jobsApi";
-import type { Tab } from "../TabsLayout";
 
-interface Props {
-  tab: Tab;
-}
-
-export function ConceptCreate(props: Props) {
+export function ConceptCreate() {
   const [name, setName] = createSignal("");
   const [forms, setForms] = createSignal("");
   const [fps, setFps] = createSignal("");
 
   const submit = async () => {
-    await postJson(API.concepts.create, {
+    await postJson(API.concepts.create_and_run, {
       concept: name(),
       forms: forms().split(",").map(s => s.trim()),
       false_positives: fps().split(",").map(s => s.trim()),
     }, "Create concept");
 
-    await postJson(API.concepts.runTier2, {
-      concept: name(),
-    }, "Run Tier2");
   };
 
   return (
     <section>
       <div class="fieldset fill">
         <div class="row padding">
-          <div class="field border large">
+          <div class="s3 field border large">
             <input type="text" aria-description="Concept name" onInput={(e) => setName(e.currentTarget.value)} />
             <output>Concept name</output>
             <span class="tooltip bottom small">
@@ -43,7 +35,7 @@ export function ConceptCreate(props: Props) {
             </span>
           </div>
 
-          <div class="field border large">
+          <div class="s3 field border large">
             <textarea aria-description="Concept expressions/forms (CSV)" onInput={(e) => setForms(e.currentTarget.value)} />
             <output>Forms/expressions (comma separated)</output>
             <span class="tooltip bottom small">
@@ -54,7 +46,7 @@ export function ConceptCreate(props: Props) {
             </span>
           </div>
 
-          <div class="field border large">
+          <div class="s3 field border large">
             <textarea aria-description="False positives (CSV)" onInput={(e) => setFps(e.currentTarget.value)} />
             <output>False positives (CSV)</output>
             <span class="tooltip bottom medium">

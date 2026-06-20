@@ -1,5 +1,5 @@
 import { lazy } from "solid-js";
-import { JobsApiComponent } from "./components/jobs-api";
+import { JobsApiComponent } from "./components/Jobs";
 
 const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
@@ -65,7 +65,7 @@ export const routes = [
     help: () => <div>Temporal evolution of concepts.</div>
   },
   {
-    path: "/jobs-api",
+    path: "/Jobs",
     icon: "api",
     label: "Job Admin",
     component: JobsApiComponent,
