@@ -1,4 +1,4 @@
-import type { SqliteEvent, SqliteEventWithNeighbours, SqliteNeighbour } from "../../types";
+import type { Event, ConceptEvent, Neighbour } from "../../types";
 import { execRows } from "./dbh";
 
 const SQLITE_MAX_VARIABLES = 900; // stay safely under SQLite's ~999 limit
@@ -25,9 +25,9 @@ export async function queryYearBounds(
 }
 
 
-export async function queryEventById(id: string): Promise<SqliteEvent | null> {
+export async function queryEventById(id: string): Promise<Event | null> {
   // console.trace("[query] queryEventById", id);
-  if (typeof id !== 'string') return Promise.resolve(null);
+  if (typeof id !== 'string') console.error('queryEventById received', typeof id)
 
   let type = 'event';
   const eventRows = await execRows(
@@ -60,14 +60,14 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
     token_idx: row[6] != null ? Number(row[6]) : null,
     window_id: row[7] != null ? Number(row[7]) : null,
     window_token_pos: row[8] != null ? Number(row[8]) : null,
-  } as SqliteEvent;
+  } as Event;
 }
 
 
 export async function queryEventsByIds(
   ids: string[],
-): Promise<Map<string, SqliteEvent>> {
-  const result = new Map<string, SqliteEvent>();
+): Promise<Map<string, Event>> {
+  const result = new Map<string, Event>();
 
   // de-duplicate while preserving nothing in particular — order doesn't
   // matter since we return a Map
@@ -86,7 +86,7 @@ export async function queryEventsByIds(
     );
 
     for (const row of rows) {
-      const event: SqliteEvent = {
+      const event: Event = {
         event_id: String(row[0]),
         concept: row[1] as string,
         vector_id: row[2] != null ? String(row[2]) : null,
@@ -96,7 +96,7 @@ export async function queryEventsByIds(
         token_idx: row[6] != null ? Number(row[6]) : null,
         window_id: row[7] != null ? Number(row[7]) : null,
         window_token_pos: row[8] != null ? Number(row[8]) : null,
-      } as SqliteEvent;
+      } as Event;
 
       result.set(event.event_id, event);
     }
@@ -107,11 +107,11 @@ export async function queryEventsByIds(
 
 export async function getEventsByIds(
   ids: string[],
-): Promise<SqliteEvent[]> {
+): Promise<Event[]> {
   if (!ids.length) return [];
 
   const CHUNK_SIZE = 900;
-  const results: SqliteEvent[] = [];
+  const results: Event[] = [];
 
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);
@@ -140,14 +140,14 @@ export async function getEventsByIds(
     }
   }
 
-  return results as SqliteEvent[];
+  return results as Event[];
 }
 
 export async function queryEventsByConcept(
   concept: string,
   fromYear: number,
   toYear: number,
-): Promise<SqliteEventWithNeighbours[]> {
+): Promise<ConceptEvent[]> {
   const eventRows = await execRows(
     `SELECT event_id, vector_id, token, doc_id, pub_year,
             token_idx, window_id, window_token_pos
@@ -161,11 +161,11 @@ export async function queryEventsByConcept(
 
   if (eventRows.length === 0) return [];
 
-  const eventMap = new Map<string, SqliteEventWithNeighbours>();
-  const events: SqliteEventWithNeighbours[] = [];
+  const eventMap = new Map<string, ConceptEvent>();
+  const events: ConceptEvent[] = [];
 
   for (const r of eventRows) {
-    const e: SqliteEventWithNeighbours = {
+    const e: ConceptEvent = {
       event_id: r[0] as string,
       vector_id: r[1] as string,
       token: r[2] as string,
@@ -191,7 +191,7 @@ export async function queryEventsByConcept(
   );
 
   for (const r of nbRows) {
-    const nb: SqliteNeighbour = {
+    const nb: Neighbour = {
       event_id: String(r[1]),
       vector_id: r[2] != null ? String(r[2]) : undefined,
       token: r[3] as string,
