@@ -24,11 +24,11 @@ const HEADER_H = 36;
 const LEFT_MARGIN = 12;
 const RIGHT_MARGIN = 12;
 
-const C_BIRTH = "hsl(98, 79%, 56%)";
-const C_DEATH = "#ee7188";
-const C_BIRTH_DEATH = "#4a7fa5";
-const C_CONTINUATION = "#4aa59c";
-const C_FOCUS = "#3ecfb2";
+export const C_BIRTH = "hsl(98, 79%, 56%)";
+export const C_DEATH = "#ee7188";
+export const C_BIRTH_DEATH = "#4a7fa5";
+export const C_CONTINUATION = "#4aa59c";
+export const C_FOCUS = "#3ecfb2";
 const C_RECT_UNFOCUS = 0.05;
 const C_RECT_FOCUS = 0.18;
 const C_LINK_ALPHA = 0.6;

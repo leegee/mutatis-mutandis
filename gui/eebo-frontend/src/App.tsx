@@ -8,8 +8,8 @@ import GlobalMessageDisplay from "./components/GlobalMessageDisplay";
 import AppNav from "./components/AppNav";
 import { routes } from "./routes";
 import { matchRoute } from "./lib/matchRoute";
-import { openHelp } from "./state/help.store";
-import { HelpPanel } from "./Layout/HelpPanel";
+import { openHelp, setOpenHelp } from "./state/help.store";
+import { GuidePanel } from "./Layout/GuidePanel";
 import { ToastHost } from "./components/ToastHost";
 
 export default function App(props: any) {
@@ -52,7 +52,7 @@ export default function App(props: any) {
 
       <Transition name="slide-fade">
         <Show when={openHelp() && currentRoute()?.help}>
-          <HelpPanel currentRoute={currentRoute} />
+          <GuidePanel currentRoute={currentRoute} onClose={() => setOpenHelp(false)} />
         </Show>
       </Transition>
     </>
