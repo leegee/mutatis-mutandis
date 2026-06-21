@@ -9,9 +9,16 @@ EmitFn = Callable[[str, str], None]
 # Base logger used by the application
 logger = logging.getLogger("eebo")
 
+if logger.level == logging.NOTSET:
+    logger.setLevel(logging.DEBUG)
+
+if not logger.handlers:
+    _h = logging.StreamHandler()
+    _h.setLevel(logging.DEBUG)
+    logger.addHandler(_h)
+
 
 class EeboLogger(logging.LoggerAdapter):
-
     def __init__(
         self,
         logger: logging.Logger,
@@ -61,3 +68,4 @@ def setEmit(
         tag=tag,
         context=context,
     )
+
