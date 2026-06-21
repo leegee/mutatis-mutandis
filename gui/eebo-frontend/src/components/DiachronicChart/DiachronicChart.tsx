@@ -55,13 +55,12 @@ export interface ContextNode {
   token?: string;
   doc_id?: string;
   pub_year?: number;
-  token_idx?: number;   // present on event nodes; undefined on hub/neighbour
+  token_idx?: number;
 }
 
 export interface HubHubEdge { kind: "hub-hub"; sourceId: string; targetId: string; weight: number; }
 export interface HubNbEdge { kind: "hub-neighbour"; sourceId: string; targetId: string; weight: number; }
 export type AnyEdge = HubHubEdge | HubNbEdge;
-
 
 export type TokenStatus = "birth" | "death" | "birth-death" | "continuation";
 
@@ -116,11 +115,10 @@ function linkPath(x1: number, y1: number, x2: number, y2: number): string {
   return `M ${ x1 } ${ y1 } C ${ cx } ${ y1 }, ${ cx } ${ y2 }, ${ x2 } ${ y2 }`;
 }
 
-
 const DiachronicChart: Component = () => {
   const [smoothWindow, setSmoothWindow] = createSignal(0);
   const [sortKey, setSortKey] = createSignal<SortKey>("freq");
-  const [focusToken, setFocusToken] = createSignal<string | null>(null);
+  const [focusPos, setFocusPos] = createSignal<{ col: number; rank: number } | null>(null);
 
   const [filteredEventsResource] = createResource(
     () => [controls.concept, controls.fromYear, controls.toYear] as const,
@@ -140,6 +138,15 @@ const DiachronicChart: Component = () => {
     [...displaySlices().keys()].sort((a, b) => a - b),
   );
 
+  const focusToken = createMemo<string | null>(() => {
+    const pos = focusPos();
+    if (!pos) return null;
+    const yr = years()[pos.col];
+    if (yr === undefined) return null;
+    const col = displaySlices().get(yr) ?? [];
+    return col.find(t => t.rank === pos.rank)?.token ?? null;
+  });
+
   const svgWidth = createMemo(
     () => LEFT_MARGIN + years().length * COL_WIDTH + RIGHT_MARGIN,
   );
@@ -147,6 +154,76 @@ const DiachronicChart: Component = () => {
   const svgHeight = createMemo(
     () => HEADER_H + controls.topN * ROW_HEIGHT + 12,
   );
+
+  function handleKeyDown(e: KeyboardEvent) {
+    const yrs = years();
+    const sl = displaySlices();
+    const pos = focusPos();
+
+    if (!["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Escape"].includes(e.key)) return;
+    e.preventDefault();
+
+    if (e.key === "Escape") {
+      setFocusPos(null);
+      return;
+    }
+
+    if (!pos) {
+      setFocusPos({ col: 0, rank: 0 });
+      return;
+    }
+
+    if (e.key === "Enter") {
+      const token = focusToken();
+      if (!token) return;
+
+      const yrs = years();
+      const sl = displaySlices();
+      const { col } = pos;
+
+      // Find all columns where this token appears
+      const occurrences = yrs
+        .map((yr, i) => ({ i, items: sl.get(yr) ?? [] }))
+        .filter(({ items }) => items.some(t => t.token === token))
+        .map(({ i }) => i);
+
+      if (occurrences.length < 2) return;
+
+      // Jump to the next occurrence to the right, wrapping to leftmost if at the end
+      const nextCol = occurrences.find(i => i > col) ?? occurrences[0];
+      const nextRank = (sl.get(yrs[nextCol]) ?? []).find(t => t.token === token)!.rank;
+
+      setFocusPos({ col: nextCol, rank: nextRank });
+      return;
+    }
+
+    const { col, rank } = pos;
+    const token = focusToken();
+
+    if (e.key === "ArrowUp") {
+      setFocusPos({ col, rank: Math.max(0, rank - 1) });
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      const maxRank = (sl.get(yrs[col]) ?? []).length - 1;
+      setFocusPos({ col, rank: Math.min(maxRank, rank + 1) });
+      return;
+    }
+
+    const newCol = e.key === "ArrowLeft"
+      ? Math.max(0, col - 1)
+      : Math.min(yrs.length - 1, col + 1);
+
+    if (newCol === col) return;
+
+    const newColItems = sl.get(yrs[newCol]) ?? [];
+    const sameToken = token ? newColItems.find(t => t.token === token) : undefined;
+    const newRank = sameToken
+      ? sameToken.rank
+      : Math.min(rank, Math.max(0, newColItems.length - 1));
+
+    setFocusPos({ col: newCol, rank: newRank });
+  }
 
   const links = createMemo(() => {
     const focus = focusToken();
@@ -241,7 +318,8 @@ const DiachronicChart: Component = () => {
         <hr class="divider vertical max no-margin no-padding" />
 
         <div class="field border middle-align small">
-          <select style="max-width: 7rem"
+          <select
+            style="max-width: 7rem"
             value={sortKey()}
             onChange={(e) => setSortKey(e.currentTarget.value as SortKey)}
           >
@@ -255,7 +333,10 @@ const DiachronicChart: Component = () => {
 
         <div class="field middle-align" style="max-width: 4rem">
           <div class="slider">
-            <input type="range" min={0} max={4}
+            <input
+              type="range"
+              min={0}
+              max={4}
               value={smoothWindow()}
               onInput={(e) => setSmoothWindow(Number(e.currentTarget.value))}
             />
@@ -276,7 +357,13 @@ const DiachronicChart: Component = () => {
       </Show>
 
       <div class="scroll">
-        <svg width={svgWidth()} height={svgHeight()}>
+        <svg
+          width={svgWidth()}
+          height={svgHeight()}
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+          style="outline: none;"
+        >
           <For each={years()}>
             {(yr, i) => (
               <text
@@ -317,22 +404,32 @@ const DiachronicChart: Component = () => {
                   const color = () => statusColor(status());
                   const isFocused = () =>
                     !focusToken() || focusToken() === rt.token;
+                  const isCursor = () => {
+                    const pos = focusPos();
+                    return pos?.col === ci() && pos?.rank === rt.rank;
+                  };
                   const x = () => colX(ci()) - CELL_WIDTH / 2;
                   const y = () => HEADER_H + rt.rank * ROW_HEIGHT;
 
                   return (
-                    <g onClick={() => setFocusToken((prev) => prev === rt.token ? null : rt.token,)} >
+                    <g
+                      onClick={() =>
+                        setFocusPos(prev =>
+                          prev?.col === ci() && prev?.rank === rt.rank
+                            ? null
+                            : { col: ci(), rank: rt.rank }
+                        )
+                      }
+                    >
                       <rect
                         x={x()}
                         y={y()}
                         width={CELL_WIDTH}
                         height={CELL_H}
                         fill={color()}
-                        stroke={focusToken() === rt.token ? C_FOCUS : "none"}
-                        stroke-width={focusToken() === rt.token ? 1.2 : 0}
-                        fill-opacity={
-                          isFocused() ? C_RECT_FOCUS : C_RECT_UNFOCUS
-                        }
+                        stroke={isCursor() ? C_FOCUS : "none"}
+                        stroke-width={isCursor() ? 1.2 : 0}
+                        fill-opacity={isFocused() ? C_RECT_FOCUS : C_RECT_UNFOCUS}
                       />
                       <text
                         x={x() + LABEL_PAD}
