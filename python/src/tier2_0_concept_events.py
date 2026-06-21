@@ -93,7 +93,7 @@ become incorrect without raising an error.
 SQLite schema
 -------------
 
-Four tables:
+Five tables:
 
     events
         One row per query event (globally unique by event_id).
@@ -112,6 +112,10 @@ Four tables:
 
     concepts
         One row per concept with n_events summary.
+
+    concept_forms
+        One row per concept + exemplar of form.
+
 """
 
 from __future__ import annotations
@@ -309,9 +313,7 @@ class ZarrEventLookup:
         self._chunks = {}
         self._emb_chunks = []
 
-    # ------------------------------------------------------------
     # Row access
-    # ------------------------------------------------------------
 
     def get_event(self, event_id: int) -> dict:
         """
@@ -397,14 +399,10 @@ def analyse_concept(
     Compute neighbourhood structure for all events matching a concept.
 
     Record construction (event/neighbour rows) reads directly from the
-    columnar arrays in `lookup` via row positions, avoiding the
-    intermediate per-event/per-neighbour dicts (_event_record /
-    _neighbour_record) used in the previous implementation. The returned
+    columnar arrays in `lookup` via row positions. The returned
     "events"/"neighbours" entries are still plain dicts (one per query
     event and one per surviving neighbour), since that shape is what
-    write_sqlite consumes — but no *extra* dicts are built beyond those,
-    and pub_year is looked up once per query event rather than once per
-    neighbour.
+    write_sqlite consumes. pub_year is looked up once per query event.
     """
     # CONCEPT_SET entry union with any args supplied to this routine
     forms           = set(concept["forms"])
@@ -457,8 +455,6 @@ def analyse_concept(
     window_counter = Counter()
     results        = []
 
-    # Pull array references once; avoids repeated attribute lookups in the
-    # inner loop below.
     L_event_id  = lookup.event_id
     L_vector_id = lookup.vector_id
     L_doc_id    = lookup.doc_id
@@ -826,11 +822,6 @@ def run_tier2_core(
 ):
     logger.info("[tier2.run_tier2_core] Enter")
     output = {}
-    lookup = ZarrEventLookup(
-        ZARR_ROOT / "tier1",
-        forms=target_forms,
-        false_positives=false_positives,
-    )
 
     if diagnostics:
         knn_diagnostics( lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"], )
@@ -922,11 +913,17 @@ def main():
         logger.info( "[tier2.main] nothing to write — all concepts already processed" )
         return
 
+    lookup = ZarrEventLookup(
+        ZARR_ROOT / "tier1",
+        forms=target_forms,
+        false_positives=false_positives,
+    )
+
     run_tier2_service(
         doc_meta        = doc_meta,
         concepts_to_run = concepts_to_run,
         db_path         = CORPUS_TIER2_DB_PATH,
-        lookup          = None,
+        lookup          = lookup,
         false_positives = target_fps,
         clear           = args.clear,
         diagnostics     = args.diagnostics,

@@ -1,24 +1,18 @@
-import { createResource, onMount, onCleanup, Show } from "solid-js";
-import { API, getJson } from "../../services/jobsApi";
+// src/components/Jobs/JobsPanel.tsx
 
-export const POLLING_INTERVAL_MS = 10_000;
+import { Show } from "solid-js";
+import { type Resource } from "solid-js";
 
-export function JobPanel() {
-  const [jobs, { refetch }] = createResource(async () =>
-    getJson<any[]>(API.jobs.list, "Job list")
-  );
+interface JobPanelProps {
+  jobsList: Resource<any[]>;
+}
 
-  onMount(() => {
-    const timer = setInterval(() => {
-      refetch();
-    }, POLLING_INTERVAL_MS);
-
-    onCleanup(() => clearInterval(timer));
-  });
-
+export function JobPanel(props: JobPanelProps) {
   return (
-    <section class="no-padding no-margin left-margin right-margin " style="  overflow-y: auto !important; height: 100vh!important; padding-bottom: 50vh !important;">
-      <progress class="small no-padding no-margin no-space" style={{ opacity: jobs.loading ? 1 : 0 }} />
+    <section class="no-padding no-margin left-margin right-margin"
+      style="overflow-y: auto !important; height: 100vh!important; padding-bottom: 50vh !important;">
+      <progress class="small no-padding no-margin no-space"
+        style={{ opacity: props.jobsList.loading ? 1 : 0 }} />
       <table class="table padding no-margin">
         <thead>
           <tr>
@@ -34,7 +28,7 @@ export function JobPanel() {
           </tr>
         </thead>
         <tbody>
-          <Show when={jobs()}>
+          <Show when={props.jobsList()}>
             {(jobList) =>
               jobList().map((job) => (
                 <>
@@ -50,7 +44,7 @@ export function JobPanel() {
                     <td>{job.last_heartbeat}</td>
                   </tr>
                   <Show when={job.error}>
-                    <tr class="">
+                    <tr>
                       <td colspan="9">
                         <pre class="error-container">{job.error}</pre>
                       </td>
@@ -59,10 +53,9 @@ export function JobPanel() {
                 </>
               ))
             }
-          </Show >
+          </Show>
         </tbody>
       </table>
-    </section >
+    </section>
   );
 }
-
