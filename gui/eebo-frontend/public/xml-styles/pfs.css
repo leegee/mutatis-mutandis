@@ -1,3 +1,31 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IM+Fell+English:ital@0;1&display=swap");
+
+@font-face {
+  font-family: 'Junicode';
+  src: url('/fonts/Junicode/JunicodeVF-Roman.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Junicode';
+  src: url('/fonts/Junicode/JunicodeVF-Italic.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+}
+
+
+* {
+  font-family: Junicode;
+}
+
+
+P {
+  font-family: Junicode !important;
+  line-height: 2;
+}
+
+
 ETS {
   background: #333;
   color: oldlace;
@@ -48,7 +76,7 @@ IDNO[TYPE~="DLPS"]:before {
   content: "TCP: ";
 }
 
-AVAILABILITY > P {
+AVAILABILITY>P {
   font-family: "courier new", "courier", monospace;
   font-size: 10pt;
   display: none;
@@ -64,7 +92,7 @@ NOTESSTMT {
   display: none;
 }
 
-NOTESSTMT > NOTE {
+NOTESSTMT>NOTE {
   display: list-item;
 }
 
@@ -110,7 +138,7 @@ CHANGE {
   display: list-item;
 }
 
-CHANGE > ITEM {
+CHANGE>ITEM {
   display: inline;
 }
 
@@ -182,28 +210,28 @@ GOID {
   display: block;
 }
 
-EEBO > TEXT:before {
+EEBO>TEXT:before {
   content: "Primary language is " attr(LANG) ".";
   display: block;
   font-size: 8pt;
   color: silver;
 }
 
-GROUP > TEXT:before {
+GROUP>TEXT:before {
   content: "Primary language is " attr(LANG) ".";
   display: block;
   font-size: 8pt;
   color: silver;
 }
 
-Q > TEXT:before {
+Q>TEXT:before {
   content: "(embedded document in " attr(LANG) ")";
   display: block;
   font-size: 8pt;
   color: silver;
 }
 
-P > TEXT:before {
+P>TEXT:before {
   content: "(embedded document in " attr(LANG) ")";
   display: block;
   font-size: 8pt;
@@ -250,6 +278,7 @@ CORR {
 CORR:before {
   content: " [";
 }
+
 CORR:after {
   content: "] ";
 }
@@ -283,39 +312,44 @@ ARGUMENT {
   margin-bottom: 1em;
 }
 
-ARGUMENT > HEAD {
+ARGUMENT>HEAD {
   display: block;
   font-size: 14pt;
   color: green;
   text-align: center;
 }
 
-DIV2 > HEAD {
+DIV2>HEAD {
   display: block;
   color: #ff0000;
   font-size: 16pt;
 }
-DIV3 > HEAD {
+
+DIV3>HEAD {
   display: block;
   color: #6666ff;
   font-size: 16pt;
 }
-DIV4 > HEAD {
+
+DIV4>HEAD {
   display: block;
   color: #ff3300;
   font-size: 14pt;
 }
-DIV5 > HEAD {
+
+DIV5>HEAD {
   display: block;
   color: #ff9966;
   font-size: 14pt;
 }
-DIV6 > HEAD {
+
+DIV6>HEAD {
   display: block;
   color: #ff9966;
   font-size: 12pt;
 }
-DIV7 > HEAD {
+
+DIV7>HEAD {
   display: block;
   color: #ff3399;
   font-size: 12pt;
@@ -328,18 +362,23 @@ DIV1[REND~="small"] {
 DIV2[REND~="small"] {
   font-size: smaller;
 }
+
 DIV3[REND~="small"] {
   font-size: smaller;
 }
+
 DIV4[REND~="small"] {
   font-size: smaller;
 }
+
 DIV5[REND~="small"] {
   font-size: smaller;
 }
+
 DIV6[REND~="small"] {
   font-size: smaller;
 }
+
 DIV7[REND~="small"] {
   font-size: smaller;
 }
@@ -348,26 +387,32 @@ DIV1[REND~="italic"] {
   font-style: italic;
   font-weight: normal;
 }
+
 DIV2[REND~="italic"] {
   font-style: italic;
   font-weight: normal;
 }
+
 DIV3[REND~="italic"] {
   font-style: italic;
   font-weight: normal;
 }
+
 DIV4[REND~="italic"] {
   font-style: italic;
   font-weight: normal;
 }
+
 DIV5[REND~="italic"] {
   font-style: italic;
   font-weight: normal;
 }
+
 DIV6[REND~="italic"] {
   font-style: italic;
   font-weight: normal;
 }
+
 DIV7[REND~="italic"] {
   font-style: italic;
   font-weight: normal;
@@ -376,21 +421,27 @@ DIV7[REND~="italic"] {
 DIV1[REND~="centerJustify"] {
   text-align: center;
 }
+
 DIV2[REND~="centerJustify"] {
   text-align: center;
 }
+
 DIV3[REND~="centerJustify"] {
   text-align: center;
 }
+
 DIV4[REND~="centerJustify"] {
   text-align: center;
 }
+
 DIV5[REND~="centerJustify"] {
   text-align: center;
 }
+
 DIV6[REND~="centerJustify"] {
   text-align: center;
 }
+
 DIV7[REND~="centerJustify"] {
   text-align: center;
 }
@@ -406,19 +457,20 @@ BIBL {
   display: inline;
 }
 
-EPIGRAPH > BIBL:before {
-  content: "--";
-}
-Q > BIBL:before {
+EPIGRAPH>BIBL:before {
   content: "--";
 }
 
-EPIGRAPH > BIBL {
+Q>BIBL:before {
+  content: "--";
+}
+
+EPIGRAPH>BIBL {
   display: block;
   text-align: right;
 }
 
-Q > BIBL {
+Q>BIBL {
   display: block;
   text-align: right;
 }
@@ -470,26 +522,32 @@ DIV1:before {
   content: "[" attr(TYPE) " " attr(SUBTYPE) " " attr(N) "]";
   color: #ff0000;
 }
+
 DIV2:before {
   content: "[" attr(TYPE) " " attr(N) "]";
   color: #ff0000;
 }
+
 DIV3:before {
   content: "[" attr(TYPE) " " attr(N) "]";
   color: #6666ff;
 }
+
 DIV4:before {
   content: "[" attr(TYPE) " " attr(N) "]";
   color: #ff3300;
 }
+
 DIV5:before {
   content: "[" attr(TYPE) " " attr(N) "]";
   color: #ff9966;
 }
+
 DIV6:before {
   content: "[" attr(TYPE) " " attr(N) "]";
   color: #ff9966;
 }
+
 DIV7:before {
   content: "[" attr(TYPE) " " attr(N) "]";
   color: #ff3399;
@@ -520,7 +578,7 @@ FIGURE {
   padding: 3px 3px 3px 3px;
 }
 
-FIGURE > HEAD {
+FIGURE>HEAD {
   display: block;
   color: rgb(182, 182, 241);
   font-size: 12pt;
@@ -535,6 +593,7 @@ FIGDESC {
 FIGDESC:before {
   content: "[";
 }
+
 FIGDESC:after {
   content: "]";
 }
@@ -549,13 +608,13 @@ FIGURE[REND="inline"] {
   padding: 0;
 }
 
-FIGURE[REND="inline"] > HEAD {
+FIGURE[REND="inline"]>HEAD {
   display: inline;
   color: blue;
   font-size: 12pt;
 }
 
-FIGURE[REND="inline"] > FIGDESC {
+FIGURE[REND="inline"]>FIGDESC {
   display: inline;
   font-size: small;
   color: brown;
@@ -590,6 +649,7 @@ HEAD {
 LG HEAD {
   font-size: 14pt;
 }
+
 LIST HEAD {
   font-size: 14pt;
 }
@@ -603,7 +663,7 @@ HEADNOTE {
   margin-bottom: 1em;
 }
 
-HEADNOTE > HEAD {
+HEADNOTE>HEAD {
   display: block;
   font-size: 14pt;
   color: green;
@@ -614,12 +674,12 @@ HI {
   font-style: italic;
 }
 
-HI > HI {
+HI>HI {
   font-style: normal;
   font-weight: normal;
 }
 
-HI > HI > HI {
+HI>HI>HI {
   font-style: normal;
   font-weight: bold;
 }
@@ -760,14 +820,14 @@ LIST {
   margin-left: 1em;
 }
 
-LIST > HEAD {
+LIST>HEAD {
   display: block;
   font-size: 14pt;
   color: green;
   margin-left: 2em;
 }
 
-LIST > TRAILER {
+LIST>TRAILER {
   display: block;
   font-size: 14pt;
   color: green;
@@ -802,21 +862,21 @@ ITEM ITEM ITEM ITEM {
   list-style-type: disc;
 }
 
-LABEL + ITEM {
+LABEL+ITEM {
   display: block;
   text-indent: 0;
   margin-left: 3em;
   font-size: smaller;
 }
 
-LABEL + ITEM[ROLE="label"] {
+LABEL+ITEM[ROLE="label"] {
   display: block;
   text-indent: 0;
   margin-left: 3em;
   color: green;
 }
 
-LABEL + ITEM[ROLE="total"] {
+LABEL+ITEM[ROLE="total"] {
   display: block;
   text-indent: 0;
   margin-left: 3em;
@@ -824,7 +884,7 @@ LABEL + ITEM[ROLE="total"] {
   background-color: rgb(87, 74, 74);
 }
 
-LIST > LABEL {
+LIST>LABEL {
   display: list-item;
   font-weight: bold;
   margin-left: 1em;
@@ -833,7 +893,7 @@ LIST > LABEL {
   list-style-type: none;
 }
 
-LIST > LABEL[ROLE="label"] {
+LIST>LABEL[ROLE="label"] {
   display: list-item;
   font-weight: bold;
   margin-left: 1em;
@@ -843,34 +903,34 @@ LIST > LABEL[ROLE="label"] {
   color: green;
 }
 
-ITEM > LABEL {
+ITEM>LABEL {
   display: inline;
   font-style: italic;
   font-weight: bold;
 }
 
-P > LABEL {
+P>LABEL {
   display: inline;
   font-style: italic;
   font-weight: bold;
 }
 
-L > LABEL {
+L>LABEL {
   display: inline;
   font-style: italic;
   font-weight: bold;
   color: green;
 }
 
-L > LABEL:before {
+L>LABEL:before {
   content: "[";
 }
 
-L > LABEL:after {
+L>LABEL:after {
   content: "]";
 }
 
-CELL > LABEL {
+CELL>LABEL {
   display: inline;
   font-style: italic;
   font-weight: bold;
@@ -903,7 +963,7 @@ LG[TYPE]:before {
   text-align: center;
 }
 
-LG > LG {
+LG>LG {
   margin-left: 8em;
   margin-right: 8em;
 }
@@ -953,7 +1013,7 @@ Q[REND="italic"] L {
   font-style: italic;
 }
 
-Q[REND="italic"] L > HI {
+Q[REND="italic"] L>HI {
   font-style: normal;
 }
 
@@ -1065,7 +1125,7 @@ P[REND~="italic"] {
   font-style: italic;
 }
 
-[REND~="italic"] > HI {
+[REND~="italic"]>HI {
   font-style: normal;
 }
 
@@ -1139,7 +1199,7 @@ Q[REND~="margSglQuotes"] {
   background-repeat: repeat-y;
 }
 
-Q[REND~="margQuotes"] > P {
+Q[REND~="margQuotes"]>P {
   text-indent: 0em;
 }
 
@@ -1153,14 +1213,16 @@ Q[REND~="inline"] {
 Q[REND~="inline"]:before {
   content: "`";
 }
+
 Q[REND~="inline"]:after {
   content: "'";
 }
 
-Q[REND~="inline"] > Q[REND~="inline"]:before {
+Q[REND~="inline"]>Q[REND~="inline"]:before {
   content: "``";
 }
-Q[REND~="inline"] > Q[REND~="inline"]:after {
+
+Q[REND~="inline"]>Q[REND~="inline"]:after {
   content: "''";
 }
 
@@ -1178,7 +1240,7 @@ Q[REND~="block"] {
   background-color: hsl(60, 50%, 50%);
 }
 
-[REND~="italic"] > HI > HI {
+[REND~="italic"]>HI>HI {
   font-style: italic;
   font-weight: bold;
 }
@@ -1188,7 +1250,7 @@ SALUTE {
   color: orange;
 }
 
-SALUTE > HI {
+SALUTE>HI {
   font-weight: bold;
   font-style: italic;
 }
@@ -1206,7 +1268,7 @@ SIGNED {
   color: blue;
 }
 
-SIGNED > HI {
+SIGNED>HI {
   font-weight: bold;
   font-style: italic;
 }
@@ -1253,7 +1315,7 @@ TABLE {
   empty-cells: show;
 }
 
-TABLE > HEAD {
+TABLE>HEAD {
   display: table-caption;
   caption-side: top;
   color: green;
@@ -1270,7 +1332,7 @@ TAILNOTE {
   margin-bottom: 1em;
 }
 
-TAILNOTE > HEAD {
+TAILNOTE>HEAD {
   display: block;
   font-size: 14pt;
   color: green;
@@ -1295,7 +1357,7 @@ CELL[ROLE="label"] {
   vertical-align: baseline;
 }
 
-ROW[ROLE="label"] > CELL {
+ROW[ROLE="label"]>CELL {
   background-color: yellow;
   font-weight: bold;
   text-align: center;
@@ -1308,7 +1370,7 @@ CELL[ROLE="total"] {
   border: 1px solid black;
 }
 
-ROW[ROLE="total"] > CELL {
+ROW[ROLE="total"]>CELL {
   background-color: silver;
   font-weight: bold;
   border: 1px solid black;
@@ -1320,7 +1382,7 @@ CELL[REND="strikethrough"] {
   font-weight: inherit;
 }
 
-TABLE > TRAILER {
+TABLE>TRAILER {
   display: block;
   color: green;
   font-size: 12pt;
@@ -1356,6 +1418,7 @@ ABOVE {
 STAGE[REND~="pars"]:before {
   content: "(";
 }
+
 STAGE[REND~="pars"]:after {
   content: ")";
 }
