@@ -128,7 +128,7 @@ import zarr
 
 from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, CORPUS_TIER2_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
-from lib.eebo_logging import logger
+from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
 from lib.zarr_store_dirs import store_dirs
@@ -785,7 +785,13 @@ def run_tier2_service(
     diagnostics     = False,
     emit            = None
 ):
-    logger.info(f"[tier2.run_tier2_service] Enter")
+    logger = setEmit(
+        emit,
+        "[tier2]",
+        {concept},
+    )
+    logger.info(f"[tier2.run_tier2_service] Enter with", {concept, false_positives})
+
     index = index or EeboFaissIndex.load(FAISS_TIER1_INDEX)
     if index.ntotal == 0:
         raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )

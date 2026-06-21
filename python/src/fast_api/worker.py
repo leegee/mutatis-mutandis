@@ -4,7 +4,6 @@ from fast_api.jobs_dao import ( claim_next_job, )
 from fast_api.state import ( init_state, STATE, )
 from fast_api.runner import run_job
 
-
 async def worker_loop():
     init_state()
 

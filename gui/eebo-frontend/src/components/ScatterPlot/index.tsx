@@ -16,7 +16,7 @@ const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
 export default function ConceptClusterPlot() {
     const [projection, setProjection] = createSignal<"local" | "global">("global");
-    const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("concept");
+    const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("neighbours");
     const [colorBy, setColorBy] = createSignal("pub_year");
     const [bfsOpacity, setBfsOpacity] = createSignal(3);
     const [neighbourOpacity, setNeighbourOpacity] = createSignal(200);
@@ -97,8 +97,8 @@ export default function ConceptClusterPlot() {
                                         setColorBy("cluster_label")
                                     }
                                 }}>
+                                <option value="neighbours">All</option>
                                 <option value="concept">Concept</option>
-                                <option value="neighbours">+ Neighbours</option>
                                 <option value="clusters">Clusters</option>
                             </select>
                             <div class="tooltip bottom">View mode</div>

@@ -14,7 +14,6 @@ export function ConceptCreate() {
       forms: forms().split(",").map(s => s.trim()),
       false_positives: fps().split(",").map(s => s.trim()),
     }, "Create concept");
-
   };
 
   return (

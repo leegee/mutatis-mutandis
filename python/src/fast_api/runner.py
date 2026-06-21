@@ -1,16 +1,33 @@
 # fast_api/runner.py
 import traceback
 
-from lib.eebo_logging import logger
+from lib.eebo_logging import setEmit
 from lib.eebo_db import get_connection
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
 from fast_api.jobs_dao import ( update_stage, mark_done, mark_error, )
+from fast_api.event_bus import job_streams
 from tier2_0_concept_events import ( run_tier2_service, load_doc_metadata, sqlite3_connection as events_sqlite3_connection )
 from tier3_0_plots import ( run_tier3_service )
 
 
+def make_emit(job_id: str) -> EmitFn:
+    def emit(message: str, payload: str):
+        q = job_streams.get(job_id)
+        if q is None:
+            return
+        q.put_nowait({
+            "message": message,
+            "payload": json.loads(payload) if payload else None,
+        })
+    return emit
+
+
 def run_job(*, job_id, concept, index, lookup):
+    emit = make_emit(job_id)
+    logger = setEmit(emit, "[tier2]", {concept})
+
     logger.info("fast_api.runner Enter")
+
     try:
         conn = get_connection()
         doc_meta = load_doc_metadata(conn)
@@ -35,8 +52,10 @@ def run_job(*, job_id, concept, index, lookup):
             doc_meta        = doc_meta,
             false_positives = false_positives,
             concepts_to_run = [(concept, {"forms": forms})],
+            emit            = emit,
         )
         logger.info(f"[fast_api.runner] calling run_tier2_service with keys: {list(kwargs.keys())}")
+
         run_tier2_service(**kwargs)
         logger.info("[fast_api.runner] returned from run_tier2_service with keys")
 

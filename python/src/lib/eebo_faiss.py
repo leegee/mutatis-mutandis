@@ -77,7 +77,6 @@ import numpy as np
 
 from lib.eebo_logging import logger
 
-
 class EeboFaissIndex:
     """
     Thin wrapper around FAISS IndexIDMap.

@@ -154,8 +154,8 @@ class EmbeddingCache:
         return self._mat[self._row_of[event_id]]
 
 
-def backfill_missing_events_from_zarr(lookup, event_ids):
-    sqlite_conn = sqlite3.connect(CORPUS_TIER2_DB_PATH)
+def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
+    sqlite_conn = sqlite3.connect(db_path)
     try:
         existing = {
             row[0]
@@ -662,7 +662,7 @@ def run_tier3_core(
 
     # Backfill safety
     if all_event_ids:
-        backfill_missing_events_from_zarr(lookup, all_event_ids)
+        backfill_missing_events_from_zarr(db_path, lookup, all_event_ids)
 
     # Global projection
     if emit:
@@ -770,6 +770,7 @@ def run_tier3_core(
 
 def run_tier3_service(
     *,
+    db_path,
     index,
     lookup,
     concept=None,
@@ -777,14 +778,21 @@ def run_tier3_service(
     mode="full",
     emit=None,
 ):
-    logger.info("[tier3 run_tier3_service] Enter")
+    logger = setEmit(
+        emit,
+        "[tier3]",
+        { concept },
+    )
+    logger.info("[tier3 run_tier3_service] Enter with", {concept, false_positives})
+
     return run_tier3_core(
-        index=index,
-        lookup=lookup,
-        concept=concept,
-        false_positives=false_positives,
-        mode=mode,
-        emit=emit,
+        db_path         = db_path,
+        index           = index,
+        lookup          = lookup,
+        concept         = concept,
+        false_positives = false_positives,
+        mode            = mode,
+        emit            = emit,
     )
 
 
@@ -804,6 +812,7 @@ def main():
     index  = EeboFaissIndex.load(FAISS_TIER1_INDEX)
 
     run_tier3_core(
+        db_path = CORPUS_TIER2_DB_PATH,
         index=index,
         lookup=lookup,
         concept=args.concept,

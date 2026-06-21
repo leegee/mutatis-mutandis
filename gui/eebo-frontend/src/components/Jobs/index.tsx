@@ -8,17 +8,17 @@ export function JobsApiComponent() {
   return (
     <Tabs tabs={[
       {
+        key: "jobs",
+        label: "Jobs",
+        icon: "sync",
+        component: JobPanel
+      },
+      {
         key: "concepts",
         label: "Concepts",
         icon: "psychology",
         component: ConceptCreate
       },
-      {
-        key: "jobs",
-        label: "Jobs",
-        icon: "sync",
-        component: JobPanel
-      }
     ]} />
   );
 }
