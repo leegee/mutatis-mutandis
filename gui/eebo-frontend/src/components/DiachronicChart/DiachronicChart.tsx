@@ -115,10 +115,18 @@ function linkPath(x1: number, y1: number, x2: number, y2: number): string {
   return `M ${ x1 } ${ y1 } C ${ cx } ${ y1 }, ${ cx } ${ y2 }, ${ x2 } ${ y2 }`;
 }
 
+type GridPosition = {
+  col: number;
+  rank: number;
+}
+
 const DiachronicChart: Component = () => {
+  let scrollRef: HTMLDivElement | undefined;
+  let scrollbarTimeout: ReturnType<typeof setTimeout>;
+
   const [smoothWindow, setSmoothWindow] = createSignal(0);
   const [sortKey, setSortKey] = createSignal<SortKey>("freq");
-  const [focusPos, setFocusPos] = createSignal<{ col: number; rank: number } | null>(null);
+  const [focusPos, setFocusPos] = createSignal<GridPosition | null>(null);
 
   const [filteredEventsResource] = createResource(
     () => [controls.concept, controls.fromYear, controls.toYear] as const,
@@ -155,6 +163,62 @@ const DiachronicChart: Component = () => {
     () => HEADER_H + controls.topN * ROW_HEIGHT + 12,
   );
 
+  function swapTokenForLinked(pos: GridPosition, reverseDirection: boolean, jumpToEnd: boolean) {
+    const token = focusToken();
+    if (!token) return;
+
+    const yrs = years();
+    const sl = displaySlices();
+    const { col } = pos;
+
+    const occurrences = yrs
+      .map((yr, i) => ({ i, items: sl.get(yr) ?? [] }))
+      .filter(({ items }) => items.some(t => t.token === token))
+      .map(({ i }) => i);
+
+    if (occurrences.length < 2) return;
+
+    let nextCol, nextRank;
+
+    if (jumpToEnd) {
+      nextCol = reverseDirection
+        ? occurrences[occurrences.length - 1]
+        : nextCol = occurrences.reverse().find(i => i > col) ?? occurrences[0]
+    }
+
+    else {
+      nextCol = reverseDirection
+        ? occurrences.reverse().find(i => i < col) ?? occurrences[occurrences.length - 1]
+        : occurrences.find(i => i > col) ?? occurrences[0];
+    }
+
+    nextRank = (sl.get(yrs[nextCol]) ?? []).find(t => t.token === token)!.rank;
+
+    setFocusPos({ col: nextCol, rank: nextRank });
+    scrollColIntoView(nextCol);
+    return;
+  }
+
+
+  function scrollColIntoView(col: number) {
+    const scrollEl = scrollRef;
+    if (!scrollEl) return;
+
+    const x = colX(col) - CELL_WIDTH / 2;
+    const cellRight = x + CELL_WIDTH;
+    const scrollLeft = scrollEl.scrollLeft;
+    const clientWidth = scrollEl.clientWidth;
+
+    if (x < scrollLeft || cellRight > scrollLeft + clientWidth) {
+      if (x < scrollLeft) {
+        scrollEl.scrollLeft = x - LEFT_MARGIN;
+      } else {
+        scrollEl.scrollLeft = cellRight - clientWidth + RIGHT_MARGIN;
+      }
+    }
+  }
+
+
   function handleKeyDown(e: KeyboardEvent) {
     const yrs = years();
     const sl = displaySlices();
@@ -170,60 +234,47 @@ const DiachronicChart: Component = () => {
 
     if (!pos) {
       setFocusPos({ col: 0, rank: 0 });
+      scrollColIntoView(0);
       return;
     }
 
     if (e.key === "Enter") {
-      const token = focusToken();
-      if (!token) return;
-
-      const yrs = years();
-      const sl = displaySlices();
-      const { col } = pos;
-
-      // Find all columns where this token appears
-      const occurrences = yrs
-        .map((yr, i) => ({ i, items: sl.get(yr) ?? [] }))
-        .filter(({ items }) => items.some(t => t.token === token))
-        .map(({ i }) => i);
-
-      if (occurrences.length < 2) return;
-
-      // Jump to the next occurrence to the right, wrapping to leftmost if at the end
-      const nextCol = occurrences.find(i => i > col) ?? occurrences[0];
-      const nextRank = (sl.get(yrs[nextCol]) ?? []).find(t => t.token === token)!.rank;
-
-      setFocusPos({ col: nextCol, rank: nextRank });
-      return;
+      return swapTokenForLinked(
+        pos,
+        e.shiftKey,
+        e.altKey || e.ctrlKey || e.metaKey
+      );
     }
 
     const { col, rank } = pos;
+    let [newCol, newRank] = [col, rank];
     const token = focusToken();
 
     if (e.key === "ArrowUp") {
-      setFocusPos({ col, rank: Math.max(0, rank - 1) });
-      return;
+      newRank = rank - 1;
     }
-    if (e.key === "ArrowDown") {
+    else if (e.key === "ArrowDown") {
       const maxRank = (sl.get(yrs[col]) ?? []).length - 1;
-      setFocusPos({ col, rank: Math.min(maxRank, rank + 1) });
-      return;
+      newRank = Math.min(maxRank, rank + 1);
     }
+    else {
+      newCol = e.key === "ArrowLeft"
+        ? Math.max(0, col - 1)
+        : Math.min(yrs.length - 1, col + 1);
 
-    const newCol = e.key === "ArrowLeft"
-      ? Math.max(0, col - 1)
-      : Math.min(yrs.length - 1, col + 1);
+      if (newCol === col) return;
 
-    if (newCol === col) return;
-
-    const newColItems = sl.get(yrs[newCol]) ?? [];
-    const sameToken = token ? newColItems.find(t => t.token === token) : undefined;
-    const newRank = sameToken
-      ? sameToken.rank
-      : Math.min(rank, Math.max(0, newColItems.length - 1));
+      const newColItems = sl.get(yrs[newCol]) ?? [];
+      const sameToken = token ? newColItems.find(t => t.token === token) : undefined;
+      newRank = sameToken
+        ? sameToken.rank
+        : Math.min(rank, Math.max(0, newColItems.length - 1));
+    }
 
     setFocusPos({ col: newCol, rank: newRank });
+    scrollColIntoView(newCol);
   }
+
 
   const links = createMemo(() => {
     const focus = focusToken();
@@ -356,7 +407,7 @@ const DiachronicChart: Component = () => {
         <progress />
       </Show>
 
-      <div class="scroll">
+      <div class="scroll" ref={scrollRef}>
         <svg
           width={svgWidth()}
           height={svgHeight()}
