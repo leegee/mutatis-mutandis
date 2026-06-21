@@ -1,0 +1,24 @@
+.diachronic-rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 120ms ease, fill-opacity 120ms ease;
+}
+
+.diachronic-rect:hover {
+  transform: scale(2);
+  fill-opacity: 1;
+  opacity: 1;
+  padding: 1em;
+  font-weight: bold;
+  pointer-events: all;
+}
+
+.diachronic-rect:hover rect {
+  pointer-events: all;
+  fill-opacity: 1;
+  opacity: 1;
+}
+
+.diachronic-rect:hover text {
+  filter: invert() brightness(2);
+}

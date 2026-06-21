@@ -7,10 +7,11 @@ import {
   Show,
 } from "solid-js";
 
+import { type SortKey, type YearSlices, buildYearSlices } from "../../lib/yearUtils";
 import { getYearFiltered } from "../../state/controls.selectors";
 import ControlsHeader from "../ControlsHeader";
 import { controls } from "../../state/controls.store";
-import { type SortKey, type YearSlices, buildYearSlices } from "../../lib/yearUtils";
+import "./style.css";
 
 const CELL_WIDTH = 92;
 const COL_GAP = 32;
@@ -239,31 +240,34 @@ const DiachronicChart: Component = () => {
       <ControlsHeader title="Diachronic Neighbours" topN={true}>
         <hr class="divider vertical max no-margin no-padding" />
 
-        <div class="field suffix border middle-align small">
-          <select
+        <div class="field border middle-align small">
+          <select style="max-width: 7rem"
             value={sortKey()}
             onChange={(e) => setSortKey(e.currentTarget.value as SortKey)}
           >
             <option value="freq">Frequency</option>
-            <option value="score">Cosine score</option>
+            <option value="score">Cosine</option>
           </select>
           <span class="tooltip bottom">Rank by</span>
         </div>
 
         <hr class="divider vertical max no-margin no-padding" />
 
-        <div class="field middle-align">
+        <div class="field middle-align" style="max-width: 4rem">
           <div class="slider">
-            <input
-              type="range"
-              min={0}
-              max={4}
+            <input type="range" min={0} max={4}
               value={smoothWindow()}
               onInput={(e) => setSmoothWindow(Number(e.currentTarget.value))}
             />
             <span class="tooltip bottom" />
           </div>
           <span class="tooltip bottom">Smoothing</span>
+        </div>
+
+        <div class="field middle-align fill">
+          <h2 class="large extra-text large-opacity secondary-text">
+            {focusToken()}
+          </h2>
         </div>
       </ControlsHeader>
 
@@ -317,13 +321,7 @@ const DiachronicChart: Component = () => {
                   const y = () => HEADER_H + rt.rank * ROW_HEIGHT;
 
                   return (
-                    <g
-                      onClick={() =>
-                        setFocusToken((prev) =>
-                          prev === rt.token ? null : rt.token,
-                        )
-                      }
-                    >
+                    <g onClick={() => setFocusToken((prev) => prev === rt.token ? null : rt.token,)} >
                       <rect
                         x={x()}
                         y={y()}

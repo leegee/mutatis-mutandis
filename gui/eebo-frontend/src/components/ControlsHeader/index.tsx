@@ -88,10 +88,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         <Show when={props.topN}>
           <div class="field middle-align prefix border small">
             <i class="tiny">tenancy</i>
-            <input
+            <input style="max-width: 6em"
               type="number"
-              min={1}
-              max={MAX_TOP_N}
+              min={1} max={MAX_TOP_N}
               step={1}
               value={controls.topN}
               onInput={(e) => A.setTopN(Number(e.currentTarget.value))}
