@@ -5,6 +5,7 @@ const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
 const NeighbourhoodBrowserGuide = lazy(() => import("./components/NeighbourhoodBrowser/Guide"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart/DiachronicChart"));
+const DiachronicChartGuide = lazy(() => import("./components/DiachronicChart/Guide"));
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 const ConceptClusters = lazy(() => import("./components/ConceptClusters"));
@@ -62,7 +63,7 @@ export const routes = [
     icon: "chronic",
     label: "Diachronic Chart",
     component: DiachronicChart,
-    help: () => <div>Temporal evolution of concepts.</div>
+    help: () => <DiachronicChartGuide />
   },
   {
     path: "/Jobs",

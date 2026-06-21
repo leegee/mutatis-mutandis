@@ -8,7 +8,7 @@ export const HelpPanel = (props: Props) => {
     <article class="helpContainer border no-round large-padding right surface-container-highest large-elevate border"
       style="z-index:999"
     >
-      <header>
+      <header class="fixed">
         <nav>
           <button class="small border no-margin no-padding circle" onClick={() => props.currentRoute().setOpenHelp(false)}><i>close</i></button>
           <h2 class="max">{props.currentRoute().label}</h2>

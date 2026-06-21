@@ -31,7 +31,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const concepts = () => conceptsResource() ?? [];
 
   return (
-    <header class="left-align max surface-container-low tiny-padding bottom-padding top-padding no-margin">
+    <header class="fixed left-align max surface-container-low tiny-padding bottom-padding top-padding no-margin">
       <nav>
         <div class="field suffix border middle-align small">
           <Show when={concepts().length > 0}>
