@@ -37,7 +37,8 @@ export function createWindowMiddleware(pool: Pool): Connect.NextHandleFunction {
         .map((row) =>
           row.token_idx === tokenIdx ? `<mark>${ row.token }</mark>` : row.token,
         )
-        .join(" ");
+        .join(" ")
+        .replace(/\s+([,.;:\)])/g, "$1").replace(/\(\s+/g, "(");
 
       // console.debug(`[api/window] ${ docId }/${ tokenIdx }`);
 
