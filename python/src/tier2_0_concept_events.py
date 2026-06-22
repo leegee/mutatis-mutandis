@@ -913,10 +913,11 @@ def run_tier2_service(
     depth           = 1,
     emit            = None
 ):
+    concept_names = [name for name, _ in concepts_to_run]
     logger = setEmit(
         emit,
         "[tier2]",
-        concepts_to_run,
+        {"concepts": concept_names},
     )
     logger.info(f"[tier2.run_tier2_service] Enter")
 
