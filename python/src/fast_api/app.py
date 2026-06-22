@@ -73,25 +73,6 @@ async def list_all_jobs():
     ]
 
 
-@app.get("/jobs/{job_id}/events")
-async def events(job_id: str):
-    async def stream():
-        q = job_streams.setdefault(job_id, asyncio.Queue())
-
-        while True:
-            try:
-                event = await asyncio.wait_for(q.get(), timeout=5)
-                yield f"data: {json.dumps(event)}\n\n"
-
-            except asyncio.TimeoutError:
-                job = get_job(job_id)
-
-                if job and job[2] in ("done", "error"):
-                    break
-
-    return StreamingResponse(stream(), media_type="text/event-stream")
-
-
 @app.get("/jobs/{job_id}")
 async def job_status(job_id: str):
     row = get_job(job_id)
@@ -112,3 +93,21 @@ async def job_status(job_id: str):
         "error": row[9],
     }
 
+
+@app.get("/jobs/{job_id}/events")
+async def events(job_id: str):
+    async def stream():
+        q = job_streams.setdefault(job_id, asyncio.Queue())
+
+        while True:
+            try:
+                event = await asyncio.wait_for(q.get(), timeout=5)
+                yield f"data: {json.dumps(event)}\n\n"
+
+            except asyncio.TimeoutError:
+                job = get_job(job_id)
+
+                if job and job[2] in ("done", "error"):
+                    break
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
