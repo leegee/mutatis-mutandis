@@ -784,9 +784,9 @@ def run_tier2_service(
     logger = setEmit(
         emit,
         "[tier2]",
-        {concept},
+        concepts_to_run,
     )
-    logger.info(f"[tier2.run_tier2_service] Enter with", {concept, false_positives})
+    logger.info(f"[tier2.run_tier2_service] Enter")
 
     index = index or EeboFaissIndex.load(FAISS_TIER1_INDEX)
     if index.ntotal == 0:
@@ -886,9 +886,7 @@ def main():
                 CONCEPT_SETS[concept_name].get("false_positives", [])
             )
 
-        logger.info(
-            f"[tier2.main] single-concept mode: {concept_name} forms={target_forms}"
-        )
+        logger.info( f"[tier2.main] single-concept mode: {concept_name} forms={target_forms}" )
 
     conn = get_connection()
     doc_meta = load_doc_metadata(conn)
@@ -916,7 +914,7 @@ def main():
     lookup = ZarrEventLookup(
         ZARR_ROOT / "tier1",
         forms=target_forms,
-        false_positives=false_positives,
+        false_positives=target_fps,
     )
 
     run_tier2_service(
