@@ -47,7 +47,7 @@ import sqlite3
 from lib.eebo_config import ZARR_ROOT, FAISS_TIER1_INDEX, PLOT_DIR, CORPUS_TIER2_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.concept_resolve import resolve_concepts
-from lib.eebo_logging import logger
+from lib.eebo_logging import logger, setEmit
 from lib.eebo_db import get_connection
 
 from tier2_0_concept_events import ZarrEventLookup
@@ -782,9 +782,9 @@ def run_tier3_service(
     logger = setEmit(
         emit,
         "[tier3]",
-        { concept },
+        concept ,
     )
-    logger.info("[tier3 run_tier3_service] Enter with", {concept, false_positives})
+    logger.info("[tier3 run_tier3_service] Enter")
 
     return run_tier3_core(
         db_path         = db_path,

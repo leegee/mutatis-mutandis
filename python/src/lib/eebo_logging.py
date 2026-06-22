@@ -34,9 +34,7 @@ class EeboLogger(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         if self._tag:
             msg = f"{self._tag} {msg}"
-
         kwargs.setdefault("extra", {}).update(self._context)
-
         return msg, kwargs
 
     def log(self, level, msg, *args, **kwargs):
@@ -46,6 +44,9 @@ class EeboLogger(logging.LoggerAdapter):
             except Exception:
                 rendered = str(msg)
 
+            payload = dict(self._context)
+            print(type(self._context))
+            print(repr(self._context))
             payload = dict(self._context)
             payload.update(kwargs.get("extra", {}))
 

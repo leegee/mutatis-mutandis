@@ -1,8 +1,11 @@
 import asyncio
 from uuid import uuid4
 
+import asyncio
+import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from fast_api.worker import worker_loop
 from fast_api.routes.jobs import router as jobs_router
@@ -94,7 +97,7 @@ async def job_status(job_id: str):
     }
 
 
-@app.get("/jobs/{job_id}/events")
+@app.get("/stream/{job_id}")
 async def events(job_id: str):
     async def stream():
         q = job_streams.setdefault(job_id, asyncio.Queue())
@@ -111,3 +114,34 @@ async def events(job_id: str):
                     break
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@app.get("/stream/")
+async def all_events():
+    async def stream():
+        while True:
+            # gather all queues
+            queues = list(job_streams.values())
+
+            if not queues:
+                await asyncio.sleep(0.5)
+                continue
+
+            # wait for any queue to emit
+            tasks = [asyncio.create_task(q.get()) for q in queues]
+
+            done, pending = await asyncio.wait(
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # cancel unused tasks
+            for t in pending:
+                t.cancel()
+
+            for t in done:
+                event = t.result()
+                yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+

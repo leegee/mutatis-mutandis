@@ -11,7 +11,8 @@ export const API = {
     status: "/jobs/status",
     list: "/jobs/",
     cancel: "/jobs/cancel",
-    events: "/jobs/:job_id/events"
+    events: "/jobs/:job_id/events",
+    stream: "/stream/"
   },
 
   concepts: {
@@ -76,18 +77,3 @@ export async function postJson<T>(
 }
 
 
-export async function jobEventStreat(jobId: string) {
-  const source = new EventSource(`/jobs/${ jobId }/events`);
-
-  source.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log(data);
-    pushToast({ type: 'info', message: event.data })
-  };
-
-  source.onerror = (e) => {
-    source.close();
-    console.error(e);
-    pushToast({ type: 'error', message: 'Event bus error' })
-  };
-}

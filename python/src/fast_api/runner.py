@@ -26,7 +26,7 @@ def make_emit(job_id: str) -> EmitFn:
 
 def run_job(*, job_id, concept, index, lookup):
     emit = make_emit(job_id)
-    logger = setEmit(emit, "[tier2]", {concept})
+    logger = setEmit(emit, "[tier2]",  {"concept": concept})
 
     logger.info("fast_api.runner Enter")
 
@@ -65,6 +65,7 @@ def run_job(*, job_id, concept, index, lookup):
 
         logger.info("[fast_api.runner] calling run_tier3_service")
         run_tier3_service(
+            db_path         = CORPUS_TIER2_DB_PATH,
             index           = index,
             lookup          = lookup,
             concept         = concept,

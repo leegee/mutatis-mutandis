@@ -5,6 +5,7 @@ import { ConceptCreate } from "./ConceptCreate";
 import { Tabs } from "../TabsLayout";
 import { JobsPanel } from "./JobsPanel";
 import { API, getJson } from "../../services/jobsApi";
+import { jobsEventBus } from "../../services/jobsEventBus";
 
 export const POLLING_INTERVAL_MS = 10_000;
 
@@ -14,6 +15,7 @@ export function JobsApiComponent() {
   );
 
   onMount(() => {
+    jobsEventBus.connect();
     const timer = setInterval(() => refetch(), POLLING_INTERVAL_MS);
     onCleanup(() => clearInterval(timer));
   });

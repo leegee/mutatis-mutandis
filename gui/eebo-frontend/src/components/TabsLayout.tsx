@@ -17,7 +17,7 @@ export function Tabs(props: { tabs: Tab[] }) {
     <div>
       <nav class="tabs center-align ">
         {props.tabs.map((t) => (
-          <a class={`tab vertical max ${ active() === t.key ? "active" : "background" }`}
+          <a class={`tab max ${ active() === t.key ? "active" : "background" }`}
             onClick={() => setActive(t.key)}
           >
             <i>{t.icon}</i>
