@@ -1,3 +1,4 @@
+import { onCleanup, onMount } from "solid-js";
 
 interface Props {
   currentRoute: () => any; // destructure at call site
@@ -5,9 +6,17 @@ interface Props {
 }
 
 export const GuidePanel = (props: Props) => {
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === "Escape") props.onClose();
+  }
+
+  onMount(() => window.document.body.addEventListener('keydown', handleKeyDown))
+  onCleanup(() => window.document.body.removeEventListener('keydown', handleKeyDown))
+
   return (
     <article class="helpContainer border no-round tiny-padding right surface-container-high large-elevate border shadow"
       style="z-index:99"
+      onKeyDown={handleKeyDown}
     >
       <header class="fixed bottom-margin no-padding">
         <nav class="no-padding no-round  surface">
