@@ -520,6 +520,7 @@ def write_json(path, payload):
 
 def run_tier3_core(
     *,
+    db_path,
     index,
     lookup,
     concept=None,
