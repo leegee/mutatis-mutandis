@@ -1,13 +1,13 @@
 // src/components/Jobs/JobsPanel.tsx
 
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { type Resource } from "solid-js";
 
-interface JobPanelProps {
+interface JobsPanelProps {
   jobsList: Resource<any[]>;
 }
 
-export function JobPanel(props: JobPanelProps) {
+export function JobsPanel(props: JobsPanelProps) {
   return (
     <section class="no-padding no-margin left-margin right-margin"
       style="overflow-y: auto !important; height: 100vh!important; padding-bottom: 50vh !important;">
@@ -30,28 +30,30 @@ export function JobPanel(props: JobPanelProps) {
         <tbody>
           <Show when={props.jobsList()}>
             {(jobList) =>
-              jobList().map((job) => (
-                <>
-                  <tr>
-                    <th scope="row">{job.concept}</th>
-                    <td>{job.type}</td>
-                    <td class={job.error ? 'error-container' : ''}>{job.status}</td>
-                    <td>{job.stage}</td>
-                    <td>{job.attempts}</td>
-                    <td>{job.created_at}</td>
-                    <td>{job.started_at}</td>
-                    <td>{job.finished_at}</td>
-                    <td>{job.last_heartbeat}</td>
-                  </tr>
-                  <Show when={job.error}>
+              <For each={jobList()}>
+                {(job) => (
+                  <>
                     <tr>
-                      <td colspan="9">
-                        <pre class="error-container">{job.error}</pre>
-                      </td>
+                      <th scope="row">{job.concept}</th>
+                      <td>{job.type}</td>
+                      <td class={job.error ? 'error-container' : ''}>{job.status}</td>
+                      <td>{job.stage}</td>
+                      <td>{job.attempts}</td>
+                      <td>{job.created_at}</td>
+                      <td>{job.started_at}</td>
+                      <td>{job.finished_at}</td>
+                      <td>{job.last_heartbeat}</td>
                     </tr>
-                  </Show>
-                </>
-              ))
+                    <Show when={job.error}>
+                      <tr>
+                        <td colspan="9">
+                          <pre class="error-container">{job.error}</pre>
+                        </td>
+                      </tr>
+                    </Show>
+                  </>
+                )}
+              </For>
             }
           </Show>
         </tbody>
