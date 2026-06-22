@@ -9,7 +9,7 @@ export const API = {
   jobs: {
     enqueue: "/jobs/enqueue",
     status: "/jobs/status",
-    list: "/jobs/list",
+    list: "/jobs/",
     cancel: "/jobs/cancel",
   },
 

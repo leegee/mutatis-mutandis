@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fast_api.worker import worker_loop
 from fast_api.routes.jobs import router as jobs_router
 from fast_api.routes.concepts import router as concepts_router
-from fast_api.jobs_dao import ( init_db, create_job, get_job )
+from fast_api.jobs_dao import ( init_db, create_job, get_job, list_jobs  )
 from fast_api.event_bus import job_streams
 
 app = FastAPI()
@@ -51,6 +51,19 @@ async def run_job(concept: str):
         "status": "queued",
     }
 
+
+@app.get("/jobs")
+async def list_all_jobs():
+    rows = list_jobs()
+
+    return [
+        {
+            "job_id": row[0],
+            "concept": row[1],
+            "status": row[2],
+        }
+        for row in rows
+    ]
 
 @app.get("/jobs/{job_id}/events")
 async def events(job_id: str):
