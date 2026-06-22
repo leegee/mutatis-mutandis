@@ -1,4 +1,4 @@
-import { createResource, Show, For } from "solid-js";
+import { createResource, Show, For, onMount, onCleanup } from "solid-js";
 import { controls } from "../state/controls.store";
 import { queryEventById } from "../services/db";
 import { controlsActions } from "../state/controls.actions";
@@ -7,10 +7,17 @@ import ExportSelectedEvents from "./ExportSelectedEvents";
 import { showDocument } from "../services/documentApi";
 
 interface Props {
-    onClose?: () => void;
+    onClose: () => void;
 }
 
 export default function SidebarMultiple(props: Props) {
+    function handleKeyDown(e: KeyboardEvent) {
+        if (e.key === "Escape") props.onClose();
+    }
+
+    onMount(() => window.document.body.addEventListener('keydown', handleKeyDown))
+    onCleanup(() => window.document.body.removeEventListener('keydown', handleKeyDown))
+
     // stable selection
     const selectedEventIds = () => controls.selectedEventIds ? Array.from(controls.selectedEventIds) : [];
 

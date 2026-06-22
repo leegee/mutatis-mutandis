@@ -187,7 +187,10 @@ export default function ConceptClusterPlot() {
                             />
                         </div>
 
-                        <SidebarMultiple />
+                        <SidebarMultiple onClose={() => {
+                            controlsActions.setSelectedEventIds(null);
+                            // setParamsTokenIdx(null);
+                        }} />
                     </div>
                 </Show>
             </Show>

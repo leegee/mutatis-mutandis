@@ -507,8 +507,7 @@ export const ConceptGraph: Component = () => {
             controlsActions.setSelectedEventIds(null);
             setParamsTokenIdx(null);
             graph?.fitView();
-          }}
-          />
+          }} />
           {/* <Show when={selectedNode()}>
             <Sidebar
               selectedNode={selectedNode()}
