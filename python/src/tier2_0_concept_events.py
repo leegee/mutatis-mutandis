@@ -99,7 +99,11 @@ Five tables:
         One row per query event (globally unique by event_id).
 
     neighbours
-        One row per (query event, neighbour) pair.
+        One row per (query event, neighbour, depth) triple.
+        depth=1 rows are direct FAISS neighbours (original behaviour).
+        depth=2 rows are neighbours-of-neighbours; via_event_id records
+        which depth-1 event produced the result, and event_id still refers
+        to the original concept query event (fan-out model).
         Foreign key: event_id -> events.event_id.
 
     concept_aggregate
@@ -394,9 +398,21 @@ def analyse_concept(
     diagnostics     = False,
     false_positives = None,
     top_n: int      = K,
+    depth: int      = 1,
 ):
     """
     Compute neighbourhood structure for all events matching a concept.
+
+    depth=1 (default): direct FAISS neighbours only. Identical to the
+    original behaviour; all existing call sites are unaffected.
+
+    depth=2: additionally computes neighbours-of-neighbours. Each depth-1
+    neighbour is used as a query vector for a second FAISS search. Results
+    are fanned out to the original concept query event (event_id always
+    refers to a concept event). via_event_id records which depth-1 event
+    produced the depth-2 result. depth-2 rows exclude: the original query
+    events themselves, any event already present as a depth-1 neighbour of
+    that query event, and false_positive tokens.
 
     Record construction (event/neighbour rows) reads directly from the
     columnar arrays in `lookup` via row positions. The returned
@@ -463,6 +479,10 @@ def analyse_concept(
     L_window_id = lookup.window_id
     L_wpos      = lookup.window_token_pos
 
+    # Set of original query event_ids — used to exclude self-matches at
+    # depth 2 without repeated list membership tests.
+    query_event_id_set = set(event_ids)
+
     for i, eid in enumerate(event_ids):
         q_pos = int(event_pos[i])
         q_doc_id = str(L_doc_id[q_pos])
@@ -495,6 +515,8 @@ def analyse_concept(
                 "window_id":        n_window_id,
                 "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
                 "score":            float(score),
+                "depth":            1,
+                "via_event_id":     None,
             })
 
         q_wpos = int(L_wpos[q_pos])
@@ -510,6 +532,103 @@ def analyse_concept(
             "window_token_pos": None if q_wpos == _NO_WPOS else q_wpos,
             "neighbours":       neighbours,
         })
+
+    # ------------------------------------------------------------------
+    # Depth-2: neighbours-of-neighbours
+    # ------------------------------------------------------------------
+    if depth >= 2:
+        # Collect the unique set of depth-1 neighbour event_ids across all
+        # query events, excluding the original query events themselves.
+        d1_event_id_set: set[int] = set()
+        for res in results:
+            for n in res["neighbours"]:
+                d1_event_id_set.add(n["event_id"])
+        d1_event_id_set -= query_event_id_set
+
+        # Build a reverse map: depth-1 event_id -> list of query event_ids
+        # that hold it as a direct neighbour. Used to fan depth-2 results
+        # back out to the originating query events.
+        via_to_queries: dict[int, list[int]] = {}
+        for res in results:
+            for n in res["neighbours"]:
+                via_eid = n["event_id"]
+                if via_eid in d1_event_id_set:
+                    via_to_queries.setdefault(via_eid, []).append(res["event_id"])
+
+        # Also build a per-query-event set of its depth-1 neighbour ids so
+        # we can skip events already seen at depth 1 for that query event.
+        query_d1_neighbours: dict[int, set[int]] = {
+            res["event_id"]: {n["event_id"] for n in res["neighbours"]}
+            for res in results
+        }
+
+        # Index results by query event_id for O(1) append access.
+        results_by_query: dict[int, dict] = {res["event_id"]: res for res in results}
+
+        if d1_event_id_set:
+            d1_ids_list  = list(d1_event_id_set)
+            d1_positions = np.array(
+                [lookup.get_pos(eid) for eid in d1_ids_list if eid in lookup._pos],
+                dtype=np.int64,
+            )
+            # Filter d1_ids_list to only those present in the lookup
+            # (get_pos above would raise for missing ids; guard here).
+            d1_ids_list = [eid for eid in d1_ids_list if eid in lookup._pos]
+
+            if d1_positions.size > 0:
+                d1_vecs = lookup.embeddings[d1_positions]
+                d2_scores, d2_neigh_ids = index.search(d1_vecs, K)
+
+                logger.info(
+                    f"[tier2] depth-2 search: via_events={len(d1_ids_list)}"
+                )
+
+                for i, via_eid in enumerate(d1_ids_list):
+                    query_eids_for_via = via_to_queries.get(via_eid, [])
+                    if not query_eids_for_via:
+                        continue
+
+                    for nid, score in zip(d2_neigh_ids[i], d2_scores[i]):
+                        nid_int = int(nid)
+                        if nid_int == -1:
+                            continue
+                        # Exclude original query events and depth-1 neighbours
+                        # (checked per query event below) and unknown ids.
+                        if nid_int in query_event_id_set:
+                            continue
+                        if nid_int not in lookup._pos:
+                            continue
+
+                        n_pos    = lookup.get_pos(nid_int)
+                        n_token  = str(L_token[n_pos])
+                        if n_token.lower() in false_positives:
+                            continue
+
+                        n_doc_id    = str(L_doc_id[n_pos])
+                        n_window_id = int(L_window_id[n_pos])
+                        n_wpos      = int(L_wpos[n_pos])
+
+                        neighbour_record = {
+                            "event_id":         int(L_event_id[n_pos]),
+                            "vector_id":        int(L_vector_id[n_pos]),
+                            "token":            n_token,
+                            "doc_id":           n_doc_id,
+                            "pub_year":         doc_meta.get(n_doc_id, {}).get("pub_year"),
+                            "token_idx":        int(L_token_idx[n_pos]),
+                            "window_id":        n_window_id,
+                            "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
+                            "score":            float(score),
+                            "depth":            2,
+                            "via_event_id":     via_eid,
+                        }
+
+                        # Fan out to every query event that had via_eid as
+                        # a depth-1 neighbour, skipping if this event_id is
+                        # already a depth-1 neighbour of that query event.
+                        for q_eid in query_eids_for_via:
+                            if nid_int in query_d1_neighbours.get(q_eid, set()):
+                                continue
+                            results_by_query[q_eid]["neighbours"].append(neighbour_record)
 
     return {
         "concept":   concept_name,
@@ -560,6 +679,8 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS neighbours (
     event_id             INTEGER NOT NULL,
     neighbour_event_id   INTEGER NOT NULL,
+    depth                INTEGER NOT NULL DEFAULT 1,
+    via_event_id         INTEGER,
     vector_id            INTEGER,
     token                TEXT,
     doc_id               TEXT,
@@ -568,7 +689,7 @@ CREATE TABLE IF NOT EXISTS neighbours (
     window_id            INTEGER,
     window_token_pos     INTEGER,
     score                REAL,
-    PRIMARY KEY (event_id, neighbour_event_id),
+    PRIMARY KEY (event_id, neighbour_event_id, depth),
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
 
@@ -595,6 +716,7 @@ CREATE INDEX IF NOT EXISTS idx_events_doc_id        ON events(doc_id);
 CREATE INDEX IF NOT EXISTS idx_events_concept_year  ON events(concept, pub_year);
 CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_token     ON neighbours(token);
+CREATE INDEX IF NOT EXISTS idx_neighbours_depth     ON neighbours(event_id, depth);
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept    ON concept_aggregate(concept, kind);
 """
 
@@ -718,12 +840,21 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
 
         con.executemany(
             """INSERT OR IGNORE INTO neighbours
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
-                    e["event_id"], n["event_id"], n["vector_id"], n["token"],
-                    n["doc_id"], n["pub_year"], n["token_idx"],
-                    n["window_id"], n["window_token_pos"], n["score"],
+                    e["event_id"],
+                    n["event_id"],
+                    n.get("depth", 1),
+                    n.get("via_event_id"),
+                    n["vector_id"],
+                    n["token"],
+                    n["doc_id"],
+                    n["pub_year"],
+                    n["token_idx"],
+                    n["window_id"],
+                    n["window_token_pos"],
+                    n["score"],
                 )
                 for e in data["events"]
                 for n in e["neighbours"]
@@ -779,6 +910,7 @@ def run_tier2_service(
     false_positives = None,
     clear           = False,
     diagnostics     = False,
+    depth           = 1,
     emit            = None
 ):
     logger = setEmit(
@@ -799,6 +931,7 @@ def run_tier2_service(
         lookup           = lookup,
         false_positives  = false_positives,
         diagnostics      = diagnostics,
+        depth            = depth,
         emit             = emit
     )
 
@@ -818,6 +951,7 @@ def run_tier2_core(
     false_positives = None,
     diagnostics     = False,
     target_forms    = None,
+    depth           = 1,
     emit            = None,
 ):
     logger.info("[tier2.run_tier2_core] Enter")
@@ -835,6 +969,7 @@ def run_tier2_core(
             concept_name,
             concept,
             diagnostics=diagnostics,
+            depth=depth,
         )
     logger.info("[tier2.run_tier2_core] Leave")
     return output
@@ -849,6 +984,7 @@ def main():
     parser.add_argument( "--false-positives", type=str, default=None, help="Comma-separated list of false positive forms to exclude", )
     parser.add_argument( "--clear", action="store_true", help="Wipe and recreate SQLite database before writing", )
     parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics", )
+    parser.add_argument( "--depth", type=int, default=1, choices=[1, 2], help="Neighbour depth: 1=direct only (default), 2=include neighbours-of-neighbours", )
     args = parser.parse_args()
 
     if args.clear and args.concept:
@@ -925,6 +1061,7 @@ def main():
         false_positives = target_fps,
         clear           = args.clear,
         diagnostics     = args.diagnostics,
+        depth           = args.depth,
         emit            = None
     )
     logger.info(f"[tier2.main] Complete, wrote {CORPUS_TIER2_DB_PATH}")
