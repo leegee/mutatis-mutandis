@@ -1,23 +1,25 @@
-// src/lib/toast/store.ts
+// src/lib/state/toast.store.ts
 
-import { createStore } from "solid-js/store";
+import { createSignal } from "solid-js";
 
-export type Toast = {
+export type ToastType = "info" | "error" | "success";
+
+export interface Toast {
   id: number;
-  type: "success" | "error" | "info";
+  type: ToastType;
   message: string;
-};
-
-const [toasts, setToasts] = createStore<Toast[]>([]);
-let id = 0;
-
-export function pushToast(t: Omit<Toast, "id">) {
-  const toast: Toast = { id: ++id, ...t };
-  setToasts((prev) => [...prev, toast]);
-
-  setTimeout(() => {
-    setToasts((prev) => prev.filter((x) => x.id !== toast.id));
-  }, 4_000);
 }
 
+let _id = 0;
+
+const [toasts, setToasts] = createSignal<Toast[]>([]);
+
 export { toasts };
+
+export function pushToast(toast: Omit<Toast, "id">, durationMs = 8_000) {
+  const id = ++_id;
+  setToasts((prev) => [...prev, { ...toast, id }]);
+  setTimeout(() => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, durationMs);
+}

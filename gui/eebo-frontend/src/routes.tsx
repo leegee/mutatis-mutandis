@@ -1,6 +1,6 @@
 import { lazy } from "solid-js";
-import { JobsApiComponent } from "./components/Jobs";
 
+import { JobsApiComponent } from "./components/Jobs";
 const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
 const NeighbourhoodBrowserGuide = lazy(() => import("./components/NeighbourhoodBrowser/Guide"));
@@ -8,6 +8,7 @@ const DiachronicChart = lazy(() => import("./components/DiachronicChart/Diachron
 const DiachronicChartGuide = lazy(() => import("./components/DiachronicChart/Guide"));
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
+import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
 const ConceptClusters = lazy(() => import("./components/ConceptClusters"));
 
 export const routes = [
@@ -27,11 +28,7 @@ export const routes = [
     icon: "crowdsource",
     label: "Aggregates",
     component: ConceptAggregates,
-    help: () => (
-      <div>
-        Aggregates show grouped concept statistics.
-      </div>
-    )
+    help: () => <ConceptAggregatesGuide />
   },
   {
     path: "/clusters",

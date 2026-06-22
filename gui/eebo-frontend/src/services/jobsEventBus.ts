@@ -15,7 +15,7 @@ class JobsEventBus {
 
     this.source.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log("[JobsEventBus.onmessage]", data)
+      console.log("[JobsEventBus.onmessage]", data.message)
       pushToast({
         type: "info",
         message: data.message ?? event.data,
@@ -24,7 +24,6 @@ class JobsEventBus {
 
     this.source.onerror = (e) => {
       console.error("[JobsEventBus.onerror]", e)
-      this.disconnect();
       pushToast({
         type: "error",
         message: "Event stream disconnected",

@@ -7,7 +7,7 @@ interface Props {
 export const GuidePanel = (props: Props) => {
   return (
     <article class="helpContainer border no-round tiny-padding right surface-container-high large-elevate border shadow"
-      style="z-index:999"
+      style="z-index:99"
     >
       <header class="fixed bottom-margin no-padding">
         <nav class="no-padding no-round  surface">

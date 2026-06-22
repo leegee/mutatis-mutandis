@@ -4,13 +4,15 @@ import { For } from "solid-js";
 import { toasts } from "../state/toast.store";
 import { Portal } from "solid-js/web";
 
+import "./ToastHost.css";
+
 export function ToastHost() {
   return (
     <Portal>
-      <div class="top" style="z-index: 999; position: fixed; width: 40rem; left: -20rem; margin-left: 50%; margin-top: 3rem;">
-        <For each={toasts}>
+      <div class="toast-list">
+        <For each={toasts()}>
           {(t) => (
-            <div class={`snaackbar ${ t.type }-container margin padding  active`}>
+            <div class={`toast toast--${ t.type }`}>
               {t.message}
             </div>
           )}

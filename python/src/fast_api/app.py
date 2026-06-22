@@ -124,7 +124,7 @@ async def all_events():
             queues = list(job_streams.values())
 
             if not queues:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1)
                 continue
 
             # wait for any queue to emit
@@ -132,7 +132,7 @@ async def all_events():
 
             done, pending = await asyncio.wait(
                 tasks,
-                return_when=asyncio.FIRST_COMPLETED,
+                return_when = asyncio.FIRST_COMPLETED,
             )
 
             # cancel unused tasks
@@ -145,3 +145,15 @@ async def all_events():
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 
+
+@app.get("/streamtest/")
+async def stream_test():
+    async def stream():
+        i = 0
+        while True:
+            i += 1
+            event = {"tick": i, "message": f"heartbeat {i}"}
+            yield f"data: {json.dumps(event)}\n\n"
+            await asyncio.sleep(5)
+
+    return StreamingResponse(stream(), media_type="text/event-stream")

@@ -89,11 +89,14 @@ export default function ConceptAggregates() {
       <h2>Concept Aggregates</h2>
 
       <Show when={loading()}>
-        <p>Loading aggregates...</p>
+        <p>
+          Loading aggregates...
+          <progress />
+        </p>
       </Show>
 
       <Show when={error()}>
-        <aside class="error"><h3>Error</h3>{error()}</aside>
+        <aside class="error-container"><h3>Error</h3>{error()}</aside>
       </Show>
 
       <div class="grid">
@@ -116,7 +119,7 @@ export default function ConceptAggregates() {
                     <For each={tokenRows()}>
                       {(row) => (
                         <tr>
-                          <td>{row.rank}</td>
+                          <td>{row.rank + 1}</td>
                           <td><strong>{row.item}</strong></td>
                           <td>{new Intl.NumberFormat().format(row.count)}</td>
                         </tr>
@@ -156,7 +159,7 @@ export default function ConceptAggregates() {
 
                         return (
                           <tr>
-                            <td>{row.rank}</td>
+                            <td>{row.rank + 1}</td>
                             <td><strong>{row.item}</strong></td>
                             <td>{new Intl.NumberFormat().format(row.count)}</td>
                             <td>{avgPerEvent}</td>
