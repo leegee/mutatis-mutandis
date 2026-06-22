@@ -29,7 +29,37 @@ class EeboLogger(logging.LoggerAdapter):
         super().__init__(logger, {})
         self._emit = emit
         self._tag = tag
-        self._context = context or {}
+        self._context = self._normalise_context(context)
+
+    @staticmethod
+    def _normalise_context(context) -> dict:
+        """
+        Coerce whatever was passed as context into a plain dict safe for
+        use with dict.update().
+
+        Callers sometimes pass a string, a list of tuples, or other
+        non-dict values. Rather than requiring every call site to be
+        correct, we absorb the mismatch here and store a JSON-serialisable
+        dict in all cases:
+
+            None                 -> {}
+            dict                 -> dict (used as-is)
+            str                  -> {"context": "<value>"}
+            list/tuple of pairs  -> dict(value)   e.g. [("a", 1)] -> {"a": 1}
+            anything else        -> {"context": str(value)}
+        """
+        if not context:
+            return {}
+        if isinstance(context, dict):
+            return context
+        if isinstance(context, str):
+            return {"context": context}
+        if isinstance(context, (list, tuple)):
+            try:
+                return dict(context)
+            except (TypeError, ValueError):
+                return {"context": json.dumps(context, default=str)}
+        return {"context": str(context)}
 
     def process(self, msg, kwargs):
         if self._tag:
@@ -44,9 +74,6 @@ class EeboLogger(logging.LoggerAdapter):
             except Exception:
                 rendered = str(msg)
 
-            payload = dict(self._context)
-            print(type(self._context))
-            print(repr(self._context))
             payload = dict(self._context)
             payload.update(kwargs.get("extra", {}))
 
@@ -69,4 +96,3 @@ def setEmit(
         tag=tag,
         context=context,
     )
-
