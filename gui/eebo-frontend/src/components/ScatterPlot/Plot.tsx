@@ -15,6 +15,7 @@ import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
 import type { Id, ScreenRect } from "./SelectionPlugin/types";
 import { buildColorMap } from "../../lib/colour";
+import type { ProjectionModeType } from "../../state/controls.store";
 
 interface PlotProps {
   // Data
@@ -22,7 +23,7 @@ interface PlotProps {
   bfsDataset?: BfsDataset;
 
   // Controlled display state — parent owns these
-  projection: "local" | "global";
+  projectionMode: ProjectionModeType;
   colorBy: string;
   colorByFields: string[];
   pointRadius?: number;
@@ -123,7 +124,7 @@ export default function Plot(props: PlotProps) {
   // One ScatterplotLayer per concept dataset so toggling visibility
   // per-concept is trivially available to the parent later.
   const layers = createMemo(() => {
-    const proj = props.projection;
+    const proj = props.projectionMode;
     const colorFn = getColor();
     const radius = props.pointRadius ?? 4;
     const opacity = props.opacity ?? 0.85;
@@ -163,20 +164,26 @@ export default function Plot(props: PlotProps) {
       [[], []] as [ScatterplotLayer<PointData>[], ScatterplotLayer<PointData>[]]
     );
 
-    const bfsLayer = props.bfsDataset && bfsOpacity && props.bfsDataset?.points?.length && props.projection === "global" && new ScatterplotLayer<PointData>({
-      id: "bfs-global",
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-      data: props.bfsDataset.points,
-      getPosition: getBfsPosition,
-      getFillColor: () => [150, 150, 150, bfsOpacity],
-      updateTriggers: {
-        getFillColor: bfsOpacity,
-      },
-      getRadius: radius * 1.5,
-      radiusUnits: "pixels",
-      pickable: true,
-      onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-    });
+    const bfsLayer = props.bfsDataset
+      && bfsOpacity
+      && props.bfsDataset?.points?.length
+      && props.projectionMode === "global"
+      && new ScatterplotLayer<PointData>(
+        {
+          id: "bfs-global",
+          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          data: props.bfsDataset.points,
+          getPosition: getBfsPosition,
+          getFillColor: () => [150, 150, 150, bfsOpacity],
+          updateTriggers: {
+            getFillColor: bfsOpacity,
+          },
+          getRadius: radius * 1.5,
+          radiusUnits: "pixels",
+          pickable: true,
+          onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
+        }
+      );
 
     return [
       ...(bfsLayer ? [bfsLayer] : []),

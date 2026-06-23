@@ -1,6 +1,6 @@
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import type { ViewMode, YearMode } from "../types";
-import { setControls } from "./controls.store";
+import { setControls, type ProjectionModeType } from "./controls.store";
 
 const clampYear = (y: number) =>
     Math.min(CORPUS_END_YEAR, Math.max(CORPUS_START_YEAR, y));
@@ -54,6 +54,12 @@ export const controlsActions = {
         setControls({
             viewMode: mode,
             selectedNode: null,
+        });
+    },
+
+    setProjection(mode: ProjectionModeType) {
+        setControls({
+            projectionMode: mode,
         });
     },
 

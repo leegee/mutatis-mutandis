@@ -7,6 +7,8 @@ import type { ViewMode, YearMode } from "../types";
 
 export const MAX_TOP_N = 1000;
 
+export type ProjectionModeType = "local" | "global"
+
 export type ControlsState = {
   concept: string;
   conceptSelection: string[];
@@ -22,6 +24,7 @@ export type ControlsState = {
   fromYear: number;
   toYear: number;
   showEventLabels: boolean;
+  projectionMode: ProjectionModeType;
 };
 
 const initialControls: ControlsState = {
@@ -39,6 +42,7 @@ const initialControls: ControlsState = {
   fromYear: CORPUS_START_YEAR,
   toYear: CORPUS_END_YEAR,
   showEventLabels: false,
+  projectionMode: 'global',
 };
 
 export const [controls, setControls] = makePersisted(

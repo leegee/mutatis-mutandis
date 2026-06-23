@@ -15,7 +15,6 @@ import TextWindow from "../TextWindow";
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
 export default function ConceptClusterPlot() {
-    const [projection, setProjection] = createSignal<"local" | "global">("global");
     const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("neighbours");
     const [colorBy, setColorBy] = createSignal("pub_year");
     const [bfsOpacity, setBfsOpacity] = createSignal(3);
@@ -118,8 +117,8 @@ export default function ConceptClusterPlot() {
                         </div>
 
                         <div class="field border middle-align">
-                            <select class="small-padding" value={projection()}
-                                onChange={e => setProjection(e.currentTarget.value as "local" | "global")}>
+                            <select class="small-padding" value={controls.projectionMode}
+                                onChange={e => controlsActions.setProjection(e.currentTarget.value as "local" | "global")}>
                                 <option value="global">Global</option>
                                 <option value="local">Local</option>
                             </select>
@@ -171,7 +170,7 @@ export default function ConceptClusterPlot() {
                     <div id="graph_sidebar_row">
                         <div id="under_sidebar" class="max">
                             <Plot
-                                projection={projection()}
+                                projectionMode={controls.projectionMode}
                                 datasets={activeDatasets()}
                                 bfsDataset={bfs()}
                                 bfsOpacity={bfsOpacity()}
