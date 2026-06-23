@@ -93,7 +93,7 @@ export default function ExportSelectedEvents() {
 
         <li onClick={async () => {
           const text = await cluster2groq(exportedData()!.events[0].concept.toLocaleLowerCase(), allText())
-          alert(text.results)
+          alert(text)
         }}>
           <i>new_label</i>
           <span>Label with Groq</span>

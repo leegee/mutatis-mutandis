@@ -1,63 +1,32 @@
-// src/components/Jobs/JobsPanel.tsx
+// JobsPanel.tsx
 
-import { For, Show } from "solid-js";
-import { type Resource } from "solid-js";
+import { Show, type Resource } from "solid-js";
+
+import { jobTypeGuards, type Job } from "./BaseJob.type";
+import TopicJobsTable from "./TopicJobsTable";
+import DefaultJobsTable from "./DefaultJobsTable";
 
 interface JobsPanelProps {
-  jobsList: Resource<any[]>;
+  jobsList: Resource<Job[]>;
 }
 
 export function JobsPanel(props: JobsPanelProps) {
+  const jobs = () => props.jobsList();
+
+  const topicJobs = () => (props.jobsList() ?? []).filter(jobTypeGuards.topic_analysis)
+  const defaultJobs = () => jobs()?.filter(j => j.job_type !== "topic_analysis") ?? [];
+
   return (
     <section class="no-padding no-margin left-margin right-margin"
-      style="overflow-y: auto !important; height: 100vh!important; padding-bottom: 50vh !important;">
-      <progress class="small no-padding no-margin no-space"
-        style={{ opacity: props.jobsList.loading ? 1 : 0 }} />
-      <table class="table padding no-margin">
-        <thead>
-          <tr>
-            <th scope="col">Concept</th>
-            <th scope="col">Type</th>
-            <th scope="col">Status</th>
-            <th scope="col">Stage</th>
-            <th scope="col">Attempts</th>
-            <th scope="col">Created at</th>
-            <th scope="col">Started at</th>
-            <th scope="col">Finished at</th>
-            <th scope="col">Last heartbeat</th>
-          </tr>
-        </thead>
-        <tbody>
-          <Show when={props.jobsList()}>
-            {(jobList) =>
-              <For each={jobList()}>
-                {(job) => (
-                  <>
-                    <tr>
-                      <th scope="row">{job.concept}</th>
-                      <td>{job.type}</td>
-                      <td class={job.error ? 'error-container' : ''}>{job.status}</td>
-                      <td>{job.stage}</td>
-                      <td>{job.attempts}</td>
-                      <td>{job.created_at}</td>
-                      <td>{job.started_at}</td>
-                      <td>{job.finished_at}</td>
-                      <td>{job.last_heartbeat}</td>
-                    </tr>
-                    <Show when={job.error}>
-                      <tr>
-                        <td colspan="9">
-                          <pre class="error-container">{job.error}</pre>
-                        </td>
-                      </tr>
-                    </Show>
-                  </>
-                )}
-              </For>
-            }
-          </Show>
-        </tbody>
-      </table>
+      style="overflow-y: auto; height: 100vh; padding-bottom: 50vh;">
+
+      <Show when={!props.jobsList.loading}>
+        <>
+          <TopicJobsTable jobs={topicJobs()} />
+          <DefaultJobsTable jobs={defaultJobs()} />
+        </>
+      </Show>
+
     </section>
   );
 }

@@ -78,7 +78,7 @@ def claim_next_job():
         LIMIT 1
     )
     AND status='queued'
-    RETURNING job_id, concept, job_type;
+    RETURNING job_id, concept, job_type, payload;
     """
 
     conn = get_jobs_conn()
@@ -87,12 +87,13 @@ def claim_next_job():
     if row is None:
         return None
 
-    job_id, concept, job_type = row
+    job_id, concept, job_type, payload = row
 
     return {
         "job_id": job_id,
         "concept": concept,
         "job_type": job_type,
+        "payload": payload,
     }
 
 

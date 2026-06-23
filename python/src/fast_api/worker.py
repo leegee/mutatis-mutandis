@@ -1,13 +1,16 @@
 import asyncio
+import json
+import nltk
+from bertopic import BERTopic
+from umap import UMAP
+
+from lib.eebo_logging import logger
+from lib.json import sanitize
+
+from fast_api.models import embedder, representation_model, make_umap
 from fast_api.jobs_dao import claim_next_job
 from fast_api.state import init_state, STATE
 from fast_api.runner import run_job
-
-from lib.macberth import get_macberth_embedder
-from bertopic import BERTopic
-from bertopic.representation import KeyBERTInspired
-from lib.eebo_logging import logger
-import nltk
 
 async def worker_loop():
     # TODO temp disabled in dev
@@ -26,23 +29,27 @@ async def worker_loop():
 
         try:
             if job_type == "topic_analysis":
+                payload = job.get("payload", {})
+                if isinstance(payload, str):
+                    payload = json.loads(payload)
                 await asyncio.to_thread(
                     run_topic_analysis_job,
-                    job_id=job["job_id"],
-                    payload=job.get("payload", {})
+                    job_id    = job["job_id"],
+                    payload   = payload
                 )
             else:
                 await asyncio.to_thread(
                     lambda: run_job(
-                        job_id=job["job_id"],
-                        concept=job["concept"],
-                        index=STATE.index,
-                        lookup=STATE.get_tier1_zarr_lookup(),
+                        job_id  = job["job_id"],
+                        concept = job["concept"],
+                        index   = STATE.index,
+                        lookup  = STATE.get_tier1_zarr_lookup(),
                     )
                 )
         except Exception as e:
-            logger.error(f"Worker failed on job {job.get('job_id')}: {e}")
+            logger.exception(f"Worker failed on job {job.get('job_id')}")
             # TODO ? mark job as error in DAO
+            raise
 
 
 def run_topic_analysis_job(job_id: str, payload: dict):
@@ -52,7 +59,7 @@ def run_topic_analysis_job(job_id: str, payload: dict):
 
         documents = payload.get("documents", [])
         concept = payload.get("concept", "unknown")
-        min_topic_size = payload.get("min_topic_size", 5)
+        min_topic_size = payload.get("min_topic_size", 2)
         use_sentence_chunking = payload.get("use_sentence_chunking", False)
 
         if not documents:
@@ -60,6 +67,7 @@ def run_topic_analysis_job(job_id: str, payload: dict):
 
         if use_sentence_chunking:
             nltk.download('punkt', quiet=True)
+            nltk.download("punkt_tab", quiet=True)
             from nltk.tokenize import sent_tokenize
 
             documents = [
@@ -70,41 +78,52 @@ def run_topic_analysis_job(job_id: str, payload: dict):
             ]
             logger.info(f"Chunked into {len(documents)} sentences")
 
-        # Load MacBERTh embedder (reuses your lib)
-        embedder = get_macberth_embedder(pooling="mean")
-
-        # BERTopic setup
-        representation_model = KeyBERTInspired(top_n_words=12)
+        umap_model = make_umap(len(documents))
 
         topic_model = BERTopic(
-            embedding_model=embedder,
-            representation_model=representation_model,
-            min_topic_size=min_topic_size,
-            n_gram_range=(1, 2),
-            calculate_probabilities=True,
+            embedding_model         = embedder,
+            representation_model    = representation_model,
+            umap_model              = umap_model,
+            min_topic_size          = min_topic_size,
+            calculate_probabilities = True,
             verbose=False
         )
 
         # Run the model
         topics, probs = topic_model.fit_transform(documents)
 
+        topic_info = topic_model.get_topic_info()
+        rep_docs = topic_model.get_representative_docs()
+
+        topics_structured = [
+            {
+                "topic_id": row["Topic"],
+                "size": row["Count"],
+                "keywords": topic_model.get_topic(row["Topic"]),
+                "representative_docs": rep_docs.get(row["Topic"], [])
+            }
+            for _, row in topic_info.iterrows()
+            if row["Topic"] != -1
+        ]
+
         result = {
             "status": "done",
             "concept": concept,
             "document_count": len(documents),
-            "topics": topics.tolist(),
+            "topics": topics_structured,
             "probabilities": probs.tolist() if probs is not None else None,
-            "topic_info": topic_model.get_topic_info().to_dict(orient="records"),
-            "representative_docs": topic_model.get_representative_docs(),
-            # Optional: 2D embeddings for semantic map
-            # "embeddings_2d":  _model.umap_model.transform(...).tolist()
         }
 
-        # TODO: Save result via DAO / file / DB
-        # save_topic_result(job_id, result)
+        logger.info(
+            f"Topic analysis completed for job {job_id} — {len(result['topics'])} topics found"
+        )
 
-        logger.info(f"Topic analysis completed for job {job_id} — {len(result['topic_info'])} topics found")
-        return result
+        logger.info(
+            "Topic analysis result:\n%s",
+            json.dumps(sanitize(result), indent=2, ensure_ascii=False)
+        )
+
+        return sanitize(result)
 
     except Exception as e:
         logger.error(f"Topic analysis failed for job {job_id}: {e}")

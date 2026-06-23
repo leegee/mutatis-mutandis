@@ -33,22 +33,27 @@ export default function TopicAnalysisButton(props: Props) {
 
     setIsRunning(true);
 
+    const body = {
+      concept: concept.toLowerCase(),
+      documents: documents,
+      label: `topic-${ concept }-${ new Date().toISOString().slice(0, 10) }`,
+      min_topic_size: 5,
+      use_sentence_chunking: true,
+    };
+    console.log("[topic-button] Sending", JSON.stringify(body, null, 2))
+
     try {
       const result = await postJson<{ job_id: string; status: string }>(
         API.topic.analyse,
-        {
-          concept: concept.toLowerCase(),
-          documents: documents,
-          label: `topic-${ concept }-${ new Date().toISOString().slice(0, 10) }`,
-          min_topic_size: 5,
-          use_sentence_chunking: true,   // good for "liberty"-style fine analysis
-        },
-        `Topic analysis for "${ concept }"`
+        body,
+        `Start topic analysis for "${ concept }"`
       );
+
+      console.log("[topic-button] Result", result)
 
       pushToast({
         type: "success",
-        message: `Topic analysis queued! Job ID: ${ result.job_id }`,
+        message: `Topic analysis queued. Job ID: ${ result.job_id }`,
       });
 
       // window.open(`/jobs/${ result.job_id }`, "_blank");

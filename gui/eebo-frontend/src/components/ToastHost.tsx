@@ -11,13 +11,23 @@ export function ToastHost() {
     <Portal>
       <div class="toast-list">
         <For each={toasts()}>
-          {(t) => (
-            <div class={`toast toast--${ t.type }`}>
+          {(thisToast) => (
+            <div class={`toast toast--${ thisToast.type }`}
+              style={{
+                animation: `toast-out ${ thisToast.durationMs }ms ease-out`,
+                "animation-delay": `${ thisToast.durationMs - 2_000 }ms`
+              }}
+              onAnimationEnd={(e) => {
+                if (e.animationName === "toast-out") {
+                  removeToast(thisToast.id);
+                }
+              }}
+            >
               <nav>
                 <span class="max">
-                  {t.message}
+                  {thisToast.message}
                 </span>
-                <button class="chip round small no-border" onClick={() => removeToast(t.id)}>
+                <button class="chip round small no-border" onClick={() => removeToast(thisToast.id)}>
                   <i>close</i>
                 </button>
               </nav>

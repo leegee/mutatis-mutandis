@@ -39,7 +39,20 @@ export function createGroqMiddleware(): Connect.NextHandleFunction {
     }
 }
 
-export async function analyzeCluster(term: string, text: string) {
+function safeJsonParse(raw: string) {
+    try {
+        return JSON.parse(raw);
+    } catch {
+        // fallback: extract JSON block
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error("No JSON found in model output");
+        return JSON.parse(match[0]);
+    }
+}
+
+export async function analyzeCluster(term: string, textExemplars: string) {
+    const text = textExemplars.substring(0, 1_000) // 12_000
+    console.log("[groq] term =", term, text);
     const completion = await groq.chat.completions.create({
         messages: [
             {
@@ -48,13 +61,37 @@ export async function analyzeCluster(term: string, text: string) {
             },
             {
                 role: "user",
-                content: `Analyze this cluster of text snippets and identify the sense of the use of the word "${ term }":\n\n${ text }\n\nFocus ONLY on the following. Be concise and evidence-based. Do not write general historical essays or broad definitions. Just return the sense defined by context without preamble or postamble. No need to be polite.`,
+                content: `You are labeling a semantic sense of a word in a historical corpus.
+
+TASK:
+Given multiple snippets where the word "${ term }" appears, identify ONE unified sense.
+
+OUTPUT FORMAT (STRICT JSON ONLY):
+{
+  "sense_name": string (max 8 words),
+  "description": string (1-2 sentences)
+}
+
+RULES:
+- Do NOT provide multiple senses
+- Do NOT give general dictionary definitions
+- Do NOT write historical commentary
+- Only describe the sense as used in this cluster
+- Be specific to the evidence
+
+TEXT:
+${ text }`
             },
         ],
         model: "llama-3.3-70b-versatile", // or mixtral, qwen, etc.
         temperature: 0.3,
+        response_format: { type: "json_object" },
     });
 
-    return completion.choices[0]?.message?.content;
+    const raw = completion.choices[0]?.message?.content;
+
+    if (!raw) throw new Error("No model output");
+
+    return safeJsonParse(raw);
 }
 
