@@ -2,11 +2,10 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
-
+from fast_api.jobs_dao import create_job
 from fast_api.models import CreateConceptRequest, CreateConceptAndRunRequest, RunJobRequest
 from fast_api.connections import get_corpus_tier2_conn
 from tier2_0_concept_events import sqlite3_connection as events_sqlite3_connection
-from fast_api.jobs_dao import create_job
 
 # con = events_sqlite3_connection(CORPUS_TIER2_DB_PATH)
 
@@ -129,10 +128,6 @@ def save_concepts(data):
 @router.get("/list")
 async def concepts_list():
     return load_concepts()
-
-
-from fast_api.jobs_dao import create_job
-from uuid import uuid4
 
 
 @router.post("/create_and_run")

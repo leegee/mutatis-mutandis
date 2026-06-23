@@ -3,7 +3,7 @@ import { controls, setControls } from "../state/controls.store";
 import { queryEventById, queryEventsByIds } from "../services/db";
 import { fetchWindowBatch, type TextWindowItem } from "../services/tokenWindowBatchApi";
 import { setWindowCache, getWindow } from "../services/windowCache";
-import { loadJson } from "../lib/loadJson";
+import { loadJson } from "../lib/json";
 import ControlsHeader from "./ControlsHeader";
 import { controlsActions } from "../state/controls.actions";
 

@@ -1,7 +1,8 @@
 // src/components/Jobs/ConceptCreate.tsx
 
 import { createSignal } from "solid-js";
-import { postJson, API } from "../../services/jobsApi";
+import { API } from "../../services/jobsApi";
+import { postJson } from "../../lib/json";
 
 export function ConceptCreate() {
   const [name, setName] = createSignal("");

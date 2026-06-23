@@ -1,4 +1,4 @@
-import { loadJson } from "../../lib/loadJson";
+import { loadJson } from "../../lib/json";
 import { getEventsByIds } from "../../services/db";
 import type { YearMode } from "../../types";
 import type { ConceptDataset } from "./types";

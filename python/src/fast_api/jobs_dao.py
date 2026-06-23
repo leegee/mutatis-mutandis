@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import sqlite3
 
 from fast_api.connections import get_jobs_conn
@@ -11,9 +12,13 @@ def now():
 def init_db():
     conn = get_jobs_conn()
 
+    conn.execute("DROP TABLE IF EXISTS jobs;")
+
     conn.execute("""
     CREATE TABLE IF NOT EXISTS jobs (
         job_id TEXT PRIMARY KEY,
+        job_type TEXT NOT NULL,
+        payload TEXT,
         concept TEXT NOT NULL,
         status TEXT NOT NULL,
         stage TEXT,
@@ -44,11 +49,17 @@ def init_db():
     conn.commit()
 
 
-def create_job(job_id: str, concept: str):
+def create_job(*, job_id: str, concept: str, job_type: str = "default", payload: dict = None):
     get_jobs_conn().execute("""
-        INSERT INTO jobs (job_id, concept, status, created_at)
-        VALUES (?, ?, 'queued', ?)
-    """, (job_id, concept, now()))
+        INSERT INTO jobs (
+            job_id, concept, status,  created_at, job_type, payload
+        )
+        VALUES (
+            ?,      ?,      'queued', ?,        ?,        ?
+        )
+    """, (
+        job_id, concept,              now(),       job_type,  json.dumps(payload) if payload else None
+    ))
     get_jobs_conn().commit()
 
 
@@ -66,7 +77,8 @@ def claim_next_job():
         ORDER BY created_at
         LIMIT 1
     )
-    RETURNING job_id, concept;
+    AND status='queued'
+    RETURNING job_id, concept, job_type;
     """
 
     conn = get_jobs_conn()
@@ -75,11 +87,12 @@ def claim_next_job():
     if row is None:
         return None
 
-    job_id, concept = row
+    job_id, concept, job_type = row
 
     return {
         "job_id": job_id,
         "concept": concept,
+        "job_type": job_type,
     }
 
 

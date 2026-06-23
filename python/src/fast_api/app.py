@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from fast_api.worker import worker_loop
 from fast_api.routes.jobs import router as jobs_router
 from fast_api.routes.concepts import router as concepts_router
+from fast_api.routes.topics import router as topics_router
 from fast_api.jobs_dao import ( init_db, create_job, get_job, list_jobs  )
 from fast_api.event_bus import job_streams
 
@@ -31,7 +32,7 @@ app.add_middleware(
 
 app.include_router(concepts_router)
 app.include_router(jobs_router)
-
+app.include_router(topics_router)
 
 
 @app.on_event("startup")
@@ -157,3 +158,6 @@ async def stream_test():
             await asyncio.sleep(5)
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+

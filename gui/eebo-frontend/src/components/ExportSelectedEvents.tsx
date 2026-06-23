@@ -9,6 +9,7 @@ import {
 } from "../lib/eventExport";
 import { controls } from "../state/controls.store";
 import { cluster2groq } from "../services/groqApi";
+import TopicAnalysisButton from "./TopicAnalysisButton";   // ← add this
 
 export default function ExportSelectedEvents() {
   const [isExporting, setIsExporting] = createSignal(false);
@@ -84,6 +85,11 @@ export default function ExportSelectedEvents() {
             </li>
           </menu>
         </li>
+
+        <TopicAnalysisButton
+          exportedData={exportedData}
+          concept={controls.conceptSelection[0]}
+        />
 
         <li onClick={async () => {
           const text = await cluster2groq(exportedData()!.events[0].concept.toLocaleLowerCase(), allText())

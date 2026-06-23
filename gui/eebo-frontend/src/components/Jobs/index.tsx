@@ -4,8 +4,9 @@ import { createResource, onMount, onCleanup } from "solid-js";
 import { ConceptCreate } from "./ConceptCreate";
 import { Tabs } from "../TabsLayout";
 import { JobsPanel } from "./JobsPanel";
-import { API, getJson } from "../../services/jobsApi";
+import { API } from "../../services/jobsApi";
 import { jobsEventBus } from "../../services/jobsEventBus";
+import { getJson } from "../../lib/json";
 
 export const POLLING_INTERVAL_MS = 10_000;
 
