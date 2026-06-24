@@ -2,7 +2,7 @@ import { onMount, onCleanup, createEffect } from "solid-js";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import type { ConceptDataset } from "./ScatterPlot/types";
+import type { ConceptDataset } from "../ScatterPlot/types";
 
 interface ClusterGeoMapProps {
     clusterDatasets: ConceptDataset[] | undefined;
@@ -14,7 +14,7 @@ export type EventPoint = {
     label: string;
 };
 
-export default function ConceptClusterGeoMap(props: ClusterGeoMapProps) {
+export default function GeoMap(props: ClusterGeoMapProps) {
     let mapContainer: HTMLDivElement | undefined;
     let map: maplibregl.Map | undefined;
 

@@ -9,7 +9,7 @@ const DiachronicChartGuide = lazy(() => import("./components/DiachronicChart/Gui
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
-import ConceptClusterGeoMap from "./components/ConceptClusterGeoMap.tsx";
+import Map from "./components/ConceptClusterGeoMap/GeoMap.tsx";
 import ScatterPlotGuide from "./components/ScatterPlot/ScatterPlotGuide";
 const ConceptClusters = lazy(() => import("./components/ConceptClusters"));
 
@@ -43,7 +43,7 @@ export const routes = [
     path: "/geo",
     icon: "map",
     label: "Cluster Geography",
-    component: ConceptClusterGeoMap,
+    component: Map,
     help: () => { },
   },
   {

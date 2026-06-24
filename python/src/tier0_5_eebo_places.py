@@ -2,143 +2,446 @@
 
 import re
 import unicodedata
+from collections import defaultdict
 
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 
-logger.info("Enter")
 
-REPLACEMENTS = {
-    "aberdene": "Aberdeen",
+# ---------------------------------------------------------------------------
+# VARIANT → CANONICAL MAP (lowercase keys)
+# ---------------------------------------------------------------------------
 
+PLACE_MAP = {
+    "london": "London",
+    "londres": "London",
+    "llundain": "London",
+    "oxford": "Oxford",
+    "oxon": "Oxford",
+    "yorke": "York",
+    "york": "York",
+    "edinburgh": "Edinburgh",
+    "edenburgh": "Edinburgh",
+    "amsterdam": "Amsterdam",
+    "amsterodam": "Amsterdam",
+    "antwerp": "Antwerp",
+    "antwerpen": "Antwerp",
     "bruxelles": "Brussels",
-    "bristoll": "bristol",
+    "brussels": "Brussels",
+    "dublin": "Dublin",
+    "waterford": "Waterford",
+    "leiden": "Leiden",
+    "leyden": "Leiden",
+    "ghent": "Ghent",
+    "gant": "Ghent",
+    "paris": "Paris",
+    "rouen": "Rouen",
+    "douai": "Douai",
+    "saint omer": "Saint-Omer",
+    "hamburgh": "Hamburg",
+    "hamburg": "Hamburg",
+    "rotterdam":"Rotterdam",
+    "roterdame":"Rotterdam",
+    "rhydychen": "Oxford",
+    "norwich": "Norwich",
+    "nottingham": "Nottingham",
 
     # Cambridge
-    "cantabrigiae nov. ang.": "Cambridge",
+    "cambridge": "Cambridge",
+    "cantabrigi": "Cambridge",
+    "cantabrigiae": "Cambridge",
+    "cambridg": "Cambridge",
 
-    "delph": "Delft",
+    # Boston
+    "boston": "Boston, Mass.",
 
+    # Aberdeen
+    "aberdeen": "Aberdeen",
+    "aberdene": "Aberdeen",
+
+    # Edinburgh
+    "edinburg": "Edinburgh",
+    "edinbvrgh": "Edinburgh",
+    "edenborough": "Edinburgh",
     "edenbrough": "Edinburgh",
+    "edenburg": "Edinburgh",
+    "edenburgi": "Edinburgh",
+    "edynburgh": "Edinburgh",
 
     # Hague
-    "a la haye": "The Hague",
-    "hag├": "The Hague",
     "hague": "The Hague",
+    "hagh": "The Hague",
+    "haghe": "The Hague",
+    "hage": "The Hague",
+    "gravenhagh": "The Hague",
 
-    # London
-    "london": "London",
+    # Waterford
+    "vvaterford": "Waterford",
+
+    # Dublin
+    "dvblin": "Dublin",
+    "dubdin": "Dublin",
+
+    # Leiden
+    "leyden": "Leiden",
+
+    # Delft
+    "delft": "Delft",
+    "delf": "Delft",
+    "delff": "Delft",
+    "delph": "Delft",
+
+    # Brussels
+    "bruxells": "Brussels",
+
+    # Middelburg
+    "middelburgh": "Middelburg",
+    "middleburg": "Middelburg",
+
+    # Antwerp
+    "anwerp": "Antwerp",
+    "antwarp": "Antwerp",
+
+    # Ghent
+    "ghent": "Ghent",
+
+    # Douai
+    "doway": "Douai",
+    "dovvay": "Douai",
+
+    # Aberdeen
+    "aberderdene": "Aberdeen",   # if present elsewhere
+    "abderdene": "Aberdeen",
+    "aberden": "Aberdeen",
+    "aberdoni": "Aberdeen",
+    "aberdoniis": "Aberdeen",
+    "abredeis": "Aberdeen",
+    "abredoni": "Aberdeen",
+
+    # Amsterdam
+    "amstelodami": "Amsterdam",
+    "amstelredam": "Amsterdam",
+    "amsterledam": "Amsterdam",
+    "amstersdam": "Amsterdam",
+
+    # Antwerp
+    "antworp": "Antwerp",
+
+    # Saint-Omer
+    "audomari": "Saint-Omer",
+    "omer": "Saint-Omer",
+    "omers": "Saint-Omer",
+
+    # Beauvais
+    "beauvais": "Beauvais",
+
+    # Breda
+    "breda": "Breda",
+
+    # Bristol
+    "bristol": "Bristol",
+    "bristoll": "Bristol",
+
+    # Bruges
+    "bruges": "Bruges",
+
+    # Caen
+    "caen": "Caen",
+
+    # Colchester
+    "colechester": "Colchester",
+
+    # Cologne
+    "cologne": "Cologne",
+
+    # Constantinople
+    "constantinople": "Constantinople",
+
+    # Cork
+    "corck": "Cork",
+    "corcke": "Cork",
+    "cork": "Cork",
+    "corke": "Cork",
+
+    # Dordrecht
+    "dordrecht": "Dordrecht",
+    "dort": "Dordrecht",
+
+    # Douai
+    "douay": "Douai",
+
+    # Durham
+    "durham": "Durham",
+
+    # Edinburgh
+    "edinbourg": "Edinburgh",
+    "edinburh": "Edinburgh",
+    "edingburgh": "Edinburgh",
+
+    # Exeter
+    "exeter": "Exeter",
+    "exon": "Exeter",
+
+    # Falmouth
+    "falmouth": "Falmouth",
+
+    # Franckfort
+    "franckfort": "Frankfurt",
+
+    # Geneva
+    "genevah": "Geneva",
+
+    # Glasgow
+    "glasgow": "Glasgow",
+    "glasgu": "Glasgow",
+
+    # Haarlem
+    "haarlem": "Haarlem",
+
+    # Hague
+    "hag": "The Hague",
+    "haye": "The Hague",
+
+    # Hamburg
+    "hamborough": "Hamburg",
+
+    # Ipswich
+    "ipswich": "Ipswich",
+
+    # Kilkenny
+    "kilkenny": "Kilkenny",
+
+    # Leith
+    "leith": "Leith",
+
+    # Liège
+    "liege": "Liège",
+    "lvyck": "Liège",
+
+    # Lille
+    "lille": "Lille",
+
+    # London variants
+    "llyndain": "London",
+    "lodnon": "London",
+    "lodon": "London",
+    "lond": "London",
+    "londdn": "London",
+    "londen": "London",
+    "londgn": "London",
+    "londinensis": "London",
     "londini": "London",
-    "lond.": "London",
-    "lonon": "London",
+    "londn": "London",
     "londnon": "London",
-    "llundain": "London",
-    "a londres": "London",
-    "gehenna": "London",
+    "londod": "London",
+    "londou": "London",
+    "londre": "London",
+    "lonkon": "London",
+    "lonndo": "London",
+    "lonndon": "London",
+    "lonnon": "London",
+    "lonon": "London",
+    "lonpuo": "London",
+    "loudon": "London",
+    "loydon": "London",
+    "ludd": "London",
+    "lundain": "London",
+    "ondon": "London",
+
+    # Loreto
+    "loreto": "Loreto",
+
+    # Louvain / Leuven
+    "louain": "Leuven",
+    "louanii": "Leuven",
+    "louvain": "Leuven",
+    "lovain": "Leuven",
+
+    # Newcastle
+    "newcastle": "Newcastle",
 
     # Oxford
-    "oxon.": "Oxford",
+    "oxen": "Oxford",   # OCR variant
 
-    # Saint Omer
-    "s. omers": "Saint-Omer",
+    # Reading
+    "reading": "Reading",
 
-    # York
-    "yorke": "York",
+    # Rochester
+    "rochester": "Rochester",
 
+    # Rouen
+    "roan": "Rouen",
+    "rouan": "Rouen",
+
+    # Salisbury
+    "salisbury": "Salisbury",
+
+    # Savoy
+    "savoy": "Savoy, London",
+
+    # Shrewsbury
+    "shrewsbury": "Shrewsbury",
+
+    # Swarthmore
+    "swarthmore": "Swarthmore",
+
+    # Troyes
+    "troyes": "Troyes",
+
+    # Waterford
+    "warerford": "Waterford",
+
+    # Westminster
+    "westminster": "Westminster",
+
+    # Worcester
+    "worcester": "Worcester",
+
+    "aire": "Aire-sur-la-Lys",      # often linked with Saint-Omer printing
+    "buckden": "Buckden",
+    "chelmsford": "Chelmsford",
+    "chester": "Chester",
+    "cirencester": "Cirencester",
+    "finsbury": "Finsbury, London",
+    "gateshead": "Gateshead",
+    "pomadie": "Pomadie",           # check source; may be a pseudonymous imprint
+    "sicilia": "Sicily",
+    "smithfield": "Smithfield, London",
+    "wakefield": "Wakefield",
+
+    "gateside": "Gateside, Scotland",
+    "carolopoli": "Charleville, France",
+    "gottenberge": "Gothenburg, Denmark",
+    "edinb": "Edinburgh",
+    "edin": "Edinburgh",
+    "england": "england",
+    "scotland": "Scotland",
+    "ireland": "Ireland",
+    "europ": "Europe",
+    "europe": "Europe",
+    "franca": "France",
+    "france": "France",
+    "holland": "Netherlands",
+    "netherlands": "Netherlands",
+    "lon": "London",
+    "abroad": "Sine Loco",
+    "s.l.": "Sine Loco",
+    "[s.l.": "Sine Loco",
+    "[s.l": "Sine Loco",
+    "[s.l,": "Sine Loco",
+    "s. l.": "Sine Loco",
+    "[S.1.": "Sine Loco",
+    "n.p.": "Sine Loco",
+    "n. p.": "Sine Loco",
+    "doüay": "Douai, France",
+    "roüen": "Rouen",
+    "lo[ndon": "London",
+    "L[ondo]n": "London",
+    "[liège?": "Liège",
+    "[lo]ndon": "London",
+    "nod-nol.": "Nödinge-Nol, Västra Götaland",
 }
 
 
-LEADING_NOISE = re.compile(
-    r"^[\s\[\(]*"
-    r"(?:printed\s+(?:by\s+[^,]+,\s*)?at\s+|at\s+|in\s+)?"
-    r"[\s\[\(\.…*]*",
-    re.I
-)
+def norm_key(s: str) -> str:
+    s = unicodedata.normalize("NFKC", s)
+    s = s.lower()
 
-TRAILING_NOISE = re.compile(
-    r"[\s\]\)?\[,;:\.?!\"\'—–\-]+$"
-)
+    # remove combining diacritics (Doüay → douay, roüen → rouen)
+    s = "".join(c for c in s if not unicodedata.combining(c))
 
-DATE_PREFIX = re.compile(
-    r"^(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z.]*\s+)?"
-    r"\d{1,2}[.,]?\s*\d{4}[.,]?\s*",
-    re.I
-)
-
-UNCERTAINTY = re.compile(r"\?")
-
-MULTIPLE_PLACE_SEP = re.compile(r"\s+and\s+", re.I)
-
-
-def clean_place(place: str | None) -> str | None:
-    if not place:
-        return None
-
-    s = unicodedata.normalize("NFKC", place).strip()
-
-    # Expand editorial corrections [i.e. X] before anything else
-    s = re.sub(r"\[i\.e\.\s*([^\]]+)\]", r"\1", s, flags=re.I)
-    s = re.sub(r"\[sic\]", "", s, flags=re.I)
-
-    # Drop clearly damaged/partial tokens like "Lon[don pri]nted at"
-    # (bracket content that contains lowercase letters mid-word — editorial damage)
-    s = re.sub(r"\[[^\]]{1,20}\]", "", s)  # remove short bracketed fragments
-
-    # Strip "re-printed at X" / "printed for X" tails
-    s = re.sub(r",?\s*(re-?\s*)?printed\b.*", "", s, flags=re.I)
-    s = re.sub(r",?\s*printed\s+for\b.*", "", s, flags=re.I)
-
-    # Strip date prefix  e.g. "March 11. 1643."
-    s = DATE_PREFIX.sub("", s)
-
-    # Strip leading noise: brackets, "In ", "At ", "Printed at "
-    s = LEADING_NOISE.sub("", s)
-
-    # Strip trailing noise: colons, brackets, commas, punctuation
-    s = TRAILING_NOISE.sub("", s)
-    s = re.sub(r"[\[\s?i\.?e\.?\s+.+$]", "", s)
-
-    # Normalize internal whitespace
+    # normalize punctuation variants
+    s = re.sub(r"[\[\]().,:;?']", "", s)
     s = re.sub(r"\s+", " ", s).strip()
 
-    if not s:
+    return s
+
+
+CLEAN_PLACE_MAP = {
+    norm_key(k): v
+    for k, v in PLACE_MAP.items()
+}
+
+
+QUALIFIERS = {
+    "england",
+    "scotland",
+    "ireland",
+    "netherlands",
+    "holland",
+    "mass",
+    "massachusetts",
+    "yorkshire",
+    "oxfordshire",
+    "cambridgeshire",
+}
+
+
+
+# dominant place suppression when multiple found
+LOW_PRIORITY = {"london"}
+
+
+UNKNOWN = defaultdict(str)
+
+
+# ---------------------------------------------------------------------------
+# NORMALISER
+# ---------------------------------------------------------------------------
+
+def normalize(raw: str | None):
+    if not raw:
         return None
 
-    # Null-place markers
-    token_check = re.sub(r"[^a-z]", "", s.lower())
-    if token_check in ("sl", "sn", "sp"):
-        return token_check
+    s = unicodedata.normalize("NFKC", raw).lower()
 
-    s_clean = UNCERTAINTY.sub("", token_check).strip()
+    found = []
 
-    lower = s_clean.lower()
-    lower = TRAILING_NOISE.sub("", lower)
-    if lower in REPLACEMENTS:
-        return REPLACEMENTS[lower]
+    # -------------------------------------------------------
+    # pure variant scan (your requested approach)
+    # -------------------------------------------------------
+    key = norm_key(s)
 
-    parts = MULTIPLE_PLACE_SEP.split(lower)
-    lower = parts[0].strip()
+    for variant, canonical in CLEAN_PLACE_MAP.items():
+        if variant in key:
+            found.append(canonical)
 
-    if lower in REPLACEMENTS:
-        return REPLACEMENTS[lower]
+    # dedupe preserving order
+    found = list(dict.fromkeys(found))
 
-    logger.info(f" <<{place}>> ---> <<{lower}>>")
+    # -------------------------------------------------------
+    # if multiple, drop London (or other low-priority)
+    # -------------------------------------------------------
+    if len(found) > 1:
+        found = [
+            f for f in found
+            if f.lower() not in LOW_PRIORITY
+        ] or found
 
-    # Title-case if fully lowercase (artifact of noisy input)
-    if s_clean == s_clean.lower():
-        s_clean = s_clean.title()
+    # -------------------------------------------------------
+    # logging unknowns (only for iteration)
+    # -------------------------------------------------------
+    if not found:
+        for token in re.findall(r"[a-z]+", s):
+            if token not in CLEAN_PLACE_MAP:
+                UNKNOWN[token] += f"{token} "
+        return None
 
-    return s_clean if s_clean else None
+    return found
+
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
 
 def main():
     conn = get_connection(application_name="normalize_places")
 
     with conn.cursor() as cur:
         cur.execute("""
-            DROP TABLE IF EXISTS place_normalization;
-            CREATE TABLE place_normalization (
-                raw_place text PRIMARY KEY,
-                normalized_place text
+            CREATE TABLE IF NOT EXISTS place_normalization (
+                raw_place TEXT PRIMARY KEY,
+                normalized_places TEXT[]
             )
         """)
 
@@ -150,65 +453,68 @@ def main():
         """)
 
         rows = cur.fetchall()
+        logger.info("Processing %d rows", len(rows))
 
-        for (raw_place,) in rows:
-            normalized = clean_place(raw_place)
-            logger.info(f"{raw_place} \t-->\t\t {normalized}")
+        total = 0
+        matched = 0
+        unmatched = []
+
+        for (raw,) in rows:
+            total += 1
+
+            norm = normalize(raw)
 
             cur.execute("""
-                INSERT INTO place_normalization
-                    (raw_place, normalized_place)
+                INSERT INTO place_normalization (raw_place, normalized_places)
                 VALUES (%s, %s)
                 ON CONFLICT (raw_place)
-                DO UPDATE
-                SET normalized_place = EXCLUDED.normalized_place
-            """, (raw_place, normalized))
+                DO UPDATE SET normalized_places = EXCLUDED.normalized_places
+            """, (raw, norm))
+
+            if norm:
+                matched += 1
+            else:
+                unmatched.append(raw)
+
+            logger.info("%s -> %s", raw, norm)
 
     conn.commit()
 
-    logger.info(f"Processed {len(rows):,} distinct place strings")
+    # -------------------------------------------------------
+    # coverage
+    # -------------------------------------------------------
 
-    total = 0
-    mapped = 0
-    unresolved = []
+    logger.info("")
+    logger.info("=== COVERAGE ===")
+    logger.info("Total rows:     %d", total)
+    logger.info("Matched rows:   %d", matched)
+    logger.info("Unmatched rows: %d", len(unmatched))
+    logger.info("Coverage:       %.1f%%", 100.0 * matched / total)
 
-    conn = get_connection(application_name="normalize_places")
+    # -------------------------------------------------------
+    # unmatched examples
+    # -------------------------------------------------------
 
-    with conn.cursor() as cur:
-        for (raw_place,) in rows:
-            total += 1
+    logger.info("")
+    logger.info("=== UNMATCHED ROWS ===")
 
-            normalized = clean_place(raw_place)
+    for raw in unmatched[:200]:
+        logger.info(raw)
 
-            cur.execute("""
-                INSERT INTO place_normalization
-                    (raw_place, normalized_place)
-                VALUES (%s, %s)
-                ON CONFLICT (raw_place)
-                DO UPDATE
-                SET normalized_place = EXCLUDED.normalized_place
-            """, (raw_place, normalized))
+    # -------------------------------------------------------
+    # token diagnostics
+    # -------------------------------------------------------
 
-            if normalized is None:
-                unresolved.append(raw_place)
-            elif normalized != raw_place:
-                mapped += 1
+    # logger.info("")
+    # logger.info("=== UNKNOWN TOKENS ===")
 
-        conn.commit()
+    # for token, values in sorted(
+    #     UNKNOWN.items(),
+    #     key=lambda x: len(x[1]),
+    #     reverse=True,
+    # )[:200]:
+    #     logger.info("%s -> %s", token, " ".join(values))
 
-    # print()
-    # print("=== Place normalization summary ===")
-    # print(f"Distinct places:     {total:,}")
-    # print(f"Mapped/normalized:   {mapped:,}")
-    # print(f"Unresolved:          {len(unresolved):,}")
-    # print()
-
-    # if unresolved:
-    #     print("Top unresolved values:")
-    #     for place in sorted(unresolved)[:100]:
-    #         print(f"  {place}")
-
-    # select distinct(normalized_place) from place_normalization;
 
 if __name__ == "__main__":
     main()
