@@ -8,10 +8,14 @@ import type { ViewMode, YearMode } from "../types";
 export const MAX_TOP_N = 1000;
 
 export type ProjectionModeType = "local" | "global"
+export type ScatterPlotLayerType = "concept" | "neighbours" | "clusters"
+export type ColorScatterByType = 'pub_year' | "cluster_label" | "doc_id"
 
 export type ControlsState = {
   concept: string;
   conceptSelection: string[];
+  scatterPlotLayerMode: ScatterPlotLayerType;
+  colorScatterBy: ColorScatterByType;
   viewMode: ViewMode;
   maxHubs: number;
   topN: number;
@@ -43,6 +47,8 @@ const initialControls: ControlsState = {
   toYear: CORPUS_END_YEAR,
   showEventLabels: false,
   projectionMode: 'global',
+  scatterPlotLayerMode: 'neighbours',
+  colorScatterBy: 'pub_year',
 };
 
 export const [controls, setControls] = makePersisted(

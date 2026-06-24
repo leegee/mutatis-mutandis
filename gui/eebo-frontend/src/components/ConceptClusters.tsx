@@ -55,6 +55,7 @@ export default function ConceptClusters() {
     const [selectedCluster, setSelectedCluster] = createSignal<string | null>(null);
     const [clusterLoading, setClusterLoading] = createSignal(false);
     const [clusterError, setClusterError] = createSignal<string | null>(null);
+    const [showDominantOnly, setShowDominantOnly] = createSignal(false);
 
     const [exporting, setExporting] = createSignal(false);
     const [exportError, setExportError] = createSignal<string | null>(null);
@@ -110,6 +111,31 @@ export default function ConceptClusters() {
             topToken: agg.top_tokens[0]?.[0] ?? "—",
         }));
     };
+
+    const visibleClusterSummary = createMemo(() => {
+        const summary = clusterSummary();
+
+        if (!showDominantOnly() || summary.length === 0) {
+            return summary;
+        }
+
+        const largest = Math.max(...summary.map(c => c.n));
+        const cutoff = largest * 0.10;
+
+        return summary.filter(c => c.n > cutoff);
+    });
+
+    createEffect(() => {
+        const visible = visibleClusterSummary();
+
+        if (!visible.length) return;
+
+        const current = selectedCluster();
+
+        if (!visible.some(c => c.cid === current)) {
+            setSelectedCluster(visible[0].cid);
+        }
+    });
 
     const selectedAgg = () => {
         const f = clusterFile();
@@ -293,18 +319,45 @@ export default function ConceptClusters() {
         <article class="concept-clusters">
             <ControlsHeader />
 
-            <h2>Cluster Explorer</h2>
+            <nav>
+                <h2 class="max">Cluster Explorer</h2>
+                {/* Export controls */}
+                <button class="border small" disabled={exporting()} onClick={handleCopyJson} >
+                    <i>content_copy</i>
+                    <span>
+                        {copyStatus() === "copied"
+                            ? "Copied!"
+                            : copyStatus() === "failed"
+                                ? "Copy failed"
+                                : "Copy JSON"}
+                    </span>
+                </button>
+
+                <button class="border small" disabled={exporting()} onClick={handleDownloadJson} >
+                    <i>download</i>
+                    <span>Download JSON</span>
+                </button>
+
+                <Show when={exporting()}>
+                    <progress class="circle small" />
+                </Show>
+
+                <Show when={exportError()}>
+                    <span class="error-container">{exportError()}</span>
+                </Show>
+            </nav>
 
             <Show when={!controls.concept}>
                 <p>Select a concept to view its clusters.</p>
             </Show>
 
             <Show when={clusterLoading()}>
-                <p>Loading clusters…</p>
+                <p>Loading clusters</p>
+                <progress />
             </Show>
 
             <Show when={clusterError()}>
-                <aside class="error"><h3>Error</h3>{clusterError()}</aside>
+                <aside class="error-container"><h3>Error</h3>{clusterError()}</aside>
             </Show>
 
             <Show when={clusterFile()}>
@@ -315,51 +368,33 @@ export default function ConceptClusters() {
                     · generated {clusterFile()!.generated_at.slice(0, 10)}
                 </p>
 
-                {/* Export controls */}
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:1rem;">
-                    <button
-                        class="border small"
-                        disabled={exporting()}
-                        onClick={handleCopyJson}
-                    >
-                        <i>content_copy</i>
-                        <span>
-                            {copyStatus() === "copied"
-                                ? "Copied!"
-                                : copyStatus() === "failed"
-                                    ? "Copy failed"
-                                    : "Copy JSON"}
-                        </span>
-                    </button>
+                <nav class="scroll bottom-padding">
+                    <label class="no-padding">
+                        <div class="field middle-align small">
+                            <nav>
+                                <div class="max">
+                                    <p>Dominant clusters only</p>
+                                </div>
+                                <label class="switch">
+                                    <input
+                                        type="checkbox"
+                                        checked={showDominantOnly()}
+                                        onInput={(e) => setShowDominantOnly(e.currentTarget.checked)}
+                                    />
 
-                    <button
-                        class="border small"
-                        disabled={exporting()}
-                        onClick={handleDownloadJson}
-                    >
-                        <i>download</i>
-                        <span>Download JSON</span>
-                    </button>
+                                    <span></span>
+                                </label>
+                            </nav>
+                        </div>
+                    </label>
 
-                    <Show when={exporting()}>
-                        <progress class="circle small" />
-                    </Show>
-
-                    <Show when={exportError()}>
-                        <span class="error-text">{exportError()}</span>
-                    </Show>
-                </div>
-
-                {/* Cluster selector pills */}
-                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:1.5rem;">
-                    <For each={clusterSummary()}>
+                    <For each={visibleClusterSummary()}>
                         {(row, i) => (
                             <button class="chip"
                                 onClick={() => setSelectedCluster(row.cid)}
                                 style={{
-                                    "background": selectedCluster() === row.cid
-                                        ? CLUSTER_COLORS[i() % CLUSTER_COLORS.length]
-                                        : "var(--color-background-secondary)",
+                                    "background": selectedCluster() === row.cid ? CLUSTER_COLORS[i() % CLUSTER_COLORS.length] : "var(--color-background-secondary)",
+                                    "border": `1pt solid ${ CLUSTER_COLORS[i() % CLUSTER_COLORS.length] }`,
                                     "color": selectedCluster() === row.cid
                                         ? "#fff"
                                         : "var(--color-text-primary)",
@@ -372,16 +407,16 @@ export default function ConceptClusters() {
                             </button>
                         )}
                     </For>
-                </div>
+                </nav>
 
                 {/* Selected cluster detail */}
                 <Show when={selectedAgg()}>
                     <div class="grid">
                         <div class="s3">
                             <section>
-                                <h3>Top tokens</h3>
                                 <div class="large-height scroll surface">
                                     <table class="stripes no-border scroll max">
+                                        <caption>Top tokens</caption>
                                         <thead class="fixed">
                                             <tr><th>Rank</th><th>Token</th><th>Count</th></tr>
                                         </thead>
@@ -403,12 +438,12 @@ export default function ConceptClusters() {
 
                         <div class="s9">
                             <section class="scroll-parent" style={{ height: '70vh' }}>
-                                <h3>Top documents</h3>
                                 <Show when={clusterEvents.loading}>
                                     <progress />
                                 </Show>
                                 <div class="surface" style={{ overflow: "auto" }}>
                                     <table class="stripes no-border scroll max">
+                                        <caption>Top documents</caption>
                                         <thead class="fixed">
                                             <tr><th>Rank</th><th>Document ID</th><th>Count</th></tr>
                                         </thead>

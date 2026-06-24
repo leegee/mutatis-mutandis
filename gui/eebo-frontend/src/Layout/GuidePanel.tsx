@@ -14,7 +14,7 @@ export const GuidePanel = (props: Props) => {
   onCleanup(() => window.document.body.removeEventListener('keydown', handleKeyDown))
 
   return (
-    <article class="helpContainer border no-round tiny-padding right surface-container-high large-elevate border shadow"
+    <article class="helpContainer border no-round no-padding right surface-container-high large-elevate border shadow"
       style="z-index:99"
       onKeyDown={handleKeyDown}
     >
@@ -27,7 +27,9 @@ export const GuidePanel = (props: Props) => {
           <h2 class="max no-padding noo-margin">{props.currentRoute().label}</h2>
         </nav>
       </header>
-      {props.currentRoute().help()}
+      <div class="extra-padding left-padding right-padding">
+        {props.currentRoute().help()}
+      </div>
     </article>
   );
 };

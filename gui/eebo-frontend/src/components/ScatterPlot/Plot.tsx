@@ -4,12 +4,12 @@
 
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { Deck, OrthographicView } from "@deck.gl/core";
-import { ScatterplotLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./style.css";
-import type { BfsDataset, ConceptDataset, PointData, ViewBounds } from "./types";
+import type { BfsDataset, ConceptDataset, LabelPoint, LabelDataset, PointData, ViewBounds } from "./types";
 import { CanvasDragPlugin } from "./SelectionPlugin/CanvasDragPlugin";
 import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
@@ -21,6 +21,7 @@ interface PlotProps {
   // Data
   datasets: ConceptDataset[];
   bfsDataset?: BfsDataset;
+  labelDataset?: LabelDataset;
 
   // Controlled display state — parent owns these
   projectionMode: ProjectionModeType;
@@ -48,6 +49,7 @@ const INITIAL_VIEW_STATE: OrthographicViewState = {
   minZoom: 8,
   maxZoom: 20,
 };
+
 
 function getPosition(
   p: PointData,
@@ -78,6 +80,7 @@ export default function Plot(props: PlotProps) {
     )
   );
 
+
   // Build colour map whenever the field or data changes.
   const colorMap = createMemo(() => {
     const field = props.colorBy;
@@ -85,7 +88,9 @@ export default function Plot(props: PlotProps) {
     return buildColorMap(values);
   });
 
+
   const selected = createMemo(() => props.selected ?? new Set<Id>());
+
 
   const getColor = createMemo(() => {
     const field = props.colorBy;
@@ -119,6 +124,26 @@ export default function Plot(props: PlotProps) {
       return base as [number, number, number, number];
     }
   });
+
+
+  const labelLayer = props.labelDataset?.labels.length
+    ? new TextLayer<LabelPoint>({
+      id: "labels",
+      data: props.labelDataset.labels,
+
+      getPosition: d =>
+        props.projectionMode === "global"
+          ? [d.gnx ?? d.nx, d.gny ?? d.ny, 0]
+          : [d.nx, d.ny, 0],
+
+      getText: d => d.text,
+      getSize: 16,
+      sizeUnits: "pixels",
+      getColor: [222, 222, 222, 222],
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+    })
+    : null;
 
 
   // One ScatterplotLayer per concept dataset so toggling visibility
@@ -189,6 +214,7 @@ export default function Plot(props: PlotProps) {
       ...(bfsLayer ? [bfsLayer] : []),
       ...neighbourLayers,
       ...conceptLayers,
+      ...(labelLayer ? [labelLayer] : []),
     ];
   });
 

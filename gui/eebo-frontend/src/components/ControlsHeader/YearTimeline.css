@@ -22,3 +22,12 @@
     }
 
 }
+
+#giant-year-range {
+    font-size: 48pt;
+    font-weight: 900;
+    position: fixed;
+    bottom: 12pt;
+    right: 12pt;
+    opacity: 0.3;
+}

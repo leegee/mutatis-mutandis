@@ -1,20 +1,32 @@
 import type { Connect } from "vite";
-import 'dotenv/config';
-import Groq from 'groq-sdk';
+import "dotenv/config";
+import Groq from "groq-sdk";
 
 import { text, serverError } from "../lib/middleware";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+/**
+ * Request shape coming from frontend
+ */
+export interface Cluster2GroqRequest {
+    concept: string;
+    points: {
+        id: string;
+        x: number;
+        y: number;
+    }[];
+    rawText?: string;
+}
+
 export function createGroqMiddleware(): Connect.NextHandleFunction {
     return async (req, res, next) => {
-        // console.debug("[api/grok] enter");
         if (!req.url) return next();
 
-        const match = req.url.match(/^\/api\/groq/);
-        if (!match) return next();
+        if (!req.url.startsWith("/api/groq")) return next();
 
         try {
+            // Parse request body
             const body = await new Promise<string>((resolve, reject) => {
                 let data = "";
                 req.on("data", (c) => (data += c));
@@ -22,76 +34,99 @@ export function createGroqMiddleware(): Connect.NextHandleFunction {
                 req.on("error", reject);
             });
 
-            const parsed = JSON.parse(body);
+            const parsed = JSON.parse(body) as Cluster2GroqRequest;
 
-            if (!parsed || !parsed.term || !parsed.text) {
-                throw new TypeError(`Expected {term: string, text: string} not ${ body }`);
+            // Validate request
+            if (
+                !parsed ||
+                typeof parsed.concept !== "string" ||
+                !Array.isArray(parsed.points)
+            ) {
+                throw new TypeError(
+                    `Expected { concept: string, points: {id,x,y}[] } but got: ${ body }`
+                );
             }
 
-            const results = await analyzeCluster(parsed.term, parsed.text);
-            // console.log(`[api/grok] returning ${ results }`);
+            const results = await analyzeCluster(parsed);
 
-            return text(res, 200, JSON.stringify({ results }));
-        }
-        catch (error) {
+            return text(res, 200, JSON.stringify(results));
+        } catch (error) {
             return serverError(res, error);
         }
-    }
+    };
 }
 
+/**
+ * Safe JSON parsing fallback for LLM output
+ */
 function safeJsonParse(raw: string) {
     try {
         return JSON.parse(raw);
     } catch {
-        // fallback: extract JSON block
         const match = raw.match(/\{[\s\S]*\}/);
         if (!match) throw new Error("No JSON found in model output");
         return JSON.parse(match[0]);
     }
 }
 
-export async function analyzeCluster(term: string, textExemplars: string) {
-    const text = textExemplars.substring(0, 1_000) // 12_000
-    console.log("[groq] term =", term, text);
+/**
+ * Core Groq semantic cluster labeling
+ */
+export async function analyzeCluster(input: Cluster2GroqRequest) {
+    const { concept, points, rawText } = input;
+
+    // Keep lightweight context for LLM
+    const sampleText = (rawText ?? "").substring(0, 1000);
+
+    const clusterSummary = `
+Concept: ${ concept }
+Point count: ${ points.length }
+
+Sample text:
+${ sampleText }
+`;
+
     const completion = await groq.chat.completions.create({
         messages: [
             {
                 role: "system",
-                content: "You are an expert in historical English semantics and cover the whole range of Early English Books Online.",
+                content:
+                    "You are an expert in historical English semantics, specializing in Early English Books Online (EEBO). You label semantic usage clusters based on contextual evidence.",
             },
             {
                 role: "user",
-                content: `You are labeling a semantic sense of a word in a historical corpus.
-
+                content: `
 TASK:
-Given multiple snippets where the word "${ term }" appears, identify ONE unified sense.
+Given a cluster of occurrences of a word, identify ONE unified semantic sense.
+
+CLUSTER DATA:
+${ clusterSummary }
+
+RULES:
+- Only ONE sense
+- Do NOT output multiple meanings
+- Do NOT give dictionary definitions
+- Do NOT provide historical commentary
+- Focus only on usage in this cluster
 
 OUTPUT FORMAT (STRICT JSON ONLY):
 {
   "sense_name": string (max 8 words),
-  "description": string (1-2 sentences)
+  "description": string (1–2 sentences)
 }
-
-RULES:
-- Do NOT provide multiple senses
-- Do NOT give general dictionary definitions
-- Do NOT write historical commentary
-- Only describe the sense as used in this cluster
-- Be specific to the evidence
-
-TEXT:
-${ text }`
+`,
             },
         ],
-        model: "llama-3.3-70b-versatile", // or mixtral, qwen, etc.
+        model: "llama-3.3-70b-versatile",
         temperature: 0.3,
         response_format: { type: "json_object" },
     });
 
     const raw = completion.choices[0]?.message?.content;
 
-    if (!raw) throw new Error("No model output");
+    if (!raw) {
+        throw new Error("No model output");
+    }
 
     return safeJsonParse(raw);
 }
-

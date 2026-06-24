@@ -6,10 +6,15 @@ import {
   type ExportData,
   copyTextToClipboard,
   copyToClipboard,
+  getEnrichedSelectedEvents,
+  type EnrichedEvent,
 } from "../lib/eventExport";
 import { controls } from "../state/controls.store";
 import { cluster2groq } from "../services/groqApi";
 import TopicAnalysisButton from "./TopicAnalysisButton";   // ← add this
+import { setLabelState } from "../state/labels.store";
+import { labelsActions } from "../state/labels.actions";
+import type { PointData } from "./ScatterPlot/types";
 
 export default function ExportSelectedEvents() {
   const [isExporting, setIsExporting] = createSignal(false);
@@ -20,6 +25,7 @@ export default function ExportSelectedEvents() {
       setIsExporting(true);
       try {
         const data = await exportSelectedEvents();
+        console.log(data);
         setExportedData(data);
       } finally {
         setIsExporting(false);
@@ -86,14 +92,43 @@ export default function ExportSelectedEvents() {
           </menu>
         </li>
 
-        <TopicAnalysisButton
+        {/* <TopicAnalysisButton
           exportedData={exportedData}
           concept={controls.conceptSelection[0]}
-        />
+        /> */}
 
         <li onClick={async () => {
-          const text = await cluster2groq(exportedData()!.events[0].concept.toLocaleLowerCase(), allText())
-          alert(text)
+          const selectedPoints = await getEnrichedSelectedEvents();
+
+          const points = selectedPoints
+            .filter((p): p is EnrichedEvent & { nx: number; ny: number } =>
+              typeof p.nx === "number" && typeof p.ny === "number"
+            )
+            .map((p) => ({
+              id: p.event_id,
+              x: p.nx,
+              y: p.ny,
+            }));
+
+          const result = await cluster2groq({
+            concept: exportedData()!.events[0].concept.toLowerCase(),
+            points,
+            rawText: allText()
+          });
+
+          const labelText = result.sense_name;
+
+          const success = labelsActions.createFromCluster(
+            selectedPoints as unknown as PointData[], // should define a new type
+            labelText
+          );
+
+          if (!success) {
+            alert("Label too close to existing cluster");
+            return;
+          }
+
+          alert(`${ result.sense_name }\n\n${ result.description }`);
         }}>
           <i>new_label</i>
           <span>Label with Groq</span>

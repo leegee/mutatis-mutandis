@@ -6,17 +6,16 @@ import type { Id } from "./SelectionPlugin/types";
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
 import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets";
-import { controls } from "../../state/controls.store";
+import { controls, type ColorScatterByType, type ScatterPlotLayerType } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import TextWindow from "../TextWindow";
+import { labelState } from "../../state/labels.store";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
 export default function ConceptClusterPlot() {
-    const [layerMode, setLayerMode] = createSignal<"concept" | "neighbours" | "clusters">("neighbours");
-    const [colorBy, setColorBy] = createSignal("pub_year");
     const [bfsOpacity, setBfsOpacity] = createSignal(3);
     const [neighbourOpacity, setNeighbourOpacity] = createSignal(200);
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
@@ -34,12 +33,12 @@ export default function ConceptClusterPlot() {
     );
 
     const [neighbourDatasets] = createResource(
-        () => layerMode() === "neighbours" ? { ...sharedKey(), dataType: "concept_neighbours" } : null,
+        () => controls.scatterPlotLayerMode === "neighbours" ? { ...sharedKey(), dataType: "concept_neighbours" } : null,
         loadDatasets
     );
 
     const [clusterDatasets] = createResource(
-        () => layerMode() === "clusters" ? { ...sharedKey(), dataType: "concept_clusters" } : null,
+        () => controls.scatterPlotLayerMode === "clusters" ? { ...sharedKey(), dataType: "concept_clusters" } : null,
         loadDatasets
     );
 
@@ -55,11 +54,11 @@ export default function ConceptClusterPlot() {
     // Concept is always shown; neighbours are layered on top when toggled.
     // BFS is always passed separately to Plot and rendered beneath.
     const activeDatasets = () => {
-        if (layerMode() === "clusters") {
+        if (controls.scatterPlotLayerMode === "clusters") {
             return (clusterDatasets() ?? []).map(d => ({ ...d, origin: "clusters" }));
         }
         const concept = (conceptDatasets() ?? []).map(d => ({ ...d, origin: "concept" }));
-        const neighbours = layerMode() === "neighbours"
+        const neighbours = controls.scatterPlotLayerMode === "neighbours"
             ? (neighbourDatasets() ?? []).map(d => ({ ...d, origin: "neighbours" }))
             : [];
         return [...concept, ...neighbours];
@@ -89,31 +88,34 @@ export default function ConceptClusterPlot() {
                 }>
                     <ControlsHeader multiConcept={true}>
                         <div class="field  border middle-align">
-                            <select class="small-padding" value={layerMode()}
+                            <select class="small-padding" value={controls.scatterPlotLayerMode}
                                 onChange={e => {
-                                    setLayerMode(e.currentTarget.value as "concept" | "neighbours" | "clusters");
+                                    controlsActions.setScatterplotLayerMode(e.currentTarget.value as "concept" | "neighbours" | "clusters");
                                     if (e.currentTarget.value === 'clusters') {
-                                        setColorBy("cluster_label")
+                                        controlsActions.setColorBy("cluster_label")
                                     }
                                 }}>
                                 <option value="neighbours">All</option>
                                 <option value="concept">Concept</option>
                                 <option value="clusters">Clusters</option>
                             </select>
-                            <div class="tooltip bottom">View mode</div>
+                            <div class="tooltip bottom">
+                                Show concepts with neighbours (All), concepts without neighbours, or clusters.
+                            </div>
                         </div>
 
                         <div class="field border middle-align">
-                            <select class="small-padding" value={colorBy()}
-                                onChange={e => setColorBy(e.currentTarget.value)}>
-                                {COLOR_FIELDS
-                                    .filter(clrMode => !(clrMode.includes('cluster') && layerMode() !== 'clusters'))
-                                    .map(
-                                        v => <option value={v}>{
+                            <select class="small-padding" value={controls.colorScatterBy}
+                                onChange={e => controlsActions.setColorBy(e.currentTarget.value as ColorScatterByType)}
+                            >
+                                {COLOR_FIELDS.filter(clrMode => !(controls.scatterPlotLayerMode !== 'clusters' && clrMode.includes('cluster')))
+                                    .map(v => (
+                                        <option value={v}>{
                                             v.replace('_', ' ').replace(/^(.)/, _ => _.toLocaleUpperCase())
-                                        }</option>)}
+                                        }</option>)
+                                    )}
                             </select>
-                            <div class="tooltip bottom">Point colour mode</div>
+                            <div class="tooltip bottom">Choose the domain upon which to base the point colours </div>
                         </div>
 
                         <div class="field border middle-align">
@@ -151,7 +153,7 @@ export default function ConceptClusterPlot() {
                                         <nav>
                                             <div class="slider medium responsive">
                                                 <input type='range' min={1} max={255} step={1}
-                                                    disabled={layerMode() !== "neighbours"}
+                                                    disabled={controls.scatterPlotLayerMode !== "neighbours"}
                                                     value={neighbourOpacity()}
                                                     onInput={(e) => setNeighbourOpacity(Number(e.currentTarget.value))}
                                                 />
@@ -172,10 +174,11 @@ export default function ConceptClusterPlot() {
                             <Plot
                                 projectionMode={controls.projectionMode}
                                 datasets={activeDatasets()}
+                                labelDataset={labelState.labelDataset}
                                 bfsDataset={bfs()}
                                 bfsOpacity={bfsOpacity()}
                                 neighbourOpacity={neighbourOpacity()}
-                                colorBy={colorBy()}
+                                colorBy={controls.colorScatterBy}
                                 colorByFields={COLOR_FIELDS}
                                 onPointHover={(pt, xy) =>
                                     setHovered(pt && xy ? { point: pt, x: xy[0], y: xy[1] } : null)

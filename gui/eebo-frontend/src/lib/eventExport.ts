@@ -6,6 +6,7 @@ import { setWindowCache, getWindow, } from "../services/windowCache";
 
 export type EnrichedEvent = SemanticEvent & {
   id: string;
+  event_id: string;
   concept: string;
   doc_id: string;
   token_idx: number;
@@ -13,6 +14,8 @@ export type EnrichedEvent = SemanticEvent & {
   pub_year: number;
   windowText?: string;
   windowKey: string;
+  nx?: number;
+  ny?: number; // ??
 };
 
 export type ExportData = {
@@ -42,7 +45,8 @@ export async function enrichEventWithWindow(e: any): Promise<EnrichedEvent> {
   }
 
   return {
-    id: e.id, // assuming events have an id
+    id: e.id || e.event_id,
+    event_id: e.event_id || e.id,
     doc_id: e.doc_id,
     token_idx: Number(e.token_idx),
     token: e.token,
@@ -69,6 +73,7 @@ export async function getEnrichedSelectedEvents(): Promise<EnrichedEvent[]> {
 
   return Promise.all(cleanEvents.map(enrichEventWithWindow));
 }
+
 
 // Main export function — returns structured data ready for JSON, CSV, etc.
 export async function exportSelectedEvents(): Promise<ExportData> {

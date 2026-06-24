@@ -20,6 +20,24 @@ export interface PointData extends Omit<SqliteEvent, "vector_id"> {
   umap_y?: number;
 }
 
+
+export interface LabelPoint {
+  id: string;
+  text: string;
+  nx: number;
+  ny: number;
+  gnx?: number;
+  gny?: number;
+  clusterId?: string;
+  type?: "cluster_summary" | "keyword" | "note";
+}
+
+export interface LabelDataset {
+  labels: LabelPoint[];
+  minCentroidDistance: number;
+}
+
+
 export interface ConceptDataset {
   concept: string;
   origin?: string | undefined;
@@ -51,3 +69,5 @@ export interface ViewBounds {
   maxY: number;
   zoom: number;
 }
+
+

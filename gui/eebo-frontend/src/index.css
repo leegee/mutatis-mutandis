@@ -35,6 +35,15 @@ body {
   overflow: hidden;
 }
 
+caption {
+  font-weight: 100 !important;
+  font-size: 66%;
+  text-transform: uppercase;
+  opacity: 80%;
+  border-bottom: 0.25pt dotted var(--inverse-surface);
+  margin: 0 20%;
+}
+
 .s9 {
   flex: 1;
   overflow: hidden;
