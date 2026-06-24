@@ -1,0 +1,7 @@
+.geo-event {
+    width: 1em;
+    height: 1em;
+    border-radius: 50%;
+    background: fuchsia;
+    opacity: 1;
+}

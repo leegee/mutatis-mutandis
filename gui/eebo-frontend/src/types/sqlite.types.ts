@@ -24,3 +24,12 @@ export interface SqliteEvent {
 export interface SqliteEventWithNeighbours extends SqliteEvent {
   neighbours: SqliteNeighbour[];
 }
+
+
+export type EventQuery = {
+  concept?: string;
+  fromYear?: number;
+  toYear?: number;
+  selectedEventIds?: string[] | null;
+  bbox?: [number, number, number, number];
+};

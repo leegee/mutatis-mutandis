@@ -8,7 +8,7 @@ let _msgId = 0;
 
 function getWorker(): Worker {
   if (!_worker)
-    throw new Error("[db] worker not initialised — call initDb() first");
+    throw new Error("[db] worker not initialised! Call initDb() first");
   return _worker;
 }
 

@@ -26,7 +26,7 @@ async function init(url: string): Promise<void> {
   const filename = "/" + url.split("/").pop()!;
   await OpfsWlDb.importDb(filename, new Uint8Array(buf));
   DBH = new OpfsWlDb(filename, "r");
-  console.log('db.worker] DBH', DBH)
+  console.log('[db.worker] DBH', DBH)
 
   // Sanity check
   const rows = execRows(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`,);

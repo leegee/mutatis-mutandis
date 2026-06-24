@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-
+import psycopg
+import time
+import requests
 import re
 import unicodedata
 from collections import defaultdict
@@ -8,10 +10,10 @@ from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 
 
-# ---------------------------------------------------------------------------
-# VARIANT → CANONICAL MAP (lowercase keys)
-# ---------------------------------------------------------------------------
+GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
 
+
+# VARIANT to CANONICAL MAP (lowercase keys)
 PLACE_MAP = {
     "london": "London",
     "londres": "London",
@@ -304,17 +306,17 @@ PLACE_MAP = {
     "cirencester": "Cirencester",
     "finsbury": "Finsbury, London",
     "gateshead": "Gateshead",
-    "pomadie": "Pomadie",           # check source; may be a pseudonymous imprint
+    "pomadie": "Pomerania",
     "sicilia": "Sicily",
     "smithfield": "Smithfield, London",
     "wakefield": "Wakefield",
 
     "gateside": "Gateside, Scotland",
     "carolopoli": "Charleville, France",
-    "gottenberge": "Gothenburg, Denmark",
+    "gottenberge": "Gothenburg",
     "edinb": "Edinburgh",
     "edin": "Edinburgh",
-    "england": "england",
+    "england": "England",
     "scotland": "Scotland",
     "ireland": "Ireland",
     "europ": "Europe",
@@ -339,7 +341,8 @@ PLACE_MAP = {
     "L[ondo]n": "London",
     "[liège?": "Liège",
     "[lo]ndon": "London",
-    "nod-nol.": "Nödinge-Nol, Västra Götaland",
+    "nod-nol.": "Nödinge-Nol",
+    "lo:": "Sine Loco",
 }
 
 
@@ -383,6 +386,13 @@ QUALIFIERS = {
 UNKNOWN = defaultdict(str)
 
 
+def final_sql(conn: psycopg.Connection):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS place_normalization_geom_idx ON place_normalization USING GIST (geom);
+        """)
+
+
 def normalize_pub_place(raw: str | None):
     if not raw:
         return None
@@ -391,9 +401,7 @@ def normalize_pub_place(raw: str | None):
 
     found = []
 
-    # -------------------------------------------------------
-    # pure variant scan (your requested approach)
-    # -------------------------------------------------------
+    # pure variant scan
     key = norm_key(s)
 
     for variant, canonical in CLEAN_PLACE_MAP.items():
@@ -403,18 +411,14 @@ def normalize_pub_place(raw: str | None):
     # dedupe preserving order
     found = list(dict.fromkeys(found))
 
-    # -------------------------------------------------------
     # if multiple, drop London (or other low-priority)
-    # -------------------------------------------------------
     if len(found) > 1:
         found = [
             f for f in found
             if norm_key(f) not in QUALIFIERS
         ] or found
 
-    # -------------------------------------------------------
     # logging unknowns (only for iteration)
-    # -------------------------------------------------------
     if not found:
         for token in re.findall(r"[a-z]+", s):
             if token not in CLEAN_PLACE_MAP:
@@ -424,18 +428,42 @@ def normalize_pub_place(raw: str | None):
     return found
 
 
-# ---------------------------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------------------------
 
-def main():
-    conn = get_connection(application_name="normalize_places")
+def geocode(place: str):
+    if (place == "Sine Loco"):
+        return 54.75, 2.25
 
+    try:
+        r = requests.get(
+            GEOCODE_URL,
+            params={"q": place, "format": "json", "limit": 1},
+            headers={"User-Agent": "eebo-geocoder/1.0"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json()
+
+        if not data:
+            return None
+
+        return float(data[0]["lat"]), float(data[0]["lon"])
+
+    except Exception as e:
+        logger.warning("Geocode failed for %s: %s", place, e)
+        return None
+
+
+def create_place(conn: psycopg.Connection):
     with conn.cursor() as cur:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+
+        # cur.execute("DROP TABLE IF  EXISTS place_normalization;")
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS place_normalization (
                 raw_place TEXT PRIMARY KEY,
-                normalized_places TEXT[]
+                normalized_places TEXT[],
+                geom GEOGRAPHY(POINT, 4326)
             )
         """)
 
@@ -472,12 +500,11 @@ def main():
 
             logger.info("%s -> %s", raw, norm)
 
+        cur.execute("CREATE INDEX IF NOT EXISTS place_normalization_geom_idx ON place_normalization USING GIST (geom);")
+
     conn.commit()
 
-    # -------------------------------------------------------
-    # coverage
-    # -------------------------------------------------------
-
+    # coverage report
     logger.info("")
     logger.info("=== COVERAGE ===")
     logger.info("Total rows:     %d", total)
@@ -485,30 +512,72 @@ def main():
     logger.info("Unmatched rows: %d", len(unmatched))
     logger.info("Coverage:       %.1f%%", 100.0 * matched / total)
 
-    # -------------------------------------------------------
     # unmatched examples
-    # -------------------------------------------------------
-
     logger.info("")
     logger.info("=== UNMATCHED ROWS ===")
 
     for raw in unmatched[:200]:
         logger.info(raw)
 
-    # -------------------------------------------------------
-    # token diagnostics
-    # -------------------------------------------------------
 
-    # logger.info("")
-    # logger.info("=== UNKNOWN TOKENS ===")
+def geocode_places(conn: psycopg.Connection):
+    done = set()
 
-    # for token, values in sorted(
-    #     UNKNOWN.items(),
-    #     key=lambda x: len(x[1]),
-    #     reverse=True,
-    # )[:200]:
-    #     logger.info("%s -> %s", token, " ".join(values))
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT raw_place, normalized_places, geom
+            FROM place_normalization
+            WHERE geom IS NULL
+        """)
 
+        rows = cur.fetchall()
+        logger.info("Need geocoding: %d rows", len(rows))
+
+        for raw_place, normalized, geom in rows:
+            if geom is not None:
+                continue
+
+            if normalized:
+                key = normalized[0] if isinstance(normalized, list) else normalized
+            else:
+                key = raw_place
+
+            key = key.strip()
+
+            if key in done:
+                continue
+
+            done.add(key)
+
+            logger.info("Geocoding: %s", key)
+
+            result = geocode(key)
+
+            if not result:
+                logger.warning("No result for: %s", key)
+                continue
+
+            lat, lon = result
+
+            cur.execute("""
+                UPDATE place_normalization
+                SET geom = ST_SetSRID(ST_MakePoint(%s, %s), 4326)
+                WHERE %s = ANY(normalized_places)
+                OR (normalized_places IS NULL AND raw_place = %s)
+            """, (lon, lat, key, key))
+
+            conn.commit()
+            time.sleep(1.1)
+
+    logger.info("Geocoding complete")
+
+
+
+def main():
+    conn = get_connection(application_name="normalize_places")
+    create_place(conn)
+    geocode_places(conn)
+    final_sql(conn)
 
 if __name__ == "__main__":
     main()

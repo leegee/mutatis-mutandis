@@ -1,11 +1,11 @@
-import { onMount, onCleanup, createEffect } from "solid-js";
+import { onMount, onCleanup, createEffect, createSignal } from "solid-js";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import type { ConceptDataset } from "../ScatterPlot/types";
+import './GeoMap.css';
 
 interface ClusterGeoMapProps {
-    clusterDatasets: ConceptDataset[] | undefined;
+    points: EventPoint[];
 }
 
 export type EventPoint = {
@@ -17,6 +17,7 @@ export type EventPoint = {
 export default function GeoMap(props: ClusterGeoMapProps) {
     let mapContainer: HTMLDivElement | undefined;
     let map: maplibregl.Map | undefined;
+    const [mapReady, setMapReady] = createSignal(false);
 
     const markers: maplibregl.Marker[] = [];
 
@@ -34,11 +35,7 @@ export default function GeoMap(props: ClusterGeoMapProps) {
             if (p.lat == null || p.lng == null) continue;
 
             const el = document.createElement("div");
-            el.style.width = "8px";
-            el.style.height = "8px";
-            el.style.borderRadius = "50%";
-            el.style.background = "#3b82f6";
-            el.style.opacity = "0.8";
+            el.className = 'geo-event';
 
             const marker = new maplibregl.Marker({ element: el })
                 .setLngLat([p.lng, p.lat])
@@ -46,23 +43,9 @@ export default function GeoMap(props: ClusterGeoMapProps) {
                     new maplibregl.Popup({ offset: 12 }).setText(p.label ?? "")
                 )
                 .addTo(map);
-
             markers.push(marker);
         }
-    }
-
-    function extractPoints(): EventPoint[] {
-        const datasets = props.clusterDatasets ?? [];
-
-        return datasets.flatMap(ds =>
-            (ds.points ?? [])
-                .map((p: any) => ({
-                    lat: p.lat,
-                    lng: p.lng,
-                    label: p.placename ?? p.label ?? "unknown"
-                }))
-                .filter((p: EventPoint) => p.lat != null && p.lng != null)
-        );
+        console.log("[GeoMap] marker count", markers.length)
     }
 
     onMount(() => {
@@ -78,12 +61,14 @@ export default function GeoMap(props: ClusterGeoMapProps) {
         });
 
         map.on("load", () => {
-            renderPoints(extractPoints());
+            setMapReady(true)
+            renderPoints(props.points ?? []);
         });
     });
 
     createEffect(() => {
-        renderPoints(extractPoints());
+        if (!map || !mapReady()) return;
+        renderPoints(props.points ?? []);
     });
 
     onCleanup(() => {
