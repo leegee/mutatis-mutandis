@@ -42,7 +42,7 @@ export const routes = [
   {
     path: "/geo",
     icon: "map",
-    label: "Cluster Geography",
+    label: "Geography",
     component: Map,
     help: () => { },
   },

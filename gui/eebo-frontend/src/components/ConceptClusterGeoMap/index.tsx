@@ -3,9 +3,49 @@ import GeoMap, { type EventPoint } from "./GeoMap";
 import { controls } from "../../state/controls.store";
 import { loadDatasets } from "../ScatterPlot/loadScatterDatasets";
 import { buildEventQuery, fetchEvents } from "../../services/db";
+import ControlsHeader from "../ControlsHeader";
+
+type RawRow = {
+    event_id: bigint;
+    doc_id: string;
+    pub_year: number;
+    token: string;
+    geom: string;
+    lat: number;
+    lng: number;
+    label: string;
+};
+
+export function aggregatePlaces(rows: RawRow[]) {
+    const map = new Map<
+        string,
+        { lat: number; lng: number; label: String; count: number }
+    >();
+
+    for (const r of rows) {
+        if (r.lat == null || r.lng == null) continue;
+
+        // stable spatial key
+        const key = `${ r.lat.toFixed(6) },${ r.lng.toFixed(6) }`;
+
+        const existing = map.get(key);
+
+        if (!existing) {
+            map.set(key, {
+                lat: r.lat,
+                lng: r.lng,
+                label: r.label,
+                count: 1,
+            });
+        } else {
+            existing.count += 1;
+        }
+    }
+
+    return [...map.entries()].map(([_, v]) => v);
+}
 
 export default function ConceptClusterGeoMap() {
-
     const sharedKey = () => ({
         concepts: controls.conceptSelection,
         fromYear: controls.fromYear,
@@ -41,18 +81,23 @@ export default function ConceptClusterGeoMap() {
         const eventPoints = eventRows.map((e) => ({
             lat: e!.lat,
             lng: e!.lng,
-            label: e!.token ?? "event",
+            label: e!.token ?? controls.conceptSelection[0],
             // type: "event"
         }));
 
         // console.debug("[geo] event", eventRows);
         // console.debug("[geo] event points", eventPoints);
 
-        return [
+        return aggregatePlaces([
             // ...clusterPoints,
-            ...eventPoints
-        ] as EventPoint[];
+            ...eventPoints as RawRow[]
+        ]) as EventPoint[];
     });
 
-    return <GeoMap points={mapPoints()} />;
+    return (
+        <>
+            <ControlsHeader />
+            <GeoMap points={mapPoints()} />
+        </>
+    );
 }

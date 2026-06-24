@@ -12,6 +12,7 @@ export type EventPoint = {
     lat: number;
     lng: number;
     label: string;
+    count: number;
 };
 
 export default function GeoMap(props: ClusterGeoMapProps) {
@@ -26,26 +27,49 @@ export default function GeoMap(props: ClusterGeoMapProps) {
         markers.length = 0;
     }
 
+
     function renderPoints(points: EventPoint[]) {
         if (!map) return;
 
         clearMarkers();
 
         for (const p of points) {
-            if (p.lat == null || p.lng == null) continue;
+            const size = Math.min(6 + Math.sqrt(p.count) * 2.5, 30);
 
             const el = document.createElement("div");
-            el.className = 'geo-event';
-
+            el.className = "geo-event";
+            el.style.width = `${ size }px`;
+            el.style.height = `${ size }px`;
+            el.innerText = String(p.count);
+            el.innerHTML = `
+  <div style="
+    width:${ size }px;
+    height:${ size }px;
+    border-radius:50%;
+    background:#3b82f6;
+    opacity:0.75;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:10px;
+    font-weight:600;
+  ">${ p.count }</div>
+  <div style="text-align:center; margin-top:2px; text-shadow:0 0 2px black; ">
+  ${ p.label }
+  </div>
+`;
             const marker = new maplibregl.Marker({ element: el })
                 .setLngLat([p.lng, p.lat])
                 .setPopup(
-                    new maplibregl.Popup({ offset: 12 }).setText(p.label ?? "")
+                    new maplibregl.Popup({ offset: 12 }).setText(
+                        `${ p.label || "-" } (${ p.count || "-" })`
+                    )
                 )
                 .addTo(map);
+
             markers.push(marker);
         }
-        console.log("[GeoMap] marker count", markers.length)
     }
 
     onMount(() => {
@@ -62,7 +86,6 @@ export default function GeoMap(props: ClusterGeoMapProps) {
 
         map.on("load", () => {
             setMapReady(true)
-            renderPoints(props.points ?? []);
         });
     });
 
