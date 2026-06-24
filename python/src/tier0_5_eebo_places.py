@@ -367,6 +367,7 @@ QUALIFIERS = {
     "england",
     "scotland",
     "ireland",
+    "london",
     "netherlands",
     "holland",
     "mass",
@@ -378,18 +379,11 @@ QUALIFIERS = {
 
 
 
-# dominant place suppression when multiple found
-LOW_PRIORITY = {"london"}
-
 
 UNKNOWN = defaultdict(str)
 
 
-# ---------------------------------------------------------------------------
-# NORMALISER
-# ---------------------------------------------------------------------------
-
-def normalize(raw: str | None):
+def normalize_pub_place(raw: str | None):
     if not raw:
         return None
 
@@ -415,7 +409,7 @@ def normalize(raw: str | None):
     if len(found) > 1:
         found = [
             f for f in found
-            if f.lower() not in LOW_PRIORITY
+            if norm_key(f) not in QUALIFIERS
         ] or found
 
     # -------------------------------------------------------
@@ -462,7 +456,7 @@ def main():
         for (raw,) in rows:
             total += 1
 
-            norm = normalize(raw)
+            norm = normalize_pub_place(raw)
 
             cur.execute("""
                 INSERT INTO place_normalization (raw_place, normalized_places)
