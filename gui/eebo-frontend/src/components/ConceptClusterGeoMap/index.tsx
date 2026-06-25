@@ -78,10 +78,10 @@ export default function ConceptClusterGeoMap() {
         // console.debug("[geo] cluster points", clusterPoints);
 
         const eventRows = events() ?? [];
-        const eventPoints = eventRows.map((e) => ({
-            lat: e!.lat,
-            lng: e!.lng,
-            label: e!.token ?? controls.conceptSelection[0],
+        const eventPoints = eventRows.map((eventPoint) => ({
+            lat: eventPoint.lat,
+            lng: eventPoint.lng,
+            label: eventPoint.token ?? controls.conceptSelection[0],
             // type: "event"
         }));
 

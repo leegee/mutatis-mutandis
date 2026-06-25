@@ -32,7 +32,7 @@ export const labelsActions = {
             nx: centroid.x,
             ny: centroid.y,
         };
-        console.log(`[label.actions] label! ${ label }`)
+        console.log(`[label.actions] label! ${ text }`, label)
 
         setLabelState("labelDataset", "labels", (prev) => [
             ...(prev ?? []),

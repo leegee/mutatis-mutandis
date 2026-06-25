@@ -15,23 +15,6 @@ export function buildEventQuery(): EventQuery {
   };
 }
 
-
-function _wkbToLngLat(hex?: string | null) {
-  if (!hex) return null;
-
-  const bytes = new Uint8Array(
-    hex.match(/.{1,2}/g)!.map((b) => parseInt(b, 16))
-  );
-
-  const view = new DataView(bytes.buffer);
-
-  const lng = view.getFloat64(9, true);
-  const lat = view.getFloat64(17, true);
-
-  return { lng, lat };
-}
-
-
 // No bbox yet
 export async function fetchEvents() {
   const concepts = controls.conceptSelection ?? [];
@@ -45,32 +28,29 @@ export async function fetchEvents() {
         doc_id,
         pub_year,
         token,
-        geom
+        lat,
+        lng
     FROM events
     WHERE pub_year BETWEEN ? AND ?
     AND concept ${ conceptPlaceholders }
-    AND geom IS NOT NULL`;
+    AND lat IS NOT NULL
+    AND lng IS NOT NULL`;
 
   const args = [controls.fromYear, controls.toYear, ...concepts];
 
-  console.log("[queries.fetchEvents] " + sql, args)
+  console.debug("[queries.fetchEvents] " + sql, args)
 
   const rows = await execRows(sql, args);
 
   const parsedRows = rows
     .map((r) => {
-      const geomHex = String(r[4]);
-
-      const coords = _wkbToLngLat(geomHex);
-      if (!coords) return null;
-
       return {
         event_id: r[0],
         doc_id: r[1],
         pub_year: r[2],
         token: r[3],
-        geom: geomHex,
-        ...coords,
+        lat: r[4],
+        lng: r[5],
       };
     })
     .filter(Boolean);
@@ -79,6 +59,7 @@ export async function fetchEvents() {
 
   return parsedRows;
 }
+
 
 export async function listConcepts(): Promise<string[]> {
   const rows = await execRows("SELECT concept FROM concepts ORDER BY concept");
@@ -117,7 +98,8 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   if (!row) {
     type = 'neighbour';
     const neighbourRow = await execRows(
-      "SELECT * FROM neighbours WHERE neighbour_event_id = ? LIMIT 1",
+      `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
+       FROM neighbours WHERE neighbour_event_id = ? LIMIT 1`,
       [id],
     );
 
@@ -137,6 +119,8 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
     token_idx: row[6] != null ? Number(row[6]) : null,
     window_id: row[7] != null ? Number(row[7]) : null,
     window_token_pos: row[8] != null ? Number(row[8]) : null,
+    lat: row[8] != null ? Number(row[8]) : null,
+    lng: row[8] != null ? Number(row[9]) : null,
   } as SqliteEvent;
 }
 
@@ -182,6 +166,7 @@ export async function queryEventsByIds(
   return result;
 }
 
+
 export async function getEventsByIds(
   ids: string[],
 ): Promise<SqliteEvent[]> {
@@ -196,7 +181,7 @@ export async function getEventsByIds(
     const sql = `
     SELECT
       event_id, vector_id, token, token_idx, doc_id,
-      pub_year, window_id, window_token_pos
+      pub_year, window_id, window_token_pos, lat, lng
     FROM events
     WHERE event_id IN (${ chunk.map(id => `'${ id }'`).join(",") });
   `;
@@ -213,6 +198,8 @@ export async function getEventsByIds(
         pub_year: Number(r[5]),
         window_id: Number(r[6]),
         window_token_pos: Number(r[7]),
+        lat: Number(r[8]),
+        lng: Number(r[9]),
       });
     }
   }
@@ -227,7 +214,7 @@ export async function queryEventsByConcept(
 ): Promise<SqliteEventWithNeighbours[]> {
   const eventRows = await execRows(
     `SELECT event_id, vector_id, token, doc_id, pub_year,
-            token_idx, window_id, window_token_pos
+            token_idx, window_id, window_token_pos, lat, lng
      FROM   events
      WHERE  concept   = ?
        AND  pub_year >= ?
@@ -251,6 +238,8 @@ export async function queryEventsByConcept(
       token_idx: r[5] as number,
       window_id: r[6] as number,
       window_token_pos: r[7] as number,
+      lat: r[8] as number,
+      lng: r[9] as number,
       neighbours: [],
     };
     eventMap.set(e.event_id, e);
@@ -261,7 +250,7 @@ export async function queryEventsByConcept(
   const nbRows = await execRows(
     `SELECT event_id, neighbour_event_id, vector_id, token,
             doc_id, pub_year, token_idx, window_id,
-            window_token_pos, score
+            window_token_pos, score, lat, lng
      FROM   neighbours
      WHERE  event_id IN (${ ids })
      ORDER  BY event_id, score DESC`,
@@ -278,6 +267,8 @@ export async function queryEventsByConcept(
       window_id: r[7] as number,
       window_token_pos: r[8] as number,
       score: r[9] as number,
+      lat: r[10] as number,
+      lng: r[11] as number,
     };
     eventMap.get(r[0] as string)?.neighbours.push(nb);
   }
