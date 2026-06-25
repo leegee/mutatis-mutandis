@@ -76,3 +76,5 @@ docs/proposal-*
 gui/eebo-frontend/public/data/scatter/
 docs/BL.txt
 python/fastapi_jobs.sqlite3
+*.db-shm
+*.db-wal
