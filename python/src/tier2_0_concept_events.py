@@ -382,7 +382,9 @@ def load_doc_metadata(conn) -> dict:
             d.pub_year,
             d.title,
             pn.normalized_places,
-            pn.geom
+            pn.geom,
+            ST_Y(pn.geom::geometry) AS lat,
+            ST_X(pn.geom::geometry) AS lng
         FROM documents d
         LEFT JOIN place_normalization pn
             ON d.pub_place = pn.raw_place
@@ -390,12 +392,14 @@ def load_doc_metadata(conn) -> dict:
     """)
 
     out = {}
-    for doc_id, year, title, places, geom in cur.fetchall():
+    for doc_id, year, title, places, geom, lat, lng in cur.fetchall():
         out[doc_id] = {
             "pub_year": year,
             "title": title,
             "places": places,
             "geom": geom,   # ST_Point
+            "lat": lat,
+            "lng": lng,
         }
 
     return out
@@ -500,6 +504,8 @@ def analyse_concept(
 
         q_meta = doc_meta.get(q_doc_id, {})
         q_geom = q_meta.get("geom")
+        q_lat = q_meta.get("lat")
+        q_lng = q_meta.get("lng")
 
         neighbours = []
 
@@ -514,6 +520,8 @@ def analyse_concept(
                 continue
             n_doc_id                                = str(L_doc_id[n_pos])
             n_geom                                  = doc_meta.get(n_doc_id, {}).get("geom")
+            n_lat                                   = doc_meta.get(n_doc_id, {}).get("lat")
+            n_lng                                   = doc_meta.get(n_doc_id, {}).get("lng")
             n_window_id                             = int(L_window_id[n_pos])
             token_counter[n_token]                  += 1
             doc_counter[n_doc_id]                   += 1
@@ -531,6 +539,8 @@ def analyse_concept(
                 "score":            float(score),
                 "depth":            1,
                 "geom":             n_geom,
+                "lat":              n_lat,
+                "lng":              n_lng,
                 "via_event_id":     None,
             })
 
@@ -545,7 +555,9 @@ def analyse_concept(
             "token_idx":        int(L_token_idx[q_pos]),
             "window_id":        int(L_window_id[q_pos]),
             "window_token_pos": None if q_wpos == _NO_WPOS else q_wpos,
-            "geom":            q_geom,
+            "geom":             q_geom,
+            "lat":              q_lat,
+            "lng":              q_lng,
             "neighbours":       neighbours,
         })
 
@@ -690,6 +702,8 @@ CREATE TABLE IF NOT EXISTS events (
     window_id        INTEGER,
     window_token_pos INTEGER,
     geom             TEXT,
+    lat              NUMBER,
+    lng              NUMBER,
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
@@ -707,12 +721,19 @@ CREATE TABLE IF NOT EXISTS neighbours (
     window_token_pos     INTEGER,
     score                REAL,
     geom                 TEXT,
+    lat                  NUMBER,
+    lng                  NUMBER,
     PRIMARY KEY (event_id, neighbour_event_id, depth),
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
 
 CREATE INDEX IF NOT EXISTS events_geom_idx ON events(geom);
 CREATE INDEX IF NOT EXISTS neighbours_geom_idx ON neighbours(geom);
+
+CREATE INDEX IF NOT EXISTS events_lat_idx ON events(lat);
+CREATE INDEX IF NOT EXISTS events_lng_idx ON events(lng);
+CREATE INDEX IF NOT EXISTS neighbours_lat_idx ON neighbours(lat);
+CREATE INDEX IF NOT EXISTS neighbours_lng_idx ON neighbours(lng);
 
 -- Flattened aggregate rows for top_tokens, top_docs, top_windows.
 -- kind    = 'token' | 'doc' | 'window'
@@ -842,7 +863,7 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
 
         con.executemany(
             """INSERT OR IGNORE INTO events
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     e["event_id"],
@@ -855,6 +876,8 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
                     e["window_id"],
                     e["window_token_pos"],
                     e["geom"],
+                    e["lat"],
+                    e["lng"]
                 )
                 for e in data["events"]
             ],
@@ -862,7 +885,7 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
 
         con.executemany(
             """INSERT OR IGNORE INTO neighbours
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     e["event_id"],
@@ -878,6 +901,8 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
                     n["window_token_pos"],
                     n["score"],
                     n["geom"],
+                    n["lat"],
+                    n["lng"],
                 )
                 for e in data["events"]
                 for n in e["neighbours"]
@@ -1093,3 +1118,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
