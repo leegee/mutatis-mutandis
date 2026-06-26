@@ -25,7 +25,7 @@ export type ControlsState = {
   hubSpread: number;
   selectedNode: string | null;
   selectedEventId: string | null;
-  selectedEventIds: Set<string> | null;
+  selectedEventIds: Set<string>;
   yearMode: YearMode;
   fromYear: number;
   toYear: number;
@@ -45,7 +45,7 @@ const initialControls: ControlsState = {
   hubSpread: 1,
   selectedNode: null,
   selectedEventId: null,
-  selectedEventIds: null,
+  selectedEventIds: new Set(),
   yearMode: "range",
   fromYear: CORPUS_START_YEAR,
   toYear: CORPUS_END_YEAR,

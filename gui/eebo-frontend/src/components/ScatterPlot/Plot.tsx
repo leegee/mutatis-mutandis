@@ -18,11 +18,30 @@ import { buildColorMap } from "../../lib/colour";
 import type { ProjectionModeType } from "../../state/controls.store";
 import { labelState } from "../../state/labels.store";
 
-const DEPTH_COLORS: Record<number, [number, number, number]> = {
+type RGB = [number, number, number];
+type RGBA = [number, number, number, number]
+
+const DEPTH_COLORS: Record<number, RGB> = {
   0: [230, 180, 80],  // gold   — seeds
   1: [80, 160, 220],  // blue   — depth 1
   2: [80, 200, 140],  // green  — depth 2
 };
+
+
+const brighten = ([r, g, b]: RGB | RGBA): RGBA => [
+  Math.min(r * 1.25, 255),
+  Math.min(g * 1.25, 255),
+  Math.min(b * 1.25, 255),
+  255,
+];
+
+const dim = ([r, g, b, a]: RGBA): RGBA => [
+  r * 0.5,
+  g * 0.5,
+  b * 0.5,
+  a,
+];
+
 
 interface PlotProps {
   // Data
@@ -37,7 +56,7 @@ interface PlotProps {
   opacity?: number;
   bfsOpacity?: number
   neighbourOpacity?: number;
-  selected?: Set<Id> | null;
+  selected?: Set<Id>;
 
   // Events
   onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
@@ -86,55 +105,65 @@ export default function Plot(props: PlotProps) {
   );
 
 
-  // Build colour map whenever the field or data changes.
+  const selected = createMemo(() => props.selected ?? new Set<Id>());
+
+  const getBaseColor = (
+    p: PointData,
+    origin: string | undefined,
+    map: Map<string, RGBA>,
+    field: keyof PointData,
+  ): RGBA => {
+    if (origin === "neighbours") {
+      return [
+        ...DEPTH_COLORS[p.depth ?? 1],
+        p.depth === 2
+          ? Math.floor((props.neighbourOpacity ?? 200) * 0.45)
+          : (props.neighbourOpacity ?? 200),
+      ];
+    }
+
+    return map.get(String(p[field] ?? "")) ?? GREY;
+  };
+
   const colorMap = createMemo(() => {
     const field = props.colorBy;
     const values = allPoints().map((p) => String(p[field] ?? ""));
     return buildColorMap(values);
   });
 
-
-  const selected = createMemo(() => props.selected ?? new Set<Id>());
-
-
   const getColor = createMemo(() => {
     const field = props.colorBy;
     const map = colorMap();
     const sel = selected();
+    const neighbourOpacity = props.neighbourOpacity ?? 200;
 
-    return (p: PointData, origin?: string): [number, number, number, number] => {
-      const base: [number, number, number, number] =
-        origin === "neighbours"
-          ? [
-            ...DEPTH_COLORS[p.depth ?? 1],
-            p.depth === 2
-              ? Math.floor((props.neighbourOpacity ?? 200) * 0.45)
-              : (props.neighbourOpacity ?? 200),
-          ] as [number, number, number, number]
-          : map.get(String(p[field] ?? "")) ?? GREY;
+    return (p: PointData, origin?: string): RGBA => {
+      let base: RGBA;
 
-      if (sel.size > 0) {
-        if (sel.has(p.event_id)) {
-          return [
-            Math.min(base[0] * 1.25, 255),
-            Math.min(base[1] * 1.25, 255),
-            Math.min(base[2] * 1.25, 255),
-            255,
-          ];
-        } else {
-          return [
-            Math.min(base[0] * 0.5, base[0]),
-            Math.min(base[1] * 0.5, base[1]),
-            Math.min(base[2] * 0.5, base[2]),
-            base[3],
-          ];
-        }
+      if (origin === "neighbours") {
+        const depth = p.depth ?? 1;
+
+        const alpha =
+          depth === 2
+            ? Math.floor(neighbourOpacity * 0.45)
+            : neighbourOpacity;
+
+        base = [
+          ...DEPTH_COLORS[depth],
+          alpha,
+        ];
+      } else {
+        base = map.get(String(p[field] ?? "")) ?? GREY;
       }
 
-      return base;
+      if (!sel.size) return base;
+      if (sel.has(p.event_id)) {
+        return brighten(base);
+      }
+
+      return dim(base);
     };
   });
-
 
   const labelLayer = createMemo(() => {
     const labels = labelState.labels;
