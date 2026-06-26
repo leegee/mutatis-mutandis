@@ -18,6 +18,12 @@ import { buildColorMap } from "../../lib/colour";
 import type { ProjectionModeType } from "../../state/controls.store";
 import { labelState } from "../../state/labels.store";
 
+const DEPTH_COLORS: Record<number, [number, number, number]> = {
+  0: [230, 180, 80],  // gold   — seeds
+  1: [80, 160, 220],  // blue   — depth 1
+  2: [80, 200, 140],  // green  — depth 2
+};
+
 interface PlotProps {
   // Data
   datasets: ConceptDataset[];
@@ -41,7 +47,6 @@ interface PlotProps {
 }
 
 const GREY: [number, number, number, number] = [120, 120, 130, 140];
-const NEIGHBOURS: [number, number, number] = [120, 120, 170];
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
 const INITIAL_VIEW_STATE: OrthographicViewState = {
   target: [0.5, 0.5, 0],
@@ -98,31 +103,36 @@ export default function Plot(props: PlotProps) {
     const sel = selected();
 
     return (p: PointData, origin?: string): [number, number, number, number] => {
-      const base =
+      const base: [number, number, number, number] =
         origin === "neighbours"
-          ? [...NEIGHBOURS, props.neighbourOpacity ?? 200]
+          ? [
+            ...DEPTH_COLORS[p.depth ?? 1],
+            p.depth === 2
+              ? Math.floor((props.neighbourOpacity ?? 200) * 0.45)
+              : (props.neighbourOpacity ?? 200),
+          ] as [number, number, number, number]
           : map.get(String(p[field] ?? "")) ?? GREY;
 
-      // selection emphasis
       if (sel.size > 0) {
         if (sel.has(p.event_id)) {
           return [
             Math.min(base[0] * 1.25, 255),
             Math.min(base[1] * 1.25, 255),
             Math.min(base[2] * 1.25, 255),
-            255
+            255,
           ];
         } else {
           return [
-            Math.min(base[0] * .5, base[0]),
-            Math.min(base[1] * .5, base[1]),
-            Math.min(base[2] * .5, base[2]),
-            Math.min(base[3]),
-          ]
+            Math.min(base[0] * 0.5, base[0]),
+            Math.min(base[1] * 0.5, base[1]),
+            Math.min(base[2] * 0.5, base[2]),
+            base[3],
+          ];
         }
       }
-      return base as [number, number, number, number];
-    }
+
+      return base;
+    };
   });
 
 
@@ -169,6 +179,10 @@ export default function Plot(props: PlotProps) {
           getPosition: (p) => getPosition(p, proj),
           getFillColor: (p) => colorFn(p, dataset.origin),
           getRadius: radius,
+          // getRadius: (p: PointData) => {
+          //   if (origin === "neighbours") return radius * (p.depth === 2 ? 0.6 : 0.85);
+          //   return radius;
+          // },
           radiusUnits: "pixels",
           opacity,
           pickable: true,
@@ -181,6 +195,7 @@ export default function Plot(props: PlotProps) {
           updateTriggers: {
             getPosition: [proj],
             getFillColor: [props.neighbourOpacity, props.colorBy, dataset.concept, dataset.origin, selected()],
+            // getRadius: [props.pointRadius, dataset.origin],
           },
           onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
         });
@@ -195,22 +210,26 @@ export default function Plot(props: PlotProps) {
       && bfsOpacity
       && props.bfsDataset?.points?.length
       && props.projectionMode === "global"
-      && new ScatterplotLayer<PointData>(
-        {
-          id: "bfs-global",
-          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-          data: props.bfsDataset.points,
-          getPosition: getBfsPosition,
-          getFillColor: () => [150, 150, 150, bfsOpacity],
-          updateTriggers: {
-            getFillColor: bfsOpacity,
-          },
-          getRadius: radius * 1.5,
-          radiusUnits: "pixels",
-          pickable: true,
-          onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-        }
-      );
+      &&
+      new ScatterplotLayer<PointData>({
+        id: "bfs-global",
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        data: props.bfsDataset.points,
+        getPosition: getBfsPosition,
+        // getFillColor: () => [150, 150, 150, bfsOpacity],
+        getFillColor: (p: PointData) => {
+          const [r, g, b] = DEPTH_COLORS[p.depth ?? 0] ?? DEPTH_COLORS[2];
+          return [r, g, b, bfsOpacity];
+        },
+        updateTriggers: {
+          // getFillColor: bfsOpacity,
+          getFillColor: [bfsOpacity]
+        },
+        getRadius: radius * 1.5,
+        radiusUnits: "pixels",
+        pickable: true,
+        onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
+      });
 
     return [
       ...(bfsLayer ? [bfsLayer] : []),

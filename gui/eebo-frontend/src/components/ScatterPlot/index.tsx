@@ -1,4 +1,4 @@
-import { createSignal, createResource, Show } from "solid-js";
+import { createSignal, createResource, Show, Switch, Match } from "solid-js";
 
 import type { PointData, ViewBounds } from "./types";
 import type { Id } from "./SelectionPlugin/types";
@@ -207,28 +207,49 @@ export default function ConceptClusterPlot() {
                             "z-index": 20,
                             "pointer-events": "none",
                             "white-space": "nowrap",
-                            "width": "15em",
-                            "max-width": "15em",
+                            "width": "20em",
                         }}>
 
                         <header class="bottom-margin">
-                            <h2 class="max">{h().point.token}</h2>
-                            <div class="medium-opacity small-text">
-                                {h().point.concept
-                                    ? (h().point.concept + ' in ')
-                                    : ''} {h().point.cluster_label ? `Cluster ${ h().point.cluster_label }` : 'Unclustered / Noise'}
-                            </div>
+                            <h2 class="medium-padding fill max">{h().point.token}</h2>
+
+                            <Show when={h().point.depth
+                                || (
+                                    controls.scatterPlotLayerMode === 'clusters'
+                                    && h().point.concept)
+                            }>
+                                <div class="medium-opacity small-text no-space small small-margin tiny-padding">
+                                    <span class="max no-space small small-margin no-padding">
+                                        <Switch>
+                                            <Match when={controls.scatterPlotLayerMode === 'clusters'}>
+                                                {h().point.pub_year}
+                                                <Show when={h().point.concept}>
+                                                    {h().point.concept}
+                                                </Show>
+                                            </Match>
+
+                                            <Match when={controls.scatterPlotLayerMode !== 'clusters'}>
+                                                <span class="bold">{h().point.pub_year} </span>
+                                                <Show when={h().point.depth}>
+                                                    {h().point.concept}
+                                                    <sup class="medium-text"> {h().point.depth}</sup>
+                                                </Show>
+                                            </Match>
+                                        </Switch>
+                                    </span>
+
+                                    <span>
+                                        {h().point.cluster_label && ` Cluster ${ h().point.cluster_label }`}
+                                    </span>
+                                </div>
+                            </Show>
                         </header>
 
                         <div class="left-padding right-padding">
-                            {/* style="border-bottom:1pt solid var(--on-surface)"> */}
-                            {h().point.pub_year}
-
                             <span class="medium-opacity">
-                                {" • "}
-                                Doc: {h().point.doc_id}
+                                Doc: {h().point.doc_id} T {h().point.token_idx}
                                 <br />
-                                WinId/Token: {h().point.window_id}/{h().point.window_token_pos}
+                                Win: {h().point.window_id} T {h().point.window_token_pos}
                             </span>
                         </div>
                         <footer class="row border padding" style="bottom-padding: 1em; top-padding: 1em">

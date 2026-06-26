@@ -28,7 +28,10 @@ function enrichPoints<T extends { event_id: string }>(
         const event = eventMap.get(String(p.event_id));
         const pubYear = event?.pub_year;
         if (pubYear == null || !yearCheck(pubYear)) return acc;
-        acc.push({ ...p, ...event });
+        // event (DB row) spreads first so JSON point fields win all
+        // collisions — in particular `depth` from the JSON is never
+        // clobbered by a same-named DB column.
+        acc.push({ ...event, ...p });
         return acc;
     }, []);
 }
@@ -71,7 +74,7 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
         return rv;
     }
     catch (error) {
-        console.error('xxxxxxxxxxxxxx', error)
+        console.error('xxxxxxxxxxxxxx', error);
     }
     return [];
 }
