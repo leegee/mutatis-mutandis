@@ -15,9 +15,16 @@ const normalizeRange = (from: number, to: number) => {
 };
 
 export const controlsActions = {
+    setBfsOpacity(bfsOpacity: number | string) {
+        setControls("bfsOpacity", Number(bfsOpacity));
+    },
+
+    setNeighbourOpacity(neighbourOpacity: number | string) {
+        setControls("neighbourOpacity", Number(neighbourOpacity));
+    },
+
     setConcept(concept: string) {
         console.log('[actions] setConcept', concept);
-        alert('woop')
         setControls({
             concept,
             selectedNode: null,

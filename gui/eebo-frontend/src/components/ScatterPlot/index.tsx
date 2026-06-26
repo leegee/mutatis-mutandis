@@ -16,8 +16,6 @@ import { labelState } from "../../state/labels.store";
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
 export default function ConceptClusterPlot() {
-    const [bfsOpacity, setBfsOpacity] = createSignal(3);
-    const [neighbourOpacity, setNeighbourOpacity] = createSignal(200);
     const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
     const sharedKey = () => ({
@@ -138,8 +136,8 @@ export default function ConceptClusterPlot() {
                                         <nav>
                                             <div class="slider medium responsive">
                                                 <input type='range' min={0} max={4} step={0.5}
-                                                    value={bfsOpacity()}
-                                                    onInput={(e) => setBfsOpacity(Number(e.currentTarget.value))}
+                                                    value={controls.bfsOpacity}
+                                                    onInput={(e) => controlsActions.setBfsOpacity(e.currentTarget.value)}
                                                 />
                                                 <span><i>brightness_6</i></span>
                                             </div>
@@ -154,8 +152,8 @@ export default function ConceptClusterPlot() {
                                             <div class="slider medium responsive">
                                                 <input type='range' min={1} max={255} step={1}
                                                     disabled={controls.scatterPlotLayerMode !== "neighbours"}
-                                                    value={neighbourOpacity()}
-                                                    onInput={(e) => setNeighbourOpacity(Number(e.currentTarget.value))}
+                                                    value={controls.neighbourOpacity}
+                                                    onInput={(e) => controlsActions.setNeighbourOpacity(Number(e.currentTarget.value))}
                                                 />
                                                 <span><i>brightness_6</i></span>
                                             </div>
@@ -175,8 +173,8 @@ export default function ConceptClusterPlot() {
                                 projectionMode={controls.projectionMode}
                                 datasets={activeDatasets()}
                                 bfsDataset={bfs()}
-                                bfsOpacity={bfsOpacity()}
-                                neighbourOpacity={neighbourOpacity()}
+                                bfsOpacity={controls.bfsOpacity}
+                                neighbourOpacity={controls.neighbourOpacity}
                                 colorBy={controls.colorScatterBy}
                                 colorByFields={COLOR_FIELDS}
                                 onPointHover={(pt, xy) =>

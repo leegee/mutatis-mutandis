@@ -13,6 +13,8 @@ export type ColorScatterByType = 'pub_year' | "cluster_label" | "doc_id"
 
 export type ControlsState = {
   concept: string;
+  bfsOpacity: number;
+  neighbourOpacity: number;
   conceptSelection: string[];
   scatterPlotLayerMode: ScatterPlotLayerType;
   colorScatterBy: ColorScatterByType;
@@ -32,6 +34,8 @@ export type ControlsState = {
 };
 
 const initialControls: ControlsState = {
+  bfsOpacity: 3,
+  neighbourOpacity: 200,
   concept: "LIBERTY",
   conceptSelection: ["LIBERTY"],
   viewMode: "events",
