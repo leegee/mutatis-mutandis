@@ -463,13 +463,15 @@ def create_place(conn: psycopg.Connection):
     with conn.cursor() as cur:
         cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
 
-        # cur.execute("DROP TABLE IF  EXISTS place_normalization;")
+        cur.execute("DROP TABLE IF  EXISTS place_normalization;")
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS place_normalization (
                 raw_place TEXT PRIMARY KEY,
                 normalized_places TEXT[],
-                geom GEOGRAPHY(POINT, 4326)
+                geom GEOGRAPHY(POINT, 4326),
+                lat DOUBLE PRECISION,
+                lng DOUBLE PRECISION
             )
         """)
 
@@ -501,7 +503,12 @@ def create_place(conn: psycopg.Connection):
             else:
                 unmatched.append(raw)
 
-        cur.execute("CREATE INDEX IF NOT EXISTS place_normalization_geom_idx ON place_normalization USING GIST (geom);")
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS place_normalization_geom_idx ON place_normalization USING GIST (geom);
+            CREATE INDEX place_normalization_lat_idx ON place_normalization (lat);
+            CREATE INDEX place_normalization_lng_idx ON place_normalization (lng);
+        """)
+
     conn.commit()
 
     # coverage report
@@ -560,10 +567,12 @@ def geocode_places(conn: psycopg.Connection):
 
             cur.execute("""
                 UPDATE place_normalization
-                SET geom = ST_SetSRID(ST_MakePoint(%s, %s), 4326)
+                SET geom = ST_SetSRID(ST_MakePoint(%s, %s), 4326),
+                    lat  = %s,
+                    lng  = %s
                 WHERE %s = ANY(normalized_places)
                 OR (normalized_places IS NULL AND raw_place = %s)
-            """, (lon, lat, key, key))
+            """, (lon, lat, lat, lon, key, key))
 
             conn.commit()
             time.sleep(1.1)
