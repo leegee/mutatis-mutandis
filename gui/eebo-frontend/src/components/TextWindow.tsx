@@ -5,6 +5,7 @@ import { setWindowCache, getWindow } from "../services/windowCache";
 
 interface TextWindowProps {
     eventid: string;
+    style?: string;
 }
 
 export default function TextWindow(props: TextWindowProps) {
@@ -33,10 +34,12 @@ export default function TextWindow(props: TextWindowProps) {
         }
     );
 
+    const style = () => "max-width: 100%;" + (props.style ?? '')
+
     return (
         <Show when={!windowText.loading} fallback={<progress />}>
             <Show when={windowText()} fallback={<progress />}>
-                <span innerHTML={windowText()!} style="max-width: 100%" />
+                <span innerHTML={windowText()!} style={style()} />
             </Show>
         </Show>
     );

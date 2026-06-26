@@ -199,7 +199,7 @@ export default function ConceptClusterPlot() {
             {/* Hover Tooltip */}
             <Show when={hovered()}>
                 {(h) => (
-                    <aside class="surface-container-highest border large-elevate small-padding"
+                    <aside class="surface-container-highest border large-elevate no-padding"
                         style={{
                             position: "fixed",
                             left: `${ h().x + 100 }px`,
@@ -210,21 +210,30 @@ export default function ConceptClusterPlot() {
                             "width": "15em",
                             "max-width": "15em",
                         }}>
-                        <div class="row">
-                            <span class="bold max">{h().point.token}</span>
-                            <span class="medium-opacity small-text padding-left">
-                                {h().point.concept} • {h().point.cluster_label ? `Cluster ${ h().point.cluster_label }` : 'Noise'}
+
+                        <header class="bottom-margin">
+                            <h2 class="max">{h().point.token}</h2>
+                            <div class="medium-opacity small-text">
+                                {h().point.concept
+                                    ? (h().point.concept + ' in ')
+                                    : ''} {h().point.cluster_label ? `Cluster ${ h().point.cluster_label }` : 'Unclustered / Noise'}
+                            </div>
+                        </header>
+
+                        <div class="left-padding right-padding">
+                            {/* style="border-bottom:1pt solid var(--on-surface)"> */}
+                            {h().point.pub_year}
+
+                            <span class="medium-opacity">
+                                {" • "}
+                                Doc: {h().point.doc_id}
+                                <br />
+                                WinId/Token: {h().point.window_id}/{h().point.window_token_pos}
                             </span>
                         </div>
-                        <div class="row">
-                            <div class="row small-text">Doc: {h().point.doc_id} • Year: {h().point.pub_year}</div>
-                        </div>
-                        <div class="row">
-                            <div class="row small-text">Win: {h().point.window_id} • Win token pos: {h().point.window_token_pos}</div>
-                        </div>
-                        <div class="row">
-                            <TextWindow eventid={h().point.event_id} />
-                        </div>
+                        <footer class="row border padding" style="bottom-padding: 1em; top-padding: 1em">
+                            <TextWindow eventid={h().point.event_id} style="font-size: 8pt; line-height: 1.6;" />
+                        </footer>
                     </aside>
                 )}
             </Show>
