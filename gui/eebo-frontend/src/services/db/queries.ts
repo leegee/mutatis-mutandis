@@ -89,11 +89,13 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
 
   let type = 'event';
   const eventRows = await execRows(
-    "SELECT * FROM events WHERE event_id = ? LIMIT 1",
+    `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
+    FROM events WHERE event_id = ? LIMIT 1`,
     [id],
   );
 
   let row = eventRows[0];
+  console.log("[queryEventById]", row)
 
   if (!row) {
     type = 'neighbour';
@@ -119,8 +121,8 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
     token_idx: row[6] != null ? Number(row[6]) : null,
     window_id: row[7] != null ? Number(row[7]) : null,
     window_token_pos: row[8] != null ? Number(row[8]) : null,
-    lat: row[8] != null ? Number(row[8]) : null,
-    lng: row[8] != null ? Number(row[9]) : null,
+    lat: row[9] != null ? Number(row[9]) : null,
+    lng: row[10] != null ? Number(row[10]) : null,
   } as SqliteEvent;
 }
 
@@ -142,7 +144,9 @@ export async function queryEventsByIds(
     const placeholders = chunk.map(() => "?").join(",");
 
     const rows = await execRows(
-      `SELECT * FROM events WHERE event_id IN (${ placeholders })`,
+      `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
+       FROM events
+       WHERE event_id IN (${ placeholders })`,
       chunk,
     );
 
@@ -157,6 +161,8 @@ export async function queryEventsByIds(
         token_idx: row[6] != null ? Number(row[6]) : null,
         window_id: row[7] != null ? Number(row[7]) : null,
         window_token_pos: row[8] != null ? Number(row[8]) : null,
+        lat: row[9] != null ? Number(row[9]) : null,
+        lng: row[10] != null ? Number(row[10]) : null,
       } as SqliteEvent;
 
       result.set(event.event_id, event);
@@ -258,7 +264,7 @@ export async function queryEventsByConcept(
 
   for (const r of nbRows) {
     const nb: SqliteNeighbour = {
-      event_id: String(r[1]),
+      event_id: String(r[1]),        // neighbour_event_id
       vector_id: String(r[2]),
       token: r[3] as string,
       doc_id: r[4] as string,

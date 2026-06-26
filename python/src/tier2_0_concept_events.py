@@ -386,8 +386,7 @@ def load_doc_metadata(conn) -> dict:
             ST_Y(pn.geom::geometry) AS lat,
             ST_X(pn.geom::geometry) AS lng
         FROM documents d
-        LEFT JOIN place_normalization pn
-            ON d.pub_place = pn.raw_place
+        LEFT JOIN place_normalization pn ON d.pub_place = pn.raw_place
         ORDER BY d.doc_id
     """)
 
@@ -797,7 +796,8 @@ def load_concept_forms(conn, concept):
 
     return forms, fps
 
-def write_sqlite(output: dict, db_path, *, clear: bool = False):
+
+def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict = None):
     """
     Write analyse_concept output to a normalised SQLite database.
 
@@ -830,7 +830,7 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
             con.execute(stmt, (concept_name,))
 
         con.execute(
-            "INSERT OR IGNORE INTO concepts VALUES (?, ?)",
+            "INSERT OR IGNORE INTO concepts (concept, n_events) VALUES (?, ?)",
             (concept_name, data["n_events"]),
         )
 
@@ -861,8 +861,9 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
                 (concept_name, form),
             )
 
-        con.executemany(
-            """INSERT OR IGNORE INTO events
+        con.executemany( """INSERT OR IGNORE INTO events
+            (event_id, concept, vector_id, token, doc_id, pub_year,
+                token_idx, window_id, window_token_pos, geom, lat, lng)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
@@ -885,7 +886,10 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
 
         con.executemany(
             """INSERT OR IGNORE INTO neighbours
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (event_id, neighbour_event_id, depth, via_event_id, vector_id,
+                token, doc_id, pub_year, token_idx, window_id, window_token_pos,
+                score, geom, lat, lng)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     e["event_id"],
@@ -914,6 +918,17 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False):
                (concept, kind, rank, value, window_doc_id, window_id, count)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             list(_aggregate_rows(concept_name, data["aggregate"])),
+        )
+
+        con.executemany(
+            """UPDATE events
+            SET geom = ?, lat = ?, lng = ?
+            WHERE doc_id = ? AND (lat IS NULL OR lng IS NULL)""",
+            [
+                (meta["geom"], meta["lat"], meta["lng"], doc_id)
+                for doc_id, meta in doc_meta.items()
+                if meta.get("lat") is not None and meta.get("lng") is not None
+            ]
         )
 
         con.commit()
@@ -985,7 +1000,7 @@ def run_tier2_service(
     )
 
     logger.info(f"[tier2.run_tier2_service] Write SQL")
-    write_sqlite( output, db_path, clear=clear, )
+    write_sqlite( output, db_path, clear=clear, doc_meta=doc_meta)
 
     logger.info(f"[tier2.run_tier2_service] Done")
     return output

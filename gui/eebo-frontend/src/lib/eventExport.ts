@@ -69,6 +69,8 @@ export async function getEnrichedSelectedEvents(): Promise<EnrichedEvent[]> {
     selectedIds.map((id) => queryEventById(id))
   );
 
+  console.log("[getEnrichedSelectedEvents]", events)
+
   const cleanEvents = events.filter(Boolean);
 
   return Promise.all(cleanEvents.map(enrichEventWithWindow));

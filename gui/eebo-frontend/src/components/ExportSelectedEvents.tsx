@@ -99,8 +99,8 @@ export default function ExportSelectedEvents() {
           const selectedPoints = await getEnrichedSelectedEvents();
 
           const points = selectedPoints
-            .filter((p): p is EnrichedEvent & { nx: number; ny: number } =>
-              typeof p.nx === "number" && typeof p.ny === "number"
+            .filter((selectedPoint): selectedPoint is EnrichedEvent & { nx: number; ny: number } =>
+              typeof selectedPoint.nx === "number" && typeof selectedPoint.ny === "number"
             )
             .map((p) => ({
               id: p.event_id,

@@ -6,7 +6,7 @@ export const labelsActions = {
         points: PointData[],
         text: string
     ) {
-        console.log(`[label.actions] enter`, points)
+        console.log(`[label.actions] enter with points:`, JSON.stringify(points))
         const centroid = computeCentroid(points);
         console.log(`[label.actions] centroid`, centroid)
 
@@ -64,7 +64,7 @@ function computeCentroid(points: { nx: number; ny: number }[]) {
     let y = 0;
 
     for (const p of points) {
-        console.log(`[computeCentroid] point ${ p }`)
+        console.log(`[computeCentroid] point ${ JSON.stringify(p) }`)
         x += p.nx;
         y += p.ny;
     }

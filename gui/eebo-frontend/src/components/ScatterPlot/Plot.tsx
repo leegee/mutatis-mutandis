@@ -21,10 +21,19 @@ import { labelState } from "../../state/labels.store";
 type RGB = [number, number, number];
 type RGBA = [number, number, number, number]
 
-const DEPTH_COLORS: Record<number, RGB> = {
-  0: [230, 180, 80],  // gold   — seeds
-  1: [80, 160, 220],  // blue   — depth 1
-  2: [80, 200, 140],  // green  — depth 2
+const DEPTH_COLORS: Record<number, RGBA> = {
+  0: [0, 0, 0, 0],  // gold   — seeds
+  1: [80, 160, 220, 250],  // blue   — depth 1
+  2: [80, 200, 140, 250],  // green  — depth 2
+};
+
+const GREY: [number, number, number, number] = [120, 120, 130, 140];
+
+const INITIAL_VIEW_STATE: OrthographicViewState = {
+  target: [0.5, 0.5, 0],
+  zoom: 10,
+  minZoom: 8,
+  maxZoom: 20,
 };
 
 
@@ -65,15 +74,7 @@ interface PlotProps {
   onSelectionChange?: (ids: string[] | null) => void;
 }
 
-const GREY: [number, number, number, number] = [120, 120, 130, 140];
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
-const INITIAL_VIEW_STATE: OrthographicViewState = {
-  target: [0.5, 0.5, 0],
-  zoom: 10,
-  minZoom: 8,
-  maxZoom: 20,
-};
-
 
 function getPosition(
   p: PointData,
@@ -107,23 +108,23 @@ export default function Plot(props: PlotProps) {
 
   const selected = createMemo(() => props.selected ?? new Set<Id>());
 
-  const getBaseColor = (
-    p: PointData,
-    origin: string | undefined,
-    map: Map<string, RGBA>,
-    field: keyof PointData,
-  ): RGBA => {
-    if (origin === "neighbours") {
-      return [
-        ...DEPTH_COLORS[p.depth ?? 1],
-        p.depth === 2
-          ? Math.floor((props.neighbourOpacity ?? 200) * 0.45)
-          : (props.neighbourOpacity ?? 200),
-      ];
-    }
+  // const getBaseColor = (
+  //   p: PointData,
+  //   origin: string | undefined,
+  //   map: Map<string, RGBA>,
+  //   field: keyof PointData,
+  // ): RGBA => {
+  //   if (origin === "neighbours") {
+  //     return [
+  //       ...DEPTH_COLORS[p.depth ?? 1],
+  //       p.depth === 2
+  //         ? Math.floor((props.neighbourOpacity ?? 200) * 0.45)
+  //         : (props.neighbourOpacity ?? 200),
+  //     ];
+  //   }
 
-    return map.get(String(p[field] ?? "")) ?? GREY;
-  };
+  //   return map.get(String(p[field] ?? "")) ?? GREY;
+  // };
 
   const colorMap = createMemo(() => {
     const field = props.colorBy;
@@ -149,7 +150,9 @@ export default function Plot(props: PlotProps) {
             : neighbourOpacity;
 
         base = [
-          ...DEPTH_COLORS[depth],
+          DEPTH_COLORS[depth][0],
+          DEPTH_COLORS[depth][1],
+          DEPTH_COLORS[depth][2],
           alpha,
         ];
       } else {
