@@ -3,7 +3,7 @@ import { pushToast } from "../state/toast.store";
 
 // gui\eebo-frontend\src\lib\loadJson.ts
 export async function loadJson<T = any>(url: string, label?: string): Promise<T> {
-  console.log(`Loading ${ url } for ${ label ?? '-' }`);
+  console.debug(`Loading ${ url } for ${ label ?? '-' }`);
 
   const res = await fetch(url);
 
@@ -24,7 +24,7 @@ export async function loadJson<T = any>(url: string, label?: string): Promise<T>
 
   try {
     const json = JSON.parse(text);
-    console.log(`Loaded ${ url } for ${ label ?? '-' }`);
+    console.debug(`Loaded ${ url } for ${ label ?? '-' }`);
     // console.log('JSON', json)
     return json as T;
   } catch (e) {

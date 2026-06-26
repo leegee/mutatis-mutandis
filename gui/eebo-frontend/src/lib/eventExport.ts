@@ -5,17 +5,15 @@ import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
 import { setWindowCache, getWindow, } from "../services/windowCache";
 
 export type EnrichedEvent = SemanticEvent & {
-  id: string;
   event_id: string;
-  concept: string;
-  doc_id: string;
   token_idx: number;
-  token: string;
   pub_year: number;
   windowText?: string;
   windowKey: string;
+  gnx?: number;
+  gny?: number;
   nx?: number;
-  ny?: number; // ??
+  ny?: number;
 };
 
 export type ExportData = {

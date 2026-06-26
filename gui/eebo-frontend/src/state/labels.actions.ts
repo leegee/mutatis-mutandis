@@ -1,20 +1,21 @@
 import type { LabelDataset, LabelPoint, PointData } from "../components/ScatterPlot/types";
+import type { EnrichedEvent } from "../lib/eventExport";
 import { labelState, setLabelState } from "./labels.store";
 
 export const labelsActions = {
     createFromCluster(
-        points: PointData[],
+        points: EnrichedEvent[],
         text: string
     ) {
         console.log(`[label.actions] enter with points:`, JSON.stringify(points))
         const centroid = computeCentroid(points);
-        console.log(`[label.actions] centroid`, centroid)
+        console.debug(`[label.actions] centroid`, centroid)
 
         const labels = labelState.labels;
-        console.log(`[label.actions] labels`, labels)
+        console.debug(`[label.actions] labels`, labels)
 
         const minDist = labelState?.minCentroidDistance ?? 0.05;
-        console.log(`[label.actions] mid`, minDist)
+        console.debug(`[label.actions] mid`, minDist)
 
         if (labels && isTooClose(centroid, labels, minDist)) {
             console.log(`[label.actions] too close - bail out!`)
@@ -58,13 +59,16 @@ function isTooClose(
     });
 }
 
-function computeCentroid(points: { nx: number; ny: number }[]) {
+function computeCentroid(points: { nx: number | undefined; ny: number | undefined }[]) {
     console.log(`[computeCentroid]`)
     let x = 0;
     let y = 0;
 
     for (const p of points) {
         console.log(`[computeCentroid] point ${ JSON.stringify(p) }`)
+        if (typeof p.nx === "undefined" || typeof p.ny === "undefined") {
+            throw new Error("point nx/ny undefined");
+        }
         x += p.nx;
         y += p.ny;
     }

@@ -26,13 +26,15 @@ async function init(url: string): Promise<void> {
   const filename = "/" + url.split("/").pop()!;
   await OpfsWlDb.importDb(filename, new Uint8Array(buf));
   DBH = new OpfsWlDb(filename, "r");
-  console.log('[db.worker] DBH', DBH)
+
+  console.debug('[db.worker] DBH', DBH)
 
   // Sanity check
   const rows = execRows(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`,);
   const tables = rows.map(_ => _[0]);
-  console.log("[db.worker] tables:", tables);
+
   if (!tables.includes("events")) {
+    console.debug("[db.worker] tables:", tables);
     throw new Error(`[db.worker] 'events' table missing. Found: [${ tables.join(", ") }]`);
   }
 }

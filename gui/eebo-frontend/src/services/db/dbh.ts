@@ -8,7 +8,7 @@ let _msgId = 0;
 
 function getWorker(): Worker {
   if (!_worker)
-    throw new Error("[db] worker not initialised! Call initDb() first");
+    throw new Error("[dbh] worker not initialised! Call initDb() first");
   return _worker;
 }
 
@@ -45,11 +45,11 @@ export async function initDb(url: string): Promise<void> {
     };
 
     _worker.onerror = (e) => {
-      console.error("[db] worker error:", e.message);
+      console.error("[dbh] worker error:", e.message);
     };
 
     await send("init", { url });
-    console.log("[db] worker ready");
+    console.log("[dbh] worker ready");
   })();
 
   return _initPromise;

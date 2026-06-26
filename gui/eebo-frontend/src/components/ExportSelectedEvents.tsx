@@ -23,7 +23,7 @@ export default function ExportSelectedEvents() {
       setIsExporting(true);
       try {
         const data = await exportSelectedEvents();
-        console.log(data);
+        // console.log(data);
         setExportedData(data);
       } finally {
         setIsExporting(false);
@@ -98,9 +98,12 @@ export default function ExportSelectedEvents() {
         <li onClick={async () => {
           const selectedPoints = await getEnrichedSelectedEvents();
 
+          console.log('xxx1', selectedPoints)
+
           const points = selectedPoints
-            .filter((selectedPoint): selectedPoint is EnrichedEvent & { nx: number; ny: number } =>
-              typeof selectedPoint.nx === "number" && typeof selectedPoint.ny === "number"
+            .filter(
+              (selectedPoint): selectedPoint is EnrichedEvent & { nx: number; ny: number } =>
+                typeof selectedPoint.nx === "number" && typeof selectedPoint.ny === "number"
             )
             .map((p) => ({
               id: p.event_id,
@@ -117,7 +120,7 @@ export default function ExportSelectedEvents() {
           const labelText = result.sense_name;
 
           const success = labelsActions.createFromCluster(
-            selectedPoints as unknown as PointData[], // should define a new type
+            selectedPoints,
             labelText
           );
 
