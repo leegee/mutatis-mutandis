@@ -2,6 +2,7 @@ import type { SqliteEvent } from '../../types'
 
 export interface PointData extends Omit<SqliteEvent, "vector_id"> {
   event_id: string;
+  depth?: number;
   token_idx: number;
   // local projection
   nx: number;
