@@ -1,14 +1,18 @@
 import { createStore } from "solid-js/store";
-import type { LabelDataset, LabelPoint } from "../components/ScatterPlot/types";
+import { makePersisted } from "@solid-primitives/storage";
+import type { LabelPoint } from "../components/ScatterPlot/types";
 
 export interface LabelStoreState {
-  labelDataset?: LabelDataset;
+  labels: LabelPoint[];
+  minCentroidDistance: number;
 }
 
-export const [labelState, setLabelState] = createStore<LabelStoreState>({
-  labelDataset: {
-    labels: [] as LabelPoint[],
-    minCentroidDistance: 0,
-  }
-});
+const initialLabelState = {
+  labels: [] as LabelPoint[],
+  minCentroidDistance: 0,
+}
 
+export const [labelState, setLabelState] = makePersisted(
+  createStore<LabelStoreState>(initialLabelState),
+  { name: "labels" }
+);

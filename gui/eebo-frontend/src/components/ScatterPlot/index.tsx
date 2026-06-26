@@ -174,7 +174,6 @@ export default function ConceptClusterPlot() {
                             <Plot
                                 projectionMode={controls.projectionMode}
                                 datasets={activeDatasets()}
-                                labelDataset={labelState.labelDataset}
                                 bfsDataset={bfs()}
                                 bfsOpacity={bfsOpacity()}
                                 neighbourOpacity={neighbourOpacity()}

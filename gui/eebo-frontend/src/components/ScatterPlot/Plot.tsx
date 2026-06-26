@@ -9,19 +9,19 @@ import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./style.css";
-import type { BfsDataset, ConceptDataset, LabelPoint, LabelDataset, PointData, ViewBounds } from "./types";
+import type { BfsDataset, ConceptDataset, LabelPoint, PointData, ViewBounds } from "./types";
 import { CanvasDragPlugin } from "./SelectionPlugin/CanvasDragPlugin";
 import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
 import type { Id, ScreenRect } from "./SelectionPlugin/types";
 import { buildColorMap } from "../../lib/colour";
 import type { ProjectionModeType } from "../../state/controls.store";
+import { labelState } from "../../state/labels.store";
 
 interface PlotProps {
   // Data
   datasets: ConceptDataset[];
   bfsDataset?: BfsDataset;
-  labelDataset?: LabelDataset;
 
   // Controlled display state — parent owns these
   projectionMode: ProjectionModeType;
@@ -126,24 +126,27 @@ export default function Plot(props: PlotProps) {
   });
 
 
-  const labelLayer = props.labelDataset?.labels.length
-    ? new TextLayer<LabelPoint>({
+  const labelLayer = createMemo(() => {
+    const labels = labelState.labels;
+    return new TextLayer<LabelPoint>({
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       id: "labels",
-      data: props.labelDataset.labels,
-
-      getPosition: d =>
-        props.projectionMode === "global"
-          ? [d.gnx ?? d.nx, d.gny ?? d.ny, 0]
-          : [d.nx, d.ny, 0],
+      data: labels.length ? labels : [],
+      getPosition: d => props.projectionMode === "global"
+        ? [d.gnx ?? d.nx, d.gny ?? d.ny, 0]
+        : [d.nx, d.ny, 0],
 
       getText: d => d.text,
-      getSize: 16,
+      getSize: 24,
       sizeUnits: "pixels",
       getColor: [222, 222, 222, 222],
+      background: true,
+      getBackgroundColor: [110, 110, 110, 80],
+      backgroundPadding: [4, 2],
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
-    })
-    : null;
+    });
+  });
 
 
   // One ScatterplotLayer per concept dataset so toggling visibility
@@ -181,7 +184,6 @@ export default function Plot(props: PlotProps) {
           },
           onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
         });
-
         return dataset.origin === "neighbours"
           ? [[...n, layer], c]
           : [n, [...c, layer]];
@@ -214,7 +216,7 @@ export default function Plot(props: PlotProps) {
       ...(bfsLayer ? [bfsLayer] : []),
       ...neighbourLayers,
       ...conceptLayers,
-      ...(labelLayer ? [labelLayer] : []),
+      ...(labelLayer ? [labelLayer()] : []),
     ];
   });
 

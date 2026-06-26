@@ -9,7 +9,7 @@ const DiachronicChartGuide = lazy(() => import("./components/DiachronicChart/Gui
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
-import Map from "./components/ConceptClusterGeoMap";
+import Map from "./components/GeoMap";
 import ScatterPlotGuide from "./components/ScatterPlot/ScatterPlotGuide";
 const ConceptClusters = lazy(() => import("./components/ConceptClusters"));
 

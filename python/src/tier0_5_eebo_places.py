@@ -24,6 +24,7 @@ PLACE_MAP = {
     "york": "York",
     "edinburgh": "Edinburgh",
     "edenburgh": "Edinburgh",
+    "warsaw": "Warsaw",
     "amsterdam": "Amsterdam",
     "amsterodam": "Amsterdam",
     "antwerp": "Antwerp",
@@ -342,21 +343,18 @@ PLACE_MAP = {
     "[liège?": "Liège",
     "[lo]ndon": "London",
     "nod-nol.": "Nödinge-Nol",
-    "lo:": "Sine Loco",
+    # "lo:": "Sine Loco",
 }
 
 
 def norm_key(s: str) -> str:
     s = unicodedata.normalize("NFKC", s)
     s = s.lower()
-
     # remove combining diacritics (Doüay → douay, roüen → rouen)
     s = "".join(c for c in s if not unicodedata.combining(c))
-
     # normalize punctuation variants
     s = re.sub(r"[\[\]().,:;?']", "", s)
     s = re.sub(r"\s+", " ", s).strip()
-
     return s
 
 
@@ -378,6 +376,7 @@ QUALIFIERS = {
     "yorkshire",
     "oxfordshire",
     "cambridgeshire",
+    "sine loco",
 }
 
 
@@ -398,6 +397,7 @@ def normalize_pub_place(raw: str | None):
         return None
 
     s = unicodedata.normalize("NFKC", raw).lower()
+    logger.info("IN %s ", s)
 
     found = []
 
@@ -406,17 +406,23 @@ def normalize_pub_place(raw: str | None):
 
     for variant, canonical in CLEAN_PLACE_MAP.items():
         if variant in key:
+            logger.info("VAR ---------- %s -> %s", variant, canonical)
             found.append(canonical)
+
 
     # dedupe preserving order
     found = list(dict.fromkeys(found))
 
-    # if multiple, drop London (or other low-priority)
+    # if multiple, drop Sine Loco, London (or other low-priority)
     if len(found) > 1:
-        found = [
-            f for f in found
-            if norm_key(f) not in QUALIFIERS
-        ] or found
+        found = [f for f in found if norm_key(f) != norm_key("sine loco")]
+        if len(found) > 1:
+            found = [
+                f for f in found
+                if norm_key(f) not in QUALIFIERS
+            ] or found
+
+    logger.info("FIN ------------------------------------------------------------------------------------ %s", found)
 
     # logging unknowns (only for iteration)
     if not found:
@@ -431,7 +437,7 @@ def normalize_pub_place(raw: str | None):
 
 def geocode(place: str):
     if (place == "Sine Loco"):
-        return 54.75, 2.25
+        return 54.75, 2.25 # Dogger Bank for visibility
 
     try:
         r = requests.get(
@@ -468,8 +474,7 @@ def create_place(conn: psycopg.Connection):
         """)
 
         cur.execute("""
-            SELECT DISTINCT pub_place
-            FROM documents
+            SELECT DISTINCT pub_place FROM documents
             WHERE pub_place IS NOT NULL
             ORDER BY pub_place
         """)
@@ -483,39 +488,33 @@ def create_place(conn: psycopg.Connection):
 
         for (raw,) in rows:
             total += 1
-
             norm = normalize_pub_place(raw)
-
             cur.execute("""
                 INSERT INTO place_normalization (raw_place, normalized_places)
                 VALUES (%s, %s)
                 ON CONFLICT (raw_place)
                 DO UPDATE SET normalized_places = EXCLUDED.normalized_places
             """, (raw, norm))
-
+            # logger.info("%s \t\t %s",  norm, raw)
             if norm:
                 matched += 1
             else:
                 unmatched.append(raw)
 
-            logger.info("%s -> %s", raw, norm)
-
         cur.execute("CREATE INDEX IF NOT EXISTS place_normalization_geom_idx ON place_normalization USING GIST (geom);")
-
     conn.commit()
 
     # coverage report
-    logger.info("")
-    logger.info("=== COVERAGE ===")
-    logger.info("Total rows:     %d", total)
-    logger.info("Matched rows:   %d", matched)
-    logger.info("Unmatched rows: %d", len(unmatched))
-    logger.info("Coverage:       %.1f%%", 100.0 * matched / total)
+    # logger.info("")
+    # logger.info("=== COVERAGE ===")
+    # logger.info("Total rows:     %d", total)
+    # logger.info("Matched rows:   %d", matched)
+    # logger.info("Unmatched rows: %d", len(unmatched))
+    # logger.info("Coverage:       %.1f%%", 100.0 * matched / total)
 
     # unmatched examples
     logger.info("")
     logger.info("=== UNMATCHED ROWS ===")
-
     for raw in unmatched[:200]:
         logger.info(raw)
 

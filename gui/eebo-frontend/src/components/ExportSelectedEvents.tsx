@@ -11,8 +11,6 @@ import {
 } from "../lib/eventExport";
 import { controls } from "../state/controls.store";
 import { cluster2groq } from "../services/groqApi";
-import TopicAnalysisButton from "./TopicAnalysisButton";   // ← add this
-import { setLabelState } from "../state/labels.store";
 import { labelsActions } from "../state/labels.actions";
 import type { PointData } from "./ScatterPlot/types";
 
