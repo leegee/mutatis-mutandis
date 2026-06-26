@@ -14,6 +14,8 @@ import { queryYearBounds, queryEventsByConcept, listConcepts, queryNEvents, quer
 import { filterByYearRange, scanYearRange } from "../lib/yearUtils";
 import type { ConceptData, SqliteEventWithNeighbours } from "../types";
 
+const DYNAMIC_YEAR_BOUNDS = 0;
+
 export async function getConcepts(): Promise<string[]> {
   return listConcepts();
 }
@@ -78,7 +80,7 @@ export async function getYearBuckets(
   if (!c) return [];
 
   const [[minYear, maxYear], tally] = await Promise.all([
-    getYearBounds(c),
+    DYNAMIC_YEAR_BOUNDS ? getYearBounds(c) : [CORPUS_START_YEAR, CORPUS_END_YEAR],
     queryYearCounts(c),
   ]);
 
