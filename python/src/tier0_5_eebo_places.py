@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+We need to seed the table `normalized_places` with the locations
+of `QUALIFIERS` sometimes those are the only thing that resolves `documents.pub_places`.
+"""
+
 import psycopg
 import time
 import requests

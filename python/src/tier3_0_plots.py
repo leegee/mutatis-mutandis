@@ -24,6 +24,9 @@ Each point carries six coordinates:
         gx,  gy  — raw global UMAP output
         gnx, gny — normalised within the shared global padded bounds  [0, 1]
 
+concept_neighbours and bfs_global files additionally carry:
+    depth  — 0 = concept seed, 1 = direct neighbour, 2 = second-order neighbour
+
 concept_clusters files additionally carry:
     cluster_id      — integer HDBSCAN cluster id (-1 = noise)
     cluster_label   — letter label A, B, C... (null for noise)
@@ -60,23 +63,6 @@ CLUSTER_DIR       = PLOT_DIR / "concept_clusters"
 K = 25
 
 
-class EventUniverse:
-    def __init__(self):
-        self._ids = set()
-
-    def add(self, ids):
-        self._ids.update(ids)
-
-    def add_one(self, eid):
-        self._ids.add(eid)
-
-    def ids(self):
-        return self._ids
-
-    def snapshot(self):
-        return set(self._ids)
-
-
 class EmbeddingCache:
     """
     Single point of access for embeddings.
@@ -84,8 +70,8 @@ class EmbeddingCache:
     Fetches each event's embedding from the lookup at most once and keeps
     it in memory as a row in a contiguous float32 matrix, so repeated
     np.stack([lookup.get_event(eid)["embedding"] for eid in ids]) calls
-    across fit_umap_local / fit_cluster_local / expand_neighbors /
-    bfs_event_expansion collapse into cheap array slicing.
+    across fit_umap_local / fit_cluster_local / build_depth_layers
+    collapse into cheap array slicing.
 
     Does not change any numeric results — same embeddings, same dtype,
     same ordering semantics (callers still build their own X via
@@ -220,52 +206,74 @@ def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
         sqlite_conn.close()
 
 
-def bfs_event_expansion(lookup, index, seed_ids, emb_cache, k=25, max_nodes=5000, depth=2):
-    if not seed_ids:
-        logger.warning("[tier3] bfs_event_expansion called with empty seed_ids, skipping")
-        return []
-    visited = set(map(str, seed_ids))
-    frontier = set(map(str, seed_ids))
-    all_nodes = set(map(str, seed_ids))
+def build_depth_layers(
+    index,
+    emb_cache,
+    seed_ids,
+    k: int = 25,
+    max_depth: int = 2,
+    max_nodes: int | None = None,
+) -> dict[int, list[str]]:
+    """
+    BFS expansion via ANN search from seed_ids to max_depth hops.
 
-    for _ in range(depth):
-        if len(all_nodes) >= max_nodes:
-            break
+    Each ring contains only nodes first reached at that depth — rings are
+    guaranteed disjoint by the seen set.  The frontier for depth d is
+    exactly the ring discovered at depth d-1, so each ANN search covers
+    only new nodes rather than the entire accumulated set.
 
-        frontier_list = list(frontier)
-        vecs = emb_cache.matrix(frontier_list)
-        _, nn_ids = index.search(vecs, k)
+    Args:
+        index      — FAISS index supporting .search(vecs, k)
+        emb_cache  — EmbeddingCache
+        seed_ids   — iterable of seed event ids (str or int)
+        k          — number of ANN neighbours per query vector
+        max_depth  — number of BFS hops (default 2)
+        max_nodes  — optional total node cap across all depths
 
-        next_frontier = set()
-        for row in nn_ids:
-            for nid in row:
-                nid = int(nid)
-                if nid == -1:
-                    continue
-                if nid not in visited:
-                    visited.add(str(nid))
-                    next_frontier.add(str(nid))
+    Returns:
+        {depth: [str_event_id, ...]}  for depth in 0..max_depth
+        Depth 0 is always exactly the (deduplicated) seed set.
+    """
+    seen = set(map(str, seed_ids))
+    layers: dict[int, list[str]] = {0: list(seen)}
+    frontier = list(seen)
 
-        all_nodes.update(next_frontier)
-        frontier = next_frontier
+    for depth in range(1, max_depth + 1):
         if not frontier:
             break
-
-    return list(all_nodes)[:max_nodes]
-
-
-def expand_neighbors(index, lookup, event_ids, emb_cache, k=25, max_points=3000):
-    ids = set(event_ids)
-    vecs = emb_cache.matrix(list(event_ids))
-    _, nn_ids = index.search(vecs, k)
-    for row in nn_ids:
-        for nid in row:
-            nid = int(nid)
-            if nid != -1:
-                ids.add(str(nid))
-        if len(ids) >= max_points:
+        if max_nodes is not None and sum(len(v) for v in layers.values()) >= max_nodes:
             break
-    return [str(x) for x in list(ids)[:max_points]]
+
+        X = emb_cache.matrix(frontier)
+        _, nn = index.search(X, k)
+
+        ring: set[str] = set()
+        for row in nn:
+            for nid in row:
+                if nid != -1:
+                    sid = str(int(nid))
+                    if sid not in seen:
+                        ring.add(sid)
+
+        seen |= ring
+        layers[depth] = list(ring)
+        frontier = list(ring)
+
+    return layers
+
+
+def depth_layers_to_flat(layers: dict[int, list[str]]) -> tuple[list[str], dict[str, int]]:
+    """
+    Flatten {depth: [ids]} into (all_ids, {id: depth}).
+    Preserves depth-ascending order: seeds first, then ring 1, ring 2, ...
+    """
+    all_ids: list[str] = []
+    depth_map: dict[str, int] = {}
+    for depth in sorted(layers):
+        for sid in layers[depth]:
+            all_ids.append(sid)
+            depth_map[sid] = depth
+    return all_ids, depth_map
 
 
 def fit_umap_local(X, event_ids, n_neighbors=15, min_dist=0.1):
@@ -535,9 +543,9 @@ def run_tier3_core(
 
     manifest = {"concepts": [], "global": None, "globalBounds": None}
     all_concept_events = []
-    buffered_concept       = []
-    buffered_concept_neigh = []
-    buffered_clusters      = []
+    buffered_concept       = []   # (path, meta, event_ids, local_coords)
+    buffered_concept_neigh = []   # (path, meta, event_ids, local_coords, depth_map)
+    buffered_clusters      = []   # (path, meta, event_ids, local_coords, cluster_labels)
     all_event_ids = set()
 
     #
@@ -572,8 +580,12 @@ def run_tier3_core(
             ))
             all_event_ids.update(concept_sample)
 
-            neigh_ids = expand_neighbors(index, lookup, concept_sample, emb_cache, max_points=3000)
-            X_neigh   = emb_cache.matrix(neigh_ids)
+            # depth=2 neighbour expansion; seed ring is depth 0
+            neigh_layers = build_depth_layers(
+                index, emb_cache, concept_sample, k=K, max_depth=2, max_nodes=3000
+            )
+            neigh_ids, neigh_depth_map = depth_layers_to_flat(neigh_layers)
+            X_neigh     = emb_cache.matrix(neigh_ids)
             local_neigh = fit_umap_local(X_neigh, neigh_ids)
 
             buffered_concept_neigh.append((
@@ -581,6 +593,7 @@ def run_tier3_core(
                 {"type": "concept_neighbours", "concept": concept_name},
                 neigh_ids,
                 local_neigh,
+                neigh_depth_map,
             ))
             all_event_ids.update(neigh_ids)
 
@@ -648,18 +661,24 @@ def run_tier3_core(
             if emit:
                 emit("concept_done", {"concept": concept_name})
 
-    # BFS (full only)
+    #
+    # BFS global expansion (full mode only)
+    #
     if mode == "full":
         if emit:
             emit("bfs_start", {})
         logger.info(f"[tier3] all_concept_events count: {len(all_concept_events)}")
-        bfs_ids   = bfs_event_expansion(lookup, index, all_concept_events, emb_cache, max_nodes=5000, depth=2)
-        X_bfs     = emb_cache.matrix(bfs_ids)
-        local_bfs = fit_umap_local(X_bfs, bfs_ids)
+        bfs_layers = build_depth_layers(
+            index, emb_cache, all_concept_events, k=K, max_depth=2, max_nodes=5000
+        )
+        bfs_ids, bfs_depth_map = depth_layers_to_flat(bfs_layers)
+        X_bfs     = emb_cache.matrix(bfs_ids) if bfs_ids else None
+        local_bfs = fit_umap_local(X_bfs, bfs_ids) if bfs_ids else {}
         all_event_ids.update(bfs_ids)
     else:
-        bfs_ids   = []
-        local_bfs = {}
+        bfs_ids       = []
+        bfs_depth_map = {}
+        local_bfs     = {}
 
     # Backfill safety
     if all_event_ids:
@@ -671,10 +690,10 @@ def run_tier3_core(
 
     if all_event_ids:
         all_event_ids_list   = list(all_event_ids)
-        X_global              = emb_cache.matrix(all_event_ids_list)
-        global_coords         = fit_umap_global(X_global, all_event_ids_list)
-        global_bounds         = compute_bounds_from_coords(list(global_coords.values()))
-        global_bounds_padded  = add_padding(global_bounds)
+        X_global             = emb_cache.matrix(all_event_ids_list)
+        global_coords        = fit_umap_global(X_global, all_event_ids_list)
+        global_bounds        = compute_bounds_from_coords(list(global_coords.values()))
+        global_bounds_padded = add_padding(global_bounds)
     else:
         logger.warning("[tier3] no event ids — skipping global projection")
         global_coords        = {}
@@ -684,9 +703,9 @@ def run_tier3_core(
     logger.info(f"[tier3] global bounds (padded): {global_bounds_padded}")
 
     #
-    # Pass 3 — concept + neighbour outputs
+    # Pass 3a — concept outputs (seeds; no depth field needed, implicitly 0)
     #
-    for path, meta, event_ids, local_coords in buffered_concept + buffered_concept_neigh:
+    for path, meta, event_ids, local_coords in buffered_concept:
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
@@ -701,7 +720,30 @@ def run_tier3_core(
             "points":       points,
         })
 
-    # Cluster outputs
+    #
+    # Pass 3b — concept_neighbours outputs (with depth field per point)
+    #
+    for path, meta, event_ids, local_coords, depth_map in buffered_concept_neigh:
+        local_bounds = add_padding(
+            compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
+        )
+        extra = {str(eid): {"depth": depth_map[str(eid)]} for eid in event_ids}
+        points = assemble_points(
+            event_ids, local_coords, global_coords,
+            local_bounds, global_bounds_padded,
+            extra_fields=extra,
+        )
+        write_json(path, {
+            **meta,
+            "max_depth":    2,
+            "bounds":       local_bounds,
+            "globalBounds": global_bounds_padded,
+            "points":       points,
+        })
+
+    #
+    # Pass 3c — cluster outputs
+    #
     for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
         unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
         label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
@@ -737,14 +779,18 @@ def run_tier3_core(
             "points": points,
         })
 
-    # BFS output
+    #
+    # BFS global output (with depth field per point)
+    #
     if bfs_ids:
         local_bounds_bfs = add_padding(
             compute_bounds_from_coords([local_bfs[str(e)] for e in bfs_ids])
         )
+        extra_bfs = {str(eid): {"depth": bfs_depth_map[str(eid)]} for eid in bfs_ids}
         points_bfs = assemble_points(
             bfs_ids, local_bfs, global_coords,
             local_bounds_bfs, global_bounds_padded,
+            extra_fields=extra_bfs,
         )
         write_json(
             BFS_DIR / "global.json",
@@ -752,7 +798,7 @@ def run_tier3_core(
                 "type":         "bfs_global",
                 "bounds":       local_bounds_bfs,
                 "globalBounds": global_bounds_padded,
-                "depth":        2,
+                "max_depth":    2,
                 "k":            K,
                 "points":       points_bfs,
             }
@@ -782,7 +828,7 @@ def run_tier3_service(
     logger = setEmit(
         emit,
         "[tier3]",
-        concept ,
+        concept,
     )
     logger.info("[tier3 run_tier3_service] Enter")
 
@@ -813,13 +859,13 @@ def main():
     index  = EeboFaissIndex.load(FAISS_TIER1_INDEX)
 
     run_tier3_core(
-        db_path = CORPUS_TIER2_DB_PATH,
-        index=index,
-        lookup=lookup,
-        concept=args.concept,
-        false_positives=args.false_positives,
-        mode=args.mode,
-        emit=None,
+        db_path         = CORPUS_TIER2_DB_PATH,
+        index           = index,
+        lookup          = lookup,
+        concept         = args.concept,
+        false_positives = args.false_positives,
+        mode            = args.mode,
+        emit            = None,
     )
 
     logger.info("[tier3] complete")
