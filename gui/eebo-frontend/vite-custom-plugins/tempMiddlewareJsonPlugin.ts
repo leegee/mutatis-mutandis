@@ -1,10 +1,10 @@
 import type { Plugin } from "vite";
 import { Pool } from "pg";
-import { createWindowMiddleware } from "../server-middleware/api/window";
-import { createWindowBatchMiddleware } from "../server-middleware/api/window-batch";
-import { createDocumentMiddleware } from "../server-middleware/api/doc";
-import { createGroqMiddleware } from "../server-middleware/api/groq";
-import { createStaticMiddleware } from "../server-middleware/static";
+import { createWindowMiddleware } from "../server-middleware/api/window.middleware";
+import { createWindowBatchMiddleware } from "../server-middleware/api/window-batch.middleware";
+import { createDocumentMiddleware } from "../server-middleware/api/doc.middleware";
+import { createGroqMiddleware } from "../server-middleware/api/groq.middleware";
+import { createStaticMiddleware } from "../server-middleware/static.middleware";
 
 
 export function temporaryMiddlewarePlugin(rootDir: string): Plugin {
