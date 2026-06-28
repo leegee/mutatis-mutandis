@@ -172,7 +172,7 @@ export default function Plot(props: PlotProps) {
   const labelLayer = createMemo(() => {
     const labels = labelState.labels;
     return new TextLayer<LabelPoint>({
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      coordinateSystem: "cartesian",
       id: "labels",
       data: labels.length ? labels : [],
       getPosition: d => props.projectionMode === "global"
@@ -207,7 +207,7 @@ export default function Plot(props: PlotProps) {
       ([n, c], dataset) => {
         const layer = new ScatterplotLayer<PointData>({
           id: `${ dataset.origin ?? "concept" }-${ dataset.concept }`,
-          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          coordinateSystem: "cartesian",
           data: dataset.points,
           getPosition: (p) => getPosition(p, proj),
           getFillColor: (p) => colorFn(p, dataset.origin),
@@ -246,7 +246,7 @@ export default function Plot(props: PlotProps) {
       &&
       new ScatterplotLayer<PointData>({
         id: "bfs-global",
-        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        coordinateSystem: "cartesian",
         data: props.bfsDataset.points,
         getPosition: getBfsPosition,
         // getFillColor: () => [150, 150, 150, bfsOpacity],
