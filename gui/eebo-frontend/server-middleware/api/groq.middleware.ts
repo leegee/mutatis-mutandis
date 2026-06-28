@@ -11,11 +11,6 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
  */
 export interface Cluster2GroqRequest {
     concept: string;
-    points: {
-        id: string;
-        x: number;
-        y: number;
-    }[];
     rawText?: string;
 }
 
@@ -39,11 +34,10 @@ export function createGroqMiddleware(): Connect.NextHandleFunction {
             // Validate request
             if (
                 !parsed ||
-                typeof parsed.concept !== "string" ||
-                !Array.isArray(parsed.points)
+                typeof parsed.concept !== "string"
             ) {
                 throw new TypeError(
-                    `Expected { concept: string, points: {id,x,y}[] } but got: ${ body }`
+                    `Expected { concept: string, rawText: string } but got: ${ body }`
                 );
             }
 
@@ -73,15 +67,13 @@ function safeJsonParse(raw: string) {
  * Core Groq semantic cluster labeling
  */
 export async function analyzeCluster(input: Cluster2GroqRequest) {
-    const { concept, points, rawText } = input;
+    const { concept, rawText } = input;
 
     // Keep lightweight context for LLM
     const sampleText = (rawText ?? "").substring(0, 1000);
 
     const clusterSummary = `
 Concept: ${ concept }
-Point count: ${ points.length }
-
 Sample text:
 ${ sampleText }
 `;
