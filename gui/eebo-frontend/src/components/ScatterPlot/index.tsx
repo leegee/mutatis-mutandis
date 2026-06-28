@@ -65,9 +65,9 @@ export default function ConceptClusterPlot() {
     // const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
-    function handleSelectionChange(event_ids: Id[] | null) {
-        // console.debug("[ConceptClusterPlot] handleSelectionChange event:", event_ids ? event_ids.map(_ => _) : null);
-        controlsActions.setSelectedEventIds(event_ids ? new Set(event_ids) : null)
+    function handleSelectionChange(points: PointData[] | null) {
+        console.log("[ScattPlot] handleSelectionChange event:", points);
+        controlsActions.setSelectedPoints(points || []);
     }
 
     function handleBoundsChange(_bounds: ViewBounds) {

@@ -96,9 +96,9 @@ export default function ExportSelectedEvents() {
         /> */}
 
         <li onClick={async () => {
-          const selectedPoints = await getEnrichedSelectedEvents();
 
-          console.log('xxx1', selectedPoints)
+          const selectedPoints = controls.selectedPoints;
+          console.log('[ExportSelectedEvents] selected points:', selectedPoints)
 
           const points = selectedPoints
             .filter(

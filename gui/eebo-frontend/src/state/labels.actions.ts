@@ -1,10 +1,9 @@
-import type { LabelDataset, LabelPoint, PointData } from "../components/ScatterPlot/types";
-import type { EnrichedEvent } from "../lib/eventExport";
+import type { LabelPoint, PointData } from "../components/ScatterPlot/types";
 import { labelState, setLabelState } from "./labels.store";
 
 export const labelsActions = {
     createFromCluster(
-        points: EnrichedEvent[],
+        points: PointData[],
         text: string
     ) {
         console.log(`[label.actions] enter with points:`, JSON.stringify(points))

@@ -51,8 +51,9 @@ export const controlsActions = {
         setControls("selectedNode", (prev) => (prev === id ? null : id));
     },
 
-    setSelectedEvents(pointEvents: PointData[]) {
-
+    setSelectedPoints(points: PointData[]) {
+        setControls("selectedPoints", points);
+        this.setSelectedEventIds(new Set(points.map(p => p.event_id)));
     },
 
     setSelectedEventIds(ids: Set<string | null> | string | null) {

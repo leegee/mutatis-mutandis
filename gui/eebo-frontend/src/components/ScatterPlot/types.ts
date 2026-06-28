@@ -1,6 +1,7 @@
+import type { EnrichedEvent } from '../../lib/eventExport';
 import type { SqliteEvent } from '../../types'
 
-export interface PointData extends Omit<SqliteEvent, "vector_id"> {
+export interface PointData extends EnrichedEvent, Omit<SqliteEvent, "vector_id"> {
   event_id: string;
   depth?: number;
   token_idx: number;
@@ -11,14 +12,11 @@ export interface PointData extends Omit<SqliteEvent, "vector_id"> {
   gnx: number;
   gny: number;
   concept: string;
-  // any additional augmented fields the parent has attached
-  [key: string]: unknown;
 
-  // Clustering
+  // [key: string]: unknown;
+
   cluster_id?: number;
   cluster_label?: string;
-  umap_x?: number;
-  umap_y?: number;
 }
 
 

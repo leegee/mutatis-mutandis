@@ -21,6 +21,8 @@ import { labelState } from "../../state/labels.store";
 type RGB = [number, number, number];
 type RGBA = [number, number, number, number]
 
+let currentPoints: PointData[] = [];
+
 const DEPTH_COLORS: Record<number, RGBA> = {
   0: [0, 0, 0, 0],  // gold   — seeds
   1: [80, 160, 220, 250],  // blue   — depth 1
@@ -35,7 +37,6 @@ const INITIAL_VIEW_STATE: OrthographicViewState = {
   minZoom: 8,
   maxZoom: 20,
 };
-
 
 const brighten = ([r, g, b]: RGB | RGBA): RGBA => [
   Math.min(r * 1.25, 255),
@@ -71,7 +72,7 @@ interface PlotProps {
   onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
   onPointRightClick?: (point: PointData) => void;
   onBoundsChange?: (bounds: ViewBounds) => void;
-  onSelectionChange?: (ids: string[] | null) => void;
+  onSelectionChange?: (points: PointData[] | null) => void;
 }
 
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
@@ -128,7 +129,7 @@ export default function Plot(props: PlotProps) {
 
   const colorMap = createMemo(() => {
     const field = props.colorBy;
-    const values = allPoints().map((p) => String(p[field] ?? ""));
+    const values = allPoints().map((p) => String(p[field as keyof PointData] ?? ""));
     return buildColorMap(values);
   });
 
@@ -156,7 +157,7 @@ export default function Plot(props: PlotProps) {
           alpha,
         ];
       } else {
-        base = map.get(String(p[field] ?? "")) ?? GREY;
+        base = map.get(String(p[field as keyof PointData] ?? "")) ?? GREY;
       }
 
       if (!sel.size) return base;
@@ -313,7 +314,12 @@ export default function Plot(props: PlotProps) {
       multiKey: "Shift",
     });
 
-    controller.setChangeHandler((set) => props.onSelectionChange?.(set ? [...set] : null));
+    controller.setChangeHandler((set) => {
+      console.log("[plot.SelectionController changehanlder]", set)
+      const points = set ? currentPoints.filter(p => set.has(p.event_id)) : null;
+      props.onSelectionChange?.(points);
+    });
+
     controller.setDragPreview = (rect) => setDragRect(rect);
     controller
       .use(new DeckClickPlugin(deck, controller))
@@ -339,6 +345,8 @@ export default function Plot(props: PlotProps) {
 
     fitZoom();
   });
+
+  createEffect(() => currentPoints = allPoints());
 
   // Single source of truth for all layers, including BFS.
   createEffect(() => {

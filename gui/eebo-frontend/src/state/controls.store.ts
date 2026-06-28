@@ -4,6 +4,7 @@ import { createStore } from "solid-js/store";
 import { makePersisted } from "@solid-primitives/storage";
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
 import type { ViewMode, YearMode } from "../types";
+import type { PointData } from "../components/ScatterPlot/types";
 
 export const MAX_TOP_N = 1000;
 
@@ -26,6 +27,7 @@ export type ControlsState = {
   selectedNode: string | null;
   selectedEventId: string | null;
   selectedEventIds: Set<string>;
+  selectedPoints: PointData[],
   yearMode: YearMode;
   fromYear: number;
   toYear: number;
@@ -46,6 +48,7 @@ const initialControls: ControlsState = {
   selectedNode: null,
   selectedEventId: null,
   selectedEventIds: new Set(),
+  selectedPoints: [],
   yearMode: "range",
   fromYear: CORPUS_START_YEAR,
   toYear: CORPUS_END_YEAR,

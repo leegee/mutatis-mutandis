@@ -79,7 +79,7 @@ export async function queryYearBounds(
   );
   const row = rows[0];
   if (!row || row[0] == null || row[1] == null) return null;
-  return [row[0] as number, row[1] as number];
+  return [Number(row[0]), Number(row[1])];
 }
 
 
@@ -98,7 +98,7 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   );
 
   let row = eventRows[0];
-  console.log("[queryEventById]", row)
+  // console.trace("[queryEventById]", row)
 
   if (!row) {
     type = 'neighbour';
@@ -190,7 +190,7 @@ export async function getEventsByIds(
     const sql = `
     SELECT
       event_id, vector_id, token, token_idx, doc_id,
-      pub_year, window_id, window_token_pos, lat, lng
+      pub_year, window_id, window_token_pos, lat, lng, concept
     FROM events
     WHERE event_id IN (${ chunk.map(id => `'${ id }'`).join(",") });
   `;
@@ -202,13 +202,14 @@ export async function getEventsByIds(
         event_id: String(r[0]),
         vector_id: String(r[1]),
         token: String(r[2]),
-        token_idx: Number(r[3]) as number,
+        token_idx: Number(r[3]),
         doc_id: String(r[4]),
         pub_year: Number(r[5]),
         window_id: Number(r[6]),
         window_token_pos: Number(r[7]),
         lat: Number(r[8]),
         lng: Number(r[9]),
+        concept: String(r[10]),
       });
     }
   }
@@ -223,7 +224,7 @@ export async function queryEventsByConcept(
 ): Promise<SqliteEventWithNeighbours[]> {
   const eventRows = await execRows(
     `SELECT event_id, vector_id, token, doc_id, pub_year,
-            token_idx, window_id, window_token_pos, lat, lng
+            token_idx, window_id, window_token_pos, lat, lng, concept
      FROM   events
      WHERE  concept   = ?
        AND  pub_year >= ?
@@ -243,12 +244,13 @@ export async function queryEventsByConcept(
       vector_id: r[1] as string,
       token: r[2] as string,
       doc_id: r[3] as string,
-      pub_year: r[4] as number,
-      token_idx: r[5] as number,
-      window_id: r[6] as number,
-      window_token_pos: r[7] as number,
-      lat: r[8] as number,
-      lng: r[9] as number,
+      pub_year: Number(r[4]),
+      token_idx: Number(r[5]),
+      window_id: Number(r[6]),
+      window_token_pos: Number(r[7]),
+      lat: Number(r[8]),
+      lng: Number(r[9]),
+      concept: String(r[10]),
       neighbours: [],
     };
     eventMap.set(e.event_id, e);
@@ -271,13 +273,13 @@ export async function queryEventsByConcept(
       vector_id: String(r[2]),
       token: r[3] as string,
       doc_id: r[4] as string,
-      pub_year: r[5] as number,
+      pub_year: Number(r[5]),
       token_idx: String(r[6]),
-      window_id: r[7] as number,
-      window_token_pos: r[8] as number,
-      score: r[9] as number,
-      lat: r[10] as number,
-      lng: r[11] as number,
+      window_id: Number(r[7]),
+      window_token_pos: Number(r[8]),
+      score: Number(r[9]),
+      lat: Number(r[10]),
+      lng: Number(r[11]),
     };
     eventMap.get(r[0] as string)?.neighbours.push(nb);
   }
@@ -290,7 +292,7 @@ export async function queryNEvents(concept: string): Promise<number> {
     "SELECT n_events FROM concepts WHERE concept = ?",
     [concept],
   );
-  return (rows[0]?.[0] as number) ?? 0;
+  return (Number(rows[0]?.[0])) ?? 0;
 }
 
 

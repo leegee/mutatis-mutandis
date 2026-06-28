@@ -1,19 +1,19 @@
-import type { SemanticEvent } from '../types';
+import type { SemanticEvent, SqliteEvent } from '../types';
 import { controls } from "../state/controls.store";
 import { queryEventById } from "../services/db";
 import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
 import { setWindowCache, getWindow, } from "../services/windowCache";
 
-export type EnrichedEvent = SemanticEvent & {
+export type EnrichedEvent = SqliteEvent & {
   event_id: string;
   token_idx: number;
   pub_year: number;
   windowText?: string;
   windowKey: string;
-  gnx?: number;
-  gny?: number;
-  nx?: number;
-  ny?: number;
+  gnx: number;
+  gny: number;
+  nx: number;
+  ny: number;
 };
 
 export type ExportData = {
