@@ -1,3 +1,4 @@
+import type { PointData } from "../components/ScatterPlot/types";
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import type { ViewMode, YearMode } from "../types";
 import { setControls, type ColorScatterByType, type ProjectionModeType, type ScatterPlotLayerType } from "./controls.store";
@@ -50,10 +51,15 @@ export const controlsActions = {
         setControls("selectedNode", (prev) => (prev === id ? null : id));
     },
 
+    setSelectedEvents(pointEvents: PointData[]) {
+
+    },
+
     setSelectedEventIds(ids: Set<string | null> | string | null) {
         if (typeof ids === 'string') return setControls("selectedEventIds", ids);
-        const hasNull = ids?.has(null) ?? false;
-        const resolved = (ids === null || hasNull) ? null : ids as Set<string>;
+        const resolved = ids
+            ? new Set<string>([...ids].filter((id): id is string => id !== null))
+            : new Set<string>();
         setControls("selectedEventIds", resolved);
     },
 
