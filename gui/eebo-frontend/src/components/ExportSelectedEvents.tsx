@@ -96,31 +96,28 @@ export default function ExportSelectedEvents() {
         /> */}
 
         <li onClick={async () => {
+          // const selectedPoints = controls.selectedPoints
+          //   .filter(
+          //     (selectedPoint): selectedPoint is EnrichedEvent & { nx: number; ny: number } =>
+          //       typeof selectedPoint.nx === "number" && typeof selectedPoint.ny === "number"
+          //   )
+          //   .map((p) => ({
+          //     id: p.event_id,
+          //     x: p.nx,
+          //     y: p.ny,
+          //   }));
+          // console.log('[ExportSelectedEvents] selected points:', selectedPoints)
 
-          const selectedPoints = controls.selectedPoints;
-          console.log('[ExportSelectedEvents] selected points:', selectedPoints)
-
-          const points = selectedPoints
-            .filter(
-              (selectedPoint): selectedPoint is EnrichedEvent & { nx: number; ny: number } =>
-                typeof selectedPoint.nx === "number" && typeof selectedPoint.ny === "number"
-            )
-            .map((p) => ({
-              id: p.event_id,
-              x: p.nx,
-              y: p.ny,
-            }));
-
+          console.log('[ExportSelectedEvents] Call cluster2groq')
           const result = await cluster2groq({
             concept: exportedData()!.events[0].concept.toLowerCase(),
-            points,
             rawText: allText()
           });
 
           const labelText = result.sense_name;
 
           const success = labelsActions.createFromCluster(
-            selectedPoints,
+            controls.selectedPoints,
             labelText
           );
 

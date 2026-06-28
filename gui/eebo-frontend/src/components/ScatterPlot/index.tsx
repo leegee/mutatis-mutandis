@@ -66,7 +66,7 @@ export default function ConceptClusterPlot() {
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
     function handleSelectionChange(points: PointData[] | null) {
-        console.log("[ScattPlot] handleSelectionChange event:", points);
+        console.debug("[ScattPlot] handleSelectionChange event:", points);
         controlsActions.setSelectedPoints(points || []);
     }
 

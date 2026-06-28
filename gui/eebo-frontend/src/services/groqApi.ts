@@ -12,13 +12,6 @@ export interface ClusterLabelRequest {
 
 export interface Cluster2GroqRequest {
     concept: string;
-
-    points: {
-        id: string;
-        x: number;
-        y: number;
-    }[];
-
     rawText?: string;
 }
 

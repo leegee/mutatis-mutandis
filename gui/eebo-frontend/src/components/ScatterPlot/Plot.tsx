@@ -315,7 +315,7 @@ export default function Plot(props: PlotProps) {
     });
 
     controller.setChangeHandler((set) => {
-      console.log("[plot.SelectionController changehanlder]", set)
+      console.debug("[plot.SelectionController changehanlder]", set)
       const points = set ? currentPoints.filter(p => set.has(p.event_id)) : null;
       props.onSelectionChange?.(points);
     });

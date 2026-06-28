@@ -24,8 +24,10 @@ export const labelsActions = {
         const labelPoint: LabelPoint = {
             id: crypto.randomUUID(),
             text,
-            nx: centroid.x,
-            ny: centroid.y,
+            nx: centroid.nx,
+            ny: centroid.ny,
+            gnx: centroid.gnx,
+            gny: centroid.gny,
             type: "cluster_summary"
         };
         console.log(`[label.actions] label! ${ text }`, labelPoint)
@@ -58,23 +60,31 @@ function isTooClose(
     });
 }
 
-function computeCentroid(points: { nx: number | undefined; ny: number | undefined }[]) {
+function computeCentroid(points: { gnx: number; gny: number; nx: number; ny: number }[]) {
     console.log(`[computeCentroid]`)
-    let x = 0;
-    let y = 0;
+    let nx = 0;
+    let ny = 0;
+    let gnx = 0;
+    let gny = 0;
 
     for (const p of points) {
         console.log(`[computeCentroid] point ${ JSON.stringify(p) }`)
-        if (typeof p.nx === "undefined" || typeof p.ny === "undefined") {
+        if (typeof p.nx === "undefined" || typeof p.ny === "undefined"
+            || typeof p.gnx === "undefined" || typeof p.gny === "undefined"
+        ) {
             throw new Error("point nx/ny undefined");
         }
-        x += p.nx;
-        y += p.ny;
+        nx += p.nx;
+        ny += p.ny;
+        gnx += p.gnx;
+        gny += p.gny;
     }
 
     return {
-        x: x / points.length,
-        y: y / points.length,
+        nx: nx / points.length,
+        ny: ny / points.length,
+        gnx: gnx / points.length,
+        gny: gny / points.length,
     };
 }
 

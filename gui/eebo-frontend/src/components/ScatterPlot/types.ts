@@ -25,10 +25,10 @@ export interface LabelPoint {
   text: string;
   nx: number;
   ny: number;
-  gnx?: number;
-  gny?: number;
+  gnx: number;
+  gny: number;
   clusterId?: string;
-  type?: "cluster_summary" | "keyword" | "note";
+  type: "cluster_summary" | "keyword" | "note";
 }
 
 export interface LabelDataset {
