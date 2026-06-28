@@ -1,7 +1,7 @@
 import type { Connect } from "vite";
 import path from "path";
 import fs from "fs";
-import { json } from "./lib/middleware";
+import { json } from "./lib/response";
 
 export function createStaticMiddleware(
   rootDir: string,
@@ -19,7 +19,7 @@ export function createStaticMiddleware(
     const filePath = path.resolve(rootDir, dir, relativePath);
     const rootPath = path.resolve(rootDir);
 
-    console.log(`[static] ${req.url} -> ${filePath}`);
+    console.log(`[static] ${ req.url } -> ${ filePath }`);
 
     if (!filePath.startsWith(rootPath)) {
       return json(res, 403, {

@@ -1,6 +1,6 @@
 import type { Connect } from "vite";
 import { Pool } from "pg";
-import { serverError, text } from "../lib/middleware";
+import { serverError, text } from "../lib/response";
 
 const TOKEN_WINDOW_HALF = 30;
 

@@ -1,6 +1,6 @@
 import type { Connect } from "vite";
 import { Pool } from "pg";
-import { json, serverError, redirect } from "../lib/middleware";
+import { json, serverError, redirect } from "../lib/response";
 
 export function createDocumentMiddleware(
   pool: Pool,

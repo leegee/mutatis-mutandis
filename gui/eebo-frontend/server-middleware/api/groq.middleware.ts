@@ -2,7 +2,7 @@ import type { Connect } from "vite";
 import "dotenv/config";
 import Groq from "groq-sdk";
 
-import { text, serverError } from "../lib/middleware";
+import { text, serverError } from "../lib/response";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
