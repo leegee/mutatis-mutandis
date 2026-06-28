@@ -47,15 +47,15 @@ function addLabel(labelPoint: LabelPoint) {
 }
 
 function isTooClose(
-    centroid: { x: number; y: number },
+    centroid: { nx: number; ny: number },
     labels: LabelPoint[],
     minDist: number
 ) {
     const minDist2 = minDist * minDist;
 
     return labels.some((l) => {
-        const dx = l.nx - centroid.x;
-        const dy = l.ny - centroid.y;
+        const dx = l.nx - centroid.nx;
+        const dy = l.ny - centroid.ny;
         return dx * dx + dy * dy < minDist2;
     });
 }
