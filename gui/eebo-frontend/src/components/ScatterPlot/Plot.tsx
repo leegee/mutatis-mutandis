@@ -178,7 +178,9 @@ export default function Plot(props: PlotProps) {
       getPosition: d => props.projectionMode === "global"
         ? [d.gnx ?? d.nx, d.gny ?? d.ny, 0]
         : [d.nx, d.ny, 0],
-
+      updateTriggers: {
+        getPosition: [props.projectionMode],
+      },
       getText: d => d.text,
       getSize: 12,
       sizeUnits: "pixels",

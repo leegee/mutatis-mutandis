@@ -6,19 +6,17 @@ export const labelsActions = {
         points: PointData[],
         text: string
     ) {
-        console.log(`[label.actions] enter with points:`, JSON.stringify(points))
         const centroid = computeCentroid(points);
-        console.debug(`[label.actions] centroid`, centroid)
+        console.debug(`[label.actions] enter with points:`, JSON.stringify(points), "\nGot centroid", centroid)
 
         const labels = labelState.labels;
-        console.debug(`[label.actions] labels`, labels)
 
-        const minDist = labelState?.minCentroidDistance ?? 0.05;
-        console.debug(`[label.actions] mid`, minDist)
-
-        if (labels && isTooClose(centroid, labels, minDist)) {
-            console.log(`[label.actions] too close - bail out!`)
-            return false;
+        if (labels) {
+            const minDist = labelState?.minCentroidDistance ?? 0.05;
+            if (isTooClose(centroid, labels, minDist)) {
+                console.log(`[label.actions] too close - bail out!`)
+                return false;
+            }
         }
 
         const labelPoint: LabelPoint = {
