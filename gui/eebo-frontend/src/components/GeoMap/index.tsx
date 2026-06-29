@@ -1,8 +1,7 @@
 import { createMemo, createResource } from "solid-js";
 import GeoMap, { type EventPoint } from "./GeoMap";
 import { controls } from "../../state/controls.store";
-import { loadDatasets } from "../ScatterPlot/loadScatterDatasets";
-import { buildEventQuery, fetchEvents } from "../../services/db";
+import { fetchEvents } from "../../services/db";
 import ControlsHeader from "../ControlsHeader";
 
 type RawRow = {

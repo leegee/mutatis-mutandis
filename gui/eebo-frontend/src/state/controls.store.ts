@@ -54,7 +54,7 @@ const initialControls: ControlsState = {
   toYear: CORPUS_END_YEAR,
   showEventLabels: false,
   projectionMode: 'global',
-  scatterPlotLayerMode: 'neighbours',
+  scatterPlotLayerMode: 'concept',
   colorScatterBy: 'pub_year',
 };
 

@@ -36,11 +36,13 @@ function send(
 
 let _initPromise: Promise<void> | null = null;
 
+
 export async function initDb(url: string): Promise<void> {
   if (_initPromise) return _initPromise;
   console.log("[dbh.initDb]", url);
 
   _initPromise = (async () => {
+    console.log("[dbh] Creating new DB worker instance");
     _worker = new DbWorker();
 
     _worker.onmessage = (e: MessageEvent) => {
@@ -68,11 +70,14 @@ export async function initDb(url: string): Promise<void> {
     };
 
     await send("init", { url });
+    await preWarmDatabase();
     console.log("[dbh] worker ready");
+
   })();
 
   return _initPromise;
 }
+
 
 export async function execRows(
   sql: string,
@@ -81,3 +86,11 @@ export async function execRows(
   const stack = new Error("SQL origin trace").stack;
   return send("exec", { sql, bind }, { stack });
 }
+
+
+export async function preWarmDatabase() {
+  const result = await send("prewarm", {});
+  console.log("[db] Pre-warm result:", result);
+  return result;
+}
+

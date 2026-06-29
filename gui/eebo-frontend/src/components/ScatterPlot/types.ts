@@ -52,6 +52,7 @@ export interface ConceptDatasetSqlite {
   points: PointData[];
   bounds: Bounds;
   globalBounds: Bounds;
+  type: string;
 }
 
 

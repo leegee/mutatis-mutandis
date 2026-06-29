@@ -2,17 +2,7 @@
 
 """
 Outputs:
-    indexes/
-        umap/
-            concept/
-                PREROGATIVE.json
-            concept_neighbours/
-                PREROGATIVE.json
-            bfs_global/
-                global.json
-            concept_clusters/
-                PREROGATIVE.json
-            manifest.json
+    Sqlite3 DB shared with fronto-end
 
 Each point carries six coordinates:
 
@@ -53,7 +43,7 @@ from lib.concept_resolve import resolve_concepts
 from lib.eebo_logging import logger, setEmit
 from lib.eebo_db import get_connection
 
-from tier2_0_concept_events import ZarrEventLookup
+from tier2_0_concept_events import ZarrEventLookup, sqlite3_connection
 
 CONCEPT_DIR       = PLOT_DIR / "concept"
 CONCEPT_NEIGH_DIR = PLOT_DIR / "concept_neighbours"
@@ -141,7 +131,7 @@ class EmbeddingCache:
 
 
 def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
-    sqlite_conn = sqlite3.connect(db_path)
+    sqlite_conn = sqlite3_connection(db_path)
     try:
         existing = {
             row[0]
@@ -520,6 +510,8 @@ def assemble_points(event_ids, local_coords, global_coords,
 
 
 def write_json(path, payload):
+    logger.warning("[tier3] Not writing JSON, use SQLite")
+    return
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -541,7 +533,6 @@ def run_tier3_core(
     false_positives = false_positives or []
     emb_cache = EmbeddingCache(lookup)
 
-    manifest = {"concepts": [], "global": None, "globalBounds": None}
     all_concept_events = []
     buffered_concept       = []   # (path, meta, event_ids, local_coords)
     buffered_concept_neigh = []   # (path, meta, event_ids, local_coords, depth_map)
@@ -613,49 +604,44 @@ def run_tier3_core(
             ))
 
             all_concept_events.extend(concept_sample)
-
-            manifest["concepts"].append({
-                "name":               concept_name,
-                "concept":            f"/umap/concept/{concept_name}.json",
-                "concept_neighbours": f"/umap/concept_neighbours/{concept_name}.json",
-                "concept_clusters":   f"/umap/concept_clusters/{concept_name}.json",
-            })
-
             if emit:
                 emit("concept_done", {"concept": concept_name})
 
     else:
-        logger.info("[tier3] clustering-only mode (loading concept outputs)")
+        logger.info("[tier3] clustering-only mode (loading from sqlite)")
+        con = sqlite3_connection(db_path)
+        concept_names = [
+            row[0] for row in
+            con.execute("SELECT DISTINCT concept FROM events WHERE concept != '__derived__'")
+        ]
+        con.close()
 
-        for concept_file in CONCEPT_DIR.glob("*.json"):
-            concept_name = concept_file.stem
+        for concept_name in concept_names:
+            # load event_ids from sqlite rather than JSON
+            con = sqlite3_connection(db_path)
+            rows = con.execute(
+                "SELECT event_id FROM events WHERE concept = ?", (concept_name,)
+            ).fetchall()
+            con.close()
 
-            with open(concept_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            # event_id is a string in the JSON; keep it that way
-            concept_sample = [p["event_id"] for p in data["points"]]
+            concept_sample = [str(row[0]) for row in rows]
+            if not concept_sample:
+                continue
 
             logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)})")
             if emit:
                 emit("concept_start", {"concept": concept_name})
 
             X_concept = emb_cache.matrix(concept_sample)
-
-            # In clustering-only mode we don't have a freshly computed
-            # local_concept 2D projection in hand (it was written to disk
-            # by a previous "full" run), so fit_cluster_local computes its
-            # own 2D UMAP for display coords here.
             cluster_local_coords, cluster_labels = fit_cluster_local(X_concept, concept_sample)
 
             buffered_clusters.append((
-                CLUSTER_DIR / f"{concept_name}.json",
+                None,
                 {"type": "concept_clusters", "concept": concept_name},
                 concept_sample,
                 cluster_local_coords,
                 cluster_labels,
             ))
-
             all_concept_events.extend(concept_sample)
 
             if emit:
@@ -703,126 +689,81 @@ def run_tier3_core(
     logger.info(f"[tier3] global bounds (padded): {global_bounds_padded}")
 
     #
-    # Pass 3a — concept outputs (seeds; no depth field needed, implicitly 0)
+    # Pass 3a — concept seed projections -> events table
     #
     for path, meta, event_ids, local_coords in buffered_concept:
+        concept_name = meta["concept"]
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
-        points = assemble_points(
-            event_ids, local_coords, global_coords,
-            local_bounds, global_bounds_padded,
+        write_projections_to_sqlite(
+            db_path=db_path,
+            concept_name=concept_name,
+            event_ids=event_ids,
+            local_coords=local_coords,
+            global_coords=global_coords,
+            local_bounds=local_bounds,
+            global_bounds=global_bounds_padded,
+            target="events",
         )
-        write_json(path, {
-            **meta,
-            "bounds":       local_bounds,
-            "globalBounds": global_bounds_padded,
-            "points":       points,
-        })
+        write_concept_bounds_to_sqlite(
+            db_path=db_path,
+            concept_name=concept_name,
+            local_bounds=local_bounds,
+            global_bounds=global_bounds_padded
+        )
 
     #
-    # Pass 3b — concept_neighbours outputs (with depth field per point)
+    # Pass 3b — neighbour projections -> neighbours table
     #
     for path, meta, event_ids, local_coords, depth_map in buffered_concept_neigh:
-        local_bounds = add_padding(
-            compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
-        )
-        extra = {str(eid): {"depth": depth_map[str(eid)]} for eid in event_ids}
-        points = assemble_points(
-            event_ids, local_coords, global_coords,
-            local_bounds, global_bounds_padded,
-            extra_fields=extra,
-        )
-        write_json(path, {
-            **meta,
-            "max_depth":    2,
-            "bounds":       local_bounds,
-            "globalBounds": global_bounds_padded,
-            "points":       points,
-        })
-
-    #
-    # Pass 3c — cluster outputs
-    #
-    for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
         concept_name = meta["concept"]
-        unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
-        label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
-
-        extra = {
-            str(eid): {
-                "cluster_id":    int(cluster_labels[i]),
-                "cluster_label": label_map.get(cluster_labels[i]),
-            }
-            for i, eid in enumerate(event_ids)
-        }
-
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
-
         write_projections_to_sqlite(
             db_path         = db_path,
             concept_name    = concept_name,
-            points          = None,
+            event_ids       = event_ids,
             local_coords    = local_coords,
             global_coords   = global_coords,
             local_bounds    = local_bounds,
             global_bounds   = global_bounds_padded,
-            cluster_labels  = cluster_labels,
-            event_ids       = event_ids,
+            depth_map       = depth_map,
+            target          = "neighbours",
         )
-
-        points = assemble_points(
-            event_ids, local_coords, global_coords,
-            local_bounds, global_bounds_padded,
-            extra_fields=extra,
+        write_concept_bounds_to_sqlite(
+            db_path=db_path,
+            concept_name=concept_name,
+            local_bounds=local_bounds,
+            global_bounds=global_bounds_padded
         )
-        aggregates = compute_cluster_aggregates(event_ids, cluster_labels, lookup)
-
-        write_json(path, {
-            **meta,
-            "generated_at": datetime.now().isoformat(),
-            "n_events":     len(event_ids),
-            "bounds":       local_bounds,
-            "globalBounds": global_bounds_padded,
-            "clusters": {
-                "label_map":  {str(k): v for k, v in label_map.items()},
-                "aggregates": aggregates,
-            },
-            "points": points,
-        })
 
     #
-    # BFS global output (with depth field per point)
+    # Pass 3c — cluster labels + coords -> events table
     #
-    if bfs_ids:
-        local_bounds_bfs = add_padding(
-            compute_bounds_from_coords([local_bfs[str(e)] for e in bfs_ids])
+    for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
+        concept_name = meta["concept"]
+        local_bounds = add_padding(
+            compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
-        extra_bfs = {str(eid): {"depth": bfs_depth_map[str(eid)]} for eid in bfs_ids}
-        points_bfs = assemble_points(
-            bfs_ids, local_bfs, global_coords,
-            local_bounds_bfs, global_bounds_padded,
-            extra_fields=extra_bfs,
+        write_projections_to_sqlite(
+            db_path=db_path,
+            concept_name=concept_name,
+            event_ids=event_ids,
+            local_coords=local_coords,
+            global_coords=global_coords,
+            local_bounds=local_bounds,
+            global_bounds=global_bounds_padded,
+            cluster_labels=cluster_labels,
+            target="events",
         )
-        write_json(
-            BFS_DIR / "global.json",
-            {
-                "type":         "bfs_global",
-                "bounds":       local_bounds_bfs,
-                "globalBounds": global_bounds_padded,
-                "max_depth":    2,
-                "k":            K,
-                "points":       points_bfs,
-            }
+        write_concept_bounds_to_sqlite(
+            db_path=db_path,
+            concept_name=concept_name,
+            local_bounds=local_bounds,
+            global_bounds=global_bounds_padded
         )
-        manifest["global"] = "/umap/bfs_global/global.json"
-    else:
-        manifest["global"] = None
-
-    manifest["globalBounds"] = global_bounds_padded
-    write_json(PLOT_DIR / "manifest.json", manifest)
 
     if emit:
         emit("tier3_done", {})
@@ -857,76 +798,123 @@ def run_tier3_service(
     )
 
 
-def write_projections_to_sqlite(db_path, concept_name, points, local_coords, global_coords, local_bounds, global_bounds, cluster_labels=None, event_ids=None):
-    """
-    Write projection coordinates and cluster assignments to SQLite.
-    points: list of assembled point dicts from assemble_points
-    """
-    con = sqlite3.connect(db_path)
+def write_projections_to_sqlite(
+    db_path,
+    concept_name,
+    event_ids,
+    local_coords,
+    global_coords,
+    local_bounds,
+    global_bounds,
+    cluster_labels=None,
+    target="events",      # "events" | "neighbours"
+    depth_map=None,
+):
+    logger.info(f"[tier3] write_projections_to_sqlite target={target} concept={concept_name}")
+    con = sqlite3_connection(db_path)
 
-    # Update events table (seeds with cluster assignments)
-    if cluster_labels and event_ids:
-        label_map = {
-            str(eid): cluster_labels[i]
-            for i, eid in enumerate(event_ids)
-        }
+    con.execute("""
+        CREATE TEMP TABLE IF NOT EXISTS _proj_update (
+            event_id      INTEGER PRIMARY KEY,
+            nx            REAL, ny REAL,
+            gnx           REAL, gny REAL,
+            cluster_id    INTEGER,
+            cluster_label TEXT,
+            depth         INTEGER
+        )
+    """)
+    con.execute("DELETE FROM _proj_update")
+
+    unique_clusters = sorted(c for c in set(cluster_labels or []) if c != -1)
+    label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
+
+    data = []
+    for i, eid in enumerate(event_ids):
+        sid = str(eid)
+        if sid not in local_coords or sid not in global_coords:
+            continue
+
+        lx, ly = local_coords[sid]
+        gx, gy = global_coords[sid]
+
+        data.append((
+            int(eid),
+            float(lx), float(ly),
+            float(gx), float(gy),
+            cluster_labels[i] if cluster_labels is not None else None,
+            label_map.get(cluster_labels[i]) if cluster_labels is not None else None,
+            depth_map.get(sid) if depth_map is not None else None,
+        ))
+
+    if data:
         con.executemany(
-            """UPDATE events
-               SET local_x = ?, local_y = ?, global_x = ?, global_y = ?,
-                   cluster_id = ?, cluster_label = ?
-               WHERE event_id = ?""",
-            [
-                (
-                    local_coords[str(eid)][0],
-                    local_coords[str(eid)][1],
-                    global_coords[str(eid)][0],
-                    global_coords[str(eid)][1],
-                    int(label_map[str(eid)]),
-                    chr(65 + int(label_map[str(eid)])) if label_map[str(eid)] != -1 else None,
-                    int(eid),
-                )
-                for eid in event_ids
-                if str(eid) in local_coords and str(eid) in global_coords
-            ]
+            "INSERT INTO _proj_update VALUES (?,?,?,?,?,?,?,?)",
+            data
         )
 
-    # Update neighbours table (no cluster assignments)
-    con.executemany(
-        """UPDATE neighbours
-           SET local_x = ?, local_y = ?, global_x = ?, global_y = ?
-           WHERE neighbour_event_id = ?""",
-        [
-            (
-                local_coords[str(eid)][0],
-                local_coords[str(eid)][1],
-                global_coords[str(eid)][0],
-                global_coords[str(eid)][1],
-                int(eid),
-            )
-            for eid in (event_ids or [])
-            if str(eid) in local_coords and str(eid) in global_coords
-        ]
-    )
-
-    # Update concept_projection_bounds
-    con.execute(
-        """INSERT OR REPLACE INTO concept_projection_bounds (
-               concept,
-               local_min_x, local_max_x, local_min_y, local_max_y,
-               global_min_x, global_max_x, global_min_y, global_max_y
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            concept_name,
-            local_bounds["minX"],  local_bounds["maxX"],
-            local_bounds["minY"],  local_bounds["maxY"],
-            global_bounds["minX"], global_bounds["maxX"],
-            global_bounds["minY"], global_bounds["maxY"],
-        )
-    )
+    if target == "events":
+        con.execute("""
+            UPDATE events SET
+                nx            = _proj_update.nx,
+                ny            = _proj_update.ny,
+                gnx           = _proj_update.gnx,
+                gny           = _proj_update.gny,
+                cluster_id    = _proj_update.cluster_id,
+                cluster_label = _proj_update.cluster_label
+            FROM _proj_update
+            WHERE events.event_id = _proj_update.event_id
+        """)
+    else:  # neighbours
+        con.execute("""
+            UPDATE neighbours SET
+                nx  = _proj_update.nx,
+                ny  = _proj_update.ny,
+                gnx = _proj_update.gnx,
+                gny = _proj_update.gny
+            FROM _proj_update
+            WHERE neighbours.neighbour_event_id = _proj_update.event_id
+        """)
 
     con.commit()
     con.close()
+    logger.info(f"[tier3] wrote projections to sqlite target={target} concept={concept_name} ({len(data)} rows)")
 
+
+def write_concept_bounds_to_sqlite(
+    db_path: str,
+    concept_name: str,
+    local_bounds: dict,
+    global_bounds: dict
+):
+    """Update or insert the projection bounds for a concept."""
+    con = sqlite3_connection(db_path)
+
+    con.execute("""
+        INSERT INTO concept_projection_bounds (
+            concept,
+            local_min_x, local_max_x, local_min_y, local_max_y,
+            global_min_x, global_max_x, global_min_y, global_max_y
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(concept) DO UPDATE SET
+            local_min_x  = excluded.local_min_x,
+            local_max_x  = excluded.local_max_x,
+            local_min_y  = excluded.local_min_y,
+            local_max_y  = excluded.local_max_y,
+            global_min_x = excluded.global_min_x,
+            global_max_x = excluded.global_max_x,
+            global_min_y = excluded.global_min_y,
+            global_max_y = excluded.global_max_y
+    """, (
+        concept_name,
+        local_bounds["minX"], local_bounds["maxX"],
+        local_bounds["minY"], local_bounds["maxY"],
+        global_bounds["minX"], global_bounds["maxX"],
+        global_bounds["minY"], global_bounds["maxY"],
+    ))
+
+    con.commit()
+    con.close()
+    logger.info(f"[tier3] updated bounds for concept={concept_name}")
 
 def main():
     logger.info("[tier3 main] Enter")

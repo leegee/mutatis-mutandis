@@ -703,10 +703,10 @@ CREATE TABLE IF NOT EXISTS events (
     geom             TEXT,
     lat              NUMBER,
     lng              NUMBER,
-    local_x          REAL,
-    local_y          REAL,
-    global_x         REAL,
-    global_y         REAL,
+    nx          REAL,
+    ny          REAL,
+    gnx         REAL,
+    gny         REAL,
     cluster_id       INTEGER,
     cluster_label    TEXT,
     FOREIGN KEY (concept) REFERENCES concepts(concept)
@@ -728,10 +728,10 @@ CREATE TABLE IF NOT EXISTS neighbours (
     geom                TEXT,
     lat                 NUMBER,
     lng                 NUMBER,
-    local_x             REAL,
-    local_y             REAL,
-    global_x            REAL,
-    global_y            REAL,
+    nx             REAL,
+    ny             REAL,
+    gnx            REAL,
+    gny            REAL,
     cluster_id          INTEGER,
     cluster_label       TEXT,
     PRIMARY KEY (event_id, neighbour_event_id, depth),
@@ -745,6 +745,7 @@ CREATE INDEX IF NOT EXISTS events_lat_idx ON events(lat);
 CREATE INDEX IF NOT EXISTS events_lng_idx ON events(lng);
 CREATE INDEX IF NOT EXISTS neighbours_lat_idx ON neighbours(lat);
 CREATE INDEX IF NOT EXISTS neighbours_lng_idx ON neighbours(lng);
+CREATE INDEX IF NOT EXISTS idx_events_concept_pubyear_nx ON events(concept, pub_year, nx, ny, gnx, gny);
 
 CREATE TABLE concept_projection_bounds (
     concept   TEXT NOT NULL,

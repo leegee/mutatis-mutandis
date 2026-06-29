@@ -1,17 +1,19 @@
-import { createSignal, createResource, Show, Switch, Match } from "solid-js";
+import { createSignal, createResource, Show, Switch, Match, createEffect, onMount } from "solid-js";
 
-import type { LabelPoint, PointData, ViewBounds } from "./types";
+import type { BfsDataset, LabelPoint, PointData, ViewBounds } from "./types";
 
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
-import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets";
-import { controls, type ColorScatterByType, type ScatterPlotLayerType } from "../../state/controls.store";
+import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets.sqlite";
+import { controls, type ColorScatterByType } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import TextWindow from "../TextWindow";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
+
+console.log("[scatterplot] loaded");
 
 export default function ConceptClusterPlot() {
     const [pointHovered, setPointHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
@@ -40,11 +42,13 @@ export default function ConceptClusterPlot() {
     );
 
     const [bfs] = createResource(
-        () => ({
-            fromYear: controls.fromYear,
-            toYear: controls.toYear,
-            yearMode: controls.yearMode,
-        }),
+        () => false // controls.showBfsGlobal
+            ? {
+                fromYear: controls.fromYear,
+                toYear: controls.toYear,
+                yearMode: controls.yearMode,
+            }
+            : null,
         loadBfsDataset
     );
 
@@ -61,7 +65,7 @@ export default function ConceptClusterPlot() {
         return [...concept, ...neighbours];
     };
 
-    // const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
+    const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
     function handleSelectionChange(points: PointData[] | null) {
@@ -75,6 +79,9 @@ export default function ConceptClusterPlot() {
 
     return (
         <>
+            <Show when={loading()}>
+                <progress />
+            </Show>
             <Show when={conceptDatasets()}>
                 <Show when={!error()} fallback={
                     <GlobalMessageDisplay
@@ -171,7 +178,7 @@ export default function ConceptClusterPlot() {
                             <Plot
                                 projectionMode={controls.projectionMode}
                                 datasets={activeDatasets()}
-                                bfsDataset={bfs()}
+                                bfsDataset={bfs() as BfsDataset}
                                 bfsOpacity={controls.bfsOpacity}
                                 neighbourOpacity={controls.neighbourOpacity}
                                 colorBy={controls.colorScatterBy}
@@ -223,7 +230,7 @@ export default function ConceptClusterPlot() {
                             "width": "20em",
                         }}>
 
-                        <header class="bottom-margin">
+                        <header class="bottom-margin fill">
                             <h2 class="medium-padding fill max">{hoveredPoint().point.token}</h2>
                             <Show when={hoveredPoint().point.depth
                                 || (
@@ -250,9 +257,11 @@ export default function ConceptClusterPlot() {
                                         </Switch>
                                     </span>
 
-                                    <span>
-                                        {hoveredPoint().point.cluster_label && ` Cluster ${ hoveredPoint().point.cluster_label }`}
-                                    </span>
+                                    <Show when={hoveredPoint().point.cluster_label}>
+                                        <span>
+                                            Cluster ${hoveredPoint().point.cluster_label}
+                                        </span>
+                                    </Show>
                                 </div>
                             </Show>
                         </header>
@@ -264,7 +273,7 @@ export default function ConceptClusterPlot() {
                                 Win: {hoveredPoint().point.window_id} T {hoveredPoint().point.window_token_pos}
                             </span>
                         </div>
-                        <footer class="row border padding" style="bottom-padding: 1em; top-padding: 1em">
+                        <footer class="row padding fill" style="bottom-padding: 1em; top-padding: 1em">
                             <TextWindow eventid={hoveredPoint().point.event_id} style="font-size: 8pt; line-height: 1.6;" />
                         </footer>
                     </aside>

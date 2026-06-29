@@ -13,6 +13,8 @@ interface TraceEntry {
   error?: { message: string; stack?: string; cause?: unknown };
 }
 
+console.log("[db.worker] Worker script initialized (new instance)");
+
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -47,7 +49,6 @@ function startSpan(traceId: string, event: string) {
     },
   };
 }
-
 
 function toErrorShape(err: unknown) {
   if (err instanceof Error) {
@@ -190,6 +191,39 @@ self.onmessage = async (e: MessageEvent) => {
       const rows = execRows(e.data.sql as string, e.data.bind, traceId);
       span.end("debug", { rowCount: rows.length });
       self.postMessage({ id, traceId, result: rows });
+    }
+
+    else if (type === 'prewarm') {
+      const span = startSpan(traceId, "prewarm");
+      try {
+        const start = performance.now();
+
+        await Promise.all([
+          execRows("SELECT COUNT(*) FROM events", undefined, traceId),
+          execRows("SELECT nx, ny, gnx, gny FROM events LIMIT 1000", undefined, traceId),
+          execRows("SELECT COUNT(*) FROM neighbours", undefined, traceId),
+          execRows("SELECT nx, ny, gnx, gny FROM neighbours LIMIT 2500", undefined, traceId),
+        ]);
+
+        const duration = performance.now() - start;
+        console.log(`[db.worker] Pre-warm completed in ${ duration.toFixed(1) }ms`);
+
+        span.end("info", { duration });
+
+        self.postMessage({
+          id,
+          traceId,
+          result: { success: true, duration }
+        });
+      }
+      catch (err) {
+        span.fail(err);
+        self.postMessage({
+          id,
+          traceId,
+          error: (err as Error).message
+        });
+      }
     }
 
     else {
