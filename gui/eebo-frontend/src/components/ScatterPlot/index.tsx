@@ -1,7 +1,6 @@
 import { createSignal, createResource, Show, Switch, Match } from "solid-js";
 
 import type { LabelPoint, PointData, ViewBounds } from "./types";
-import type { Id } from "./SelectionPlugin/types";
 
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
@@ -11,7 +10,6 @@ import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import TextWindow from "../TextWindow";
-import { labelState } from "../../state/labels.store";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
