@@ -5,6 +5,7 @@ import { controlsActions } from "../state/controls.actions";
 import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
 import ExportSelectedEvents from "./ExportSelectedEvents";
 import { showDocument } from "../services/documentApi";
+import type { PointData } from "./ScatterPlot/types";
 
 interface Props {
     onClose: () => void;
@@ -107,18 +108,23 @@ export default function SidebarMultiple(props: Props) {
                                         </legend>
 
                                         <For each={group.events}>
-                                            {(e) => {
+                                            {(e: PointData) => {
                                                 const data = sidebarData();
                                                 const key = `${ e.doc_id }:${ Number(e.token_idx) }`;
                                                 const w = data?.windowMap.get(key);
 
                                                 return (
                                                     <>
-                                                        <h6 class="small left-margin no-padding">
-                                                            <q>{e.token}</q>
-                                                            &nbsp;&mdash;
-                                                            <small> {e.pub_year} </small>
-                                                        </h6>
+                                                        <nav>
+                                                            <h6 class="small left-margin no-padding max">
+                                                                <q>{e.token}</q>
+                                                                &nbsp;&mdash;
+                                                                <small> {e.pub_year} </small>
+                                                            </h6>
+                                                            <span title="Window ID/position">
+                                                                {e.window_id}/{e.window_token_pos}
+                                                            </span>
+                                                        </nav>
 
                                                         <Show when={w} fallback={<progress />}>
                                                             <blockquote innerHTML={w.content} class="no-padding left-margin bottom-margin" />
