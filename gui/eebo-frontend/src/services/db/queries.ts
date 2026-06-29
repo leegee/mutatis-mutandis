@@ -103,7 +103,7 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   if (!row) {
     type = 'neighbour';
     const neighbourRow = await execRows(
-      `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
+      `SELECT event_id, score, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
        FROM neighbours WHERE neighbour_event_id = ? LIMIT 1`,
       [id],
     );
@@ -116,7 +116,7 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   return {
     type,
     event_id: String(row[0]),
-    concept: row[1] as string,
+    score: Number(row[1]),
     vector_id: row[2] != null ? String(row[2]) : null,
     token: (row[3] as string) ?? null,
     doc_id: (row[4] as string) ?? null,
@@ -126,7 +126,7 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
     window_token_pos: row[8] != null ? Number(row[8]) : null,
     lat: row[9] != null ? Number(row[9]) : null,
     lng: row[10] != null ? Number(row[10]) : null,
-  } as SqliteEvent;
+  } as SqliteNeighbour;
 }
 
 
@@ -274,7 +274,7 @@ export async function queryEventsByConcept(
       token: r[3] as string,
       doc_id: r[4] as string,
       pub_year: Number(r[5]),
-      token_idx: String(r[6]),
+      token_idx: Number(r[6]),
       window_id: Number(r[7]),
       window_token_pos: Number(r[8]),
       score: Number(r[9]),

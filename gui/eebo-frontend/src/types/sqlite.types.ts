@@ -1,11 +1,11 @@
 export interface SqliteNeighbour {
   event_id: string;
-  vector_id?: string;
+  vector_id: string;
   token: string;
-  doc_id?: string;
-  pub_year?: number;
-  token_idx: string;
-  window_id?: number;
+  doc_id: string;
+  pub_year: number;
+  token_idx: number;
+  window_id: number;
   window_token_pos: number;
   score: number;
   lat: number;
@@ -13,7 +13,7 @@ export interface SqliteNeighbour {
 }
 
 export interface SqliteEvent {
-  concept: string;
+  concept?: string;
   doc_id: string;
   event_id: string; // The integers are too large for JS?
   geom?: string;    // Should drop this, SQLlite does not support geom ST_*

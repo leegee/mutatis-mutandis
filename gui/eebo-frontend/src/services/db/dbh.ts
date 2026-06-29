@@ -6,22 +6,33 @@ let _pending = new Map<string,
 >();
 let _msgId = 0;
 
+
 function getWorker(): Worker {
   if (!_worker)
     throw new Error("[dbh] worker not initialised! Call initDb() first");
   return _worker;
 }
 
+
 function send(
   type: string,
   payload: Record<string, unknown> = {},
+  meta?: { stack?: string }
 ): Promise<unknown[][]> {
   return new Promise((resolve, reject) => {
     const id = String(++_msgId);
+
     _pending.set(id, { resolve, reject });
-    getWorker().postMessage({ id, type, ...payload });
+
+    getWorker().postMessage({
+      id,
+      type,
+      ...payload,
+      __meta: meta,
+    });
   });
 }
+
 
 let _initPromise: Promise<void> | null = null;
 
@@ -33,11 +44,19 @@ export async function initDb(url: string): Promise<void> {
     _worker = new DbWorker();
 
     _worker.onmessage = (e: MessageEvent) => {
-      const { id, result, error } = e.data;
+      const { id, result, error, __meta } = e.data;
       const pending = _pending.get(id);
+
       if (!pending) return;
+
       _pending.delete(id);
+
       if (error) {
+        console.error("[dbh] SQL ERROR:", {
+          error,
+          stack: __meta?.stack,
+        });
+
         pending.reject(new Error(error));
       } else {
         pending.resolve(result);
@@ -59,5 +78,6 @@ export async function execRows(
   sql: string,
   bind?: (string | number | null)[],
 ): Promise<unknown[][]> {
-  return send("exec", { sql, bind });
+  const stack = new Error("SQL origin trace").stack;
+  return send("exec", { sql, bind }, { stack });
 }

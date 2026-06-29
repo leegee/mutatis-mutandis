@@ -12,6 +12,8 @@ export interface Toast {
   durationMs: number;
 }
 
+const DURATION_MS = 10_000;
+
 let _id = 0;
 
 const [toasts, setToasts] = createSignal<Toast[]>([]);
@@ -20,11 +22,14 @@ const removeToast = (id: number) => setToasts(
   toasts().filter((t) => t.id !== id)
 );
 
-export function pushToast(toast: Omit<Toast, "id" | "durationMs" | "timeFormatted">, durationMs = 4_000) {
+export function pushToast(toast: Omit<Toast, "id" | "timeFormatted" | "durationMs">, durationMs = DURATION_MS) {
   const id = ++_id;
-  const timeFormatted = (new Date()).toISOString().split('T')[1].slice(0, 8);
-
-  setToasts((prev) => [...prev, { ...toast, id, timeFormatted, durationMs }]);
+  setToasts((prev) => [...prev, {
+    ...toast,
+    id,
+    timeFormatted: (new Date()).toISOString().split('T')[1].slice(0, 8),
+    durationMs: (durationMs),
+  }]);
 }
 
 export { toasts, removeToast };

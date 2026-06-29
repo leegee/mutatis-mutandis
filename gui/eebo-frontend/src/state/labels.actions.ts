@@ -2,15 +2,26 @@ import type { LabelPoint, PointData } from "../components/ScatterPlot/types";
 import { labelState, setLabelState } from "./labels.store";
 
 export const labelsActions = {
-    createFromCluster(
-        points: PointData[],
-        text: string
-    ) {
+    getAcceptableCentroid(points: PointData[]) {
         const centroid = computeCentroid(points);
+        const labels = labelState.labels;
+        if (labels) {
+            const minDist = labelState?.minCentroidDistance ?? 0.05;
+            if (isTooClose(centroid, labels, minDist)) {
+                console.log(`[label.actions] too close - bail out!`)
+                return null;
+            }
+        }
+        return centroid;
+    },
+
+    createFromCluster(points: PointData[], title: string, description: string,) {
+        const centroid = this.getAcceptableCentroid(points);
         console.debug(`[label.actions] enter with points:`, JSON.stringify(points), "\nGot centroid", centroid)
 
-        const labels = labelState.labels;
+        if (!centroid) throw new Error("No centroid for points")
 
+        const labels = labelState.labels;
         if (labels) {
             const minDist = labelState?.minCentroidDistance ?? 0.05;
             if (isTooClose(centroid, labels, minDist)) {
@@ -21,17 +32,17 @@ export const labelsActions = {
 
         const labelPoint: LabelPoint = {
             id: crypto.randomUUID(),
-            text,
+            title,
+            description,
             nx: centroid.nx,
             ny: centroid.ny,
             gnx: centroid.gnx,
             gny: centroid.gny,
             type: "cluster_summary"
         };
-        console.log(`[label.actions] label! ${ text }`, labelPoint)
+        console.log(`[label.actions] label! ${ title }`, labelPoint)
 
         addLabel(labelPoint);
-
         return true;
     }
 };

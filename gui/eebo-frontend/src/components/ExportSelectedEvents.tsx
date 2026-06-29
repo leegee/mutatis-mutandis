@@ -13,6 +13,7 @@ import { controls } from "../state/controls.store";
 import { cluster2groq } from "../services/groqApi";
 import { labelsActions } from "../state/labels.actions";
 import type { PointData } from "./ScatterPlot/types";
+import { pushToast } from "../state/toast.store";
 
 export default function ExportSelectedEvents() {
   const [isExporting, setIsExporting] = createSignal(false);
@@ -96,17 +97,14 @@ export default function ExportSelectedEvents() {
         /> */}
 
         <li onClick={async () => {
-          // const selectedPoints = controls.selectedPoints
-          //   .filter(
-          //     (selectedPoint): selectedPoint is EnrichedEvent & { nx: number; ny: number } =>
-          //       typeof selectedPoint.nx === "number" && typeof selectedPoint.ny === "number"
-          //   )
-          //   .map((p) => ({
-          //     id: p.event_id,
-          //     x: p.nx,
-          //     y: p.ny,
-          //   }));
-          // console.log('[ExportSelectedEvents] selected points:', selectedPoints)
+          const positionOk = labelsActions.getAcceptableCentroid(controls.selectedPoints);
+          if (!positionOk) {
+            pushToast({
+              type: "error",
+              message: "Label cannot be placed this close to an existing label",
+            });
+            return;
+          }
 
           console.log('[ExportSelectedEvents] Call cluster2groq')
           const result = await cluster2groq({
@@ -114,19 +112,17 @@ export default function ExportSelectedEvents() {
             rawText: allText()
           });
 
-          const labelText = result.sense_name;
-
           const success = labelsActions.createFromCluster(
             controls.selectedPoints,
-            labelText
+            result.sense_name,
+            result.description,
           );
 
-          if (!success) {
-            alert("Label too close to existing cluster");
-            return;
-          }
+          pushToast({
+            type: "info",
+            message: `Added sense <q>${ result.sense_name }</q>:<br/><br/><dfn>${ result.description }</dfn>`,
+          })
 
-          alert(`${ result.sense_name }\n\n${ result.description }`);
         }}>
           <i>new_label</i>
           <span>Label with Groq</span>

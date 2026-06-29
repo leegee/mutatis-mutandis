@@ -22,7 +22,8 @@ export interface PointData extends EnrichedEvent, Omit<SqliteEvent, "vector_id">
 
 export interface LabelPoint {
   id: string;
-  text: string;
+  title: string;
+  description: string;
   nx: number;
   ny: number;
   gnx: number;

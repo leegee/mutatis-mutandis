@@ -24,9 +24,7 @@ export function ToastHost() {
               }}
             >
               <nav>
-                <span class="max">
-                  {thisToast.message}
-                </span>
+                <span class="max" innerHTML={thisToast.message}></span>
                 <button class="chip round small no-border" onClick={() => removeToast(thisToast.id)}>
                   <i>close</i>
                 </button>

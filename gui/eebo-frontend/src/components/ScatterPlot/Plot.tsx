@@ -69,10 +69,11 @@ interface PlotProps {
   selected?: Set<Id>;
 
   // Events
-  onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
   onPointRightClick?: (point: PointData) => void;
   onBoundsChange?: (bounds: ViewBounds) => void;
   onSelectionChange?: (points: PointData[] | null) => void;
+  onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
+  onLabelHover: (label: LabelPoint | null, screenXY: [number, number] | null) => void;
 }
 
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
@@ -181,7 +182,7 @@ export default function Plot(props: PlotProps) {
       updateTriggers: {
         getPosition: [props.projectionMode],
       },
-      getText: d => d.text,
+      getText: d => d.title,
       getSize: 12,
       sizeUnits: "pixels",
       getColor: [252, 252, 252, 222],
@@ -190,6 +191,8 @@ export default function Plot(props: PlotProps) {
       backgroundPadding: [4, 2],
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
+      pickable: true,
+      onHover: (info: PickingInfo<LabelPoint>) => props.onLabelHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
     });
   });
 

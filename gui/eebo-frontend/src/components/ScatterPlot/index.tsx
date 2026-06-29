@@ -1,6 +1,6 @@
 import { createSignal, createResource, Show, Switch, Match } from "solid-js";
 
-import type { PointData, ViewBounds } from "./types";
+import type { LabelPoint, PointData, ViewBounds } from "./types";
 import type { Id } from "./SelectionPlugin/types";
 
 import Plot from "./Plot";
@@ -16,7 +16,8 @@ import { labelState } from "../../state/labels.store";
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
 export default function ConceptClusterPlot() {
-    const [hovered, setHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
+    const [pointHovered, setPointHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
+    const [labelHovered, setLabelHovered] = createSignal<{ label: LabelPoint; x: number; y: number } | null>(null);
 
     const sharedKey = () => ({
         concepts: controls.conceptSelection,
@@ -177,12 +178,11 @@ export default function ConceptClusterPlot() {
                                 neighbourOpacity={controls.neighbourOpacity}
                                 colorBy={controls.colorScatterBy}
                                 colorByFields={COLOR_FIELDS}
-                                onPointHover={(pt, xy) =>
-                                    setHovered(pt && xy ? { point: pt, x: xy[0], y: xy[1] } : null)
-                                }
                                 onBoundsChange={handleBoundsChange}
                                 selected={controls.selectedEventIds}
                                 onSelectionChange={handleSelectionChange}
+                                onPointHover={(point, xy) => setPointHovered(point && xy ? { point: point, x: xy[0], y: xy[1] } : null)}
+                                onLabelHover={(label, xy) => setLabelHovered(label && xy ? { label: label, x: xy[0], y: xy[1] } : null)}
                             />
                         </div>
 
@@ -194,14 +194,31 @@ export default function ConceptClusterPlot() {
                 </Show>
             </Show>
 
-            {/* Hover Tooltip */}
-            <Show when={hovered()}>
+            {/* Label-hover tooltip */}
+            <Show when={labelHovered()}>
                 {(h) => (
-                    <aside class="surface-container-highest border large-elevate no-padding"
+                    <aside class="surface-container-highest border large-elevate padding"
                         style={{
                             position: "fixed",
                             left: `${ h().x + 100 }px`,
                             top: `${ h().y + 70 }px`,
+                            "z-index": 20,
+                            "pointer-events": "none",
+                            "width": "20em",
+                        }}>
+                        {JSON.stringify(h().label.description)}
+                    </aside>
+                )}
+            </Show>
+
+            {/* Piont-hover Tooltip */}
+            <Show when={pointHovered()}>
+                {(hoveredPoint) => (
+                    <aside class="surface-container-highest border large-elevate no-padding"
+                        style={{
+                            position: "fixed",
+                            left: `${ hoveredPoint().x + 100 }px`,
+                            top: `${ hoveredPoint().y + 70 }px`,
                             "z-index": 20,
                             "pointer-events": "none",
                             "white-space": "nowrap",
@@ -209,35 +226,34 @@ export default function ConceptClusterPlot() {
                         }}>
 
                         <header class="bottom-margin">
-                            <h2 class="medium-padding fill max">{h().point.token}</h2>
-
-                            <Show when={h().point.depth
+                            <h2 class="medium-padding fill max">{hoveredPoint().point.token}</h2>
+                            <Show when={hoveredPoint().point.depth
                                 || (
                                     controls.scatterPlotLayerMode === 'clusters'
-                                    && h().point.concept)
+                                    && hoveredPoint().point.concept)
                             }>
                                 <div class="medium-opacity small-text no-space small small-margin tiny-padding">
                                     <span class="max no-space small small-margin no-padding">
                                         <Switch>
                                             <Match when={controls.scatterPlotLayerMode === 'clusters'}>
-                                                {h().point.pub_year}
-                                                <Show when={h().point.concept}>
-                                                    {h().point.concept}
+                                                {hoveredPoint().point.pub_year}
+                                                <Show when={hoveredPoint().point.concept}>
+                                                    {" "} {hoveredPoint().point.concept}
                                                 </Show>
                                             </Match>
 
                                             <Match when={controls.scatterPlotLayerMode !== 'clusters'}>
-                                                <span class="bold">{h().point.pub_year} </span>
-                                                <Show when={h().point.depth}>
-                                                    {h().point.concept}
-                                                    <sup class="medium-text"> {h().point.depth}</sup>
+                                                <span class="bold">{hoveredPoint().point.pub_year} </span>
+                                                <Show when={hoveredPoint().point.depth}>
+                                                    {" "}{hoveredPoint().point.concept}
+                                                    <sup class="medium-text"> {hoveredPoint().point.depth}</sup>
                                                 </Show>
                                             </Match>
                                         </Switch>
                                     </span>
 
                                     <span>
-                                        {h().point.cluster_label && ` Cluster ${ h().point.cluster_label }`}
+                                        {hoveredPoint().point.cluster_label && ` Cluster ${ hoveredPoint().point.cluster_label }`}
                                     </span>
                                 </div>
                             </Show>
@@ -245,13 +261,13 @@ export default function ConceptClusterPlot() {
 
                         <div class="left-padding right-padding">
                             <span class="medium-opacity">
-                                Doc: {h().point.doc_id} T {h().point.token_idx}
+                                Doc: {hoveredPoint().point.doc_id} T {hoveredPoint().point.token_idx}
                                 <br />
-                                Win: {h().point.window_id} T {h().point.window_token_pos}
+                                Win: {hoveredPoint().point.window_id} T {hoveredPoint().point.window_token_pos}
                             </span>
                         </div>
                         <footer class="row border padding" style="bottom-padding: 1em; top-padding: 1em">
-                            <TextWindow eventid={h().point.event_id} style="font-size: 8pt; line-height: 1.6;" />
+                            <TextWindow eventid={hoveredPoint().point.event_id} style="font-size: 8pt; line-height: 1.6;" />
                         </footer>
                     </aside>
                 )}
