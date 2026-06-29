@@ -534,7 +534,7 @@ export const ConceptGraph: Component = () => {
 
       <Show when={!data.loading && !data.error && data() && counts()}>
         <footer class="surface-container-low">
-          <nav class="padding">
+          <nav class="bottom-padding bottom-align">
             <div style="display:flex;gap:1em">
               <Dot color={`rgba(${ NODE_RGBA[NODE_KIND.EVENT].map(_ => _ * 255).join(",") })`}
                 label={`events (${ counts()!.events.toLocaleString() })`}
