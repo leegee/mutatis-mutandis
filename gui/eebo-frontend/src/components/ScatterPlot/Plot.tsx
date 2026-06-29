@@ -9,7 +9,7 @@ import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./style.css";
-import type { BfsDataset, ConceptDataset, LabelPoint, PointData, ViewBounds } from "./types";
+import type { BfsDataset, ConceptDatasetJSON, LabelPoint, PointData, ViewBounds } from "./types";
 import { CanvasDragPlugin } from "./SelectionPlugin/CanvasDragPlugin";
 import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
@@ -56,7 +56,7 @@ const dim = ([r, g, b, a]: RGBA): RGBA => [
 
 interface PlotProps {
   // Data
-  datasets: ConceptDataset[];
+  datasets: ConceptDatasetJSON[];
   bfsDataset?: BfsDataset;
 
   // Controlled display state — parent owns these

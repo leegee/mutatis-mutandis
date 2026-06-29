@@ -38,13 +38,22 @@ export interface LabelDataset {
 }
 
 
-export interface ConceptDataset {
+export interface ConceptDatasetJSON {
   concept: string;
   origin?: string | undefined;
   points: PointData[];
   bounds: Bounds;
   globalBounds: Bounds;
 }
+
+export interface ConceptDatasetSqlite {
+  concept: string;
+  origin?: string | undefined;
+  points: PointData[];
+  bounds: Bounds;
+  globalBounds: Bounds;
+}
+
 
 export interface BfsDataset {
   points: any[];

@@ -745,6 +745,7 @@ def run_tier3_core(
     # Pass 3c — cluster outputs
     #
     for path, meta, event_ids, local_coords, cluster_labels in buffered_clusters:
+        concept_name = meta["concept"]
         unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
         label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
 
@@ -759,6 +760,19 @@ def run_tier3_core(
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
+
+        write_projections_to_sqlite(
+            db_path         = db_path,
+            concept_name    = concept_name,
+            points          = None,
+            local_coords    = local_coords,
+            global_coords   = global_coords,
+            local_bounds    = local_bounds,
+            global_bounds   = global_bounds_padded,
+            cluster_labels  = cluster_labels,
+            event_ids       = event_ids,
+        )
+
         points = assemble_points(
             event_ids, local_coords, global_coords,
             local_bounds, global_bounds_padded,
@@ -841,6 +855,77 @@ def run_tier3_service(
         mode            = mode,
         emit            = emit,
     )
+
+
+def write_projections_to_sqlite(db_path, concept_name, points, local_coords, global_coords, local_bounds, global_bounds, cluster_labels=None, event_ids=None):
+    """
+    Write projection coordinates and cluster assignments to SQLite.
+    points: list of assembled point dicts from assemble_points
+    """
+    con = sqlite3.connect(db_path)
+
+    # Update events table (seeds with cluster assignments)
+    if cluster_labels and event_ids:
+        label_map = {
+            str(eid): cluster_labels[i]
+            for i, eid in enumerate(event_ids)
+        }
+        con.executemany(
+            """UPDATE events
+               SET local_x = ?, local_y = ?, global_x = ?, global_y = ?,
+                   cluster_id = ?, cluster_label = ?
+               WHERE event_id = ?""",
+            [
+                (
+                    local_coords[str(eid)][0],
+                    local_coords[str(eid)][1],
+                    global_coords[str(eid)][0],
+                    global_coords[str(eid)][1],
+                    int(label_map[str(eid)]),
+                    chr(65 + int(label_map[str(eid)])) if label_map[str(eid)] != -1 else None,
+                    int(eid),
+                )
+                for eid in event_ids
+                if str(eid) in local_coords and str(eid) in global_coords
+            ]
+        )
+
+    # Update neighbours table (no cluster assignments)
+    con.executemany(
+        """UPDATE neighbours
+           SET local_x = ?, local_y = ?, global_x = ?, global_y = ?
+           WHERE neighbour_event_id = ?""",
+        [
+            (
+                local_coords[str(eid)][0],
+                local_coords[str(eid)][1],
+                global_coords[str(eid)][0],
+                global_coords[str(eid)][1],
+                int(eid),
+            )
+            for eid in (event_ids or [])
+            if str(eid) in local_coords and str(eid) in global_coords
+        ]
+    )
+
+    # Update concept_projection_bounds
+    con.execute(
+        """INSERT OR REPLACE INTO concept_projection_bounds (
+               concept,
+               local_min_x, local_max_x, local_min_y, local_max_y,
+               global_min_x, global_max_x, global_min_y, global_max_y
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            concept_name,
+            local_bounds["minX"],  local_bounds["maxX"],
+            local_bounds["minY"],  local_bounds["maxY"],
+            global_bounds["minX"], global_bounds["maxX"],
+            global_bounds["minY"], global_bounds["maxY"],
+        )
+    )
+
+    con.commit()
+    con.close()
 
 
 def main():
