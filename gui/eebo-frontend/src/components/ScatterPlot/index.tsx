@@ -176,18 +176,18 @@ export default function ConceptClusterPlot() {
                     <div id="graph_sidebar_row">
                         <div id="under_sidebar" class="max">
                             <Plot
-                                projectionMode={controls.projectionMode}
-                                datasets={activeDatasets()}
                                 bfsDataset={bfs() as BfsDataset}
                                 bfsOpacity={controls.bfsOpacity}
-                                neighbourOpacity={controls.neighbourOpacity}
                                 colorBy={controls.colorScatterBy}
                                 colorByFields={COLOR_FIELDS}
+                                datasets={activeDatasets()}
+                                neighbourOpacity={controls.neighbourOpacity}
                                 onBoundsChange={handleBoundsChange}
-                                selected={controls.selectedEventIds}
-                                onSelectionChange={handleSelectionChange}
-                                onPointHover={(point, xy) => setPointHovered(point && xy ? { point: point, x: xy[0], y: xy[1] } : null)}
                                 onLabelHover={(label, xy) => setLabelHovered(label && xy ? { label: label, x: xy[0], y: xy[1] } : null)}
+                                onPointHover={(point, xy) => setPointHovered(point && xy ? { point: point, x: xy[0], y: xy[1] } : null)}
+                                onSelectionChange={handleSelectionChange}
+                                projectionMode={controls.projectionMode}
+                                selectedEventIds={controls.selectedEventIds}
                             />
                         </div>
 

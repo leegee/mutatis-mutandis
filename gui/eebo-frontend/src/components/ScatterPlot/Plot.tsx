@@ -59,10 +59,9 @@ interface PlotProps {
   colorBy: string;
   colorByFields: string[];
   pointRadius?: number;
-  opacity?: number;
   bfsOpacity?: number;
   neighbourOpacity?: number;
-  selected?: Set<Id>;
+  selectedEventIds?: Set<Id>;
 
   onPointRightClick?: (point: PointData) => void;
   onBoundsChange?: (bounds: ViewBounds) => void;
@@ -90,19 +89,12 @@ export default function Plot(props: PlotProps) {
   // Instance-scoped point cache (not a module-level global).
   let currentPoints: PointData[] = [];
 
-  // isZoomedIn controls layer pickability. Kept as a plain mutable ref
-  // rather than a signal so reading it inside the layers memo does NOT
-  // subscribe — rebuilding all ScatterplotLayer objects on every zoom frame
-  // (60 fps) was the source of the blockiness/jank.
   let isZoomedInRef = false;
   // Separate signal that only flips when the threshold actually crosses,
   // used solely to trigger a layer rebuild on that one frame.
   const [zoomTier, setZoomTier] = createSignal(0); // 0 = zoomed-out, 1 = zoomed-in
 
   // Track drag state via pointer distance rather than a boolean flag.
-  // A flag-based guard clears at the wrong moment relative to the click event,
-  // which was causing drag-end events to either pass through or block clicks
-  // incorrectly. Distance threshold is reliable regardless of event ordering.
   let pointerDownX = 0;
   let pointerDownY = 0;
   const DRAG_THRESHOLD_PX = 6;
@@ -118,7 +110,7 @@ export default function Plot(props: PlotProps) {
     return result;
   });
 
-  const selected = createMemo(() => props.selected ?? new Set<Id>());
+  const selectedEventIds = createMemo(() => props.selectedEventIds ?? new Set<Id>());
 
   // Split so colorMap only rebuilds when the colour field values change,
   // not on every unrelated dataset mutation.
@@ -132,7 +124,7 @@ export default function Plot(props: PlotProps) {
   const getColor = createMemo(() => {
     const field = props.colorBy;
     const map = colorMap();
-    const sel = selected();
+    const sel = selectedEventIds();
     const neighbourOpacity = props.neighbourOpacity ?? 200;
 
     return (p: PointData, origin?: string): RGBA => {
@@ -230,7 +222,7 @@ export default function Plot(props: PlotProps) {
           },
           updateTriggers: {
             getPosition: [proj],
-            getFillColor: [props.colorBy, selected()],
+            getFillColor: [props.colorBy, selectedEventIds(), props.colorByFields],
           },
           onHover: info => {
             if (isDragging) return;
@@ -260,7 +252,7 @@ export default function Plot(props: PlotProps) {
           },
           updateTriggers: {
             getPosition: [proj],
-            getFillColor: [props.neighbourOpacity, props.colorBy, selected()],
+            getFillColor: [props.neighbourOpacity, props.colorBy, selectedEventIds()],
           },
           onHover: info => {
             if (isDragging) return;
@@ -285,6 +277,9 @@ export default function Plot(props: PlotProps) {
           radiusUnits: "pixels",
           opacity: (props.bfsOpacity ?? 90) / 255,
           pickable: zoomed,
+          updateTriggers: {
+            getFillColor: [props.bfsOpacity],
+          }
         })
       );
     }
