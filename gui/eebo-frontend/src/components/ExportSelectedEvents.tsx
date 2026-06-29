@@ -6,13 +6,10 @@ import {
   type ExportData,
   copyTextToClipboard,
   copyToClipboard,
-  getEnrichedSelectedEvents,
-  type EnrichedEvent,
 } from "../lib/eventExport";
 import { controls } from "../state/controls.store";
 import { cluster2groq } from "../services/groqApi";
 import { labelsActions } from "../state/labels.actions";
-import type { PointData } from "./ScatterPlot/types";
 import { pushToast } from "../state/toast.store";
 
 export default function ExportSelectedEvents() {
@@ -108,7 +105,7 @@ export default function ExportSelectedEvents() {
 
           console.log('[ExportSelectedEvents] Call cluster2groq')
           const result = await cluster2groq({
-            concept: exportedData()!.events[0].concept.toLowerCase(),
+            concept: exportedData()!.events[0].concept?.toLowerCase() || controls.concept,
             rawText: allText()
           });
 
