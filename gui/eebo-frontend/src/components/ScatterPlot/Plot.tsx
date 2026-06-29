@@ -221,8 +221,8 @@ export default function Plot(props: PlotProps) {
           radiusUnits: "pixels",
           opacity: 0.96,
           pickable: true,
-          autoHighlight: zoomed,
-          highlightColor: [255, 255, 200, 180],
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 80],
           transitions: {
             getPosition: { duration: 600 },
             getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
@@ -341,12 +341,9 @@ export default function Plot(props: PlotProps) {
       canvas,
       views: new OrthographicView({ id: "ortho", controller: true }),
       initialViewState: INITIAL_VIEW_STATE,
-      gl: canvas.getContext("webgl2", {
-        antialias: true,
-        alpha: true,
-        preserveDrawingBuffer: false,
-        powerPreference: "high-performance",
-      }),
+      // Let DeckGL create and own the WebGL context. Passing a pre-created
+      // context via `gl:` bypasses DeckGL's canvas event wiring which breaks
+      // hover picking. Smoothness comes from useDevicePixels, not MSAA flags.
       useDevicePixels: true,
       touchAction: "none",
       layers: [],
