@@ -559,7 +559,7 @@ def run_tier3_core(
 
             seed_ids       = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
             seed_ids       = [str(eid) for eid in seed_ids]
-            concept_sample = seed_ids[:1000]
+            concept_sample = seed_ids # [:1000]
 
             if not concept_sample:
                 logger.warning(f"[tier3] no events found for concept={concept_name}, skipping")
