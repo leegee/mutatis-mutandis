@@ -46,9 +46,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
             const height = () =>
               Math.max(
                 4,
-                Math.round(
-                  (bucket.count / maxCount()) * 28,
-                ),
+                Math.round((bucket.count / maxCount()) * 100)
               );
 
             return (
@@ -86,7 +84,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
                 }}
               >
                 <div class="year-data" style={{
-                  height: `${ height() }px`,
+                  height: `${ height() }%`,
                   opacity: bucket.count === 0 ? 0.15 : 1,
                   background:
                     bucket.count === 0
