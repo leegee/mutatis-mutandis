@@ -15,8 +15,9 @@ import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
 import type { Id, ScreenRect } from "./SelectionPlugin/types";
 import { buildColorMap } from "../../lib/colour";
-import type { ProjectionModeType } from "../../state/controls.store";
+import { controls, type ProjectionModeType } from "../../state/controls.store";
 import { labelState } from "../../state/labels.store";
+import { labelsActions } from "../../state/labels.actions";
 
 type RGB = [number, number, number];
 type RGBA = [number, number, number, number]
@@ -79,7 +80,7 @@ interface PlotProps {
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
 
 function getPosition(
-  p: PointData,
+  p: PointData | LabelPoint,
   projection: "local" | "global"
 ): [number, number, number] {
   return projection === "global"
@@ -171,14 +172,13 @@ export default function Plot(props: PlotProps) {
   });
 
   const labelLayer = createMemo(() => {
-    const labels = labelState.labels;
+    const labels = labelsActions.getLabels(controls.concept);
+
     return new TextLayer<LabelPoint>({
       coordinateSystem: "cartesian",
       id: "labels",
       data: labels.length ? labels : [],
-      getPosition: d => props.projectionMode === "global"
-        ? [d.gnx ?? d.nx, d.gny ?? d.ny, 0]
-        : [d.nx, d.ny, 0],
+      getPosition: d => getPosition(d, props.projectionMode),
       updateTriggers: {
         getPosition: [props.projectionMode],
       },

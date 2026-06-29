@@ -2,9 +2,20 @@ import type { LabelPoint, PointData } from "../components/ScatterPlot/types";
 import { labelState, setLabelState } from "./labels.store";
 
 export const labelsActions = {
-    getAcceptableCentroid(points: PointData[]) {
+    getLabels(concept: string) {
+        return labelState.labels[concept] ?? [];
+    },
+
+    addLabel(concept: string, labelPoint: LabelPoint) {
+        setLabelState("labels", concept, (prev = []) => [
+            ...prev,
+            labelPoint,
+        ]);
+    },
+
+    getAcceptableCentroid(concept: string, points: PointData[]) {
         const centroid = computeCentroid(points);
-        const labels = labelState.labels;
+        const labels = this.getLabels(concept);
         if (labels) {
             const minDist = labelState?.minCentroidDistance ?? 0.05;
             if (isTooClose(centroid, labels, minDist)) {
@@ -15,16 +26,16 @@ export const labelsActions = {
         return centroid;
     },
 
-    createFromCluster(points: PointData[], title: string, description: string,) {
-        const centroid = this.getAcceptableCentroid(points);
+    createFromCluster(concept: string, points: PointData[], title: string, description: string,) {
+        const centroid = this.getAcceptableCentroid(concept, points);
         console.debug(`[label.actions] enter with points:`, JSON.stringify(points), "\nGot centroid", centroid)
 
         if (!centroid) throw new Error("No centroid for points")
 
-        const labels = labelState.labels;
+        const labels = this.getLabels(concept);
         if (labels) {
             const minDist = labelState?.minCentroidDistance ?? 0.05;
-            if (isTooClose(centroid, labels, minDist)) {
+            if (isTooClose(centroid, this.getLabels(concept), minDist)) {
                 console.log(`[label.actions] too close - bail out!`)
                 return false;
             }
@@ -42,18 +53,11 @@ export const labelsActions = {
         };
         console.log(`[label.actions] label! ${ title }`, labelPoint)
 
-        addLabel(labelPoint);
+        this.addLabel(concept, labelPoint);
         return true;
     }
 };
 
-function addLabel(labelPoint: LabelPoint) {
-    console.log('Added label', labelPoint);
-    setLabelState("labels", (prev) => [
-        ...(prev ?? []),
-        labelPoint,
-    ]);
-}
 
 function isTooClose(
     centroid: { nx: number; ny: number },

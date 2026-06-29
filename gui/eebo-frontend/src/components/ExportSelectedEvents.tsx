@@ -94,7 +94,7 @@ export default function ExportSelectedEvents() {
         /> */}
 
         <li onClick={async () => {
-          const positionOk = labelsActions.getAcceptableCentroid(controls.selectedPoints);
+          const positionOk = labelsActions.getAcceptableCentroid(controls.concept, controls.selectedPoints);
           if (!positionOk) {
             pushToast({
               type: "error",
@@ -110,14 +110,15 @@ export default function ExportSelectedEvents() {
           });
 
           const success = labelsActions.createFromCluster(
+            controls.concept,
             controls.selectedPoints,
             result.sense_name,
             result.description,
           );
 
           pushToast({
-            type: "info",
-            message: `Added sense <q>${ result.sense_name }</q>:<br/><br/><dfn>${ result.description }</dfn>`,
+            type: success ? "info" : "error",
+            message: success ? `Added sense <q>${ result.sense_name }</q>:<br/><br/><dfn>${ result.description }</dfn>` : 'Check the logs.',
           })
 
         }}>
