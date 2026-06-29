@@ -703,25 +703,37 @@ CREATE TABLE IF NOT EXISTS events (
     geom             TEXT,
     lat              NUMBER,
     lng              NUMBER,
+    local_x          REAL,
+    local_y          REAL,
+    global_x         REAL,
+    global_y         REAL,
+    cluster_id       INTEGER,
+    cluster_label    TEXT,
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
 CREATE TABLE IF NOT EXISTS neighbours (
-    event_id             INTEGER NOT NULL,
-    neighbour_event_id   INTEGER NOT NULL,
-    depth                INTEGER NOT NULL DEFAULT 1,
-    via_event_id         INTEGER,
-    vector_id            INTEGER,
-    token                TEXT,
-    doc_id               TEXT,
-    pub_year             INTEGER,
-    token_idx            INTEGER,
-    window_id            INTEGER,
-    window_token_pos     INTEGER,
-    score                REAL,
-    geom                 TEXT,
-    lat                  NUMBER,
-    lng                  NUMBER,
+    event_id            INTEGER NOT NULL,
+    neighbour_event_id  INTEGER NOT NULL,
+    depth               INTEGER NOT NULL DEFAULT 1,
+    via_event_id        INTEGER,
+    vector_id           INTEGER,
+    token               TEXT,
+    doc_id              TEXT,
+    pub_year            INTEGER,
+    token_idx           INTEGER,
+    window_id           INTEGER,
+    window_token_pos    INTEGER,
+    score               REAL,
+    geom                TEXT,
+    lat                 NUMBER,
+    lng                 NUMBER,
+    local_x             REAL,
+    local_y             REAL,
+    global_x            REAL,
+    global_y            REAL,
+    cluster_id          INTEGER,
+    cluster_label       TEXT,
     PRIMARY KEY (event_id, neighbour_event_id, depth),
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
@@ -733,6 +745,15 @@ CREATE INDEX IF NOT EXISTS events_lat_idx ON events(lat);
 CREATE INDEX IF NOT EXISTS events_lng_idx ON events(lng);
 CREATE INDEX IF NOT EXISTS neighbours_lat_idx ON neighbours(lat);
 CREATE INDEX IF NOT EXISTS neighbours_lng_idx ON neighbours(lng);
+
+CREATE TABLE concept_projection_bounds (
+    concept   TEXT NOT NULL,
+    local_min_x  REAL, local_max_x  REAL,
+    local_min_y  REAL, local_max_y  REAL,
+    global_min_x REAL, global_max_x REAL,
+    global_min_y REAL, global_max_y REAL,
+    PRIMARY KEY (concept)
+);
 
 -- Flattened aggregate rows for top_tokens, top_docs, top_windows.
 -- kind    = 'token' | 'doc' | 'window'
