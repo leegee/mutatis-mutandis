@@ -3,13 +3,13 @@
 // Pure render component: all state lives in the parent.
 
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { Deck, OrthographicView } from "@deck.gl/core";
+import { Deck, OrthographicView, LinearInterpolator } from "@deck.gl/core";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./style.css";
-import type { BfsDataset, ConceptDatasetJSON, LabelPoint, PointData, ViewBounds } from "./types";
+import type { BfsDataset, ConceptDatasetSqlite, LabelPoint, PointData, ViewBounds } from "./types";
 import { CanvasDragPlugin } from "./SelectionPlugin/CanvasDragPlugin";
 import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
@@ -20,17 +20,15 @@ import { labelState } from "../../state/labels.store";
 import { labelsActions } from "../../state/labels.actions";
 
 type RGB = [number, number, number];
-type RGBA = [number, number, number, number]
-
-let currentPoints: PointData[] = [];
+type RGBA = [number, number, number, number];
 
 const DEPTH_COLORS: Record<number, RGBA> = {
-  0: [0, 0, 0, 0],  // gold   — seeds
-  1: [80, 160, 220, 250],  // blue   — depth 1
-  2: [80, 200, 140, 250],  // green  — depth 2
+  0: [0, 0, 0, 0],
+  1: [80, 160, 220, 250],
+  2: [80, 200, 140, 250],
 };
 
-const GREY: [number, number, number, number] = [120, 120, 130, 140];
+const GREY: RGBA = [120, 120, 130, 140];
 
 const INITIAL_VIEW_STATE: OrthographicViewState = {
   target: [0.5, 0.5, 0],
@@ -53,23 +51,19 @@ const dim = ([r, g, b, a]: RGBA): RGBA => [
   a,
 ];
 
-
 interface PlotProps {
-  // Data
-  datasets: ConceptDatasetJSON[];
+  datasets: ConceptDatasetSqlite[];
   bfsDataset?: BfsDataset;
 
-  // Controlled display state — parent owns these
   projectionMode: ProjectionModeType;
   colorBy: string;
   colorByFields: string[];
   pointRadius?: number;
   opacity?: number;
-  bfsOpacity?: number
+  bfsOpacity?: number;
   neighbourOpacity?: number;
   selected?: Set<Id>;
 
-  // Events
   onPointRightClick?: (point: PointData) => void;
   onBoundsChange?: (bounds: ViewBounds) => void;
   onSelectionChange?: (points: PointData[] | null) => void;
@@ -93,47 +87,47 @@ export default function Plot(props: PlotProps) {
   let deck: Deck<OrthographicView> | null = null;
   let controller: SelectionController<PointData> | undefined;
 
-  const [_viewState, setViewState] = createSignal<OrthographicViewState>(INITIAL_VIEW_STATE);
+  // Instance-scoped point cache (not a module-level global).
+  let currentPoints: PointData[] = [];
+
+  // isZoomedIn controls layer pickability. Kept as a plain mutable ref
+  // rather than a signal so reading it inside the layers memo does NOT
+  // subscribe — rebuilding all ScatterplotLayer objects on every zoom frame
+  // (60 fps) was the source of the blockiness/jank.
+  let isZoomedInRef = false;
+  // Separate signal that only flips when the threshold actually crosses,
+  // used solely to trigger a layer rebuild on that one frame.
+  const [zoomTier, setZoomTier] = createSignal(0); // 0 = zoomed-out, 1 = zoomed-in
+
+  // Track drag state via pointer distance rather than a boolean flag.
+  // A flag-based guard clears at the wrong moment relative to the click event,
+  // which was causing drag-end events to either pass through or block clicks
+  // incorrectly. Distance threshold is reliable regardless of event ordering.
+  let pointerDownX = 0;
+  let pointerDownY = 0;
+  const DRAG_THRESHOLD_PX = 6;
+
+  // Separate drag-preview signal for the selection rectangle overlay.
+  let isDragging = false;
   const [dragRect, setDragRect] = createSignal<ScreenRect | null>(null);
 
-  // Flatten all points across all datasets for colour map derivation.
-  // const allPoints = createMemo<PointData[]>(() =>
-  //   props.datasets.flatMap((d) => d.points)
-  // );
-  const allPoints = createMemo<PointData[]>(() =>
-    props.datasets.flatMap((d) =>
-      (d.points ?? []).filter(
-        (p): p is PointData => p != null
-      )
-    )
-  );
-
+  const allPoints = createMemo(() => {
+    const start = performance.now();
+    const result = props.datasets.flatMap(d => d.points || []);
+    console.log(`[Plot] allPoints memo computed ${ result.length } points in ${ (performance.now() - start).toFixed(1) }ms`);
+    return result;
+  });
 
   const selected = createMemo(() => props.selected ?? new Set<Id>());
 
-  // const getBaseColor = (
-  //   p: PointData,
-  //   origin: string | undefined,
-  //   map: Map<string, RGBA>,
-  //   field: keyof PointData,
-  // ): RGBA => {
-  //   if (origin === "neighbours") {
-  //     return [
-  //       ...DEPTH_COLORS[p.depth ?? 1],
-  //       p.depth === 2
-  //         ? Math.floor((props.neighbourOpacity ?? 200) * 0.45)
-  //         : (props.neighbourOpacity ?? 200),
-  //     ];
-  //   }
-
-  //   return map.get(String(p[field] ?? "")) ?? GREY;
-  // };
-
-  const colorMap = createMemo(() => {
+  // Split so colorMap only rebuilds when the colour field values change,
+  // not on every unrelated dataset mutation.
+  const colorFieldValues = createMemo(() => {
     const field = props.colorBy;
-    const values = allPoints().map((p) => String(p[field as keyof PointData] ?? ""));
-    return buildColorMap(values);
+    return allPoints().map(p => String(p[field as keyof PointData] ?? ""));
   });
+
+  const colorMap = createMemo(() => buildColorMap(colorFieldValues()));
 
   const getColor = createMemo(() => {
     const field = props.colorBy;
@@ -146,12 +140,10 @@ export default function Plot(props: PlotProps) {
 
       if (origin === "neighbours") {
         const depth = p.depth ?? 1;
-
         const alpha =
           depth === 2
             ? Math.floor(neighbourOpacity * 0.45)
             : neighbourOpacity;
-
         base = [
           DEPTH_COLORS[depth][0],
           DEPTH_COLORS[depth][1],
@@ -163,10 +155,7 @@ export default function Plot(props: PlotProps) {
       }
 
       if (!sel.size) return base;
-      if (sel.has(p.event_id)) {
-        return brighten(base);
-      }
-
+      if (sel.has(p.event_id)) return brighten(base);
       return dim(base);
     };
   });
@@ -192,104 +181,148 @@ export default function Plot(props: PlotProps) {
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
       pickable: true,
-      onHover: (info: PickingInfo<LabelPoint>) => props.onLabelHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
+      onHover: (info: PickingInfo<LabelPoint>) =>
+        props.onLabelHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
     });
   });
 
+  const mergedConceptPoints = createMemo(() =>
+    props.datasets
+      .filter(d => d.type === "concept")
+      .flatMap(d => d.points || [])
+  );
 
-  // One ScatterplotLayer per concept dataset so toggling visibility
-  // per-concept is trivially available to the parent later.
+  const mergedNeighbourPoints = createMemo(() =>
+    props.datasets
+      .filter(d => d.type === "concept_neighbours")
+      .flatMap(d => d.points || [])
+  );
+
   const layers = createMemo(() => {
     const proj = props.projectionMode;
-    const colorFn = getColor();
-    const radius = props.pointRadius ?? 4;
-    const opacity = props.opacity ?? 0.85;
-    const bfsOpacity = props.bfsOpacity ?? 100;
+    // Reading zoomTier (not a per-frame zoom value) means this memo only
+    // re-runs when pickability flips, not on every scroll tick.
+    const zoomed = zoomTier() === 1;
 
-    // console.debug("[Plot] bfsDataset points:", props.bfsDataset?.points?.length);
+    const conceptPoints = mergedConceptPoints();
+    const neighbourPoints = mergedNeighbourPoints();
 
-    const [neighbourLayers, conceptLayers] = props.datasets.reduce(
-      ([n, c], dataset) => {
-        const layer = new ScatterplotLayer<PointData>({
-          id: `${ dataset.origin ?? "concept" }-${ dataset.concept }`,
+    const layersList: any[] = [];
+
+    if (conceptPoints.length > 0) {
+      layersList.push(
+        new ScatterplotLayer<PointData>({
+          id: "concepts-merged",
           coordinateSystem: "cartesian",
-          data: dataset.points,
-          getPosition: (p) => getPosition(p, proj),
-          getFillColor: (p) => colorFn(p, dataset.origin),
-          getRadius: radius,
-          // getRadius: (p: PointData) => {
-          //   if (origin === "neighbours") return radius * (p.depth === 2 ? 0.6 : 0.85);
-          //   return radius;
-          // },
+          data: conceptPoints,
+          getPosition: p => getPosition(p, proj),
+          getFillColor: p => getColor()(p),
+          getRadius: 4.5,
           radiusUnits: "pixels",
-          opacity,
+          opacity: 0.96,
           pickable: true,
-          autoHighlight: true,
-          highlightColor: [255, 255, 255, 80],
+          autoHighlight: zoomed,
+          highlightColor: [255, 255, 200, 180],
           transitions: {
-            getPosition: { duration: 650, easing: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t },
-            getFillColor: { duration: 300 },
+            getPosition: { duration: 600 },
+            getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
+            getRadius: { duration: 200 },
           },
           updateTriggers: {
             getPosition: [proj],
-            getFillColor: [props.neighbourOpacity, props.colorBy, dataset.concept, dataset.origin, selected()],
-            // getRadius: [props.pointRadius, dataset.origin],
+            getFillColor: [props.colorBy, selected()],
           },
-          onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-        });
-        return dataset.origin === "neighbours"
-          ? [[...n, layer], c]
-          : [n, [...c, layer]];
-      },
-      [[], []] as [ScatterplotLayer<PointData>[], ScatterplotLayer<PointData>[]]
-    );
+          onHover: info => {
+            if (isDragging) return;
+            props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null);
+          },
+        })
+      );
+    }
 
-    const bfsLayer = props.bfsDataset
-      && bfsOpacity
-      && props.bfsDataset?.points?.length
-      && props.projectionMode === "global"
-      &&
-      new ScatterplotLayer<PointData>({
-        id: "bfs-global",
-        coordinateSystem: "cartesian",
-        data: props.bfsDataset.points,
-        getPosition: getBfsPosition,
-        // getFillColor: () => [150, 150, 150, bfsOpacity],
-        getFillColor: (p: PointData) => {
-          const [r, g, b] = DEPTH_COLORS[p.depth ?? 0] ?? DEPTH_COLORS[2];
-          return [r, g, b, bfsOpacity];
-        },
-        updateTriggers: {
-          // getFillColor: bfsOpacity,
-          getFillColor: [bfsOpacity]
-        },
-        getRadius: radius * 1.5,
-        radiusUnits: "pixels",
-        pickable: true,
-        onHover: (info: PickingInfo<PointData>) => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-      });
+    if (neighbourPoints.length > 0) {
+      layersList.push(
+        new ScatterplotLayer<PointData>({
+          id: "neighbours-merged",
+          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          data: neighbourPoints,
+          getPosition: p => getPosition(p, proj),
+          getFillColor: p => getColor()(p, "neighbours"),
+          getRadius: p => (p.depth === 2 ? 1.8 : 2.8),
+          radiusUnits: "pixels",
+          opacity: (props.neighbourOpacity ?? 140) / 255,
+          pickable: zoomed,
+          autoHighlight: zoomed,
+          highlightColor: [255, 255, 255, 100],
+          transitions: {
+            getPosition: { duration: 450 },
+            getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
+          },
+          updateTriggers: {
+            getPosition: [proj],
+            getFillColor: [props.neighbourOpacity, props.colorBy, selected()],
+          },
+          onHover: info => {
+            if (isDragging) return;
+            props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null);
+          },
+        })
+      );
+    }
 
-    return [
-      ...(bfsLayer ? [bfsLayer] : []),
-      ...neighbourLayers,
-      ...conceptLayers,
-      ...(labelLayer ? [labelLayer()] : []),
-    ];
+    if (props.bfsDataset?.points?.length && proj === "global" && props.bfsOpacity) {
+      layersList.push(
+        new ScatterplotLayer({
+          id: "bfs-global",
+          data: props.bfsDataset.points,
+          getPosition: getBfsPosition,
+          getFillColor: p => {
+            const depth = p.depth ?? 0;
+            const base = DEPTH_COLORS[depth] || DEPTH_COLORS[2];
+            return [base[0], base[1], base[2], props.bfsOpacity ?? 90];
+          },
+          getRadius: 3.5,
+          radiusUnits: "pixels",
+          opacity: (props.bfsOpacity ?? 90) / 255,
+          pickable: zoomed,
+        })
+      );
+    }
+
+    layersList.push(labelLayer());
+
+    return layersList;
   });
 
-  function fitZoom(): number {
-    const size = Math.min(canvas.clientWidth, canvas.clientHeight) * 0.9;
-    return Math.log2(size / 512);
+  function flyTo(target: [number, number, number], newZoom: number, duration = 800) {
+    if (!deck) return;
+    // Using initialViewState + LinearInterpolator keeps DeckGL in uncontrolled
+    // mode (pan/zoom controller stays alive) while still animating the camera.
+    deck.setProps({
+      initialViewState: {
+        target,
+        zoom: newZoom,
+        minZoom: 2,
+        maxZoom: 30,
+        transitionDuration: duration,
+        transitionInterpolator: new LinearInterpolator(["target", "zoom"]),
+      } as OrthographicViewState,
+    });
   }
 
-
-  // Emit onBoundsChange when the viewport moves.
   function handleViewStateChange({ viewState: vs }: { viewState: OrthographicViewState }) {
-    setViewState(vs);
+    const z = (vs.zoom as number) ?? 10;
+
+    // Only flip the tier signal when crossing the threshold — not on every
+    // scroll tick — so the layers memo doesn't rebuild every frame.
+    const nowZoomedIn = z > 11;
+    if (nowZoomedIn !== isZoomedInRef) {
+      isZoomedInRef = nowZoomedIn;
+      setZoomTier(nowZoomedIn ? 1 : 0);
+    }
 
     if (props.onBoundsChange) {
-      const zoom = (vs.zoom as number) ?? 1;
-      const scale = Math.pow(2, zoom);
+      const scale = Math.pow(2, z);
       const halfW = (window.innerWidth / 2) / (512 * scale);
       const halfH = (window.innerHeight / 2) / (512 * scale);
       const [cx, cy] = vs.target as [number, number, number];
@@ -298,7 +331,7 @@ export default function Plot(props: PlotProps) {
         maxX: cx + halfW,
         minY: cy - halfH,
         maxY: cy + halfH,
-        zoom,
+        zoom: z,
       });
     }
   }
@@ -308,8 +341,15 @@ export default function Plot(props: PlotProps) {
       canvas,
       views: new OrthographicView({ id: "ortho", controller: true }),
       initialViewState: INITIAL_VIEW_STATE,
+      gl: canvas.getContext("webgl2", {
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: false,
+        powerPreference: "high-performance",
+      }),
       useDevicePixels: true,
-      layers: [],                        // start empty — effect below sets immediately
+      touchAction: "none",
+      layers: [],
       onViewStateChange: handleViewStateChange,
       style: { width: "100%", height: "100%" },
     });
@@ -319,26 +359,51 @@ export default function Plot(props: PlotProps) {
       multiKey: "Shift",
     });
 
-    controller.setChangeHandler((set) => {
-      console.debug("[plot.SelectionController changehanlder]", set)
+    controller.setChangeHandler(set => {
+      console.debug("[plot.SelectionController changeHandler]", set);
       const points = set ? currentPoints.filter(p => set.has(p.event_id)) : null;
       props.onSelectionChange?.(points);
     });
 
-    controller.setDragPreview = (rect) => setDragRect(rect);
+    controller.setDragPreview = (rect: ScreenRect | null) => {
+      isDragging = rect !== null;
+      setDragRect(rect);
+      if (rect !== null) {
+        props.onPointHover?.(null, null);
+      }
+    };
+
     controller
       .use(new DeckClickPlugin(deck, controller))
       .use(new CanvasDragPlugin(canvas, deck, controller));
 
-    canvas.addEventListener("pointerup", async (e) => {
+    // Record pointer-down position for distance-based click vs drag detection.
+    canvas.addEventListener("pointerdown", e => {
+      pointerDownX = e.offsetX;
+      pointerDownY = e.offsetY;
+    });
+
+    // Use pointerup (matching the original approach) rather than click.
+    // The DeckClickPlugin handles its own click logic; this handler is only
+    // responsible for picking objects and dispatching to the SelectionController.
+    // We restore pointerup here because click fires *after* the drag plugin
+    // has already cleared isDragging, making the flag unreliable for filtering
+    // drag-end events. pointerup fires before that cleanup.
+    canvas.addEventListener("pointerup", async e => {
+      // Distance guard: if the pointer travelled more than DRAG_THRESHOLD_PX
+      // this is a drag-end, not a click — ignore it.
+      const dx = e.offsetX - pointerDownX;
+      const dy = e.offsetY - pointerDownY;
+      if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX) return;
+
       const pick = await deck?.pickObjects({
         x: e.offsetX,
         y: e.offsetY,
       });
 
       const cleanPick = pick
-        ?.filter((p) => !p.sourceLayer?.id.startsWith("bfs-"))
-        .map((p) => p.object)
+        ?.filter(p => !p.sourceLayer?.id.startsWith("bfs-"))
+        .map(p => p.object)
         .filter((o): o is PointData => !!o?.event_id) ?? [];
 
       if (cleanPick.length) {
@@ -347,15 +412,45 @@ export default function Plot(props: PlotProps) {
         controller?.dispatch({ type: "null-select", payload: null });
       }
     });
-
-    fitZoom();
   });
 
-  createEffect(() => currentPoints = allPoints());
+  createEffect(() => {
+    currentPoints = allPoints();
+  });
 
-  // Single source of truth for all layers, including BFS.
   createEffect(() => {
     deck?.setProps({ layers: layers() });
+  });
+
+  // Fit camera to dataset bounds whenever projection mode or datasets change.
+  createEffect(() => {
+    if (!deck) return;
+
+    const mode = props.projectionMode;
+    const datasets = props.datasets;
+
+    if (!datasets || datasets.length === 0) return;
+
+    const ds = datasets[0];
+    const bounds = mode === "global" ? ds.globalBounds : ds.bounds;
+
+    if (!bounds) return;
+
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerY = (bounds.minY + bounds.maxY) / 2;
+    const rangeX = bounds.maxX - bounds.minX;
+    const rangeY = bounds.maxY - bounds.minY;
+
+    const padding = 0.15;
+    const paddedRange = Math.max(rangeX, rangeY) * (1 + padding * 2);
+
+    const newZoom = Math.log2(
+      Math.min(canvas.clientWidth, canvas.clientHeight) * 0.85 / paddedRange
+    );
+
+    flyTo([centerX, centerY, 0], newZoom, 800);
+
+    console.log(`[Plot] Fitted to ${ mode } mode - center: [${ centerX.toFixed(2) }, ${ centerY.toFixed(2) }], zoom: ${ newZoom.toFixed(2) }`);
   });
 
   onCleanup(() => {
@@ -383,7 +478,6 @@ export default function Plot(props: PlotProps) {
           }}
         />
       )}
-
     </article>
   );
 }
