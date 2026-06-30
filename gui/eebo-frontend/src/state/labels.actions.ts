@@ -81,7 +81,7 @@ function computeCentroid(points: { gnx: number; gny: number; nx: number; ny: num
     let gny = 0;
 
     for (const p of points) {
-        console.log(`[computeCentroid] point ${ JSON.stringify(p) }`)
+        // console.log(`[computeCentroid] point ${ JSON.stringify(p) }`)
         if (typeof p.nx === "undefined" || typeof p.ny === "undefined"
             || typeof p.gnx === "undefined" || typeof p.gny === "undefined"
         ) {
