@@ -118,7 +118,6 @@ export default function Plot(props: PlotProps) {
   const colorMap = createMemo(() => buildColorMap(colorFieldValues()));
 
   const getColor = createMemo(() => {
-
     return (p: PointData, origin?: string): RGBA => {
       let base: RGBA;
 
