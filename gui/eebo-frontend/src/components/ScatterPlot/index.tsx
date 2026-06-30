@@ -238,7 +238,7 @@ export default function ConceptClusterPlot() {
 
                             <Match when={controls.scatterPlotLayerMode !== 'concept_clusters'}>
                                 <header class="bottom-margin fill">
-                                    <h2 class="medium-padding fill max">{hoveredPoint().point.token}{controls.scatterPlotLayerMode}</h2>
+                                    <h2 class="fill max"><q>{hoveredPoint().point.token}</q></h2>
                                     <Show when={hoveredPoint().point.depth
                                         || (
                                             controls.scatterPlotLayerMode === 'concept_clusters'
@@ -252,12 +252,6 @@ export default function ConceptClusterPlot() {
                                                     <sup class="medium-text"> {hoveredPoint().point.depth}</sup>
                                                 </Show>
                                             </span>
-
-                                            <Show when={hoveredPoint().point.cluster_label}>
-                                                <span>
-                                                    Cluster ${hoveredPoint().point.cluster_label}
-                                                </span>
-                                            </Show>
                                         </div>
                                     </Show>
                                 </header>
@@ -269,8 +263,15 @@ export default function ConceptClusterPlot() {
                                         Win: {hoveredPoint().point.window_id} T {hoveredPoint().point.window_token_pos}
                                     </span>
                                 </div>
+
+                                <div class="left-padding right-padding">
+                                    <span class="medium-opacity">
+                                        Cluster {hoveredPoint().point.cluster_label || 'N/A'}
+                                    </span>
+                                </div>
+
                                 <footer class="row padding fill" style="bottom-padding: 1em; top-padding: 1em">
-                                    <TextWindow eventid={hoveredPoint().point.event_id} style="font-size: 8pt; line-height: 1.6;" />
+                                    <TextWindow eventid={hoveredPoint().point.event_id} style="font-size: 12pt; line-height: 1.6;" />
                                 </footer>
                             </Match>
                         </Switch>

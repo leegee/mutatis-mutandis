@@ -39,7 +39,7 @@ export default function TextWindow(props: TextWindowProps) {
     return (
         <Show when={!windowText.loading} fallback={<progress />}>
             <Show when={windowText()} fallback={<progress />}>
-                <span innerHTML={windowText()!} style={style()} />
+                <q innerHTML={windowText()!} style={style()} />
             </Show>
         </Show>
     );
