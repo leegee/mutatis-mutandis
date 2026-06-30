@@ -426,24 +426,65 @@ def fit_cluster_local(X, event_ids, local_concept_coords=None):
     return local_coords, final_labels
 
 
-def compute_cluster_aggregates(event_ids, cluster_labels, lookup, top_n=25):
+def compute_cluster_aggregates(
+    event_ids,
+    cluster_labels,
+    lookup,
+    local_coords,
+    global_coords,
+    top_n=25
+):
+    """
+    Returns two things:
+      1. aggregates: list of rows for concept_aggregate table (with cluster_id)
+      2. cluster_info: list of dicts for concept_cluster_info table
+    """
+    from collections import defaultdict, Counter
+
     token_counters = defaultdict(Counter)
     doc_counters   = defaultdict(Counter)
 
+    # Build counters per cluster
     for eid, cid in zip(event_ids, cluster_labels):
         if cid == -1:
             continue
         event = lookup.get_event(eid)
         token_counters[cid][event["token"]] += 1
-        doc_counters[cid][event["doc_id"]]  += 1
+        doc_counters[cid][event["doc_id"]] += 1
 
-    return {
-        str(cid): {
-            "top_tokens": token_counters[cid].most_common(top_n),
-            "top_docs":   doc_counters[cid].most_common(top_n),
-        }
-        for cid in token_counters
-    }
+    aggregates = []
+    cluster_info = []
+
+    for cid in sorted(token_counters.keys()):
+        # Top tokens & docs
+        top_tokens = token_counters[cid].most_common(top_n)
+        top_docs   = doc_counters[cid].most_common(top_n)
+
+        # Aggregate rows for concept_aggregate
+        for rank, (value, count) in enumerate(top_tokens, 1):
+            aggregates.append((cid, 'token', rank, value, count))
+        for rank, (value, count) in enumerate(top_docs, 1):
+            aggregates.append((cid, 'doc', rank, value, count))
+
+        # Centroid calculation
+        cluster_idx = [i for i, c in enumerate(cluster_labels) if c == cid]
+        if cluster_idx:
+            nx_vals = [local_coords[event_ids[i]][0] for i in cluster_idx]
+            ny_vals = [local_coords[event_ids[i]][1] for i in cluster_idx]
+            gnx_vals = [global_coords[event_ids[i]][0] for i in cluster_idx]
+            gny_vals = [global_coords[event_ids[i]][1] for i in cluster_idx]
+
+            cluster_info.append({
+                'cluster_id': cid,
+                'cluster_label': chr(65 + cid),   # A, B, C...
+                'centroid_nx': float(np.mean(nx_vals)),
+                'centroid_ny': float(np.mean(ny_vals)),
+                'centroid_gnx': float(np.mean(gnx_vals)),
+                'centroid_gny': float(np.mean(gny_vals)),
+                'point_count': len(cluster_idx)
+            })
+
+    return aggregates, cluster_info
 
 
 def compute_bounds_from_coords(coords):
@@ -705,6 +746,7 @@ def run_tier3_core(
             local_bounds=local_bounds,
             global_bounds=global_bounds_padded,
             target="events",
+            lookup=lookup,
         )
         write_concept_bounds_to_sqlite(
             db_path=db_path,
@@ -757,6 +799,7 @@ def run_tier3_core(
             global_bounds=global_bounds_padded,
             cluster_labels=cluster_labels,
             target="events",
+            lookup=lookup,
         )
         write_concept_bounds_to_sqlite(
             db_path=db_path,
@@ -809,10 +852,12 @@ def write_projections_to_sqlite(
     cluster_labels=None,
     target="events",      # "events" | "neighbours"
     depth_map=None,
+    lookup=None,          # pass lookup for aggregates
 ):
     logger.info(f"[tier3] write_projections_to_sqlite target={target} concept={concept_name}")
     con = sqlite3_connection(db_path)
 
+    # Point projections
     con.execute("""
         CREATE TEMP TABLE IF NOT EXISTS _proj_update (
             event_id      INTEGER PRIMARY KEY,
@@ -833,10 +878,8 @@ def write_projections_to_sqlite(
         sid = str(eid)
         if sid not in local_coords or sid not in global_coords:
             continue
-
         lx, ly = local_coords[sid]
         gx, gy = global_coords[sid]
-
         data.append((
             int(eid),
             float(lx), float(ly),
@@ -852,6 +895,7 @@ def write_projections_to_sqlite(
             data
         )
 
+    # Write point data
     if target == "events":
         con.execute("""
             UPDATE events SET
@@ -864,7 +908,7 @@ def write_projections_to_sqlite(
             FROM _proj_update
             WHERE events.event_id = _proj_update.event_id
         """)
-    else:  # neighbours
+    else:
         con.execute("""
             UPDATE neighbours SET
                 nx  = _proj_update.nx,
@@ -875,9 +919,51 @@ def write_projections_to_sqlite(
             WHERE neighbours.neighbour_event_id = _proj_update.event_id
         """)
 
+    # Cluster aggregates & centroids (NEW)
+    if target == "events" and cluster_labels is not None and lookup is not None:
+        if any(c != -1 for c in cluster_labels):
+            aggregates, cluster_info = compute_cluster_aggregates(
+                event_ids,
+                cluster_labels,
+                lookup,
+                local_coords,
+                global_coords,
+                top_n=25
+            )
+        else:
+            logger.info(f"[tier3] No valid clusters for {concept_name}")
+
+        # concept_aggregate
+        con.executemany("""
+            INSERT INTO concept_aggregate
+            (concept, cluster_id, kind, rank, value, count)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, [
+            (concept_name, cid, kind, rank, value, count)
+            for cid, kind, rank, value, count in aggregates
+        ])
+
+        # concept_cluster_info
+        con.executemany("""
+            INSERT OR REPLACE INTO concept_cluster_info
+            (concept, cluster_id, cluster_label, centroid_nx, centroid_ny,
+             centroid_gnx, centroid_gny, point_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (concept_name,
+             info['cluster_id'],
+             info['cluster_label'],
+             info['centroid_nx'],
+             info['centroid_ny'],
+             info['centroid_gnx'],
+             info['centroid_gny'],
+             info['point_count'])
+            for info in cluster_info
+        ])
+
     con.commit()
     con.close()
-    logger.info(f"[tier3] wrote projections to sqlite target={target} concept={concept_name} ({len(data)} rows)")
+    logger.info(f"[tier3] wrote projections + cluster data for {concept_name}")
 
 
 def write_concept_bounds_to_sqlite(

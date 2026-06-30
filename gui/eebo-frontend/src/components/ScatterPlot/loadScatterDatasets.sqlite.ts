@@ -26,10 +26,9 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
     try {
         const rv = await Promise.all(
             params.concepts.map(async (concept) => {
-                const isNeighbours = params.dataType === "concept_neighbours";
-
-                const pointsQuery = isNeighbours
-                    ? `SELECT
+                let pointsQuery;
+                if (params.dataType === "concept_neighbours") {
+                    pointsQuery = `SELECT
                             n.neighbour_event_id AS event_id,
                             n.token, n.doc_id, n.pub_year,
                             n.token_idx, n.window_id,
@@ -40,8 +39,22 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
                        WHERE e.concept = ?
                          AND n.pub_year IS NOT NULL
                          ${ yearFilter('n.', params.yearMode, params.fromYear, params.toYear) }
-                        `
-                    : `SELECT
+                    `;
+                }
+                else if (params.dataType === "concept_clusters") {
+                    pointsQuery = `SELECT
+                        event_id, token, doc_id, pub_year,
+                        token_idx, window_id,
+                        nx, ny, gnx, gny,
+                        cluster_id, cluster_label
+                        FROM events
+                        WHERE concept = ?
+                        AND pub_year IS NOT NULL
+                        ${ yearFilter('', params.yearMode, params.fromYear, params.toYear) }
+                    `;
+                }
+                else {
+                    pointsQuery = `SELECT
                             event_id, token, doc_id, pub_year,
                             token_idx, window_id,
                             nx, ny, gnx, gny,
@@ -50,7 +63,8 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
                        WHERE concept = ?
                          AND pub_year IS NOT NULL
                          ${ yearFilter('', params.yearMode, params.fromYear, params.toYear) }
-                        `;
+                    `;
+                }
 
                 const points = await execRows(pointsQuery, [concept]);
 
@@ -98,7 +112,7 @@ export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptD
                             concept,
                         };
 
-                        if (isNeighbours) {
+                        if (params.dataType === "concept_neighbours") {
                             return {
                                 ...base,
                                 depth: p[10],

@@ -689,7 +689,6 @@ CREATE TABLE IF NOT EXISTS concept_forms (
 CREATE INDEX IF NOT EXISTS idx_concept_forms_concept ON concept_forms(concept);
 CREATE INDEX IF NOT EXISTS idx_concept_forms_form    ON concept_forms(form);
 
--- Should probably split into concept_events
 CREATE TABLE IF NOT EXISTS events (
     event_id         INTEGER PRIMARY KEY,
     concept          TEXT    NOT NULL,
@@ -769,6 +768,7 @@ CREATE TABLE IF NOT EXISTS concept_aggregate (
     window_doc_id TEXT,
     window_id     INTEGER,
     count         INTEGER NOT NULL,
+    cluster_id    INTEGER,
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
@@ -781,9 +781,22 @@ CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_token     ON neighbours(token);
 CREATE INDEX IF NOT EXISTS idx_neighbours_depth     ON neighbours(event_id, depth);
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept    ON concept_aggregate(concept, kind);
+
+CREATE TABLE IF NOT EXISTS concept_cluster_info (
+    concept        TEXT    NOT NULL,
+    cluster_id     INTEGER NOT NULL,
+    cluster_label  TEXT,
+    centroid_nx    REAL,
+    centroid_ny    REAL,
+    centroid_gnx   REAL,
+    centroid_gny   REAL,
+    point_count    INTEGER,
+    PRIMARY KEY (concept, cluster_id)
+);
 """
 
 _SCHEMA_CLEAR = """
+DROP TABLE IF EXISTS concept_cluster_info;
 DROP TABLE IF EXISTS concept_aggregate;
 DROP TABLE IF EXISTS neighbours;
 DROP TABLE IF EXISTS events;
@@ -791,6 +804,7 @@ DROP TABLE IF EXISTS concepts;
 """
 
 _DELETE_CONCEPT = [
+    "DELETE FROM concept_cluster_info WHERE concept = ?",
     "DELETE FROM concept_aggregate WHERE concept = ?",
     "DELETE FROM neighbours WHERE event_id IN (SELECT event_id FROM events WHERE concept = ?)",
     "DELETE FROM events WHERE concept = ?",
