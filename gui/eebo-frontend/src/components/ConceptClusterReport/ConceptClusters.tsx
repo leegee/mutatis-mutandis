@@ -1,11 +1,11 @@
 import { createSignal, createEffect, createMemo, Show, For, createResource, onCleanup } from "solid-js";
-import { controls, setControls } from "../state/controls.store";
-import { queryEventById, queryEventsByIds } from "../services/db";
-import { fetchWindowBatch, type TextWindowItem } from "../services/tokenWindowBatchApi";
-import { setWindowCache, getWindow } from "../services/windowCache";
-import { loadJson } from "../lib/json";
-import ControlsHeader from "./ControlsHeader";
-import { controlsActions } from "../state/controls.actions";
+import { controls, setControls } from "../../state/controls.store";
+import { queryEventById, queryEventsByIds } from "../../services/db";
+import { fetchWindowBatch, type TextWindowItem } from "../../services/tokenWindowBatchApi";
+import { setWindowCache, getWindow } from "../../services/windowCache";
+import { loadJson } from "../../lib/json";
+import ControlsHeader from "../ControlsHeader";
+import { controlsActions } from "../../state/controls.actions";
 
 interface ClusterAggregate {
     top_tokens: [string, number][];

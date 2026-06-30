@@ -11,7 +11,7 @@ const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
 import Map from "./components/GeoMap";
 import ScatterPlotGuide from "./components/ScatterPlot/ScatterPlotGuide";
-const ConceptClusters = lazy(() => import("./components/ConceptClusters"));
+const ConceptClusters = lazy(() => import("./components/ConceptClusterReport/ConceptClusters"));
 
 export const routes = [
   {
