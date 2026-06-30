@@ -73,32 +73,53 @@ function isTooClose(
     });
 }
 
-function computeCentroid(points: { gnx: number; gny: number; nx: number; ny: number }[]) {
-    console.log(`[computeCentroid]`)
-    let nx = 0;
-    let ny = 0;
-    let gnx = 0;
-    let gny = 0;
+
+// Trimmed-mean centroid hack
+function computeCentroid(
+    points: { gnx: number; gny: number; nx: number; ny: number }[],
+    trimRatio = 0.1 // 10% trimmed from each side
+) {
+    console.log(`[computeCentroid]`);
+
+    const nxArr: number[] = [];
+    const nyArr: number[] = [];
+    const gnxArr: number[] = [];
+    const gnyArr: number[] = [];
 
     for (const p of points) {
-        // console.log(`[computeCentroid] point ${ JSON.stringify(p) }`)
-        if (typeof p.nx === "undefined" || typeof p.ny === "undefined"
-            || typeof p.gnx === "undefined" || typeof p.gny === "undefined"
+        if (
+            typeof p.nx === "undefined" ||
+            typeof p.ny === "undefined" ||
+            typeof p.gnx === "undefined" ||
+            typeof p.gny === "undefined"
         ) {
             throw new Error("point nx/ny undefined");
         }
-        nx += p.nx;
-        ny += p.ny;
-        gnx += p.gnx;
-        gny += p.gny;
+
+        nxArr.push(p.nx);
+        nyArr.push(p.ny);
+        gnxArr.push(p.gnx);
+        gnyArr.push(p.gny);
     }
 
-    return {
-        nx: nx / points.length,
-        ny: ny / points.length,
-        gnx: gnx / points.length,
-        gny: gny / points.length,
+    const trimmedMean = (arr: number[]) => {
+        const sorted = arr.slice().sort((a, b) => a - b);
+        const n = sorted.length;
+
+        const trim = Math.floor(n * trimRatio);
+        const trimmed = sorted.slice(trim, n - trim);
+
+        return trimmed.reduce((sum, v) => sum + v, 0) / trimmed.length;
     };
+
+    const rv = {
+        nx: trimmedMean(nxArr),
+        ny: trimmedMean(nyArr),
+        gnx: trimmedMean(gnxArr),
+        gny: trimmedMean(gnyArr),
+    };
+
+    console.log(`[computeCentroid] rv`, rv);
+
+    return rv;
 }
-
-
