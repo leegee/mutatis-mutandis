@@ -102,7 +102,7 @@ export default function Plot(props: PlotProps) {
   const allPoints = createMemo(() => {
     const start = performance.now();
     const result = props.datasets.flatMap(d => d.points || []);
-    console.log(`[Plot] allPoints memo computed ${ result.length } points in ${ (performance.now() - start).toFixed(1) }ms`);
+    console.debug(`[Plot] allPoints memo computed ${ result.length } points in ${ (performance.now() - start).toFixed(1) }ms`);
     return result;
   });
 
@@ -434,8 +434,7 @@ export default function Plot(props: PlotProps) {
     );
 
     flyTo([centerX, centerY, 0], newZoom, 800);
-
-    console.log(`[Plot] Fitted to ${ mode } mode - center: [${ centerX.toFixed(2) }, ${ centerY.toFixed(2) }], zoom: ${ newZoom.toFixed(2) }`);
+    console.debug(`[Plot] Fitted to ${ mode } mode - center: [${ centerX.toFixed(2) }, ${ centerY.toFixed(2) }], zoom: ${ newZoom.toFixed(2) }`);
   });
 
   onCleanup(() => {
