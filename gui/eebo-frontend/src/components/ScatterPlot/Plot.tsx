@@ -118,20 +118,16 @@ export default function Plot(props: PlotProps) {
   const colorMap = createMemo(() => buildColorMap(colorFieldValues()));
 
   const getColor = createMemo(() => {
-    const field = props.colorBy;
-    const map = colorMap();
-    const sel = selectedEventIds();
-    const neighbourOpacity = props.neighbourOpacity ?? 200;
 
     return (p: PointData, origin?: string): RGBA => {
       let base: RGBA;
 
       if (origin === "neighbours") {
+        const thisNeighbourOpacity = props.neighbourOpacity ?? 200;
         const depth = p.depth ?? 1;
-        const alpha =
-          depth === 2
-            ? Math.floor(neighbourOpacity * 0.45)
-            : neighbourOpacity;
+        const alpha = depth === 2
+          ? Math.floor(thisNeighbourOpacity * 0.45)
+          : thisNeighbourOpacity;
         base = [
           DEPTH_COLORS[depth][0],
           DEPTH_COLORS[depth][1],
@@ -139,11 +135,14 @@ export default function Plot(props: PlotProps) {
           alpha,
         ];
       } else {
-        base = map.get(String(p[field as keyof PointData] ?? "")) ?? GREY;
+        const thisColourMap = colorMap();
+        const thisColorBy = props.colorBy;
+        base = thisColourMap.get(String(p[thisColorBy as keyof PointData] ?? "")) ?? GREY;
       }
 
-      if (!sel.size) return base;
-      if (sel.has(p.event_id)) return brighten(base);
+      const thisSelectedEventIds = selectedEventIds();
+      if (!thisSelectedEventIds.size) return base;
+      if (thisSelectedEventIds.has(p.event_id)) return brighten(base);
       return dim(base);
     };
   });
