@@ -919,8 +919,10 @@ def write_projections_to_sqlite(
             WHERE neighbours.neighbour_event_id = _proj_update.event_id
         """)
 
-    # Cluster aggregates & centroids (NEW)
+    # Cluster aggregates & centroids
     if target == "events" and cluster_labels is not None and lookup is not None:
+         aggregates, cluster_info = [], []
+
         if any(c != -1 for c in cluster_labels):
             aggregates, cluster_info = compute_cluster_aggregates(
                 event_ids,
