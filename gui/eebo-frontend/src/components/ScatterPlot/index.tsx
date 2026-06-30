@@ -37,7 +37,7 @@ export default function ConceptClusterPlot() {
     );
 
     const [clusterDatasets] = createResource(
-        () => controls.scatterPlotLayerMode === "clusters" ? { ...sharedKey(), dataType: "concept_clusters" } : null,
+        () => controls.scatterPlotLayerMode === "concept_clusters" ? { ...sharedKey(), dataType: "concept_clusters" } : null,
         loadDatasets
     );
 
@@ -55,8 +55,8 @@ export default function ConceptClusterPlot() {
     // Concept is always shown; neighbours are layered on top when toggled.
     // BFS is always passed separately to Plot and rendered beneath.
     const activeDatasets = () => {
-        if (controls.scatterPlotLayerMode === "clusters") {
-            return (clusterDatasets() ?? []).map(d => ({ ...d, origin: "clusters" }));
+        if (controls.scatterPlotLayerMode === "concept_clusters") {
+            return (clusterDatasets() ?? []).map(d => ({ ...d, origin: "concept_clusters" }));
         }
         const concept = (conceptDatasets() ?? []).map(d => ({ ...d, origin: "concept" }));
         const neighbours = controls.scatterPlotLayerMode === "neighbours"
@@ -95,13 +95,13 @@ export default function ConceptClusterPlot() {
                             <select class="small-padding" value={controls.scatterPlotLayerMode}
                                 onChange={e => {
                                     controlsActions.setScatterplotLayerMode(e.currentTarget.value as ScatterPlotLayerType);
-                                    if (e.currentTarget.value === 'clusters') {
+                                    if (e.currentTarget.value === 'concept_clusters') {
                                         controlsActions.setColorBy("cluster_label")
                                     }
                                 }}>
                                 <option value="neighbours">All</option>
                                 <option value="concept">Concept</option>
-                                <option value="clusters">Clusters</option>
+                                <option value="concept_clusters">Clusters</option>
                             </select>
                             <div class="tooltip bottom">
                                 Show concepts with neighbours (All), concepts without neighbours, or clusters.
@@ -112,12 +112,11 @@ export default function ConceptClusterPlot() {
                             <select class="small-padding" value={controls.colorScatterBy}
                                 onChange={e => controlsActions.setColorBy(e.currentTarget.value as ColorScatterByType)}
                             >
-                                {COLOR_FIELDS.filter(clrMode => !(controls.scatterPlotLayerMode !== 'clusters' && clrMode.includes('cluster')))
-                                    .map(v => (
-                                        <option value={v}>{
-                                            v.replace('_', ' ').replace(/^(.)/, _ => _.toLocaleUpperCase())
-                                        }</option>)
-                                    )}
+                                {COLOR_FIELDS.map(v => (
+                                    <option value={v}>{
+                                        v.replace('_', ' ').replace(/^(.)/, _ => _.toLocaleUpperCase())
+                                    }</option>)
+                                )}
                             </select>
                             <div class="tooltip bottom">Choose the domain upon which to base the point colours </div>
                         </div>
@@ -193,7 +192,6 @@ export default function ConceptClusterPlot() {
 
                         <SidebarMultiple onClose={() => {
                             controlsActions.setSelectedEventIds(null);
-                            // setParamsTokenIdx(null);
                         }} />
                     </div>
                 </Show>
@@ -230,55 +228,55 @@ export default function ConceptClusterPlot() {
                             "width": "20em",
                         }}>
 
-                        <header class="bottom-margin fill">
-                            <h2 class="medium-padding fill max">{hoveredPoint().point.token}</h2>
-                            <Show when={hoveredPoint().point.depth
-                                || (
-                                    controls.scatterPlotLayerMode === 'clusters'
-                                    && hoveredPoint().point.concept)
-                            }>
-                                <div class="medium-opacity small-text no-space small small-margin tiny-padding">
-                                    <span class="max no-space small small-margin no-padding">
-                                        <Switch>
-                                            <Match when={controls.scatterPlotLayerMode === 'clusters'}>
-                                                {hoveredPoint().point.pub_year}
-                                                <Show when={hoveredPoint().point.concept}>
-                                                    {" "} {hoveredPoint().point.concept}
-                                                </Show>
-                                            </Match>
+                        <Switch>
+                            <Match when={controls.scatterPlotLayerMode === 'concept_clusters'}>
+                                <div class="padding">
+                                    <h2>{hoveredPoint().point.cluster_label}</h2>
+                                    <p>{hoveredPoint().point.concept}</p>
+                                </div>
+                            </Match>
 
-                                            <Match when={controls.scatterPlotLayerMode !== 'clusters'}>
+                            <Match when={controls.scatterPlotLayerMode !== 'concept_clusters'}>
+                                <header class="bottom-margin fill">
+                                    <h2 class="medium-padding fill max">{hoveredPoint().point.token}{controls.scatterPlotLayerMode}</h2>
+                                    <Show when={hoveredPoint().point.depth
+                                        || (
+                                            controls.scatterPlotLayerMode === 'concept_clusters'
+                                            && hoveredPoint().point.concept)
+                                    }>
+                                        <div class="medium-opacity small-text no-space small small-margin tiny-padding">
+                                            <span class="max no-space small small-margin no-padding">
                                                 <span class="bold">{hoveredPoint().point.pub_year} </span>
                                                 <Show when={hoveredPoint().point.depth}>
                                                     {" "}{hoveredPoint().point.concept}
                                                     <sup class="medium-text"> {hoveredPoint().point.depth}</sup>
                                                 </Show>
-                                            </Match>
-                                        </Switch>
-                                    </span>
+                                            </span>
 
-                                    <Show when={hoveredPoint().point.cluster_label}>
-                                        <span>
-                                            Cluster ${hoveredPoint().point.cluster_label}
-                                        </span>
+                                            <Show when={hoveredPoint().point.cluster_label}>
+                                                <span>
+                                                    Cluster ${hoveredPoint().point.cluster_label}
+                                                </span>
+                                            </Show>
+                                        </div>
                                     </Show>
-                                </div>
-                            </Show>
-                        </header>
+                                </header>
 
-                        <div class="left-padding right-padding">
-                            <span class="medium-opacity">
-                                Doc: {hoveredPoint().point.doc_id} T {hoveredPoint().point.token_idx}
-                                <br />
-                                Win: {hoveredPoint().point.window_id} T {hoveredPoint().point.window_token_pos}
-                            </span>
-                        </div>
-                        <footer class="row padding fill" style="bottom-padding: 1em; top-padding: 1em">
-                            <TextWindow eventid={hoveredPoint().point.event_id} style="font-size: 8pt; line-height: 1.6;" />
-                        </footer>
+                                <div class="left-padding right-padding">
+                                    <span class="medium-opacity">
+                                        Doc: {hoveredPoint().point.doc_id} T {hoveredPoint().point.token_idx}
+                                        <br />
+                                        Win: {hoveredPoint().point.window_id} T {hoveredPoint().point.window_token_pos}
+                                    </span>
+                                </div>
+                                <footer class="row padding fill" style="bottom-padding: 1em; top-padding: 1em">
+                                    <TextWindow eventid={hoveredPoint().point.event_id} style="font-size: 8pt; line-height: 1.6;" />
+                                </footer>
+                            </Match>
+                        </Switch>
                     </aside>
                 )}
-            </Show>
+            </Show >
         </>
     );
 }

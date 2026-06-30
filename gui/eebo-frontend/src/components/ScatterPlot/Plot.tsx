@@ -119,8 +119,12 @@ export default function Plot(props: PlotProps) {
 
   const getColor = createMemo(() => {
     return (p: PointData, origin?: string): RGBA => {
-      let base: RGBA;
+      if (props.colorBy === "cluster_label" && p.cluster_id !== undefined && p.cluster_id !== -1) {
+        const label = p.cluster_label || String(p.cluster_id);
+        return colorMap().get(label) ?? GREY;
+      }
 
+      let base: RGBA;
       if (origin === "neighbours") {
         const thisNeighbourOpacity = props.neighbourOpacity ?? 200;
         const depth = p.depth ?? 1;
@@ -145,6 +149,7 @@ export default function Plot(props: PlotProps) {
       return dim(base);
     };
   });
+
 
   const labelLayer = createMemo(() => {
     const labels = labelsActions.getLabels(controls.concept);
@@ -171,17 +176,13 @@ export default function Plot(props: PlotProps) {
     });
   });
 
-  const mergedConceptPoints = createMemo(() =>
-    props.datasets
-      .filter(d => d.type === "concept")
-      .flatMap(d => d.points || [])
-  );
 
-  const mergedNeighbourPoints = createMemo(() =>
-    props.datasets
-      .filter(d => d.type === "concept_neighbours")
-      .flatMap(d => d.points || [])
-  );
+  const mergedConceptPoints = createMemo(() => props.datasets.filter(d => d.type === "concept").flatMap(d => d.points || []));
+
+  const mergedNeighbourPoints = createMemo(() => props.datasets.filter(d => d.type === "concept_neighbours").flatMap(d => d.points || []));
+
+  const mergedClusterPoints = createMemo(() => props.datasets.filter(d => d.type === "concept_clusters").flatMap(d => d.points || []));
+
 
   const layers = createMemo(() => {
     const proj = props.projectionMode;
@@ -191,8 +192,34 @@ export default function Plot(props: PlotProps) {
 
     const conceptPoints = mergedConceptPoints();
     const neighbourPoints = mergedNeighbourPoints();
+    const clusterPoints = mergedClusterPoints();
 
     const layersList: any[] = [];
+
+    if (clusterPoints.length > 0) {
+      layersList.push(new ScatterplotLayer<PointData>({
+        id: "clusters-merged",
+        coordinateSystem: "cartesian",
+        data: clusterPoints,
+        getPosition: p => getPosition(p, proj),
+        getFillColor: p => getColor()(p),
+        getRadius: 10.0,
+        radiusUnits: "pixels",
+        opacity: 0.95,
+        pickable: true,
+        autoHighlight: true,
+        highlightColor: [255, 255, 100, 180],
+        transitions: {
+          getPosition: { duration: 600 },
+          getFillColor: { duration: 300 },
+        },
+        updateTriggers: {
+          getPosition: [proj],
+          getFillColor: [props.colorBy, selectedEventIds()],
+        },
+        onHover: info => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
+      }));
+    }
 
     if (conceptPoints.length > 0) {
       layersList.push(
@@ -202,7 +229,7 @@ export default function Plot(props: PlotProps) {
           data: conceptPoints,
           getPosition: p => getPosition(p, proj),
           getFillColor: p => getColor()(p),
-          getRadius: 4.5,
+          getRadius: 4.5, // TODO
           radiusUnits: "pixels",
           opacity: 0.96,
           pickable: true,
@@ -284,8 +311,6 @@ export default function Plot(props: PlotProps) {
 
   function flyTo(target: [number, number, number], newZoom: number, duration = 800) {
     if (!deck) return;
-    // Using initialViewState + LinearInterpolator keeps DeckGL in uncontrolled
-    // mode (pan/zoom controller stays alive) while still animating the camera.
     deck.setProps({
       initialViewState: {
         target,
@@ -329,9 +354,6 @@ export default function Plot(props: PlotProps) {
       canvas,
       views: new OrthographicView({ id: "ortho", controller: true }),
       initialViewState: INITIAL_VIEW_STATE,
-      // Let DeckGL create and own the WebGL context. Passing a pre-created
-      // context via `gl:` bypasses DeckGL's canvas event wiring which breaks
-      // hover picking. Smoothness comes from useDevicePixels, not MSAA flags.
       useDevicePixels: true,
       touchAction: "none",
       layers: [],
@@ -414,12 +436,14 @@ export default function Plot(props: PlotProps) {
     const mode = props.projectionMode;
     const datasets = props.datasets;
 
+
     if (!datasets || datasets.length === 0) return;
 
     const ds = datasets[0];
     const bounds = mode === "global" ? ds.globalBounds : ds.bounds;
 
     if (!bounds) return;
+
 
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;

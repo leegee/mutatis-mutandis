@@ -9,7 +9,7 @@ import type { PointData } from "../components/ScatterPlot/types";
 export const MAX_TOP_N = 1000;
 
 export type ProjectionModeType = "local" | "global"
-export type ScatterPlotLayerType = "concept" | "neighbours" | "clusters"
+export type ScatterPlotLayerType = "concept" | "neighbours" | "concept_clusters"
 export type ColorScatterByType = 'pub_year' | "cluster_label" | "doc_id"
 
 export type ControlsState = {
