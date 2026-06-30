@@ -1,4 +1,6 @@
 import { execRows } from "../../services/db";
+import type { YearMode } from "../../types";
+import type { ClusterInfo } from "./ConceptClusters";
 
 export interface ClusterAggregate {
     top_tokens: [string, number][];
@@ -26,20 +28,63 @@ export interface ClusterFile {
         label_map: Record<string, string>;
         aggregates: Record<string, ClusterAggregate>;
     };
-    points: ClusterPoint[];
+    points: ClusterInfo[];
 }
 
-export async function loadClusters(concept: string): Promise<ClusterFile> {
-    console.log(`[loadClusters] START for ${ concept }`);
+export interface LoadClusterFileParams {
+    concept: string;
+    // Omit (or pass yearMode: undefined) for the unfiltered, full-corpus
+    // view that reads pre-computed concept_aggregate rows.
+    yearMode?: YearMode;
+    fromYear?: number;
+    toYear?: number;
+}
+
+const TOP_N = 25; // matches top_n used by tier3's compute_cluster_aggregates
+
+function yearFilter(yearMode: YearMode, fromYear: number, toYear: number): string {
+    return yearMode === "single"
+        ? `AND pub_year = ${ fromYear }`
+        : `AND pub_year BETWEEN ${ fromYear } AND ${ toYear }`;
+}
+
+// Bucket [cluster_id, key, count] rows into { [cluster_id]: [key, count][] },
+// sorted desc by count and capped to TOP_N per cluster. Used only for the
+// live-aggregation (year-filtered) path; the unfiltered path reads
+// pre-ranked rows straight from concept_aggregate instead.
+function bucketTopN(rows: any[][]): Record<string, [string, number][]> {
+    const byCluster = new Map<string, [string, number][]>();
+    for (const [cid, key, count] of rows) {
+        const cidStr = String(cid);
+        const arr = byCluster.get(cidStr) ?? [];
+        arr.push([key, count]);
+        byCluster.set(cidStr, arr);
+    }
+    const out: Record<string, [string, number][]> = {};
+    for (const [cid, arr] of byCluster) {
+        arr.sort((a, b) => b[1] - a[1]);
+        out[cid] = arr.slice(0, TOP_N);
+    }
+    return out;
+}
+
+
+export async function loadClusters(params: LoadClusterFileParams): Promise<ClusterFile> {
+    const { concept, yearMode, fromYear, toYear } = params;
+    const yearActive = yearMode != null && fromYear != null && toYear != null;
+    const yearClause = yearActive ? yearFilter(yearMode!, fromYear!, toYear!) : "";
+
+    console.log(`[loadClusterFile] START for ${ concept } (yearFiltered=${ yearActive })`);
     const start = performance.now();
 
-    // 1. Per-event points belonging to a cluster
+    // 1. Per-event points belonging to a cluster, optionally year-filtered
     const pointRows = await execRows(
         `SELECT event_id, cluster_id, cluster_label, nx, ny, gnx, gny
          FROM events
          WHERE concept = ?
            AND cluster_id IS NOT NULL
-           AND pub_year IS NOT NULL`,
+           AND pub_year IS NOT NULL
+           ${ yearClause }`,
         [concept]
     );
 
@@ -62,43 +107,88 @@ export async function loadClusters(concept: string): Promise<ClusterFile> {
         }
     }
 
-    // 3. Per-cluster top_tokens / top_docs, pre-ranked by the writer
-    //    (tier2_0_concept_events.py's _aggregate_rows). Rows are already
-    //    ordered by rank ascending per (concept, cluster_id, kind), so we
-    //    just need to bucket them in the order they arrive.
-    const aggRows = await execRows(
-        `SELECT cluster_id, kind, value, count
-         FROM concept_aggregate
-         WHERE concept = ?
-           AND cluster_id IS NOT NULL
-           AND kind IN ('token', 'doc')
-         ORDER BY cluster_id, kind, rank`,
-        [concept]
-    );
+    // 3. top_tokens / top_docs per cluster
+    let aggregates: Record<string, ClusterAggregate>;
 
-    const aggregates: Record<string, ClusterAggregate> = {};
-    for (const [cid, kind, value, count] of aggRows as any[]) {
-        const cidStr = String(cid);
-        if (!aggregates[cidStr]) {
-            aggregates[cidStr] = { top_tokens: [], top_docs: [] };
+    if (!yearActive) {
+        // Fast path: pre-computed, pre-ranked rows written by tier3's
+        // compute_cluster_aggregates (rank starts at 1 there, but we sort
+        // by rank regardless of starting value so that's not load-bearing).
+        const aggRows = await execRows(
+            `SELECT cluster_id, kind, value, count
+             FROM concept_aggregate
+             WHERE concept = ?
+               AND cluster_id IS NOT NULL
+               AND kind IN ('token', 'doc')
+             ORDER BY cluster_id, kind, rank`,
+            [concept]
+        );
+
+        aggregates = {};
+        for (const [cid, kind, value, count] of aggRows as any[]) {
+            const cidStr = String(cid);
+            if (!aggregates[cidStr]) {
+                aggregates[cidStr] = { top_tokens: [], top_docs: [] };
+            }
+            if (kind === "token") {
+                aggregates[cidStr].top_tokens.push([value, count]);
+            } else if (kind === "doc") {
+                aggregates[cidStr].top_docs.push([value, count]);
+            }
         }
-        if (kind === "token") {
-            aggregates[cidStr].top_tokens.push([value, count]);
-        } else if (kind === "doc") {
-            aggregates[cidStr].top_docs.push([value, count]);
+    } else {
+        // Year-filtered path: concept_aggregate has no pub_year column
+        // (counts are baked across the whole corpus at cluster-build
+        // time), so live-aggregate over `events` instead, scoped to the
+        // same year range as the points query above.
+        const tokenRows = await execRows(
+            `SELECT cluster_id, token, COUNT(*) as c
+             FROM events
+             WHERE concept = ?
+               AND cluster_id IS NOT NULL
+               AND pub_year IS NOT NULL
+               ${ yearClause }
+             GROUP BY cluster_id, token`,
+            [concept]
+        );
+
+        const docRows = await execRows(
+            `SELECT cluster_id, doc_id, COUNT(*) as c
+             FROM events
+             WHERE concept = ?
+               AND cluster_id IS NOT NULL
+               AND pub_year IS NOT NULL
+               ${ yearClause }
+             GROUP BY cluster_id, doc_id`,
+            [concept]
+        );
+
+        const topTokensByCluster = bucketTopN(tokenRows as any[]);
+        const topDocsByCluster = bucketTopN(docRows as any[]);
+
+        aggregates = {};
+        const allClusterIds = new Set([
+            ...Object.keys(topTokensByCluster),
+            ...Object.keys(topDocsByCluster),
+        ]);
+        for (const cid of allClusterIds) {
+            aggregates[cid] = {
+                top_tokens: topTokensByCluster[cid] ?? [],
+                top_docs: topDocsByCluster[cid] ?? [],
+            };
         }
     }
 
     // Make sure every cluster present in `points` has an aggregates entry,
-    // even if concept_aggregate has no rows for it yet (e.g. cluster_id
-    // wasn't populated when the aggregate rows were written).
     for (const cidStr of Object.keys(label_map)) {
         if (!aggregates[cidStr]) {
             aggregates[cidStr] = { top_tokens: [], top_docs: [] };
         }
     }
 
-    // 4. Bounds
+    // 4. Bounds (not year-scoped — local/global projection bounds are
+    // fixed at tier3 build time for the whole concept, independent of any
+    // year filter applied at read time)
     const boundsRows = await execRows(
         `SELECT local_min_x, local_max_x, local_min_y, local_max_y,
                 global_min_x, global_max_x, global_min_y, global_max_y
@@ -108,7 +198,7 @@ export async function loadClusters(concept: string): Promise<ClusterFile> {
     const b = (boundsRows as any[])[0] || [];
 
     const duration = performance.now() - start;
-    console.log(`[loadClusters] FINISHED in ${ duration.toFixed(1) }ms`);
+    console.log(`[loadClusterFile] FINISHED in ${ duration.toFixed(1) }ms`);
 
     return {
         type: "concept_clusters",
@@ -127,3 +217,4 @@ export async function loadClusters(concept: string): Promise<ClusterFile> {
         points,
     };
 }
+

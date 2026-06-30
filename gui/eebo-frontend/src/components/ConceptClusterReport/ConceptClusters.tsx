@@ -1,28 +1,22 @@
-import { createSignal, createEffect, createMemo, Show, For, createResource, onCleanup } from "solid-js";
+import { createSignal, createEffect, createMemo, Show, For, createResource } from "solid-js";
+
 import { controls } from "../../state/controls.store";
 import { queryEventById, queryEventsByIds } from "../../services/db";
-import { getWindow } from "../../services/windowCache";
 import ControlsHeader from "../ControlsHeader";
+
 import { loadClusters } from "./loadClusters";
 import DocRow from "./DocRow";
+import ClusterExport from "./ClusterExport";
 
 interface ClusterAggregate {
     top_tokens: [string, number][];
     top_docs: [string, number][];
 }
 
-interface ClusterPoint {
+export interface ClusterInfo { // a point without point data
     event_id: string;
     cluster_id: number;
     cluster_label: string | null;
-    x: number;
-    y: number;
-    nx: number;
-    ny: number;
-    gx: number;
-    gy: number;
-    gnx: number;
-    gny: number;
 }
 
 interface ClusterFile {
@@ -36,7 +30,7 @@ interface ClusterFile {
         label_map: Record<string, string>;
         aggregates: Record<string, ClusterAggregate>;
     };
-    points: ClusterPoint[];
+    points: ClusterInfo[];
 }
 
 export type ResolvedEvent = NonNullable<Awaited<ReturnType<typeof queryEventById>>>;
@@ -46,50 +40,42 @@ const CLUSTER_COLORS = [
     "#378ADD", "#BA7517", "#639922", "#E24B4A",
 ];
 
-// Max exemplar rows shown per document
 const MAX_EXEMPLARS_PER_DOC = 3;
 
-export default function ConceptClusters() {
-    const [clusterFile, setClusterFile] = createSignal<ClusterFile | null>(null);
-    const [selectedCluster, setSelectedCluster] = createSignal<string | null>(null);
-    const [clusterLoading, setClusterLoading] = createSignal(false);
-    const [clusterError, setClusterError] = createSignal<string | null>(null);
-    const [showDominantOnly, setShowDominantOnly] = createSignal(true);
-    const [exporting, setExporting] = createSignal(false);
-    const [exportError, setExportError] = createSignal<string | null>(null);
-    const [copyStatus, setCopyStatus] = createSignal<"idle" | "copied" | "failed">("idle");
-
-    const runClusterFetch = async (concept: string) => {
-        setClusterFile(null);
-        setSelectedCluster(null);
-        setClusterError(null);
-
-        if (!concept) return;
-
-        setClusterLoading(true);
-        try {
-            // const data = await loadJson(`/data/scatter/concept_clusters/${ concept }.json`);
-            const data = await loadClusters(concept);
-            setClusterFile(data);
-            const first = Object.keys(data.clusters.aggregates)[0];
-            setSelectedCluster(first ?? null);
-        } catch (err) {
-            console.error(err);
-            setClusterError(err instanceof Error ? err.message : "Failed to load cluster file");
-        } finally {
-            setClusterLoading(false);
-        }
+// Resource source: returns null (skips fetch) when no concept selected,
+// otherwise the params object. createResource refetches whenever any
+// field read here changes, which is what replaces the two createEffects.
+function clusterFetchParams() {
+    const concept = controls.concept;
+    if (!concept) return null;
+    return {
+        concept,
+        yearMode: controls.yearMode,
+        fromYear: controls.fromYear,
+        toYear: controls.toYear,
     };
+}
 
+export default function ConceptClusters() {
+    const [clusterFile, { refetch: refetchClusters }] = createResource(
+        clusterFetchParams,
+        async (params): Promise<ClusterFile> => loadClusters(params)
+    );
+
+    const [selectedCluster, setSelectedCluster] = createSignal<string | null>(null);
+    const [showDominantOnly, setShowDominantOnly] = createSignal(true);
+
+    // Reset cluster selection whenever a fresh file loads (new concept or
+    // year range) — createResource doesn't clear selectedCluster itself,
+    // so do it explicitly when the underlying data identity changes.
     createEffect(() => {
-        const currentConcept = controls.concept;
-        if (currentConcept) {
-            runClusterFetch(currentConcept);
-        } else {
-            setClusterFile(null);
+        const f = clusterFile();
+        if (!f) {
             setSelectedCluster(null);
-            setClusterError(null);
+            return;
         }
+        const first = Object.keys(f.clusters.aggregates)[0];
+        setSelectedCluster(first ?? null);
     });
 
     const clusterSummary = () => {
@@ -149,7 +135,6 @@ export default function ConceptClusters() {
         return f.points.filter(p => p.cluster_id === -1).length;
     };
 
-    // All points belonging to the selected cluster
     const clusterPoints = () => {
         const f = clusterFile();
         const cid = selectedCluster();
@@ -157,9 +142,6 @@ export default function ConceptClusters() {
         return f.points.filter(p => String(p.cluster_id) === cid);
     };
 
-    // Resolve every event in the selected cluster in ONE batched query (not
-    // per DocRow, not one-by-one). This is the single source of `doc_id`
-    // for each event_id, since ClusterPoint itself doesn't carry doc_id.
     const [clusterEvents] = createResource(
         clusterPoints,
         async (points): Promise<ResolvedEvent[]> => {
@@ -175,8 +157,6 @@ export default function ConceptClusters() {
         }
     );
 
-    // Group resolved events by doc_id, capped to MAX_EXEMPLARS_PER_DOC per
-    // doc up front — so DocRow never has to fetch/filter the full cluster.
     const eventsByDoc = createMemo(() => {
         const events = clusterEvents();
         const map = new Map<string, ResolvedEvent[]>();
@@ -191,155 +171,12 @@ export default function ConceptClusters() {
         return map;
     });
 
-    // Build the full export payload: the loaded cluster file, with every
-    // cluster's top_docs annotated with resolved exemplar events (capped
-    // to MAX_EXEMPLARS_PER_DOC per doc, same as the live view).
-    //
-    // This resolves events for ALL clusters in the file, not just the
-    // currently selected one, since the export is meant to be a complete
-    // snapshot of "the whole cluster file with doc/exemplars resolved".
-    const buildExportPayload = async () => {
-        const f = clusterFile();
-        if (!f) return null;
-
-        // Resolve every event referenced anywhere in f.points, in one
-        // batched query, regardless of which cluster it belongs to.
-        const allEventIds = Array.from(new Set(f.points.map((p) => p.event_id)));
-        const eventById = await queryEventsByIds(allEventIds);
-
-        // doc_id -> exemplar events, capped per doc, across the whole file
-        const exemplarsByDoc = new Map<string, ResolvedEvent[]>();
-        for (const p of f.points) {
-            const ev = eventById.get(p.event_id);
-            if (!ev) continue;
-            const arr = exemplarsByDoc.get(ev.doc_id) ?? [];
-            if (arr.length < MAX_EXEMPLARS_PER_DOC) {
-                arr.push(ev);
-                exemplarsByDoc.set(ev.doc_id, arr);
-            }
-        }
-
-        const toExemplarPayload = (ev: ResolvedEvent) => ({
-            event_id: ev.event_id,
-            doc_id: ev.doc_id,
-            token_idx: ev.token_idx,
-            token: ev.token,
-            window: getWindow(ev.event_id) ?? null,
-        });
-
-        // Rebuild aggregates with resolved exemplars attached to each top_doc
-        const aggregates: Record<string, ClusterAggregate & {
-            top_docs_resolved: {
-                doc_id: string;
-                count: number;
-                exemplars: ReturnType<typeof toExemplarPayload>[];
-            }[];
-        }> = {};
-
-        for (const [cid, agg] of Object.entries(f.clusters.aggregates)) {
-            aggregates[cid] = {
-                ...agg,
-                top_docs_resolved: agg.top_docs.map(([doc_id, count]) => ({
-                    doc_id,
-                    count,
-                    exemplars: (exemplarsByDoc.get(doc_id) ?? []).map(toExemplarPayload),
-                })),
-            };
-        }
-
-        return {
-            type: f.type,
-            concept: f.concept,
-            generated_at: f.generated_at,
-            n_events: f.n_events,
-            bounds: f.bounds,
-            globalBounds: f.globalBounds,
-            clusters: {
-                label_map: f.clusters.label_map,
-                aggregates,
-            },
-            points: f.points,
-            exported_at: new Date().toISOString(),
-        };
-    };
-
-    const exportFilename = () => {
-        const f = clusterFile();
-        const concept = f?.concept ?? "cluster_export";
-        return `${ concept }_clusters_export.json`;
-    };
-
-    const handleCopyJson = async () => {
-        setExportError(null);
-        setCopyStatus("idle");
-        setExporting(true);
-        try {
-            const payload = await buildExportPayload();
-            if (!payload) return;
-            const text = JSON.stringify(payload, null, 2);
-            await navigator.clipboard.writeText(text);
-            setCopyStatus("copied");
-            setTimeout(() => setCopyStatus("idle"), 2000);
-        } catch (err) {
-            console.error(err);
-            setCopyStatus("failed");
-            setExportError(err instanceof Error ? err.message : "Failed to copy to clipboard");
-            setTimeout(() => setCopyStatus("idle"), 2000);
-        } finally {
-            setExporting(false);
-        }
-    };
-
-    const handleDownloadJson = async () => {
-        setExportError(null);
-        setExporting(true);
-        try {
-            const payload = await buildExportPayload();
-            if (!payload) return;
-            const text = JSON.stringify(payload, null, 2);
-            const blob = new Blob([text], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = exportFilename();
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error(err);
-            setExportError(err instanceof Error ? err.message : "Failed to build download");
-        } finally {
-            setExporting(false);
-        }
-    };
 
     return (
         <article class="concept-clusters background">
             <ControlsHeader>
-
-                <button class="border small" disabled={exporting()} onClick={handleCopyJson} >
-                    <i>content_copy</i>
-                    <span>
-                        {copyStatus() === "copied"
-                            ? "Copied!"
-                            : copyStatus() === "failed"
-                                ? "Copy failed"
-                                : "Copy JSON"}
-                    </span>
-                </button>
-
-                <button class="border small" disabled={exporting()} onClick={handleDownloadJson} >
-                    <i>download</i>
-                    <span>Download JSON</span>
-                </button>
-
-                <Show when={exporting()}>
-                    <progress class="circle small" />
-                </Show>
-
-                <Show when={exportError()}>
-                    <span class="error-container">{exportError()}</span>
+                <Show when={clusterFile()}>
+                    <ClusterExport MAX_EXEMPLARS_PER_DOC={MAX_EXEMPLARS_PER_DOC} clusters={clusterFile()!} />
                 </Show>
             </ControlsHeader>
 
@@ -347,16 +184,23 @@ export default function ConceptClusters() {
                 <p>Select a concept to view its clusters.</p>
             </Show>
 
-            <Show when={clusterLoading()}>
+            {/* <Show when={clusterFile.loading}>
                 <p>Loading clusters</p>
                 <progress />
+            </Show> */}
+
+            <Show when={clusterFile.error}>
+                <aside class="error-container">
+                    <h3>Error</h3>
+                    {clusterFile.error instanceof Error ? clusterFile.error.message : String(clusterFile.error)}
+                </aside>
             </Show>
 
-            <Show when={clusterError()}>
-                <aside class="error-container"><h3>Error</h3>{clusterError()}</aside>
+            <Show when={!clusterFile.loading && (!clusterFile() || !clusterFile()?.n_events)}>
+                <h3 class="center-align middle-align  extra-margin extra-padding">No data for this period.</h3>
             </Show>
 
-            <Show when={clusterFile()}>
+            <Show when={clusterFile() && clusterFile()?.n_events}>
                 <nav class="scroll bottom-padding">
                     <label class="no-padding">
                         <div class="field middle-align small">
@@ -470,8 +314,6 @@ export default function ConceptClusters() {
                 </Show>
             </Show>
 
-        </article>
+        </article >
     );
 }
-
-
