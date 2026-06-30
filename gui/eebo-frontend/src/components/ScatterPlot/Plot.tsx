@@ -1,12 +1,11 @@
 // ScatterPlot/Plot.tsx
-// Full-screen WebGL scatter plot for EEBO event data.
+// Full-screen WebGL scatter plot for event data.
 // Pure render component: all state lives in the parent.
 
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { Deck, OrthographicView, LinearInterpolator } from "@deck.gl/core";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
-import { COORDINATE_SYSTEM } from "@deck.gl/core";
 
 import "./style.css";
 import type { BfsDataset, ConceptDatasetSqlite, LabelPoint, PointData, ViewBounds } from "./types";
@@ -16,11 +15,12 @@ import { SelectionController } from "./SelectionPlugin/SelectionController";
 import type { Id, ScreenRect } from "./SelectionPlugin/types";
 import { buildColorMap } from "../../lib/colour";
 import { controls, type ProjectionModeType } from "../../state/controls.store";
-import { labelState } from "../../state/labels.store";
 import { labelsActions } from "../../state/labels.actions";
 
 type RGB = [number, number, number];
 type RGBA = [number, number, number, number];
+
+const ZOOM_THRESHOLD = 7;
 
 const DEPTH_COLORS: Record<number, RGBA> = {
   0: [0, 0, 0, 0],
@@ -173,8 +173,7 @@ export default function Plot(props: PlotProps) {
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
       pickable: true,
-      onHover: (info: PickingInfo<LabelPoint>) =>
-        props.onLabelHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
+      onHover: (info: PickingInfo<LabelPoint>) => props.onLabelHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
     });
   });
 
@@ -236,7 +235,7 @@ export default function Plot(props: PlotProps) {
       layersList.push(
         new ScatterplotLayer<PointData>({
           id: "neighbours-merged",
-          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          coordinateSystem: "cartesian",
           data: neighbourPoints,
           getPosition: p => getPosition(p, proj),
           getFillColor: p => getColor()(p, "neighbours"),
@@ -310,7 +309,7 @@ export default function Plot(props: PlotProps) {
 
     // Only flip the tier signal when crossing the threshold — not on every
     // scroll tick — so the layers memo doesn't rebuild every frame.
-    const nowZoomedIn = z > 11;
+    const nowZoomedIn = z > ZOOM_THRESHOLD;
     if (nowZoomedIn !== isZoomedInRef) {
       isZoomedInRef = nowZoomedIn;
       setZoomTier(nowZoomedIn ? 1 : 0);
