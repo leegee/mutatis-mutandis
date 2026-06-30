@@ -1,11 +1,10 @@
 import { createSignal, createEffect, createMemo, Show, For, createResource, onCleanup } from "solid-js";
-import { controls, setControls } from "../../state/controls.store";
+import { controls } from "../../state/controls.store";
 import { queryEventById, queryEventsByIds } from "../../services/db";
-import { fetchWindowBatch, type TextWindowItem } from "../../services/tokenWindowBatchApi";
-import { setWindowCache, getWindow } from "../../services/windowCache";
-import { loadJson } from "../../lib/json";
+import { getWindow } from "../../services/windowCache";
 import ControlsHeader from "../ControlsHeader";
-import { controlsActions } from "../../state/controls.actions";
+import { loadClusters } from "./loadClusters";
+import DocRow from "./DocRow";
 
 interface ClusterAggregate {
     top_tokens: [string, number][];
@@ -40,7 +39,7 @@ interface ClusterFile {
     points: ClusterPoint[];
 }
 
-type ResolvedEvent = NonNullable<Awaited<ReturnType<typeof queryEventById>>>;
+export type ResolvedEvent = NonNullable<Awaited<ReturnType<typeof queryEventById>>>;
 
 const CLUSTER_COLORS = [
     "#7F77DD", "#1D9E75", "#D85A30", "#D4537E",
@@ -55,8 +54,7 @@ export default function ConceptClusters() {
     const [selectedCluster, setSelectedCluster] = createSignal<string | null>(null);
     const [clusterLoading, setClusterLoading] = createSignal(false);
     const [clusterError, setClusterError] = createSignal<string | null>(null);
-    const [showDominantOnly, setShowDominantOnly] = createSignal(false);
-
+    const [showDominantOnly, setShowDominantOnly] = createSignal(true);
     const [exporting, setExporting] = createSignal(false);
     const [exportError, setExportError] = createSignal<string | null>(null);
     const [copyStatus, setCopyStatus] = createSignal<"idle" | "copied" | "failed">("idle");
@@ -70,7 +68,8 @@ export default function ConceptClusters() {
 
         setClusterLoading(true);
         try {
-            const data = await loadJson(`/data/scatter/concept_clusters/${ concept }.json`);
+            // const data = await loadJson(`/data/scatter/concept_clusters/${ concept }.json`);
+            const data = await loadClusters(concept);
             setClusterFile(data);
             const first = Object.keys(data.clusters.aggregates)[0];
             setSelectedCluster(first ?? null);
@@ -316,12 +315,9 @@ export default function ConceptClusters() {
     };
 
     return (
-        <article class="concept-clusters">
-            <ControlsHeader />
+        <article class="concept-clusters background">
+            <ControlsHeader>
 
-            <nav>
-                <h2 class="max">Cluster Explorer</h2>
-                {/* Export controls */}
                 <button class="border small" disabled={exporting()} onClick={handleCopyJson} >
                     <i>content_copy</i>
                     <span>
@@ -345,7 +341,7 @@ export default function ConceptClusters() {
                 <Show when={exportError()}>
                     <span class="error-container">{exportError()}</span>
                 </Show>
-            </nav>
+            </ControlsHeader>
 
             <Show when={!controls.concept}>
                 <p>Select a concept to view its clusters.</p>
@@ -361,13 +357,6 @@ export default function ConceptClusters() {
             </Show>
 
             <Show when={clusterFile()}>
-                <p>
-                    {clusterFile()!.n_events.toLocaleString()} events
-                    · {Object.keys(clusterFile()!.clusters.aggregates).length} clusters
-                    · {noiseCount().toLocaleString()} noise points
-                    · generated {clusterFile()!.generated_at.slice(0, 10)}
-                </p>
-
                 <nav class="scroll bottom-padding">
                     <label class="no-padding">
                         <div class="field middle-align small">
@@ -413,8 +402,9 @@ export default function ConceptClusters() {
                 <Show when={selectedAgg()}>
                     <div class="grid">
                         <div class="s3">
-                            <section>
+                            <section class="left-padding">
                                 <div class="large-height scroll surface">
+
                                     <table class="stripes no-border scroll max">
                                         <caption>Top tokens</caption>
                                         <thead class="fixed">
@@ -424,7 +414,7 @@ export default function ConceptClusters() {
                                             <For each={selectedAgg()!.top_tokens}>
                                                 {([token, count], i) => (
                                                     <tr>
-                                                        <td>{i()}</td>
+                                                        <td>{i() + 1}</td>
                                                         <td><strong>{token}</strong></td>
                                                         <td>{count.toLocaleString()}</td>
                                                     </tr>
@@ -432,6 +422,19 @@ export default function ConceptClusters() {
                                             </For>
                                         </tbody>
                                     </table>
+
+                                    <Show when={clusterFile()}>
+                                        <p>
+                                            {clusterFile()!.n_events.toLocaleString()} events
+                                        </p><p>
+                                            {Object.keys(clusterFile()!.clusters.aggregates).length} clusters
+                                        </p><p>
+                                            {noiseCount().toLocaleString()} noise points
+                                        </p><p>
+                                            Generated {clusterFile()!.generated_at.slice(0, 10)}
+                                        </p>
+                                    </Show>
+
                                 </div>
                             </section>
                         </div>
@@ -444,14 +447,14 @@ export default function ConceptClusters() {
                                 <div class="surface" style={{ overflow: "auto" }}>
                                     <table class="stripes no-border scroll max">
                                         <caption>Top documents</caption>
-                                        <thead class="fixed">
+                                        <thead class="fixed surface-container-high">
                                             <tr><th>Rank</th><th>Document ID</th><th>Count</th></tr>
                                         </thead>
                                         <tbody>
                                             <For each={selectedAgg()!.top_docs}>
                                                 {([doc_id, count], i) => (
                                                     <DocRow
-                                                        rank={i()}
+                                                        rank={i() + 1}
                                                         doc_id={doc_id}
                                                         count={count}
                                                         events={eventsByDoc().get(doc_id) ?? []}
@@ -466,138 +469,9 @@ export default function ConceptClusters() {
                     </div>
                 </Show>
             </Show>
+
         </article>
     );
 }
 
-function DocRow(props: {
-    rank: number;
-    doc_id: string;
-    count: number;
-    events: ResolvedEvent[];
-}) {
-    let rowRef: HTMLTableRowElement | undefined;
-    const [visible, setVisible] = createSignal(false);
 
-    // events are pre-resolved and already capped to MAX_EXEMPLARS_PER_DOC
-    // by the parent — only fetch window text for these few ids, and only
-    // once this row is visible.
-    const [resolved] = createResource(
-        () => (visible() ? props.events : null),
-        async (events): Promise<ResolvedEvent[]> => {
-            if (!events || !events.length) return [];
-
-            // skip ids whose window content is already cached
-            const toFetch = events.filter((e) => !getWindow(e.event_id));
-
-            if (toFetch.length) {
-                const batch = toFetch.map((e) => ({
-                    eventId: e.event_id,
-                    docId: e.doc_id,
-                    tokenIdx: e.token_idx,
-                }));
-
-                const res = await fetchWindowBatch(batch);
-
-                res.results.forEach((r: TextWindowItem, idx: number) => {
-                    setWindowCache(toFetch[idx].event_id, r.content);
-                });
-            }
-
-            return events;
-        }
-    );
-
-    createEffect(() => {
-        if (!rowRef || visible()) return;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting) {
-                    setVisible(true);
-                    observer.disconnect();
-                }
-            },
-            { rootMargin: "100px" }
-        );
-        observer.observe(rowRef);
-        onCleanup(() => observer.disconnect());
-    });
-
-    return (
-        <>
-            <tr ref={rowRef}>
-                <td>{props.rank}</td>
-                <td><strong>{props.doc_id}</strong></td>
-                <td>{props.count.toLocaleString()}</td>
-            </tr>
-            <Show when={visible() && resolved.loading}>
-                <tr>
-                    <td colspan="3">
-                        <progress />
-                    </td>
-                </tr>
-            </Show>
-            <For each={props.events}>
-                {(ev) => <ExemplarSubRow event={ev} />}
-            </For>
-        </>
-    );
-}
-
-
-function ExemplarSubRow(props: { event: ResolvedEvent }) {
-    let rowRef: HTMLTableRowElement | undefined;
-    const [visible, setVisible] = createSignal(false);
-
-    createEffect(() => {
-        if (!rowRef || visible()) return;
-
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting) {
-                    setVisible(true);
-                    observer.disconnect();
-                }
-            },
-            { rootMargin: "100px" }
-        );
-
-        observer.observe(rowRef);
-        onCleanup(() => observer.disconnect());
-    });
-
-    const windowText = createMemo(() => getWindow(props.event.event_id));
-
-    return (
-        <tr
-            ref={rowRef}
-            onClick={() => controlsActions.setSelectedEventIds(props.event.event_id)}
-            class="bottom-padding"
-            style={{
-                background:
-                    controls.selectedEventId === props.event.event_id
-                        ? "var(--color-background-info)" : "transparent",
-            }}
-        >
-            <td colspan="3">
-                <div>
-                    token_idx {props.event.token_idx} · {props.event.token}
-                </div>
-
-                <div>
-                    <Show when={!visible()}>
-                        &mdash;
-                    </Show>
-
-                    <Show when={visible() && !windowText()}>
-                        <progress />
-                    </Show>
-
-                    <Show when={windowText()}>
-                        <span innerHTML={windowText()!} />
-                    </Show>
-                </div>
-            </td>
-        </tr>
-    );
-}

@@ -29,8 +29,8 @@ export interface ClusterFile {
     points: ClusterPoint[];
 }
 
-export async function loadClusterFile(concept: string): Promise<ClusterFile> {
-    console.log(`[loadClusterFile] START for ${ concept }`);
+export async function loadClusters(concept: string): Promise<ClusterFile> {
+    console.log(`[loadClusters] START for ${ concept }`);
     const start = performance.now();
 
     // 1. Per-event points belonging to a cluster
@@ -108,7 +108,7 @@ export async function loadClusterFile(concept: string): Promise<ClusterFile> {
     const b = (boundsRows as any[])[0] || [];
 
     const duration = performance.now() - start;
-    console.log(`[loadClusterFile] FINISHED in ${ duration.toFixed(1) }ms`);
+    console.log(`[loadClusters] FINISHED in ${ duration.toFixed(1) }ms`);
 
     return {
         type: "concept_clusters",
