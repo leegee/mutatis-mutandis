@@ -5,7 +5,7 @@ import type { BfsDataset, LabelPoint, PointData, ViewBounds } from "./types";
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
 import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets.sqlite";
-import { controls, type ColorScatterByType, type ProjectionModeType } from "../../state/controls.store";
+import { controls, type ColorScatterByType, type ProjectionModeType, type ScatterPlotLayerType } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
@@ -94,7 +94,7 @@ export default function ConceptClusterPlot() {
                         <div class="field  border middle-align">
                             <select class="small-padding" value={controls.scatterPlotLayerMode}
                                 onChange={e => {
-                                    controlsActions.setScatterplotLayerMode(e.currentTarget.value as "concept" | "neighbours" | "clusters");
+                                    controlsActions.setScatterplotLayerMode(e.currentTarget.value as ScatterPlotLayerType);
                                     if (e.currentTarget.value === 'clusters') {
                                         controlsActions.setColorBy("cluster_label")
                                     }
