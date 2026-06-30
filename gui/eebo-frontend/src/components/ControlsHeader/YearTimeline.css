@@ -30,4 +30,5 @@
     bottom: 12pt;
     right: 12pt;
     opacity: 0.3;
+    pointer-events: none;
 }
