@@ -5,7 +5,7 @@ import type { BfsDataset, LabelPoint, PointData, ViewBounds } from "./types";
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
 import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets.sqlite";
-import { controls, type ColorScatterByType } from "../../state/controls.store";
+import { controls, type ColorScatterByType, type ProjectionModeType } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
@@ -124,7 +124,7 @@ export default function ConceptClusterPlot() {
 
                         <div class="field border middle-align">
                             <select class="small-padding" value={controls.projectionMode}
-                                onChange={e => controlsActions.setProjection(e.currentTarget.value as "local" | "global")}>
+                                onChange={e => controlsActions.setProjection(e.currentTarget.value as ProjectionModeType)}>
                                 <option value="global">Global</option>
                                 <option value="local">Local</option>
                             </select>

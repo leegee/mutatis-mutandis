@@ -20,7 +20,10 @@ import { labelsActions } from "../../state/labels.actions";
 type RGB = [number, number, number];
 type RGBA = [number, number, number, number];
 
+
 const ZOOM_THRESHOLD = 7;
+const DRAG_THRESHOLD_PX = 6;
+
 
 const DEPTH_COLORS: Record<number, RGBA> = {
   0: [0, 0, 0, 0],
@@ -72,32 +75,25 @@ interface PlotProps {
 
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
 
-function getPosition(
-  p: PointData | LabelPoint,
-  projection: "local" | "global"
-): [number, number, number] {
-  return projection === "global"
-    ? [p.gnx, p.gny, 0]
-    : [p.nx, p.ny, 0];
-}
+const getPosition = (p: PointData | LabelPoint, projection: ProjectionModeType): RGB =>
+  projection === "global" ? [p.gnx, p.gny, 0] : [p.nx, p.ny, 0];
+
 
 export default function Plot(props: PlotProps) {
   let canvas!: HTMLCanvasElement;
   let deck: Deck<OrthographicView> | null = null;
   let controller: SelectionController<PointData> | undefined;
 
-  // Instance-scoped point cache (not a module-level global).
   let currentPoints: PointData[] = [];
 
-  let isZoomedInRef = false;
   // Separate signal that only flips when the threshold actually crosses,
   // used solely to trigger a layer rebuild on that one frame.
   const [zoomTier, setZoomTier] = createSignal(0); // 0 = zoomed-out, 1 = zoomed-in
+  let isZoomedIn = false;
 
   // Track drag state via pointer distance rather than a boolean flag.
   let pointerDownX = 0;
   let pointerDownY = 0;
-  const DRAG_THRESHOLD_PX = 6;
 
   // Separate drag-preview signal for the selection rectangle overlay.
   let isDragging = false;
@@ -310,8 +306,8 @@ export default function Plot(props: PlotProps) {
     // Only flip the tier signal when crossing the threshold — not on every
     // scroll tick — so the layers memo doesn't rebuild every frame.
     const nowZoomedIn = z > ZOOM_THRESHOLD;
-    if (nowZoomedIn !== isZoomedInRef) {
-      isZoomedInRef = nowZoomedIn;
+    if (nowZoomedIn !== isZoomedIn) {
+      isZoomedIn = nowZoomedIn;
       setZoomTier(nowZoomedIn ? 1 : 0);
     }
 
@@ -374,15 +370,15 @@ export default function Plot(props: PlotProps) {
       pointerDownY = e.offsetY;
     });
 
-    // Use pointerup (matching the original approach) rather than click.
-    // The DeckClickPlugin handles its own click logic; this handler is only
-    // responsible for picking objects and dispatching to the SelectionController.
-    // We restore pointerup here because click fires *after* the drag plugin
+    // Use pointerup rather than click becuase DeckClickPlugin handles  click logic;
+    // this handler is only responsible for picking objects and dispatching
+    // to the SelectionController.
+    // We restore pointerup here because click fires after the drag plugin
     // has already cleared isDragging, making the flag unreliable for filtering
     // drag-end events. pointerup fires before that cleanup.
     canvas.addEventListener("pointerup", async e => {
       // Distance guard: if the pointer travelled more than DRAG_THRESHOLD_PX
-      // this is a drag-end, not a click — ignore it.
+      // this is a drag-end, not a click so ignore.
       const dx = e.offsetX - pointerDownX;
       const dy = e.offsetY - pointerDownY;
       if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX) return;
