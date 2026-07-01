@@ -12,11 +12,11 @@
 
 ## Conceptual Synopsis
 
-Ontological Topology: the study of semantic space as a structured geometric object, where meaning is defined by relative positions, continuity, and deformation of distributions across time rather than discrete sense inventories. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...
+Ideally this project would build a complete Ontological Topology of a corpus, a gigantic semantic space as a structured geometric object, where meaning is illustrated by relative positions, continuity and deformation of distributions across time, rather than through dictionaries. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...
 
-So: instead of corpus-wide embedding, I am trying a recursive probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
+So: instead of corpus-wide embedding, we recursively probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
 
-Finally, attempt topological data analysis if I can get my head around the Betti numbers.
+To do: Betti numbers.
 
     EEBO-TCP TEI XML
             |
@@ -30,7 +30,7 @@ Finally, attempt topological data analysis if I can get my head around the Betti
             |
     Analysis (drift, clustering, interpretation)
             |
-    GUI (Solid, d3)
+    GUI (Solid, d3, CosmosGL, DeckGL)
 
 ## Architecture
 
@@ -139,7 +139,7 @@ class CP,TD,VI output;
 
     conda list --export > requirements.txt
 
-## Colab
+## Colab Notebooks
 
 Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/port output from `ngrok tcp 5432`.
 
@@ -147,24 +147,19 @@ Don't forget to restart the Colab session when the IP changes.
 
 (Colab workbooks is well out of date)
 
-## Abstract: About This Project
-
-- [Abstract](./ABSTRACT.md)
-- [Concise abstract](./ABSTRACT_concise.md)
-
 ## Bibliography
 
 See [Bibliography](./BIBLIOGRAPHY.md)
 
 ## People and Projects
 
-- [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
-- [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
-- [McGillivray, Barbara](https://www.kcl.ac.uk/people/barbara-mcgillivray)
-- [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
 - [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
-- [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
 - [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
+- [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
+- [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
+- [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
+- [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
+- [McGillivray, Barbara](https://www.kcl.ac.uk/people/barbara-mcgillivray)
 
 - https://dhq.digitalhumanities.org/
 - https://openhumanitiesdata.metajnl.com/
@@ -174,13 +169,13 @@ In addition to EEBO-TCP:
 
 | Resource                                              | Focus                           | Contains TEI/XML? | Best Use                           |
 | ----------------------------------------------------- | ------------------------------- | ----------------- | ---------------------------------- |
-| **Manuscript Pamphleteering in Early Stuart England** | 17th‑c manuscript pamphlets     | Yes               | Manuscript pamphlet transcriptions |
-| **MoEML Early Modern Broadsides**                     | 16–17th‑c broadsides            | Yes               | Printed sheets & broadsides        |
 | **EarlyPrint / aggregated XML**                       | Multi‑collection metadata + XML | Yes               | Indexed TEI + multi‑collections    |
+| **EBBA**                                              | 17th‑c ballads                  | Structured text   | Genre adjacent to pamphlets        |
 | **ECCO‑TCP**                                          | 18th‑c books & pamphlets        | Yes               | Later historical context           |
 | **Evans‑TCP**                                         | American imprints               | Yes               | Wider corpus coverage              |
-| **EBBA**                                              | 17th‑c ballads                  | Structured text   | Genre adjacent to pamphlets        |
 | **HathiTrust Extracted Dataset**                      | Broad public domain texts       | Bulk data         | Pre‑processing into TEI            |
+| **Manuscript Pamphleteering in Early Stuart England** | 17th‑c manuscript pamphlets     | Yes               | Manuscript pamphlet transcriptions |
+| **MoEML Early Modern Broadsides**                     | 16–17th‑c broadsides            | Yes               | Printed sheets & broadsides        |
 
 ## Restoring the Database
 
@@ -248,24 +243,8 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 ## To Do
 
-### Data
-
-1. Cleaner corpus text
-1. Fuller corpus date parsing
-1. Check:
-    from langdetect import detect, DetectorFactory
-    DetectorFactory.seed = 0
-    try:
-        lang = detect(raw_text)
-            except Exception:
-                lang = None
-
-### Visualisations
-
-1. Share a JSON config for constants such as corpus year range, window size, etc
-1. Cosmos animation - compute the cosmos for all years and fade out those not currently in the animation frame.
-1. 3D with x/y being current FDG or heatmap, z being time
 1. api result paging
+1. expose tier 2's analytics
 
 ### DB
 
