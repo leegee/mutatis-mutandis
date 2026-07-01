@@ -300,7 +300,6 @@ export default function ConceptClusters() {
                                                     <DocRow
                                                         rank={i() + 1}
                                                         doc_id={doc_id}
-                                                        pub_year={ }
                                                         count={count}
                                                         events={eventsByDoc().get(doc_id) ?? []}
                                                     />
