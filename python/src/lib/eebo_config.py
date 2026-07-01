@@ -43,6 +43,10 @@ INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
 ZARR_ROOT = OUT_DIR / "zarr"
+ZARR_ROOT.mkdir(parents=True, exist_ok=True)
+
+ZARR_PATH = ZARR_ROOT / "tier1"
+ZARR_PATH.mkdir(parents=True, exist_ok=True)
 
 MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -288,6 +292,9 @@ CONCEPT_SETS: CanonicalRules = {
             "fanatic", "fanatick", "fanatique", # "fanaticism", "fanaticisme", "phanatic", "phanatique"
         },
         "false_positives": set(),
+    },
+    "ANABAPTIST": {
+        "anabaptist"
     },
     "ENTHUSIASM": {
         "forms": {
