@@ -224,7 +224,6 @@ class EmbeddingPipeline:
 
         if batch:
             events.extend(self._flush_batch(buf, batch))
-
         return events
 
     def _encode(self, tokens):
@@ -349,8 +348,8 @@ class CorpusProcessor:
 
     def process(self, doc_id=None):
         store = ZarrEmbeddingObservationStore(
-            path=str(ZARR_ROOT / "tier1"),
-            dim=self.pipeline.model.config.hidden_size,
+            path = str(ZARR_ROOT / "tier1"),
+            dim  = self.pipeline.model.config.hidden_size,
         )
 
         already_processed = store.get_doc_ids()
@@ -409,7 +408,7 @@ class CorpusProcessor:
             (e.event_id,
             e.concept_id,
             e.doc_id,
-            e.corpus_token_idx,           # ← source of truth
+            e.corpus_token_idx,           # UUID
             e.window_start,
             e.window_token_pos,
             e.token,
@@ -419,16 +418,17 @@ class CorpusProcessor:
         ])
 
         store.append_events(
-            event_id=np.asarray(event_ids, dtype=np.int64),
-            concept_id=np.asarray(concept_ids, dtype=np.int64),
-            emb_raw=np.stack(vecs),
-            vector_id=np.asarray(vector_ids, dtype=np.int64),
-            doc_id=np.asarray(doc_ids, dtype="U32"),
-            token_idx=np.asarray(corpus_token_idxs, dtype=np.int32),  # ← still write to old column name
-            window_id=np.asarray(window_starts, dtype=np.int32),
-            window_token_pos=np.asarray(window_token_pos, dtype=np.int32),
+            event_id            = np.asarray(event_ids, dtype=np.int64),
+            concept_id          = np.asarray(concept_ids, dtype=np.int64),
+            emb_raw             = np.stack(vecs),
+            vector_id           = np.asarray(vector_ids, dtype=np.int64),
+            doc_id              = np.asarray(doc_ids, dtype="U32"),
+            token_idx           = np.asarray(corpus_token_idxs, dtype=np.int32),  # ← still write to old column name
+            window_id           = np.asarray(window_starts, dtype=np.int32),
+            window_token_pos    = np.asarray(window_token_pos, dtype=np.int32),
             token=np.asarray(tokens, dtype=object),
         )
+
 
 def clear_output_dir():
     path = ZARR_ROOT / "tier1"

@@ -21,8 +21,8 @@ export class CanvasDragPlugin<T extends { event_id: string }> {
     }
 
     private onDown = (e: MouseEvent) => {
-        // only care about shift drag
-        if (!e.shiftKey) return;
+        // only care about ctrl drag
+        if (!e.ctrlKey) return;
         this.start = this.getXY(e);
         this.controller.setDragStart?.(this.start);
         window.addEventListener("mousemove", this.onMove);

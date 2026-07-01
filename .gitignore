@@ -78,3 +78,4 @@ docs/BL.txt
 python/fastapi_jobs.sqlite3
 *.db-shm
 *.db-wal
+bibliography/cited
