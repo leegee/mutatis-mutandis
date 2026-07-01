@@ -8,9 +8,9 @@ export default function DiachronicChartGuide() {
         to integers in a two-dimensional space.
       </p>
       <p>
-        Select a point by clicking, and also both <kbd>SHIFT</kbd>-clicking and clicking then dragging whilst holding <kbd>SHIFT</kbd> key.
-        Once you have thus raised summary reports of the selected mini-corpus, you may wish to down your selection,
-        or copy it to your clipboard. Several styles of export are available.
+        Select a point by clicking, add another point by <kbd>SHIFT</kbd>-clicking. Hold <kbd>CTRL</kbd> whilst  clicking and dragging to select multiple points.
+        Once you have thus raised summary reports of the selected mini-corpus, you may wish to download your selection,
+        or copy it to your clipboard. Several styles of export are available from the sidebar.
       </p>
       <p>
         Other options are exploratory prototypes - send parts of selections to <code>llama-3.3-70b-versatile</code>
