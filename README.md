@@ -16,6 +16,8 @@
 >
 > Who during the 1600s was expressing in their own language concepts we differntly express today?
 >
+> Who were the terrorists of the 17th century? (Fanatics, Sectaries, Enthusiasts, Levellers, Diggers, Muggltonians, Anabaptists, Jesuits...)
+>
 > How in the past was the concept we term X referenced  if at all?
 
 ## Progress
