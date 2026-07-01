@@ -43,102 +43,55 @@ Currently extending from individual tokens to clauses, which is where the real d
 ```mermaid
 flowchart TB
 
-%% ===================================
-%% STYLES
-%% ===================================
-
-classDef process fill:#e8f0fe,stroke:#4a6fa5,stroke-width:1.5px;
-classDef datastore fill:#fff3cd,stroke:#c9a227,stroke-width:1.5px;
-classDef index fill:#f8d7da,stroke:#b24c63,stroke-width:1.5px;
-classDef output fill:#d1e7dd,stroke:#4f8a5b,stroke-width:1.5px;
-
-%% ===================================
-%% CORPUS LAYER
-%% ===================================
-
 subgraph L0["Corpus Layer"]
-
-PG[(EEBO-TCP<br/>Postgres Token Store)]
-
+PG[(EEBO-TCP Postgres Token Store)]
 end
-
-%% ===================================
-%% TIER 1
-%% ===================================
 
 subgraph L1["Tier 1: Event Construction"]
-
 TF[Token Filtering]
-WS[Sliding Window<br/>Segmentation]
-MB[MacBERTh<br/>Contextual Encoder]
-EB[Event Builder<br/>event_id / concept_id]
 
-ZS[(Zarr Event Store<br/>Atomic Semantic Events)]
+CS[Clause Segmentation]
+SS[Sentence Segmentation]
+PS[Paragraph Segmentation]
 
+MB[MacBERTh Contextual Encoder]
+EB[Event Builder event_id / concept_id]
+ZS[(Zarr Event Store Atomic Semantic Events)]
 end
-
-%% ===================================
-%% INDEX
-%% ===================================
 
 subgraph L2["Event Space Index"]
-
-FI{{FAISS Index<br/>Event Embedding Space}}
-
+FI[FAISS Index Event Embedding Space]
 end
-
-%% ===================================
-%% TIER 2
-%% ===================================
 
 subgraph L3["Tier 2: Neighbourhood Analysis"]
-
 KR[kNN Retrieval]
-EG[Event Graph<br/>Construction]
-SA[Statistical Analysis<br/>Clustering / Drift / Entropy]
-
+EG[Event Graph Construction]
+SA[Statistical Analysis Clustering Drift Entropy]
 end
 
-%% ===================================
-%% OUTPUTS
-%% ===================================
-
 subgraph L4["Outputs"]
-
 CP[[Concept Profiles]]
 TD[[Temporal Drift Signals]]
 VI[[Visualisation Interface]]
-
 end
 
-%% ===================================
-%% FLOWS
-%% ===================================
-
 PG --> TF
-TF --> WS
-WS --> MB
-MB --> EB
-EB --> ZS
 
-ZS --> FI
+TF --> CS
+TF --> SS
+TF --> PS
 
-FI --> KR
-KR --> EG
-EG --> SA
+CS --> MB
+SS --> MB
+PS --> MB
+
+MB --> EB --> ZS --> FI
+
+FI --> KR --> EG --> SA
 
 SA --> CP
 SA --> TD
 SA --> VI
-
-%% ===================================
-%% CLASSES
-%% ===================================
-
-class TF,WS,MB,EB,KR,EG,SA process;
-class PG,ZS datastore;
-class FI index;
-class CP,TD,VI output;
 ```
 
 ## Deps list
