@@ -43,6 +43,10 @@ Currently extending from individual tokens to clauses, which is where the real d
 ```mermaid
 flowchart TB
 
+classDef dark fill:#0d1117,stroke:#ffffff,color:#ffffff,stroke-width:1px;
+classDef store fill:#161b22,stroke:#ffffff,color:#ffffff,stroke-width:1px;
+classDef output fill:#1f2937,stroke:#ffffff,color:#ffffff,stroke-width:1px;
+
 subgraph L0["Corpus Layer"]
 PG[(EEBO-TCP Postgres Token Store)]
 end
@@ -92,6 +96,10 @@ FI --> KR --> EG --> SA
 SA --> CP
 SA --> TD
 SA --> VI
+
+class PG,ZS,FI dark;
+class TF,CS,SS,PS,MB,EB,KR,EG,SA store;
+class CP,TD,VI output;
 ```
 
 ## Deps list
