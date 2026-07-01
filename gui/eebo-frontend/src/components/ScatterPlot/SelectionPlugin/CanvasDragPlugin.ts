@@ -1,7 +1,11 @@
 import type { SelectionController } from "./SelectionController";
 
+type ModifierKey = "shiftKey" | "ctrlKey" | "altKey" | "metaKey";
+
 export class CanvasDragPlugin<T extends { event_id: string }> {
     private start: { x: number; y: number } | null = null;
+    private modifierKey = 'ctrlKey' as ModifierKey;
+
 
     constructor(
         private canvas: HTMLCanvasElement,
@@ -22,7 +26,7 @@ export class CanvasDragPlugin<T extends { event_id: string }> {
 
     private onDown = (e: MouseEvent) => {
         // only care about ctrl drag
-        if (!e.ctrlKey) return;
+        if (!e[this.modifierKey]) return;
         this.start = this.getXY(e);
         this.controller.setDragStart?.(this.start);
         window.addEventListener("mousemove", this.onMove);
@@ -35,7 +39,7 @@ export class CanvasDragPlugin<T extends { event_id: string }> {
         this.controller.setDragPreview?.(null);
 
         // must still be shift at release
-        if (!e.shiftKey) {
+        if (!e[this.modifierKey]) {
             this.start = null;
             return;
         }
@@ -58,7 +62,7 @@ export class CanvasDragPlugin<T extends { event_id: string }> {
     };
 
     private onMove = (e: MouseEvent) => {
-        if (!this.start || !e.shiftKey) return;
+        if (!this.start || !e[this.modifierKey]) return;
 
         const current = this.getXY(e);
 
