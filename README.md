@@ -12,11 +12,17 @@
 
 ## Conceptual Synopsis
 
+> Who today is using the concept of liberty as it was used by Milton, or Hobbes, or Locke?
+>
+> Who during the 1600s was expressing in their own language concepts we differntly express today?
+
+## Progress
+
 Ideally this project would build a complete Ontological Topology of a corpus, a gigantic semantic space as a structured geometric object, where meaning is illustrated by relative positions, continuity and deformation of distributions across time, rather than through dictionaries. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...
 
 So: instead of corpus-wide embedding, we recursively probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
 
-To do: Betti numbers.
+Currently extending from individual tokens to clauses, which is where the real definitional use lies. After that, sentances and paragraphs.
 
     EEBO-TCP TEI XML
             |
