@@ -188,7 +188,7 @@ class EeboFaissIndex:
         for eid in ids:
             eid = int(eid)
             if eid in seen:
-                raise ValueError(f"Duplicate event_id in batch: {eid}")
+                raise ValueError(f"Duplicate event_id in batch: {eid}. Did you mean to run with the argument --clear?")
             seen.add(eid)
 
         # Guard against cross-call duplicates

@@ -94,7 +94,7 @@ import unicodedata
 
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
-from lib.eebo_config import ZARR_ROOT, EMBED_BATCH_SIZE
+from lib.eebo_config import ZARR_PATH, EMBED_BATCH_SIZE
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 
@@ -142,6 +142,9 @@ class Event:
     token: str
     vector_id: int
     vec: np.ndarray
+    event_type: str = "window"
+    span_start_token_idx: int = -1
+    span_end_token_idx: int = -1
 
     @property
     def token_idx(self):
@@ -158,24 +161,37 @@ class Event:
         token: str,
         vector_id: int,
         vec: np.ndarray,
+        event_type: str = "window",
+        span_start_token_idx: int | None = None,
+        span_end_token_idx: int | None = None,
     ) -> Event:
         concept_id = stable_hash(f"{doc_id}:{corpus_token_idx}")
 
+        # start = span_start_token_idx if span_start_token_idx is not None else corpus_token_idx
+        # end = span_end_token_idx if span_end_token_idx is not None else corpus_token_idx
+        # NOT ENOUGH event_id   = stable_hash( f"{doc_id}:{event_type}:{start}:{end}" )
+
+        start = span_start_token_idx if span_start_token_idx is not None else corpus_token_idx
+        end   = span_end_token_idx   if span_end_token_idx   is not None else corpus_token_idx
+
         event_id = stable_hash(
-            f"{doc_id}:{corpus_token_idx}:{window_start_token_idx}:{window_token_pos}"
+            f"{doc_id}:{event_type}:{corpus_token_idx}:{window_start_token_idx}:{window_token_pos}:{start}:{end}"
         )
 
         return Event(
-            event_id=event_id,
-            concept_id=concept_id,
-            doc_id=doc_id,
-            corpus_token_idx=corpus_token_idx,   # ← now passed correctly
-            window_start=window_start,
-            window_start_token_idx=window_start_token_idx,
-            window_token_pos=window_token_pos,
-            token=token,
-            vector_id=vector_id,
-            vec=vec.astype(np.float32),
+            event_id                = event_id,
+            concept_id              = concept_id,
+            doc_id                  = doc_id,
+            corpus_token_idx        = corpus_token_idx,   # ← now passed correctly
+            window_start            = window_start,
+            window_start_token_idx  = window_start_token_idx,
+            window_token_pos        = window_token_pos,
+            token                   = token,
+            vector_id               = vector_id,
+            vec                     = vec.astype(np.float32),
+            event_type              = event_type,
+            span_start_token_idx    = start,
+            span_end_token_idx      = end,
         )
 
 @dataclass
@@ -299,14 +315,17 @@ class EmbeddingPipeline:
 
             events.append(
                 Event.make(
-                    doc_id=buf.doc_id,
-                    corpus_token_idx=buf.corpus_token_idxs[wid],
-                    window_start_token_idx=window_start_token_idx,
-                    window_start=window_start,
-                    window_token_pos=i,
-                    token=buf.tokens[wid],
-                    vector_id=buf.vector_ids[wid],
-                    vec=hidden[i],
+                    doc_id                  = buf.doc_id,
+                    corpus_token_idx        = buf.corpus_token_idxs[wid],
+                    window_start_token_idx  = window_start_token_idx,
+                    window_start            = window_start,
+                    window_token_pos        = i,
+                    token                   = buf.tokens[wid],
+                    vector_id               = buf.vector_ids[wid],
+                    vec                     = hidden[i],
+                    event_type              = "window",
+                    span_start_token_idx    = buf.corpus_token_idxs[wid],   # single token for now
+                    span_end_token_idx      = buf.corpus_token_idxs[wid],
                 )
             )
         return events
@@ -331,6 +350,7 @@ class EmbeddingPipeline:
 
         return out.last_hidden_state.cpu().numpy()
 
+
     def _flush_batch(self, buf, batch):
         hidden_states = self._forward(batch)
 
@@ -348,7 +368,7 @@ class CorpusProcessor:
 
     def process(self, doc_id=None):
         store = ZarrEmbeddingObservationStore(
-            path = str(ZARR_ROOT / "tier1"),
+            path = str(ZARR_PATH),
             dim  = self.pipeline.model.config.hidden_size,
         )
 
@@ -402,18 +422,21 @@ class CorpusProcessor:
         if not events:
             return
 
-        # Explicit mapping for clarity
         (event_ids, concept_ids, doc_ids, corpus_token_idxs,
-        window_starts, window_token_pos, tokens, vector_ids, vecs) = zip(*[
+         window_starts, window_token_pos, tokens, vector_ids, vecs,
+         event_types, span_starts, span_ends) = zip(*[
             (e.event_id,
-            e.concept_id,
-            e.doc_id,
-            e.corpus_token_idx,           # UUID
-            e.window_start,
-            e.window_token_pos,
-            e.token,
-            e.vector_id,
-            e.vec)
+             e.concept_id,
+             e.doc_id,
+             e.corpus_token_idx,
+             e.window_start,
+             e.window_token_pos,
+             e.token,
+             e.vector_id,
+             e.vec,
+             e.event_type,
+             e.span_start_token_idx,
+             e.span_end_token_idx)
             for e in events
         ])
 
@@ -423,15 +446,17 @@ class CorpusProcessor:
             emb_raw             = np.stack(vecs),
             vector_id           = np.asarray(vector_ids, dtype=np.int64),
             doc_id              = np.asarray(doc_ids, dtype="U32"),
-            token_idx           = np.asarray(corpus_token_idxs, dtype=np.int32),  # ← still write to old column name
+            token_idx           = np.asarray(corpus_token_idxs, dtype=np.int32),
             window_id           = np.asarray(window_starts, dtype=np.int32),
             window_token_pos    = np.asarray(window_token_pos, dtype=np.int32),
-            token=np.asarray(tokens, dtype=object),
+            token               = np.asarray(tokens, dtype=object),
+            event_type          = np.asarray(event_types, dtype="U32"),
+            span_start_token_idx= np.asarray(span_starts, dtype=np.int64),
+            span_end_token_idx  = np.asarray(span_ends, dtype=np.int64),
         )
 
-
 def clear_output_dir():
-    path = ZARR_ROOT / "tier1"
+    path = ZARR_PATH
     if path.exists():
         shutil.rmtree(path)
     path.mkdir(parents=True, exist_ok=True)

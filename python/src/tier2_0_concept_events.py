@@ -189,6 +189,9 @@ class ZarrEventLookup:
         "token_idx":        np.int64,
         "window_id":        np.int64,
         "window_token_pos": np.int64,
+        "event_type":       object,          # string
+        "span_start_token_idx": np.int64,
+        "span_end_token_idx":   np.int64,
     }
 
     def __init__(self, root, forms: set[str] | None = None, false_positives: set[str] | None = None):
@@ -224,15 +227,11 @@ class ZarrEventLookup:
 
         logger.info(f"[tier2] events={len(self._pos)}")
 
+
     def _load_store(self, e, store_dir):
         """
         Load events from one Zarr store into the staging columns.
-
-        Reads each dataset as a contiguous numpy array per batch, then
-        applies the forms/false_positives mask with vectorised numpy
-        boolean indexing (np.isin) rather than per-row Python checks.
-        Matching rows are appended to the staging arrays as whole arrays
-        (no per-event dicts are created).
+        Now supports the new event_type and span fields.
         """
         if "event_id" not in e:
             raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
@@ -243,19 +242,26 @@ class ZarrEventLookup:
         for start in range(0, n, BATCH_SIZE):
             end = min(start + BATCH_SIZE, n)
 
-            b_eids = e["event_id"][start:end]
-            b_vids = e["vector_id"][start:end]
-            b_docs = e["doc_id"][start:end]
-            b_toks = e["token"][start:end]
-            b_idxs = e["token_idx"][start:end]
-            b_wins = e["window_id"][start:end]
-            b_embs = e["emb_raw"][start:end]
-            b_wpos = wpos[start:end] if wpos is not None else None
+            # Load all needed arrays
+            b_eids       = e["event_id"][start:end]
+            b_vids       = e["vector_id"][start:end]
+            b_docs       = e["doc_id"][start:end]
+            b_toks       = e["token"][start:end]
+            b_idxs       = e["token_idx"][start:end]
+            b_wins       = e["window_id"][start:end]
+            b_embs       = e["emb_raw"][start:end]
+            b_wpos       = wpos[start:end] if wpos is not None else None
+
+            # NEW fields
+            b_event_type = e["event_type"][start:end] if "event_type" in e else None
+            b_span_start = e["span_start_token_idx"][start:end] if "span_start_token_idx" in e else None
+            b_span_end   = e["span_end_token_idx"][start:end] if "span_end_token_idx" in e else None
 
             b_toks = b_toks.astype(str)
             b_docs = b_docs.astype(str)
             b_toks_lower = np.char.lower(b_toks)
 
+            # Filtering (forms / false_positives)
             if self.forms is not None:
                 keep = np.isin(b_toks_lower, list(self.forms))
             else:
@@ -267,29 +273,52 @@ class ZarrEventLookup:
             if not keep.any():
                 continue
 
-            if b_wpos is not None:
-                wpos_col = np.asarray(b_wpos, dtype=np.int64)[keep]
-            else:
-                wpos_col = np.full(int(keep.sum()), _NO_WPOS, dtype=np.int64)
+            keep_count = int(keep.sum())
 
+            # Existing fields
             self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
             self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
             self._chunks["doc_id"].append(b_docs[keep])
             self._chunks["token"].append(b_toks[keep])
             self._chunks["token_idx"].append(np.asarray(b_idxs, dtype=np.int64)[keep])
             self._chunks["window_id"].append(np.asarray(b_wins, dtype=np.int64)[keep])
+
+            if b_wpos is not None:
+                wpos_col = np.asarray(b_wpos, dtype=np.int64)[keep]
+            else:
+                wpos_col = np.full(keep_count, _NO_WPOS, dtype=np.int64)
             self._chunks["window_token_pos"].append(wpos_col)
 
             self._emb_chunks.append(np.asarray(b_embs, dtype=np.float32)[keep])
 
+            # === NEW fields ===
+            if b_event_type is not None:
+                self._chunks["event_type"].append(b_event_type[keep].astype(str))
+            else:
+                self._chunks["event_type"].append(np.full(keep_count, "window", dtype=object))
+
+            if b_span_start is not None:
+                self._chunks["span_start_token_idx"].append(
+                    np.asarray(b_span_start, dtype=np.int64)[keep]
+                )
+            else:
+                self._chunks["span_start_token_idx"].append(
+                    np.asarray(b_idxs, dtype=np.int64)[keep]
+                )
+
+            if b_span_end is not None:
+                self._chunks["span_end_token_idx"].append(
+                    np.asarray(b_span_end, dtype=np.int64)[keep]
+                )
+            else:
+                self._chunks["span_end_token_idx"].append(
+                    np.asarray(b_idxs, dtype=np.int64)[keep]
+                )
+
+
     def _finalize(self):
         """
-        Concatenate staged per-batch arrays into the final columnar arrays
-        and build the event_id -> row position map.
-
-        If no events were loaded (e.g. an empty corpus or a concept with
-        no matches), all columns are initialised as empty arrays with the
-        correct dtype/shape so downstream code can operate uniformly.
+        Concatenate staged per-batch arrays into final columnar arrays.
         """
         n_total = sum(arr.shape[0] for arr in self._chunks["event_id"])
 
@@ -306,16 +335,14 @@ class ZarrEventLookup:
 
         self.embeddings = np.concatenate(self._emb_chunks, axis=0)
 
-        # event_id -> row position. event_id is globally unique (Tier 1
-        # invariant), so this is a straight bijection; last-write-wins is
-        # not expected to occur but if Tier 1 ever produced a duplicate
-        # this would silently keep the last row, matching prior dict
-        # behaviour (by_event_id[eid] = ... overwrote on duplicates too).
         self._pos = {int(eid): pos for pos, eid in enumerate(self.event_id)}
 
-        # Free staging buffers now that the columnar arrays own the data.
+        # Clean up
         self._chunks = {}
         self._emb_chunks = []
+
+        logger.info(f"[tier2] loaded {n_total:,} events (including clause_complex)")
+
 
     # Row access
 
@@ -333,12 +360,16 @@ class ZarrEventLookup:
         pos = self._pos[int(event_id)]
         return self._row_to_dict(pos)
 
+
     def get_pos(self, event_id: int) -> int:
         """event_id -> row position. Raises KeyError if not present."""
         return self._pos[int(event_id)]
 
+
     def _row_to_dict(self, pos: int) -> dict:
+        """Convert a row position into the legacy dict format + new fields."""
         wpos = int(self.window_token_pos[pos])
+
         return {
             "event_id":         int(self.event_id[pos]),
             "vector_id":        int(self.vector_id[pos]),
@@ -348,12 +379,15 @@ class ZarrEventLookup:
             "window_id":        int(self.window_id[pos]),
             "window_token_pos": None if wpos == _NO_WPOS else wpos,
             "embedding":        self.embeddings[pos],
+            "event_type":       str(self.event_type[pos]),
+            "span_start_token_idx": int(self.span_start_token_idx[pos]),
+            "span_end_token_idx":   int(self.span_end_token_idx[pos]),
         }
 
-    def iter_matching_event_ids(self, forms, false_positives=None):
+
+    def iter_matching_event_ids(self, forms, false_positives=None, event_type=None):
         """
-        Yield event_ids whose token matches `forms` and is not in
-        `false_positives`. Vectorised over the token column.
+        Yield event_ids matching forms (and optionally event_type).
         """
         forms = {f.lower() for f in forms}
         false_positives = {f.lower() for f in (false_positives or [])}
@@ -363,8 +397,14 @@ class ZarrEventLookup:
 
         tokens_lower = np.char.lower(self.token.astype(str))
         mask = np.isin(tokens_lower, list(forms))
+
         if false_positives:
             mask &= ~np.isin(tokens_lower, list(false_positives))
+
+        # NEW: optional event_type filter
+        if event_type is not None:
+            type_mask = (self.event_type == event_type)
+            mask &= type_mask
 
         for eid in self.event_id[mask]:
             yield int(eid)
@@ -416,24 +456,36 @@ def analyse_concept(
     """
     Compute neighbourhood structure for all events matching a concept.
 
-    depth=1 (default): direct FAISS neighbours only. Identical to the
-    original behaviour; all existing call sites are unaffected.
+    Supports both legacy "window" events and new "clause_complex" events.
 
-    depth=2: additionally computes neighbours-of-neighbours. Each depth-1
-    neighbour is used as a query vector for a second FAISS search. Results
-    are fanned out to the original concept query event (event_id always
-    refers to a concept event). via_event_id records which depth-1 event
-    produced the depth-2 result. depth-2 rows exclude: the original query
-    events themselves, any event already present as a depth-1 neighbour of
-    that query event, and false_positive tokens.
+    Parameters
+    ----------
+    depth : int
+        1 = direct FAISS neighbours only (original behaviour)
+        2 = also include neighbours-of-neighbours (depth-2 expansion)
 
-    Record construction (event/neighbour rows) reads directly from the
-    columnar arrays in `lookup` via row positions. The returned
-    "events"/"neighbours" entries are still plain dicts (one per query
-    event and one per surviving neighbour), since that shape is what
-    write_sqlite consumes. pub_year is looked up once per query event.
+    Returns
+    -------
+    dict with keys:
+        - concept, forms, n_events
+        - aggregate (top tokens/docs/windows)
+        - events: list of dicts containing:
+            * event metadata + new fields (event_type, span_start, span_end)
+            * neighbours: list of neighbour dicts (same structure)
     """
-    # CONCEPT_SET entry union with any args supplied to this routine
+    # Column references from lookup (struct-of-arrays)
+    L_event_id      = lookup.event_id
+    L_vector_id     = lookup.vector_id
+    L_doc_id        = lookup.doc_id
+    L_token         = lookup.token
+    L_token_idx     = lookup.token_idx
+    L_window_id     = lookup.window_id
+    L_wpos          = lookup.window_token_pos
+    L_event_type    = lookup.event_type
+    L_span_start    = lookup.span_start_token_idx
+    L_span_end      = lookup.span_end_token_idx
+
+    # CONCEPT_SET union with any args supplied to this routine
     forms           = set(concept["forms"])
     forms           = {
         f.lower()
@@ -442,6 +494,7 @@ def analyse_concept(
             + list(concept.get("forms", []))
         )
     }
+
     false_positives = {
         f.lower()
         for f in (
@@ -449,6 +502,7 @@ def analyse_concept(
             + list(concept.get("false_positives", []))
         )
     }
+
     event_ids = list(lookup.iter_matching_event_ids(forms, false_positives))
 
     logger.info(f"[tier2] concept={concept_name}")
@@ -484,19 +538,83 @@ def analyse_concept(
     window_counter = Counter()
     results        = []
 
-    L_event_id  = lookup.event_id
-    L_vector_id = lookup.vector_id
-    L_doc_id    = lookup.doc_id
-    L_token     = lookup.token
-    L_token_idx = lookup.token_idx
-    L_window_id = lookup.window_id
-    L_wpos      = lookup.window_token_pos
-
     # Set of original query event_ids — used to exclude self-matches at
     # depth 2 without repeated list membership tests.
     query_event_id_set = set(event_ids)
 
     for i, eid in enumerate(event_ids):
+        q_pos = int(event_pos[i])
+        q_doc_id = str(L_doc_id[q_pos])
+        q_pub_year = doc_meta.get(q_doc_id, {}).get("pub_year")
+
+        q_meta  = doc_meta.get(q_doc_id, {})
+        q_geom  = q_meta.get("geom")
+        q_lat   = q_meta.get("lat")
+        q_lng   = q_meta.get("lng")
+        q_wpos  = int(L_wpos[q_pos])
+
+        neighbours = []
+
+        # Depth 1 neighbours
+        for nid, score in zip(all_neigh_ids[i], all_scores[i]):
+            nid_int = int(nid)
+            if nid_int == -1 or nid_int == eid:
+                continue
+            n_pos = lookup.get_pos(nid_int)
+            n_token = str(L_token[n_pos])
+            if n_token.lower() in false_positives:
+                continue
+
+            n_doc_id = str(L_doc_id[n_pos])
+            n_geom = doc_meta.get(n_doc_id, {}).get("geom")
+            n_lat = doc_meta.get(n_doc_id, {}).get("lat")
+            n_lng = doc_meta.get(n_doc_id, {}).get("lng")
+            n_window_id = int(L_window_id[n_pos])
+            n_wpos = int(L_wpos[n_pos])
+
+            token_counter[n_token] += 1
+            doc_counter[n_doc_id] += 1
+            window_counter[(n_doc_id, n_window_id)] += 1
+
+            neighbours.append({
+                "event_id":         int(L_event_id[n_pos]),
+                "vector_id":        int(L_vector_id[n_pos]),
+                "token":            n_token,
+                "doc_id":           n_doc_id,
+                "pub_year":         doc_meta.get(n_doc_id, {}).get("pub_year"),
+                "token_idx":        int(L_token_idx[n_pos]),
+                "window_id":        n_window_id,
+                "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
+                "score":            float(score),
+                "depth":            1,
+                "geom":             n_geom,
+                "lat":              n_lat,
+                "lng":              n_lng,
+                "via_event_id":     None,
+                "event_type":       str(L_event_type[n_pos]),
+                "span_start":       int(L_span_start[n_pos]),
+                "span_end":         int(L_span_end[n_pos]),
+            })
+
+        # Main query event
+        results.append({
+            "event_id":         int(L_event_id[q_pos]),
+            "vector_id":        int(L_vector_id[q_pos]),
+            "token":            str(L_token[q_pos]),
+            "doc_id":           q_doc_id,
+            "pub_year":         q_pub_year,
+            "token_idx":        int(L_token_idx[q_pos]),
+            "window_id":        int(L_window_id[q_pos]),
+            "window_token_pos": None if q_wpos == _NO_WPOS else q_wpos,
+            "geom":             q_geom,
+            "lat":              q_lat,
+            "lng":              q_lng,
+            "event_type":       str(L_event_type[q_pos]),
+            "span_start":       int(L_span_start[q_pos]),
+            "span_end":         int(L_span_end[q_pos]),
+            "neighbours":       neighbours,
+        })
+
         q_pos = int(event_pos[i])
         q_doc_id = str(L_doc_id[q_pos])
         q_pub_year = doc_meta.get(q_doc_id, {}).get("pub_year")
@@ -541,6 +659,9 @@ def analyse_concept(
                 "lat":              n_lat,
                 "lng":              n_lng,
                 "via_event_id":     None,
+                "event_type":       str(L_event_type[n_pos]),
+                "span_start":       int(L_span_start[n_pos]),
+                "span_end":         int(L_span_end[n_pos]),
             })
 
         q_wpos = int(L_wpos[q_pos])
@@ -557,12 +678,13 @@ def analyse_concept(
             "geom":             q_geom,
             "lat":              q_lat,
             "lng":              q_lng,
+            "event_type":       str(L_event_type[q_pos]),
+            "span_start":       int(L_span_start[q_pos]),
+            "span_end":         int(L_span_end[q_pos]),
             "neighbours":       neighbours,
         })
 
-    # ------------------------------------------------------------------
     # Depth-2: neighbours-of-neighbours
-    # ------------------------------------------------------------------
     if depth >= 2:
         # Collect the unique set of depth-1 neighbour event_ids across all
         # query events, excluding the original query events themselves.
@@ -647,6 +769,9 @@ def analyse_concept(
                             "score":            float(score),
                             "depth":            2,
                             "via_event_id":     via_eid,
+                            "event_type":       str(L_event_type[n_pos]),
+                            "span_start":       int(L_span_start[n_pos]),
+                            "span_end":         int(L_span_end[n_pos]),
                         }
 
                         # Fan out to every query event that had via_eid as
@@ -681,13 +806,9 @@ CREATE TABLE IF NOT EXISTS concept_forms (
     concept           TEXT NOT NULL,
     form              TEXT NOT NULL,
     is_false_positive INTEGER DEFAULT 0,
-
     PRIMARY KEY (concept, form),
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
-
-CREATE INDEX IF NOT EXISTS idx_concept_forms_concept ON concept_forms(concept);
-CREATE INDEX IF NOT EXISTS idx_concept_forms_form    ON concept_forms(form);
 
 CREATE TABLE IF NOT EXISTS events (
     event_id         INTEGER PRIMARY KEY,
@@ -702,12 +823,16 @@ CREATE TABLE IF NOT EXISTS events (
     geom             TEXT,
     lat              NUMBER,
     lng              NUMBER,
-    nx          REAL,
-    ny          REAL,
-    gnx         REAL,
-    gny         REAL,
+    nx               REAL,
+    ny               REAL,
+    gnx              REAL,
+    gny              REAL,
     cluster_id       INTEGER,
     cluster_label    TEXT,
+    -- NEW fields
+    event_type       TEXT,
+    span_start       INTEGER,
+    span_end         INTEGER,
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
@@ -727,12 +852,16 @@ CREATE TABLE IF NOT EXISTS neighbours (
     geom                TEXT,
     lat                 NUMBER,
     lng                 NUMBER,
-    nx             REAL,
-    ny             REAL,
-    gnx            REAL,
-    gny            REAL,
+    nx                  REAL,
+    ny                  REAL,
+    gnx                 REAL,
+    gny                 REAL,
     cluster_id          INTEGER,
     cluster_label       TEXT,
+    -- NEW fields
+    event_type          TEXT,
+    span_start          INTEGER,
+    span_end            INTEGER,
     PRIMARY KEY (event_id, neighbour_event_id, depth),
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
@@ -777,6 +906,9 @@ CREATE INDEX IF NOT EXISTS idx_events_token         ON events(token);
 CREATE INDEX IF NOT EXISTS idx_events_event_id      ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_events_doc_id        ON events(doc_id);
 CREATE INDEX IF NOT EXISTS idx_events_concept_year  ON events(concept, pub_year);
+CREATE INDEX IF NOT EXISTS idx_events_event_type    ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_span_start    ON events(span_start);
+CREATE INDEX IF NOT EXISTS idx_events_span_end      ON events(span_end);
 CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_token     ON neighbours(token);
 CREATE INDEX IF NOT EXISTS idx_neighbours_depth     ON neighbours(event_id, depth);
@@ -796,11 +928,11 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
 """
 
 _SCHEMA_CLEAR = """
-DROP TABLE IF EXISTS concept_cluster_info;
-DROP TABLE IF EXISTS concept_aggregate;
-DROP TABLE IF EXISTS neighbours;
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS concepts;
+    DROP TABLE IF EXISTS concept_cluster_info;
+    DROP TABLE IF EXISTS concept_aggregate;
+    DROP TABLE IF EXISTS neighbours;
+    DROP TABLE IF EXISTS events;
+    DROP TABLE IF EXISTS concepts;
 """
 
 _DELETE_CONCEPT = [
@@ -860,8 +992,7 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
 
         con.execute("BEGIN")
 
-        # Remove existing rows for this concept in dependency order
-        # before rewriting, so a rerun of a single concept is idempotent.
+        # Remove existing rows for this concept
         for stmt in _DELETE_CONCEPT:
             con.execute(stmt, (concept_name,))
 
@@ -897,10 +1028,13 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                 (concept_name, form),
             )
 
-        con.executemany( """INSERT OR IGNORE INTO events
+        con.executemany( """
+            INSERT OR IGNORE INTO events
             (event_id, concept, vector_id, token, doc_id, pub_year,
-                token_idx, window_id, window_token_pos, geom, lat, lng)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            token_idx, window_id, window_token_pos, geom, lat, lng,
+            event_type, span_start, span_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             [
                 (
                     e["event_id"],
@@ -912,26 +1046,31 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                     e["token_idx"],
                     e["window_id"],
                     e["window_token_pos"],
-                    e["geom"],
-                    e["lat"],
-                    e["lng"]
+                    e.get("geom"),
+                    e.get("lat"),
+                    e.get("lng"),
+                    e.get("event_type"),
+                    e.get("span_start"),
+                    e.get("span_end"),
                 )
                 for e in data["events"]
             ],
         )
 
-        con.executemany(
-            """INSERT OR IGNORE INTO neighbours
+        # neighbours
+        con.executemany("""
+            INSERT OR IGNORE INTO neighbours
             (event_id, neighbour_event_id, depth, via_event_id, vector_id,
-                token, doc_id, pub_year, token_idx, window_id, window_token_pos,
-                score, geom, lat, lng)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            token, doc_id, pub_year, token_idx, window_id, window_token_pos,
+            score, geom, lat, lng, event_type, span_start, span_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
             [
                 (
                     e["event_id"],
                     n["event_id"],
                     n.get("depth", 1),
-                    n["via_event_id"],
+                    n.get("via_event_id"),
                     n["vector_id"],
                     n["token"],
                     n["doc_id"],
@@ -940,9 +1079,12 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                     n["window_id"],
                     n["window_token_pos"],
                     n["score"],
-                    n["geom"],
-                    n["lat"],
-                    n["lng"],
+                    n.get("geom"),
+                    n.get("lat"),
+                    n.get("lng"),
+                    n.get("event_type"),
+                    n.get("span_start"),
+                    n.get("span_end"),
                 )
                 for e in data["events"]
                 for n in e["neighbours"]

@@ -250,7 +250,7 @@ export default function ConceptClusters() {
                                 <div class="large-height scroll surface">
 
                                     <table class="stripes no-border scroll max">
-                                        <caption>Top tokens</caption>
+                                        <caption>Top Tokens</caption>
                                         <thead class="fixed">
                                             <tr><th>Rank</th><th>Token</th><th>Count</th></tr>
                                         </thead>
@@ -300,6 +300,7 @@ export default function ConceptClusters() {
                                                     <DocRow
                                                         rank={i() + 1}
                                                         doc_id={doc_id}
+                                                        pub_year={ }
                                                         count={count}
                                                         events={eventsByDoc().get(doc_id) ?? []}
                                                     />

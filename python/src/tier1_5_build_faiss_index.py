@@ -99,6 +99,14 @@ def build_index(
             obs_ids = obs_ids[new_mask]
             skipped += (~new_mask).sum()
 
+        # batch deduplication
+        if len(obs_ids) > 0:
+            obs_ids = np.asarray(obs_ids)
+            _, unique_idx = np.unique(obs_ids, return_index=True)
+            unique_idx = np.sort(unique_idx)
+            vecs = vecs[unique_idx]
+            obs_ids = obs_ids[unique_idx]
+
         try:
             index.add(vecs, obs_ids)
             total += len(obs_ids)
@@ -129,15 +137,13 @@ def main():
     if args.clear or not FAISS_TIER1_INDEX.is_file():
         if args.clear:
             logger.info("[faiss-build] clearing existing FAISS index")
-            EeboFaissIndex.wipe_faiss_index(FAISS_INDEX_DIR)
-        else:
-            logger.info("[faiss-build] no existing index found — building from scratch")
+            EeboFaissIndex.wipe_faiss_index(FAISS_TIER1_INDEX.parent)
 
-        logger.info("[faiss-build] building FAISS observation index")
-        index = build_index(stream)
+        logger.info("[faiss-build] building FAISS observation index from scratch")
+        index = build_index(stream)          # always fresh when --clear or no index
     else:
         logger.info("[faiss-build] incremental mode — loading existing index")
-        index          = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+        index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
         already_indexed = index.ids()
         logger.info(f"[faiss-build] existing index ntotal={len(already_indexed)}")
         index = build_index(stream, index=index, already_indexed=already_indexed)
@@ -145,7 +151,6 @@ def main():
     FAISS_TIER1_INDEX.parent.mkdir(parents=True, exist_ok=True)
     index.save(FAISS_TIER1_INDEX)
     logger.info(f"[faiss-build] done -> {FAISS_TIER1_INDEX}")
-
 
 if __name__ == "__main__":
     main()

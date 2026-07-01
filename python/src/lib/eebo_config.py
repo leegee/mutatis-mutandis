@@ -294,7 +294,8 @@ CONCEPT_SETS: CanonicalRules = {
         "false_positives": set(),
     },
     "ANABAPTIST": {
-        "anabaptist"
+        "forms": {"anabaptist"},
+        "false_positives": set(),
     },
     "ENTHUSIASM": {
         "forms": {
