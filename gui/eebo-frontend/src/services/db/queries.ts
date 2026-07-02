@@ -92,7 +92,7 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
 
   let type = 'event';
   const eventRows = await execRows(
-    `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng, author, title
+    `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
     FROM events WHERE event_id = ? LIMIT 1`,
     [id],
   );
@@ -103,7 +103,7 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   if (!row) {
     type = 'neighbour';
     const neighbourRow = await execRows(
-      `SELECT event_id, score, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng, author, title
+      `SELECT event_id, score, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
        FROM neighbours WHERE neighbour_event_id = ? LIMIT 1`,
       [id],
     );
@@ -126,8 +126,6 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
     window_token_pos: row[8] != null ? Number(row[8]) : null,
     lat: row[9] != null ? Number(row[9]) : null,
     lng: row[10] != null ? Number(row[10]) : null,
-    author: row[11] != null ? String(row[11]) : null,
-    title: row[12] != null ? String(row[12]) : null,
   } as SqliteNeighbour;
 }
 
@@ -149,7 +147,7 @@ export async function queryEventsByIds(
     const placeholders = chunk.map(() => "?").join(",");
 
     const rows = await execRows(
-      `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng, author, title
+      `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos, lat, lng
        FROM events
        WHERE event_id IN (${ placeholders })`,
       chunk,
@@ -168,8 +166,6 @@ export async function queryEventsByIds(
         window_token_pos: row[8] != null ? Number(row[8]) : null,
         lat: row[9] != null ? Number(row[9]) : null,
         lng: row[10] != null ? Number(row[10]) : null,
-        author: row[11] != null ? String(row[11]) : null,
-        title: row[12] != null ? String(row[12]) : null,
       } as SqliteEvent;
 
       result.set(event.event_id, event);

@@ -829,7 +829,6 @@ CREATE TABLE IF NOT EXISTS events (
     gny              REAL,
     cluster_id       INTEGER,
     cluster_label    TEXT,
-    -- NEW fields
     event_type       TEXT,
     span_start       INTEGER,
     span_end         INTEGER,
@@ -858,7 +857,6 @@ CREATE TABLE IF NOT EXISTS neighbours (
     gny                 REAL,
     cluster_id          INTEGER,
     cluster_label       TEXT,
-    -- NEW fields
     event_type          TEXT,
     span_start          INTEGER,
     span_end            INTEGER,
