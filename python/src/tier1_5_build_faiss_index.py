@@ -37,9 +37,7 @@ Key invariants
 
 1. Tier 1 observation stores are the sole source of truth for embeddings.
 
-2. FAISS stores only:
-      - L2-normalised embedding vectors
-      - stable observation IDs
+2. FAISS stores only L2-normalised embedding vectors and stable observation IDs: it is intended as simply a retrieval layer and not a semantic model or clustering system.
 
 3. vector_id is lexical identity, NOT embedding identity.
 
