@@ -46,6 +46,11 @@ Key invariants
 5. No full-corpus materialisation occurs during index construction.
 
 6. FAISS geometry operates over contextual observations, not corpus events.
+
+WIP
+---
+Now builds FAISS using the ensemble of multi-window embeddings.
+
 """
 
 from __future__ import annotations
@@ -68,24 +73,29 @@ def build_index(
     already_indexed: set[int] | None = None,
 ) -> EeboFaissIndex:
     """
-    Build or incrementally update a FAISS index over Tier 1 contextual
-    observations.
-
-    If index and already_indexed are provided, only event_ids not already
-    present are added. Otherwise a fresh index is constructed.
+    Build or incrementally update FAISS index using multi-window ensemble embeddings.
     """
-    total     = 0
-    skipped   = 0
+    total = 0
+    skipped = 0
     incremental = already_indexed is not None
 
-    logger.info("[faiss-build] streaming Tier1 observation store Zarr")
+    logger.info("[faiss-build] streaming Tier1 multi-scale embeddings")
 
-    for vecs, obs_ids in stream.iter_embeddings(batch_size=BATCH_SIZE):
-        if vecs is None or len(vecs) == 0:
+    for emb_local, emb_medium, emb_broad, obs_ids in stream.iter_multi_scale_embeddings(
+        batch_size=BATCH_SIZE
+    ):
+        if len(obs_ids) == 0:
             continue
 
+        # Compute ensemble embedding (weighted average)
+        ensemble = (
+            0.25 * emb_local +
+            0.50 * emb_medium +
+            0.25 * emb_broad
+        )
+
         if index is None:
-            dim   = vecs.shape[1]
+            dim = ensemble.shape[1]
             index = EeboFaissIndex(dim=dim, exact=True)
 
         if incremental:
@@ -93,21 +103,16 @@ def build_index(
             if not new_mask.any():
                 skipped += len(obs_ids)
                 continue
-            vecs    = vecs[new_mask]
+
+            ensemble = ensemble[new_mask]
             obs_ids = obs_ids[new_mask]
             skipped += (~new_mask).sum()
 
-        # batch deduplication
-        if len(obs_ids) > 0:
-            obs_ids = np.asarray(obs_ids)
-            _, unique_idx = np.unique(obs_ids, return_index=True)
-            unique_idx = np.sort(unique_idx)
-            vecs = vecs[unique_idx]
-            obs_ids = obs_ids[unique_idx]
-
         try:
-            index.add(vecs, obs_ids)
+            index.add(ensemble, obs_ids)
             total += len(obs_ids)
+            if total % 100_000 == 0:
+                logger.info(f"[faiss-build] indexed {total:,} events so far...")
         except Exception as e:
             logger.error(f"[faiss-build] add failed: {e}", exc_info=True)
             raise
@@ -115,8 +120,7 @@ def build_index(
     if index is None:
         raise RuntimeError("No embeddings found in Tier1 observation store")
 
-    logger.info(f"[faiss-build] added={total} skipped={skipped}")
-
+    logger.info(f"[faiss-build] finished - added={total:,} skipped={skipped:,}")
     return index
 
 

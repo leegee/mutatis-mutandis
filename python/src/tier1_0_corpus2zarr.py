@@ -79,6 +79,22 @@ Risks
 Subword tokenization alignment: The code relies on word_ids from the tokenizer correctly mapping back to the filtered buffer indices. MacBERTh (BERT-based) should be stable here, but if you ever change tokenizers or preprocessing, this is a breakage point.
 
 Overlapping windows + same token: Each contextual occurrence gets its own event_id (correct), but concept_id stays the same (also correct). Confirm downstream tiers (Tier 2+) expect this duality.
+
+Updates WIP
+-----------
+This module now generates multiple contextual embeddings per token occurrence
+using different window sizes to capture semantic meaning at multiple scales:
+
+- local (384 tokens):  fine-grained syntactic and immediate context
+- medium (512 tokens): standard paragraph-level context (original default)
+- broad (1024 tokens):  larger discourse / argumentative context
+
+Each event stores three separate embedding vectors. Downstream tiers can
+use them individually or via an ensemble (weighted average or concatenation).
+
+This design significantly improves representation of abstract historical
+concepts (liberty, fanaticism, sedition, etc.) whose meaning often depends
+on broader rhetorical context.
 """
 
 from __future__ import annotations
@@ -86,6 +102,7 @@ from __future__ import annotations
 import argparse
 import shutil
 from dataclasses import dataclass
+from collections import defaultdict
 
 import numpy as np
 import torch
@@ -99,8 +116,12 @@ from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 
 
-WINDOW_SIZE = 512
-STRIDE = WINDOW_SIZE // 2
+WINDOW_CONFIGS = [
+    {"name": "local",  "size": 256,  "stride": 128},   # finer grain
+    {"name": "medium", "size": 512,  "stride": 256},   # original
+    {"name": "broad",  "size": 512,  "stride": 256},   # same size as medium but different stride for more overlap
+]
+
 
 STOPWORDS = {
     "the", "a", "an",
@@ -132,19 +153,22 @@ def is_content_token(token: str) -> bool:
 
 @dataclass(slots=True)
 class Event:
+    """
+    Represents one contextual embedding observation at a specific scale.
+
+    Each token occurrence now generates multiple events (one per window config).
+    """
     event_id: np.int64
     concept_id: np.int64
     doc_id: str
-    corpus_token_idx: int          # renamed / primary source of truth
+    corpus_token_idx: int          # primary corpus position
     window_start: int
     window_start_token_idx: int
     window_token_pos: int
     token: str
     vector_id: int
     vec: np.ndarray
-    event_type: str = "window"
-    span_start_token_idx: int = -1
-    span_end_token_idx: int = -1
+    config_name: str               # "local", "medium", or "broad"
 
     @property
     def token_idx(self):
@@ -161,38 +185,31 @@ class Event:
         token: str,
         vector_id: int,
         vec: np.ndarray,
-        event_type: str = "window",
-        span_start_token_idx: int | None = None,
-        span_end_token_idx: int | None = None,
+        config_name: str = "medium",   # NEW
     ) -> Event:
+        """
+        Factory method to create an Event with proper hashing.
+        """
         concept_id = stable_hash(f"{doc_id}:{corpus_token_idx}")
 
-        # start = span_start_token_idx if span_start_token_idx is not None else corpus_token_idx
-        # end = span_end_token_idx if span_end_token_idx is not None else corpus_token_idx
-        # NOT ENOUGH event_id   = stable_hash( f"{doc_id}:{event_type}:{start}:{end}" )
-
-        start = span_start_token_idx if span_start_token_idx is not None else corpus_token_idx
-        end   = span_end_token_idx   if span_end_token_idx   is not None else corpus_token_idx
-
         event_id = stable_hash(
-            f"{doc_id}:{event_type}:{corpus_token_idx}:{window_start_token_idx}:{window_token_pos}:{start}:{end}"
+            f"{doc_id}:{corpus_token_idx}:{window_start_token_idx}:{window_token_pos}:{config_name}"
         )
 
         return Event(
-            event_id                = event_id,
-            concept_id              = concept_id,
-            doc_id                  = doc_id,
-            corpus_token_idx        = corpus_token_idx,   # ← now passed correctly
-            window_start            = window_start,
-            window_start_token_idx  = window_start_token_idx,
-            window_token_pos        = window_token_pos,
-            token                   = token,
-            vector_id               = vector_id,
-            vec                     = vec.astype(np.float32),
-            event_type              = event_type,
-            span_start_token_idx    = start,
-            span_end_token_idx      = end,
+            event_id=event_id,
+            concept_id=concept_id,
+            doc_id=doc_id,
+            corpus_token_idx=corpus_token_idx,
+            window_start=window_start,
+            window_start_token_idx=window_start_token_idx,
+            window_token_pos=window_token_pos,
+            token=token,
+            vector_id=vector_id,
+            vec=vec.astype(np.float32),
+            config_name=config_name,
         )
+
 
 @dataclass
 class DocBuffer:
@@ -213,33 +230,157 @@ class DocBuffer:
 
 
 class EmbeddingPipeline:
+    """
+    Produces multi-scale contextual embeddings using MacBERTh.
+    """
     def __init__(self, tokenizer, model, device):
         self.tokenizer = tokenizer
         self.model = model
         self.device = device
+        self.configs = WINDOW_CONFIGS
+
+    # def embed_doc(self, buf: DocBuffer) -> list[Event]:
+    #     input_ids, attention_mask, word_ids = self._encode(buf.tokens)
+
+    #     events = []
+    #     batch = []
+
+    #     for window_start, ids, mask, wids in self._iter_windows(
+    #         input_ids, attention_mask, word_ids
+    #     ):
+    #         batch.append({
+    #             "input_ids": ids,
+    #             "mask": mask,
+    #             "word_ids": wids,
+    #             "window_start": window_start,
+    #         })
+
+    #         if len(batch) >= EMBED_BATCH_SIZE:
+    #             events.extend(self._flush_batch(buf, batch))
+    #             batch.clear()
+
+    #     if batch:
+    #         events.extend(self._flush_batch(buf, batch))
+    #     return events
 
     def embed_doc(self, buf: DocBuffer) -> list[Event]:
+        """
+        Generate multi-scale contextual embeddings for the document.
+        Runs separate windowing passes for each context size.
+        """
         input_ids, attention_mask, word_ids = self._encode(buf.tokens)
+        all_events = []
+
+        for config in self.configs:
+            logger.debug(f"Processing {config['name']} windows (size={config['size']}) for doc {buf.doc_id}")
+
+            for window_start, ids, mask, wids in self._iter_windows_config(
+                input_ids, attention_mask, word_ids, config["size"], config["stride"]
+            ):
+                hidden = self._forward_single_window(ids, mask)
+
+                events = self._extract_events(
+                    buf,
+                    {"window_start": window_start, "word_ids": wids},  # item dict
+                    hidden,
+                    config["name"]
+                )
+                all_events.extend(events)
+
+        return all_events
+
+    @staticmethod
+    def _iter_windows_config(input_ids, attention_mask, word_ids, window_size, stride):
+        """Yield windows for a specific size/stride combination."""
+        n = len(input_ids)
+        if n == 0:
+            return
+
+        valid_word_ids = [wid for wid in word_ids if wid is not None and wid >= 0]
+        n_words = max(valid_word_ids) + 1 if valid_word_ids else 0
+
+        start_word = 0
+        while start_word < n_words:
+            try:
+                encoded_start = next(i for i, wid in enumerate(word_ids) if wid == start_word)
+            except StopIteration:
+                break
+
+            encoded_end = min(encoded_start + window_size, n)
+
+            yield (
+                start_word,
+                input_ids[encoded_start:encoded_end],
+                attention_mask[encoded_start:encoded_end],
+                word_ids[encoded_start:encoded_end]
+            )
+
+            if encoded_end == n:
+                break
+            start_word += stride
+
+
+    def _forward_single_window(self, ids, mask):
+        """Forward pass for one window."""
+        input_ids = torch.tensor([ids], dtype=torch.long).to(self.device)
+        attention_mask = torch.tensor([mask], dtype=torch.long).to(self.device)
+
+        with torch.inference_mode():
+            out = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                return_dict=True
+            )
+
+        return out.last_hidden_state[0].cpu().numpy()
+
+
+    @staticmethod
+    def _extract_events(
+        buf: DocBuffer,
+        item: dict,
+        hidden: np.ndarray,
+        config_name: str
+    ) -> list[Event]:
+        """
+        Extract Event objects for all tokens in this window for a given config scale.
+
+        Args:
+            buf: Document buffer containing tokens and metadata
+            item: Window item with window_start, word_ids, etc.
+            hidden: Hidden states from the model for this window (numpy array)
+            config_name: Which context scale was used ("local", "medium", "broad")
+        """
+        window_start = item["window_start"]
+
+        # Robust guard
+        if window_start >= len(buf.corpus_token_idxs):
+            logger.warning(
+                f"Window start {window_start} out of range "
+                f"(buffer has {len(buf.corpus_token_idxs)} tokens) for doc {buf.doc_id}"
+            )
+            return []
+
+        window_start_token_idx = buf.corpus_token_idxs[window_start]
 
         events = []
-        batch = []
+        for i, wid in enumerate(item["word_ids"]):
+            if wid is None or wid < 0 or wid >= len(buf.corpus_token_idxs):
+                continue
 
-        for window_start, ids, mask, wids in self._iter_windows(
-            input_ids, attention_mask, word_ids
-        ):
-            batch.append({
-                "input_ids": ids,
-                "mask": mask,
-                "word_ids": wids,
-                "window_start": window_start,
-            })
-
-            if len(batch) >= EMBED_BATCH_SIZE:
-                events.extend(self._flush_batch(buf, batch))
-                batch.clear()
-
-        if batch:
-            events.extend(self._flush_batch(buf, batch))
+            events.append(
+                Event.make(
+                    doc_id=buf.doc_id,
+                    corpus_token_idx=buf.corpus_token_idxs[wid],
+                    window_start_token_idx=window_start_token_idx,
+                    window_start=window_start,
+                    window_token_pos=i,
+                    token=buf.tokens[wid],
+                    vector_id=buf.vector_ids[wid],
+                    vec=hidden[i],
+                    config_name=config_name,          # ← Critical
+                )
+            )
         return events
 
     def _encode(self, tokens):
@@ -293,42 +434,6 @@ class EmbeddingPipeline:
             if encoded_end == n:
                 break
             start_word += STRIDE
-
-    @staticmethod
-    def _extract_events(buf: DocBuffer, item: dict, hidden: np.ndarray) -> list[Event]:
-        window_start = item["window_start"]
-
-        # Robust guard
-        if window_start >= len(buf.corpus_token_idxs):
-            logger.warning(
-                f"Window start {window_start} out of range "
-                f"(buffer has {len(buf.corpus_token_idxs)} tokens) for doc {buf.doc_id}"
-            )
-            return []
-
-        window_start_token_idx = buf.corpus_token_idxs[window_start]
-
-        events = []
-        for i, wid in enumerate(item["word_ids"]):
-            if wid is None or wid < 0 or wid >= len(buf.corpus_token_idxs):
-                continue
-
-            events.append(
-                Event.make(
-                    doc_id                  = buf.doc_id,
-                    corpus_token_idx        = buf.corpus_token_idxs[wid],
-                    window_start_token_idx  = window_start_token_idx,
-                    window_start            = window_start,
-                    window_token_pos        = i,
-                    token                   = buf.tokens[wid],
-                    vector_id               = buf.vector_ids[wid],
-                    vec                     = hidden[i],
-                    event_type              = "window",
-                    span_start_token_idx    = buf.corpus_token_idxs[wid],   # single token for now
-                    span_end_token_idx      = buf.corpus_token_idxs[wid],
-                )
-            )
-        return events
 
 
     def _forward(self, batch):
@@ -416,44 +521,76 @@ class CorpusProcessor:
         if buf and buf.doc_id not in already_processed:
             self._flush(buf, store)
 
-
+    #
     def _flush(self, buf, store):
-        events = self.pipeline.embed_doc(buf)
-        if not events:
+        """Generate multi-scale embeddings and append to store."""
+        raw_events = self.pipeline.embed_doc(buf)
+        if not raw_events:
             return
 
-        (event_ids, concept_ids, doc_ids, corpus_token_idxs,
-         window_starts, window_token_pos, tokens, vector_ids, vecs,
-         event_types, span_starts, span_ends) = zip(*[
-            (e.event_id,
-             e.concept_id,
-             e.doc_id,
-             e.corpus_token_idx,
-             e.window_start,
-             e.window_token_pos,
-             e.token,
-             e.vector_id,
-             e.vec,
-             e.event_type,
-             e.span_start_token_idx,
-             e.span_end_token_idx)
-            for e in events
-        ])
+        from collections import defaultdict
+        events_by_token = defaultdict(dict)   # key -> config_name -> event
+
+        for e in raw_events:
+            key = (e.corpus_token_idx, e.window_token_pos)
+            events_by_token[key][e.config_name] = e
+
+        # Build aligned arrays
+        event_ids = []
+        concept_ids = []
+        emb_local = []
+        emb_medium = []
+        emb_broad = []
+        vector_ids = []
+        doc_ids = []
+        token_idxs = []
+        tokens = []
+        window_ids = []
+        window_token_poss = []
+
+        for key, config_dict in events_by_token.items():
+            if len(config_dict) < 2:   # at least 2 scales
+                continue
+
+            # Use medium if available, else any
+            canonical = config_dict.get("medium") or list(config_dict.values())[0]
+
+            event_ids.append(canonical.event_id)
+            concept_ids.append(canonical.concept_id)
+
+            # Get embeddings with fallback to medium if missing
+            emb_local.append(config_dict.get("local", canonical).vec)
+            emb_medium.append(config_dict.get("medium", canonical).vec)
+            emb_broad.append(config_dict.get("broad", canonical).vec)
+
+            vector_ids.append(canonical.vector_id)
+            doc_ids.append(canonical.doc_id)
+            token_idxs.append(canonical.corpus_token_idx)
+            tokens.append(canonical.token)
+            window_ids.append(canonical.window_start)
+            window_token_poss.append(canonical.window_token_pos)
+
+        if not event_ids:
+            logger.warning(f"No valid multi-scale events for doc {buf.doc_id}")
+            return
+
+        logger.info(f"Doc {buf.doc_id}: {len(event_ids):,} tokens with multi-scale embeddings")
 
         store.append_events(
-            event_id            = np.asarray(event_ids, dtype=np.int64),
-            concept_id          = np.asarray(concept_ids, dtype=np.int64),
-            emb_raw             = np.stack(vecs),
-            vector_id           = np.asarray(vector_ids, dtype=np.int64),
-            doc_id              = np.asarray(doc_ids, dtype="U32"),
-            token_idx           = np.asarray(corpus_token_idxs, dtype=np.int32),
-            window_id           = np.asarray(window_starts, dtype=np.int32),
-            window_token_pos    = np.asarray(window_token_pos, dtype=np.int32),
-            token               = np.asarray(tokens, dtype=object),
-            event_type          = np.asarray(event_types, dtype="U32"),
-            span_start_token_idx= np.asarray(span_starts, dtype=np.int64),
-            span_end_token_idx  = np.asarray(span_ends, dtype=np.int64),
+            event_id=np.asarray(event_ids, dtype=np.int64),
+            concept_id=np.asarray(concept_ids, dtype=np.int64),
+            emb_local=np.stack(emb_local),
+            emb_medium=np.stack(emb_medium),
+            emb_broad=np.stack(emb_broad),
+            vector_id=np.asarray(vector_ids, dtype=np.int64),
+            doc_id=np.asarray(doc_ids, dtype="U32"),
+            token_idx=np.asarray(token_idxs, dtype=np.int64),
+            token=np.asarray(tokens, dtype=object),
+            window_id=np.asarray(window_ids, dtype=np.int64),
+            window_token_pos=np.asarray(window_token_poss, dtype=np.int32),
         )
+
+
 
 def clear_output_dir():
     path = ZARR_PATH

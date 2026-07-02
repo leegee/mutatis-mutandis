@@ -42,23 +42,45 @@ class ZarrEventStream:
         self._token_by_id = None
         self._doc_by_id = None
 
+
+    def iter_multi_scale_embeddings(self, batch_size: int = 8192):
+        """
+        Yields tuples of (emb_local, emb_medium, emb_broad, obs_ids)
+        """
+        for store_dir in store_dirs(self.root):
+            g = zarr.open_group(str(store_dir), mode="r")
+            group = g["events"]
+
+            eids = group["event_id"]
+            emb_l = group["emb_local"]
+            emb_m = group["emb_medium"]
+            emb_b = group["emb_broad"]
+
+            n = eids.shape[0]
+
+            for start in range(0, n, batch_size):
+                end = min(start + batch_size, n)
+
+                yield (
+                    np.asarray(emb_l[start:end], dtype=np.float32),
+                    np.asarray(emb_m[start:end], dtype=np.float32),
+                    np.asarray(emb_b[start:end], dtype=np.float32),
+                    np.asarray(eids[start:end], dtype=np.int64),
+                )
+
     def _build_lookup(self):
         if self._token_by_id is not None:
             return
-
         logger.info("[stream] building global event lookup")
-
         token_map = {}
         doc_map = {}
 
         for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
-
             if self.EXPECTED_GROUP not in g:
                 continue
 
             group = g[self.EXPECTED_GROUP]
-
             if self.EXPECTED_ID_KEY not in group:
                 raise KeyError(f"Missing event_id in {store_dir}")
 
@@ -77,12 +99,13 @@ class ZarrEventStream:
 
         self._token_by_id = token_map
         self._doc_by_id   = doc_map
-
         logger.info(f"[stream] indexed events={len(token_map)}")
+
 
     def token(self, event_id: int):
         self._build_lookup()
         return self._token_by_id.get(int(event_id))
+
 
     def doc_id(self, event_id: int):
         self._build_lookup()

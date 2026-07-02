@@ -81,10 +81,10 @@ function execRows(
       rowMode: "array",
       callback: (row: unknown[]) => { rows.push([...row]); },
     });
-    span.end("debug", { rowCount: rows.length, sql: truncate(sql, 120) });
+    // span.end("debug", { rowCount: rows.length, sql: truncate(sql, 120) });
     return rows;
   } catch (err) {
-    span.fail(err, { sql: truncate(sql, 120), bind });
+    span.fail(err, { sql, bind });
     throw err;
   }
 }

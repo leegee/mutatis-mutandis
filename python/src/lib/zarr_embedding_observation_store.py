@@ -12,9 +12,6 @@ Each row is a contextual observation event:
         window_id,            # transformer window start coordinate
         window_token_pos,     # token position within window
         emb_raw               # raw contextual embedding
-        event_type            # "window" | "clause_complex"
-        span_start_token_idx  # clasue_complex corpus-level start (inclusive)
-        span_end_token_idx    # clause_complex corpus-level end (inclusive)
     )
 
 Core invariants
@@ -39,6 +36,14 @@ Failure modes
 - Removing window_token_pos destroys positional structure.
 - Treating observations as corpus truth corrupts frequency analysis.
 - Concurrent writers break append determinism.
+
+WIP
+---
+Now stores three embedding vectors per event:
+    emb_local, emb_medium, emb_broad
+
+This enables multi-scale semantic analysis while preserving the original
+medium-scale embeddings for backward compatibility.
 """
 
 from __future__ import annotations
@@ -50,10 +55,9 @@ from numcodecs import Blosc
 
 class ZarrEmbeddingObservationStore:
     """
-    Append-only contextual observation store.
+    Append-only store supporting multi-window ensemble embeddings.
 
-    This layer records how transformer context windows
-    observe lexical events from the corpus.
+    This layer records how transformer context windows observe lexical events from the corpus.
     """
 
     def __init__(self, path: str, dim: int):
@@ -77,24 +81,21 @@ class ZarrEmbeddingObservationStore:
         # contextual embedding
         self.emb_raw = self._ds( g, "emb_raw", (dim,), compressor, "float32" )
 
+        # Multi-scale contextual embeddings
+        self.emb_local  = self._ds(g, "emb_local",  (self.dim,), compressor, "float32")
+        self.emb_medium = self._ds(g, "emb_medium", (self.dim,), compressor, "float32")
+        self.emb_broad  = self._ds(g, "emb_broad",  (self.dim,), compressor, "float32")
+
         # corpus coordinates
         self.vector_id = self._ds( g, "vector_id", (), compressor, "int64" )
-
         self.token_idx = self._ds( g, "token_idx", (), compressor, "int64" )
-
         self.token = self._ds( g, "token", (), compressor, "U32" )
-
         self.doc_id = self._ds( g, "doc_id", (), compressor, "U32" )
 
         # contextual coordinates
         self.window_id = self._ds( g, "window_id", (), compressor, "int64" )
-
         self.window_token_pos = self._ds( g, "window_token_pos", (), compressor, "int32", )
 
-        # clause-complexes
-        self.event_type = self._ds(g, "event_type", (), compressor, "U32")          # "window", "clause_complex"
-        self.span_start_token_idx = self._ds(g, "span_start_token_idx", (), compressor, "int64")
-        self.span_end_token_idx = self._ds(g, "span_end_token_idx", (), compressor, "int64")
 
     # dataset helper
     def _ds(self, g, name, shape_suffix, compressor, dtype):
@@ -115,26 +116,30 @@ class ZarrEmbeddingObservationStore:
             compressor=compressor,
         )
 
-
+    #
     def append_events(
         self,
         event_id,
         concept_id,
-        emb_raw,
+        emb_local,
+        emb_medium,
+        emb_broad,
         vector_id,
         doc_id,
         token_idx,
         token,
         window_id,
         window_token_pos,
-        # === NEW parameters ===
-        event_type=None,
-        span_start_token_idx=None,
-        span_end_token_idx=None,
     ):
+        """
+        Append events with three embedding scales: local, medium, and broad.
+        """
         event_id = np.asarray(event_id, dtype=np.int64)
         concept_id = np.asarray(concept_id, dtype=np.int64)
-        emb_raw = np.asarray(emb_raw, dtype=np.float32)
+
+        emb_local  = np.asarray(emb_local,  dtype=np.float32)
+        emb_medium = np.asarray(emb_medium, dtype=np.float32)
+        emb_broad  = np.asarray(emb_broad,  dtype=np.float32)
 
         vector_id = np.asarray(vector_id, dtype=np.int64)
         token_idx = np.asarray(token_idx, dtype=np.int64)
@@ -145,57 +150,47 @@ class ZarrEmbeddingObservationStore:
         window_id = np.asarray(window_id, dtype=np.int64)
         window_token_pos = np.asarray(window_token_pos, dtype=np.int32)
 
-        n = event_id.shape[0]
-
-        if event_type is None:
-            event_type = np.full(n, "window", dtype="U32")
-        else:
-            event_type = np.asarray(event_type, dtype="U32")
-
-        if span_start_token_idx is None:
-            span_start_token_idx = token_idx.copy()
-        else:
-            span_start_token_idx = np.asarray(span_start_token_idx, dtype=np.int64)
-
-        if span_end_token_idx is None:
-            span_end_token_idx = token_idx.copy()
-        else:
-            span_end_token_idx = np.asarray(span_end_token_idx, dtype=np.int64)
+        n = len(event_id)
 
         # Validation
-        for arr, name in [
-            (event_id, "event_id"), (concept_id, "concept_id"), (emb_raw, "emb_raw"),
-            (vector_id, "vector_id"), (token_idx, "token_idx"),
-            (token, "token"), (doc_id, "doc_id"),
-            (window_id, "window_id"), (window_token_pos, "window_token_pos"),
-            (event_type, "event_type"),
-            (span_start_token_idx, "span_start_token_idx"),
-            (span_end_token_idx, "span_end_token_idx"),
-        ]:
-            if len(arr) != n:
-                raise ValueError(f"Size mismatch for {name}: expected {n}, got {len(arr)}")
+        if not (len(emb_local) == len(emb_medium) == len(emb_broad) == n):
+            raise ValueError(f"Embedding arrays have mismatched lengths: "
+                           f"local={len(emb_local)}, medium={len(emb_medium)}, broad={len(emb_broad)}, n={n}")
 
-        # Append
+        self._check(event_id, n)
+        self._check(concept_id, n)
+        self._check(vector_id, n)
+        self._check(token_idx, n)
+        self._check(token, n)
+        self._check(doc_id, n)
+        self._check(window_id, n)
+        self._check(window_token_pos, n)
+
+        # Append embeddings
+        self._append(self.emb_local,  emb_local)
+        self._append(self.emb_medium, emb_medium)
+        self._append(self.emb_broad,  emb_broad)
+
+        # Append metadata
         self._append(self.event_id, event_id)
         self._append(self.concept_id, concept_id)
-        self._append(self.emb_raw, emb_raw)
-
         self._append(self.vector_id, vector_id)
         self._append(self.token_idx, token_idx)
         self._append(self.token, token)
         self._append(self.doc_id, doc_id)
-
         self._append(self.window_id, window_id)
         self._append(self.window_token_pos, window_token_pos)
 
-        self._append(self.event_type, event_type)
-        self._append(self.span_start_token_idx, span_start_token_idx)
-        self._append(self.span_end_token_idx, span_end_token_idx)
+
+    def _check(self, arr, n):
+        """Validate array length."""
+        if len(arr) != n:
+            raise ValueError(f"event size mismatch: expected {n}, got {len(arr)}")
 
 
     def _append(self, ds, arr):
+        """Append array to a Zarr dataset."""
         arr = np.asarray(arr)
-
         old = ds.shape[0]
         new = old + arr.shape[0]
 
@@ -211,16 +206,19 @@ class ZarrEmbeddingObservationStore:
     def n_events(self) -> int:
         return int(self.event_id.shape[0])
 
+
     def get_doc_ids(self) -> set[str]:
         if self.doc_id.shape[0] == 0:
             return set()
         return set(self.doc_id[:])
+
 
     def embedding_dim(self) -> int:
         if len(self.emb_raw.shape) <= 1:
             return 0
 
         return int(self.emb_raw.shape[1])
+
 
     def __len__(self) -> int:
         return self.n_events

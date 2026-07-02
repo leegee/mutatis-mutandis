@@ -20,6 +20,8 @@
 >
 > How in the past was the concept we term X referenced  if at all?
 
+Can we recursively reverse search over diachronic ranges, taking top results for each period as bridge terms to search with in the earlier  date range?
+
 ## Progress
 
 Ideally this project would build a complete Ontological Topology of a corpus, a gigantic semantic space as a structured geometric object, where meaning is illustrated by relative positions, continuity and deformation of distributions across time, rather than through dictionaries. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...

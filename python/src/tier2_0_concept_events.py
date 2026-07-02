@@ -177,6 +177,8 @@ class ZarrEventLookup:
     issued using the canonical Zarr vector rather than relying on FAISS
     internal vector storage. See module docstring for trade-offs and the
     deferred migration path to EeboFaissIndex.reconstruct().
+
+    Loads three embedding scales and provides ensemble vectors for downstream use.
     """
 
     # Field name -> numpy dtype for the metadata columns (excludes
@@ -189,24 +191,21 @@ class ZarrEventLookup:
         "token_idx":        np.int64,
         "window_id":        np.int64,
         "window_token_pos": np.int64,
-        "event_type":       object,          # string
-        "span_start_token_idx": np.int64,
-        "span_end_token_idx":   np.int64,
     }
 
     def __init__(self, root, forms: set[str] | None = None, false_positives: set[str] | None = None):
         self.root            = root
         self.forms           = {f.lower() for f in forms} if forms else None
         self.false_positives = {f.lower() for f in false_positives} if false_positives else set()
-
-        # event_id -> row position (single dict, replaces by_event_id)
         self._pos: dict[int, int] = {}
-
         # Per-batch staging lists, concatenated into arrays in _finalize.
         self._chunks: dict[str, list[np.ndarray]] = {field: [] for field in self._FIELDS}
-        self._emb_chunks: list[np.ndarray] = []
-
+        # Multi-scale embedding chunks
+        self._emb_local_chunks  = []
+        self._emb_medium_chunks = []
+        self._emb_broad_chunks  = []
         self._build()
+
 
     def _build(self):
         logger.info("[tier2] building event lookup")
@@ -217,12 +216,9 @@ class ZarrEventLookup:
 
         for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
-
             if "events" not in g:
                 continue
-
             self._load_store(g["events"], store_dir)
-
         self._finalize()
 
         logger.info(f"[tier2] events={len(self._pos)}")
@@ -230,38 +226,37 @@ class ZarrEventLookup:
 
     def _load_store(self, e, store_dir):
         """
-        Load events from one Zarr store into the staging columns.
-        Now supports the new event_type and span fields.
+        Load events from one Zarr store into staging columns.
+        Supports multi-scale embeddings
         """
         if "event_id" not in e:
             raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
 
         wpos = e["window_token_pos"] if "window_token_pos" in e else None
-        n    = e["event_id"].shape[0]
+        n = e["event_id"].shape[0]
 
         for start in range(0, n, BATCH_SIZE):
             end = min(start + BATCH_SIZE, n)
 
-            # Load all needed arrays
-            b_eids       = e["event_id"][start:end]
-            b_vids       = e["vector_id"][start:end]
-            b_docs       = e["doc_id"][start:end]
-            b_toks       = e["token"][start:end]
-            b_idxs       = e["token_idx"][start:end]
-            b_wins       = e["window_id"][start:end]
-            b_embs       = e["emb_raw"][start:end]
-            b_wpos       = wpos[start:end] if wpos is not None else None
+            # Load metadata
+            b_eids = e["event_id"][start:end]
+            b_vids = e["vector_id"][start:end]
+            b_docs = e["doc_id"][start:end]
+            b_toks = e["token"][start:end]
+            b_idxs = e["token_idx"][start:end]
+            b_wins = e["window_id"][start:end]
+            b_wpos = wpos[start:end] if wpos is not None else None
 
-            # NEW fields
-            b_event_type = e["event_type"][start:end] if "event_type" in e else None
-            b_span_start = e["span_start_token_idx"][start:end] if "span_start_token_idx" in e else None
-            b_span_end   = e["span_end_token_idx"][start:end] if "span_end_token_idx" in e else None
+            # Multi-scale embeddings
+            b_local  = e["emb_local"][start:end]
+            b_medium = e["emb_medium"][start:end]
+            b_broad  = e["emb_broad"][start:end]
 
             b_toks = b_toks.astype(str)
             b_docs = b_docs.astype(str)
             b_toks_lower = np.char.lower(b_toks)
 
-            # Filtering (forms / false_positives)
+            # Filtering
             if self.forms is not None:
                 keep = np.isin(b_toks_lower, list(self.forms))
             else:
@@ -275,7 +270,7 @@ class ZarrEventLookup:
 
             keep_count = int(keep.sum())
 
-            # Existing fields
+            # Append metadata
             self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
             self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
             self._chunks["doc_id"].append(b_docs[keep])
@@ -289,62 +284,56 @@ class ZarrEventLookup:
                 wpos_col = np.full(keep_count, _NO_WPOS, dtype=np.int64)
             self._chunks["window_token_pos"].append(wpos_col)
 
-            self._emb_chunks.append(np.asarray(b_embs, dtype=np.float32)[keep])
-
-            # === NEW fields ===
-            if b_event_type is not None:
-                self._chunks["event_type"].append(b_event_type[keep].astype(str))
-            else:
-                self._chunks["event_type"].append(np.full(keep_count, "window", dtype=object))
-
-            if b_span_start is not None:
-                self._chunks["span_start_token_idx"].append(
-                    np.asarray(b_span_start, dtype=np.int64)[keep]
-                )
-            else:
-                self._chunks["span_start_token_idx"].append(
-                    np.asarray(b_idxs, dtype=np.int64)[keep]
-                )
-
-            if b_span_end is not None:
-                self._chunks["span_end_token_idx"].append(
-                    np.asarray(b_span_end, dtype=np.int64)[keep]
-                )
-            else:
-                self._chunks["span_end_token_idx"].append(
-                    np.asarray(b_idxs, dtype=np.int64)[keep]
-                )
+            # Multi-scale embeddings
+            self._emb_local_chunks.append(np.asarray(b_local, dtype=np.float32)[keep])
+            self._emb_medium_chunks.append(np.asarray(b_medium, dtype=np.float32)[keep])
+            self._emb_broad_chunks.append(np.asarray(b_broad, dtype=np.float32)[keep])
 
 
     def _finalize(self):
         """
-        Concatenate staged per-batch arrays into final columnar arrays.
+        Concatenate all staged chunks.
         """
         n_total = sum(arr.shape[0] for arr in self._chunks["event_id"])
 
         if n_total == 0:
             for field, dtype in self._FIELDS.items():
                 setattr(self, field, np.empty(0, dtype=dtype))
-            self.embeddings = np.empty((0, 0), dtype=np.float32)
-            self._chunks = {}
-            self._emb_chunks = []
+            self.emb_local  = np.empty((0, 768), dtype=np.float32)  # adjust dim if needed
+            self.emb_medium = np.empty((0, 768), dtype=np.float32)
+            self.emb_broad  = np.empty((0, 768), dtype=np.float32)
             return
 
+        # Metadata
         for field, dtype in self._FIELDS.items():
             setattr(self, field, np.concatenate(self._chunks[field]).astype(dtype, copy=False))
 
-        self.embeddings = np.concatenate(self._emb_chunks, axis=0)
+        # Embeddings
+        self.emb_local  = np.concatenate(self._emb_local_chunks, axis=0)
+        self.emb_medium = np.concatenate(self._emb_medium_chunks, axis=0)
+        self.emb_broad  = np.concatenate(self._emb_broad_chunks, axis=0)
 
         self._pos = {int(eid): pos for pos, eid in enumerate(self.event_id)}
 
-        # Clean up
-        self._chunks = {}
-        self._emb_chunks = []
+        # Cleanup
+        self._chunks.clear()
+        self._emb_local_chunks.clear()
+        self._emb_medium_chunks.clear()
+        self._emb_broad_chunks.clear()
 
-        logger.info(f"[tier2] loaded {n_total:,} events (including clause_complex)")
+        logger.info(f"[tier2] loaded {n_total:,} events with multi-scale embeddings")
 
 
-    # Row access
+    def get_ensemble_embedding(self, pos: int, weights=None) -> np.ndarray:
+        """Return weighted ensemble embedding for a given event position."""
+        if weights is None:
+            weights = [0.25, 0.50, 0.25]  # local, medium, broad
+
+        return (
+            weights[0] * self.emb_local[pos] +
+            weights[1] * self.emb_medium[pos] +
+            weights[2] * self.emb_broad[pos]
+        )
 
     def get_event(self, event_id: int) -> dict:
         """
@@ -358,7 +347,9 @@ class ZarrEventLookup:
         allocation — see analyse_concept.
         """
         pos = self._pos[int(event_id)]
-        return self._row_to_dict(pos)
+        event = self._row_to_dict(pos)
+        event["embedding"] = self.get_ensemble_embedding(pos)   # default to ensemble
+        return event
 
 
     def get_pos(self, event_id: int) -> int:
@@ -367,7 +358,7 @@ class ZarrEventLookup:
 
 
     def _row_to_dict(self, pos: int) -> dict:
-        """Convert a row position into the legacy dict format + new fields."""
+        """Convert a row position into the legacy dict format."""
         wpos = int(self.window_token_pos[pos])
 
         return {
@@ -378,16 +369,13 @@ class ZarrEventLookup:
             "token_idx":        int(self.token_idx[pos]),
             "window_id":        int(self.window_id[pos]),
             "window_token_pos": None if wpos == _NO_WPOS else wpos,
-            "embedding":        self.embeddings[pos],
-            "event_type":       str(self.event_type[pos]),
-            "span_start_token_idx": int(self.span_start_token_idx[pos]),
-            "span_end_token_idx":   int(self.span_end_token_idx[pos]),
+            # "embedding" is now added in get_event() using ensemble
         }
 
 
-    def iter_matching_event_ids(self, forms, false_positives=None, event_type=None):
+    def iter_matching_event_ids(self, forms, false_positives=None):
         """
-        Yield event_ids matching forms (and optionally event_type).
+        Yield event_ids matching forms).
         """
         forms = {f.lower() for f in forms}
         false_positives = {f.lower() for f in (false_positives or [])}
@@ -400,11 +388,6 @@ class ZarrEventLookup:
 
         if false_positives:
             mask &= ~np.isin(tokens_lower, list(false_positives))
-
-        # NEW: optional event_type filter
-        if event_type is not None:
-            type_mask = (self.event_type == event_type)
-            mask &= type_mask
 
         for eid in self.event_id[mask]:
             yield int(eid)
@@ -470,7 +453,7 @@ def analyse_concept(
         - concept, forms, n_events
         - aggregate (top tokens/docs/windows)
         - events: list of dicts containing:
-            * event metadata + new fields (event_type, span_start, span_end)
+            * event metadata
             * neighbours: list of neighbour dicts (same structure)
     """
     # Column references from lookup (struct-of-arrays)
@@ -481,9 +464,6 @@ def analyse_concept(
     L_token_idx     = lookup.token_idx
     L_window_id     = lookup.window_id
     L_wpos          = lookup.window_token_pos
-    L_event_type    = lookup.event_type
-    L_span_start    = lookup.span_start_token_idx
-    L_span_end      = lookup.span_end_token_idx
 
     # CONCEPT_SET union with any args supplied to this routine
     forms           = set(concept["forms"])
@@ -517,7 +497,7 @@ def analyse_concept(
         count=len(event_ids),
     )
 
-    query_vecs = lookup.embeddings[event_pos]
+    query_vecs = np.array([lookup.get_ensemble_embedding(p) for p in event_pos])
 
     if diagnostics:
         logger.debug(f"[tier2] query_events={len(event_ids)}")
@@ -591,9 +571,6 @@ def analyse_concept(
                 "lat":              n_lat,
                 "lng":              n_lng,
                 "via_event_id":     None,
-                "event_type":       str(L_event_type[n_pos]),
-                "span_start":       int(L_span_start[n_pos]),
-                "span_end":         int(L_span_end[n_pos]),
             })
 
         # Main query event
@@ -609,9 +586,6 @@ def analyse_concept(
             "geom":             q_geom,
             "lat":              q_lat,
             "lng":              q_lng,
-            "event_type":       str(L_event_type[q_pos]),
-            "span_start":       int(L_span_start[q_pos]),
-            "span_end":         int(L_span_end[q_pos]),
             "neighbours":       neighbours,
         })
 
@@ -659,9 +633,6 @@ def analyse_concept(
                 "lat":              n_lat,
                 "lng":              n_lng,
                 "via_event_id":     None,
-                "event_type":       str(L_event_type[n_pos]),
-                "span_start":       int(L_span_start[n_pos]),
-                "span_end":         int(L_span_end[n_pos]),
             })
 
         q_wpos = int(L_wpos[q_pos])
@@ -678,9 +649,6 @@ def analyse_concept(
             "geom":             q_geom,
             "lat":              q_lat,
             "lng":              q_lng,
-            "event_type":       str(L_event_type[q_pos]),
-            "span_start":       int(L_span_start[q_pos]),
-            "span_end":         int(L_span_end[q_pos]),
             "neighbours":       neighbours,
         })
 
@@ -725,7 +693,7 @@ def analyse_concept(
             d1_ids_list = [eid for eid in d1_ids_list if eid in lookup._pos]
 
             if d1_positions.size > 0:
-                d1_vecs = lookup.embeddings[d1_positions]
+                d1_vecs = np.array([lookup.get_ensemble_embedding(p) for p in d1_positions])
                 d2_scores, d2_neigh_ids = index.search(d1_vecs, K)
 
                 logger.info(
@@ -769,9 +737,6 @@ def analyse_concept(
                             "score":            float(score),
                             "depth":            2,
                             "via_event_id":     via_eid,
-                            "event_type":       str(L_event_type[n_pos]),
-                            "span_start":       int(L_span_start[n_pos]),
-                            "span_end":         int(L_span_end[n_pos]),
                         }
 
                         # Fan out to every query event that had via_eid as
@@ -829,9 +794,6 @@ CREATE TABLE IF NOT EXISTS events (
     gny              REAL,
     cluster_id       INTEGER,
     cluster_label    TEXT,
-    event_type       TEXT,
-    span_start       INTEGER,
-    span_end         INTEGER,
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
@@ -857,9 +819,6 @@ CREATE TABLE IF NOT EXISTS neighbours (
     gny                 REAL,
     cluster_id          INTEGER,
     cluster_label       TEXT,
-    event_type          TEXT,
-    span_start          INTEGER,
-    span_end            INTEGER,
     PRIMARY KEY (event_id, neighbour_event_id, depth),
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
@@ -904,9 +863,6 @@ CREATE INDEX IF NOT EXISTS idx_events_token         ON events(token);
 CREATE INDEX IF NOT EXISTS idx_events_event_id      ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_events_doc_id        ON events(doc_id);
 CREATE INDEX IF NOT EXISTS idx_events_concept_year  ON events(concept, pub_year);
-CREATE INDEX IF NOT EXISTS idx_events_event_type    ON events(event_type);
-CREATE INDEX IF NOT EXISTS idx_events_span_start    ON events(span_start);
-CREATE INDEX IF NOT EXISTS idx_events_span_end      ON events(span_end);
 CREATE INDEX IF NOT EXISTS idx_neighbours_event_id  ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_token     ON neighbours(token);
 CREATE INDEX IF NOT EXISTS idx_neighbours_depth     ON neighbours(event_id, depth);
@@ -1029,9 +985,8 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
         con.executemany( """
             INSERT OR IGNORE INTO events
             (event_id, concept, vector_id, token, doc_id, pub_year,
-            token_idx, window_id, window_token_pos, geom, lat, lng,
-            event_type, span_start, span_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            token_idx, window_id, window_token_pos, geom, lat, lng )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -1047,9 +1002,6 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                     e.get("geom"),
                     e.get("lat"),
                     e.get("lng"),
-                    e.get("event_type"),
-                    e.get("span_start"),
-                    e.get("span_end"),
                 )
                 for e in data["events"]
             ],
@@ -1060,8 +1012,8 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
             INSERT OR IGNORE INTO neighbours
             (event_id, neighbour_event_id, depth, via_event_id, vector_id,
             token, doc_id, pub_year, token_idx, window_id, window_token_pos,
-            score, geom, lat, lng, event_type, span_start, span_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            score, geom, lat, lng )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             [
                 (
@@ -1080,9 +1032,6 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                     n.get("geom"),
                     n.get("lat"),
                     n.get("lng"),
-                    n.get("event_type"),
-                    n.get("span_start"),
-                    n.get("span_end"),
                 )
                 for e in data["events"]
                 for n in e["neighbours"]
