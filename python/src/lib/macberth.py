@@ -120,6 +120,18 @@ class MacBERThEmbedder:
             return embeddings
         return torch.tensor(embeddings)
 
+
+    def encode_normalized(
+        self,
+        texts: Union[str, List[str]]
+    ) -> np.ndarray:
+        embeddings = self.encode(texts)
+
+        return np.array([
+            normalize(v)
+            for v in embeddings
+        ])
+
     @staticmethod
     def _mean_pooling(hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """Mean pooling with attention mask (standard for BERT)."""
