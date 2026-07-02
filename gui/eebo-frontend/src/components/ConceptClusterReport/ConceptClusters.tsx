@@ -200,26 +200,20 @@ export default function ConceptClusters() {
                 <h3 class="center-align middle-align  extra-margin extra-padding">No data for this period.</h3>
             </Show>
 
+            <h2>UMAP/PACMAP Report</h2>
             <Show when={clusterFile() && clusterFile()?.n_events}>
                 <nav class="scroll bottom-padding">
-                    <label class="no-padding">
-                        <div class="field middle-align small">
-                            <nav>
-                                <div class="max">
-                                    <p>Dominant clusters only</p>
-                                </div>
-                                <label class="switch">
-                                    <input
-                                        type="checkbox"
-                                        checked={showDominantOnly()}
-                                        onInput={(e) => setShowDominantOnly(e.currentTarget.checked)}
-                                    />
-
-                                    <span></span>
-                                </label>
-                            </nav>
-                        </div>
-                    </label>
+                    <span> Dominant clusters only </span>
+                    <div class="field middle-align">
+                        <label class="switch">
+                            <input
+                                type="checkbox"
+                                checked={showDominantOnly()}
+                                onInput={(e) => setShowDominantOnly(e.currentTarget.checked)}
+                            />
+                            <span></span>
+                        </label>
+                    </div>
 
                     <For each={visibleClusterSummary()}>
                         {(row, i) => (
