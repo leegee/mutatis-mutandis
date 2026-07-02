@@ -1,125 +1,151 @@
 #!/usr/bin/env python
 """
-tier2_0_concept_events.py - Tier2: neighbourhood analysis over event-space substrate
+tier2_0_concept_events.py - Tier 2: Concept Neighbourhood Analysis
 
-Core invariant
---------------
+This module performs the first semantic analysis over the Tier 1 observation
+space. It uses the FAISS retrieval index to identify contextual
+neighbourhoods around lexical concepts while preserving complete provenance
+back to the original corpus observations.
 
-Tier 1:
-    token x window -> embedding event (Zarr), keyed by event_id
+Architecture
+------------
 
-Tier 2:
-    event -> geometric neighbourhood (FAISS) -> contextual analysis
+Tier 1
 
-FAISS is a geometric operator only.
-FAISS ids are event_ids (stable, globally unique observation identity).
-vector_id is lexical identity only and is NOT used as a lookup key.
+    corpus
+        →
+    semantic observations
+        ├── metadata
+        ├── emb_local
+        ├── emb_medium
+        └── emb_broad
 
-No aggregation or centroid reconstruction is performed.
-Events remain atomic observations with full provenance.
+            │
+
+Tier 1.5
+
+    weighted ensemble embeddings
+            │
+            ▼
+        FAISS index
+
+            │
+
+Tier 2
+
+    concept forms
+            │
+            ▼
+    matching observations
+            │
+            ▼
+    neighbourhood retrieval
+            │
+            ▼
+    contextual concept analysis
+            │
+            ▼
+    SQLite analysis database
+
+Tier 2 performs no embedding generation. It analyses the observation geometry
+constructed by earlier tiers.
+
+Core invariants
+---------------
+
+1. Tier 1 is the semantic source of truth
+   - All metadata and embeddings originate from the Tier 1 observation store.
+
+2. FAISS is a retrieval layer only
+   - Neighbourhoods are determined geometrically without assigning semantic
+     interpretation.
+
+3. Observations remain atomic
+   - Every result corresponds to a single corpus-grounded contextual
+     observation identified by a stable event_id.
+
+4. Lexical identity is independent of observation identity
+   - Multiple observations may share the same vector_id while representing
+     different contextual occurrences.
+
+5. Provenance is never lost
+   - Every neighbour can be traced back to its document, token position and
+     contextual window.
+
+6. Multi-scale representations are analysed through an ensemble embedding
+   - Queries use the weighted combination of local, medium and broad
+     embeddings generated in Tier 1.
 
 Performance model
 -----------------
 
-ZarrEventLookup._build reads the Tier 1 observation store in batches,
-materialising one numpy array per dataset per batch before iterating in
-Python. This avoids the element-by-element Zarr reads that would otherwise
-pay decompression overhead on every scalar access.
+Tier 1 observations are streamed from Zarr into an in-memory
+struct-of-arrays lookup optimised for neighbourhood analysis.
 
-When a single concept is queried (--concept), only events whose token
-matches one of the concept's forms are loaded into memory. This makes
-single-concept runs substantially faster and much lighter on memory than
-full-corpus loads. When no concept filter is active, all events are loaded.
+When analysing a single concept, only observations matching the requested
+forms are loaded, making memory consumption proportional to the concept
+rather than the corpus.
 
-STORAGE MODEL (struct-of-arrays)
----------------------------------
-
-ZarrEventLookup stores event metadata as parallel numpy arrays (one array
-per field, indexed by row position), plus a single event_id -> row position
-dict (`_pos`). This replaces the earlier design of one Python dict per
-event (`by_event_id: dict[int, dict]`), which for a multi-million event
-corpus meant millions of small heap objects, dict-hashing overhead per
-field access, and poor cache locality.
-
-The struct-of-arrays layout means:
-
-    - _pos:        dict[int, int]      event_id -> row position (one dict)
-    - event_id:    np.ndarray[int64]
-    - vector_id:   np.ndarray[int64]
-    - doc_id:      np.ndarray[object]  (interned strings)
-    - token:       np.ndarray[object]  (interned strings)
-    - token_idx:   np.ndarray[int64]
-    - window_id:   np.ndarray[int64]
-    - window_token_pos: np.ndarray[int64]  (-1 where absent)
-    - embeddings:  np.ndarray[float32, shape=(n, dim)]
-
-A "row" is the same row position across all of these arrays. get_event()
-and get_pos() operate on row positions rather than per-event dicts, and
-record construction for SQLite reads directly from these arrays.
-
-Embeddings are currently stored in ZarrEventLookup alongside metadata so
-that FAISS queries can be issued using the canonical Zarr vector rather than
-relying on FAISS internal storage. This is correct and safe for IndexFlatIP,
-which stores vectors verbatim, but it has two consequences:
-
-    1. Memory: all embeddings for the full corpus are resident in the lookup
-       when no concept filter is active. For a large corpus this can
-       be several GB.
-
-    2. Coupling: the lookup is responsible for both metadata and vector
-       storage, which conflates two concerns.
-
-A cleaner long-term approach is to drop the embeddings array from
-ZarrEventLookup entirely, and instead reconstruct vectors from the FAISS
-index at query time via EeboFaissIndex.reconstruct(). See eebo_faiss.py
-for the reconstruct() method and usage notes.
-
-This migration is deferred until the index type (exact vs. approximate)
-is confirmed stable, because IndexHNSWFlat does not support vector
-reconstruction.
-
-window_id scoping invariant
----------------------------
-
-window_counter keys are (doc_id, window_id) because window_id is defined
-as a document-local coordinate in the Tier 1 store (it is the token-space
-start offset of the transformer window within that document). Treating
-window_id as globally unique across documents would silently merge windows
-from different documents that happen to share the same offset. This
-invariant is enforced in Tier 1 but is not re-checked here; if Tier 1
-were ever rebuilt with a global window_id scheme this counter would
-become incorrect without raising an error.
-
-SQLite schema
+Storage model
 -------------
 
-Five tables:
+Metadata are stored as parallel NumPy arrays indexed by row position,
+together with an event_id → row lookup.
 
-    events
-        One row per query event (globally unique by event_id).
+The lookup contains:
 
-    neighbours
-        One row per (query event, neighbour, depth) triple.
-        depth=1 rows are direct FAISS neighbours (original behaviour).
-        depth=2 rows are neighbours-of-neighbours; via_event_id records
-        which depth-1 event produced the result, and event_id still refers
-        to the original concept query event (fan-out model).
-        Foreign key: event_id -> events.event_id.
+- observation metadata
+- aligned local embeddings
+- aligned medium embeddings
+- aligned broad embeddings
 
-    concept_aggregate
-        Flattened top_tokens / top_docs / top_windows rows.
-        kind = 'token' | 'doc' | 'window'.
-        For token/doc rows: value holds the token or doc_id; window_doc_id
-        and window_id are NULL.
-        For window rows: window_doc_id and window_id hold the tuple
-        components; value is NULL.
+Ensemble embeddings are computed on demand rather than materialised
+separately.
 
-    concepts
-        One row per concept with n_events summary.
+This design provides good cache locality while avoiding millions of small
+Python objects.
 
-    concept_forms
-        One row per concept + exemplar of form.
+Neighbourhood model
+-------------------
 
+Each query observation is searched against the global FAISS index using its
+ensemble embedding.
+
+Neighbourhoods may be expanded to two levels:
+
+- depth 1: direct semantic neighbours
+- depth 2: neighbours-of-neighbours
+
+Both levels retain full provenance and explicitly record the path through
+which secondary neighbours were discovered.
+
+Outputs
+-------
+
+Results are written to a normalised SQLite database containing:
+
+- concepts
+- concept_forms
+- query observations
+- neighbourhood relationships
+- aggregate statistics
+- document metadata
+
+The database is intended as the persistent semantic substrate for later
+visualisation, clustering and diachronic analysis.
+
+Design intent
+-------------
+
+Tier 2 intentionally performs neighbourhood analysis rather than concept
+modelling. It establishes the local semantic geometry surrounding lexical
+concepts while leaving higher-level interpretation—such as clustering,
+semantic field induction, temporal comparison and semantic drift—to later
+tiers.
+
+This separation keeps retrieval, neighbourhood construction and semantic
+interpretation as distinct stages of the pipeline, allowing each to evolve
+independently without compromising provenance or reproducibility.
 """
 
 from __future__ import annotations
@@ -1058,8 +1084,36 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
 
         con.commit()
 
+    populate_documents_table(con, doc_meta)
+
     con.close()
     logger.info(f"[tier2] sqlite write complete: {db_path}")
+
+
+def populate_documents_table(con, doc_meta):
+    """Populate a lightweight documents table from doc_meta."""
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS documents (
+            doc_id    TEXT PRIMARY KEY,
+            title     TEXT,
+            author    TEXT,
+            pub_year  INTEGER,
+            publisher TEXT,
+            pub_place TEXT
+        )
+    """)
+
+    con.execute("DELETE FROM documents")
+
+    data = [
+        (doc_id, meta.get("title"), None, meta.get("pub_year"), None, None)
+        for doc_id, meta in doc_meta.items()
+    ]
+
+    con.executemany(
+        "INSERT INTO documents (doc_id, title, author, pub_year, publisher, pub_place) VALUES (?,?,?,?,?,?)",
+        data
+    )
 
 
 def _aggregate_rows(concept_name, aggregate):

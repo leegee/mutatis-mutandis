@@ -1,56 +1,99 @@
 #!/usr/bin/env python
 """
-tier1_5_build_faiss_index.py
+tier1_5_build_faiss_index.py - Tier 1.5: FAISS Retrieval Index Construction
 
-Streaming FAISS construction over Tier 1 contextual observation stores.
+This module builds the global FAISS retrieval index over the Tier 1 semantic
+observation store.
+
+Tier 1 provides corpus-grounded observations containing aligned contextual
+embeddings at multiple scales. Tier 1.5 derives a single retrieval embedding
+from these representations and inserts it into a FAISS index for efficient
+nearest-neighbour search.
 
 Architecture
 ------------
 
-Tier 1 is a single contextual observation store:
+Tier 1 observation store
 
-    ZARR_ROOT/tier1/events/*
+    Observation
+        ├── metadata
+        ├── emb_local
+        ├── emb_medium
+        └── emb_broad
 
-Each stored row represents a contextual observation of a corpus token
-under a specific transformer window.
+            │
 
-This builder constructs a global FAISS geometry index by streaming:
+            ▼
 
-    Tier1 Observation Store
-        ->
-    FAISS observation-space index
+    Weighted ensemble embedding
 
-FAISS is retrieval infrastructure only.
+            │
 
-It does NOT define:
-    - semantic meaning
-    - concepts
-    - drift
-    - clusters
-    - fields
+            ▼
 
-It provides approximate nearest-neighbour geometry over contextual
-observations.
+    Global FAISS observation index
+
+The ensemble embedding is currently computed as:
+
+    0.25 × local
+  + 0.50 × medium
+  + 0.25 × broad
+
+This weighting is an implementation choice rather than a semantic claim and
+may evolve as retrieval quality is evaluated.
+
+Purpose
+-------
+FAISS provides efficient approximate nearest-neighbour retrieval over the
+Tier 1 observation space.
+
+It does not perform:
+
+- semantic interpretation
+- concept induction
+- clustering
+- semantic drift analysis
+- corpus modelling
+
+It is purely a geometric retrieval layer.
 
 Key invariants
 --------------
 
-1. Tier 1 observation stores are the sole source of truth for embeddings.
+1. Tier 1 is the sole source of truth
+   - Embeddings are read directly from the Tier 1 observation store.
 
-2. FAISS stores only L2-normalised embedding vectors and stable observation IDs: it is intended as simply a retrieval layer and not a semantic model or clustering system.
+2. FAISS stores retrieval representations only
+   - The index contains L2-normalised ensemble embeddings together with
+     stable observation identifiers.
 
-3. vector_id is lexical identity, NOT embedding identity.
+3. Observation identity is preserved
+   - Each FAISS entry refers to exactly one Tier 1 observation.
 
-4. Multiple contextual observations may share the same vector_id.
+4. Lexical identity is independent of retrieval identity
+   - Multiple observations may share the same vector_id while differing in
+     contextual representation.
 
-5. No full-corpus materialisation occurs during index construction.
+5. Streaming construction
+   - The index is built incrementally from streamed batches without loading
+     the full corpus into memory.
 
-6. FAISS geometry operates over contextual observations, not corpus events.
+6. Retrieval is observation-based
+   - Neighbourhoods are computed over contextual observations rather than
+     lexical types or inferred concepts.
 
-WIP
----
-Now builds FAISS using the ensemble of multi-window embeddings.
+Incremental updates
+-------------------
+Existing FAISS indices may be extended without rebuilding from scratch.
+Previously indexed observation IDs are detected and skipped, allowing newly
+generated Tier 1 observations to be appended efficiently.
 
+Design intent
+-------------
+Tier 1.5 deliberately remains a thin infrastructure layer separating storage
+from retrieval. Tier 1 defines the semantic observation space, while higher
+tiers perform neighbourhood analysis, concept modelling, clustering and
+diachronic investigation using the retrieval capabilities provided here.
 """
 
 from __future__ import annotations

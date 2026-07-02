@@ -1,23 +1,27 @@
 #!/usr/bin/env python
-
 """
-tier1_corpus2zarr.py
+tier1_corpus2zarr.py - Tier 1: Multi-scale Contextual Embedding Construction
 
-Tier 1: Contextual Embedding Observation Construction
-
-This module constructs the foundational event-space representation of a corpus.
-It transforms a tokenised document stream into a set of contextual embedding
-observations, each anchored to a stable corpus index and a sliding window
-context.
+This module constructs the foundational semantic observation layer for the
+corpus. It transforms a tokenised document stream into contextual embedding
+observations generated at multiple context scales while preserving stable
+corpus identities for every lexical occurrence.
 
 Core abstraction
------------------
-The system defines a single atomic unit of analysis:
+----------------
+The atomic unit of analysis is a contextual token occurrence:
 
-    Event = (token occurrence, windowed context, embedding vector)
+    Observation = (
+        token occurrence,
+        contextual window,
+        context scale,
+        embedding vector
+    )
 
-Each event is uniquely identified and fully traceable to the source corpus
-position.
+Each lexical occurrence may participate in multiple overlapping windows and
+is represented at several contextual scales. These observations are aligned
+back onto a single corpus identity so downstream analysis can compare local,
+paragraph-level and broader discourse representations of the same token.
 
 Indexing invariants
 -------------------
@@ -25,76 +29,74 @@ Indexing invariants
    - Each token has a stable (doc_id, token_idx) identity.
 
 2. Token identity is immutable
-   - token_idx always refers to the original corpus ordering and is never
-     recomputed or inferred from window position.
+   - token_idx always refers to the original corpus ordering.
 
-3. Windowing is contextual only
-   - Sliding windows provide transformer context but do not redefine corpus
+3. Windowing provides context only
+   - Sliding windows supply transformer context without redefining corpus
      structure.
 
-4. Event identity is fully grounded
-   - event_id is a stable hash of:
-         (doc_id, token_idx, window_start_token_idx, window_token_pos)
+4. Observation identity is deterministic
+   - event_id is derived from:
+         (doc_id,
+          token_idx,
+          window_start_token_idx,
+          window_token_pos,
+          context_scale)
 
-5. Window anchors are corpus-aligned
-   - window_start_token_idx preserves the true corpus position of the window
-     origin, decoupling embedding geometry from filtered buffer indices.
+5. Multi-scale embeddings remain aligned
+   - Local, medium and broad embeddings correspond to the same contextual
+     observation and are stored together.
 
 Pipeline behaviour
 ------------------
 For each document:
 
-1. Tokens are filtered (stopword and non-content removal)
-2. Remaining tokens are accumulated in a document buffer
-3. Overlapping sliding windows are constructed over the buffer
-4. A transformer model produces contextual embeddings per window
-5. Word-aligned embeddings are emitted as atomic events
-6. Events are written to a Zarr-backed observation store
+1. Filter non-content tokens.
+2. Build a corpus-aligned document buffer.
+3. Generate overlapping windows for each configured context scale.
+4. Compute contextual embeddings with MacBERTh.
+5. Align embeddings back to corpus token positions.
+6. Combine the embeddings from each scale into a single observation.
+7. Write observations to the Zarr store.
 
 Outputs
 -------
-The resulting store contains:
+Each stored observation contains:
 
-- event_id: globally unique embedding observation identifier
-- concept_id: stable lexical occurrence identity
-- token_idx: corpus-aligned token position
-- window_start / window_start_token_idx: window alignment in both buffer
-  and corpus coordinate spaces
-- window_token_pos: position of token within window
-- emb_raw: contextual embedding vector
+- event_id
+- concept_id
+- vector_id
+- doc_id
+- token_idx
+- token
+- window_id
+- window_token_pos
+- emb_local
+- emb_medium
+- emb_broad
 
 Design intent
 -------------
-Tier 1 does not perform semantic aggregation, clustering, or neighbourhood
-analysis. It exists solely to produce a stable, fully-referencable event
-space that higher tiers (e.g. FAISS neighbourhood search, UMAP projection,
-semantic drift analysis) can operate over without ambiguity.
+Tier 1 performs no semantic aggregation, clustering or neighbourhood
+analysis. Its responsibility is solely to construct a deterministic,
+corpus-grounded observation space enriched with multiple contextual
+representations of each token occurrence.
 
-This separation ensures that all downstream geometric or statistical
-behaviour can be traced back to a deterministic corpus coordinate system,
-avoiding conflation of windowing artefacts with semantic structure.
+Higher tiers may select individual context scales or combine them to support
+tasks such as semantic neighbourhood search, concept retrieval, clustering,
+or diachronic semantic analysis without losing traceability back to the
+original corpus.
 
-Risks
------
-Subword tokenization alignment: The code relies on word_ids from the tokenizer correctly mapping back to the filtered buffer indices. MacBERTh (BERT-based) should be stable here, but if you ever change tokenizers or preprocessing, this is a breakage point.
+Implementation assumptions
+--------------------------
+The implementation assumes reliable alignment between tokenizer word_ids and
+filtered corpus tokens. If tokenization or preprocessing changes, this
+alignment must be revalidated.
 
-Overlapping windows + same token: Each contextual occurrence gets its own event_id (correct), but concept_id stays the same (also correct). Confirm downstream tiers (Tier 2+) expect this duality.
-
-Updates WIP
------------
-This module now generates multiple contextual embeddings per token occurrence
-using different window sizes to capture semantic meaning at multiple scales:
-
-- local (384 tokens):  fine-grained syntactic and immediate context
-- medium (512 tokens): standard paragraph-level context (original default)
-- broad (1024 tokens):  larger discourse / argumentative context
-
-Each event stores three separate embedding vectors. Downstream tiers can
-use them individually or via an ensemble (weighted average or concatenation).
-
-This design significantly improves representation of abstract historical
-concepts (liberty, fanaticism, sedition, etc.) whose meaning often depends
-on broader rhetorical context.
+Multiple observations for the same lexical occurrence are expected because
+overlapping windows capture different contextual evidence. The three stored
+embeddings represent complementary views of that evidence rather than
+independent lexical identities.
 """
 
 from __future__ import annotations
