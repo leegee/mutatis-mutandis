@@ -52,11 +52,6 @@ export default function ConceptClusterGeoMap() {
         yearMode: controls.yearMode,
     });
 
-    // const [conceptDatasets] = createResource(
-    //     () => ({ ...sharedKey(), dataType: "concept" }),
-    //     loadDatasets
-    // );
-
     const [events] = createResource(
         sharedKey,
         fetchEvents
@@ -64,31 +59,14 @@ export default function ConceptClusterGeoMap() {
 
     const mapPoints = createMemo(() => {
         console.log("[geo] making map points");
-        // const clusters = conceptDatasets() ?? [];
-        // const clusterPoints = clusters.flatMap(ds =>
-        //     (ds.points ?? []).map(p => ({
-        //         lat: p.lat,
-        //         lng: p.lng,
-        //         label: p.placename ?? p.label ?? "cluster",
-        //         type: "cluster"
-        //     }))
-        // );
-
-        // console.debug("[geo] cluster points", clusterPoints);
-
         const eventRows = events() ?? [];
         const eventPoints = eventRows.map((eventPoint) => ({
             lat: eventPoint.lat,
             lng: eventPoint.lng,
             label: eventPoint.token ?? controls.conceptSelection[0],
-            // type: "event"
         }));
 
-        // console.debug("[geo] event", eventRows);
-        // console.debug("[geo] event points", eventPoints);
-
         return aggregatePlaces([
-            // ...clusterPoints,
             ...eventPoints as RawRow[]
         ]) as EventPoint[];
     });

@@ -153,19 +153,19 @@ from __future__ import annotations
 import os
 import argparse
 import sqlite3
+import json
 from collections import Counter
 from itertools import combinations
 from pathlib import Path
+from lib.zarr_event_lookup import ZarrEventLookup
 
 import numpy as np
-import zarr
 
 from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, CORPUS_TIER2_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
-from lib.zarr_store_dirs import store_dirs
 from lib.tier2_diagnostics import (
     audit_embedding_diversity,
     audit_embedding_isotropy,
@@ -176,250 +176,13 @@ from lib.tier2_diagnostics import (
 )
 
 K           = 25
-BATCH_SIZE  = 8192
+
 
 # Sentinel for absent window_token_pos in the int64 column. -1 is never a
 # valid token position, so it is unambiguous as "not present".
 _NO_WPOS = -1
 
 
-# Event lookup
-class ZarrEventLookup:
-    """
-    In-memory index of Tier 1 observation events, stored as parallel numpy
-    arrays (struct-of-arrays) keyed by row position, plus a single
-    event_id -> row position dict.
-
-    When forms is provided, only events whose token matches one of the
-    supplied forms are loaded. This is the normal path for single-concept
-    runs and keeps memory use proportional to the concept, not the corpus.
-
-    When forms is None, all events are loaded. This is required when
-    querying across multiple concepts in a single run.
-
-    vector_id is stored as metadata only — NOT used as a lookup key.
-
-    Embeddings are loaded alongside metadata so that FAISS queries can be
-    issued using the canonical Zarr vector rather than relying on FAISS
-    internal vector storage. See module docstring for trade-offs and the
-    deferred migration path to EeboFaissIndex.reconstruct().
-
-    Loads three embedding scales and provides ensemble vectors for downstream use.
-    """
-
-    # Field name -> numpy dtype for the metadata columns (excludes
-    # embeddings, which are handled separately as a 2D float32 array).
-    _FIELDS = {
-        "event_id":         np.int64,
-        "vector_id":        np.int64,
-        "doc_id":           object,
-        "token":            object,
-        "token_idx":        np.int64,
-        "window_id":        np.int64,
-        "window_token_pos": np.int64,
-    }
-
-    def __init__(self, root, forms: set[str] | None = None, false_positives: set[str] | None = None):
-        self.root            = root
-        self.forms           = {f.lower() for f in forms} if forms else None
-        self.false_positives = {f.lower() for f in false_positives} if false_positives else set()
-        self._pos: dict[int, int] = {}
-        # Per-batch staging lists, concatenated into arrays in _finalize.
-        self._chunks: dict[str, list[np.ndarray]] = {field: [] for field in self._FIELDS}
-        # Multi-scale embedding chunks
-        self._emb_local_chunks  = []
-        self._emb_medium_chunks = []
-        self._emb_broad_chunks  = []
-        self._build()
-
-
-    def _build(self):
-        logger.info("[tier2] building event lookup")
-        if self.forms:
-            logger.info(f"[tier2] filtering to forms={self.forms}")
-        if self.false_positives:
-            logger.info(f"[tier2] excluding false_positives={self.false_positives}")
-
-        for store_dir in store_dirs(self.root):
-            g = zarr.open_group(str(store_dir), mode="r")
-            if "events" not in g:
-                continue
-            self._load_store(g["events"], store_dir)
-        self._finalize()
-
-        logger.info(f"[tier2] events={len(self._pos)}")
-
-
-    def _load_store(self, e, store_dir):
-        """
-        Load events from one Zarr store into staging columns.
-        Supports multi-scale embeddings
-        """
-        if "event_id" not in e:
-            raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
-
-        wpos = e["window_token_pos"] if "window_token_pos" in e else None
-        n = e["event_id"].shape[0]
-
-        for start in range(0, n, BATCH_SIZE):
-            end = min(start + BATCH_SIZE, n)
-
-            # Load metadata
-            b_eids = e["event_id"][start:end]
-            b_vids = e["vector_id"][start:end]
-            b_docs = e["doc_id"][start:end]
-            b_toks = e["token"][start:end]
-            b_idxs = e["token_idx"][start:end]
-            b_wins = e["window_id"][start:end]
-            b_wpos = wpos[start:end] if wpos is not None else None
-
-            # Multi-scale embeddings
-            b_local  = e["emb_local"][start:end]
-            b_medium = e["emb_medium"][start:end]
-            b_broad  = e["emb_broad"][start:end]
-
-            b_toks = b_toks.astype(str)
-            b_docs = b_docs.astype(str)
-            b_toks_lower = np.char.lower(b_toks)
-
-            # Filtering
-            if self.forms is not None:
-                keep = np.isin(b_toks_lower, list(self.forms))
-            else:
-                keep = np.ones(end - start, dtype=bool)
-
-            if self.false_positives:
-                keep &= ~np.isin(b_toks_lower, list(self.false_positives))
-
-            if not keep.any():
-                continue
-
-            keep_count = int(keep.sum())
-
-            # Append metadata
-            self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
-            self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
-            self._chunks["doc_id"].append(b_docs[keep])
-            self._chunks["token"].append(b_toks[keep])
-            self._chunks["token_idx"].append(np.asarray(b_idxs, dtype=np.int64)[keep])
-            self._chunks["window_id"].append(np.asarray(b_wins, dtype=np.int64)[keep])
-
-            if b_wpos is not None:
-                wpos_col = np.asarray(b_wpos, dtype=np.int64)[keep]
-            else:
-                wpos_col = np.full(keep_count, _NO_WPOS, dtype=np.int64)
-            self._chunks["window_token_pos"].append(wpos_col)
-
-            # Multi-scale embeddings
-            self._emb_local_chunks.append(np.asarray(b_local, dtype=np.float32)[keep])
-            self._emb_medium_chunks.append(np.asarray(b_medium, dtype=np.float32)[keep])
-            self._emb_broad_chunks.append(np.asarray(b_broad, dtype=np.float32)[keep])
-
-
-    def _finalize(self):
-        """
-        Concatenate all staged chunks.
-        """
-        n_total = sum(arr.shape[0] for arr in self._chunks["event_id"])
-
-        if n_total == 0:
-            for field, dtype in self._FIELDS.items():
-                setattr(self, field, np.empty(0, dtype=dtype))
-            self.emb_local  = np.empty((0, 768), dtype=np.float32)  # adjust dim if needed
-            self.emb_medium = np.empty((0, 768), dtype=np.float32)
-            self.emb_broad  = np.empty((0, 768), dtype=np.float32)
-            return
-
-        # Metadata
-        for field, dtype in self._FIELDS.items():
-            setattr(self, field, np.concatenate(self._chunks[field]).astype(dtype, copy=False))
-
-        # Embeddings
-        self.emb_local  = np.concatenate(self._emb_local_chunks, axis=0)
-        self.emb_medium = np.concatenate(self._emb_medium_chunks, axis=0)
-        self.emb_broad  = np.concatenate(self._emb_broad_chunks, axis=0)
-
-        self._pos = {int(eid): pos for pos, eid in enumerate(self.event_id)}
-
-        # Cleanup
-        self._chunks.clear()
-        self._emb_local_chunks.clear()
-        self._emb_medium_chunks.clear()
-        self._emb_broad_chunks.clear()
-
-        logger.info(f"[tier2] loaded {n_total:,} events with multi-scale embeddings")
-
-
-    def get_ensemble_embedding(self, pos: int, weights=None) -> np.ndarray:
-        """Return weighted ensemble embedding for a given event position."""
-        if weights is None:
-            weights = [0.25, 0.50, 0.25]  # local, medium, broad
-
-        return (
-            weights[0] * self.emb_local[pos] +
-            weights[1] * self.emb_medium[pos] +
-            weights[2] * self.emb_broad[pos]
-        )
-
-    def get_event(self, event_id: int) -> dict:
-        """
-        Return a dict for one event, in the same shape as the previous
-        per-event dict representation (event_id, vector_id, doc_id, token,
-        token_idx, window_id, window_token_pos, embedding).
-
-        Kept for compatibility with code that wants a single event as a
-        dict (e.g. logging, one-off lookups). Hot loops should prefer
-        get_pos() plus direct array access to avoid per-call dict
-        allocation — see analyse_concept.
-        """
-        pos = self._pos[int(event_id)]
-        event = self._row_to_dict(pos)
-        event["embedding"] = self.get_ensemble_embedding(pos)   # default to ensemble
-        return event
-
-
-    def get_pos(self, event_id: int) -> int:
-        """event_id -> row position. Raises KeyError if not present."""
-        return self._pos[int(event_id)]
-
-
-    def _row_to_dict(self, pos: int) -> dict:
-        """Convert a row position into the legacy dict format."""
-        wpos = int(self.window_token_pos[pos])
-
-        return {
-            "event_id":         int(self.event_id[pos]),
-            "vector_id":        int(self.vector_id[pos]),
-            "doc_id":           str(self.doc_id[pos]),
-            "token":            str(self.token[pos]),
-            "token_idx":        int(self.token_idx[pos]),
-            "window_id":        int(self.window_id[pos]),
-            "window_token_pos": None if wpos == _NO_WPOS else wpos,
-            # "embedding" is now added in get_event() using ensemble
-        }
-
-
-    def iter_matching_event_ids(self, forms, false_positives=None):
-        """
-        Yield event_ids matching forms).
-        """
-        forms = {f.lower() for f in forms}
-        false_positives = {f.lower() for f in (false_positives or [])}
-
-        if len(self.token) == 0:
-            return
-
-        tokens_lower = np.char.lower(self.token.astype(str))
-        mask = np.isin(tokens_lower, list(forms))
-
-        if false_positives:
-            mask &= ~np.isin(tokens_lower, list(false_positives))
-
-        for eid in self.event_id[mask]:
-            yield int(eid)
-
-
-# Document metadata
 def load_doc_metadata(conn) -> dict:
     """
     Build doc_id -> metadata mapping from documents + place_normalization.
@@ -428,8 +191,11 @@ def load_doc_metadata(conn) -> dict:
     cur.execute("""
         SELECT DISTINCT ON (d.doc_id)
             d.doc_id,
-            d.pub_year,
             d.title,
+            d.pub_year,
+            d.pub_place,
+            d.author,
+            d.publisher,
             pn.normalized_places,
             pn.geom,
             ST_Y(pn.geom::geometry) AS lat,
@@ -440,17 +206,86 @@ def load_doc_metadata(conn) -> dict:
     """)
 
     out = {}
-    for doc_id, year, title, places, geom, lat, lng in cur.fetchall():
+    for (
+        doc_id,
+        title,
+        pub_year,
+        pub_place,
+        author,
+        publisher,
+        places,
+        geom,
+        lat,
+        lng,
+    ) in cur.fetchall():
         out[doc_id] = {
-            "pub_year": year,
+            "pub_year": pub_year,
             "title": title,
+            "author": author,
+            "publisher": publisher,
+            "pub_place": pub_place,
             "places": places,
             "geom": geom,   # ST_Point
             "lat": lat,
             "lng": lng,
         }
-
     return out
+
+
+def populate_documents_table(con, doc_meta):
+    """Populate or refresh the documents table with metadata and location info."""
+    logger.info(f"[tier2] Populating documents table ({len(doc_meta)} entries)")
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS documents (
+            doc_id            TEXT PRIMARY KEY,
+            title             TEXT,
+            author            TEXT,
+            pub_year          INTEGER,
+            publisher         TEXT,
+            pub_place         TEXT,
+            normalized_places TEXT, -- json
+            geom              TEXT,
+            lat               REAL,
+            lng               REAL
+        )
+    """)
+
+    con.execute("DELETE FROM documents")
+
+    data = []
+    for doc_id, meta in doc_meta.items():
+        places = meta.get("places")
+        places_json = json.dumps(places) if isinstance(places, (list, dict)) else str(places) if places else None
+        data.append((
+            doc_id,
+            meta.get("title"),
+            meta.get("author"),
+            meta.get("pub_year"),
+            meta.get("publisher"),
+            meta.get("pub_place"),
+            places_json,
+            meta.get("geom"),
+            meta.get("lat"),
+            meta.get("lng")
+        ))
+
+    con.executemany("""
+        INSERT INTO documents
+        (doc_id, title, author, pub_year, publisher, pub_place,
+         normalized_places, geom, lat, lng)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, data)
+
+    con.executescript("""
+        CREATE INDEX IF NOT EXISTS docs_geom_idx ON documents(geom);
+        CREATE INDEX IF NOT EXISTS docs_pub_latlng_idx ON documents(lat, lng);
+        CREATE INDEX IF NOT EXISTS idx_documents_pub_year_lat_lng ON documents(pub_year, lat, lng);
+        CREATE INDEX IF NOT EXISTS docs_doc_idx ON documents(doc_id);
+        CREATE INDEX IF NOT EXISTS docs_author_idx ON documents(author);
+        CREATE INDEX IF NOT EXISTS docs_pub_year_idx ON documents(pub_year);
+        CREATE INDEX IF NOT EXISTS docs_pub_place_idx ON documents(pub_place);
+    """)
 
 
 # Concept analysis
@@ -482,38 +317,30 @@ def analyse_concept(
             * event metadata
             * neighbours: list of neighbour dicts (same structure)
     """
-    # Column references from lookup (struct-of-arrays)
-    L_event_id      = lookup.event_id
-    L_vector_id     = lookup.vector_id
-    L_doc_id        = lookup.doc_id
-    L_token         = lookup.token
-    L_token_idx     = lookup.token_idx
-    L_window_id     = lookup.window_id
-    L_wpos          = lookup.window_token_pos
+    L_event_id   = lookup.event_id
+    L_vector_id  = lookup.vector_id
+    L_doc_id     = lookup.doc_id
+    L_token      = lookup.token
+    L_token_idx  = lookup.token_idx
+    L_window_id  = lookup.window_id
+    L_wpos       = lookup.window_token_pos
 
-    # CONCEPT_SET union with any args supplied to this routine
-    forms           = set(concept["forms"])
-    forms           = {
+    forms = {
         f.lower()
-        for f in (
-            list(forms or [])
-            + list(concept.get("forms", []))
-        )
+        for f in concept.get("forms", []) or []
     }
 
     false_positives = {
         f.lower()
-        for f in (
-            list(false_positives or [])
-            + list(concept.get("false_positives", []))
-        )
+        for f in list(false_positives or []) + list(concept.get("false_positives", []))
     }
 
     event_ids = list(lookup.iter_matching_event_ids(forms, false_positives))
 
-    logger.info(f"[tier2] concept={concept_name}")
+    logger.info(f"[tier2] concept={concept_name} | events={len(event_ids)}")
     if false_positives:
         logger.info(f"[tier2] excluding false_positives={false_positives}")
+
     if not event_ids:
         return {"concept": concept_name, "empty": True}
 
@@ -528,40 +355,24 @@ def analyse_concept(
     if diagnostics:
         logger.debug(f"[tier2] query_events={len(event_ids)}")
         logger.debug(f"[tier2] sample_event_id={event_ids[0]}")
-        logger.debug(f"[tier2] sample_embedding_shape={query_vecs.shape}")
 
-    all_scores, all_neigh_ids = index.search(query_vecs, K)
-
-    if diagnostics:
-        audit_embedding_diversity(concept_name, query_vecs)
-        audit_embedding_isotropy(query_vecs)
-        audit_hubness(index, query_vecs, k=K)
-        audit_neighbour_identity(all_neigh_ids)
-        audit_knn_stability(index, lookup, event_ids, k=K)
+    all_scores, all_neigh_ids = index.search(query_vecs, top_n)
 
     token_counter  = Counter()
     doc_counter    = Counter()
     window_counter = Counter()
     results        = []
 
-    # Set of original query event_ids — used to exclude self-matches at
-    # depth 2 without repeated list membership tests.
     query_event_id_set = set(event_ids)
 
     for i, eid in enumerate(event_ids):
         q_pos = int(event_pos[i])
         q_doc_id = str(L_doc_id[q_pos])
         q_pub_year = doc_meta.get(q_doc_id, {}).get("pub_year")
-
-        q_meta  = doc_meta.get(q_doc_id, {})
-        q_geom  = q_meta.get("geom")
-        q_lat   = q_meta.get("lat")
-        q_lng   = q_meta.get("lng")
-        q_wpos  = int(L_wpos[q_pos])
+        q_wpos = int(L_wpos[q_pos])
 
         neighbours = []
 
-        # Depth 1 neighbours
         for nid, score in zip(all_neigh_ids[i], all_scores[i]):
             nid_int = int(nid)
             if nid_int == -1 or nid_int == eid:
@@ -572,9 +383,6 @@ def analyse_concept(
                 continue
 
             n_doc_id = str(L_doc_id[n_pos])
-            n_geom = doc_meta.get(n_doc_id, {}).get("geom")
-            n_lat = doc_meta.get(n_doc_id, {}).get("lat")
-            n_lng = doc_meta.get(n_doc_id, {}).get("lng")
             n_window_id = int(L_window_id[n_pos])
             n_wpos = int(L_wpos[n_pos])
 
@@ -593,75 +401,8 @@ def analyse_concept(
                 "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
                 "score":            float(score),
                 "depth":            1,
-                "geom":             n_geom,
-                "lat":              n_lat,
-                "lng":              n_lng,
                 "via_event_id":     None,
             })
-
-        # Main query event
-        results.append({
-            "event_id":         int(L_event_id[q_pos]),
-            "vector_id":        int(L_vector_id[q_pos]),
-            "token":            str(L_token[q_pos]),
-            "doc_id":           q_doc_id,
-            "pub_year":         q_pub_year,
-            "token_idx":        int(L_token_idx[q_pos]),
-            "window_id":        int(L_window_id[q_pos]),
-            "window_token_pos": None if q_wpos == _NO_WPOS else q_wpos,
-            "geom":             q_geom,
-            "lat":              q_lat,
-            "lng":              q_lng,
-            "neighbours":       neighbours,
-        })
-
-        q_pos = int(event_pos[i])
-        q_doc_id = str(L_doc_id[q_pos])
-        q_pub_year = doc_meta.get(q_doc_id, {}).get("pub_year")
-
-        q_meta = doc_meta.get(q_doc_id, {})
-        q_geom = q_meta.get("geom")
-        q_lat = q_meta.get("lat")
-        q_lng = q_meta.get("lng")
-
-        neighbours = []
-
-        for nid, score in zip(all_neigh_ids[i], all_scores[i]):
-            # Skip no match or self-matches:
-            nid_int = int(nid)
-            if nid_int == -1 or nid_int == eid:
-                continue
-            n_pos                                   = lookup.get_pos(int(nid))
-            n_token                                 = str(L_token[n_pos])
-            if n_token.lower() in false_positives:
-                continue
-            n_doc_id                                = str(L_doc_id[n_pos])
-            n_geom                                  = doc_meta.get(n_doc_id, {}).get("geom")
-            n_lat                                   = doc_meta.get(n_doc_id, {}).get("lat")
-            n_lng                                   = doc_meta.get(n_doc_id, {}).get("lng")
-            n_window_id                             = int(L_window_id[n_pos])
-            token_counter[n_token]                  += 1
-            doc_counter[n_doc_id]                   += 1
-            window_counter[(n_doc_id, n_window_id)] += 1
-            n_wpos                                  = int(L_wpos[n_pos])
-            neighbours.append({
-                "event_id":         int(L_event_id[n_pos]),
-                "vector_id":        int(L_vector_id[n_pos]),
-                "token":            n_token,
-                "doc_id":           n_doc_id,
-                "pub_year":         doc_meta.get(n_doc_id, {}).get("pub_year"),
-                "token_idx":        int(L_token_idx[n_pos]),
-                "window_id":        n_window_id,
-                "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
-                "score":            float(score),
-                "depth":            1,
-                "geom":             n_geom,
-                "lat":              n_lat,
-                "lng":              n_lng,
-                "via_event_id":     None,
-            })
-
-        q_wpos = int(L_wpos[q_pos])
 
         results.append({
             "event_id":         int(L_event_id[q_pos]),
@@ -672,9 +413,6 @@ def analyse_concept(
             "token_idx":        int(L_token_idx[q_pos]),
             "window_id":        int(L_window_id[q_pos]),
             "window_token_pos": None if q_wpos == _NO_WPOS else q_wpos,
-            "geom":             q_geom,
-            "lat":              q_lat,
-            "lng":              q_lng,
             "neighbours":       neighbours,
         })
 
@@ -720,7 +458,7 @@ def analyse_concept(
 
             if d1_positions.size > 0:
                 d1_vecs = np.array([lookup.get_ensemble_embedding(p) for p in d1_positions])
-                d2_scores, d2_neigh_ids = index.search(d1_vecs, K)
+                d2_scores, d2_neigh_ids = index.search(d1_vecs, top_n)
 
                 logger.info(
                     f"[tier2] depth-2 search: via_events={len(d1_ids_list)}"
@@ -733,6 +471,8 @@ def analyse_concept(
 
                     for nid, score in zip(d2_neigh_ids[i], d2_scores[i]):
                         nid_int = int(nid)
+                        if nid_int == via_eid:
+                            continue
                         if nid_int == -1:
                             continue
                         # Exclude original query events and depth-1 neighbours
@@ -811,9 +551,6 @@ CREATE TABLE IF NOT EXISTS events (
     token_idx        INTEGER,
     window_id        INTEGER,
     window_token_pos INTEGER,
-    geom             TEXT,
-    lat              NUMBER,
-    lng              NUMBER,
     nx               REAL,
     ny               REAL,
     gnx              REAL,
@@ -836,9 +573,6 @@ CREATE TABLE IF NOT EXISTS neighbours (
     window_id           INTEGER,
     window_token_pos    INTEGER,
     score               REAL,
-    geom                TEXT,
-    lat                 NUMBER,
-    lng                 NUMBER,
     nx                  REAL,
     ny                  REAL,
     gnx                 REAL,
@@ -849,16 +583,9 @@ CREATE TABLE IF NOT EXISTS neighbours (
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
 
-CREATE INDEX IF NOT EXISTS events_geom_idx ON events(geom);
-CREATE INDEX IF NOT EXISTS neighbours_geom_idx ON neighbours(geom);
-
-CREATE INDEX IF NOT EXISTS events_lat_idx ON events(lat);
-CREATE INDEX IF NOT EXISTS events_lng_idx ON events(lng);
-CREATE INDEX IF NOT EXISTS neighbours_lat_idx ON neighbours(lat);
-CREATE INDEX IF NOT EXISTS neighbours_lng_idx ON neighbours(lng);
 CREATE INDEX IF NOT EXISTS idx_events_concept_pubyear_nx ON events(concept, pub_year, nx, ny, gnx, gny);
 
-CREATE TABLE concept_projection_bounds (
+CREATE TABLE IF NOT EXISTS concept_projection_bounds (
     concept   TEXT NOT NULL,
     local_min_x  REAL, local_max_x  REAL,
     local_min_y  REAL, local_max_y  REAL,
@@ -908,11 +635,15 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
 """
 
 _SCHEMA_CLEAR = """
+    DROP TABLE IF EXISTS concept_forms;
+    DROP TABLE IF EXISTS concepts;
     DROP TABLE IF EXISTS concept_cluster_info;
     DROP TABLE IF EXISTS concept_aggregate;
     DROP TABLE IF EXISTS neighbours;
     DROP TABLE IF EXISTS events;
     DROP TABLE IF EXISTS concepts;
+    DROP TABLE IF EXISTS documents;
+    DROP TABLE IF EXISTS concept_projection_bounds;
 """
 
 _DELETE_CONCEPT = [
@@ -948,13 +679,6 @@ def load_concept_forms(conn, concept):
 def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict = None):
     """
     Write analyse_concept output to a normalised SQLite database.
-
-    If clear=True, all existing tables are dropped and recreated before
-    writing. Use this when rebuilding the full corpus analysis from scratch.
-
-    Otherwise, existing rows for each concept in output are deleted and
-    rewritten, leaving all other concepts intact. This is the correct path
-    for single-concept runs from the UI.
     """
     logger.debug(f"[tier2] writing sqlite -> {db_path}")
 
@@ -984,7 +708,6 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
         forms = set(data.get("forms", []))
         false_positives = set(data.get("false_positives", []))
 
-        # normal forms
         for form in forms:
             con.execute(
                 """
@@ -996,7 +719,6 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                 (concept_name, form),
             )
 
-        # false positives override
         for form in false_positives:
             con.execute(
                 """
@@ -1008,11 +730,12 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                 (concept_name, form),
             )
 
+        # Events - NO location fields
         con.executemany( """
             INSERT OR IGNORE INTO events
             (event_id, concept, vector_id, token, doc_id, pub_year,
-            token_idx, window_id, window_token_pos, geom, lat, lng )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             token_idx, window_id, window_token_pos)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -1025,21 +748,17 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                     e["token_idx"],
                     e["window_id"],
                     e["window_token_pos"],
-                    e.get("geom"),
-                    e.get("lat"),
-                    e.get("lng"),
                 )
                 for e in data["events"]
             ],
         )
 
-        # neighbours
+        # Neighbours - NO location fields
         con.executemany("""
             INSERT OR IGNORE INTO neighbours
             (event_id, neighbour_event_id, depth, via_event_id, vector_id,
-            token, doc_id, pub_year, token_idx, window_id, window_token_pos,
-            score, geom, lat, lng )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             token, doc_id, pub_year, token_idx, window_id, window_token_pos, score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             [
                 (
@@ -1055,9 +774,6 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                     n["window_id"],
                     n["window_token_pos"],
                     n["score"],
-                    n.get("geom"),
-                    n.get("lat"),
-                    n.get("lng"),
                 )
                 for e in data["events"]
                 for n in e["neighbours"]
@@ -1071,60 +787,14 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
             list(_aggregate_rows(concept_name, data["aggregate"])),
         )
 
-        con.executemany(
-            """UPDATE events
-            SET geom = ?, lat = ?, lng = ?
-            WHERE doc_id = ? AND (lat IS NULL OR lng IS NULL)""",
-            [
-                (meta["geom"], meta["lat"], meta["lng"], doc_id)
-                for doc_id, meta in doc_meta.items()
-                if meta.get("lat") is not None and meta.get("lng") is not None
-            ]
-        )
-
         con.commit()
 
-    populate_documents_table(con, doc_meta)
+    # Populate documents table (once, outside the loop)
+    if doc_meta:
+        populate_documents_table(con, doc_meta)
 
     con.close()
     logger.info(f"[tier2] sqlite write complete: {db_path}")
-
-
-def populate_documents_table(con, doc_meta):
-    """Populate a lightweight documents table from doc_meta."""
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS documents (
-            doc_id    TEXT PRIMARY KEY,
-            title     TEXT,
-            author    TEXT,
-            pub_year  INTEGER,
-            publisher TEXT,
-            pub_place TEXT
-        )
-    """)
-
-    con.execute("DELETE FROM documents")
-
-    con.executemany(
-        """
-        INSERT INTO documents
-            (doc_id, title, author, pub_year, publisher, pub_place)
-        VALUES
-            (?,       ?,    ?,      ?,        ?,         ?)
-        """,
-        (
-            (
-                doc_id,
-                meta.get("title"),
-                None,
-                meta.get("pub_year"),
-                None,
-                None,
-            )
-            for doc_id, meta in doc_meta.items()
-        ),
-    )
-    con.commit()
 
 
 def _aggregate_rows(concept_name, aggregate):
@@ -1222,6 +892,7 @@ def run_tier2_core(
             lookup,
             concept_name,
             concept,
+            false_positives=false_positives,
             diagnostics=diagnostics,
             depth=depth,
         )
