@@ -71,6 +71,7 @@ export default function DocRow(props: Props) {
                 <td>{props.doc_id}</td>
                 <td>{props.author}</td>
                 <td>{props.pub_year}</td>
+                <td>{props.author}</td>
                 <td>
                     <span class="td-title">{props.title}</span>
                     <span class="tooltip max bottom">{props.title}</span>

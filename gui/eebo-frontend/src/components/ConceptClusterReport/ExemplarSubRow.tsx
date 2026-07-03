@@ -37,7 +37,7 @@ export default function ExemplarSubRow(props: { event: Exemplar }) {
             }
             class="bottom-padding surface-container-lowest"
         >
-            <td colspan="6">
+            <td colspan="7">
                 <div>
                     token_idx {props.event.token_idx}
                     {props.event.token ? ` · ${ props.event.token }` : ""}
