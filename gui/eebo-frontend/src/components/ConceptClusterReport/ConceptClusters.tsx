@@ -54,8 +54,7 @@ export default function ConceptClusters() {
     });
 
     return (
-        <article class="concept-clusters background">
-
+        <article class="background">
             <ControlsHeader>
                 <Show when={clusterReport()}>
                     <ClusterExport clusters={clusterReport()!} />
@@ -112,17 +111,16 @@ export default function ConceptClusters() {
                 <Show when={selectedClusterData()}>
                     {(c) => (
                         <div class="grid">
-
-                            <section class="s2">
-                                <table class="scroll small-height">
-                                    {/* <caption>Top Tokens</caption> */}
-                                    <thead class="fixed surface-container-highest">
+                            <div class="s2">
+                                <table class="surface">
+                                    <caption>Top Tokens</caption>
+                                    {/* <thead class="fixed">
                                         <tr>
                                             <td></td>
                                             <td>Token</td>
                                             <td>Count</td>
                                         </tr>
-                                    </thead>
+                                    </thead> */}
                                     <For each={c().topTokens}>
                                         {([t, n], i) => (
                                             <tr>
@@ -133,38 +131,42 @@ export default function ConceptClusters() {
                                         )}
                                     </For>
                                 </table>
-                            </section>
+                            </div>
 
-                            <section class="s10">
-                                <table class="scroll small-height">
-                                    {/* <caption>Top Documents</caption> */}
-                                    {/* <thead class="fixed">
-                                        <tr>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                        </tr>
-                                    </thead> */}
-                                    <tbody>
-                                        <For each={c().topDocs}>
-                                            {([doc_id, count], i) => (
-                                                <DocRow
-                                                    rank={i() + 1}
-                                                    doc_id={doc_id}
-                                                    count={count}
-                                                    author={clusterReport()?.docMeta[doc_id]?.author ?? null}
-                                                    pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
-                                                    title={clusterReport()?.docMeta[doc_id]?.title ?? null}
-                                                    exemplars={clusterReport()?.docExemplars?.[doc_id] ?? []}
-                                                />
-                                            )}
-                                        </For>
-                                    </tbody>
-                                </table>
-                            </section>
+                            <div class="s10">
 
+                                <div class="large-height scroll surface">
+                                    <table class="stripes no-border scroll max">
+
+                                        <caption>Top Documents</caption>
+                                        <thead class="fixed">
+                                            <tr>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <For each={c().topDocs}>
+                                                {([doc_id, count], i) => (
+                                                    <DocRow
+                                                        rank={i() + 1}
+                                                        doc_id={doc_id}
+                                                        count={count}
+                                                        author={clusterReport()?.docMeta[doc_id]?.author ?? null}
+                                                        pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
+                                                        title={clusterReport()?.docMeta[doc_id]?.title ?? null}
+                                                        exemplars={clusterReport()?.docExemplars?.[doc_id] ?? []}
+                                                    />
+                                                )}
+                                            </For>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                            </div>
                         </div>
                     )}
                 </Show>
