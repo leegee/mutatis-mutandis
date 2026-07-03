@@ -5,7 +5,7 @@ from lib.eebo_logging import logger
 from lib.zarr_store_dirs import store_dirs
 
 BATCH_SIZE = 8192
-
+_NO_WPOS = -1
 
 class ZarrEventLookup:
     """
