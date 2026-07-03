@@ -24,6 +24,7 @@ export default function ConceptClusterPlot() {
         fromYear: controls.fromYear,
         toYear: controls.toYear,
         yearMode: controls.yearMode,
+        authorMatch: controls.authorMatch,
     });
 
     const [conceptDatasets, { refetch }] = createResource(

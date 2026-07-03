@@ -33,6 +33,7 @@ export type ControlsState = {
   toYear: number;
   showEventLabels: boolean;
   projectionMode: ProjectionModeType;
+  authorMatch: string;
 };
 
 const initialControls: ControlsState = {
@@ -56,6 +57,7 @@ const initialControls: ControlsState = {
   projectionMode: 'global',
   scatterPlotLayerMode: 'concept',
   colorScatterBy: 'pub_year',
+  authorMatch: '',
 };
 
 export const [controls, setControls] = makePersisted(

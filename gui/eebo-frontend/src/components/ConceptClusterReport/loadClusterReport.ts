@@ -31,10 +31,39 @@ export interface ClusterReport {
     >;
 }
 
-function yearFilter(yearMode: YearMode, fromYear: number, toYear: number): string {
-    return yearMode === "single"
-        ? `AND pub_year = ${ fromYear }`
-        : `AND pub_year BETWEEN ${ fromYear } AND ${ toYear }`;
+type SqlFragment = {
+    sql: string;
+    params: any[];
+};
+
+function yearFilter(
+    yearMode: YearMode,
+    fromYear: number,
+    toYear: number
+): SqlFragment {
+    if (yearMode === "single") {
+        return {
+            sql: `AND e.pub_year = ?`,
+            params: [fromYear],
+        };
+    }
+
+    return {
+        sql: `AND e.pub_year BETWEEN ? AND ?`,
+        params: [fromYear, toYear],
+    };
+}
+
+function authorFilter(str: string): SqlFragment {
+    const term = str
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
+
+    return {
+        sql: `AND d.author LIKE ? ESCAPE '\\'`,
+        params: [`%${ term }%`],
+    };
 }
 
 interface loadClusterReportParams {
@@ -42,26 +71,55 @@ interface loadClusterReportParams {
     yearMode?: YearMode;
     fromYear?: number;
     toYear?: number;
+    authorMatch?: string;
 }
 
-export async function loadClusterReport(params: loadClusterReportParams): Promise<ClusterReport> {
-    const { concept, yearMode, fromYear, toYear } = params;
+export async function loadClusterReport(
+    params: loadClusterReportParams
+): Promise<ClusterReport> {
+    const { concept, yearMode, fromYear, toYear, authorMatch } = params;
 
-    const yearActive = yearMode != null && fromYear != null && toYear != null;
-    const yearClause = yearActive ? yearFilter(yearMode!, fromYear!, toYear!) : "";
+    const yearActive =
+        yearMode != null && fromYear != null && toYear != null;
 
-    // base stats label, size
+    const year =
+        yearActive && yearMode && fromYear != null && toYear != null
+            ? yearFilter(yearMode, fromYear, toYear)
+            : null;
+
+    const author = authorMatch?.trim()
+        ? authorFilter(authorMatch)
+        : null;
+
+    const joins = author ? "JOIN documents d ON d.doc_id = e.doc_id" : "";
+    const authorSql = author ? author.sql : "";
+
+    const baseWhere = `
+        WHERE e.concept = ?
+          AND e.cluster_id IS NOT NULL
+          AND e.pub_year IS NOT NULL
+          ${ year ? year.sql : "" }
+          ${ authorSql }
+    `;
+
+    const baseParams = [
+        concept,
+        ...(year ? year.params : []),
+        ...(author ? author.params : []),
+    ];
+
+    // -------------------------
+    // cluster stats
+    // -------------------------
     const clusterRows = await execRows(
         `
-        SELECT cluster_id, cluster_label, COUNT(*) AS n
-        FROM events
-        WHERE concept = ?
-          AND cluster_id IS NOT NULL
-          AND pub_year IS NOT NULL
-          ${ yearClause }
-        GROUP BY cluster_id, cluster_label
+        SELECT e.cluster_id, e.cluster_label, COUNT(*) AS n
+        FROM events e
+        ${ joins }
+        ${ baseWhere }
+        GROUP BY e.cluster_id, e.cluster_label
         `,
-        [concept]
+        baseParams
     );
 
     const clusters = new Map<number, ClusterSummary>();
@@ -72,7 +130,7 @@ export async function loadClusterReport(params: loadClusterReportParams): Promis
             label,
             eventCount: n,
             topTokens: [],
-            topDocs: []
+            topDocs: [],
         });
     }
 
@@ -82,62 +140,62 @@ export async function loadClusterReport(params: loadClusterReportParams): Promis
             generated_at: new Date().toISOString(),
             clusters: [],
             docMeta: {},
-            docExemplars: {}
+            docExemplars: {},
         };
     }
 
+    // -------------------------
     // tokens
+    // -------------------------
     const tokenRows = await execRows(
         `
         SELECT cluster_id, token, c
         FROM (
             SELECT
-                cluster_id,
-                token,
+                e.cluster_id,
+                e.token,
                 COUNT(*) AS c,
                 ROW_NUMBER() OVER (
-                    PARTITION BY cluster_id
+                    PARTITION BY e.cluster_id
                     ORDER BY COUNT(*) DESC
                 ) AS rn
-            FROM events
-            WHERE concept = ?
-              AND cluster_id IS NOT NULL
-              AND pub_year IS NOT NULL
-              ${ yearClause }
-            GROUP BY cluster_id, token
+            FROM events e
+            ${ joins }
+            ${ baseWhere }
+            GROUP BY e.cluster_id, e.token
         )
         WHERE rn <= 25
         `,
-        [concept]
+        baseParams
     );
 
     for (const [cid, token, c] of tokenRows as any[]) {
         clusters.get(cid)?.topTokens.push([token, c]);
     }
 
-    // top docs per cluster
+    // -------------------------
+    // top docs
+    // -------------------------
     const docRows = await execRows(
         `
         SELECT cluster_id, doc_id, c
         FROM (
             SELECT
-                cluster_id,
-                doc_id,
+                e.cluster_id,
+                e.doc_id,
                 COUNT(*) AS c,
                 ROW_NUMBER() OVER (
-                    PARTITION BY cluster_id
+                    PARTITION BY e.cluster_id
                     ORDER BY COUNT(*) DESC
                 ) AS rn
-            FROM events
-            WHERE concept = ?
-              AND cluster_id IS NOT NULL
-              AND pub_year IS NOT NULL
-              ${ yearClause }
-            GROUP BY cluster_id, doc_id
+            FROM events e
+            ${ joins }
+            ${ baseWhere }
+            GROUP BY e.cluster_id, e.doc_id
         )
         WHERE rn <= 25
         `,
-        [concept]
+        baseParams
     );
 
     const docIds = new Set<string>();
@@ -147,7 +205,9 @@ export async function loadClusterReport(params: loadClusterReportParams): Promis
         docIds.add(doc_id);
     }
 
+    // -------------------------
     // metadata
+    // -------------------------
     const docMeta: Record<string, DocMeta> = {};
 
     if (docIds.size > 0) {
@@ -167,42 +227,33 @@ export async function loadClusterReport(params: loadClusterReportParams): Promis
         }
     }
 
+    // -------------------------
     // exemplars
-    const docExemplars: Record<
-        string,
-        {
-            event_id: string;
-            doc_id: string;
-            token_idx: number;
-        }[]
-    > = {};
+    // -------------------------
+    const docExemplars: ClusterReport["docExemplars"] = {};
 
     if (docIds.size > 0) {
         const ids = [...docIds];
 
         const exemplarRows = await execRows(
             `
-            SELECT event_id, doc_id, token_idx
-            FROM events
-            WHERE concept = ?
-              AND cluster_id IS NOT NULL
-              AND pub_year IS NOT NULL
-              ${ yearClause }
-              AND doc_id IN (${ ids.map(() => "?").join(",") })
+            SELECT e.event_id, e.doc_id, e.token_idx
+            FROM events e
+            ${ joins }
+            ${ baseWhere }
+              AND e.doc_id IN (${ ids.map(() => "?").join(",") })
             LIMIT 5000
             `,
-            [concept, ...ids]
+            [...baseParams, ...ids]
         );
 
         for (const [event_id, doc_id, token_idx] of exemplarRows as any[]) {
-            if (!docExemplars[doc_id]) {
-                docExemplars[doc_id] = [];
-            }
+            if (!docExemplars[doc_id]) docExemplars[doc_id] = [];
 
             docExemplars[doc_id].push({
                 event_id: String(event_id),
                 doc_id,
-                token_idx
+                token_idx,
             });
         }
     }
@@ -212,6 +263,6 @@ export async function loadClusterReport(params: loadClusterReportParams): Promis
         generated_at: new Date().toISOString(),
         clusters: [...clusters.values()],
         docMeta,
-        docExemplars
+        docExemplars,
     };
 }

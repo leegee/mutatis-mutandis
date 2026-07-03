@@ -20,6 +20,7 @@ function clusterFetchParams() {
         yearMode: controls.yearMode,
         fromYear: controls.fromYear,
         toYear: controls.toYear,
+        authorMatch: controls.authorMatch,
     };
 }
 

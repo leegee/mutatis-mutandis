@@ -1,10 +1,4 @@
-import {
-  children,
-  createResource,
-  For,
-  Show,
-  type ParentComponent,
-} from "solid-js";
+import { children, createResource, For, Show, type ParentComponent, } from "solid-js";
 import { controls, MAX_TOP_N } from "../../state/controls.store";
 import { controlsActions as A } from "../../state/controls.actions";
 import { listConcepts } from "../../services/db";
@@ -31,8 +25,8 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   const concepts = () => conceptsResource() ?? [];
 
   return (
-    <header class="fixed left-align max surface-container-low tiny-padding bottom-padding top-padding no-margin">
-      <nav>
+    <>
+      <nav class="toolbar no-round no-margin no-padding">
         <div class="field suffix border middle-align small">
           <Show when={concepts().length > 0}>
             <Show when={props.multiConcept} fallback={
@@ -128,7 +122,15 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         {resolved()}
       </nav>
-    </header >
+
+      <nav class="toolbar no-round no-margin no-padding">
+        <div class="field label border small no-margin no-padding" >
+          <input type='search' value={controls.authorMatch || ''} onChange={(e) => A.setAuthorMatch(e.currentTarget.value)} />
+          <label>Match Author</label>
+          <span class="tooltip bottom">Match authors containing characters entered here</span>
+        </div>
+      </nav>
+    </>
   );
 };
 

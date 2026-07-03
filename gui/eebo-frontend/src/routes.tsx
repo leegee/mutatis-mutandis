@@ -21,13 +21,13 @@ export const routes = [
     component: ScatterPlot,
     help: () => <ScatterPlotGuide />
   },
-  {
-    path: "/aggregates",
-    icon: "crowdsource",
-    label: "Aggregates",
-    component: ConceptAggregates,
-    help: () => <ConceptAggregatesGuide />
-  },
+  // {
+  //   path: "/aggregates",
+  //   icon: "crowdsource",
+  //   label: "Aggregates",
+  //   component: ConceptAggregates,
+  //   help: () => <ConceptAggregatesGuide />
+  // },
   {
     path: "/clusters",
     icon: "action_key",

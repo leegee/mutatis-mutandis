@@ -24,6 +24,10 @@ export const controlsActions = {
         setControls("neighbourOpacity", Number(neighbourOpacity));
     },
 
+    setAuthorMatch(string: string) {
+        setControls("authorMatch", string);
+    },
+
     setConcept(concept: string) {
         console.log('[actions] setConcept', concept);
         setControls({
