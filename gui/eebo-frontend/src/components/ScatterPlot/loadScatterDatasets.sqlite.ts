@@ -192,13 +192,10 @@ export async function loadDatasets(
                                 gny: p[5],
                                 point_count: p[6],
                                 concept,
-
                                 token: "_NULL_",
                                 token_idx: -999,
                                 doc_id: "_NULL_",
                                 pub_year: -999,
-                                lat: -999,
-                                lng: -999,
                                 vector_id: "_NULL_",
                                 window_id: -999,
                                 window_token_pos: -999,
