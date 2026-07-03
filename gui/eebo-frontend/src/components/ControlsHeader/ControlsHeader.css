@@ -1,8 +1,8 @@
 .toolbar {
     zoom: 0.7;
+}
 
-    :is(hr, .divider).vertical {
-        height: 74%;
-    }
-
+:is(hr, .divider).vertical {
+    height: 74%;
+    max-width: 1pt;
 }

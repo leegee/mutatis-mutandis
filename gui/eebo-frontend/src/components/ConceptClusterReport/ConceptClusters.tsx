@@ -56,7 +56,7 @@ export default function ConceptClusters() {
 
     return (
         <article class="background">
-            <ControlsHeader>
+            <ControlsHeader authorMatch>
                 <Show when={clusterReport()}>
                     <ClusterExport clusters={clusterReport()!} />
                 </Show>

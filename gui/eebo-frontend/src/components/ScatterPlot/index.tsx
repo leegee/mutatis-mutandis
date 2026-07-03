@@ -91,7 +91,7 @@ export default function ConceptClusterPlot() {
                         retry={refetch}
                     />
                 }>
-                    <ControlsHeader multiConcept={true}>
+                    <ControlsHeader multiConcept authorMatch>
                         <div class="field  border middle-align">
                             <select class="small-padding" value={controls.scatterPlotLayerMode}
                                 onChange={e => {
