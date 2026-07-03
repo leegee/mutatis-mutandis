@@ -1105,15 +1105,26 @@ def populate_documents_table(con, doc_meta):
 
     con.execute("DELETE FROM documents")
 
-    data = [
-        (doc_id, meta.get("title"), None, meta.get("pub_year"), None, None)
-        for doc_id, meta in doc_meta.items()
-    ]
-
     con.executemany(
-        "INSERT INTO documents (doc_id, title, author, pub_year, publisher, pub_place) VALUES (?,?,?,?,?,?)",
-        data
+        """
+        INSERT INTO documents
+            (doc_id, title, author, pub_year, publisher, pub_place)
+        VALUES
+            (?,       ?,    ?,      ?,        ?,         ?)
+        """,
+        (
+            (
+                doc_id,
+                meta.get("title"),
+                None,
+                meta.get("pub_year"),
+                None,
+                None,
+            )
+            for doc_id, meta in doc_meta.items()
+        ),
     )
+    con.commit()
 
 
 def _aggregate_rows(concept_name, aggregate):

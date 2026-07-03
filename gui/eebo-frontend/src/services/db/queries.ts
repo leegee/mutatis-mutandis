@@ -140,7 +140,7 @@ export async function queryEventsByIds(
   const uniqueIds = Array.from(new Set(ids));
   if (uniqueIds.length === 0) return result;
 
-  console.log("[query] queryEventsByIds", uniqueIds.length);
+  console.debug("[query] queryEventsByIds", uniqueIds.length);
 
   for (let i = 0; i < uniqueIds.length; i += SQLITE_MAX_VARIABLES) {
     const chunk = uniqueIds.slice(i, i + SQLITE_MAX_VARIABLES);

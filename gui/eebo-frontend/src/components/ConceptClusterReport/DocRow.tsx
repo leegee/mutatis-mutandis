@@ -1,31 +1,38 @@
 import { createSignal, createResource, createEffect, onCleanup, Show, For } from "solid-js";
-import { fetchWindowBatch, type TextWindowItem } from "../../services/tokenWindowBatchApi";
+import { fetchWindowBatch } from "../../services/tokenWindowBatchApi";
 import { getWindow, setWindowCache } from "../../services/windowCache";
-import type { ResolvedEvent } from "./ConceptClusters";
 import ExemplarSubRow from "./ExemplarSubRow";
 
-export default function DocRow(props: {
+import './DocRow.css';
+
+interface Props {
     rank: number;
     doc_id: string;
+    title: string | null;
+    author: string | null;
+    pub_year: number | null;
     count: number;
-    events: ResolvedEvent[];
-}) {
+
+    exemplars: {
+        event_id: string;
+        doc_id: string;
+        token_idx: number;
+    }[];
+}
+
+export default function DocRow(props: Props) {
     let rowRef: HTMLTableRowElement | undefined;
     const [visible, setVisible] = createSignal(false);
 
-    // events are pre-resolved and already capped to MAX_EXEMPLARS_PER_DOC
-    // by the parent, so only fetch window text for these few ids, and only
-    // once this row is visible.
     const [resolved] = createResource(
-        () => (visible() ? props.events : null),
-        async (events): Promise<ResolvedEvent[]> => {
-            if (!events || !events.length) return [];
+        () => (visible() ? props.exemplars : null),
+        async (exemplars) => {
+            if (!exemplars?.length) return [];
 
-            // skip ids whose window content is already cached
-            const toFetch = events.filter((e) => !getWindow(e.event_id));
+            const toFetch = exemplars.filter(e => !getWindow(e.event_id));
 
             if (toFetch.length) {
-                const batch = toFetch.map((e) => ({
+                const batch = toFetch.map(e => ({
                     eventId: e.event_id,
                     docId: e.doc_id,
                     tokenIdx: e.token_idx,
@@ -33,49 +40,54 @@ export default function DocRow(props: {
 
                 const res = await fetchWindowBatch(batch);
 
-                res.results.forEach((r: TextWindowItem, idx: number) => {
+                res.results.forEach((r, idx) => {
                     setWindowCache(toFetch[idx].event_id, r.content);
                 });
             }
 
-            return events;
+            return exemplars;
         }
     );
 
     createEffect(() => {
         if (!rowRef || visible()) return;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting) {
-                    setVisible(true);
-                    observer.disconnect();
-                }
-            },
-            { rootMargin: "100px" }
-        );
+
+        const observer = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting) {
+                setVisible(true);
+                observer.disconnect();
+            }
+        }, { rootMargin: "100px" });
+
         observer.observe(rowRef);
         onCleanup(() => observer.disconnect());
     });
 
     return (
         <>
-            <tr ref={rowRef} class="surface-container">
+            <tr ref={rowRef} class="surface-container-highest">
                 <td>{props.rank}</td>
-                <td><strong>{props.doc_id}</strong></td>
                 <td>{props.count.toLocaleString()}</td>
+                <td>{props.doc_id}</td>
+                <td>{props.author}</td>
+                <td>{props.pub_year}</td>
+                <td>
+                    <span class="td-title">{props.title}</span>
+                    <span class="tooltip max bottom">{props.title}</span>
+                </td>
             </tr>
+
             <Show when={visible() && resolved.loading}>
-                <tr class="surface-container-low">
-                    <td colspan="3">
+                <tr>
+                    <td colspan="6">
                         <progress />
                     </td>
                 </tr>
             </Show>
-            <For each={props.events}>
+
+            <For each={props.exemplars}>
                 {(ev) => <ExemplarSubRow event={ev} />}
             </For>
         </>
     );
 }
-
-
