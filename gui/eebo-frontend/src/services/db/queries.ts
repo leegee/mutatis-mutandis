@@ -50,11 +50,55 @@ export async function fetchEvents() {
     })
     .filter(Boolean);
 
-  console.log("[queries.fetchEvents] RV", [parsedRows])
-
+  console.debug("[queries.fetchEvents] RV", [parsedRows])
   return parsedRows;
 }
 
+export async function fetchEventsGeo() {
+  const concepts = controls.conceptSelection ?? [];
+
+  const conceptPlaceholders = concepts.length
+    ? `IN (${ concepts.map(() => "?").join(",") })`
+    : "IS NOT NULL";
+
+  const sql = `SELECT
+        events.event_id,
+        events.doc_id,
+        events.pub_year,
+        events.token,
+        documents.pub_place,
+        documents.normalized_places,
+        documents.lat,
+        documents.lng
+    FROM events
+    LEFT JOIN documents ON events.doc_id = documents.doc_id
+    WHERE events.pub_year BETWEEN ? AND ?
+    AND concept ${ conceptPlaceholders }
+    `;
+
+  const args = [controls.fromYear, controls.toYear, ...concepts];
+  console.debug("[queries.fetchEventsGeo] " + sql, args)
+
+  const rows = await execRows(sql, args);
+
+  const parsedRows = rows
+    .map((r) => {
+      return {
+        event_id: r[0],
+        doc_id: r[1],
+        pub_year: r[2],
+        token: r[3],
+        pub_place: r[4],
+        normalized_places: r[5],
+        lat: r[6],
+        lng: r[7],
+      };
+    })
+    .filter(Boolean);
+
+  console.debug("[queries.fetchEventsGeo] RV", [parsedRows])
+  return parsedRows;
+}
 
 export async function listConcepts(): Promise<string[]> {
   const rows = await execRows("SELECT concept FROM concepts ORDER BY concept");

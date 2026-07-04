@@ -1,7 +1,7 @@
 import { createMemo, createResource } from "solid-js";
 import GeoMap, { type EventPoint } from "./GeoMap";
 import { controls } from "../../state/controls.store";
-import { fetchEvents } from "../../services/db";
+import { fetchEventsGeo } from "../../services/db";
 import ControlsHeader from "../ControlsHeader";
 
 type RawRow = {
@@ -54,7 +54,7 @@ export default function ConceptClusterGeoMap() {
 
     const [events] = createResource(
         sharedKey,
-        fetchEvents
+        fetchEventsGeo
     );
 
     const mapPoints = createMemo(() => {
@@ -63,7 +63,7 @@ export default function ConceptClusterGeoMap() {
         const eventPoints = eventRows.map((eventPoint) => ({
             lat: eventPoint.lat,
             lng: eventPoint.lng,
-            label: eventPoint.token ?? controls.conceptSelection[0],
+            label: eventPoint.normalized_places,
         }));
 
         return aggregatePlaces([

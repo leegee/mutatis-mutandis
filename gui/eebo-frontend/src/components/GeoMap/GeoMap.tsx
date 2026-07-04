@@ -56,7 +56,7 @@ export default function GeoMap(props: ClusterGeoMapProps) {
     font-weight:600;
   ">${ p.count }</div>
   <div style="text-align:center; margin-top:2px; text-shadow:0 0 2px black; ">
-  ${ p.label }
+  ${ JSON.parse(p.label) }
   </div>
 `;
             const marker = new maplibregl.Marker({ element: el })
