@@ -81,8 +81,9 @@ export default function ConceptClusterPlot() {
     return (
         <>
             <Show when={loading()}>
-                <progress class="absolute top" />
+                <progress class="absolute bottom" />
             </Show>
+
             <Show when={conceptDatasets()}>
                 <Show when={!error()} fallback={
                     <GlobalMessageDisplay
