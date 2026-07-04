@@ -42,6 +42,7 @@ from lib.eebo_faiss import EeboFaissIndex
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_logging import logger, setEmit
 from lib.eebo_db import get_connection
+from lib.embedding_cache import EmbeddingCache
 
 from tier2_0_concept_events import ZarrEventLookup, sqlite3_connection
 
@@ -52,82 +53,48 @@ CLUSTER_DIR       = PLOT_DIR / "concept_clusters"
 
 K = 25
 
+def _process_single_concept(args):
+    """Worker function for parallel concept processing."""
+    concept_name, concept_def, zarr_root, faiss_path, sample_limit = args
 
-class EmbeddingCache:
-    """
-    Single point of access for embeddings.
+    from tier2_0_concept_events import ZarrEventLookup
+    from lib.eebo_faiss import EeboFaissIndex
 
-    Fetches each event's embedding from the lookup at most once and keeps
-    it in memory as a row in a contiguous float32 matrix, so repeated
-    np.stack([lookup.get_event(eid)["embedding"] for eid in ids]) calls
-    across fit_umap_local / fit_cluster_local / build_depth_layers
-    collapse into cheap array slicing.
+    lookup = ZarrEventLookup(zarr_root)
+    index = EeboFaissIndex.load(faiss_path)
+    emb_cache = EmbeddingCache(lookup)
 
-    Does not change any numeric results — same embeddings, same dtype,
-    same ordering semantics (callers still build their own X via
-    `matrix(event_ids)`, which preserves the order of `event_ids`).
-    """
+    seed_ids = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
+    seed_ids = [str(eid) for eid in seed_ids]
+    concept_sample = seed_ids[:sample_limit] if sample_limit else seed_ids
 
-    def __init__(self, lookup):
-        self._lookup = lookup
-        self._row_of = {}      # event_id -> row index in _mat
-        self._mat = None       # (N, D) float32, grows as needed
-        self._cap = 0
+    if not concept_sample:
+        return None, f"no events found for concept={concept_name}"
 
-    def _ensure_capacity(self, extra):
-        needed = len(self._row_of) + extra
-        if self._mat is None:
-            cap = max(needed, 1024)
-            self._mat = np.empty((cap, self._dim), dtype=np.float32)
-            self._cap = cap
-            return
-        if needed > self._cap:
-            new_cap = max(needed, self._cap * 2)
-            new_mat = np.empty((new_cap, self._mat.shape[1]), dtype=np.float32)
-            new_mat[: self._mat.shape[0]] = self._mat
-            self._mat = new_mat
-            self._cap = new_cap
+    X_concept = emb_cache.matrix(concept_sample)
+    local_concept = fit_umap_local(X_concept, concept_sample)
 
-    def _fetch(self, eid):
-        emb = self._lookup.get_event(eid)["embedding"]
-        return np.asarray(emb, dtype=np.float32)
+    neigh_layers = build_depth_layers(
+        index, emb_cache, concept_sample, k=K, max_depth=2, max_nodes=3000
+    )
+    neigh_ids, neigh_depth_map = depth_layers_to_flat(neigh_layers)
+    X_neigh = emb_cache.matrix(neigh_ids)
+    local_neigh = fit_umap_local(X_neigh, neigh_ids)
 
-    def warm(self, event_ids):
-        """Fetch and cache any embeddings not already cached."""
-        missing = [eid for eid in event_ids if eid not in self._row_of]
-        if not missing:
-            return
+    cluster_local_coords, cluster_labels = fit_cluster_local(
+        X_concept, concept_sample, local_concept_coords=local_concept
+    )
 
-        if self._mat is None:
-            first = self._fetch(missing[0])
-            self._dim = first.shape[0]
-            self._ensure_capacity(len(missing))
-            row = len(self._row_of)
-            self._mat[row] = first
-            self._row_of[missing[0]] = row
-            missing = missing[1:]
-
-        if missing:
-            self._ensure_capacity(len(missing))
-            for eid in missing:
-                row = len(self._row_of)
-                self._mat[row] = self._fetch(eid)
-                self._row_of[eid] = row
-
-    def matrix(self, event_ids):
-        """
-        Return an (len(event_ids), D) float32 array with rows in the same
-        order as event_ids, fetching/caching as needed.
-        """
-        if not event_ids:
-            raise ValueError("[EmbeddingCache] matrix() called with empty event_ids")
-        self.warm(event_ids)
-        idx = np.fromiter((self._row_of[eid] for eid in event_ids), dtype=np.int64, count=len(event_ids))
-        return self._mat[idx]
-
-    def vector(self, event_id):
-        self.warm([event_id])
-        return self._mat[self._row_of[event_id]]
+    return {
+        'concept_name': concept_name,
+        'concept_sample': concept_sample,
+        'local_concept': local_concept,
+        'neigh_ids': neigh_ids,
+        'local_neigh': local_neigh,
+        'neigh_depth_map': neigh_depth_map,
+        'cluster_local_coords': cluster_local_coords,
+        'cluster_labels': cluster_labels,
+    }, None
 
 
 def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
@@ -559,68 +526,74 @@ def write_json(path, payload):
     logger.info(f"[tier3] Wrote {path}")
 
 
-def write_point_projections_to_sqlite(
-    db_path: str,
-    concept_name: str,
-    event_ids: list,
-    local_coords: dict,
-    global_coords: dict,
-    local_bounds: dict,
-    global_bounds: dict,
-    target: str = "events",      # "events" | "neighbours"
-    depth_map: dict | None = None,
+def write_projections_to_sqlite(
+    db_path,
+    concept_name,
+    event_ids,
+    local_coords,
+    global_coords,
+    local_bounds,
+    global_bounds,
+    cluster_labels=None,
+    target="events",      # "events" | "neighbours"
+    depth_map=None,
+    lookup=None,          # pass lookup for aggregates
 ):
-    """Write local + global normalized coordinates to events or neighbours table."""
-    logger.info(f"[tier3] write_point_projections target={target} concept={concept_name}")
+    logger.info(f"[tier3] write_projections_to_sqlite target={target} concept={concept_name}")
     con = sqlite3_connection(db_path)
 
-    # Temp table for bulk update
+    # Point projections
     con.execute("""
         CREATE TEMP TABLE IF NOT EXISTS _proj_update (
             event_id      INTEGER PRIMARY KEY,
-            nx            REAL,
-            ny            REAL,
-            gnx           REAL,
-            gny           REAL,
+            nx            REAL, ny REAL,
+            gnx           REAL, gny REAL,
+            cluster_id    INTEGER,
+            cluster_label TEXT,
             depth         INTEGER
         )
     """)
     con.execute("DELETE FROM _proj_update")
+
+    unique_clusters = sorted(c for c in set(cluster_labels or []) if c != -1)
+    label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
 
     data = []
     for i, eid in enumerate(event_ids):
         sid = str(eid)
         if sid not in local_coords or sid not in global_coords:
             continue
-
         lx, ly = local_coords[sid]
         gx, gy = global_coords[sid]
-
         data.append((
             int(eid),
             float(lx), float(ly),
             float(gx), float(gy),
+            cluster_labels[i] if cluster_labels is not None else None,
+            label_map.get(cluster_labels[i]) if cluster_labels is not None else None,
             depth_map.get(sid) if depth_map is not None else None,
         ))
 
     if data:
         con.executemany(
-            "INSERT INTO _proj_update VALUES (?,?,?,?,?,?)",
+            "INSERT INTO _proj_update VALUES (?,?,?,?,?,?,?,?)",
             data
         )
 
-    # Apply to correct table
+    # Write point data
     if target == "events":
         con.execute("""
             UPDATE events SET
-                nx  = _proj_update.nx,
-                ny  = _proj_update.ny,
-                gnx = _proj_update.gnx,
-                gny = _proj_update.gny
+                nx            = _proj_update.nx,
+                ny            = _proj_update.ny,
+                gnx           = _proj_update.gnx,
+                gny           = _proj_update.gny,
+                cluster_id    = _proj_update.cluster_id,
+                cluster_label = _proj_update.cluster_label
             FROM _proj_update
             WHERE events.event_id = _proj_update.event_id
         """)
-    else:  # neighbours
+    else:
         con.execute("""
             UPDATE neighbours SET
                 nx  = _proj_update.nx,
@@ -631,102 +604,54 @@ def write_point_projections_to_sqlite(
             WHERE neighbours.neighbour_event_id = _proj_update.event_id
         """)
 
-    con.commit()
-    con.close()
-    logger.info(f"[tier3] wrote point projections for {concept_name} → {target}")
+    # Cluster aggregates & centroids
+    if target == "events" and cluster_labels is not None and lookup is not None:
+        aggregates = []
+        cluster_info = []
 
+        if any(c != -1 for c in cluster_labels):
+            aggregates, cluster_info = compute_cluster_aggregates(
+                event_ids,
+                cluster_labels,
+                lookup,
+                local_coords,
+                global_coords,
+                top_n=25
+            )
+        else:
+            logger.info(f"[tier3] No valid clusters for {concept_name}")
 
-def write_cluster_data_to_sqlite(
-    db_path: str,
-    concept_name: str,
-    event_ids: list,
-    cluster_labels: list,
-    local_coords: dict,
-    global_coords: dict,
-    lookup,
-):
-    """Write cluster labels, aggregates, and centroid info (events table only)."""
-    logger.info(f"[tier3] write_cluster_data concept={concept_name}")
+        # concept_aggregate
+        con.executemany("""
+            INSERT INTO concept_aggregate
+            (concept, cluster_id, kind, rank, value, count)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, [
+            (concept_name, cid, kind, rank, value, count)
+            for cid, kind, rank, value, count in aggregates
+        ])
 
-    if not any(c != -1 for c in cluster_labels):
-        logger.info(f"[tier3] No valid clusters for {concept_name}")
-        return
-
-    con = sqlite3_connection(db_path)
-
-    # 1. Update cluster_id / cluster_label on events table
-    con.execute("""
-        CREATE TEMP TABLE IF NOT EXISTS _cluster_update (
-            event_id      INTEGER PRIMARY KEY,
-            cluster_id    INTEGER,
-            cluster_label TEXT
-        )
-    """)
-    con.execute("DELETE FROM _cluster_update")
-
-    unique_clusters = sorted(c for c in set(cluster_labels) if c != -1)
-    label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
-
-    cluster_data = []
-    for i, eid in enumerate(event_ids):
-        cid = cluster_labels[i]
-        if cid != -1:
-            cluster_data.append((
-                int(eid),
-                cid,
-                label_map.get(cid)
-            ))
-
-    if cluster_data:
-        con.executemany(
-            "INSERT INTO _cluster_update VALUES (?,?,?)",
-            cluster_data
-        )
-
-        con.execute("""
-            UPDATE events SET
-                cluster_id    = _cluster_update.cluster_id,
-                cluster_label = _cluster_update.cluster_label
-            FROM _cluster_update
-            WHERE events.event_id = _cluster_update.event_id
-        """)
-
-    # 2. Aggregates + centroids
-    aggregates, cluster_info = compute_cluster_aggregates(
-        event_ids, cluster_labels, lookup, local_coords, global_coords, top_n=25
-    )
-
-    # concept_aggregate
-    con.executemany("""
-        INSERT INTO concept_aggregate
-        (concept, cluster_id, kind, rank, value, count)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, [
-        (concept_name, cid, kind, rank, value, count)
-        for cid, kind, rank, value, count in aggregates
-    ])
-
-    # concept_cluster_info
-    con.executemany("""
-        INSERT OR REPLACE INTO concept_cluster_info
-        (concept, cluster_id, cluster_label, centroid_nx, centroid_ny,
-         centroid_gnx, centroid_gny, point_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, [
-        (concept_name,
-         info['cluster_id'],
-         info['cluster_label'],
-         info['centroid_nx'],
-         info['centroid_ny'],
-         info['centroid_gnx'],
-         info['centroid_gny'],
-         info['point_count'])
-        for info in cluster_info
-    ])
+        # concept_cluster_info
+        con.executemany("""
+            INSERT OR REPLACE INTO concept_cluster_info
+            (concept, cluster_id, cluster_label, centroid_nx, centroid_ny,
+             centroid_gnx, centroid_gny, point_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (concept_name,
+             info['cluster_id'],
+             info['cluster_label'],
+             info['centroid_nx'],
+             info['centroid_ny'],
+             info['centroid_gnx'],
+             info['centroid_gny'],
+             info['point_count'])
+            for info in cluster_info
+        ])
 
     con.commit()
     con.close()
-    logger.info(f"[tier3] wrote cluster data + aggregates for {concept_name}")
+    logger.info(f"[tier3] wrote projections + cluster data for {concept_name}")
 
 
 def write_concept_bounds_to_sqlite(
@@ -944,7 +869,7 @@ def run_tier3_core(
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
-        write_point_projections_to_sqlite(
+        write_projections_to_sqlite(
             db_path=db_path,
             concept_name=concept_name,
             event_ids=event_ids,
@@ -953,14 +878,6 @@ def run_tier3_core(
             local_bounds=local_bounds,
             global_bounds=global_bounds_padded,
             target="events",
-        )
-        write_cluster_data_to_sqlite(
-            db_path=db_path,
-            concept_name=concept_name,
-            event_ids=event_ids,
-            cluster_labels=cluster_labels,
-            local_coords=local_coords,
-            global_coords=global_coords,
             lookup=lookup,
         )
         write_concept_bounds_to_sqlite(
@@ -978,7 +895,7 @@ def run_tier3_core(
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
-        write_point_projections_to_sqlite(
+        write_projections_to_sqlite(
             db_path         = db_path,
             concept_name    = concept_name,
             event_ids       = event_ids,
@@ -1004,7 +921,7 @@ def run_tier3_core(
         local_bounds = add_padding(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
-        write_point_projections_to_sqlite(
+        write_projections_to_sqlite(
             db_path=db_path,
             concept_name=concept_name,
             event_ids=event_ids,
@@ -1014,15 +931,6 @@ def run_tier3_core(
             global_bounds=global_bounds_padded,
             cluster_labels=cluster_labels,
             target="events",
-            lookup=lookup,
-        )
-        write_cluster_data_to_sqlite(
-            db_path=db_path,
-            concept_name=concept_name,
-            event_ids=event_ids,
-            cluster_labels=cluster_labels,
-            local_coords=local_coords,
-            global_coords=global_coords,
             lookup=lookup,
         )
         write_concept_bounds_to_sqlite(
