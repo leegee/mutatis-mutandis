@@ -108,9 +108,7 @@ export async function loadClusterReport(
         ...(author ? author.params : []),
     ];
 
-    // -------------------------
     // cluster stats
-    // -------------------------
     const clusterRows = await execRows(
         `
         SELECT e.cluster_id, e.cluster_label, COUNT(*) AS n
@@ -144,9 +142,7 @@ export async function loadClusterReport(
         };
     }
 
-    // -------------------------
     // tokens
-    // -------------------------
     const tokenRows = await execRows(
         `
         SELECT cluster_id, token, c
@@ -173,9 +169,7 @@ export async function loadClusterReport(
         clusters.get(cid)?.topTokens.push([token, c]);
     }
 
-    // -------------------------
     // top docs
-    // -------------------------
     const docRows = await execRows(
         `
         SELECT cluster_id, doc_id, c
@@ -205,9 +199,7 @@ export async function loadClusterReport(
         docIds.add(doc_id);
     }
 
-    // -------------------------
     // metadata
-    // -------------------------
     const docMeta: Record<string, DocMeta> = {};
 
     if (docIds.size > 0) {
@@ -227,9 +219,7 @@ export async function loadClusterReport(
         }
     }
 
-    // -------------------------
     // exemplars
-    // -------------------------
     const docExemplars: ClusterReport["docExemplars"] = {};
 
     if (docIds.size > 0) {
