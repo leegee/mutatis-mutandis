@@ -559,6 +559,171 @@ def write_json(path, payload):
     logger.info(f"[tier3] Wrote {path}")
 
 
+def write_projections_to_sqlite(
+    db_path,
+    concept_name,
+    event_ids,
+    local_coords,
+    global_coords,
+    local_bounds,
+    global_bounds,
+    cluster_labels=None,
+    target="events",      # "events" | "neighbours"
+    depth_map=None,
+    lookup=None,          # pass lookup for aggregates
+):
+    logger.info(f"[tier3] write_projections_to_sqlite target={target} concept={concept_name}")
+    con = sqlite3_connection(db_path)
+
+    # Point projections
+    con.execute("""
+        CREATE TEMP TABLE IF NOT EXISTS _proj_update (
+            event_id      INTEGER PRIMARY KEY,
+            nx            REAL, ny REAL,
+            gnx           REAL, gny REAL,
+            cluster_id    INTEGER,
+            cluster_label TEXT,
+            depth         INTEGER
+        )
+    """)
+    con.execute("DELETE FROM _proj_update")
+
+    unique_clusters = sorted(c for c in set(cluster_labels or []) if c != -1)
+    label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
+
+    data = []
+    for i, eid in enumerate(event_ids):
+        sid = str(eid)
+        if sid not in local_coords or sid not in global_coords:
+            continue
+        lx, ly = local_coords[sid]
+        gx, gy = global_coords[sid]
+        data.append((
+            int(eid),
+            float(lx), float(ly),
+            float(gx), float(gy),
+            cluster_labels[i] if cluster_labels is not None else None,
+            label_map.get(cluster_labels[i]) if cluster_labels is not None else None,
+            depth_map.get(sid) if depth_map is not None else None,
+        ))
+
+    if data:
+        con.executemany(
+            "INSERT INTO _proj_update VALUES (?,?,?,?,?,?,?,?)",
+            data
+        )
+
+    # Write point data
+    if target == "events":
+        con.execute("""
+            UPDATE events SET
+                nx            = _proj_update.nx,
+                ny            = _proj_update.ny,
+                gnx           = _proj_update.gnx,
+                gny           = _proj_update.gny,
+                cluster_id    = _proj_update.cluster_id,
+                cluster_label = _proj_update.cluster_label
+            FROM _proj_update
+            WHERE events.event_id = _proj_update.event_id
+        """)
+    else:
+        con.execute("""
+            UPDATE neighbours SET
+                nx  = _proj_update.nx,
+                ny  = _proj_update.ny,
+                gnx = _proj_update.gnx,
+                gny = _proj_update.gny
+            FROM _proj_update
+            WHERE neighbours.neighbour_event_id = _proj_update.event_id
+        """)
+
+    # Cluster aggregates & centroids
+    if target == "events" and cluster_labels is not None and lookup is not None:
+        aggregates = []
+        cluster_info = []
+
+        if any(c != -1 for c in cluster_labels):
+            aggregates, cluster_info = compute_cluster_aggregates(
+                event_ids,
+                cluster_labels,
+                lookup,
+                local_coords,
+                global_coords,
+                top_n=25
+            )
+        else:
+            logger.info(f"[tier3] No valid clusters for {concept_name}")
+
+        # concept_aggregate
+        con.executemany("""
+            INSERT INTO concept_aggregate
+            (concept, cluster_id, kind, rank, value, count)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, [
+            (concept_name, cid, kind, rank, value, count)
+            for cid, kind, rank, value, count in aggregates
+        ])
+
+        # concept_cluster_info
+        con.executemany("""
+            INSERT OR REPLACE INTO concept_cluster_info
+            (concept, cluster_id, cluster_label, centroid_nx, centroid_ny,
+             centroid_gnx, centroid_gny, point_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (concept_name,
+             info['cluster_id'],
+             info['cluster_label'],
+             info['centroid_nx'],
+             info['centroid_ny'],
+             info['centroid_gnx'],
+             info['centroid_gny'],
+             info['point_count'])
+            for info in cluster_info
+        ])
+
+    con.commit()
+    con.close()
+    logger.info(f"[tier3] wrote projections + cluster data for {concept_name}")
+
+
+def write_concept_bounds_to_sqlite(
+    db_path: str,
+    concept_name: str,
+    local_bounds: dict,
+    global_bounds: dict
+):
+    """Update or insert the projection bounds for a concept."""
+    con = sqlite3_connection(db_path)
+
+    con.execute("""
+        INSERT INTO concept_projection_bounds (
+            concept,
+            local_min_x, local_max_x, local_min_y, local_max_y,
+            global_min_x, global_max_x, global_min_y, global_max_y
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(concept) DO UPDATE SET
+            local_min_x  = excluded.local_min_x,
+            local_max_x  = excluded.local_max_x,
+            local_min_y  = excluded.local_min_y,
+            local_max_y  = excluded.local_max_y,
+            global_min_x = excluded.global_min_x,
+            global_max_x = excluded.global_max_x,
+            global_min_y = excluded.global_min_y,
+            global_max_y = excluded.global_max_y
+    """, (
+        concept_name,
+        local_bounds["minX"], local_bounds["maxX"],
+        local_bounds["minY"], local_bounds["maxY"],
+        global_bounds["minX"], global_bounds["maxX"],
+        global_bounds["minY"], global_bounds["maxY"],
+    ))
+
+    con.commit()
+    con.close()
+    logger.info(f"[tier3] updated bounds for concept={concept_name}")
+
+
 def run_tier3_core(
     *,
     db_path,
@@ -841,169 +1006,6 @@ def run_tier3_service(
     )
 
 
-def write_projections_to_sqlite(
-    db_path,
-    concept_name,
-    event_ids,
-    local_coords,
-    global_coords,
-    local_bounds,
-    global_bounds,
-    cluster_labels=None,
-    target="events",      # "events" | "neighbours"
-    depth_map=None,
-    lookup=None,          # pass lookup for aggregates
-):
-    logger.info(f"[tier3] write_projections_to_sqlite target={target} concept={concept_name}")
-    con = sqlite3_connection(db_path)
-
-    # Point projections
-    con.execute("""
-        CREATE TEMP TABLE IF NOT EXISTS _proj_update (
-            event_id      INTEGER PRIMARY KEY,
-            nx            REAL, ny REAL,
-            gnx           REAL, gny REAL,
-            cluster_id    INTEGER,
-            cluster_label TEXT,
-            depth         INTEGER
-        )
-    """)
-    con.execute("DELETE FROM _proj_update")
-
-    unique_clusters = sorted(c for c in set(cluster_labels or []) if c != -1)
-    label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
-
-    data = []
-    for i, eid in enumerate(event_ids):
-        sid = str(eid)
-        if sid not in local_coords or sid not in global_coords:
-            continue
-        lx, ly = local_coords[sid]
-        gx, gy = global_coords[sid]
-        data.append((
-            int(eid),
-            float(lx), float(ly),
-            float(gx), float(gy),
-            cluster_labels[i] if cluster_labels is not None else None,
-            label_map.get(cluster_labels[i]) if cluster_labels is not None else None,
-            depth_map.get(sid) if depth_map is not None else None,
-        ))
-
-    if data:
-        con.executemany(
-            "INSERT INTO _proj_update VALUES (?,?,?,?,?,?,?,?)",
-            data
-        )
-
-    # Write point data
-    if target == "events":
-        con.execute("""
-            UPDATE events SET
-                nx            = _proj_update.nx,
-                ny            = _proj_update.ny,
-                gnx           = _proj_update.gnx,
-                gny           = _proj_update.gny,
-                cluster_id    = _proj_update.cluster_id,
-                cluster_label = _proj_update.cluster_label
-            FROM _proj_update
-            WHERE events.event_id = _proj_update.event_id
-        """)
-    else:
-        con.execute("""
-            UPDATE neighbours SET
-                nx  = _proj_update.nx,
-                ny  = _proj_update.ny,
-                gnx = _proj_update.gnx,
-                gny = _proj_update.gny
-            FROM _proj_update
-            WHERE neighbours.neighbour_event_id = _proj_update.event_id
-        """)
-
-    # Cluster aggregates & centroids
-    if target == "events" and cluster_labels is not None and lookup is not None:
-        aggregates = []
-        cluster_info = []
-
-        if any(c != -1 for c in cluster_labels):
-            aggregates, cluster_info = compute_cluster_aggregates(
-                event_ids,
-                cluster_labels,
-                lookup,
-                local_coords,
-                global_coords,
-                top_n=25
-            )
-        else:
-            logger.info(f"[tier3] No valid clusters for {concept_name}")
-
-        # concept_aggregate
-        con.executemany("""
-            INSERT INTO concept_aggregate
-            (concept, cluster_id, kind, rank, value, count)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, [
-            (concept_name, cid, kind, rank, value, count)
-            for cid, kind, rank, value, count in aggregates
-        ])
-
-        # concept_cluster_info
-        con.executemany("""
-            INSERT OR REPLACE INTO concept_cluster_info
-            (concept, cluster_id, cluster_label, centroid_nx, centroid_ny,
-             centroid_gnx, centroid_gny, point_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            (concept_name,
-             info['cluster_id'],
-             info['cluster_label'],
-             info['centroid_nx'],
-             info['centroid_ny'],
-             info['centroid_gnx'],
-             info['centroid_gny'],
-             info['point_count'])
-            for info in cluster_info
-        ])
-
-    con.commit()
-    con.close()
-    logger.info(f"[tier3] wrote projections + cluster data for {concept_name}")
-
-
-def write_concept_bounds_to_sqlite(
-    db_path: str,
-    concept_name: str,
-    local_bounds: dict,
-    global_bounds: dict
-):
-    """Update or insert the projection bounds for a concept."""
-    con = sqlite3_connection(db_path)
-
-    con.execute("""
-        INSERT INTO concept_projection_bounds (
-            concept,
-            local_min_x, local_max_x, local_min_y, local_max_y,
-            global_min_x, global_max_x, global_min_y, global_max_y
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(concept) DO UPDATE SET
-            local_min_x  = excluded.local_min_x,
-            local_max_x  = excluded.local_max_x,
-            local_min_y  = excluded.local_min_y,
-            local_max_y  = excluded.local_max_y,
-            global_min_x = excluded.global_min_x,
-            global_max_x = excluded.global_max_x,
-            global_min_y = excluded.global_min_y,
-            global_max_y = excluded.global_max_y
-    """, (
-        concept_name,
-        local_bounds["minX"], local_bounds["maxX"],
-        local_bounds["minY"], local_bounds["maxY"],
-        global_bounds["minX"], global_bounds["maxX"],
-        global_bounds["minY"], global_bounds["maxY"],
-    ))
-
-    con.commit()
-    con.close()
-    logger.info(f"[tier3] updated bounds for concept={concept_name}")
 
 def main():
     logger.info("[tier3 main] Enter")
