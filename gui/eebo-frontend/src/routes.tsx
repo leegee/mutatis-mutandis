@@ -41,7 +41,7 @@ export const routes = [
   },
   {
     path: "/geo",
-    icon: "map",
+    icon: "location_on",
     label: "Geography",
     component: Map,
     help: () => { },
