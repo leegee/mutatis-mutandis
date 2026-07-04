@@ -263,8 +263,8 @@ export default function Plot(props: PlotProps) {
           getRadius: p => (p.depth === 2 ? 1.8 : 2.8),
           radiusUnits: "pixels",
           opacity: (props.neighbourOpacity ?? 140) / 255,
-          pickable: zoomed,
-          autoHighlight: zoomed,
+          pickable: true, // zoomed,
+          autoHighlight: true, // zoomed,
           highlightColor: [255, 255, 255, 100],
           transitions: {
             getPosition: { duration: 450 },
