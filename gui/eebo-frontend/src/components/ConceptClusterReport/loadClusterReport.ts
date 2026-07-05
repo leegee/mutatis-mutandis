@@ -74,17 +74,19 @@ interface loadClusterReportParams {
     authorMatch?: string;
 }
 
+
+
 export async function loadClusterReport(
     params: loadClusterReportParams
-): Promise<ClusterReport> {
+): Promise<ClusterReport & { diagnostics: any }> {
     const { concept, yearMode, fromYear, toYear, authorMatch } = params;
 
     const yearActive =
         yearMode != null && fromYear != null && toYear != null;
 
     const year =
-        yearActive && yearMode && fromYear != null && toYear != null
-            ? yearFilter(yearMode, fromYear, toYear)
+        yearActive
+            ? yearFilter(yearMode!, fromYear!, toYear!)
             : null;
 
     const author = authorMatch?.trim()
@@ -108,7 +110,9 @@ export async function loadClusterReport(
         ...(author ? author.params : []),
     ];
 
-    // cluster stats
+    // -------------------------------------------------------
+    // CLUSTER SUMMARY
+    // -------------------------------------------------------
     const clusterRows = await execRows(
         `
         SELECT e.cluster_id, e.cluster_label, COUNT(*) AS n
@@ -116,19 +120,21 @@ export async function loadClusterReport(
         ${ joins }
         ${ baseWhere }
         GROUP BY e.cluster_id, e.cluster_label
+        ORDER BY e.cluster_id
         `,
         baseParams
     );
 
-    const clusters = new Map<number, ClusterSummary>();
+    const clusters = new Map<number, ClusterSummary & { eventIds: string[] }>();
 
-    for (const [id, label, n] of clusterRows as any[]) {
-        clusters.set(id, {
-            id,
+    for (const [cid, label, n] of clusterRows as any[]) {
+        clusters.set(cid, {
+            id: cid,
             label,
             eventCount: n,
             topTokens: [],
             topDocs: [],
+            eventIds: [],
         });
     }
 
@@ -139,10 +145,53 @@ export async function loadClusterReport(
             clusters: [],
             docMeta: {},
             docExemplars: {},
+            diagnostics: {
+                eventClusters: {},
+                docClusterFootprint: {},
+                clusterStats: {
+                    totalEvents: 0,
+                    multiClusterEvents: 0,
+                    multiClusterRate: 0,
+                },
+                multiClusterEvents: [],
+            },
         };
     }
 
-    // tokens
+    // -------------------------------------------------------
+    // CLUSTER MEMBERSHIP (EVENT LEVEL)
+    // -------------------------------------------------------
+    const eventRows = await execRows(
+        `
+        SELECT e.event_id, e.cluster_id, e.doc_id
+        FROM events e
+        ${ joins }
+        ${ baseWhere }
+        `,
+        baseParams
+    );
+
+    const eventClusters: Record<string, number[]> = {};
+    const eventToDoc: Record<string, string> = {};
+
+    for (const [event_id, cluster_id, doc_id] of eventRows as any[]) {
+        const sid = String(event_id);
+
+        if (!eventClusters[sid]) eventClusters[sid] = [];
+        eventClusters[sid].push(cluster_id);
+
+        eventToDoc[sid] = doc_id;
+    }
+
+    // populate cluster event lists
+    for (const [eid, clustersArr] of Object.entries(eventClusters)) {
+        const lastCluster = clustersArr[0];
+        clusters.get(lastCluster)?.eventIds.push(eid);
+    }
+
+    // -------------------------------------------------------
+    // TOP TOKENS
+    // -------------------------------------------------------
     const tokenRows = await execRows(
         `
         SELECT cluster_id, token, c
@@ -169,7 +218,9 @@ export async function loadClusterReport(
         clusters.get(cid)?.topTokens.push([token, c]);
     }
 
-    // top docs
+    // -------------------------------------------------------
+    // TOP DOCS
+    // -------------------------------------------------------
     const docRows = await execRows(
         `
         SELECT cluster_id, doc_id, c
@@ -194,12 +245,14 @@ export async function loadClusterReport(
 
     const docIds = new Set<string>();
 
-    for (const [cid, doc_id, c] of docRows as any[]) {
-        clusters.get(cid)?.topDocs.push([doc_id, c]);
+    for (const [cid, doc_id] of docRows as any[]) {
+        clusters.get(cid)?.topDocs.push([doc_id, 1]);
         docIds.add(doc_id);
     }
 
-    // metadata
+    // -------------------------------------------------------
+    // DOC METADATA
+    // -------------------------------------------------------
     const docMeta: Record<string, DocMeta> = {};
 
     if (docIds.size > 0) {
@@ -219,40 +272,83 @@ export async function loadClusterReport(
         }
     }
 
-    // exemplars
-    const docExemplars: ClusterReport["docExemplars"] = {};
+    // EXEMPLARS
+    const clusterExemplars: Record<
+        number,
+        { event_id: string; doc_id: string; token_idx: number }[]
+    > = {};
 
-    if (docIds.size > 0) {
-        const ids = [...docIds];
+    const exemplarRows = await execRows(
+        `
+        SELECT e.cluster_id, e.event_id, e.doc_id, e.token_idx
+        FROM events e
+        ${ joins }
+        ${ baseWhere }
+        LIMIT 5000
+        `,
+        baseParams
+    );
 
-        const exemplarRows = await execRows(
-            `
-            SELECT e.event_id, e.doc_id, e.token_idx
-            FROM events e
-            ${ joins }
-            ${ baseWhere }
-              AND e.doc_id IN (${ ids.map(() => "?").join(",") })
-            LIMIT 5000
-            `,
-            [...baseParams, ...ids]
-        );
+    for (const [cid, event_id, doc_id, token_idx] of exemplarRows as any[]) {
+        if (!clusterExemplars[cid]) clusterExemplars[cid] = [];
 
-        for (const [event_id, doc_id, token_idx] of exemplarRows as any[]) {
-            if (!docExemplars[doc_id]) docExemplars[doc_id] = [];
+        clusterExemplars[cid].push({
+            event_id: String(event_id),
+            doc_id,
+            token_idx,
+        });
+    }
 
-            docExemplars[doc_id].push({
-                event_id: String(event_id),
-                doc_id,
-                token_idx,
-            });
+    // DIAGNOSTICS
+    const multiClusterEvents = Object.entries(eventClusters)
+        .filter(([_, c]) => c.length > 1)
+        .map(([event_id, clusters]) => ({
+            event_id,
+            cluster_ids: clusters,
+        }));
+
+    const docClusterMap: Record<string, Set<number>> = {};
+
+    for (const [event_id, clustersArr] of Object.entries(eventClusters)) {
+        const doc_id = eventToDoc[event_id];
+        if (!doc_id) continue;
+
+        if (!docClusterMap[doc_id]) docClusterMap[doc_id] = new Set();
+
+        for (const c of clustersArr) {
+            docClusterMap[doc_id].add(c);
         }
     }
+
+    const docClusterFootprint: Record<string, number[]> = {};
+
+    for (const [doc, set] of Object.entries(docClusterMap)) {
+        docClusterFootprint[doc] = Array.from(set);
+    }
+
+    const clusterStats = {
+        totalEvents: Object.keys(eventClusters).length,
+        multiClusterEvents: multiClusterEvents.length,
+        multiClusterRate:
+            Object.keys(eventClusters).length > 0
+                ? multiClusterEvents.length / Object.keys(eventClusters).length
+                : 0,
+    };
+
+    console.log('docExemplars', clusterExemplars)
 
     return {
         concept,
         generated_at: new Date().toISOString(),
         clusters: [...clusters.values()],
         docMeta,
-        docExemplars,
+        docExemplars: clusterExemplars,
+
+        diagnostics: {
+            eventClusters,
+            docClusterFootprint,
+            clusterStats,
+            multiClusterEvents,
+        },
     };
 }

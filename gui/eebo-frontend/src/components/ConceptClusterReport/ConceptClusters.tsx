@@ -54,6 +54,23 @@ export default function ConceptClusters() {
         setSelectedCluster(report.clusters[0].id);
     });
 
+    const clusterExemplarsByDoc = createMemo(() => {
+        const report = clusterReport();
+        const cid = selectedCluster();
+        if (!report || cid == null) return {};
+
+        const rows = report.docExemplars?.[cid] ?? [];
+
+        const map: Record<string, typeof rows> = {};
+
+        for (const r of rows) {
+            if (!map[r.doc_id]) map[r.doc_id] = [];
+            map[r.doc_id].push(r);
+        }
+
+        return map;
+    });
+
     return (
         <article class="background">
             <ControlsHeader authorMatch>
@@ -115,19 +132,11 @@ export default function ConceptClusters() {
                             <div class="s2">
                                 <table class="surface">
                                     <caption>Top Tokens</caption>
-                                    {/* <thead class="fixed">
-                                        <tr>
-                                            <td></td>
-                                            <td>Token</td>
-                                            <td>Count</td>
-                                        </tr>
-                                    </thead> */}
                                     <For each={c().topTokens}>
                                         {([t, n], i) => (
                                             <tr>
-                                                <td>{i() + 1}</td>
+                                                <td>x {n}</td>
                                                 <td>{t}</td>
-                                                <td>{n}</td>
                                             </tr>
                                         )}
                                     </For>
@@ -135,10 +144,9 @@ export default function ConceptClusters() {
                             </div>
 
                             <div class="s10">
-
                                 <div class="large-height scroll surface">
-                                    <table class="stripes no-border scroll max">
 
+                                    <table class="stripes no-border scroll max">
                                         <caption>Top Documents</caption>
                                         <thead class="fixed">
                                             <tr>
@@ -160,14 +168,14 @@ export default function ConceptClusters() {
                                                         author={clusterReport()?.docMeta[doc_id]?.author ?? null}
                                                         pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
                                                         title={clusterReport()?.docMeta[doc_id]?.title ?? null}
-                                                        exemplars={clusterReport()?.docExemplars?.[doc_id] ?? []}
+                                                        exemplars={clusterExemplarsByDoc()?.[doc_id] ?? []}
                                                     />
                                                 )}
                                             </For>
                                         </tbody>
                                     </table>
-                                </div>
 
+                                </div>
                             </div>
                         </div>
                     )}
