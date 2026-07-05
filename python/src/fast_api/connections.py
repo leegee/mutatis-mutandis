@@ -4,7 +4,7 @@
 import sqlite3
 
 from lib.eebo_faiss import EeboFaissIndex
-from lib.eebo_config import FAISS_TIER1_INDEX, ZARR_ROOT, JOBS_DB_PATH, CORPUS_TIER2_DB_PATH
+from lib.eebo_config import FAISS_TIER1_INDEX, ZARR_PATH, JOBS_DB_PATH, CORPUS_TIER2_DB_PATH
 from tier2_0_concept_events import ZarrEventLookup # NB Still contains embeddings that might better be reconstructed
 
 
@@ -26,7 +26,7 @@ def get_index():
 def get_tier1_zarr_lookup():
     global _lookup
     if _lookup is None:
-        _lookup = ZarrEventLookup(ZARR_ROOT / "tier1")
+        _lookup = ZarrEventLookup(ZARR_PATH)
     return _lookup
 
 
