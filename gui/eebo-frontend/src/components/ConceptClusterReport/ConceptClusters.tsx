@@ -2,9 +2,11 @@ import { createSignal, createMemo, Show, For, createResource, createEffect } fro
 import { controls } from "../../state/controls.store";
 import ControlsHeader from "../ControlsHeader";
 
-import { loadClusterReport, type ClusterReport } from "./loadClusterReport";
+import { loadClusterReport } from "./loadClusterReport";
 import DocRow from "./DocRow";
 import ClusterExport from "./ClusterExport";
+
+import "./ConceptClusters.css";
 
 const CLUSTER_COLORS = [
     "#7F77DD", "#1D9E75", "#D85A30", "#D4537E",
@@ -32,6 +34,7 @@ export default function ConceptClusters() {
 
     const [selectedCluster, setSelectedCluster] = createSignal<number | null>(null);
     const [showDominantOnly, setShowDominantOnly] = createSignal(true);
+    const [showExemplars, setShowExemplars] = createSignal(false);
 
     const clusters = () => clusterReport()?.clusters ?? [];
 
@@ -72,7 +75,7 @@ export default function ConceptClusters() {
     });
 
     return (
-        <article class="background">
+        <article class="concept-clusters background">
             <ControlsHeader authorMatch>
                 <Show when={clusterReport()}>
                     <ClusterExport clusters={clusterReport()!} />
@@ -90,7 +93,21 @@ export default function ConceptClusters() {
             </Show>
 
             <Show when={clusterReport()}>
-                <h2>Concept Clusters</h2>
+                <div class="field middle-align">
+                    <nav>
+                        <h2 class="max">
+                            Concept Clusters
+                        </h2>
+                        <span>Show top document exemplars</span>
+                        <label class="switch">
+                            <input type="checkbox"
+                                checked={showExemplars()}
+                                onInput={e => setShowExemplars(e.currentTarget.checked)}
+                            />
+                            <span></span>
+                        </label>
+                    </nav>
+                </div>
 
                 <nav class="scroll bottom-padding">
                     <div class="field middle-align">
@@ -147,15 +164,17 @@ export default function ConceptClusters() {
                                 <div class="large-height scroll surface">
 
                                     <table class="stripes no-border scroll max">
-                                        <caption>Top Documents</caption>
+                                        <caption>
+                                            Top Documents
+                                        </caption>
                                         <thead class="fixed">
                                             <tr>
                                                 <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
+                                                <td>Count</td>
+                                                <td>Doc ID</td>
+                                                <td>Author</td>
+                                                <td>Year</td>
+                                                <td>Title</td>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -168,7 +187,9 @@ export default function ConceptClusters() {
                                                         author={clusterReport()?.docMeta[doc_id]?.author ?? null}
                                                         pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
                                                         title={clusterReport()?.docMeta[doc_id]?.title ?? null}
-                                                        exemplars={clusterExemplarsByDoc()?.[doc_id] ?? []}
+                                                        exemplars={
+                                                            showExemplars() ? clusterExemplarsByDoc()?.[doc_id] ?? [] : []
+                                                        }
                                                     />
                                                 )}
                                             </For>
@@ -181,6 +202,6 @@ export default function ConceptClusters() {
                     )}
                 </Show>
             </Show>
-        </article>
+        </article >
     );
 }
