@@ -158,6 +158,30 @@ export default function ConceptClusters() {
                                         )}
                                     </For>
                                 </table>
+
+                                <Show when={clusterReport()?.diagnostics}>
+                                    {(d) => (
+                                        <table>
+                                            <caption>
+                                                Cluster Diagnostics
+                                            </caption>
+                                            <tbody>
+                                                <tr>
+                                                    <th>Events</th>
+                                                    <td>{d().clusterStats.totalEvents}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Multi-cluster events</th>
+                                                    <td> {d().clusterStats.multiClusterEvents}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Multi-cluster rate</th>
+                                                    <td>{d().clusterStats.multiClusterRate.toFixed(4)}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </Show>
                             </div>
 
                             <div class="s10">
@@ -179,11 +203,11 @@ export default function ConceptClusters() {
                                         </thead>
                                         <tbody>
                                             <For each={c().topDocs}>
-                                                {([doc_id, count], i) => (
+                                                {([doc_id], i) => (
                                                     <DocRow
                                                         rank={i() + 1}
                                                         doc_id={doc_id}
-                                                        count={count}
+                                                        count={0}
                                                         author={clusterReport()?.docMeta[doc_id]?.author ?? null}
                                                         pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
                                                         title={clusterReport()?.docMeta[doc_id]?.title ?? null}
