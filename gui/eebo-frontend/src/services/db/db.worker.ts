@@ -106,7 +106,7 @@ async function init(url: string, traceId: string): Promise<void> {
       sqlite3 = await (sqlite3InitModule as any)({
         wasmMemory: new WebAssembly.Memory({ initial: 4096, maximum: 16384, shared: false }),
       });
-      span.end("info");
+      span.end("debug");
     } catch (err) {
       span.fail(err);
       throw err;
@@ -121,7 +121,7 @@ async function init(url: string, traceId: string): Promise<void> {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${ res.status } ${ res.statusText } — ${ url }`);
       buf = await res.arrayBuffer();
-      span.end("info", { url, bytes: buf.byteLength });
+      span.end("debug", { url, bytes: buf.byteLength });
     } catch (err) {
       span.fail(err, { url });
       throw err;
@@ -136,7 +136,7 @@ async function init(url: string, traceId: string): Promise<void> {
       const filename = "/" + url.split("/").pop()!;
       await OpfsWlDb.importDb(filename, new Uint8Array(buf));
       DBH = new OpfsWlDb(filename, "r");
-      span.end("info", { filename });
+      span.end("debug", { filename });
     } catch (err) {
       span.fail(err, { url });
       throw err;
@@ -160,7 +160,7 @@ async function init(url: string, traceId: string): Promise<void> {
         );
         throw new Error(`[db.worker] 'events' table missing. Found: [${ tables.join(", ") }]`);
       }
-      span.end("info", { tables });
+      span.end("debug", { tables });
     } catch (err) {
       if (!(err instanceof Error && err.message.startsWith("[db.worker]"))) {
         span.fail(err);
@@ -169,7 +169,7 @@ async function init(url: string, traceId: string): Promise<void> {
     }
   }
 
-  rootSpan.end("info", { url });
+  rootSpan.end("debug", { url });
 }
 
 // Message handler
@@ -183,7 +183,7 @@ self.onmessage = async (e: MessageEvent) => {
   try {
     if (type === "init") {
       await init(e.data.url as string, traceId);
-      span.end("info");
+      span.end("debug");
       self.postMessage({ id, traceId, result: [] });
     }
 
@@ -208,7 +208,7 @@ self.onmessage = async (e: MessageEvent) => {
         const duration = performance.now() - start;
         console.log(`[db.worker] Pre-warm completed in ${ duration.toFixed(1) }ms`);
 
-        span.end("info", { duration });
+        span.end("debug", { duration });
 
         self.postMessage({
           id,
