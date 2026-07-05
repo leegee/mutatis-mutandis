@@ -161,7 +161,7 @@ from lib.zarr_event_lookup import ZarrEventLookup
 
 import numpy as np
 
-from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_ROOT, OUT_DIR, CORPUS_TIER2_DB_PATH
+from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_PATH, OUT_DIR, CORPUS_TIER2_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
@@ -973,7 +973,7 @@ def main():
         return
 
     lookup = ZarrEventLookup(
-        ZARR_ROOT / "tier1",
+        ZARR_PATH,
         forms=target_forms,
         false_positives=target_fps,
     )
