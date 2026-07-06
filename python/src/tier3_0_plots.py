@@ -465,7 +465,7 @@ def compute_bounds_from_coords(coords):
     }
 
 
-def add_padding(bounds, pad_ratio=0.1):
+def add_padding(bounds, pad_ratio=0.02):
     width  = bounds["maxX"] - bounds["minX"]
     height = bounds["maxY"] - bounds["minY"]
     return {
@@ -616,8 +616,7 @@ def write_projections_to_sqlite(
             # pass already wrote nx/ny/gnx/gny for these same event_ids;
             # re-writing them here with cluster-local geometry would
             # silently replace concept-pass coordinates with cluster-pass
-            # coordinates, leaving concept_projection_bounds(target="concept")
-            # describing a projection that events.nx/ny no longer matches.
+            # coordinates,
             con.execute("""
                 UPDATE events SET
                     cluster_id    = _proj_update.cluster_id,
@@ -684,52 +683,6 @@ def write_projections_to_sqlite(
     con.commit()
     con.close()
     logger.info(f"[tier3] wrote projections + cluster data for {concept_name}")
-
-
-def write_concept_bounds_to_sqlite(
-    db_path: str,
-    concept_name: str,
-    local_bounds: dict,
-    global_bounds: dict,
-    target: str,   # "concept" | "concept_neighbours" | "concept_clusters"
-):
-    """
-    Update or insert the projection bounds for a concept, scoped by target.
-
-    Each of the three passes (concept seed / neighbours / clusters) writes
-    its own row rather than overwriting a shared one, since each pass's
-    nx/ny values in the events/neighbours tables are normalised against
-    that pass's own local bounds. Collapsing them into a single
-    (concept) key silently discarded two of the three bounds sets.
-    """
-    con = sqlite3_connection(db_path)
-
-    con.execute("""
-        INSERT INTO concept_projection_bounds (
-            concept, target,
-            local_min_x, local_max_x, local_min_y, local_max_y,
-            global_min_x, global_max_x, global_min_y, global_max_y
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(concept, target) DO UPDATE SET
-            local_min_x  = excluded.local_min_x,
-            local_max_x  = excluded.local_max_x,
-            local_min_y  = excluded.local_min_y,
-            local_max_y  = excluded.local_max_y,
-            global_min_x = excluded.global_min_x,
-            global_max_x = excluded.global_max_x,
-            global_min_y = excluded.global_min_y,
-            global_max_y = excluded.global_max_y
-    """, (
-        concept_name, target,
-        local_bounds["minX"], local_bounds["maxX"],
-        local_bounds["minY"], local_bounds["maxY"],
-        global_bounds["minX"], global_bounds["maxX"],
-        global_bounds["minY"], global_bounds["maxY"],
-    ))
-
-    con.commit()
-    con.close()
-    logger.info(f"[tier3] updated bounds for concept={concept_name} target={target}")
 
 
 def run_tier3_core(
@@ -922,13 +875,6 @@ def run_tier3_core(
             lookup=lookup,
             write_coords=False,
         )
-        write_concept_bounds_to_sqlite(
-            db_path=db_path,
-            concept_name=concept_name,
-            local_bounds=local_bounds,
-            global_bounds=global_bounds_padded,
-            target="concept",
-        )
 
     #
     # Pass 3b — neighbour projections -> neighbours table
@@ -948,13 +894,6 @@ def run_tier3_core(
             global_bounds   = global_bounds_padded,
             depth_map       = depth_map,
             target          = "neighbours",
-        )
-        write_concept_bounds_to_sqlite(
-            db_path=db_path,
-            concept_name=concept_name,
-            local_bounds=local_bounds,
-            global_bounds=global_bounds_padded,
-            target="concept_neighbours",
         )
 
     #
@@ -976,13 +915,6 @@ def run_tier3_core(
             cluster_labels=cluster_labels,
             target="events",
             lookup=lookup,
-        )
-        write_concept_bounds_to_sqlite(
-            db_path=db_path,
-            concept_name=concept_name,
-            local_bounds=local_bounds,
-            global_bounds=global_bounds_padded,
-            target="concept_clusters",
         )
 
     if emit:

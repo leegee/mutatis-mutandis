@@ -436,14 +436,9 @@ export default function Plot(props: PlotProps) {
     const mode = props.projectionMode;
     const datasets = props.datasets;
 
-
     if (!datasets || datasets.length === 0) return;
 
-    const ds = datasets[0];
-    const bounds = mode === "global" ? ds.globalBounds : ds.bounds;
-
-    if (!bounds) return;
-
+    const bounds = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
 
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;

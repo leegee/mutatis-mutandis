@@ -166,30 +166,9 @@ export async function loadDatasets(
 
                 const target = targetForDataType(params.dataType);
 
-                const boundsRows = await execRows(
-                    `SELECT local_min_x, local_max_x, local_min_y, local_max_y,
-                    global_min_x, global_max_x, global_min_y, global_max_y
-                    FROM concept_projection_bounds WHERE concept = ? AND target = ?`,
-                    [concept, target]
-                );
-
-                const b = (boundsRows as any[])[0] || {};
-
                 return {
                     concept,
                     type: params.dataType,
-                    bounds: {
-                        minX: b[0] ?? 0,
-                        maxX: b[1] ?? 0,
-                        minY: b[2] ?? 0,
-                        maxY: b[3] ?? 0,
-                    },
-                    globalBounds: {
-                        minX: b[4] ?? 0,
-                        maxX: b[5] ?? 0,
-                        minY: b[6] ?? 0,
-                        maxY: b[7] ?? 0,
-                    },
                     points: (points as any[]).map((p: any[]) => {
                         if (params.dataType === "concept_clusters") {
                             return {
