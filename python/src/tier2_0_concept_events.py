@@ -278,13 +278,14 @@ def populate_documents_table(con, doc_meta):
     """, data)
 
     con.executescript("""
-        CREATE INDEX IF NOT EXISTS docs_geom_idx ON documents(geom);
         CREATE INDEX IF NOT EXISTS docs_pub_latlng_idx ON documents(lat, lng);
         CREATE INDEX IF NOT EXISTS idx_documents_pub_year_lat_lng ON documents(pub_year, lat, lng);
         CREATE INDEX IF NOT EXISTS docs_doc_idx ON documents(doc_id);
         CREATE INDEX IF NOT EXISTS docs_author_idx ON documents(author);
         CREATE INDEX IF NOT EXISTS docs_pub_year_idx ON documents(pub_year);
         CREATE INDEX IF NOT EXISTS docs_pub_place_idx ON documents(pub_place);
+        CREATE INDEX IF NOT EXISTS idx_neighbours_neighbour_event_id_pubyear ON neighbours(neighbour_event_id, pub_year);
+        CREATE INDEX IF NOT EXISTS idx_neighbours_pubyear ON neighbours(pub_year);
     """)
 
 
@@ -587,12 +588,12 @@ CREATE INDEX IF NOT EXISTS idx_events_concept_pubyear_nx ON events(concept, pub_
 
 CREATE TABLE IF NOT EXISTS concept_projection_bounds (
     concept   TEXT NOT NULL,
-    target    TEXT NOT NULL
+    target    TEXT NOT NULL,
     local_min_x  REAL, local_max_x  REAL,
     local_min_y  REAL, local_max_y  REAL,
     global_min_x REAL, global_max_x REAL,
     global_min_y REAL, global_max_y REAL,
-    PRIMARY KEY (concept)
+    PRIMARY KEY (concept, target)
 );
 
 -- Flattened aggregate rows for top_tokens, top_docs, top_windows.

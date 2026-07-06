@@ -50,6 +50,14 @@ interface LoadDatasetsParams {
     dataType: string;
 }
 
+
+function targetForDataType(dataType: string): string {
+    if (dataType === "concept_neighbours") return "concept_neighbours";
+    if (dataType === "concept_clusters") return "concept_clusters";
+    return "concept";
+}
+
+
 export async function loadDatasets(
     params: LoadDatasetsParams
 ): Promise<ConceptDatasetSqlite[]> {
@@ -156,11 +164,13 @@ export async function loadDatasets(
                     `[loadDatasets] ${ concept } | ${ params.dataType } | raw points: ${ points.length }`
                 );
 
+                const target = targetForDataType(params.dataType);
+
                 const boundsRows = await execRows(
                     `SELECT local_min_x, local_max_x, local_min_y, local_max_y,
-                            global_min_x, global_max_x, global_min_y, global_max_y
-                     FROM concept_projection_bounds WHERE concept = ?`,
-                    [concept]
+                    global_min_x, global_max_x, global_min_y, global_max_y
+                    FROM concept_projection_bounds WHERE concept = ? AND target = ?`,
+                    [concept, target]
                 );
 
                 const b = (boundsRows as any[])[0] || {};

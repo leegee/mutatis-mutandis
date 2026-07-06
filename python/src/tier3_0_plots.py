@@ -539,12 +539,12 @@ def write_projections_to_sqlite(
     cluster_labels=None,
     target="events",      # "events" | "neighbours"
     depth_map=None,
-    lookup=None,          # pass lookup for aggregates
+    lookup=None,
+    write_coords=True,
 ):
-    logger.info(f"[tier3] write_projections_to_sqlite target={target} concept={concept_name}")
+    logger.info(f"[tier3] write_projections_to_sqlite target={target} concept={concept_name} write_coords={write_coords}")
     con = sqlite3_connection(db_path)
 
-    # Point projections
     con.execute("""
         CREATE TEMP TABLE IF NOT EXISTS _proj_update (
             event_id      INTEGER PRIMARY KEY,
@@ -560,6 +560,21 @@ def write_projections_to_sqlite(
     unique_clusters = sorted(c for c in set(cluster_labels or []) if c != -1)
     label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
 
+    # Normalize into local_bounds / global_bounds, matching assemble_points.
+    # local_bounds/global_bounds are the *padded* bounds computed by the
+    # caller (add_padding(compute_bounds_from_coords(...))) — without this
+    # step, nx/ny/gnx/gny stored in sqlite were raw UMAP output, not the
+    # [0,1]-normalized values the schema and downstream consumers assume.
+    lx0, lx1 = local_bounds["minX"],  local_bounds["maxX"]
+    ly0, ly1 = local_bounds["minY"],  local_bounds["maxY"]
+    gx0, gx1 = global_bounds["minX"], global_bounds["maxX"]
+    gy0, gy1 = global_bounds["minY"], global_bounds["maxY"]
+
+    ldx = (lx1 - lx0) + 1e-12
+    ldy = (ly1 - ly0) + 1e-12
+    gdx = (gx1 - gx0) + 1e-12
+    gdy = (gy1 - gy0) + 1e-12
+
     data = []
     for i, eid in enumerate(event_ids):
         sid = str(eid)
@@ -569,8 +584,8 @@ def write_projections_to_sqlite(
         gx, gy = global_coords[sid]
         data.append((
             int(eid),
-            float(lx), float(ly),
-            float(gx), float(gy),
+            float((lx - lx0) / ldx), float((ly - ly0) / ldy),
+            float((gx - gx0) / gdx), float((gy - gy0) / gdy),
             cluster_labels[i] if cluster_labels is not None else None,
             label_map.get(cluster_labels[i]) if cluster_labels is not None else None,
             depth_map.get(sid) if depth_map is not None else None,
@@ -584,17 +599,32 @@ def write_projections_to_sqlite(
 
     # Write point data
     if target == "events":
-        con.execute("""
-            UPDATE events SET
-                nx            = _proj_update.nx,
-                ny            = _proj_update.ny,
-                gnx           = _proj_update.gnx,
-                gny           = _proj_update.gny,
-                cluster_id    = _proj_update.cluster_id,
-                cluster_label = _proj_update.cluster_label
-            FROM _proj_update
-            WHERE events.event_id = _proj_update.event_id
-        """)
+        if write_coords:
+            con.execute("""
+                UPDATE events SET
+                    nx            = _proj_update.nx,
+                    ny            = _proj_update.ny,
+                    gnx           = _proj_update.gnx,
+                    gny           = _proj_update.gny,
+                    cluster_id    = _proj_update.cluster_id,
+                    cluster_label = _proj_update.cluster_label
+                FROM _proj_update
+                WHERE events.event_id = _proj_update.event_id
+            """)
+        else:
+            # Clustering pass: cluster_id/cluster_label only. The concept
+            # pass already wrote nx/ny/gnx/gny for these same event_ids;
+            # re-writing them here with cluster-local geometry would
+            # silently replace concept-pass coordinates with cluster-pass
+            # coordinates, leaving concept_projection_bounds(target="concept")
+            # describing a projection that events.nx/ny no longer matches.
+            con.execute("""
+                UPDATE events SET
+                    cluster_id    = _proj_update.cluster_id,
+                    cluster_label = _proj_update.cluster_label
+                FROM _proj_update
+                WHERE events.event_id = _proj_update.event_id
+            """)
     else:
         con.execute("""
             UPDATE neighbours SET
@@ -890,6 +920,7 @@ def run_tier3_core(
             global_bounds=global_bounds_padded,
             target="events",
             lookup=lookup,
+            write_coords=False,
         )
         write_concept_bounds_to_sqlite(
             db_path=db_path,
