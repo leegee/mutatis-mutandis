@@ -433,27 +433,11 @@ export default function Plot(props: PlotProps) {
   createEffect(() => {
     if (!deck) return;
 
-    const mode = props.projectionMode;
-    const datasets = props.datasets;
-
-    if (!datasets || datasets.length === 0) return;
-
-    const bounds = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
-
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-    const rangeX = bounds.maxX - bounds.minX;
-    const rangeY = bounds.maxY - bounds.minY;
-
-    const padding = 0.15;
-    const paddedRange = Math.max(rangeX, rangeY) * (1 + padding * 2);
-
-    const newZoom = Math.log2(
-      Math.min(canvas.clientWidth, canvas.clientHeight) * 0.85 / paddedRange
+    flyTo(
+      [0.5, 0.5, 0],
+      Math.log2(Math.min(canvas.clientWidth, canvas.clientHeight)),
+      400
     );
-
-    flyTo([centerX, centerY, 0], newZoom, 800);
-    console.debug(`[Plot] Fitted to ${ mode } mode - center: [${ centerX.toFixed(2) }, ${ centerY.toFixed(2) }], zoom: ${ newZoom.toFixed(2) }`);
   });
 
   onCleanup(() => {
