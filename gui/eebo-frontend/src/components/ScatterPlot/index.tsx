@@ -230,9 +230,16 @@ export default function ConceptClusterPlot() {
 
                         <Switch>
                             <Match when={controls.scatterPlotLayerMode === 'concept_clusters'}>
-                                <div class="padding">
-                                    <h2>{hoveredPoint().point.cluster_label}</h2>
-                                    <p>{hoveredPoint().point.concept}</p>
+                                <header class="bottom-margin fill">
+                                    <h2>{(hoveredPoint().point as unknown as LabelPoint).label || hoveredPoint().point.cluster_label}</h2>
+                                </header>
+                                <div class="left-padding right-padding">
+                                    <div>
+                                        <span>{(hoveredPoint().point as unknown as LabelPoint).description}</span>
+                                    </div>
+                                    <div>
+                                        {hoveredPoint().point.concept}
+                                    </div>
                                 </div>
                             </Match>
 

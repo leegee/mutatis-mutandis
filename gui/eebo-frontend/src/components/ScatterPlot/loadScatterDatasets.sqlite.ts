@@ -117,7 +117,9 @@ export async function loadDatasets(
                             centroid_ny as ny,
                             centroid_gnx as gnx,
                             centroid_gny as gny,
-                            point_count
+                            point_count,
+                            label,
+                            description
                         FROM concept_cluster_info
                         WHERE concept = ?
                         ORDER BY cluster_id
@@ -164,7 +166,7 @@ export async function loadDatasets(
                     `[loadDatasets] ${ concept } | ${ params.dataType } | raw points: ${ points.length }`
                 );
 
-                const target = targetForDataType(params.dataType);
+                // const target = targetForDataType(params.dataType);
 
                 return {
                     concept,
@@ -180,6 +182,8 @@ export async function loadDatasets(
                                 gnx: p[4],
                                 gny: p[5],
                                 point_count: p[6],
+                                label: p[7],
+                                description: p[8],
                                 concept,
                                 token: "_NULL_",
                                 token_idx: -999,

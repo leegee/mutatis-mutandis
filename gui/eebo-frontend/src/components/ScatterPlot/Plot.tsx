@@ -162,7 +162,7 @@ export default function Plot(props: PlotProps) {
       updateTriggers: {
         getPosition: [props.projectionMode],
       },
-      getText: d => d.title,
+      getText: d => d.label || (d as any).title, // legacy
       getSize: 12,
       sizeUnits: "pixels",
       getColor: [252, 252, 252, 222],
@@ -219,6 +219,45 @@ export default function Plot(props: PlotProps) {
         },
         onHover: info => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
       }));
+
+      layersList.push(
+        new TextLayer<LabelPoint>({
+          id: "clusters-labels",
+          data: clusterPoints,
+
+          coordinateSystem: "cartesian",
+          getPosition: p => getPosition(p, proj),
+
+          // prefer label, fallback to description, fallback empty
+          getText: (p) => p.label ?? p.description ?? "",
+
+          getSize: 12,
+          sizeUnits: "pixels",
+
+          getColor: [255, 255, 255, 220],
+
+          getTextAnchor: "middle",
+          getAlignmentBaseline: "center",
+
+          background: true,
+          getBackgroundColor: [0, 0, 0, 140],
+          backgroundPadding: [4, 2],
+
+          pickable: true,
+
+          updateTriggers: {
+            getPosition: [proj],
+            getText: [props.colorBy],
+          },
+
+          onHover: (info: PickingInfo<PointData>) => {
+            props.onPointHover?.(
+              info.object ?? null,
+              info.object ? [info.x, info.y] : null
+            );
+          }
+        })
+      );
     }
 
     if (conceptPoints.length > 0) {
