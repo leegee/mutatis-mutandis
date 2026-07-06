@@ -40,6 +40,7 @@ class ZarrEventLookup:
         "window_token_pos": np.int64,
     }
 
+
     def __init__(self, root, forms: set[str] | None = None, false_positives: set[str] | None = None):
         self.root            = root
         self.forms           = {f.lower() for f in forms} if forms else None
@@ -53,6 +54,7 @@ class ZarrEventLookup:
         self._emb_broad_chunks  = []
 
         self._build()
+
 
     def _build(self):
         logger.info("[tier2] building event lookup with multi-scale embeddings")
@@ -69,6 +71,7 @@ class ZarrEventLookup:
 
         self._finalize()
         logger.info(f"[tier2] events={len(self._pos)}")
+
 
     def _load_store(self, e, store_dir):
         """Load events + multi-scale embeddings."""
@@ -125,6 +128,7 @@ class ZarrEventLookup:
             self._emb_medium_chunks.append(np.asarray(b_medium, dtype=np.float32)[keep])
             self._emb_broad_chunks.append(np.asarray(b_broad, dtype=np.float32)[keep])
 
+
     def _finalize(self):
         n_total = sum(arr.shape[0] for arr in self._chunks["event_id"])
 
@@ -150,6 +154,7 @@ class ZarrEventLookup:
 
         logger.info(f"[tier2] loaded {n_total:,} events with multi-scale embeddings")
 
+
     def get_ensemble_embedding(self, pos: int, weights=[0.25, 0.50, 0.25]):
         return (
             weights[0] * self.emb_local[pos] +
@@ -157,11 +162,13 @@ class ZarrEventLookup:
             weights[2] * self.emb_broad[pos]
         )
 
+
     def get_event(self, event_id: int) -> dict:
         pos = self._pos[int(event_id)]
         d = self._row_to_dict(pos)
         d["embedding"] = self.get_ensemble_embedding(pos)
         return d
+
 
     def _row_to_dict(self, pos: int) -> dict:
         wpos = int(self.window_token_pos[pos])
@@ -174,6 +181,7 @@ class ZarrEventLookup:
             "window_id": int(self.window_id[pos]),
             "window_token_pos": None if wpos == _NO_WPOS else wpos,
         }
+
 
     def iter_matching_event_ids(self, forms, false_positives=None):
         """
@@ -195,6 +203,18 @@ class ZarrEventLookup:
         for eid in self.event_id[mask]:
             yield int(eid)
 
+
     def get_pos(self, event_id: int) -> int:
         """event_id -> row position. Raises KeyError if not present."""
         return self._pos[int(event_id)]
+
+
+    def get_embeddings(self, event_ids):
+        """
+        Return (n, d) embedding matrix aligned to event_ids.
+        Uses ensemble embedding.
+        """
+        return np.vstack([
+            self.get_ensemble_embedding(self.get_pos(int(eid)))
+            for eid in event_ids
+        ]).astype(np.float32)

@@ -361,3 +361,29 @@ class EeboFaissIndex:
         )
 
         return obj
+
+    def reconstruct_many(
+        self,
+        event_ids: Sequence[int],
+    ) -> np.ndarray:
+        """
+        Reconstruct multiple vectors from the index.
+
+        Returns
+        -------
+        (N,D) float32 array aligned with event_ids.
+
+        Failure modes
+        -------------
+        Raises if any requested event_id is absent from the index.
+
+        This method exists so downstream algorithms never need to know
+        anything about FAISS reconstruction semantics.
+        """
+
+        X = np.empty((len(event_ids), self.dim), dtype=np.float32)
+
+        for i, eid in enumerate(event_ids):
+            self._index.reconstruct(int(eid), X[i])
+
+        return X
