@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 """
+tier3_0_plots.py - the nightmare plotter that needs to be rewritten
+
 Outputs:
     Sqlite3 DB shared with fronto-end
 
