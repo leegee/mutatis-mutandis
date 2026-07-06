@@ -401,6 +401,8 @@ def compute_cluster_aggregates(
     lookup,
     local_coords,
     global_coords,
+    local_bounds,
+    global_bounds,
     top_n=25
 ):
     """
@@ -443,13 +445,26 @@ def compute_cluster_aggregates(
             gnx_vals = [global_coords[event_ids[i]][0] for i in cluster_idx]
             gny_vals = [global_coords[event_ids[i]][1] for i in cluster_idx]
 
+            # raw centroids in projection space
+            mean_x = float(np.mean(nx_vals))
+            mean_y = float(np.mean(ny_vals))
+            mean_gx = float(np.mean(gnx_vals))
+            mean_gy = float(np.mean(gny_vals))
+
+            # normalize into 0-1
+            centroid_nx = (mean_x - local_bounds["minX"]) / (local_bounds["maxX"] - local_bounds["minX"])
+            centroid_ny = (mean_y - local_bounds["minY"]) / (local_bounds["maxY"] - local_bounds["minY"])
+
+            centroid_gnx = (mean_gx - global_bounds["minX"]) / (global_bounds["maxX"] - global_bounds["minX"])
+            centroid_gny = (mean_gy - global_bounds["minY"]) / (global_bounds["maxY"] - global_bounds["minY"])
+
             cluster_info.append({
                 'cluster_id': cid,
-                'cluster_label': chr(65 + cid),   # A, B, C...
-                'centroid_nx': float(np.mean(nx_vals)),
-                'centroid_ny': float(np.mean(ny_vals)),
-                'centroid_gnx': float(np.mean(gnx_vals)),
-                'centroid_gny': float(np.mean(gny_vals)),
+                'cluster_label': chr(65 + cid),
+                'centroid_nx': float(centroid_nx),
+                'centroid_ny': float(centroid_ny),
+                'centroid_gnx': float(centroid_gnx),
+                'centroid_gny': float(centroid_gny),
                 'point_count': len(cluster_idx)
             })
 
@@ -647,6 +662,8 @@ def write_projections_to_sqlite(
                 lookup,
                 local_coords,
                 global_coords,
+                local_bounds,
+                global_bounds,
                 top_n=25
             )
         else:
