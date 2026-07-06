@@ -622,6 +622,8 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
     centroid_gnx   REAL,
     centroid_gny   REAL,
     point_count    INTEGER,
+    label          TEXT,
+    description    TEXT,
     PRIMARY KEY (concept, cluster_id)
 );
 """
