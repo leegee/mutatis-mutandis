@@ -587,6 +587,7 @@ CREATE INDEX IF NOT EXISTS idx_events_concept_pubyear_nx ON events(concept, pub_
 
 CREATE TABLE IF NOT EXISTS concept_projection_bounds (
     concept   TEXT NOT NULL,
+    target    TEXT NOT NULL
     local_min_x  REAL, local_max_x  REAL,
     local_min_y  REAL, local_max_y  REAL,
     global_min_x REAL, global_max_x REAL,

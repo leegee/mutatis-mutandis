@@ -660,18 +660,27 @@ def write_concept_bounds_to_sqlite(
     db_path: str,
     concept_name: str,
     local_bounds: dict,
-    global_bounds: dict
+    global_bounds: dict,
+    target: str,   # "concept" | "concept_neighbours" | "concept_clusters"
 ):
-    """Update or insert the projection bounds for a concept."""
+    """
+    Update or insert the projection bounds for a concept, scoped by target.
+
+    Each of the three passes (concept seed / neighbours / clusters) writes
+    its own row rather than overwriting a shared one, since each pass's
+    nx/ny values in the events/neighbours tables are normalised against
+    that pass's own local bounds. Collapsing them into a single
+    (concept) key silently discarded two of the three bounds sets.
+    """
     con = sqlite3_connection(db_path)
 
     con.execute("""
         INSERT INTO concept_projection_bounds (
-            concept,
+            concept, target,
             local_min_x, local_max_x, local_min_y, local_max_y,
             global_min_x, global_max_x, global_min_y, global_max_y
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(concept) DO UPDATE SET
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(concept, target) DO UPDATE SET
             local_min_x  = excluded.local_min_x,
             local_max_x  = excluded.local_max_x,
             local_min_y  = excluded.local_min_y,
@@ -681,7 +690,7 @@ def write_concept_bounds_to_sqlite(
             global_min_y = excluded.global_min_y,
             global_max_y = excluded.global_max_y
     """, (
-        concept_name,
+        concept_name, target,
         local_bounds["minX"], local_bounds["maxX"],
         local_bounds["minY"], local_bounds["maxY"],
         global_bounds["minX"], global_bounds["maxX"],
@@ -690,7 +699,7 @@ def write_concept_bounds_to_sqlite(
 
     con.commit()
     con.close()
-    logger.info(f"[tier3] updated bounds for concept={concept_name}")
+    logger.info(f"[tier3] updated bounds for concept={concept_name} target={target}")
 
 
 def run_tier3_core(
@@ -886,7 +895,8 @@ def run_tier3_core(
             db_path=db_path,
             concept_name=concept_name,
             local_bounds=local_bounds,
-            global_bounds=global_bounds_padded
+            global_bounds=global_bounds_padded,
+            target="concept",
         )
 
     #
@@ -912,7 +922,8 @@ def run_tier3_core(
             db_path=db_path,
             concept_name=concept_name,
             local_bounds=local_bounds,
-            global_bounds=global_bounds_padded
+            global_bounds=global_bounds_padded,
+            target="concept_neighbours",
         )
 
     #
@@ -939,7 +950,8 @@ def run_tier3_core(
             db_path=db_path,
             concept_name=concept_name,
             local_bounds=local_bounds,
-            global_bounds=global_bounds_padded
+            global_bounds=global_bounds_padded,
+            target="concept_clusters",
         )
 
     if emit:
