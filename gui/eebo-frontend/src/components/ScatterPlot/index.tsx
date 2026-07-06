@@ -13,8 +13,6 @@ import TextWindow from "../TextWindow";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
 
-console.log("[scatterplot] loaded");
-
 export default function ConceptClusterPlot() {
     const [pointHovered, setPointHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
     const [labelHovered, setLabelHovered] = createSignal<{ label: LabelPoint; x: number; y: number } | null>(null);
@@ -81,7 +79,7 @@ export default function ConceptClusterPlot() {
     return (
         <>
             <Show when={loading()}>
-                <progress class="absolute bottom" />
+                <progress class="absolute bottom" style="z-index:1000" />
             </Show>
 
             <Show when={conceptDatasets()}>
