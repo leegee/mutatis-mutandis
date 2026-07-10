@@ -48,6 +48,9 @@ ZARR_ROOT.mkdir(parents=True, exist_ok=True)
 ZARR_PATH = ZARR_ROOT / "tier1"
 ZARR_PATH.mkdir(parents=True, exist_ok=True)
 
+MASKED_ZARR_PATH = ZARR_ROOT / "tier1-masked"
+MASKED_ZARR_PATH.mkdir(parents=True, exist_ok=True)
+
 MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 

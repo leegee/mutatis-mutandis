@@ -338,3 +338,11 @@ def refresh_views(conn: Connection) -> None:
                     sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) )
                 )
     logger.info("All views refreshed and committed")
+
+
+def sqlite3_connection(db_path):
+    import sqlite3
+    con = sqlite3.connect(db_path)
+    con.execute("PRAGMA journal_mode=WAL;")
+    con.execute("PRAGMA synchronous=NORMAL;")
+    return con

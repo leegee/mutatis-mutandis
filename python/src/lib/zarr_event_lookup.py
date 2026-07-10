@@ -74,7 +74,29 @@ class ZarrEventLookup:
 
 
     def _load_store(self, e, store_dir):
-        """Load events + multi-scale embeddings."""
+        """
+        Load events + multi-scale embeddings.
+
+        PERFORMANCE NOTE: token/doc_id/etc are cheap fields (int64, short
+        strings) - reading and filtering them per batch is fast. The
+        embedding arrays (emb_local/medium/broad) are the expensive part:
+        768-dim float32 per row, and Zarr has to decompress each chunk it
+        touches. The keep-mask (derived from token matches against
+        self.forms) is now computed FIRST, from the cheap fields only, and
+        batches with zero matches skip the embedding reads entirely via
+        `continue` before ever touching e["emb_local"]/["emb_medium"]/
+        ["emb_broad"]. Previously the embedding slices were read
+        unconditionally for every batch regardless of whether anything in
+        that batch matched - meaning a single-concept forms-filtered load
+        still paid the FULL corpus's embedding-decompression cost, even
+        though most of the decompressed data was immediately discarded.
+        With a concept's occurrences spread across many documents (and
+        therefore likely touching most batches at least once), this alone
+        won't eliminate embedding reads entirely for a typical concept -
+        but any batch that genuinely contains zero matches (increasingly
+        likely for rarer concepts, or smaller shards) now costs almost
+        nothing instead of a full embedding decompression.
+        """
         if "event_id" not in e:
             raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
 
@@ -84,6 +106,7 @@ class ZarrEventLookup:
         for start in range(0, n, BATCH_SIZE):
             end = min(start + BATCH_SIZE, n)
 
+            # --- cheap fields first ---
             b_eids = e["event_id"][start:end]
             b_vids = e["vector_id"][start:end]
             b_docs = e["doc_id"][start:end]
@@ -91,10 +114,6 @@ class ZarrEventLookup:
             b_idxs = e["token_idx"][start:end]
             b_wins = e["window_id"][start:end]
             b_wpos = wpos[start:end] if wpos is not None else None
-
-            b_local  = e["emb_local"][start:end]
-            b_medium = e["emb_medium"][start:end]
-            b_broad  = e["emb_broad"][start:end]
 
             b_toks = b_toks.astype(str)
             b_docs = b_docs.astype(str)
@@ -108,8 +127,18 @@ class ZarrEventLookup:
             if self.false_positives:
                 keep &= ~np.isin(b_toks_lower, list(self.false_positives))
 
+            # Skip the expensive embedding reads entirely for batches with
+            # no matches - this is the actual fix. Previously b_local/
+            # b_medium/b_broad were read unconditionally above this point,
+            # so every batch paid full decompression cost regardless of
+            # whether `keep` had any True values.
             if not keep.any():
                 continue
+
+            # --- expensive fields only for batches with at least one match ---
+            b_local  = e["emb_local"][start:end]
+            b_medium = e["emb_medium"][start:end]
+            b_broad  = e["emb_broad"][start:end]
 
             self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
             self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
@@ -209,12 +238,23 @@ class ZarrEventLookup:
         return self._pos[int(event_id)]
 
 
-    def get_embeddings(self, event_ids):
+    def get_embeddings(self, event_ids, weights=(0.25, 0.50, 0.25)):
         """
         Return (n, d) embedding matrix aligned to event_ids.
         Uses ensemble embedding.
+
+        Vectorized: previously this built the (n, d) matrix via a Python
+        loop calling get_ensemble_embedding() (itself a per-row weighted
+        sum) once per event_id, then np.vstack-ed the results - n separate
+        small numpy allocations plus n dict lookups in a Python loop. This
+        version does one array of position lookups, then three whole-array
+        fancy-index reads and a single vectorized weighted sum - one set
+        of allocations regardless of n, instead of n of them.
         """
-        return np.vstack([
-            self.get_ensemble_embedding(self.get_pos(int(eid)))
-            for eid in event_ids
-        ]).astype(np.float32)
+        positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
+
+        return (
+            weights[0] * self.emb_local[positions] +
+            weights[1] * self.emb_medium[positions] +
+            weights[2] * self.emb_broad[positions]
+        ).astype(np.float32)

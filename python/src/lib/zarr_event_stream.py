@@ -34,7 +34,7 @@ class ZarrEventStream:
     """
 
     EXPECTED_GROUP = "events"
-    EXPECTED_EMB_KEY = "emb_raw"
+    EXPECTED_EMB_KEY = "emb_medium"
     EXPECTED_ID_KEY = "event_id"   # stable observation identity, not vector_id
 
     def __init__(self, root: str):

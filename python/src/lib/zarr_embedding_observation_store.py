@@ -213,6 +213,19 @@ class ZarrEmbeddingObservationStore:
         return set(self.doc_id[:])
 
 
+    def get_event_ids(self) -> set[int]:
+        """
+        Return the set of event_ids already present in the store.
+
+        Used by incremental writers so rerunning on additional concepts only
+        computes observations that have not yet been written.
+        """
+        if self.event_id.shape[0] == 0:
+            return set()
+
+        return set(map(int, self.event_id[:]))
+
+
     def embedding_dim(self) -> int:
         if len(self.emb_raw.shape) <= 1:
             return 0

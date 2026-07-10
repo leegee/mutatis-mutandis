@@ -61,10 +61,7 @@ function targetForDataType(dataType: string): string {
 export async function loadDatasets(
     params: LoadDatasetsParams
 ): Promise<ConceptDatasetSqlite[]> {
-    console.log(
-        `[loadDatasets] START ${ params.dataType } for`,
-        params.concepts
-    );
+    console.debug(`[loadDatasets] START ${ params.dataType } for`, params.concepts);
 
     const start = performance.now();
 
@@ -162,9 +159,7 @@ export async function loadDatasets(
 
                 const points = await execRows(pointsQuery, queryParams);
 
-                console.debug(
-                    `[loadDatasets] ${ concept } | ${ params.dataType } | raw points: ${ points.length }`
-                );
+                console.debug(`[loadDatasets] ${ concept } | ${ params.dataType } | raw points: ${ points.length }`);
 
                 // const target = targetForDataType(params.dataType);
 
@@ -217,12 +212,10 @@ export async function loadDatasets(
         );
 
         const duration = performance.now() - start;
-        console.log(
-            `[loadDatasets] FINISHED ${ params.dataType } in ${ duration.toFixed(1) }ms`
-        );
-
+        console.debug(`[loadDatasets] FINISHED ${ params.dataType } in ${ duration.toFixed(1) }ms`);
         return rv;
-    } catch (error) {
+    }
+    catch (error) {
         console.error("loadDatasets error", error);
         return [];
     }
