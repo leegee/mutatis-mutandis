@@ -36,7 +36,11 @@ GUI_PUBLIC_DIR       = Path(GUI_PUBLIC_ROOT / 'public')
 GUI_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
 
 CORPUS_TIER2_DB_URL  = str(Path('data') / 'tier2_concept_neighbours.db')
+CORPUS_TIER2_MASKED_DB_URL = str(Path('data') / 'tier2_concept_neighbours_MASKED.db')
+
 CORPUS_TIER2_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_DB_URL)
+CORPUS_TIER2_MASKED_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_MASKED_DB_URL)
+
 JOBS_DB_PATH         = OUT_DIR / "fastapi_jobs.sqlite3"
 
 INDEXES_DIR = OUT_DIR / "indexes"
@@ -62,8 +66,8 @@ MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
 FAISS_INDEX_DIR = INDEXES_DIR / "faiss"
 FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
-FAISS_TIER1_INDEX = FAISS_INDEX_DIR / "tier1.index"
-FAISS_SLICE_DIR = FAISS_INDEX_DIR / "slices"
+FAISS_TIER1_INDEX        = FAISS_INDEX_DIR / "tier1.index"
+FAISS_TIER1_INDEX_MASKED = FAISS_INDEX_DIR / "tier1-masked.index"
 
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)

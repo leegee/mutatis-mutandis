@@ -165,6 +165,7 @@ class EeboFaissIndex:
                 )
         return x / norms
 
+
     def add(self, vectors: np.ndarray, event_ids: Sequence[int]) -> None:
         vectors = np.ascontiguousarray(vectors, dtype=np.float32)
         ids     = np.ascontiguousarray(event_ids, dtype=np.int64)
@@ -193,8 +194,7 @@ class EeboFaissIndex:
 
         # Guard against cross-call duplicates
         if self._index.ntotal > 0:
-            existing    = set(faiss.vector_to_array(self._index.id_map).tolist())
-            cross_dupes = [int(eid) for eid in ids if int(eid) in existing]
+            cross_dupes = [int(eid) for eid in ids if int(eid) in self._ids]
             if cross_dupes:
                 raise ValueError(
                     f"event_ids already present in index: {cross_dupes[:10]}"
@@ -205,8 +205,10 @@ class EeboFaissIndex:
         self._index.add_with_ids(vectors, ids)
         self._ids.update(int(i) for i in ids)
 
+
     def ids(self) -> set[int]:
         return self._ids
+
 
     def search(
         self,
@@ -311,56 +313,37 @@ class EeboFaissIndex:
 
     @classmethod
     def load(cls, path: Path) -> "EeboFaissIndex":
-        """
-        Load persisted FAISS index and validate geometry invariants.
-        """
         path = Path(path)
-
         if not path.is_file():
             raise FileNotFoundError(f"FAISS index not found: {path}")
         logger.info(f"[faiss] loading index={path}")
 
-        obj = cls(dim=1)  # placeholder
+        obj = cls(dim=1)
         obj._index = faiss.read_index(str(path))
 
         if not isinstance(obj._index, faiss.IndexIDMap):
-            raise TypeError(
-                "Loaded FAISS index must be IndexIDMap "
-                "(semantic IDs are required)"
-            )
+            raise TypeError("Loaded FAISS index must be IndexIDMap (semantic IDs are required)")
 
         base = obj._index.index
-        obj.dim = base.d # replace placeholder
-
         if not hasattr(base, "metric_type"):
-            raise TypeError(
-                f"Cannot determine metric type for index: {type(base)}"
-            )
-
+            raise TypeError(f"Cannot determine metric type for index: {type(base)}")
         if base.metric_type != faiss.METRIC_INNER_PRODUCT:
-            raise TypeError(
-                "FAISS index must use INNER_PRODUCT "
-                "(cosine similarity invariant)"
-            )
+            raise TypeError("FAISS index must use INNER_PRODUCT (cosine similarity invariant)")
 
-        # Both IndexFlatIP and IndexHNSWFlat expose .d for the vector
-        # dimension. If this ever fails for a future index type, the
-        # TypeError below will surface it explicitly rather than
-        # letting obj.dim remain unset.
         if hasattr(base, "d"):
             obj.dim = base.d
         else:
             raise TypeError(
-                f"Cannot infer embedding dimension from FAISS index "
-                f"of type {type(base).__name__}. Expected an index with "
-                f"a '.d' attribute (e.g. IndexFlatIP, IndexHNSWFlat)."
+                f"Cannot infer embedding dimension from FAISS index of type "
+                f"{type(base).__name__}."
             )
 
-        logger.info(
-            f"[faiss] loaded ntotal={obj._index.ntotal} dim={obj.dim}"
-        )
+        obj._ids = set(int(i) for i in faiss.vector_to_array(obj._index.id_map).tolist())  # NEW
 
+        logger.info(f"[faiss] loaded ntotal={obj._index.ntotal} dim={obj.dim}")
         return obj
+
+
 
     def reconstruct_many(
         self,

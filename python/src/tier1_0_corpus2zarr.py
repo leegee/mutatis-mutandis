@@ -78,6 +78,14 @@ and metadata generation.
 
 from __future__ import annotations
 
+
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["OMP_NUM_THREADS"] = "4"        # limit to avoid overload
+os.environ["MKL_NUM_THREADS"] = "4"
+
+
+
 import argparse
 import shutil
 import unicodedata
@@ -90,7 +98,7 @@ import xxhash
 
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
-from lib.eebo_config import ZARR_PATH, EMBED_BATCH_SIZE
+from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 
@@ -100,6 +108,7 @@ WINDOW_CONFIGS = [
     {"name": "medium", "size": 512,  "stride": 256},
     {"name": "broad",  "size": 512,  "stride": 384},
 ]
+
 
 
 STOPWORDS = {
@@ -213,66 +222,212 @@ class EmbeddingPipeline:
         return all_events
 
     # ==================== MASKED (default) ====================
-    def _embed_doc_masked(self, buf: DocBuffer) -> list[Event]:
-        """Generate masked embeddings for every content token under all window configs."""
+    def _embed_doc_masked(self, buf):
         input_ids, attention_mask, word_ids = self._encode(buf.tokens)
 
-        # Precompute, once per document, the absolute encoded positions for
-        # each word id. Reused across every config and every token instead
-        # of being rescanned per (config, token) pair.
-        word_id_positions: dict[int, list[int]] = defaultdict(list)
-        for i, wid in enumerate(word_ids):
-            if wid is not None and wid >= 0:
-                word_id_positions[wid].append(i)
-
-        all_events: list[Event] = []
+        all_events = []
 
         for config in self.configs:
-            jobs = self._build_masked_jobs_for_config(
-                buf, input_ids, word_ids, config, word_id_positions
+            jobs = self._build_masked_window_jobs(
+                buf,
+                input_ids,
+                attention_mask,
+                word_ids,
+                config,
             )
-            if not jobs:
-                continue
 
-            # Run inference and get {job_index: vector}
-            result_vectors = self._run_masked_batch(jobs)
+            vectors = self._run_masked_window_batch(jobs)
 
-            # Convert results to Event objects
-            for job_idx, vec in result_vectors.items():
-                job = jobs[job_idx]
-                event = self._make_event_from_job(buf, job, vec, config["name"])
-                all_events.append(event)
+            all_events.extend(
+                self._events_from_masked_windows(
+                    buf,
+                    jobs,
+                    vectors,
+                    config["name"]
+                )
+            )
+
+        logger.info(
+            "Document %s: %d masked observations",
+            buf.doc_id,
+            len(all_events),
+        )
 
         return all_events
 
-    def _build_masked_jobs_for_config(self, buf: DocBuffer, input_ids, word_ids,
-                                       config, word_id_positions):
-        """Build all masked jobs for one config scale.
+    def _build_masked_window_jobs(
+        self,
+        buf: DocBuffer,
+        input_ids,
+        attention_mask,
+        word_ids,
+        config,
+    ):
+        """Create one masked inference job per contextual window.
 
-        Windows are computed once for the whole document/config (not once
-        per token), and mask positions are resolved via the precomputed
-        ``word_id_positions`` lookup rather than rescanning each window.
+        The previous implementation created one job per target token. This
+        version creates one job per transformer input window and extracts all
+        masked token representations afterwards.
         """
-        windows = self._compute_windows(word_ids, config["size"], config["stride"])
+        windows = self._compute_windows(
+            word_ids,
+            config["size"],
+            config["stride"],
+        )
+
         if not windows:
             return []
 
         jobs = []
-        for bpos, corpus_token_idx in enumerate(buf.corpus_token_idxs):
-            token = buf.tokens[bpos]
-            vector_id = buf.vector_ids[bpos]
 
-            window = self._best_window_for_token(windows, bpos)
-            if window is None:
+        for window in windows:
+            start = window["encoded_start"]
+            end = window["encoded_end"]
+
+            window_ids = list(input_ids[start:end])
+            window_mask = list(attention_mask[start:end])
+            window_word_ids = word_ids[start:end]
+
+            mask_positions = {}
+
+            for encoded_pos, word_id in enumerate(window_word_ids):
+                if word_id is None or word_id < 0:
+                    continue
+
+                if word_id >= len(buf.corpus_token_idxs):
+                    continue
+
+                # Ignore punctuation/special tokens. buf already contains only
+                # content tokens, so every valid word id is a target candidate.
+                mask_positions[encoded_pos] = word_id
+
+                window_ids[encoded_pos] = self.tokenizer.mask_token_id
+
+            if not mask_positions:
                 continue
 
-            job = self._build_masked_job(
-                input_ids, word_id_positions, window, bpos,
-                config["name"], buf.doc_id, corpus_token_idx, token, vector_id
+            jobs.append(
+                {
+                    "input_ids": window_ids,
+                    "attention_mask": window_mask,
+                    "mask_positions": mask_positions,
+                    "window_start": window["start_word"],
+                    "window_start_encoded": start,
+                    "doc_id": buf.doc_id,
+                }
             )
-            if job:
-                jobs.append(job)
+
         return jobs
+
+
+    def _run_masked_window_batch(self, jobs: list[dict]):
+        """Run batched masked window inference.
+
+        Returns a list aligned with jobs. Each item contains all token vectors
+        extracted from that window.
+        """
+        if not jobs:
+            return []
+
+        results = []
+
+        for i in range(0, len(jobs), self.batch_size):
+            chunk = jobs[i:i + self.batch_size]
+
+            results.extend(
+                self._forward_masked_window_batch(chunk)
+            )
+
+        return results
+
+
+    def _forward_masked_window_batch(self, jobs: list[dict]):
+        """Forward a batch of masked windows and extract all masked positions."""
+
+        logger.info( "MacBERTh forward batch: %d windows", len(jobs) )
+
+        max_len = max(len(j["input_ids"]) for j in jobs)
+
+        def pad(seq, value=0):
+            return seq + [value] * (max_len - len(seq))
+
+        input_ids_t = torch.tensor(
+            [pad(j["input_ids"]) for j in jobs],
+            dtype=torch.long,
+            device=self.device,
+        )
+
+        attention_mask_t = torch.tensor(
+            [pad(j["attention_mask"]) for j in jobs],
+            dtype=torch.long,
+            device=self.device,
+        )
+
+        with torch.inference_mode():
+            out = self.model(
+                input_ids=input_ids_t,
+                attention_mask=attention_mask_t,
+                return_dict=True,
+            )
+
+        hidden = out.last_hidden_state.cpu().numpy()
+
+        results = []
+
+        for batch_idx, job in enumerate(jobs):
+            vectors = {}
+
+            for position, word_id in job["mask_positions"].items():
+                vectors[word_id] = hidden[batch_idx, position].astype(np.float32)
+
+            results.append(vectors)
+
+        return results
+
+
+    def _events_from_masked_windows(
+        self,
+        buf: DocBuffer,
+        jobs,
+        vectors,
+        config_name: str,
+    ):
+        """Convert window outputs into Tier 1 Events."""
+
+        events = []
+
+        for job, window_vectors in zip(jobs, vectors):
+
+            window_start = job["window_start"]
+
+            if window_start >= len(buf.corpus_token_idxs):
+                continue
+
+            window_start_token_idx = buf.corpus_token_idxs[window_start]
+
+            for word_id, vec in window_vectors.items():
+
+                if word_id >= len(buf.corpus_token_idxs):
+                    continue
+
+                if not is_content_token(buf.tokens[word_id]):
+                    continue
+
+                events.append(
+                    Event.make(
+                        doc_id=buf.doc_id,
+                        corpus_token_idx=buf.corpus_token_idxs[word_id],
+                        window_start_token_idx=window_start_token_idx,
+                        window_start=window_start,
+                        window_token_pos=word_id,
+                        token=buf.tokens[word_id],
+                        vector_id=buf.vector_ids[word_id],
+                        vec=vec,
+                        config_name=config_name,
+                    )
+                )
+
+        return events
 
     @staticmethod
     def _compute_windows(word_ids, window_size, stride):
@@ -321,106 +476,6 @@ class EmbeddingPipeline:
 
         return windows
 
-    @staticmethod
-    def _best_window_for_token(windows, target_word_id):
-        """Pick the best-centered precomputed window containing target_word_id."""
-        best, best_centering = None, float("inf")
-        for w in windows:
-            if w["min_word"] <= target_word_id <= w["max_word"]:
-                centering = abs(target_word_id - w["mid"])
-                if centering < best_centering:
-                    best, best_centering = w, centering
-        return best
-
-    def _build_masked_job(self, input_ids, word_id_positions, window, target_buffer_idx,
-                         config_name, doc_id, corpus_token_idx, token, vector_id):
-        """Create a single masked forward-pass job from a precomputed window."""
-        encoded_start, encoded_end = window["encoded_start"], window["encoded_end"]
-        window_ids = input_ids[encoded_start:encoded_end]
-
-        abs_positions = word_id_positions.get(target_buffer_idx, [])
-        mask_positions = [
-            p - encoded_start for p in abs_positions
-            if encoded_start <= p < encoded_end
-        ]
-        if not mask_positions:
-            return None
-
-        masked_ids = list(window_ids)
-        for pos in mask_positions:
-            masked_ids[pos] = self.tokenizer.mask_token_id
-
-        return {
-            "input_ids": masked_ids,
-            "attention_mask": [1] * len(masked_ids),
-            "mask_positions": mask_positions,
-            "target_idx": corpus_token_idx,
-            "token": token,
-            "vector_id": vector_id,
-            "config_name": config_name,
-            "span": (encoded_start, encoded_end),
-            "window_start_word": window["start_word"],
-            "window_token_pos": mask_positions[0],
-            "doc_id": doc_id,
-        }
-
-    def _run_masked_batch(self, jobs: list[dict]) -> dict[int, np.ndarray]:
-        """Run batched inference. Returns {original_job_index: vector}."""
-        if not jobs:
-            return {}
-
-        results: dict[int, np.ndarray] = {}
-        for i in range(0, len(jobs), self.batch_size):
-            chunk = jobs[i : i + self.batch_size]
-            batch_results = self._forward_masked_batch(chunk)
-            # Map back to original indices in the jobs list
-            for local_idx, vec in batch_results.items():
-                global_idx = i + local_idx
-                results[global_idx] = vec
-
-        return results
-
-    def _forward_masked_batch(self, jobs: list[dict]) -> dict[int, np.ndarray]:
-        """Forward pass for a small batch of jobs. Returns {local_index: vec}."""
-        if not jobs:
-            return {}
-
-        max_len = max(len(j["input_ids"]) for j in jobs)
-
-        def pad(seq, pad_value=0):
-            return seq + [pad_value] * (max_len - len(seq))
-
-        input_ids_t = torch.tensor(
-            [pad(j["input_ids"]) for j in jobs], dtype=torch.long
-        ).to(self.device)
-        attn_mask_t = torch.tensor(
-            [pad(j["attention_mask"]) for j in jobs], dtype=torch.long
-        ).to(self.device)
-
-        with torch.inference_mode():
-            out = self.model(
-                input_ids=input_ids_t,
-                attention_mask=attn_mask_t,
-                return_dict=True
-            )
-
-        hidden = out.last_hidden_state.cpu().numpy()
-
-        batch_results = {}
-        for b, job in enumerate(jobs):
-            if self.pooling_scope == "context":
-                valid_len = sum(job["attention_mask"])
-                pool_idxs = [i for i in range(valid_len) if i not in job["mask_positions"]]
-            else:
-                pool_idxs = job["mask_positions"]
-
-            if not pool_idxs:
-                continue
-
-            vec = hidden[b, pool_idxs].mean(axis=0).astype(np.float32)
-            batch_results[b] = vec
-
-        return batch_results
 
     def _make_event_from_job(self, buf: DocBuffer, job: dict, vec: np.ndarray, config_name: str) -> Event:
         """Convert a processed job back into an Event with proper window metadata."""
@@ -493,6 +548,8 @@ class EmbeddingPipeline:
         for i, wid in enumerate(item["word_ids"]):
             if wid is None or wid < 0 or wid >= len(buf.corpus_token_idxs):
                 continue
+            if not is_content_token(buf.tokens[wid]):
+                continue
             events.append(Event.make(
                 doc_id=buf.doc_id,
                 corpus_token_idx=buf.corpus_token_idxs[wid],
@@ -508,14 +565,16 @@ class EmbeddingPipeline:
 
 
 class CorpusProcessor:
-    def __init__(self, conn, pipeline, report_every: int = 100):
+    def __init__(self,  conn, zarr_path, pipeline, report_every: int = 100):
+        self.zarr_path = zarr_path
         self.conn = conn
         self.pipeline = pipeline
         self.report_every = report_every
 
     def process(self, doc_id=None):
-        store = ZarrEmbeddingObservationStore(path=str(ZARR_PATH), dim=self.pipeline.model.config.hidden_size)
-        already_processed = store.get_doc_ids()
+        store = ZarrEmbeddingObservationStore(path=str(self.zarr_path), dim=self.pipeline.model.config.hidden_size)
+        already_processed = set(store.get_doc_ids())
+        logger.info("already processed: %d", len(already_processed))
 
         cur = self.conn.cursor(name="tier1_cursor")
         cur.itersize = 10000
@@ -524,6 +583,8 @@ class CorpusProcessor:
             cur.execute("SELECT doc_id, token_idx, vector_id, token FROM pamphlet_tokens WHERE doc_id = %s ORDER BY token_idx", (doc_id,))
         else:
             cur.execute("SELECT doc_id, token_idx, vector_id, token FROM pamphlet_tokens ORDER BY doc_id, token_idx")
+
+        logger.info("query executed for doc_id=%s", doc_id)
 
         buf = None
         docs_processed = 0
@@ -538,17 +599,22 @@ class CorpusProcessor:
                     docs_processed += 1
                     if docs_processed % self.report_every == 0:
                         logger.info(f"Processed {docs_processed} documents")
-
                 buf = DocBuffer(doc_id=row_doc_id)
 
-            if is_content_token(token):
-                buf.append(token, vid, token_idx)
+            buf.append(token, vid, token_idx)
 
         if buf and buf.doc_id not in already_processed:
             self._flush(buf, store)
 
     def _flush(self, buf, store):
+
+        import time
+        start = time.perf_counter()
+
         raw_events = self.pipeline.embed_doc(buf)
+
+        logger.info( "Embedding %s took %.2fs", buf.doc_id, time.perf_counter() - start )
+
         if not raw_events:
             return
 
@@ -557,6 +623,8 @@ class CorpusProcessor:
         for e in raw_events:
             key = (e.corpus_token_idx, e.window_token_pos)
             events_by_token[key][e.config_name] = e
+
+        logger.info( "aligned observations: %d", len(events_by_token) )
 
         # Build aligned arrays (same schema as before)
         event_ids, concept_ids = [], []
@@ -605,11 +673,10 @@ class CorpusProcessor:
         )
 
 
-def clear_output_dir():
-    path = ZARR_PATH
-    if path.exists():
-        shutil.rmtree(path)
-    path.mkdir(parents=True, exist_ok=True)
+def clear_output_dir(zarr_path):
+    if zarr_path.exists():
+        shutil.rmtree(zarr_path)
+    zarr_path.mkdir(parents=True, exist_ok=True)
 
 
 def parse_args():
@@ -626,9 +693,14 @@ def parse_args():
 def main():
     args = parse_args()
 
+    if args.no_mask:
+        zarr_path = ZARR_PATH
+    else:
+        zarr_path = MASKED_ZARR_PATH
+
     if args.clear:
         logger.info("Clearing Tier 1 output")
-        clear_output_dir()
+        clear_output_dir(zarr_path)
 
     conn = get_connection()
     mac = load_macberth()
@@ -640,7 +712,7 @@ def main():
         batch_size=args.batch_size
     )
 
-    proc = CorpusProcessor(conn, pipeline, report_every=args.report_every)
+    proc = CorpusProcessor(conn, zarr_path, pipeline, report_every=args.report_every)
     proc.process(doc_id=args.doc_id)
 
     conn.close()

@@ -161,7 +161,7 @@ from lib.zarr_event_lookup import ZarrEventLookup
 
 import numpy as np
 
-from lib.eebo_config import CONCEPT_SETS, INDEXES_DIR, FAISS_TIER1_INDEX, ZARR_PATH, OUT_DIR, CORPUS_TIER2_DB_PATH
+from lib.eebo_config import CONCEPT_SETS, FAISS_TIER1_INDEX, FAISS_TIER1_INDEX_MASKED, ZARR_PATH, MASKED_ZARR_PATH, OUT_DIR, CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
@@ -821,6 +821,7 @@ def run_tier2_service(
     doc_meta,
     concepts_to_run,
     db_path,
+    faiss_index_path,
     index           = None,
     lookup          = None,
     false_positives = None,
@@ -837,7 +838,7 @@ def run_tier2_service(
     )
     logger.info(f"[tier2.run_tier2_service] Enter")
 
-    index = index or EeboFaissIndex.load(FAISS_TIER1_INDEX)
+    index = index or EeboFaissIndex.load(faiss_index_path)
     if index.ntotal == 0:
         raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
 
@@ -894,7 +895,7 @@ def run_tier2_core(
 
 
 def main():
-    logger.info("[tier2] Enter")
+    logger.info("[tier2.main] Enter")
 
     parser = argparse.ArgumentParser()
     parser.add_argument( "--concept", type=str, default=None, help="Run analysis for a single concept (case-insensitive)", )
@@ -903,17 +904,29 @@ def main():
     parser.add_argument( "--clear", action="store_true", help="Wipe and recreate SQLite database before writing", )
     parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics", )
     parser.add_argument( "--depth", type=int, default=1, choices=[1, 2], help="Neighbour depth: 1=direct only (default), 2=include neighbours-of-neighbours", )
+    parser.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
     args = parser.parse_args()
+
+    if args.no_mask:
+        zarr_path = ZARR_PATH
+        faiss_index_path = FAISS_TIER1_INDEX
+        db_path = CORPUS_TIER2_DB_PATH
+    else:
+        zarr_path = MASKED_ZARR_PATH
+        faiss_index_path = FAISS_TIER1_INDEX_MASKED
+        db_path = CORPUS_TIER2_MASKED_DB_PATH
+
+    logger.info(f"[Tier 2.main] mode={'masked' if not args.no_mask else 'unmasked'}")
 
     if args.clear and args.concept:
         logger.warning( "[tier2.main] --clear with --concept will wipe all concepts before writing one" )
 
     if args.clear:
-        if CORPUS_TIER2_DB_PATH.exists():
-            logger.warning(f"[tier2.main] deleting SQLite DB: {CORPUS_TIER2_DB_PATH}")
-            os.remove(CORPUS_TIER2_DB_PATH)
+        if db_path.exists():
+            logger.warning(f"[tier2.main] deleting SQLite DB: {db_path}")
+            os.remove(db_path)
         else:
-            logger.info("[tier2] reset-sqlite requested but DB does not exist")
+            logger.info("[tier2.main] reset-sqlite requested but DB does not exist")
 
 
     # If a single concept is requested, restrict the lookup to its forms
@@ -949,7 +962,7 @@ def main():
     already_processed = (
         set()
         if args.clear
-        else get_processed_concepts(CORPUS_TIER2_DB_PATH)
+        else get_processed_concepts(db_path)
     )
 
     concepts_to_run = [
@@ -966,23 +979,24 @@ def main():
         return
 
     lookup = ZarrEventLookup(
-        ZARR_PATH,
+        zarr_path,
         forms=target_forms,
         false_positives=target_fps,
     )
 
     run_tier2_service(
-        doc_meta        = doc_meta,
-        concepts_to_run = concepts_to_run,
-        db_path         = CORPUS_TIER2_DB_PATH,
-        lookup          = lookup,
-        false_positives = target_fps,
-        clear           = args.clear,
-        diagnostics     = args.diagnostics,
-        depth           = args.depth,
-        emit            = None
+        doc_meta         = doc_meta,
+        concepts_to_run  = concepts_to_run,
+        db_path          = db_path,
+        faiss_index_path = faiss_index_path,
+        lookup           = lookup,
+        false_positives  = target_fps,
+        clear            = args.clear,
+        diagnostics      = args.diagnostics,
+        depth            = args.depth,
+        emit             = None
     )
-    logger.info(f"[tier2.main] Complete, wrote {CORPUS_TIER2_DB_PATH}")
+    logger.info(f"[tier2.main] Complete, wrote {db_path}")
 
 
 if __name__ == "__main__":

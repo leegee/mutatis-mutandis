@@ -292,7 +292,7 @@ export async function queryEventsByConcept(
   const nbRows = await execRows(
     `SELECT event_id, neighbour_event_id, vector_id, token,
             doc_id, pub_year, token_idx, window_id,
-            window_token_pos, score,
+            window_token_pos, score
      FROM   neighbours
      WHERE  event_id IN (${ ids })
      ORDER  BY event_id, score DESC`,

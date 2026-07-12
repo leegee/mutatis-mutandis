@@ -39,7 +39,7 @@ import hdbscan
 import pacmap
 import sqlite3
 
-from lib.eebo_config import ZARR_PATH, FAISS_TIER1_INDEX, PLOT_DIR, CORPUS_TIER2_DB_PATH
+from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, FAISS_TIER1_INDEX, FAISS_TIER1_INDEX_MASKED,  PLOT_DIR, CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_logging import logger, setEmit
@@ -242,6 +242,7 @@ def fit_umap_local(X, event_ids, n_neighbors=15, min_dist=0.1):
     """
     if not event_ids:
         return {}
+
     reducer = umap.UMAP(
         n_neighbors=n_neighbors,
         min_dist=min_dist,
@@ -249,6 +250,13 @@ def fit_umap_local(X, event_ids, n_neighbors=15, min_dist=0.1):
         random_state=42,
         metric="cosine",
     )
+
+    logger.info(
+        f"[tier3] UMAP input: shape={X.shape}, "
+        f"unique_rows={np.unique(X, axis=0).shape[0]}, "
+        f"rank≈{np.linalg.matrix_rank(X)}"
+    )
+
     emb = reducer.fit_transform(X)
     return {str(eid): (float(emb[i, 0]), float(emb[i, 1]))
             for i, eid in enumerate(event_ids)}
@@ -267,7 +275,15 @@ def fit_umap_global(X, event_ids):
         FP_ratio=2.0,
         random_state=42,
     )
+
+    logger.info(
+        f"[tier3] UMAP input: shape={X.shape}, "
+        f"unique_rows={np.unique(X, axis=0).shape[0]}, "
+        f"rank≈{np.linalg.matrix_rank(X)}"
+    )
+
     emb = reducer.fit_transform(X)
+
     return {str(eid): (float(emb[i, 0]), float(emb[i, 1]))
             for i, eid in enumerate(event_ids)}
 
@@ -311,6 +327,13 @@ def fit_cluster_local(X, event_ids, local_concept_coords=None):
         metric='cosine',
         random_state=42,
     )
+
+    logger.info(
+        f"[tier3] UMAP input: shape={X.shape}, "
+        f"unique_rows={np.unique(X, axis=0).shape[0]}, "
+        f"rank≈{np.linalg.matrix_rank(X)}"
+    )
+
     X_5d = reducer_5d.fit_transform(X)
 
     # 2. HDBSCAN on the 5D reduction
@@ -386,6 +409,13 @@ def fit_cluster_local(X, event_ids, local_concept_coords=None):
             metric='cosine',
             random_state=42,
         )
+
+        logger.info(
+            f"[tier3] UMAP input: shape={X.shape}, "
+            f"unique_rows={np.unique(X, axis=0).shape[0]}, "
+            f"rank≈{np.linalg.matrix_rank(X)}"
+        )
+
         emb_2d = reducer_2d.fit_transform(X)
         local_coords = {
             str(eid): (float(emb_2d[i, 0]), float(emb_2d[i, 1]))
@@ -881,16 +911,16 @@ def run_tier3_core(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
         write_projections_to_sqlite(
-            db_path=db_path,
-            concept_name=concept_name,
-            event_ids=event_ids,
-            local_coords=local_coords,
-            global_coords=global_coords,
-            local_bounds=local_bounds,
-            global_bounds=global_bounds_padded,
-            target="events",
-            lookup=lookup,
-            write_coords=False,
+            db_path         = db_path,
+            concept_name    = concept_name,
+            event_ids       = event_ids,
+            local_coords    = local_coords,
+            global_coords   = global_coords,
+            local_bounds    = local_bounds,
+            global_bounds   = global_bounds_padded,
+            target          = "events",
+            lookup          = lookup,
+            write_coords    = False,
         )
 
     #
@@ -922,16 +952,16 @@ def run_tier3_core(
             compute_bounds_from_coords([local_coords[str(e)] for e in event_ids])
         )
         write_projections_to_sqlite(
-            db_path=db_path,
-            concept_name=concept_name,
-            event_ids=event_ids,
-            local_coords=local_coords,
-            global_coords=global_coords,
-            local_bounds=local_bounds,
-            global_bounds=global_bounds_padded,
-            cluster_labels=cluster_labels,
-            target="events",
-            lookup=lookup,
+            db_path         = db_path,
+            concept_name    = concept_name,
+            event_ids       = event_ids,
+            local_coords    = local_coords,
+            global_coords   = global_coords,
+            local_bounds    = local_bounds,
+            global_bounds   = global_bounds_padded,
+            cluster_labels  = cluster_labels,
+            target          = "events",
+            lookup          = lookup,
         )
 
     if emit:
@@ -975,16 +1005,26 @@ def main():
     parser.add_argument("--concept", type=str, default=None)
     parser.add_argument("--mode", type=str, default="full", choices=["full", "clustering"])
     parser.add_argument("--false_positives", type=str, nargs="*", default=[])
+    parser.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
 
     args = parser.parse_args()
 
-    logger.info("[tier3] loading index + lookup")
+    if args.no_mask:
+        zarr_path = ZARR_PATH
+        faiss_index_path = FAISS_TIER1_INDEX
+        db_path = CORPUS_TIER2_DB_PATH
+    else:
+        zarr_path = MASKED_ZARR_PATH
+        faiss_index_path = FAISS_TIER1_INDEX_MASKED
+        db_path = CORPUS_TIER2_MASKED_DB_PATH
 
-    lookup = ZarrEventLookup(ZARR_PATH)
-    index  = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+    logger.info(f"[Tier3.main] loading index+lookup, mode={'masked' if not args.no_mask else 'unmasked'}")
+
+    lookup = ZarrEventLookup(zarr_path)
+    index  = EeboFaissIndex.load(faiss_index_path)
 
     run_tier3_core(
-        db_path         = CORPUS_TIER2_DB_PATH,
+        db_path         = db_path,
         index           = index,
         lookup          = lookup,
         concept         = args.concept,
