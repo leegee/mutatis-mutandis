@@ -7,6 +7,8 @@ import { Deck, OrthographicView, LinearInterpolator } from "@deck.gl/core";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
 
+import { GlowScatterplotLayer } from './GlowScatterplotLayer';
+
 import "./style.css";
 import type { BfsDataset, ConceptDatasetSqlite, LabelPoint, PointData, ViewBounds } from "./types";
 import { CanvasDragPlugin } from "./SelectionPlugin/CanvasDragPlugin";
@@ -197,7 +199,7 @@ export default function Plot(props: PlotProps) {
     const layersList: any[] = [];
 
     if (clusterPoints.length > 0) {
-      layersList.push(new ScatterplotLayer<PointData>({
+      layersList.push(new GlowScatterplotLayer<PointData>({
         id: "clusters-merged",
         coordinateSystem: "cartesian",
         data: clusterPoints,
@@ -262,13 +264,13 @@ export default function Plot(props: PlotProps) {
 
     if (conceptPoints.length > 0) {
       layersList.push(
-        new ScatterplotLayer<PointData>({
+        new GlowScatterplotLayer<PointData>({
           id: "concepts-merged",
+          getRadius: 3, // 4.5, // TODO
           coordinateSystem: "cartesian",
           data: conceptPoints,
           getPosition: p => getPosition(p, proj),
           getFillColor: p => getColor()(p),
-          getRadius: 4.5, // TODO
           radiusUnits: "pixels",
           opacity: 0.96,
           pickable: true,
@@ -323,7 +325,7 @@ export default function Plot(props: PlotProps) {
 
     if (props.bfsDataset?.points?.length && proj === "global" && props.bfsOpacity) {
       layersList.push(
-        new ScatterplotLayer({
+        new GlowScatterplotLayer({
           id: "bfs-global",
           data: props.bfsDataset.points,
           getPosition: getBfsPosition,
