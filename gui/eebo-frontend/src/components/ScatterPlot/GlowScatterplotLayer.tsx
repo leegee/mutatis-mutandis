@@ -55,6 +55,8 @@ export class GlowScatterplotLayer<DataT extends {} = any>
       coordinateSystem,
       radiusUnits = "pixels",
       opacity = 1,
+      transitions,
+      updateTriggers,
       ...coreProps
     } = this.props;
 
@@ -78,7 +80,9 @@ export class GlowScatterplotLayer<DataT extends {} = any>
         data,
         coordinateSystem,
         getPosition,
+
         getRadius: (d: DataT, info: any) => radiusAccessor(d, info) * glowScale,
+
         getFillColor: (d: DataT, info: any) => {
           const c = colorAccessor(d, info);
           return [
@@ -88,13 +92,20 @@ export class GlowScatterplotLayer<DataT extends {} = any>
             glowAlpha,
           ];
         },
+
         radiusUnits,
         opacity,
         filled: true,
         stroked: false,
         pickable: false,
-      }),
 
+        transitions,
+        updateTriggers: {
+          getPosition: this.props.updateTriggers?.getPosition,
+          getFillColor: this.props.updateTriggers?.getFillColor,
+          getRadius: this.props.updateTriggers?.getRadius,
+        },
+      }),
 
       // Interactive core
       new ScatterplotLayer<DataT>({
@@ -105,6 +116,7 @@ export class GlowScatterplotLayer<DataT extends {} = any>
         getRadius: radiusAccessor,
         getFillColor: colorAccessor,
         radiusUnits,
+        transitions,
         opacity,
         ...coreProps,
       }),
