@@ -35,13 +35,13 @@ GUI_PUBLIC_ROOT      = Path(BASE_DIR / 'gui' / 'eebo-frontend' )
 GUI_PUBLIC_DIR       = Path(GUI_PUBLIC_ROOT / 'public')
 GUI_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
 
-CORPUS_TIER2_DB_URL  = "/" + (Path('data') / 'tier2_concept_neighbours.db')
-CORPUS_TIER2_MASKED_DB_URL = "/" + (Path('data') / 'tier2_concept_neighbours_MASKED.db')
+CORPUS_TIER2_DB_URL        = "/" + str(Path('data') / 'tier2_concept_neighbours.db')
+CORPUS_TIER2_MASKED_DB_URL = "/" + str(Path('data') / 'tier2_concept_neighbours_MASKED.db')
 
-CORPUS_TIER2_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_DB_URL)
+CORPUS_TIER2_DB_PATH        = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_DB_URL)
 CORPUS_TIER2_MASKED_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_MASKED_DB_URL)
 
-JOBS_DB_PATH         = OUT_DIR / "fastapi_jobs.sqlite3"
+JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)

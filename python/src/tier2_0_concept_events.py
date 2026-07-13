@@ -391,7 +391,8 @@ def analyse_concept(
 
         neighbours = []
 
-        for nid_int, rrf_score in fused_per_query[i]:
+        for entry in fused_per_query[i]:
+            nid_int = entry["event_id"]
             if nid_int == eid:
                 continue
             n_pos = lookup.get_pos(nid_int)
@@ -416,7 +417,10 @@ def analyse_concept(
                 "token_idx":        int(L_token_idx[n_pos]),
                 "window_id":        n_window_id,
                 "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
-                "score":            float(rrf_score),
+                "score":            entry["rrf_score"],
+                "score_local":      entry["score_local"],     # NEW
+                "score_medium":     entry["score_medium"],    # NEW
+                "score_broad":      entry["score_broad"],     # NEW
                 "depth":            1,
                 "via_event_id":     None,
             })
@@ -586,6 +590,9 @@ CREATE TABLE IF NOT EXISTS neighbours (
     window_id           INTEGER,
     window_token_pos    INTEGER,
     score               REAL,
+    score_local         REAL,
+    score_medium        REAL,
+    score_broad         REAL,
     nx                  REAL,
     ny                  REAL,
     gnx                 REAL,
@@ -762,8 +769,9 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
         con.executemany("""
             INSERT OR IGNORE INTO neighbours
             (event_id, neighbour_event_id, depth, via_event_id, vector_id,
-             token, doc_id, pub_year, token_idx, window_id, window_token_pos, score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             token, doc_id, pub_year, token_idx, window_id, window_token_pos,
+             score, score_local, score_medium, score_broad)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             [
                 (
@@ -779,6 +787,9 @@ def write_sqlite(output: dict, db_path, *, clear: bool = False, doc_meta: dict =
                     n["window_id"],
                     n["window_token_pos"],
                     n["score"],
+                    n.get("score_local"),
+                    n.get("score_medium"),
+                    n.get("score_broad"),
                 )
                 for e in data["events"]
                 for n in e["neighbours"]

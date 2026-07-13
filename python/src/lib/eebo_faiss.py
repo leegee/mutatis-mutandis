@@ -395,29 +395,56 @@ class EeboFaissIndex:
 
 
     def multiscale_search(
-        index: dict,       # {"local": EeboFaissIndex, "medium": ..., "broad": ...}
-        lookup,             # ZarrEventLookup — needs .emb_local/.emb_medium/.emb_broad
-        positions,          # np.ndarray of row positions into lookup's arrays
+        index: dict,
+        lookup,
+        positions,
         top_n: int,
         rrf_k: int = 60,
         oversample: int = 3,
-    ) -> list[list[tuple[int, float]]]:
+    ) -> list[list[dict]]:
         """
         Search local/medium/broad FAISS indices for the queries at `positions`,
-        fuse the three ranked lists per query via RRF. Returns a list aligned
-        with `positions`, each a list of (neighbour_event_id, rrf_score).
+        fuse the three ranked lists per query via RRF.
+
+        Returns a list aligned with `positions`; each entry is a list of dicts:
+            {
+                "event_id":     int,
+                "rrf_score":    float,
+                "score_local":  float | None,   # None if not in that scale's
+                "score_medium": float | None,   # top-`search_k` candidates
+                "score_broad":  float | None,
+            }
+        truncated to top_n, ordered by rrf_score descending.
         """
         search_k = top_n * oversample
+        scales = ("local", "medium", "broad")
         per_scale = {
-            "local":  index["local"].search(lookup.emb_local[positions], search_k),
-            "medium": index["medium"].search(lookup.emb_medium[positions], search_k),
-            "broad":  index["broad"].search(lookup.emb_broad[positions], search_k),
+            scale: index[scale].search(getattr(lookup, f"emb_{scale}")[positions], search_k)
+            for scale in scales
         }
+
         fused = []
         for i in range(len(positions)):
-            ranked_lists = [
-                [int(nid) for nid in per_scale[scale][1][i]]
-                for scale in ("local", "medium", "broad")
-            ]
-            fused.append(reciprocal_rank_fusion(ranked_lists, k=rrf_k, top_n=top_n))
+            # id -> raw cosine score, in rank order, per scale
+            scale_scores = {
+                scale: {
+                    int(nid): float(score)
+                    for nid, score in zip(per_scale[scale][1][i], per_scale[scale][0][i])
+                    if int(nid) != -1
+                }
+                for scale in scales
+            }
+            ranked_lists = [list(scale_scores[scale].keys()) for scale in scales]
+            fused_ids = reciprocal_rank_fusion(ranked_lists, k=rrf_k, top_n=top_n)
+
+            fused.append([
+                {
+                    "event_id":     eid,
+                    "rrf_score":    rrf_score,
+                    "score_local":  scale_scores["local"].get(eid),
+                    "score_medium": scale_scores["medium"].get(eid),
+                    "score_broad":  scale_scores["broad"].get(eid),
+                }
+                for eid, rrf_score in fused_ids
+            ])
         return fused
