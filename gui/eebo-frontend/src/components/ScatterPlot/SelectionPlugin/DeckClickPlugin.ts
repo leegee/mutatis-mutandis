@@ -15,16 +15,11 @@ export class DeckClickPlugin<T extends { event_id: Id }> {
     private onClick = (info: PickingInfo<T>) => {
         if (!info.object) return;
 
-        // background-click
-        console.log(info);
+        // console.debug("[deck-click] background-click", info);
 
         this.controller.dispatch({
             type: "click",
             payload: info.object,
         });
     };
-
-    destroy() {
-        // deck doesn't require cleanup for setProps handlers in most cases
-    }
 }
