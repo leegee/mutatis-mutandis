@@ -668,6 +668,7 @@ _DELETE_CONCEPT = [
 
 
 def sqlite3_connection(db_path):
+    logger.info(f"[tier2] sqlite3_connection {db_path}")
     con = sqlite3.connect(db_path)
     con.execute("PRAGMA journal_mode=WAL;")
     con.execute("PRAGMA synchronous=NORMAL;")
