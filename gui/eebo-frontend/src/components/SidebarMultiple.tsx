@@ -32,7 +32,7 @@ export default function SidebarMultiple(props: Props) {
         );
 
         const cleanEvents = events.filter(Boolean);
-        console.log("[SidebarMultiple.sidebarData]", cleanEvents)
+        console.debug("[SidebarMultiple.sidebarData]", cleanEvents)
 
         // Get window-text snippets
         const windowRes = await fetchWindowBatch(
