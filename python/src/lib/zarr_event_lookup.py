@@ -215,7 +215,7 @@ class ZarrEventLookup:
     def iter_matching_event_ids(self, forms, false_positives=None):
         """
         Yield event_ids whose token matches `forms` and is not in
-        `false_positives`.
+        `false_positives`. Deduplicated — see note below.
         """
         forms = {f.lower() for f in forms}
         false_positives = {f.lower() for f in (false_positives or [])}
@@ -229,8 +229,17 @@ class ZarrEventLookup:
         if false_positives:
             mask &= ~np.isin(tokens_lower, list(false_positives))
 
+        # Defensive dedup: event_id should be unique per row by construction,
+        # but if the same event_id ever appears twice in the underlying arrays
+        # then yielding it twice from here would propagate duplicates into every
+        # consumer.
+        seen: set[int] = set()
         for eid in self.event_id[mask]:
-            yield int(eid)
+            eid = int(eid)
+            if eid in seen:
+                continue
+            seen.add(eid)
+            yield eid
 
 
     def get_pos(self, event_id: int) -> int:

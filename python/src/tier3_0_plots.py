@@ -198,8 +198,8 @@ def build_depth_layers(
 
         ring: set[str] = set()
         for fused_neighbours in fused:
-            for nid, _score in fused_neighbours:
-                sid = str(nid)
+            for entry in fused_neighbours:
+                sid = str(entry["event_id"])
                 if sid not in seen:
                     ring.add(sid)
 
@@ -627,7 +627,7 @@ def write_projections_to_sqlite(
 
     if data:
         con.executemany(
-            "INSERT INTO _proj_update VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT OR IGNORE INTO _proj_update VALUES (?,?,?,?,?,?,?,?)",
             data
         )
 
