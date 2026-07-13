@@ -27,13 +27,12 @@ export default function SidebarMultiple(props: Props) {
 
         // Get events by selection IDs
         const events = await Promise.all(
-            ids
-                .filter((id): id is string => id !== null)
+            ids.filter((id): id is string => id !== null)
                 .map((id) => queryEventById(id))
         );
 
         const cleanEvents = events.filter(Boolean);
-        // console.debug("[SidebarMultiple.sidebarData]", cleanEvents)
+        console.log("[SidebarMultiple.sidebarData]", cleanEvents)
 
         // Get window-text snippets
         const windowRes = await fetchWindowBatch(
@@ -103,9 +102,21 @@ export default function SidebarMultiple(props: Props) {
                                         <legend>
                                             <button class="chip" onClick={() => showDocument(group.doc)}>
                                                 {group.doc}
-                                                <span class="none"> (x {group.events.length}) </span>
+                                                {" "} &mdash; {" "}
+                                                <small>
+                                                    {group.events[0].pub_year}
+                                                    {" "}
+                                                    (x {group.events.length})
+                                                </small>
                                             </button>
                                         </legend>
+
+                                        <span class="small left-padding medium-opacity">
+                                            {group.events[0].author}
+                                            &mdash;
+                                            {group.events[0].pub_place}
+                                        </span>
+
 
                                         <For each={group.events}>
                                             {(e: PointData) => {
@@ -116,10 +127,8 @@ export default function SidebarMultiple(props: Props) {
                                                 return (
                                                     <>
                                                         <nav>
-                                                            <h6 class="small left-margin no-padding max">
+                                                            <h6 class="small bold left-margin no-padding max">
                                                                 <q>{e.token}</q>
-                                                                &nbsp;&mdash;
-                                                                <small> {e.pub_year} </small>
                                                             </h6>
                                                             <span title="Window ID/position">
                                                                 {e.window_id}/{e.window_token_pos}
