@@ -10,7 +10,8 @@ output_path = Path(GUI_PUBLIC_ROOT) / "src" / "corpus_config.ts"
 content = f"""
 export const CORPUS_START_YEAR = {CORPUS_START_YEAR};
 export const CORPUS_END_YEAR = {CORPUS_END_YEAR};
-export const CORPUS_TIER2_DB_URL = "{Path(CORPUS_TIER2_MASKED_DB_URL).as_posix()}";
+// export const CORPUS_TIER2_DB_URL = "{Path(CORPUS_TIER2_MASKED_DB_URL).as_posix()}";
+export const CORPUS_TIER2_DB_URL = "{Path(CORPUS_TIER2_DB_URL).as_posix()}";
 """.lstrip()
 
 output_path.write_text(content, encoding="utf-8")
