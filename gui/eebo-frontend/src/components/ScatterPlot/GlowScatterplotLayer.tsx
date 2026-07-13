@@ -13,8 +13,8 @@ type GlowScatterplotLayerProps<DataT extends {}> =
 
 
 // Internal visual-only layer
-class GlowScatterLayer<DataT extends {} = any>
-  extends ScatterplotLayer<DataT> {
+class GlowScatterLayer<DataT extends {} = any> extends ScatterplotLayer<DataT> {
+  static layerName = "GlowScatterLayer";
   getShaders() {
     const shaders = super.getShaders();
 
@@ -39,8 +39,7 @@ class GlowScatterLayer<DataT extends {} = any>
 
 
 
-export class GlowScatterplotLayer<DataT extends {} = any>
-  extends CompositeLayer<GlowScatterplotLayerProps<DataT>> {
+export class GlowScatterplotLayer<DataT extends {} = any> extends CompositeLayer<GlowScatterplotLayerProps<DataT>> {
   static layerName = "GlowScatterplotLayer";
 
   renderLayers() {
