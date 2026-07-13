@@ -117,6 +117,7 @@ export class GlowScatterplotLayer<DataT extends {} = any>
         getFillColor: colorAccessor,
         radiusUnits,
         transitions,
+        updateTriggers,
         opacity,
         ...coreProps,
       }),
