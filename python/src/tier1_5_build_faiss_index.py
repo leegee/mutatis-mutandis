@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import numpy as np
 
-from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, FAISS_DIR, faiss_index_paths
+from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH,  faiss_index_paths
 from lib.eebo_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 from lib.zarr_event_stream import ZarrEventStream
