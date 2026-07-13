@@ -131,8 +131,11 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
 
   let type = 'event';
   const eventRows = await execRows(
-    `SELECT event_id, concept, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos
-    FROM events WHERE event_id = ? LIMIT 1`,
+    `SELECT event_id, concept, vector_id, token, events.doc_id, events.pub_year, token_idx, window_id, window_token_pos,
+    documents.author, documents.pub_place
+    FROM events
+    LEFT JOIN documents ON events.doc_id = documents.doc_id
+    WHERE event_id = ? LIMIT 1`,
     [id],
   );
 
@@ -142,8 +145,11 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   if (!row) {
     type = 'neighbour';
     const neighbourRow = await execRows(
-      `SELECT event_id, score, vector_id, token, doc_id, pub_year, token_idx, window_id, window_token_pos
-       FROM neighbours WHERE neighbour_event_id = ? LIMIT 1`,
+      `SELECT event_id, score, vector_id, token, neighbours.doc_id, neighbours.pub_year, token_idx, window_id, window_token_pos,
+       documents.author, documents.pub_place
+       FROM neighbours
+       LEFT JOIN documents ON neighbours.doc_id = documents.doc_id
+       WHERE neighbour_event_id = ? LIMIT 1`,
       [id],
     );
 
@@ -163,6 +169,8 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
     token_idx: row[6] != null ? Number(row[6]) : null,
     window_id: row[7] != null ? Number(row[7]) : null,
     window_token_pos: row[8] != null ? Number(row[8]) : null,
+    author: row[9] != null ? row[9] : null,
+    pub_place: row[10] != null ? row[10] : null,
   } as SqliteNeighbour;
 }
 
