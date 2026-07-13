@@ -370,3 +370,54 @@ class EeboFaissIndex:
             self._index.reconstruct(int(eid), X[i])
 
         return X
+
+
+    def reciprocal_rank_fusion(
+        ranked_lists: list[list[int]],
+        k: int = 60,
+        top_n: int | None = None,
+    ) -> list[tuple[int, float]]:
+        """
+        Fuse multiple ranked neighbour-id lists (e.g. local/medium/broad FAISS
+        results for one query) via Reciprocal Rank Fusion:
+            score(id) = sum over lists containing id of 1 / (k + rank)
+        rank is 1-indexed. -1 (FAISS's "no result") entries are ignored.
+        """
+        scores: dict[int, float] = {}
+        for ranked in ranked_lists:
+            for rank, eid in enumerate(ranked, start=1):
+                if eid == -1:
+                    continue
+                scores[eid] = scores.get(eid, 0.0) + 1.0 / (k + rank)
+
+        fused = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+        return fused[:top_n] if top_n else fused
+
+
+    def multiscale_search(
+        index: dict,       # {"local": EeboFaissIndex, "medium": ..., "broad": ...}
+        lookup,             # ZarrEventLookup — needs .emb_local/.emb_medium/.emb_broad
+        positions,          # np.ndarray of row positions into lookup's arrays
+        top_n: int,
+        rrf_k: int = 60,
+        oversample: int = 3,
+    ) -> list[list[tuple[int, float]]]:
+        """
+        Search local/medium/broad FAISS indices for the queries at `positions`,
+        fuse the three ranked lists per query via RRF. Returns a list aligned
+        with `positions`, each a list of (neighbour_event_id, rrf_score).
+        """
+        search_k = top_n * oversample
+        per_scale = {
+            "local":  index["local"].search(lookup.emb_local[positions], search_k),
+            "medium": index["medium"].search(lookup.emb_medium[positions], search_k),
+            "broad":  index["broad"].search(lookup.emb_broad[positions], search_k),
+        }
+        fused = []
+        for i in range(len(positions)):
+            ranked_lists = [
+                [int(nid) for nid in per_scale[scale][1][i]]
+                for scale in ("local", "medium", "broad")
+            ]
+            fused.append(reciprocal_rank_fusion(ranked_lists, k=rrf_k, top_n=top_n))
+        return fused

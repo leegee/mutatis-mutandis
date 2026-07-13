@@ -69,6 +69,15 @@ FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 FAISS_TIER1_INDEX        = FAISS_INDEX_DIR / "tier1.index"
 FAISS_TIER1_INDEX_MASKED = FAISS_INDEX_DIR / "tier1-masked.index"
 
+FAISS_SCALES = ("local", "medium", "broad")
+
+FAISS_SCALES = ("local", "medium", "broad")
+
+def faiss_index_paths(masked: bool) -> dict[str, Path]:
+    suffix = "_masked" if masked else ""
+    return {scale: FAISS_DIR / f"tier1_{scale}{suffix}.faiss" for scale in FAISS_SCALES}
+
+
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 

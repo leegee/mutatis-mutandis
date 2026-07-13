@@ -161,8 +161,14 @@ from lib.zarr_event_lookup import ZarrEventLookup
 
 import numpy as np
 
-from lib.eebo_config import CONCEPT_SETS, FAISS_TIER1_INDEX, FAISS_TIER1_INDEX_MASKED, ZARR_PATH, MASKED_ZARR_PATH, OUT_DIR, CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH
-from lib.eebo_faiss import EeboFaissIndex
+from lib.eebo_config import (
+    CONCEPT_SETS, OUT_DIR,
+    ZARR_PATH, MASKED_ZARR_PATH,
+    FAISS_TIER1_INDEX, FAISS_TIER1_INDEX_MASKED,
+    CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH,
+    faiss_index_paths
+)
+from lib.eebo_faiss import EeboFaissIndex, reciprocal_rank_fusion, multiscale_search
 from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_db import get_connection
@@ -177,6 +183,8 @@ from lib.tier2_diagnostics import (
 
 K           = 25
 
+RRF_K      = 60
+OVERSAMPLE = 3   # pull top_n * OVERSAMPLE candidates per scale before fusing
 
 # Sentinel for absent window_token_pos in the int64 column. -1 is never a
 # valid token position, so it is unambiguous as "not present".
@@ -305,8 +313,12 @@ def analyse_concept(
 
     Parameters
     ----------
+    index : dict[str, EeboFaissIndex]
+        Per-scale FAISS indices, keyed "local" / "medium" / "broad".
+        Neighbours are retrieved independently at each scale and fused via
+        reciprocal rank fusion — see multiscale_search.
     depth : int
-        1 = direct FAISS neighbours only (original behaviour)
+        1 = direct fused neighbours only (original behaviour)
         2 = also include neighbours-of-neighbours (depth-2 expansion)
 
     Returns
@@ -317,6 +329,13 @@ def analyse_concept(
         - events: list of dicts containing:
             * event metadata
             * neighbours: list of neighbour dicts (same structure)
+
+    Note on "score"
+    ----------------
+    Neighbour "score" is now a reciprocal-rank-fusion score (higher = more
+    consistently ranked across the three scales), not a cosine similarity.
+    It is not bounded to [-1, 1] and is not comparable to scores produced
+    by the old single-index ensemble search.
     """
     L_event_id   = lookup.event_id
     L_vector_id  = lookup.vector_id
@@ -351,13 +370,11 @@ def analyse_concept(
         count=len(event_ids),
     )
 
-    query_vecs = np.array([lookup.get_ensemble_embedding(p) for p in event_pos])
-
     if diagnostics:
         logger.debug(f"[tier2] query_events={len(event_ids)}")
         logger.debug(f"[tier2] sample_event_id={event_ids[0]}")
 
-    all_scores, all_neigh_ids = index.search(query_vecs, top_n)
+    fused_per_query = multiscale_search(index, lookup, event_pos, top_n, rrf_k=RRF_K, oversample=OVERSAMPLE)
 
     token_counter  = Counter()
     doc_counter    = Counter()
@@ -374,9 +391,8 @@ def analyse_concept(
 
         neighbours = []
 
-        for nid, score in zip(all_neigh_ids[i], all_scores[i]):
-            nid_int = int(nid)
-            if nid_int == -1 or nid_int == eid:
+        for nid_int, rrf_score in fused_per_query[i]:
+            if nid_int == eid:
                 continue
             n_pos = lookup.get_pos(nid_int)
             n_token = str(L_token[n_pos])
@@ -400,7 +416,7 @@ def analyse_concept(
                 "token_idx":        int(L_token_idx[n_pos]),
                 "window_id":        n_window_id,
                 "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
-                "score":            float(score),
+                "score":            float(rrf_score),
                 "depth":            1,
                 "via_event_id":     None,
             })
@@ -417,102 +433,99 @@ def analyse_concept(
             "neighbours":       neighbours,
         })
 
-    # Depth-2: neighbours-of-neighbours
-    if depth >= 2:
-        # Collect the unique set of depth-1 neighbour event_ids across all
-        # query events, excluding the original query events themselves.
-        d1_event_id_set: set[int] = set()
-        for res in results:
-            for n in res["neighbours"]:
-                d1_event_id_set.add(n["event_id"])
-        d1_event_id_set -= query_event_id_set
+    # Depth-2: neighbours-of-neighbours - disabled for now
+    # if depth >= 2:
+    #     # Collect the unique set of depth-1 neighbour event_ids across all
+    #     # query events, excluding the original query events themselves.
+    #     d1_event_id_set: set[int] = set()
+    #     for res in results:
+    #         for n in res["neighbours"]:
+    #             d1_event_id_set.add(n["event_id"])
+    #     d1_event_id_set -= query_event_id_set
 
-        # Build a reverse map: depth-1 event_id -> list of query event_ids
-        # that hold it as a direct neighbour. Used to fan depth-2 results
-        # back out to the originating query events.
-        via_to_queries: dict[int, list[int]] = {}
-        for res in results:
-            for n in res["neighbours"]:
-                via_eid = n["event_id"]
-                if via_eid in d1_event_id_set:
-                    via_to_queries.setdefault(via_eid, []).append(res["event_id"])
+    #     # Build a reverse map: depth-1 event_id -> list of query event_ids
+    #     # that hold it as a direct neighbour. Used to fan depth-2 results
+    #     # back out to the originating query events.
+    #     via_to_queries: dict[int, list[int]] = {}
+    #     for res in results:
+    #         for n in res["neighbours"]:
+    #             via_eid = n["event_id"]
+    #             if via_eid in d1_event_id_set:
+    #                 via_to_queries.setdefault(via_eid, []).append(res["event_id"])
 
-        # Also build a per-query-event set of its depth-1 neighbour ids so
-        # we can skip events already seen at depth 1 for that query event.
-        query_d1_neighbours: dict[int, set[int]] = {
-            res["event_id"]: {n["event_id"] for n in res["neighbours"]}
-            for res in results
-        }
+    #     # Also build a per-query-event set of its depth-1 neighbour ids so
+    #     # we can skip events already seen at depth 1 for that query event.
+    #     query_d1_neighbours: dict[int, set[int]] = {
+    #         res["event_id"]: {n["event_id"] for n in res["neighbours"]}
+    #         for res in results
+    #     }
 
-        # Index results by query event_id for O(1) append access.
-        results_by_query: dict[int, dict] = {res["event_id"]: res for res in results}
+    #     # Index results by query event_id for O(1) append access.
+    #     results_by_query: dict[int, dict] = {res["event_id"]: res for res in results}
 
-        if d1_event_id_set:
-            d1_ids_list  = list(d1_event_id_set)
-            d1_positions = np.array(
-                [lookup.get_pos(eid) for eid in d1_ids_list if eid in lookup._pos],
-                dtype=np.int64,
-            )
-            # Filter d1_ids_list to only those present in the lookup
-            # (get_pos above would raise for missing ids; guard here).
-            d1_ids_list = [eid for eid in d1_ids_list if eid in lookup._pos]
+    #     if d1_event_id_set:
+    #         d1_ids_list  = list(d1_event_id_set)
+    #         d1_positions = np.array(
+    #             [lookup.get_pos(eid) for eid in d1_ids_list if eid in lookup._pos],
+    #             dtype=np.int64,
+    #         )
+    #         # Filter d1_ids_list to only those present in the lookup
+    #         # (get_pos above would raise for missing ids; guard here).
+    #         d1_ids_list = [eid for eid in d1_ids_list if eid in lookup._pos]
 
-            if d1_positions.size > 0:
-                d1_vecs = np.array([lookup.get_ensemble_embedding(p) for p in d1_positions])
-                d2_scores, d2_neigh_ids = index.search(d1_vecs, top_n)
+    #         if d1_positions.size > 0:
+    #             fused_d2 = multiscale_search(index, lookup, d1_positions, top_n)
 
-                logger.info(
-                    f"[tier2] depth-2 search: via_events={len(d1_ids_list)}"
-                )
+    #             logger.info(
+    #                 f"[tier2] depth-2 search: via_events={len(d1_ids_list)}"
+    #             )
 
-                for i, via_eid in enumerate(d1_ids_list):
-                    query_eids_for_via = via_to_queries.get(via_eid, [])
-                    if not query_eids_for_via:
-                        continue
+    #             for i, via_eid in enumerate(d1_ids_list):
+    #                 query_eids_for_via = via_to_queries.get(via_eid, [])
+    #                 if not query_eids_for_via:
+    #                     continue
 
-                    for nid, score in zip(d2_neigh_ids[i], d2_scores[i]):
-                        nid_int = int(nid)
-                        if nid_int == via_eid:
-                            continue
-                        if nid_int == -1:
-                            continue
-                        # Exclude original query events and depth-1 neighbours
-                        # (checked per query event below) and unknown ids.
-                        if nid_int in query_event_id_set:
-                            continue
-                        if nid_int not in lookup._pos:
-                            continue
+    #                 for nid_int, rrf_score in fused_d2[i]:
+    #                     if nid_int == via_eid:
+    #                         continue
+    #                     # Exclude original query events and depth-1
+    #                     # neighbours (checked per query event below) and
+    #                     # unknown ids.
+    #                     if nid_int in query_event_id_set:
+    #                         continue
+    #                     if nid_int not in lookup._pos:
+    #                         continue
 
-                        n_pos    = lookup.get_pos(nid_int)
-                        n_token  = str(L_token[n_pos])
-                        if n_token.lower() in false_positives:
-                            continue
+    #                     n_pos    = lookup.get_pos(nid_int)
+    #                     n_token  = str(L_token[n_pos])
+    #                     if n_token.lower() in false_positives:
+    #                         continue
 
-                        n_doc_id    = str(L_doc_id[n_pos])
-                        n_window_id = int(L_window_id[n_pos])
-                        n_wpos      = int(L_wpos[n_pos])
+    #                     n_doc_id    = str(L_doc_id[n_pos])
+    #                     n_window_id = int(L_window_id[n_pos])
+    #                     n_wpos      = int(L_wpos[n_pos])
 
-                        neighbour_record = {
-                            "event_id":         int(L_event_id[n_pos]),
-                            "vector_id":        int(L_vector_id[n_pos]),
-                            "token":            n_token,
-                            "doc_id":           n_doc_id,
-                            "pub_year":         doc_meta.get(n_doc_id, {}).get("pub_year"),
-                            "token_idx":        int(L_token_idx[n_pos]),
-                            "window_id":        n_window_id,
-                            "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
-                            "score":            float(score),
-                            "depth":            2,
-                            "via_event_id":     via_eid,
-                        }
+    #                     neighbour_record = {
+    #                         "event_id":         int(L_event_id[n_pos]),
+    #                         "vector_id":        int(L_vector_id[n_pos]),
+    #                         "token":            n_token,
+    #                         "doc_id":           n_doc_id,
+    #                         "pub_year":         doc_meta.get(n_doc_id, {}).get("pub_year"),
+    #                         "token_idx":        int(L_token_idx[n_pos]),
+    #                         "window_id":        n_window_id,
+    #                         "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
+    #                         "score":            float(rrf_score),
+    #                         "depth":            2,
+    #                         "via_event_id":     via_eid,
+    #                     }
 
-                        # Fan out to every query event that had via_eid as
-                        # a depth-1 neighbour, skipping if this event_id is
-                        # already a depth-1 neighbour of that query event.
-                        for q_eid in query_eids_for_via:
-                            if nid_int in query_d1_neighbours.get(q_eid, set()):
-                                continue
-                            results_by_query[q_eid]["neighbours"].append(neighbour_record)
+    #                     # Fan out to every query event that had via_eid as
+    #                     # a depth-1 neighbour, skipping if this event_id is
+    #                     # already a depth-1 neighbour of that query event.
+    #                     for q_eid in query_eids_for_via:
+    #                         if nid_int in query_d1_neighbours.get(q_eid, set()):
+    #                             continue
+    #                         results_by_query[q_eid]["neighbours"].append(neighbour_record)
 
     return {
         "concept":   concept_name,
@@ -525,7 +538,6 @@ def analyse_concept(
         },
         "events": results,
     }
-
 
 
 _SCHEMA_INIT = """
@@ -838,9 +850,14 @@ def run_tier2_service(
     )
     logger.info(f"[tier2.run_tier2_service] Enter")
 
-    index = index or EeboFaissIndex.load(faiss_index_path)
-    if index.ntotal == 0:
-        raise RuntimeError( "FAISS index is empty — run tier1_5_build_faiss_index.py first" )
+    index = index or {
+        scale: EeboFaissIndex.load(path)
+        for scale, path in faiss_index_paths.items()
+    }
+
+    for scale, idx in index.items():
+        if idx.ntotal == 0:
+            raise RuntimeError(f"FAISS '{scale}' index is empty — run tier1_5_build_faiss_index.py first")
 
     output = run_tier2_core(
         index            = index,
@@ -876,8 +893,9 @@ def run_tier2_core(
     output = {}
 
     if diagnostics:
-        knn_diagnostics( lookup, index, CONCEPT_SETS["PREROGATIVE"]["forms"], )
-        knn_diagnostics( lookup, index, CONCEPT_SETS["LAW"]["forms"], )
+        # Needs updating for the three-level index
+        knn_diagnostics( lookup, index["medium"], CONCEPT_SETS["PREROGATIVE"]["forms"], )
+        knn_diagnostics( lookup, index["medium"], CONCEPT_SETS["LAW"]["forms"], )
 
     for concept_name, concept in concepts_to_run:
         output[concept_name] = analyse_concept(
@@ -909,11 +927,11 @@ def main():
 
     if args.no_mask:
         zarr_path = ZARR_PATH
-        faiss_index_path = FAISS_TIER1_INDEX
+        faiss_index_paths_dict = faiss_index_paths(masked=False)
         db_path = CORPUS_TIER2_DB_PATH
     else:
         zarr_path = MASKED_ZARR_PATH
-        faiss_index_path = FAISS_TIER1_INDEX_MASKED
+        faiss_index_paths_dict = faiss_index_paths(masked=True)
         db_path = CORPUS_TIER2_MASKED_DB_PATH
 
     logger.info(f"[Tier 2.main] mode={'masked' if not args.no_mask else 'unmasked'}")
@@ -988,7 +1006,7 @@ def main():
         doc_meta         = doc_meta,
         concepts_to_run  = concepts_to_run,
         db_path          = db_path,
-        faiss_index_path = faiss_index_path,
+        faiss_index_paths = faiss_index_paths_dict,
         lookup           = lookup,
         false_positives  = target_fps,
         clear            = args.clear,

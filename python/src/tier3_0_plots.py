@@ -39,12 +39,17 @@ import hdbscan
 import pacmap
 import sqlite3
 
-from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, FAISS_TIER1_INDEX, FAISS_TIER1_INDEX_MASKED,  PLOT_DIR, CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH
-from lib.eebo_faiss import EeboFaissIndex
+from lib.eebo_config import (
+    PLOT_DIR, faiss_index_paths,
+    ZARR_PATH, MASKED_ZARR_PATH,
+    CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH,
+)
+from lib.eebo_faiss import EeboFaissIndex, multiscale_search
 from lib.concept_resolve import resolve_concepts
 from lib.eebo_logging import logger, setEmit
 from lib.eebo_db import get_connection
 from lib.embedding_cache import EmbeddingCache
+from tier2_0_concept_events import ZarrEventLookup
 
 from tier2_0_concept_events import ZarrEventLookup, sqlite3_connection
 
@@ -55,48 +60,46 @@ CLUSTER_DIR       = PLOT_DIR / "concept_clusters"
 
 K = 25
 
-def _process_single_concept(args):
-    """Worker function for parallel concept processing."""
-    concept_name, concept_def, zarr_root, faiss_path, sample_limit = args
 
-    from tier2_0_concept_events import ZarrEventLookup
-    from lib.eebo_faiss import EeboFaissIndex
+# def _process_single_concept(args):
+#     """Worker function for parallel concept processing."""
+#     concept_name, concept_def, zarr_root, faiss_path, sample_limit = args
 
-    lookup = ZarrEventLookup(zarr_root)
-    index = EeboFaissIndex.load(faiss_path)
-    emb_cache = EmbeddingCache(lookup)
+#     lookup = ZarrEventLookup(zarr_root)
+#     emb_cache = EmbeddingCache(lookup)
+#     index = {scale: EeboFaissIndex.load(path) for scale, path in faiss_paths.items()}
 
-    seed_ids = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
-    seed_ids = [str(eid) for eid in seed_ids]
-    concept_sample = seed_ids[:sample_limit] if sample_limit else seed_ids
+#     seed_ids = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
+#     seed_ids = [str(eid) for eid in seed_ids]
+#     concept_sample = seed_ids[:sample_limit] if sample_limit else seed_ids
 
-    if not concept_sample:
-        return None, f"no events found for concept={concept_name}"
+#     if not concept_sample:
+#         return None, f"no events found for concept={concept_name}"
 
-    X_concept = emb_cache.matrix(concept_sample)
-    local_concept = fit_umap_local(X_concept, concept_sample)
+#     X_concept = emb_cache.matrix(concept_sample)
+#     local_concept = fit_umap_local(X_concept, concept_sample)
 
-    neigh_layers = build_depth_layers(
-        index, emb_cache, concept_sample, k=K, max_depth=2, max_nodes=3000
-    )
-    neigh_ids, neigh_depth_map = depth_layers_to_flat(neigh_layers)
-    X_neigh = emb_cache.matrix(neigh_ids)
-    local_neigh = fit_umap_local(X_neigh, neigh_ids)
+#     neigh_layers = build_depth_layers(
+#         index, lookup, concept_sample, k=K, max_depth=2, max_nodes=3000   # CHANGED: emb_cache -> lookup
+#     )
+#     neigh_ids, neigh_depth_map = depth_layers_to_flat(neigh_layers)
+#     X_neigh = emb_cache.matrix(neigh_ids)
+#     local_neigh = fit_umap_local(X_neigh, neigh_ids)
 
-    cluster_local_coords, cluster_labels = fit_cluster_local(
-        X_concept, concept_sample, local_concept_coords=local_concept
-    )
+#     cluster_local_coords, cluster_labels = fit_cluster_local(
+#         X_concept, concept_sample, local_concept_coords=local_concept
+#     )
 
-    return {
-        'concept_name': concept_name,
-        'concept_sample': concept_sample,
-        'local_concept': local_concept,
-        'neigh_ids': neigh_ids,
-        'local_neigh': local_neigh,
-        'neigh_depth_map': neigh_depth_map,
-        'cluster_local_coords': cluster_local_coords,
-        'cluster_labels': cluster_labels,
-    }, None
+#     return {
+#         'concept_name': concept_name,
+#         'concept_sample': concept_sample,
+#         'local_concept': local_concept,
+#         'neigh_ids': neigh_ids,
+#         'local_neigh': local_neigh,
+#         'neigh_depth_map': neigh_depth_map,
+#         'cluster_local_coords': cluster_local_coords,
+#         'cluster_labels': cluster_labels,
+#     }, None
 
 
 def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
@@ -166,32 +169,17 @@ def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
 
 
 def build_depth_layers(
-    index,
-    emb_cache,
+    index,    # dict[str, EeboFaissIndex] — local/medium/broad
+    lookup,   # CHANGED: was emb_cache
     seed_ids,
     k: int = 25,
     max_depth: int = 2,
     max_nodes: int | None = None,
 ) -> dict[int, list[str]]:
     """
-    BFS expansion via ANN search from seed_ids to max_depth hops.
-
-    Each ring contains only nodes first reached at that depth — rings are
-    guaranteed disjoint by the seen set.  The frontier for depth d is
-    exactly the ring discovered at depth d-1, so each ANN search covers
-    only new nodes rather than the entire accumulated set.
-
-    Args:
-        index      — FAISS index supporting .search(vecs, k)
-        emb_cache  — EmbeddingCache
-        seed_ids   — iterable of seed event ids (str or int)
-        k          — number of ANN neighbours per query vector
-        max_depth  — number of BFS hops (default 2)
-        max_nodes  — optional total node cap across all depths
-
-    Returns:
-        {depth: [str_event_id, ...]}  for depth in 0..max_depth
-        Depth 0 is always exactly the (deduplicated) seed set.
+    BFS expansion via ANN search from seed_ids to max_depth hops, using
+    fused (local/medium/broad -> RRF) neighbours at each hop instead of a
+    single ensemble-embedding search.
     """
     seen = set(map(str, seed_ids))
     layers: dict[int, list[str]] = {0: list(seen)}
@@ -203,16 +191,17 @@ def build_depth_layers(
         if max_nodes is not None and sum(len(v) for v in layers.values()) >= max_nodes:
             break
 
-        X = emb_cache.matrix(frontier)
-        _, nn = index.search(X, k)
+        positions = np.array(
+            [lookup.get_pos(int(eid)) for eid in frontier], dtype=np.int64
+        )
+        fused = multiscale_search(index, lookup, positions, top_n=k)
 
         ring: set[str] = set()
-        for row in nn:
-            for nid in row:
-                if nid != -1:
-                    sid = str(int(nid))
-                    if sid not in seen:
-                        ring.add(sid)
+        for fused_neighbours in fused:
+            for nid, _score in fused_neighbours:
+                sid = str(nid)
+                if sid not in seen:
+                    ring.add(sid)
 
         seen |= ring
         layers[depth] = list(ring)
@@ -787,7 +776,7 @@ def run_tier3_core(
 
             # depth=2 neighbour expansion; seed ring is depth 0
             neigh_layers = build_depth_layers(
-                index, emb_cache, concept_sample, k=K, max_depth=2, max_nodes=3000
+                index, lookup, concept_sample, k=K, max_depth=2, max_nodes=3000
             )
             neigh_ids, neigh_depth_map = depth_layers_to_flat(neigh_layers)
             X_neigh     = emb_cache.matrix(neigh_ids)
@@ -869,7 +858,7 @@ def run_tier3_core(
             emit("bfs_start", {})
         logger.info(f"[tier3] all_concept_events count: {len(all_concept_events)}")
         bfs_layers = build_depth_layers(
-            index, emb_cache, all_concept_events, k=K, max_depth=2, max_nodes=5000
+            index, lookup, all_concept_events, k=K, max_depth=2, max_nodes=5000   # CHANGED
         )
         bfs_ids, bfs_depth_map = depth_layers_to_flat(bfs_layers)
         X_bfs     = emb_cache.matrix(bfs_ids) if bfs_ids else None
@@ -997,7 +986,6 @@ def run_tier3_service(
     )
 
 
-
 def main():
     logger.info("[tier3 main] Enter")
 
@@ -1011,17 +999,17 @@ def main():
 
     if args.no_mask:
         zarr_path = ZARR_PATH
-        faiss_index_path = FAISS_TIER1_INDEX
+        faiss_paths = faiss_index_paths(masked=False)   # CHANGED
         db_path = CORPUS_TIER2_DB_PATH
     else:
         zarr_path = MASKED_ZARR_PATH
-        faiss_index_path = FAISS_TIER1_INDEX_MASKED
+        faiss_paths = faiss_index_paths(masked=True)     # CHANGED
         db_path = CORPUS_TIER2_MASKED_DB_PATH
 
     logger.info(f"[Tier3.main] loading index+lookup, mode={'masked' if not args.no_mask else 'unmasked'}")
 
     lookup = ZarrEventLookup(zarr_path)
-    index  = EeboFaissIndex.load(faiss_index_path)
+    index  = {scale: EeboFaissIndex.load(path) for scale, path in faiss_paths.items()}   # CHANGED
 
     run_tier3_core(
         db_path         = db_path,

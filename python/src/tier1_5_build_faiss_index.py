@@ -3,26 +3,30 @@ from __future__ import annotations
 import argparse
 import numpy as np
 
-from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, FAISS_TIER1_INDEX, FAISS_TIER1_INDEX_MASKED
+from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, FAISS_DIR, faiss_index_paths
 from lib.eebo_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 from lib.zarr_event_stream import ZarrEventStream
 
-
 BATCH_SIZE = 8192
+SCALES = ("local", "medium", "broad")
 
 
-def build_index(
+
+def build_indices(
     stream: ZarrEventStream,
-    index: EeboFaissIndex | None = None,
+    indices: dict[str, EeboFaissIndex] | None = None,
     already_indexed: set[int] | None = None,
-) -> EeboFaissIndex:
+) -> dict[str, EeboFaissIndex]:
     """
-    Build or incrementally update FAISS index using multi-window ensemble embeddings.
+    Build/update THREE FAISS indices (local, medium, broad) from a single
+    streamed pass. Replaces the weighted-ensemble approach — each scale is
+    indexed independently so fusion happens downstream at query time.
     """
     total = 0
     skipped = 0
     incremental = already_indexed is not None
+    indices = indices or {}
 
     logger.info("[faiss-build] streaming Tier1 multi-scale embeddings")
 
@@ -32,84 +36,88 @@ def build_index(
         if len(obs_ids) == 0:
             continue
 
-        ensemble = (
-            0.25 * emb_local +
-            0.50 * emb_medium +
-            0.25 * emb_broad
-        )
+        per_scale = {"local": emb_local, "medium": emb_medium, "broad": emb_broad}
 
-        if index is None:
-            dim = ensemble.shape[1]
-            index = EeboFaissIndex(dim=dim, exact=True)
+        for scale, emb in per_scale.items():
+            if scale not in indices:
+                indices[scale] = EeboFaissIndex(dim=emb.shape[1], exact=True)
 
+        scale_obs_ids = obs_ids
         if incremental:
             new_mask = np.array([int(i) not in already_indexed for i in obs_ids])
             if not new_mask.any():
                 skipped += len(obs_ids)
                 continue
-
-            ensemble = ensemble[new_mask]
-            obs_ids = obs_ids[new_mask]
+            scale_obs_ids = obs_ids[new_mask]
             skipped += (~new_mask).sum()
+            per_scale = {s: e[new_mask] for s, e in per_scale.items()}
 
         try:
-            index.add(ensemble, obs_ids)
-            total += len(obs_ids)
+            # All three scales must stay in lockstep — same obs_ids added
+            # to each index every batch — or the "sync check" on load below
+            # will start failing.
+            for scale, emb in per_scale.items():
+                indices[scale].add(emb, scale_obs_ids)
+            total += len(scale_obs_ids)
             if total % 100_000 == 0:
                 logger.info(f"[faiss-build] indexed {total:,} events so far...")
         except Exception as e:
             logger.error(f"[faiss-build] add failed: {e}", exc_info=True)
             raise
 
-    if index is None:
+    if not indices:
         raise RuntimeError("No embeddings found in Tier1 observation store")
 
     logger.info(f"[faiss-build] finished - added={total:,} skipped={skipped:,}")
-    return index
+    return indices
 
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--clear", action="store_true",
-                   help="Wipe existing FAISS index and rebuild from scratch")
-    p.add_argument("--no-mask", action="store_true",
-                   help="Build index from the unmasked Tier 1 store instead of the masked one")
+    p.add_argument("--clear", action="store_true")
+    p.add_argument("--no-mask", action="store_true")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
-
-    if args.no_mask:
-        zarr_path = ZARR_PATH
-        faiss_index_path = FAISS_TIER1_INDEX
-    else:
-        zarr_path = MASKED_ZARR_PATH
-        faiss_index_path = FAISS_TIER1_INDEX_MASKED
+    zarr_path = ZARR_PATH if args.no_mask else MASKED_ZARR_PATH
+    paths = faiss_index_paths(masked=not args.no_mask)
 
     logger.info(f"[faiss-build] mode={'unmasked' if args.no_mask else 'masked'} "
-                f"zarr={zarr_path} index={faiss_index_path}")
+                f"zarr={zarr_path} indices={paths}")
 
     stream = ZarrEventStream(str(zarr_path))
+    any_missing = any(not p.is_file() for p in paths.values())
 
-    if args.clear or not faiss_index_path.is_file():
+    if args.clear or any_missing:
         if args.clear:
-            logger.info("[faiss-build] clearing existing FAISS index")
-            EeboFaissIndex.wipe_faiss_index(faiss_index_path.parent)
-
-        logger.info("[faiss-build] building FAISS observation index from scratch")
-        index = build_index(stream)
+            for scale, path in paths.items():
+                logger.info(f"[faiss-build] clearing existing {scale} index")
+                EeboFaissIndex.wipe_faiss_index(path)   # pass the file, not .parent — see earlier fix
+        indices = build_indices(stream)
     else:
-        logger.info("[faiss-build] incremental mode — loading existing index")
-        index = EeboFaissIndex.load(faiss_index_path)
-        already_indexed = index.ids()
-        logger.info(f"[faiss-build] existing index ntotal={len(already_indexed)}")
-        index = build_index(stream, index=index, already_indexed=already_indexed)
+        logger.info("[faiss-build] incremental mode — loading existing indices")
+        indices = {scale: EeboFaissIndex.load(path) for scale, path in paths.items()}
 
-    faiss_index_path.parent.mkdir(parents=True, exist_ok=True)
-    index.save(faiss_index_path)
-    logger.info(f"[faiss-build] done -> {faiss_index_path}")
+        # Sanity check: all three should hold identical id sets since
+        # they're populated together, batch by batch, from the same stream.
+        already_indexed = indices["medium"].ids()
+        for scale, idx in indices.items():
+            if idx.ids() != already_indexed:
+                raise RuntimeError(
+                    f"FAISS indices out of sync: '{scale}' has {len(idx.ids())} ids, "
+                    f"'medium' has {len(already_indexed)}. Rebuild with --clear."
+                )
+
+        logger.info(f"[faiss-build] existing indices ntotal={len(already_indexed)}")
+        indices = build_indices(stream, indices=indices, already_indexed=already_indexed)
+
+    for scale, path in paths.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        indices[scale].save(path)
+        logger.info(f"[faiss-build] done -> {path}")
+
 
 if __name__ == "__main__":
     main()
-
