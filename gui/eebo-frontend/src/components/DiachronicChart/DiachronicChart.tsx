@@ -36,32 +36,6 @@ const C_LINK_FOCUS = 0.85;
 const C_LINK_UNFOCUS = 0.05;
 const C_LINK_UNFOCUS_TEXT = 0.9;
 
-export interface TokenBin {
-  token: string;
-  eventCount: number;
-  neighbourFreq: Map<string, number>;
-  neighbourScoreSum: Map<string, number>;
-  topNeighbours: Array<{ token: string; freq: number; meanScore: number }>;
-  docs: Map<string, number | undefined>;
-  years: Set<number>;
-}
-
-export interface ContextNode {
-  id: string;
-  kind: "hub" | "neighbour" | "event";
-  eventCount: number;
-  hubDegree: number;
-  degree: number;
-  token?: string;
-  doc_id?: string;
-  pub_year?: number;
-  token_idx?: number;
-}
-
-export interface HubHubEdge { kind: "hub-hub"; sourceId: string; targetId: string; weight: number; }
-export interface HubNbEdge { kind: "hub-neighbour"; sourceId: string; targetId: string; weight: number; }
-export type AnyEdge = HubHubEdge | HubNbEdge;
-
 export type TokenStatus = "birth" | "death" | "birth-death" | "continuation";
 
 export function classifyStatus(
@@ -74,14 +48,11 @@ export function classifyStatus(
   const previousYears = years.slice(0, idx);
   const futureYears = years.slice(idx + 1);
 
-  const existedBefore = previousYears.some((y) =>
-    slices.get(y)?.some((t) => t.token === token),
-  );
-  const existsLater = futureYears.some((y) =>
-    slices.get(y)?.some((t) => t.token === token),
-  );
-  const presentThisYear =
-    slices.get(year)?.some((t) => t.token === token) ?? false;
+  const existedBefore = previousYears.some((y) => slices.get(y)?.some((t) => t.token === token),);
+
+  const existsLater = futureYears.some((y) => slices.get(y)?.some((t) => t.token === token),);
+
+  const presentThisYear = slices.get(year)?.some((t) => t.token === token) ?? false;
 
   if (!presentThisYear) return "continuation";
   if (!existedBefore && !existsLater) return "birth-death";
@@ -122,7 +93,6 @@ type GridPosition = {
 
 const DiachronicChart: Component = () => {
   let scrollRef: HTMLDivElement | undefined;
-  let scrollbarTimeout: ReturnType<typeof setTimeout>;
 
   const [smoothWindow, setSmoothWindow] = createSignal(0);
   const [sortKey, setSortKey] = createSignal<SortKey>("freq");
@@ -185,7 +155,6 @@ const DiachronicChart: Component = () => {
         ? occurrences[occurrences.length - 1]
         : nextCol = occurrences.reverse().find(i => i > col) ?? occurrences[0]
     }
-
     else {
       nextCol = reverseDirection
         ? occurrences.reverse().find(i => i < col) ?? occurrences[occurrences.length - 1]
