@@ -844,7 +844,7 @@ def run_tier2_service(
     doc_meta,
     concepts_to_run,
     db_path,
-    faiss_index_path,
+    faiss_index_paths,
     index           = None,
     lookup          = None,
     false_positives = None,
