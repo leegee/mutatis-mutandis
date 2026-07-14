@@ -1,7 +1,7 @@
 import { lazy } from "solid-js";
 
 import { JobsApiComponent } from "./components/Jobs";
-const Graph2 = lazy(() => import("./components/Graph2/Graph2"));
+const Graph2 = lazy(() => import("./components/FDG"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
 const NeighbourhoodBrowserGuide = lazy(() => import("./components/NeighbourhoodBrowser/Guide"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart/DiachronicChart"));
