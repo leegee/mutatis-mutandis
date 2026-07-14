@@ -20,7 +20,7 @@ concept_neighbours and bfs_global files additionally carry:
     depth  — 0 = concept seed, 1 = direct neighbour, 2 = second-order neighbour
 
 concept_clusters files additionally carry:
-    cluster_id      — integer HDBSCAN cluster id (-1 = noise)
+    cluster_id      — integer cluster id from HDBSCAN or Leiden (-1 = noise)
     cluster_label   — letter label A, B, C... (null for noise)
 
 Note: all event_id values are serialised as JSON strings to avoid JS/TS
@@ -38,6 +38,8 @@ import umap
 import hdbscan
 import pacmap
 import sqlite3
+import leidenalg
+import igraph as ig
 
 from lib.eebo_config import (
     PLOT_DIR, faiss_index_paths,
@@ -59,47 +61,6 @@ BFS_DIR           = PLOT_DIR / "bfs_global"
 CLUSTER_DIR       = PLOT_DIR / "concept_clusters"
 
 K = 25
-
-
-# def _process_single_concept(args):
-#     """Worker function for parallel concept processing."""
-#     concept_name, concept_def, zarr_root, faiss_path, sample_limit = args
-
-#     lookup = ZarrEventLookup(zarr_root)
-#     emb_cache = EmbeddingCache(lookup)
-#     index = {scale: EeboFaissIndex.load(path) for scale, path in faiss_paths.items()}
-
-#     seed_ids = list(lookup.iter_matching_event_ids(set(concept_def["forms"])))
-#     seed_ids = [str(eid) for eid in seed_ids]
-#     concept_sample = seed_ids[:sample_limit] if sample_limit else seed_ids
-
-#     if not concept_sample:
-#         return None, f"no events found for concept={concept_name}"
-
-#     X_concept = emb_cache.matrix(concept_sample)
-#     local_concept = fit_umap_local(X_concept, concept_sample)
-
-#     neigh_layers = build_depth_layers(
-#         index, lookup, concept_sample, k=K, max_depth=2, max_nodes=3000   # CHANGED: emb_cache -> lookup
-#     )
-#     neigh_ids, neigh_depth_map = depth_layers_to_flat(neigh_layers)
-#     X_neigh = emb_cache.matrix(neigh_ids)
-#     local_neigh = fit_umap_local(X_neigh, neigh_ids)
-
-#     cluster_local_coords, cluster_labels = fit_cluster_local(
-#         X_concept, concept_sample, local_concept_coords=local_concept
-#     )
-
-#     return {
-#         'concept_name': concept_name,
-#         'concept_sample': concept_sample,
-#         'local_concept': local_concept,
-#         'neigh_ids': neigh_ids,
-#         'local_neigh': local_neigh,
-#         'neigh_depth_map': neigh_depth_map,
-#         'cluster_local_coords': cluster_local_coords,
-#         'cluster_labels': cluster_labels,
-#     }, None
 
 
 def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
@@ -277,117 +238,195 @@ def fit_umap_global(X, event_ids):
             for i, eid in enumerate(event_ids)}
 
 
-def fit_cluster_local(X, event_ids, local_concept_coords=None):
+def fit_leiden_on_fused_graph(
+    event_ids,
+    index,  # dict of scale -> EeboFaissIndex
+    lookup,
+    k: int = 25,
+    resolution: float = 1.0,
+    n_iterations: int = -1,  # -1 for default
+):
+    """
+    Build a fused multi-scale graph using multiscale_search and run Leiden clustering.
+    Returns cluster_labels list aligned to event_ids.
+    """
+    if len(event_ids) < 10:
+        return [-1] * len(event_ids)
+
+    logger.info(f"[tier3] Building fused graph for Leiden on {len(event_ids)} points")
+
+    # Get positions for all points
+    positions = np.array(
+        [lookup.get_pos(int(eid)) for eid in event_ids], dtype=np.int64
+    )
+
+    # Use multiscale_search to get fused neighbors
+    fused_neighbors = multiscale_search(index, lookup, positions, top_n=k)
+
+    # Build adjacency list / edge list for igraph
+    edge_list = []
+    node_map = {str(eid): i for i, eid in enumerate(event_ids)}  # map str eid to index 0..N
+
+    for i, fused_list in enumerate(fused_neighbors):
+        src = i  # index in event_ids
+        for entry in fused_list:
+            tgt_eid = str(entry["event_id"])
+            if tgt_eid in node_map:
+                tgt = node_map[tgt_eid]
+                if src != tgt:  # no self-loops
+                    edge_list.append((src, tgt))
+
+    if not edge_list:
+        logger.warning("[tier3] No edges in fused graph")
+        return [-1] * len(event_ids)
+
+    # Create undirected graph with an explicit vertex count so vertex i
+    # always corresponds to event_ids[i]. Graph.TupleList must NOT be used
+    # here: it only creates vertices for ids that appear in edge_list (so
+    # any event with zero fused neighbors in the sample silently vanishes,
+    # shortening the label list below the length of event_ids), and it
+    # assigns internal vertex ids in first-appearance order rather than by
+    # the integer value itself (so even when nothing is dropped, vertex i
+    # is not guaranteed to be event_ids[i] - labels end up scrambled).
+    g = ig.Graph(n=len(event_ids), edges=edge_list, directed=False)
+
+    # Run Leiden
+    partition = leidenalg.find_partition(
+        g,
+        leidenalg.RBConfigurationVertexPartition,
+        resolution_parameter=resolution,
+        n_iterations=n_iterations,
+    )
+
+    labels = partition.membership
+    logger.info(f"[tier3] Leiden found {len(set(labels))} clusters (resolution={resolution})")
+
+    return labels
+
+
+def fit_cluster_local(X, event_ids, local_concept_coords=None, clustering_method="hdbscan", index=None, lookup=None):
     """
     Clustering pipeline:
 
-    1. 5-D UMAP reduction of the embeddings for HDBSCAN (restores the
-       structure-finding behaviour of the original 5D pipeline; raw
-       high-D cosine embeddings are too uniform under euclidean HDBSCAN
-       and tend to collapse to one cluster + noise).
-    2. HDBSCAN on the 5D reduction.
-    3. Conservative semantic merge of near-duplicate clusters only
-       (sim > 0.97), so genuinely distinct senses stay separate.
-    4. Local 2D coords for display: reuse `local_concept_coords` if the
-       caller already computed a 2D UMAP for this same point set (e.g.
-       the concept's own local projection), instead of fitting a second,
-       near-identical 2D UMAP.
+    Supports 'hdbscan' (default) or 'leiden' on fused multi-scale graph.
+
+    For Leiden:
+        - Builds graph from multiscale_search fused neighbors
+        - Runs leidenalg RBConfigurationVertexPartition
 
     X: (len(event_ids), D) float32 matrix, rows aligned to event_ids.
-    local_concept_coords: optional {str(event_id) -> (x, y)} from an existing
-        2D UMAP fit on the same event_ids (same params: n_neighbors=15,
-        min_dist=0.1, metric='cosine'). If provided, skips the redundant
-        2D UMAP fit inside this function.
+    local_concept_coords: optional {str(event_id) -> (x, y)} ...
+    clustering_method: 'hdbscan' or 'leiden'
+    index, lookup: required for 'leiden'
 
     Returns local_coords keyed by str(event_id).
     """
     if len(event_ids) < 10:
         return {str(eid): (0.0, 0.0) for eid in event_ids}, [-1] * len(event_ids)
 
-    # normalize embeddings for cosine stability (used for clustering input
-    # and for centroid similarity in the merge step)
-    X_norm = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-12)
+    if clustering_method == "leiden":
+        if index is None or lookup is None:
+            logger.warning("[tier3] Leiden requires index and lookup; falling back to HDBSCAN")
+            clustering_method = "hdbscan"
+        else:
+            labels = fit_leiden_on_fused_graph(
+                event_ids, index, lookup, k=25, resolution=1.0
+            )
+            X_norm = None  # not needed for Leiden path
+    else:
+        # Original HDBSCAN path
+        # normalize embeddings for cosine stability
+        X_norm = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-12)
 
-    # 1. 5D UMAP reduction for clustering
-    reducer_5d = umap.UMAP(
-        n_components=5,
-        n_neighbors=15,
-        min_dist=0.0,
-        metric='cosine',
-        random_state=42,
-    )
+        # 1. 5D UMAP reduction for clustering
+        reducer_5d = umap.UMAP(
+            n_components=5,
+            n_neighbors=15,
+            min_dist=0.0,
+            metric='cosine',
+            random_state=42,
+        )
 
-    logger.info(
-        f"[tier3] UMAP input: shape={X.shape}, "
-        f"unique_rows={np.unique(X, axis=0).shape[0]}, "
-        f"rank≈{np.linalg.matrix_rank(X)}"
-    )
+        logger.info(
+            f"[tier3] UMAP input: shape={X.shape}, "
+            f"unique_rows={np.unique(X, axis=0).shape[0]}, "
+            f"rank≈{np.linalg.matrix_rank(X)}"
+        )
 
-    X_5d = reducer_5d.fit_transform(X)
+        X_5d = reducer_5d.fit_transform(X)
 
-    # 2. HDBSCAN on the 5D reduction
-    clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=max(5, len(event_ids) // 200),
-        min_samples=3,
-        metric='euclidean',
-        cluster_selection_method='eom',
-        cluster_selection_epsilon=0.0,
-    )
-    labels = clusterer.fit_predict(X_5d).tolist()
+        # 2. HDBSCAN on the 5D reduction
+        clusterer = hdbscan.HDBSCAN(
+            min_cluster_size=max(5, len(event_ids) // 200),
+            min_samples=3,
+            metric='euclidean',
+            cluster_selection_method='eom',
+            cluster_selection_epsilon=0.0,
+        )
+        labels = clusterer.fit_predict(X_5d).tolist()
 
-    # 3. Build cluster structures
-    clusters = {}
-    for i, cid in enumerate(labels):
-        if cid == -1:
-            continue
-        clusters.setdefault(cid, []).append(i)
+    # 3. Build cluster structures + post-processing
+    if clustering_method == "leiden":
+        final_labels = labels[:]  # Leiden labels are 0-based integers
+        # Optional: treat very small clusters as noise (-1)
+        count = Counter(final_labels)
+        min_size = max(5, len(event_ids) // 200)
+        for i, lbl in enumerate(final_labels):
+            if count[lbl] < min_size:
+                final_labels[i] = -1
+    else:
+        # HDBSCAN path with centroid merge
+        clusters = {}
+        for i, cid in enumerate(labels):
+            if cid == -1:
+                continue
+            clusters.setdefault(cid, []).append(i)
 
-    # 4. Compute centroids (normalized)
-    centroids = {}
-    for cid, idxs in clusters.items():
-        vecs = X_norm[idxs]
-        centroid = vecs.mean(axis=0)
-        centroid /= (np.linalg.norm(centroid) + 1e-12)
-        centroids[cid] = centroid
+        # 4. Compute centroids (normalized)
+        centroids = {}
+        for cid, idxs in clusters.items():
+            vecs = X_norm[idxs]
+            centroid = vecs.mean(axis=0)
+            centroid /= (np.linalg.norm(centroid) + 1e-12)
+            centroids[cid] = centroid
 
-    # 5. Merge near-duplicate clusters only (conservative threshold)
-    def cosine(a, b):
-        return float(np.dot(a, b))
+        # 5. Merge near-duplicate clusters only (conservative threshold)
+        def cosine(a, b):
+            return float(np.dot(a, b))
 
-    parent = {cid: cid for cid in clusters.keys()}
+        parent = {cid: cid for cid in clusters.keys()}
 
-    def find(x):
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
 
-    def union(a, b):
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[rb] = ra
+        def union(a, b):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[rb] = ra
 
-    cluster_ids = list(clusters.keys())
+        cluster_ids = list(clusters.keys())
 
-    for i in range(len(cluster_ids)):
-        for j in range(i + 1, len(cluster_ids)):
-            a, b = cluster_ids[i], cluster_ids[j]
-            sim = cosine(centroids[a], centroids[b])
-            if sim > 0.97:  # near-duplicate merge only
-                union(a, b)
+        for i in range(len(cluster_ids)):
+            for j in range(i + 1, len(cluster_ids)):
+                a, b = cluster_ids[i], cluster_ids[j]
+                sim = cosine(centroids[a], centroids[b])
+                if sim > 0.97:  # near-duplicate merge only
+                    union(a, b)
 
-    merged = {}
-    for cid in cluster_ids:
-        root = find(cid)
-        merged.setdefault(root, []).extend(clusters[cid])
+        merged = {}
+        for cid in cluster_ids:
+            root = find(cid)
+            merged.setdefault(root, []).extend(clusters[cid])
 
-    final_labels = [-1] * len(event_ids)
-    for new_cid, idxs in enumerate(merged.values()):
-        for idx in idxs:
-            final_labels[idx] = new_cid
+        final_labels = [-1] * len(event_ids)
+        for new_cid, idxs in enumerate(merged.values()):
+            for idx in idxs:
+                final_labels[idx] = new_cid
 
     # 6. 2D coords for visualization — reuse if already computed.
-    # local_concept_coords is expected to be str(event_id)-keyed.
     if local_concept_coords is not None:
         local_coords = {str(eid): local_concept_coords[str(eid)] for eid in event_ids}
     else:
@@ -594,11 +633,7 @@ def write_projections_to_sqlite(
     unique_clusters = sorted(c for c in set(cluster_labels or []) if c != -1)
     label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
 
-    # Normalize into local_bounds / global_bounds, matching assemble_points.
-    # local_bounds/global_bounds are the *padded* bounds computed by the
-    # caller (add_padding(compute_bounds_from_coords(...))) — without this
-    # step, nx/ny/gnx/gny stored in sqlite were raw UMAP output, not the
-    # [0,1]-normalized values the schema and downstream consumers assume.
+    # Normalize into local_bounds / global_bounds...
     lx0, lx1 = local_bounds["minX"],  local_bounds["maxX"]
     ly0, ly1 = local_bounds["minY"],  local_bounds["maxY"]
     gx0, gx1 = global_bounds["minX"], global_bounds["maxX"]
@@ -646,11 +681,6 @@ def write_projections_to_sqlite(
                 WHERE events.event_id = _proj_update.event_id
             """)
         else:
-            # Clustering pass: cluster_id/cluster_label only. The concept
-            # pass already wrote nx/ny/gnx/gny for these same event_ids;
-            # re-writing them here with cluster-local geometry would
-            # silently replace concept-pass coordinates with cluster-pass
-            # coordinates,
             con.execute("""
                 UPDATE events SET
                     cluster_id    = _proj_update.cluster_id,
@@ -729,6 +759,8 @@ def run_tier3_core(
     concept=None,
     false_positives=None,
     mode="full",
+    use_concatenated_clustering=True,
+    skip_global_bfs=False,
     emit=None,
 ):
     logger.info("[tier3 run_tier3_core] Enter")
@@ -763,7 +795,6 @@ def run_tier3_core(
 
             # one embedding fetch for the concept sample, reused below
             X_concept = emb_cache.matrix(concept_sample)
-
             local_concept = fit_umap_local(X_concept, concept_sample)
 
             buffered_concept.append((
@@ -792,10 +823,12 @@ def run_tier3_core(
             all_event_ids.update(neigh_ids)
 
             logger.info(f"[tier3] clustering {concept_name} ({len(concept_sample)} points)")
-            # reuse X_concept and the 2D local_concept coords — avoids a
-            # second embedding fetch and a second near-identical 2D UMAP fit
+
+            X_cluster = lookup.get_concatenated_embeddings(concept_sample) if use_concatenated_clustering else X_concept
+
             cluster_local_coords, cluster_labels = fit_cluster_local(
-                X_concept, concept_sample, local_concept_coords=local_concept
+                X_cluster, concept_sample, local_concept_coords=None,
+                clustering_method="leiden", index=index, lookup=lookup
             )
 
             buffered_clusters.append((
@@ -836,7 +869,12 @@ def run_tier3_core(
                 emit("concept_start", {"concept": concept_name})
 
             X_concept = emb_cache.matrix(concept_sample)
-            cluster_local_coords, cluster_labels = fit_cluster_local(X_concept, concept_sample)
+            X_cluster = lookup.get_concatenated_embeddings(concept_sample) if use_concatenated_clustering else X_concept
+
+            cluster_local_coords, cluster_labels = fit_cluster_local(
+                X_cluster, concept_sample, local_concept_coords=None,
+                clustering_method="leiden", index=index, lookup=lookup
+            )
 
             buffered_clusters.append((
                 None,
@@ -853,12 +891,12 @@ def run_tier3_core(
     #
     # BFS global expansion (full mode only)
     #
-    if mode == "full":
+    if mode == "full" and not skip_global_bfs:
         if emit:
             emit("bfs_start", {})
         logger.info(f"[tier3] all_concept_events count: {len(all_concept_events)}")
         bfs_layers = build_depth_layers(
-            index, lookup, all_concept_events, k=K, max_depth=2, max_nodes=5000   # CHANGED
+            index, lookup, all_concept_events, k=K, max_depth=2, max_nodes=5000
         )
         bfs_ids, bfs_depth_map = depth_layers_to_flat(bfs_layers)
         X_bfs     = emb_cache.matrix(bfs_ids) if bfs_ids else None
@@ -966,6 +1004,8 @@ def run_tier3_service(
     concept=None,
     false_positives=None,
     mode="full",
+    use_concatenated_clustering=True,
+    skip_global_bfs=False,
     emit=None,
 ):
     logger = setEmit(
@@ -976,13 +1016,15 @@ def run_tier3_service(
     logger.info("[tier3 run_tier3_service] Enter")
 
     return run_tier3_core(
-        db_path         = db_path,
-        index           = index,
-        lookup          = lookup,
-        concept         = concept,
-        false_positives = false_positives,
-        mode            = mode,
-        emit            = emit,
+        db_path                     = db_path,
+        index                       = index,
+        lookup                      = lookup,
+        concept                     = concept,
+        false_positives             = false_positives,
+        mode                        = mode,
+        use_concatenated_clustering = use_concatenated_clustering,
+        skip_global_bfs             = skip_global_bfs,
+        emit                        = emit,
     )
 
 
@@ -994,31 +1036,43 @@ def main():
     parser.add_argument("--mode", type=str, default="full", choices=["full", "clustering"])
     parser.add_argument("--false_positives", type=str, nargs="*", default=[])
     parser.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
+    parser.add_argument("--no-ensemble", action="store_true", help="Cluster by concatinating ensemble vectors (legacy)")
+    parser.add_argument("--skip-bfs", action="store_true", help="Skip the global BFS expansion pass (full mode only); useful for fast single-concept runs")
 
     args = parser.parse_args()
 
     if args.no_mask:
         zarr_path = ZARR_PATH
-        faiss_paths = faiss_index_paths(masked=False)   # CHANGED
+        faiss_paths = faiss_index_paths(masked=False)
         db_path = CORPUS_TIER2_DB_PATH
+        use_concatenated_clustering = False
     else:
         zarr_path = MASKED_ZARR_PATH
-        faiss_paths = faiss_index_paths(masked=True)     # CHANGED
+        faiss_paths = faiss_index_paths(masked=True)
         db_path = CORPUS_TIER2_MASKED_DB_PATH
+        use_concatenated_clustering = True
 
-    logger.info(f"[Tier3.main] loading index+lookup, mode={'masked' if not args.no_mask else 'unmasked'}")
+    if args.no_ensemble:
+        use_concatenated_clustering = True
+
+    logger.info(
+        f"[Tier3.main] loading index+lookup, mode={'masked' if not args.no_mask else 'unmasked'}, "
+        f"clustering={'concatenated' if use_concatenated_clustering else 'ensemble'}"
+    )
 
     lookup = ZarrEventLookup(zarr_path)
-    index  = {scale: EeboFaissIndex.load(path) for scale, path in faiss_paths.items()}   # CHANGED
+    index  = {scale: EeboFaissIndex.load(path) for scale, path in faiss_paths.items()}
 
     run_tier3_core(
-        db_path         = db_path,
-        index           = index,
-        lookup          = lookup,
-        concept         = args.concept,
-        false_positives = args.false_positives,
-        mode            = args.mode,
-        emit            = None,
+        db_path                      = db_path,
+        index                        = index,
+        lookup                       = lookup,
+        concept                      = args.concept,
+        false_positives              = args.false_positives,
+        mode                         = args.mode,
+        use_concatenated_clustering  = use_concatenated_clustering,
+        skip_global_bfs              = args.skip_bfs,
+        emit                         = None,
     )
 
     logger.info("[tier3] complete")

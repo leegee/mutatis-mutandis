@@ -267,3 +267,38 @@ class ZarrEventLookup:
             weights[1] * self.emb_medium[positions] +
             weights[2] * self.emb_broad[positions]
         ).astype(np.float32)
+
+
+    def get_concatenated_embedding(self, pos: int) -> np.ndarray:
+        """
+        Return local/medium/broad embeddings, each L2-normalized, concatenated
+        into one (3*d,) vector — preserves per-scale structure for clustering
+        rather than collapsing it via weighted average.
+        """
+        def _norm(v):
+            n = np.linalg.norm(v)
+            return v / n if n > 0 else v
+
+        return np.concatenate([
+            _norm(self.emb_local[pos]),
+            _norm(self.emb_medium[pos]),
+            _norm(self.emb_broad[pos]),
+        ]).astype(np.float32)
+
+
+    def get_concatenated_embeddings(self, event_ids) -> np.ndarray:
+        """
+        Vectorized (n, 3*d) concatenated embedding matrix aligned to event_ids.
+        """
+        positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
+
+        def _norm_rows(M):
+            norms = np.linalg.norm(M, axis=1, keepdims=True)
+            norms[norms == 0] = 1.0
+            return M / norms
+
+        local  = _norm_rows(self.emb_local[positions])
+        medium = _norm_rows(self.emb_medium[positions])
+        broad  = _norm_rows(self.emb_broad[positions])
+
+        return np.concatenate([local, medium, broad], axis=1).astype(np.float32)
