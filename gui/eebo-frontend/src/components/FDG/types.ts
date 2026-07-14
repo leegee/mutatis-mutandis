@@ -11,6 +11,8 @@ export interface NodeMeta {
   windowId?: number | null;
   degree?: number | null;
   tokenIdx: number;
+  x?: number;
+  y?: number;
 }
 
 export type EdgeKind = 0 | 1 | 2;

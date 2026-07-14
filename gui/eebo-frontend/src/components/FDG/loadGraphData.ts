@@ -21,19 +21,21 @@ export async function loadGraphData(
 
   // 1. Events
   const eventRows = await execRows(
-    `SELECT event_id, token, doc_id, pub_year, window_id, token_idx
+    `SELECT event_id, token, doc_id, pub_year, window_id, token_idx, nx, ny
      FROM events
      WHERE concept = ?`,
     [concept],
   );
 
+  // console.debug("eventRows for", concept, eventRows.length);
+
   const yearCounts = new Map<number, number>();
 
   for (const row of eventRows) {
-    const [event_id, token, doc_id, pub_year, window_id, token_idx] = row as [
-      string, string, string, number | null, number | null, number
+    const [event_id, token, doc_id, pub_year, window_id, token_idx, nx, ny] = row as [
+      string, string, string, number | null, number | null, number, number, number
     ];
-    // console.debug(token)
+
     addNode({
       id: `e:${ event_id }`,
       kind: NODE_KIND.EVENT,
@@ -41,7 +43,9 @@ export async function loadGraphData(
       docId: String(doc_id),
       pubYear: pub_year,
       windowId: window_id,
-      tokenIdx: token_idx
+      tokenIdx: token_idx,
+      x: nx,
+      y: ny,
     });
     yearCounts.set(pub_year || 0, (yearCounts.get(pub_year || 0) ?? 0) + 1);
   }
@@ -56,7 +60,7 @@ export async function loadGraphData(
   // 2. Neighbours + semantic edges
   const neighbourRows = await execRows(
     `SELECT n.event_id, n.neighbour_event_id, n.token, n.doc_id,
-            n.pub_year, n.window_id, n.score, n.token_idx
+            n.pub_year, n.window_id, n.score, n.token_idx, n.nx, n.ny
      FROM neighbours n
      INNER JOIN events e ON e.event_id = n.event_id
      WHERE e.concept = ?`,
@@ -64,8 +68,8 @@ export async function loadGraphData(
   );
 
   for (const row of neighbourRows) {
-    const [event_id, neighbour_event_id, token, doc_id, pub_year, window_id, score, token_idx] =
-      row as [string, string, string, string, number | null, number | null, number, number];
+    const [event_id, neighbour_event_id, token, doc_id, pub_year, window_id, score, token_idx, nx, ny] =
+      row as [string, string, string, string, number | null, number | null, number, number, number, number];
 
     // Prefer the event-node id if this neighbour is also a concept event
     const nStringId = idToIdx.has(`e:${ neighbour_event_id }`)
@@ -79,7 +83,9 @@ export async function loadGraphData(
       docId: String(doc_id),
       pubYear: pub_year,
       windowId: window_id,
-      tokenIdx: token_idx
+      tokenIdx: token_idx,
+      x: nx,
+      y: ny,
     });
 
     const srcIdx = idToIdx.get(`e:${ event_id }`);
@@ -102,7 +108,7 @@ export async function loadGraphData(
   }
 
   // 4. Co-window edges
-  // Group event nodes by (doc_id, window_id) then connect all pairs (capped)
+  // Group event nodes by (doc_id, window_id) then connect all pairs (capped?)
   const buckets = new Map<string, number[]>(); // key to [nodeIdx, …]
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
@@ -113,8 +119,9 @@ export async function loadGraphData(
   }
 
   for (const members of buckets.values()) {
+    // console.debug("bucket size", members.length);
     if (members.length < 2) continue;
-    const capped = members.slice(0, 6); // cap clique size
+    const capped = members; // members.slice(0, 6); // cap clique size?
     for (let a = 0; a < capped.length; a++) {
       for (let b = a + 1; b < capped.length; b++) {
         edges.push({ srcIdx: capped[a], tgtIdx: capped[b], kind: 1, weight: 1.0 });
@@ -136,6 +143,49 @@ export async function loadGraphData(
       }
     }
   }
+
+  // console.log("[ConceptGraph debug]");
+  // console.log("nodes:", nodes.length);
+  // console.log("edges:", edges.length);
+
+  // console.log(
+  //   "node kinds:",
+  //   nodes.reduce((a, n) => {
+  //     a[n.kind] = (a[n.kind] ?? 0) + 1;
+  //     return a;
+  //   }, {} as Record<number, number>)
+  // );
+
+  // console.log(
+  //   "edge kinds:",
+  //   edges.reduce((a, e) => {
+  //     a[e.kind] = (a[e.kind] ?? 0) + 1;
+  //     return a;
+  //   }, {} as Record<number, number>)
+  // );
+
+  // console.log(
+  //   "coordinates:",
+  //   {
+  //     x: [
+  //       Math.min(...nodes.map(n => n.x ?? Infinity)),
+  //       Math.max(...nodes.map(n => n.x ?? -Infinity)),
+  //     ],
+  //     y: [
+  //       Math.min(...nodes.map(n => n.y ?? Infinity)),
+  //       Math.max(...nodes.map(n => n.y ?? -Infinity)),
+  //     ],
+  //   }
+  // );
+
+  // console.table(
+  //   nodes.slice(0, 20).map(n => ({
+  //     id: n.id,
+  //     kind: n.kind,
+  //     x: n.x,
+  //     y: n.y
+  //   }))
+  // );
 
   return { nodes, edges, years };
 }

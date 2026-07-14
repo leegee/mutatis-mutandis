@@ -117,11 +117,11 @@ function buildLinkColors(
   for (let i = 0; i < edges.length; i++) {
     const e = edges[i];
 
-    const visible = nodeVisible[e.srcIdx] && nodeVisible[e.tgtIdx];
+    // const visible = nodeVisible[e.srcIdx] && nodeVisible[e.tgtIdx];
+    // const rgba = visible ? EDGE_RGBA[e.kind] ?? EDGE_RGBA[0] : HIDDEN_RGBA;
 
-    const rgba = visible
-      ? EDGE_RGBA[e.kind] ?? EDGE_RGBA[0]
-      : HIDDEN_RGBA;
+    const visible = nodeVisible[e.srcIdx];
+    const rgba = visible ? EDGE_RGBA[e.kind] ?? EDGE_RGBA[0] : HIDDEN_RGBA;
 
     buf[i * 4] = rgba[0];
     buf[i * 4 + 1] = rgba[1];
@@ -140,6 +140,29 @@ function buildLinkWidths(edges: EdgeMeta[]): Float32Array {
           Math.max(2.2, e.weight * 2.6), // weight-scaled
     ),
   );
+}
+
+
+function buildPointPositions(nodes: NodeMeta[]): Float32Array {
+  const buf = new Float32Array(nodes.length * 2);
+
+  const SCALE = 4000;
+  const OFFSET = SCALE / 2;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+
+    if (n.x == null || n.y == null) {
+      buf[i * 2] = OFFSET;
+      buf[i * 2 + 1] = OFFSET;
+      continue;
+    }
+
+    buf[i * 2] = n.x * SCALE;
+    buf[i * 2 + 1] = n.y * SCALE;
+  }
+
+  return buf;
 }
 
 // Overlay components
@@ -215,21 +238,24 @@ export const ConceptGraph: Component = () => {
       spaceSize: 2048 * 2,
       fitViewOnInit: true,           // Automatically fit when graph is first rendered
       fitViewDelay: 1000,            // Give simulation time to settle before fitting
-      simulationDecay: 500,          // >= slower
       fitViewPadding: 0.01,          // 12% padding around the graph (adjust as needed)
-      simulationRepulsion: 0.8,
-      simulationLinkSpring: 0.45,
-      simulationLinkDistance: 65,
-      simulationFriction: 0.9,       // >= slower
-      simulationGravity: 0.12,
-      enableDrag: false,
+
+      // Sim
+      simulationRepulsion: 0,    // 0.8,
+      simulationLinkSpring: 0,   // 0.45,
+      simulationGravity: 0,      // 0.12,
+      simulationDecay: 1,        // 500
+      simulationFriction: 0,     // 0.9,       // > = slower
+      simulationLinkDistance: 0, // 65,
       // randomSeed: 12,
-      // Colours etc
+
+      // Clr
       backgroundColor: "#0c0e14",
       pointGreyoutOpacity: 0.4,
       linkGreyoutOpacity: 0.4,
 
-      // Events
+      // Events + interaction
+      enableDrag: false,
       onPointMouseOver: (index: number) => {
         const node = nodeMeta[index];
         if (!node) return;
@@ -311,7 +337,10 @@ export const ConceptGraph: Component = () => {
     setGraph();
 
     console.debug("[graph2.effect 1] set graph structure");
-    graph!.setPointPositions(new Float32Array(d.nodes.length * 2));
+
+    // graph!.setPointPositions(new Float32Array(d.nodes.length * 2));
+    graph!.setPointPositions(buildPointPositions(d.nodes));
+
     graph!.setLinks(buildLinks(d.edges));
     graph!.setPointSizes(buildPointSizes(d.nodes));
     graph!.setLinkWidths(buildLinkWidths(d.edges));
