@@ -97,7 +97,7 @@ import xxhash
 
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
-from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE
+from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 
@@ -133,6 +133,15 @@ def is_content_token(token: str) -> bool:
     if all(unicodedata.category(c).startswith(("P", "S", "Z")) for c in stripped):
         return False
     return True
+
+
+def is_mask_target(token: str) -> bool:
+    normalised = unicodedata.normalize("NFKC", token).lower()
+
+    return any(
+        normalised in concept["forms"]
+        for concept in CONCEPT_SETS.values()
+    )
 
 
 @dataclass(slots=True)
@@ -195,7 +204,7 @@ class EmbeddingPipeline:
     def __init__(self, tokenizer, model, device,
         mask_targets: bool = True,
         pooling_scope: str = "mask_only",
-        mask_only_target: bool = True,
+        mask_only_position: bool = True,
         batch_size: int = EMBED_BATCH_SIZE
     ):
         self.tokenizer = tokenizer
@@ -203,7 +212,7 @@ class EmbeddingPipeline:
         self.device = device
         self.mask_targets = mask_targets
         self.pooling_scope = pooling_scope
-        self.mask_only_target = mask_only_target
+        self.mask_only_position = mask_only_position
         self.batch_size = batch_size
         self.configs = WINDOW_CONFIGS
         self._window_alignment_checked = False
@@ -237,18 +246,16 @@ class EmbeddingPipeline:
         all_events = []
 
         for config in self.configs:
-            jobs = self._build_masked_window_jobs(
-                buf, input_ids, attention_mask, word_ids, config
-            )
+            jobs = self._build_masked_window_jobs( buf, input_ids, attention_mask, word_ids, config )
+
             if not self._window_alignment_checked and config["name"] == "local":
                 self._check_window_alignment_once(jobs)
+
             vectors = self._run_masked_window_batch(jobs)
-            all_events.extend(
-                self._events_from_masked_windows(buf, jobs, vectors, config["name"])
-            )
+            all_events.extend( self._events_from_masked_windows(buf, jobs, vectors, config["name"]) )
 
         logger.info("Document %s: %d masked observations (target-only=%s)",
-                    buf.doc_id, len(all_events), self.mask_only_target)
+                    buf.doc_id, len(all_events), self.mask_only_position)
         return all_events
 
 
@@ -316,21 +323,12 @@ class EmbeddingPipeline:
                     continue
                 if word_id >= len(buf.corpus_token_idxs):
                     continue
-                if not is_content_token(buf.tokens[word_id]):
+
+                if not is_mask_target(buf.tokens[word_id]):
                     continue
 
-                # Create a copy for this specific target
                 target_window_ids = list(window_ids)
-
-                if self.mask_only_target:
-                    # Mask ONLY this target
-                    target_window_ids[encoded_pos] = self.tokenizer.mask_token_id
-                else:
-                    # Fallback: original aggressive multi-masking (all content tokens)
-                    for p, wid in enumerate(window_word_ids):
-                        if wid is not None and wid >= 0 and is_content_token(buf.tokens[wid]):
-                            target_window_ids[p] = self.tokenizer.mask_token_id
-
+                target_window_ids[encoded_pos] = self.tokenizer.mask_token_id
                 jobs.append({
                     "input_ids": target_window_ids,
                     "attention_mask": window_mask,
@@ -382,38 +380,41 @@ class EmbeddingPipeline:
         for batch_idx, job in enumerate(jobs):
             pos = job["target_encoded_pos"]
             vec = hidden[batch_idx, pos].astype(np.float32)
-            results.append({job["target_word_id"]: vec})
+            results.append(vec)
 
         return results
 
 
     def _events_from_masked_windows(self, buf: DocBuffer, jobs, vectors, config_name: str):
-        """Convert to Events."""
+        """Convert masked target vectors into Events."""
         events = []
-        for job, window_vectors in zip(jobs, vectors):
+
+        for job, vec in zip(jobs, vectors):
             word_id = job["target_word_id"]
+
             if word_id >= len(buf.corpus_token_idxs):
                 continue
-            if not is_content_token(buf.tokens[word_id]):
+
+            token = buf.tokens[word_id]
+
+            if not is_mask_target(token):
                 continue
 
-            vec = list(window_vectors.values())[0]
-
-            events.append(
-                Event.make(
+            events.append( Event.make(
                     doc_id=buf.doc_id,
                     corpus_token_idx=buf.corpus_token_idxs[word_id],
-                    window_start_token_idx=buf.corpus_token_idxs[job.get("window_start", 0)],
+                    window_start_token_idx=buf.corpus_token_idxs[
+                        job.get("window_start", 0)
+                    ],
                     window_start=job.get("window_start", 0),
                     window_token_pos=job["target_encoded_pos"],
-                    token=buf.tokens[word_id],
+                    token=token,
                     vector_id=buf.vector_ids[word_id],
                     vec=vec,
-                    config_name=config_name
-                )
-            )
-        return events
+                    config_name=config_name,
+            ))
 
+        return events
 
     @staticmethod
     def _compute_windows(word_ids, window_size, stride):
@@ -575,7 +576,6 @@ class CorpusProcessor:
 
 
     def _flush(self, buf, store):
-
         import time
         start = time.perf_counter()
 
@@ -588,6 +588,7 @@ class CorpusProcessor:
 
         # Group by (corpus_token_idx, window_token_pos) and align scales
         events_by_token = defaultdict(dict)
+
         for e in raw_events:
             key = (e.corpus_token_idx, e.window_token_pos)
             events_by_token[key][e.config_name] = e
@@ -655,7 +656,7 @@ def parse_args():
     p.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
     p.add_argument("--pooling-scope", choices=["mask_only", "context"], default="mask_only")
     p.add_argument("--batch-size", type=int, default=EMBED_BATCH_SIZE)
-    p.add_argument("--mask-only-target", action="store_true", default=True, help="Mask only the target token (recommended for semantics)")
+    p.add_argument("--mask-only-position", action="store_true", default=True, help="Mask only the target token (recommended for semantics)")
     return p.parse_args()
 
 
@@ -676,10 +677,10 @@ def main():
 
     pipeline = EmbeddingPipeline(
         mac.tokenizer, mac.model, mac.device,
-        mask_targets=not args.no_mask,
-        mask_only_target=args.mask_only_target,
-        pooling_scope=args.pooling_scope,
-        batch_size=args.batch_size
+        mask_targets        = not args.no_mask,
+        mask_only_position  = args.mask_only_position,
+        pooling_scope       = args.pooling_scope,
+        batch_size          = args.batch_size
     )
 
     proc = CorpusProcessor(conn, zarr_path, pipeline, report_every=args.report_every)
