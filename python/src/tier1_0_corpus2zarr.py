@@ -204,6 +204,7 @@ class EmbeddingPipeline:
         self.mask_only_target = mask_only_target
         self.batch_size = batch_size
         self.configs = WINDOW_CONFIGS
+        self._window_alignment_checked = False
 
 
     def embed_doc(self, buf: DocBuffer) -> list[Event]:
@@ -237,6 +238,8 @@ class EmbeddingPipeline:
             jobs = self._build_masked_window_jobs(
                 buf, input_ids, attention_mask, word_ids, config
             )
+            if not self._window_alignment_checked and config["name"] == "local":
+                self._check_window_alignment_once(jobs)
             vectors = self._run_masked_window_batch(jobs)
             all_events.extend(
                 self._events_from_masked_windows(buf, jobs, vectors, config["name"])
@@ -246,6 +249,49 @@ class EmbeddingPipeline:
                     buf.doc_id, len(all_events), self.mask_only_target)
         return all_events
 
+
+    def _check_window_alignment_once(self, jobs: list[dict]) -> None:
+        """One-time regression guard for the window_token_pos overwrite bug.
+
+        Confirms that a token appearing in multiple overlapping windows gets
+        a distinct target_encoded_pos per window, so _flush's grouping key
+        (corpus_token_idx, window_token_pos) won't silently collapse
+        legitimate multi-window observations into one.
+
+        Runs once per pipeline instance (first doc, 'local' config, where
+        overlap is most likely) then disables itself regardless of outcome.
+        """
+        self._window_alignment_checked = True  # disable after this call, pass or fail
+
+        if not jobs:
+            logger.warning("Window-alignment check skipped: no jobs in first doc/config")
+            return
+
+        positions_by_word = defaultdict(set)
+        for job in jobs:
+            positions_by_word[job["target_word_id"]].add(job["target_encoded_pos"])
+
+        repeated = {wid: len(pos) for wid, pos in positions_by_word.items() if len(pos) > 1}
+
+        if not repeated:
+            logger.warning(
+                "Window-alignment check: no word appeared in >1 window for this doc "
+                "(doc too short to exercise overlap) — check inconclusive, not a failure"
+            )
+            return
+
+        sample_wid, n_positions = next(iter(repeated.items()))
+        logger.info(
+            "Window-alignment check passed: word_id=%d appears in %d windows "
+            "with distinct target_encoded_pos values (%s)",
+            sample_wid, n_positions, sorted(positions_by_word[sample_wid])
+        )
+
+        assert all(n >= 2 for n in repeated.values()), (
+            "Window-alignment check failed: a word repeated across windows but "
+            "target_encoded_pos did not vary — window_token_pos will collapse "
+            "distinct window observations in _flush's grouping key."
+        )
 
     def _build_masked_window_jobs(self, buf: DocBuffer, input_ids, attention_mask, word_ids, config):
         """NEW VERSION: Mask ONLY the target token per job (default)."""
@@ -359,7 +405,7 @@ class EmbeddingPipeline:
                     corpus_token_idx=buf.corpus_token_idxs[word_id],
                     window_start_token_idx=buf.corpus_token_idxs[job.get("window_start", 0)],
                     window_start=job.get("window_start", 0),
-                    window_token_pos=word_id,
+                    window_token_pos=job["target_encoded_pos"],
                     token=buf.tokens[word_id],
                     vector_id=buf.vector_ids[word_id],
                     vec=vec,
