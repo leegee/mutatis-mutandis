@@ -149,9 +149,11 @@ class Event:
     vec: np.ndarray
     config_name: str
 
+
     @property
     def token_idx(self):
         return self.corpus_token_idx
+
 
     @staticmethod
     def make(doc_id: str, corpus_token_idx: int, window_start_token_idx: int,
@@ -282,19 +284,18 @@ class EmbeddingPipeline:
 
         sample_wid, n_positions = next(iter(repeated.items()))
         logger.info(
-            "Window-alignment check passed: word_id=%d appears in %d windows "
-            "with distinct target_encoded_pos values (%s)",
+            "Window-alignment check passed: word_id=%d appears in %d windows with distinct target_encoded_pos values (%s)",
             sample_wid, n_positions, sorted(positions_by_word[sample_wid])
         )
 
         assert all(n >= 2 for n in repeated.values()), (
-            "Window-alignment check failed: a word repeated across windows but "
-            "target_encoded_pos did not vary — window_token_pos will collapse "
-            "distinct window observations in _flush's grouping key."
+            "Window-alignment check failed: a word repeated across windows but target_encoded_pos did not vary: ",
+            "window_token_pos will collapse distinct window observations in _flush's grouping key."
         )
 
+
     def _build_masked_window_jobs(self, buf: DocBuffer, input_ids, attention_mask, word_ids, config):
-        """NEW VERSION: Mask ONLY the target token per job (default)."""
+        """Mask only the target token per job (default)."""
         windows = self._compute_windows(word_ids, config["size"], config["stride"])
         if not windows:
             return []
@@ -346,7 +347,6 @@ class EmbeddingPipeline:
 
     def _run_masked_window_batch(self, jobs: list[dict]):
         """Run batched masked window inference.
-
         Returns a list aligned with jobs. Each item contains all token vectors
         extracted from that window.
         """
@@ -418,7 +418,6 @@ class EmbeddingPipeline:
     @staticmethod
     def _compute_windows(word_ids, window_size, stride):
         """Compute every window span once per (document, config).
-
         Each entry records the encoded [start, end) span plus the word-id
         range it covers, so per-token lookups become simple range checks
         instead of rescanning ``word_ids``.
@@ -469,6 +468,7 @@ class EmbeddingPipeline:
         word_ids = enc.word_ids() or [None] * len(enc["input_ids"][0])
         return enc["input_ids"][0].tolist(), enc["attention_mask"][0].tolist(), word_ids
 
+
     def _forward_single_window(self, ids, mask):
         input_ids = torch.tensor([ids], dtype=torch.long).to(self.device)
         attention_mask = torch.tensor([mask], dtype=torch.long).to(self.device)
@@ -476,6 +476,7 @@ class EmbeddingPipeline:
         with torch.inference_mode():
             out = self.model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
         return out.last_hidden_state[0].cpu().numpy()
+
 
     @staticmethod
     def _iter_windows_config(input_ids, attention_mask, word_ids, window_size, stride):
@@ -500,6 +501,7 @@ class EmbeddingPipeline:
             if encoded_end == n:
                 break
             start_word += stride
+
 
     @staticmethod
     def _extract_events(buf: DocBuffer, item: dict, hidden: np.ndarray, config_name: str):
@@ -570,6 +572,7 @@ class CorpusProcessor:
 
         if buf and buf.doc_id not in already_processed:
             self._flush(buf, store)
+
 
     def _flush(self, buf, store):
 
