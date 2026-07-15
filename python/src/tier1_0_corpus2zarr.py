@@ -90,6 +90,7 @@ import shutil
 import unicodedata
 from dataclasses import dataclass
 from collections import defaultdict
+import time
 
 import numpy as np
 import torch
@@ -576,7 +577,6 @@ class CorpusProcessor:
 
 
     def _flush(self, buf, store):
-        import time
         start = time.perf_counter()
 
         raw_events = self.pipeline.embed_doc(buf)
@@ -628,17 +628,17 @@ class CorpusProcessor:
                    f"({'masked' if self.pipeline.mask_targets else 'unmasked'})")
 
         store.append_events(
-            event_id=np.asarray(event_ids, dtype=np.int64),
-            concept_id=np.asarray(concept_ids, dtype=np.int64),
-            emb_local=np.stack(emb_local),
-            emb_medium=np.stack(emb_medium),
-            emb_broad=np.stack(emb_broad),
-            vector_id=np.asarray(vector_ids, dtype=np.int64),
-            doc_id=np.asarray(doc_ids, dtype="U32"),
-            token_idx=np.asarray(token_idxs, dtype=np.int64),
-            token=np.asarray(tokens, dtype=object),
-            window_id=np.asarray(window_ids, dtype=np.int64),
-            window_token_pos=np.asarray(window_token_poss, dtype=np.int32),
+            event_id            = np.asarray(event_ids, dtype=np.int64),
+            concept_id          = np.asarray(concept_ids, dtype=np.int64),
+            emb_local           = np.stack(emb_local),
+            emb_medium          = np.stack(emb_medium),
+            emb_broad           = np.stack(emb_broad),
+            vector_id           = np.asarray(vector_ids, dtype=np.int64),
+            doc_id              = np.asarray(doc_ids, dtype="U32"),
+            token_idx           = np.asarray(token_idxs, dtype=np.int64),
+            token               = np.asarray(tokens, dtype=object),
+            window_id           = np.asarray(window_ids, dtype=np.int64),
+            window_token_pos    = np.asarray(window_token_poss, dtype=np.int32),
         )
 
 
@@ -650,8 +650,8 @@ def clear_output_dir(zarr_path):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--clear", action="store_true")
-    p.add_argument("--doc-id", type=str, default=None)
+    p.add_argument("--clear", action="store_true", help="Wipe the store, start from scratch")
+    p.add_argument("--doc-id", type=str, default=None, help="doc_id of a document to process")
     p.add_argument("--report-every", type=int, default=100)
     p.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
     p.add_argument("--pooling-scope", choices=["mask_only", "context"], default="mask_only")

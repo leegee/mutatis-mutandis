@@ -79,3 +79,29 @@ Watt, Tessa. Cheap Print and Popular Piety, 1550-1640. Cambridge University Pres
 Williams, Raymond. Culture and Society 1780–1950. Chatto & Windus; Columbia University Press, 1958.
 Williams, Raymond. Keywords: A Vocabulary of Culture and Society. Croom Helm, 1976.
 
+
+## People and Projects
+
+- [Bodleian Repo](https://ota.bodleian.ox.ac.uk/repository/xmlui/handle/20.500.12024/A50955)
+- [Early English Books Online Text Creation Partnership (EEBO TCP), Bodleian Digital Library Systems & Services](https://digital.humanities.ox.ac.uk/project/early-english-books-online-text-creation-partnership-eebo-tcp)
+- [Early Modern Manuscripts Online (EMMO)](https://folgerpedia.folger.edu/Early_Modern_Manuscripts_Online_%28EMMO%29?utm_source=chatgpt.com)
+- [Heuser, Ryan](https://www.english.cam.ac.uk/people/Ryan.Heuser)
+- [MacBERTHh](https://huggingface.co/emanjavacas/MacBERTh)
+- [Manuscript Pamphleteering in Early Stuart England](https://tei-c.org/activities/projects/manuscript-pamphleteering-in-early-stuart-england/)
+- [McGillivray, Barbara](https://www.kcl.ac.uk/people/barbara-mcgillivray)
+
+- https://dhq.digitalhumanities.org/
+- https://openhumanitiesdata.metajnl.com/
+- https://www.openlibhums.org/
+
+In addition to EEBO-TCP:
+
+| Resource                                              | Focus                           | Contains TEI/XML? | Best Use                           |
+| ----------------------------------------------------- | ------------------------------- | ----------------- | ---------------------------------- |
+| **EarlyPrint / aggregated XML**                       | Multi‑collection metadata + XML | Yes               | Indexed TEI + multi‑collections    |
+| **EBBA**                                              | 17th‑c ballads                  | Structured text   | Genre adjacent to pamphlets        |
+| **ECCO‑TCP**                                          | 18th‑c books & pamphlets        | Yes               | Later historical context           |
+| **Evans‑TCP**                                         | American imprints               | Yes               | Wider corpus coverage              |
+| **HathiTrust Extracted Dataset**                      | Broad public domain texts       | Bulk data         | Pre‑processing into TEI            |
+| **Manuscript Pamphleteering in Early Stuart England** | 17th‑c manuscript pamphlets     | Yes               | Manuscript pamphlet transcriptions |
+| **MoEML Early Modern Broadsides**                     | 16–17th‑c broadsides            | Yes               | Printed sheets & broadsides        |
