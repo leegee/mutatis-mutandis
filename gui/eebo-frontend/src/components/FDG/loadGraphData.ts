@@ -135,7 +135,7 @@ export async function loadGraphData(
       id: `c:${ concept }`,
       kind: NODE_KIND.CONCEPT,
       label: concept,
-      tokenIdx: -1 // TODO what?
+      tokenIdx: -1 // TODO what?!
     });
     for (let i = 0; i < nodes.length; i++) {
       if (nodes[i].kind === NODE_KIND.EVENT) {
