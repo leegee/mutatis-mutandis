@@ -21,13 +21,13 @@ export const routes = [
     component: ScatterPlot,
     help: () => <ScatterPlotGuide />
   },
-  // {
-  //   path: "/aggregates",
-  //   icon: "crowdsource",
-  //   label: "Aggregates",
-  //   component: ConceptAggregates,
-  //   help: () => <ConceptAggregatesGuide />
-  // },
+  {
+    path: "/aggregates",
+    icon: "crowdsource",
+    label: "Aggregates",
+    component: ConceptAggregates,
+    help: () => <ConceptAggregatesGuide />
+  },
   {
     path: "/clusters",
     icon: "action_key",
@@ -38,13 +38,6 @@ export const routes = [
         Cluster report summarizes grouped structure.
       </div>
     )
-  },
-  {
-    path: "/geo",
-    icon: "location_on",
-    label: "Geography",
-    component: Map,
-    help: () => { },
   },
   {
     path: "/graph2/:token_idx?",
@@ -66,6 +59,13 @@ export const routes = [
     label: "Diachronic Chart",
     component: DiachronicChart,
     help: () => <DiachronicChartGuide />
+  },
+  {
+    path: "/geo",
+    icon: "location_on",
+    label: "Geography",
+    component: Map,
+    help: () => { },
   },
   {
     path: "/Jobs",

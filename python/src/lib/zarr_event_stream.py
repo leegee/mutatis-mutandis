@@ -43,18 +43,31 @@ class ZarrEventStream:
         self._doc_by_id = None
 
 
+    #
     def iter_multi_scale_embeddings(self, batch_size: int = 8192):
         """
-        Yields tuples of (emb_local, emb_medium, emb_broad, obs_ids)
+        Yields tuples of (emb_local, emb_medium, emb_broad, obs_ids, pub_years)
+
+        pub_years is int16, one per event, sourced from the 'pub_year' dataset
+        written alongside doc_id at ingestion time (tier 1).
         """
         for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
             group = g["events"]
 
+            # Die on legacy store use:
+            if "pub_year" not in group:
+                raise KeyError(
+                    f"Missing 'pub_year' in {store_dir} — this store predates "
+                    f"per-event pub_year and needs to be backfilled before "
+                    f"multi-scale streaming can proceed."
+                )
+
             eids = group["event_id"]
             emb_l = group["emb_local"]
             emb_m = group["emb_medium"]
             emb_b = group["emb_broad"]
+            years = group["pub_year"]
 
             n = eids.shape[0]
 
@@ -66,7 +79,9 @@ class ZarrEventStream:
                     np.asarray(emb_m[start:end], dtype=np.float32),
                     np.asarray(emb_b[start:end], dtype=np.float32),
                     np.asarray(eids[start:end], dtype=np.int64),
+                    np.asarray(years[start:end], dtype=np.int16),
                 )
+
 
     def _build_lookup(self):
         if self._token_by_id is not None:

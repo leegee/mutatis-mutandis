@@ -7,6 +7,55 @@ from lib.zarr_store_dirs import store_dirs
 BATCH_SIZE = 8192
 _NO_WPOS = -1
 
+
+class _LazyScaleEmbeddings:
+    """
+    Array-like accessor for one embedding scale (local/medium/broad),
+    backed by EeboFaissIndex.reconstruct() instead of an eagerly loaded
+    (N, 768) matrix for the whole corpus. Full-corpus eager loading of
+    all three scales does not fit in memory (~15.7 GiB for ~1.8M events);
+    this replaces it with on-demand reconstruction from the per-year
+    FAISS indices, which store vectors verbatim (IndexFlatIP).
+
+    Supports both scalar indexing (emb_local[pos] -> (dim,) array) and
+    array indexing (emb_local[positions] -> (n, dim) array) — the same
+    contract the eager array previously provided, so multiscale_search
+    and every other caller needs no changes.
+
+    No caching here by design — this is a thin on-demand layer. Callers
+    that repeatedly touch the same event_ids across multiple phases
+    (UMAP, clustering, BFS) should go through EmbeddingCache, which
+    caches on top of this and needs no changes either.
+    """
+
+    def __init__(self, lookup: "ZarrEventLookup", index, scale: str, dim: int):
+        self._lookup = lookup
+        self._index = index   # dict[year][scale] -> EeboFaissIndex
+        self._scale = scale
+        self._dim = dim
+
+    def _reconstruct_one(self, pos: int) -> np.ndarray:
+        eid = int(self._lookup.event_id[pos])
+        year = int(self._lookup.pub_year[pos])
+        year_indices = self._index.get(year)
+        if year_indices is None:
+            raise KeyError(
+                f"No FAISS index for pub_year={year} (event_id={eid}, "
+                f"scale={self._scale}). Available years: {sorted(self._index.keys())}"
+            )
+        return year_indices[self._scale].reconstruct(eid)
+
+    def __getitem__(self, idx):
+        is_scalar = isinstance(idx, (int, np.integer))
+        positions = [idx] if is_scalar else np.atleast_1d(idx)
+
+        out = np.empty((len(positions), self._dim), dtype=np.float32)
+        for i, pos in enumerate(positions):
+            out[i] = self._reconstruct_one(int(pos))
+
+        return out[0] if is_scalar else out
+
+
 class ZarrEventLookup:
     """
     In-memory index of Tier 1 observation events, stored as parallel numpy
@@ -22,12 +71,14 @@ class ZarrEventLookup:
 
     vector_id is stored as metadata only — NOT used as a lookup key.
 
-    Embeddings are loaded alongside metadata so that FAISS queries can be
-    issued using the canonical Zarr vector rather than relying on FAISS
-    internal vector storage. See module docstring for trade-offs and the
-    deferred migration path to EeboFaissIndex.reconstruct().
+    Metadata is loaded eagerly into compact NumPy arrays. Embeddings remain in
+    the per-year FAISS indices and are reconstructed lazily on demand via
+    EeboFaissIndex.reconstruct(). This avoids loading approximately 16 GiB of
+    embedding matrices into memory while preserving the existing array-like API.
 
-    Loads three embedding scales and provides ensemble vectors for downstream use.
+    Exposes three embedding scales (local, medium, broad) through lazy array-like
+    accessors. Downstream code continues to index emb_local, emb_medium, and emb_broad
+    exactly as before, while vectors are reconstructed on demand.
     """
 
     _FIELDS = {
@@ -38,6 +89,7 @@ class ZarrEventLookup:
         "token_idx":        np.int64,
         "window_id":        np.int64,
         "window_token_pos": np.int64,
+        "pub_year":         np.int16,
     }
 
 
@@ -49,11 +101,24 @@ class ZarrEventLookup:
         self._pos: dict[int, int] = {}
         self._chunks: dict[str, list] = {field: [] for field in self._FIELDS}
 
-        self._emb_local_chunks  = []
-        self._emb_medium_chunks = []
-        self._emb_broad_chunks  = []
+        self._index = None
+        self.emb_local = self.emb_medium = self.emb_broad = None   # set via attach_index()
 
         self._build()
+
+
+    @property
+    def shape(self):
+        return (len(self._lookup.event_id), self._dim)
+
+
+    @property
+    def dtype(self):
+        return np.float32
+
+
+    def __len__(self):
+        return len(self._lookup.event_id)
 
 
     def _build(self):
@@ -75,27 +140,14 @@ class ZarrEventLookup:
 
     def _load_store(self, e, store_dir):
         """
-        Load events + multi-scale embeddings.
+        Load event metadata only. Embeddings remain resident in the per-year
+        FAISS indices and are reconstructed lazily when accessed.
 
-        PERFORMANCE NOTE: token/doc_id/etc are cheap fields (int64, short
-        strings) - reading and filtering them per batch is fast. The
-        embedding arrays (emb_local/medium/broad) are the expensive part:
-        768-dim float32 per row, and Zarr has to decompress each chunk it
-        touches. The keep-mask (derived from token matches against
-        self.forms) is now computed FIRST, from the cheap fields only, and
-        batches with zero matches skip the embedding reads entirely via
-        `continue` before ever touching e["emb_local"]/["emb_medium"]/
-        ["emb_broad"]. Previously the embedding slices were read
-        unconditionally for every batch regardless of whether anything in
-        that batch matched - meaning a single-concept forms-filtered load
-        still paid the FULL corpus's embedding-decompression cost, even
-        though most of the decompressed data was immediately discarded.
-        With a concept's occurrences spread across many documents (and
-        therefore likely touching most batches at least once), this alone
-        won't eliminate embedding reads entirely for a typical concept -
-        but any batch that genuinely contains zero matches (increasingly
-        likely for rarer concepts, or smaller shards) now costs almost
-        nothing instead of a full embedding decompression.
+        Performance note: Only metadata columns are read from the Zarr stores.
+        Embedding matrices are no longer loaded during lookup construction; instead,
+        vectors are reconstructed on demand from the corresponding per-year FAISS indices.
+        Concept filtering therefore only affects metadata loading, and lookup construction
+        is now essentially independent of embedding dimensionality.
         """
         if "event_id" not in e:
             raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
@@ -113,8 +165,8 @@ class ZarrEventLookup:
             b_toks = e["token"][start:end]
             b_idxs = e["token_idx"][start:end]
             b_wins = e["window_id"][start:end]
+            b_years = e["pub_year"][start:end]
             b_wpos = wpos[start:end] if wpos is not None else None
-
             b_toks = b_toks.astype(str)
             b_docs = b_docs.astype(str)
             b_toks_lower = np.char.lower(b_toks)
@@ -135,17 +187,13 @@ class ZarrEventLookup:
             if not keep.any():
                 continue
 
-            # --- expensive fields only for batches with at least one match ---
-            b_local  = e["emb_local"][start:end]
-            b_medium = e["emb_medium"][start:end]
-            b_broad  = e["emb_broad"][start:end]
-
             self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
             self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
             self._chunks["doc_id"].append(b_docs[keep])
             self._chunks["token"].append(b_toks[keep])
             self._chunks["token_idx"].append(np.asarray(b_idxs, dtype=np.int64)[keep])
             self._chunks["window_id"].append(np.asarray(b_wins, dtype=np.int64)[keep])
+            self._chunks["pub_year"].append(np.asarray(b_years, dtype=np.int16)[keep])   # NEW
 
             if b_wpos is not None:
                 wpos_col = np.asarray(b_wpos, dtype=np.int64)[keep]
@@ -153,9 +201,28 @@ class ZarrEventLookup:
                 wpos_col = np.full(int(keep.sum()), _NO_WPOS, dtype=np.int64)
             self._chunks["window_token_pos"].append(wpos_col)
 
-            self._emb_local_chunks.append(np.asarray(b_local, dtype=np.float32)[keep])
-            self._emb_medium_chunks.append(np.asarray(b_medium, dtype=np.float32)[keep])
-            self._emb_broad_chunks.append(np.asarray(b_broad, dtype=np.float32)[keep])
+
+    def attach_index(self, index: dict[int, dict[str, "EeboFaissIndex"]]) -> None:
+        """
+        Attach the per-year, per-scale FAISS indices used for lazy embedding reconstruction.
+        After attachment, emb_local, emb_medium, and emb_broad behave like NumPy arrays,
+        but each vector is reconstructed from the appropriate FAISS index on demand.
+        This preserves the previous indexing API while avoiding eager loading of the full
+        embedding matrices.
+        """
+        self._index = index
+        any_year = next(iter(index.values()))
+        dim = next(iter(any_year.values())).dim
+        self.emb_local  = _LazyScaleEmbeddings(self, index, "local", dim)
+        self.emb_medium = _LazyScaleEmbeddings(self, index, "medium", dim)
+        self.emb_broad  = _LazyScaleEmbeddings(self, index, "broad", dim)
+
+
+    def _require_index(self):
+        if self.emb_local is None:
+            raise RuntimeError(
+                "attach_index() must be called before accessing embeddings."
+            )
 
 
     def _finalize(self):
@@ -170,21 +237,13 @@ class ZarrEventLookup:
         for field, dtype in self._FIELDS.items():
             setattr(self, field, np.concatenate(self._chunks[field]).astype(dtype, copy=False))
 
-        self.emb_local  = np.concatenate(self._emb_local_chunks, axis=0)
-        self.emb_medium = np.concatenate(self._emb_medium_chunks, axis=0)
-        self.emb_broad  = np.concatenate(self._emb_broad_chunks, axis=0)
-
         self._pos = {int(eid): pos for pos, eid in enumerate(self.event_id)}
-
         self._chunks.clear()
-        self._emb_local_chunks.clear()
-        self._emb_medium_chunks.clear()
-        self._emb_broad_chunks.clear()
-
         logger.info(f"[tier2] loaded {n_total:,} events with multi-scale embeddings")
 
 
     def get_ensemble_embedding(self, pos: int, weights=[0.25, 0.50, 0.25]):
+        self._require_index()
         return (
             weights[0] * self.emb_local[pos] +
             weights[1] * self.emb_medium[pos] +
@@ -209,6 +268,7 @@ class ZarrEventLookup:
             "token_idx": int(self.token_idx[pos]),
             "window_id": int(self.window_id[pos]),
             "window_token_pos": None if wpos == _NO_WPOS else wpos,
+            "pub_year": int(self.pub_year[pos]),
         }
 
 
@@ -249,16 +309,9 @@ class ZarrEventLookup:
 
     def get_embeddings(self, event_ids, weights=(0.25, 0.50, 0.25)):
         """
-        Return (n, d) embedding matrix aligned to event_ids.
-        Uses ensemble embedding.
-
-        Vectorized: previously this built the (n, d) matrix via a Python
-        loop calling get_ensemble_embedding() (itself a per-row weighted
-        sum) once per event_id, then np.vstack-ed the results - n separate
-        small numpy allocations plus n dict lookups in a Python loop. This
-        version does one array of position lookups, then three whole-array
-        fancy-index reads and a single vectorized weighted sum - one set
-        of allocations regardless of n, instead of n of them.
+        Returns a vectorized weighted ensemble by reconstructing the required local, medium and broad
+        embeddings for the requested events. Reconstruction is performed lazily via the attached FAISS
+        indices, while the weighted sum is computed in a single vectorized NumPy operation.
         """
         positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
 
@@ -275,6 +328,8 @@ class ZarrEventLookup:
         into one (3*d,) vector — preserves per-scale structure for clustering
         rather than collapsing it via weighted average.
         """
+        self._require_index()
+
         def _norm(v):
             n = np.linalg.norm(v)
             return v / n if n > 0 else v
@@ -289,7 +344,9 @@ class ZarrEventLookup:
     def get_concatenated_embeddings(self, event_ids) -> np.ndarray:
         """
         Vectorized (n, 3*d) concatenated embedding matrix aligned to event_ids.
+        Embeddings are reconstructed lazily and normalized per scale before concatenation.
         """
+        self._require_index()
         positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
 
         def _norm_rows(M):

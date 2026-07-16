@@ -91,6 +91,7 @@ class ZarrEmbeddingObservationStore:
         self.token_idx = self._ds( g, "token_idx", (), compressor, "int64" )
         self.token = self._ds( g, "token", (), compressor, "U32" )
         self.doc_id = self._ds( g, "doc_id", (), compressor, "U32" )
+        self.pub_year = self._ds( g, "pub_year", (), compressor, "int16" )
 
         # contextual coordinates
         self.window_id = self._ds( g, "window_id", (), compressor, "int64" )
@@ -126,6 +127,7 @@ class ZarrEmbeddingObservationStore:
         emb_broad,
         vector_id,
         doc_id,
+        pub_year,
         token_idx,
         token,
         window_id,
@@ -146,6 +148,7 @@ class ZarrEmbeddingObservationStore:
 
         token = np.asarray(token, dtype="U32")
         doc_id = np.asarray(doc_id, dtype="U32")
+        pub_year = np.asarray(pub_year, dtype=np.int16)
 
         window_id = np.asarray(window_id, dtype=np.int64)
         window_token_pos = np.asarray(window_token_pos, dtype=np.int32)
@@ -163,6 +166,7 @@ class ZarrEmbeddingObservationStore:
         self._check(token_idx, n)
         self._check(token, n)
         self._check(doc_id, n)
+        self._check(pub_year, n)
         self._check(window_id, n)
         self._check(window_token_pos, n)
 
@@ -178,6 +182,7 @@ class ZarrEmbeddingObservationStore:
         self._append(self.token_idx, token_idx)
         self._append(self.token, token)
         self._append(self.doc_id, doc_id)
+        self._append(self.pub_year, pub_year)
         self._append(self.window_id, window_id)
         self._append(self.window_token_pos, window_token_pos)
 

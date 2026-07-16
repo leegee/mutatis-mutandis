@@ -8,7 +8,7 @@ in the EEBO corpus, entirely unsupervised.
 Motivation
 ----------
 
-Tier 1 pools *hidden states* at masked positions, producing contextual
+Tier 1 can pool *hidden states* at masked positions, producing contextual
 embeddings that are excellent at grouping orthographic variants of the
 same lexeme (e.g. "liberty" / "libertie") — those occupy near-identical
 contexts, so their pooled embeddings land close together almost by
@@ -49,8 +49,7 @@ Input:
     window selection (best-centered)            (reused from Tier 1's
                                                    EmbeddingPipeline)
         ↓
-    masked forward pass → MLM head logits        (NEW: logits, not
-                                                   hidden states)
+    masked forward pass → MLM head logits        ( logits, not hidden states)
         ↓
     top-k softmax → per-occurrence substitute
     distribution
@@ -146,7 +145,7 @@ def load_macberth_mlm():
     """
     from transformers import AutoTokenizer, AutoModelForMaskedLM
 
-    MODEL_NAME = "emanjavacas/MacBERTh"  # <-- verify/adjust against lib.macberth
+    MACBERMODEL_NAME = "emanjavacas/MacBERTh"
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = AutoModelForMaskedLM.from_pretrained(MODEL_NAME)
@@ -261,7 +260,15 @@ class SubstitutePipeline:
             out = self.model(input_ids=input_ids_t, attention_mask=attn_mask_t, return_dict=True)
 
         # (batch, seq_len, vocab_size) -> probabilities at each mask position
-        probs = torch.softmax(out.logits, dim=-1)
+        # probs = torch.softmax(out.logits, dim=-1)
+
+            # OR just top probs:
+            top_logits, top_ids = torch.topk(
+                out.logits[:, pos],
+                self.top_k,
+                dim=-1
+            )
+        probs = torch.softmax(top_logits, dim=-1)
 
         for b, job in enumerate(jobs):
             pos = job["mask_position"]

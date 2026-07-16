@@ -79,7 +79,7 @@ from lib.eebo_logging import logger
 
 class EeboFaissIndex:
     """
-    Thin wrapper around FAISS IndexIDMap.
+    Thin wrapper around FAISS IndexIDMap2.
 
     Design goals:
         - explicit semantic event IDs
@@ -99,7 +99,7 @@ class EeboFaissIndex:
             self.base = faiss.IndexHNSWFlat(dim, 32)
             self.base.metric_type = faiss.METRIC_INNER_PRODUCT
 
-        self._index = faiss.IndexIDMap(self.base)
+        self._index = faiss.IndexIDMap2(self.base)
         self._ids = set()
 
     @staticmethod
@@ -287,18 +287,17 @@ class EeboFaissIndex:
         """
 
         base = self._index.index
-
-        if not isinstance(base, faiss.IndexFlatIP):
+        if not hasattr(self._index, "reconstruct"):
             raise RuntimeError(
-                f"reconstruct() is only supported for IndexFlatIP. "
-                f"Current base index is {type(base).__name__}, which does "
-                f"not support vector reconstruction. Query vectors must be "
-                f"sourced from Zarr instead."
+                f"FAISS index {type(self._index).__name__} does not support "
+                f"reconstruction."
             )
-
         vec = np.zeros(self.dim, dtype=np.float32)
         self._index.reconstruct(int(event_id), vec)
+        if not np.isfinite(vec).all():
+            raise ValueError(f"Invalid reconstructed vector for {event_id}")
         return vec
+
 
     def save(self, path: Path) -> None:
         """
@@ -311,6 +310,7 @@ class EeboFaissIndex:
         logger.info(f"[faiss] saving index={path} ntotal={self._index.ntotal}")
         faiss.write_index(self._index, str(path))
 
+
     @classmethod
     def load(cls, path: Path) -> "EeboFaissIndex":
         path = Path(path)
@@ -321,8 +321,19 @@ class EeboFaissIndex:
         obj = cls(dim=1)
         obj._index = faiss.read_index(str(path))
 
-        if not isinstance(obj._index, faiss.IndexIDMap):
-            raise TypeError("Loaded FAISS index must be IndexIDMap (semantic IDs are required)")
+        # logger.info(
+        #     f"[faiss] loaded wrapper={type(obj._index).__name__} "
+        #     f"base={type(obj._index.index).__name__}"
+        # )
+
+        # logger.info(
+        #     f"[faiss] reconstruct capability: "
+        #     f"wrapper={hasattr(obj._index, 'reconstruct')} "
+        #     f"base={hasattr(obj._index.index, 'reconstruct')}"
+        # )
+
+        if not isinstance(obj._index, faiss.IndexIDMap2):
+            raise TypeError("Loaded FAISS index must be IndexIDMap2 (semantic IDs are required)")
 
         base = obj._index.index
         if not hasattr(base, "metric_type"):
@@ -394,11 +405,49 @@ def reciprocal_rank_fusion(
     return fused[:top_n] if top_n else fused
 
 
+def _merge_topk_across_years(
+    year_results: list[tuple[np.ndarray, np.ndarray]],
+    search_k: int,
+    n_queries: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Merge per-year (scores, ids) search results into a single top-search_k
+    per query, for one scale.
+
+    Each entry in year_results is (scores, ids) as returned by
+    EeboFaissIndex.search() for one year's index at this scale, shape
+    (n_queries, search_k). Since event_ids are globally unique (stable-hashed
+    from doc_id/token_idx/window position, not scoped per year), there's no
+    cross-year collision risk here — merging is a straightforward top-k
+    re-rank over the concatenated candidates.
+    """
+    merged_scores = np.full((n_queries, search_k), -np.inf, dtype=np.float32)
+    merged_ids = np.full((n_queries, search_k), -1, dtype=np.int64)
+
+    for i in range(n_queries):
+        candidates = []
+        for scores, ids in year_results:
+            for s, eid in zip(scores[i], ids[i]):
+                eid = int(eid)
+                if eid != -1:
+                    candidates.append((float(s), eid))
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        top = candidates[:search_k]
+
+        for j, (s, eid) in enumerate(top):
+            merged_scores[i, j] = s
+            merged_ids[i, j] = eid
+
+    return merged_scores, merged_ids
+
+
 def multiscale_search(
-    index: dict,
+    index: dict[int, dict[str, "EeboFaissIndex"]],
     lookup,
     positions,
     top_n: int,
+    pub_year: int | None = None,
     rrf_k: int = 60,
     oversample: int = 3,
 ) -> list[list[dict]]:
@@ -406,25 +455,62 @@ def multiscale_search(
     Search local/medium/broad FAISS indices for the queries at `positions`,
     fuse the three ranked lists per query via RRF.
 
+    `index` is keyed as index[year][scale] -> EeboFaissIndex, matching the
+    per-year, per-scale layout produced by build_indices.py.
+
+    pub_year:
+        If given, search only that year's three scale indices.
+        If None (default), search every year's indices per scale and merge
+        each scale's results into a single top-`search_k` list per query
+        before fusion — i.e. an unscoped, corpus-wide search, same behaviour
+        as before per-year partitioning was introduced.
+
+        NOTE: unscoped search issues 3 * len(index) FAISS calls per batch of
+        queries (one per scale per year). Fine for the current year count;
+        if the corpus grows to cover many centuries this may want a
+        `year_range` param instead of scanning every year — deferred until
+        that's actually needed.
+
     Returns a list aligned with `positions`; each entry is a list of dicts:
         {
             "event_id":     int,
             "rrf_score":    float,
-            "score_local":  float | None,   # None if not in that scale's
-            "score_medium": float | None,   # top-`search_k` candidates
+            "score_local":  float | None,
+            "score_medium": float | None,
             "score_broad":  float | None,
         }
     truncated to top_n, ordered by rrf_score descending.
     """
     search_k = top_n * oversample
     scales = ("local", "medium", "broad")
-    per_scale = {
-        scale: index[scale].search(getattr(lookup, f"emb_{scale}")[positions], search_k)
-        for scale in scales
-    }
+    n_queries = len(positions)
+
+    if pub_year is not None:
+        if pub_year not in index:
+            raise KeyError(
+                f"No index found for pub_year={pub_year}. "
+                f"Available years: {sorted(index.keys())}"
+            )
+        years_to_search = [pub_year]
+    else:
+        years_to_search = sorted(index.keys())
+
+    per_scale = {}
+    for scale in scales:
+        queries = getattr(lookup, f"emb_{scale}")[positions]
+
+        if len(years_to_search) == 1:
+            per_scale[scale] = index[years_to_search[0]][scale].search(queries, search_k)
+        else:
+            year_results = [
+                index[year][scale].search(queries, search_k)
+                for year in years_to_search
+                if scale in index[year]
+            ]
+            per_scale[scale] = _merge_topk_across_years(year_results, search_k, n_queries)
 
     fused = []
-    for i in range(len(positions)):
+    for i in range(n_queries):
         # id -> raw cosine score, in rank order, per scale
         scale_scores = {
             scale: {

@@ -71,9 +71,39 @@ FAISS_TIER1_INDEX_MASKED = FAISS_INDEX_DIR / "tier1-masked.index"
 
 FAISS_SCALES = ("local", "medium", "broad")
 
-def faiss_index_paths(masked: bool) -> dict[str, Path]:
-    suffix = "_masked" if masked else ""
-    return {scale: FAISS_INDEX_DIR / f"tier1_{scale}{suffix}.faiss" for scale in FAISS_SCALES}
+def faiss_index_paths(masked: bool, year: int | None = None) -> dict[str, Path]:
+    """
+    e.g. faiss_index_paths(masked=True)         -> tier1_local_masked.faiss
+         faiss_index_paths(masked=True, year=1625) -> tier1_local_1625_masked.faiss
+
+    Year is inserted before the masked suffix so that all files for a given
+    scale still sort/group together regardless of masked status.
+    """
+    year_part = f"_{year}" if year is not None else ""
+    masked_part = "_masked" if masked else ""
+    return {
+        scale: FAISS_INDEX_DIR / f"tier1_{scale}{year_part}{masked_part}.faiss"
+        for scale in FAISS_SCALES
+    }
+
+
+def discover_index_years(masked: bool) -> list[int]:
+    """
+    Find which years already have on-disk FAISS indices, by globbing for
+    files matching the tier1_medium_<year>[_masked].faiss naming pattern.
+    """
+    import re
+    medium_base = faiss_index_paths(masked)["medium"]
+    masked_part = "_masked" if masked else ""
+    pattern = f"tier1_medium_*{masked_part}.faiss"
+    year_re = re.compile(rf"^tier1_medium_(\d+){masked_part}\.faiss$")
+
+    years = []
+    for p in medium_base.parent.glob(pattern):
+        m = year_re.match(p.name)
+        if m:
+            years.append(int(m.group(1)))
+    return sorted(years)
 
 
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"

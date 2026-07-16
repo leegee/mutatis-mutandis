@@ -78,9 +78,9 @@ Core invariants
 
 Performance model
 -----------------
-
-Tier 1 observations are streamed from Zarr into an in-memory
-struct-of-arrays lookup optimised for neighbourhood analysis.
+Tier 1 observation metadata are streamed from Zarr into an in-memory struct-of-arrays lookup.
+Embeddings remain in the per-year FAISS indices and are reconstructed lazily on demand,
+keeping memory usage proportional to metadata rather than embedding dimensionality.
 
 When analysing a single concept, only observations matching the requested
 forms are loaded, making memory consumption proportional to the concept
@@ -88,40 +88,34 @@ rather than the corpus.
 
 Storage model
 -------------
-
 Metadata are stored as parallel NumPy arrays indexed by row position,
 together with an event_id → row lookup.
 
-The lookup contains:
+The lookup contains observation metadata together with lazy array-like accessors for local,
+ medium and broad embeddings. Embeddings are reconstructed on demand from the corresponding
+ per-year FAISS indices, preserving the previous API while avoiding eager loading of the full
+ embedding matrices.
 
-- observation metadata
-- aligned local embeddings
-- aligned medium embeddings
-- aligned broad embeddings
+Ensemble embeddings are computed on demand rather than materialised separately.
 
-Ensemble embeddings are computed on demand rather than materialised
-separately.
-
-This design provides good cache locality while avoiding millions of small
-Python objects.
+This design provides good cache locality while avoiding millions of small Python objects,
+which quickly becomes expensive.
 
 Neighbourhood model
 -------------------
-
 Each query observation is searched against the global FAISS index using its
 ensemble embedding.
 
-Neighbourhoods may be expanded to two levels:
+Neighbourhoods were once expanded to two levels:
 
 - depth 1: direct semantic neighbours
 - depth 2: neighbours-of-neighbours
 
-Both levels retain full provenance and explicitly record the path through
-which secondary neighbours were discovered.
+Both levels retained full provenance and explicitly record the path through
+which secondary neighbours were discovered. This has been dropped.
 
 Outputs
 -------
-
 Results are written to a normalised SQLite database containing:
 
 - concepts
@@ -136,12 +130,10 @@ visualisation, clustering and diachronic analysis.
 
 Design intent
 -------------
-
 Tier 2 intentionally performs neighbourhood analysis rather than concept
 modelling. It establishes the local semantic geometry surrounding lexical
-concepts while leaving higher-level interpretation—such as clustering,
-semantic field induction, temporal comparison and semantic drift—to later
-tiers.
+concepts while leaving to later tiers higher-level interpretation — such as
+clustering, semantic field induction, temporal comparison and semantic drift.
 
 This separation keeps retrieval, neighbourhood construction and semantic
 interpretation as distinct stages of the pipeline, allowing each to evolve
@@ -154,6 +146,7 @@ import os
 import argparse
 import sqlite3
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from itertools import combinations
 from pathlib import Path
@@ -164,9 +157,8 @@ import numpy as np
 from lib.eebo_config import (
     CONCEPT_SETS, OUT_DIR,
     ZARR_PATH, MASKED_ZARR_PATH,
-    FAISS_TIER1_INDEX, FAISS_TIER1_INDEX_MASKED,
     CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH,
-    faiss_index_paths
+    faiss_index_paths, discover_index_years
 )
 from lib.eebo_faiss import EeboFaissIndex, reciprocal_rank_fusion, multiscale_search
 from lib.eebo_logging import logger, setEmit
@@ -182,7 +174,6 @@ from lib.tier2_diagnostics import (
 )
 
 K           = 25
-
 RRF_K      = 60
 OVERSAMPLE = 3   # pull top_n * OVERSAMPLE candidates per scale before fusing
 
@@ -297,7 +288,6 @@ def populate_documents_table(con, doc_meta):
     """)
 
 
-# Concept analysis
 def analyse_concept(
     doc_meta, index, lookup, concept_name, concept,
     *,
@@ -309,17 +299,26 @@ def analyse_concept(
     """
     Compute neighbourhood structure for all events matching a concept.
 
-    Supports both legacy "window" events and new "clause_complex" events.
-
     Parameters
     ----------
-    index : dict[str, EeboFaissIndex]
-        Per-scale FAISS indices, keyed "local" / "medium" / "broad".
+    index : dict[int, dict[str, EeboFaissIndex]]
+        Per-year, per-scale FAISS indices: index[year]["local"/"medium"/"broad"].
         Neighbours are retrieved independently at each scale and fused via
         reciprocal rank fusion — see multiscale_search.
     depth : int
         1 = direct fused neighbours only (original behaviour)
         2 = also include neighbours-of-neighbours (depth-2 expansion)
+
+    Neighbour year-scoping
+    -----------------------
+    Each query event is scoped to its OWN document's pub_year: it only
+    searches for neighbours within that year's FAISS indices. This is a
+    per-event scope, not a single global year for the whole concept run.
+
+    Query events whose doc_id has no pub_year in doc_meta (pub_year is
+    None) fall back to an unscoped search across all years in `index`,
+    since there's no year to scope them to. A warning is logged with the
+    count of such events so this doesn't happen silently.
 
     Returns
     -------
@@ -332,10 +331,9 @@ def analyse_concept(
 
     Note on "score"
     ----------------
-    Neighbour "score" is now a reciprocal-rank-fusion score (higher = more
+    Neighbour "score" is a reciprocal-rank-fusion score (higher = more
     consistently ranked across the three scales), not a cosine similarity.
-    It is not bounded to [-1, 1] and is not comparable to scores produced
-    by the old single-index ensemble search.
+    It is not bounded to [-1, 1].
     """
     L_event_id   = lookup.event_id
     L_vector_id  = lookup.vector_id
@@ -344,6 +342,7 @@ def analyse_concept(
     L_token_idx  = lookup.token_idx
     L_window_id  = lookup.window_id
     L_wpos       = lookup.window_token_pos
+    L_pub_year   = lookup.pub_year
 
     forms = {
         f.lower()
@@ -374,7 +373,35 @@ def analyse_concept(
         logger.debug(f"[tier2] query_events={len(event_ids)}")
         logger.debug(f"[tier2] sample_event_id={event_ids[0]}")
 
-    fused_per_query = multiscale_search(index, lookup, event_pos, top_n, rrf_k=RRF_K, oversample=OVERSAMPLE)
+    # Group query events by their own doc's pub_year, so each event only
+    # searches for neighbours within its own year's indices. Events with
+    # unknown pub_year (doc_id missing from doc_meta, or pub_year is None)
+    # are grouped separately and searched unscoped (across all years).
+    year_of_query: list[int | None] = []
+    for eid in event_ids:
+        pos = lookup.get_pos(eid)
+        doc_id = str(L_doc_id[pos])
+        year_of_query.append(doc_meta.get(doc_id, {}).get("pub_year"))
+
+    # Group query events by their own pub_year (from zarr, same source that
+    # build_indices.py partitioned the FAISS indices by — guaranteed to match
+    # index keys, unlike doc_meta's Postgres pub_year which could drift).
+    groups: dict[int, list[int]] = {}
+    for i in range(len(event_ids)):
+        pos = int(event_pos[i])
+        year = int(L_pub_year[pos])
+        groups.setdefault(year, []).append(i)
+
+    fused_per_query = [None] * len(event_ids)
+
+    for year, idxs in groups.items():
+        group_pos = event_pos[idxs]
+        group_fused = multiscale_search(
+            index, lookup, group_pos, top_n,
+            pub_year=year, rrf_k=RRF_K, oversample=OVERSAMPLE,
+        )
+        for local_i, global_i in enumerate(idxs):
+            fused_per_query[global_i] = group_fused[local_i]
 
     token_counter  = Counter()
     doc_counter    = Counter()
@@ -418,9 +445,9 @@ def analyse_concept(
                 "window_id":        n_window_id,
                 "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
                 "score":            entry["rrf_score"],
-                "score_local":      entry["score_local"],     # NEW
-                "score_medium":     entry["score_medium"],    # NEW
-                "score_broad":      entry["score_broad"],     # NEW
+                "score_local":      entry["score_local"],
+                "score_medium":     entry["score_medium"],
+                "score_broad":      entry["score_broad"],
                 "depth":            1,
                 "via_event_id":     None,
             })
@@ -436,100 +463,6 @@ def analyse_concept(
             "window_token_pos": None if q_wpos == _NO_WPOS else q_wpos,
             "neighbours":       neighbours,
         })
-
-    # Depth-2: neighbours-of-neighbours - disabled for now
-    # if depth >= 2:
-    #     # Collect the unique set of depth-1 neighbour event_ids across all
-    #     # query events, excluding the original query events themselves.
-    #     d1_event_id_set: set[int] = set()
-    #     for res in results:
-    #         for n in res["neighbours"]:
-    #             d1_event_id_set.add(n["event_id"])
-    #     d1_event_id_set -= query_event_id_set
-
-    #     # Build a reverse map: depth-1 event_id -> list of query event_ids
-    #     # that hold it as a direct neighbour. Used to fan depth-2 results
-    #     # back out to the originating query events.
-    #     via_to_queries: dict[int, list[int]] = {}
-    #     for res in results:
-    #         for n in res["neighbours"]:
-    #             via_eid = n["event_id"]
-    #             if via_eid in d1_event_id_set:
-    #                 via_to_queries.setdefault(via_eid, []).append(res["event_id"])
-
-    #     # Also build a per-query-event set of its depth-1 neighbour ids so
-    #     # we can skip events already seen at depth 1 for that query event.
-    #     query_d1_neighbours: dict[int, set[int]] = {
-    #         res["event_id"]: {n["event_id"] for n in res["neighbours"]}
-    #         for res in results
-    #     }
-
-    #     # Index results by query event_id for O(1) append access.
-    #     results_by_query: dict[int, dict] = {res["event_id"]: res for res in results}
-
-    #     if d1_event_id_set:
-    #         d1_ids_list  = list(d1_event_id_set)
-    #         d1_positions = np.array(
-    #             [lookup.get_pos(eid) for eid in d1_ids_list if eid in lookup._pos],
-    #             dtype=np.int64,
-    #         )
-    #         # Filter d1_ids_list to only those present in the lookup
-    #         # (get_pos above would raise for missing ids; guard here).
-    #         d1_ids_list = [eid for eid in d1_ids_list if eid in lookup._pos]
-
-    #         if d1_positions.size > 0:
-    #             fused_d2 = multiscale_search(index, lookup, d1_positions, top_n)
-
-    #             logger.info(
-    #                 f"[tier2] depth-2 search: via_events={len(d1_ids_list)}"
-    #             )
-
-    #             for i, via_eid in enumerate(d1_ids_list):
-    #                 query_eids_for_via = via_to_queries.get(via_eid, [])
-    #                 if not query_eids_for_via:
-    #                     continue
-
-    #                 for nid_int, rrf_score in fused_d2[i]:
-    #                     if nid_int == via_eid:
-    #                         continue
-    #                     # Exclude original query events and depth-1
-    #                     # neighbours (checked per query event below) and
-    #                     # unknown ids.
-    #                     if nid_int in query_event_id_set:
-    #                         continue
-    #                     if nid_int not in lookup._pos:
-    #                         continue
-
-    #                     n_pos    = lookup.get_pos(nid_int)
-    #                     n_token  = str(L_token[n_pos])
-    #                     if n_token.lower() in false_positives:
-    #                         continue
-
-    #                     n_doc_id    = str(L_doc_id[n_pos])
-    #                     n_window_id = int(L_window_id[n_pos])
-    #                     n_wpos      = int(L_wpos[n_pos])
-
-    #                     neighbour_record = {
-    #                         "event_id":         int(L_event_id[n_pos]),
-    #                         "vector_id":        int(L_vector_id[n_pos]),
-    #                         "token":            n_token,
-    #                         "doc_id":           n_doc_id,
-    #                         "pub_year":         doc_meta.get(n_doc_id, {}).get("pub_year"),
-    #                         "token_idx":        int(L_token_idx[n_pos]),
-    #                         "window_id":        n_window_id,
-    #                         "window_token_pos": None if n_wpos == _NO_WPOS else n_wpos,
-    #                         "score":            float(rrf_score),
-    #                         "depth":            2,
-    #                         "via_event_id":     via_eid,
-    #                     }
-
-    #                     # Fan out to every query event that had via_eid as
-    #                     # a depth-1 neighbour, skipping if this event_id is
-    #                     # already a depth-1 neighbour of that query event.
-    #                     for q_eid in query_eids_for_via:
-    #                         if nid_int in query_d1_neighbours.get(q_eid, set()):
-    #                             continue
-    #                         results_by_query[q_eid]["neighbours"].append(neighbour_record)
 
     return {
         "concept":   concept_name,
@@ -840,36 +773,66 @@ def get_processed_concepts(db_path) -> set[str]:
         return set()
 
 
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 def run_tier2_service(
     *,
     doc_meta,
     concepts_to_run,
     db_path,
-    faiss_index_paths,
+    faiss_index_paths_by_year,
     index           = None,
     lookup          = None,
     false_positives = None,
     clear           = False,
     diagnostics     = False,
     depth           = 1,
+    max_load_workers = 6,
     emit            = None
 ):
     concept_names = [name for name, _ in concepts_to_run]
-    logger = setEmit(
-        emit,
-        "[tier2]",
-        {"concepts": concept_names},
-    )
+    logger = setEmit(emit, "[tier2]", {"concepts": concept_names})
     logger.info(f"[tier2.run_tier2_service] Enter")
 
-    index = index or {
-        scale: EeboFaissIndex.load(path)
-        for scale, path in faiss_index_paths.items()
-    }
+    if lookup is None:
+        raise RuntimeError("run_tier2_service() requires a ZarrEventLookup")
 
-    for scale, idx in index.items():
-        if idx.ntotal == 0:
-            raise RuntimeError(f"FAISS '{scale}' index is empty — run tier1_5_build_faiss_index.py first")
+    if index is None:
+        # Flatten to a list of (year, scale, path) load jobs and run them
+        # concurrently — each EeboFaissIndex.load() is an independent file
+        # read + faiss deserialization, so this is a straightforward
+        # I/O-bound fan-out with no shared state between jobs.
+        jobs = [
+            (year, scale, path)
+            for year, scale_paths in faiss_index_paths_by_year.items()
+            for scale, path in scale_paths.items()
+        ]
+
+        index = {year: {} for year in faiss_index_paths_by_year}
+
+        logger.info(f"[tier2] loading {len(jobs)} FAISS indices "
+                    f"({max_load_workers} workers)")
+
+        with ThreadPoolExecutor(max_workers=max_load_workers) as pool:
+            future_to_job = {
+                pool.submit(EeboFaissIndex.load, path): (year, scale)
+                for year, scale, path in jobs
+            }
+            for future in as_completed(future_to_job):
+                year, scale = future_to_job[future]
+                index[year][scale] = future.result()  # raises here if load() failed?
+
+        logger.info(f"[tier2] finished loading {len(jobs)} indices")
+
+    for year, scale_indices in index.items():
+        for scale, idx in scale_indices.items():
+            if idx.ntotal == 0:
+                raise RuntimeError(
+                    f"FAISS '{scale}'/{year} index is empty — run build_indices.py first"
+                )
+
+    lookup.attach_index(index)
 
     output = run_tier2_core(
         index            = index,
@@ -883,7 +846,7 @@ def run_tier2_service(
     )
 
     logger.info(f"[tier2.run_tier2_service] Write SQL")
-    write_sqlite( output, db_path, clear=clear, doc_meta=doc_meta)
+    write_sqlite(output, db_path, clear=clear, doc_meta=doc_meta)
 
     logger.info(f"[tier2.run_tier2_service] Done")
     return output
@@ -899,15 +862,24 @@ def run_tier2_core(
     diagnostics     = False,
     target_forms    = None,
     depth           = 1,
+    pub_year        = None,
     emit            = None,
 ):
     logger.info("[tier2.run_tier2_core] Enter")
     output = {}
 
     if diagnostics:
-        # Needs updating for the three-level index
-        knn_diagnostics( lookup, index["medium"], CONCEPT_SETS["PREROGATIVE"]["forms"], )
-        knn_diagnostics( lookup, index["medium"], CONCEPT_SETS["LAW"]["forms"], )
+        # index is now {year: {scale: EeboFaissIndex}}. Diagnostics were
+        # written for a single global index, so pick one representative
+        # year's medium index rather than every year's — running
+        # knn_diagnostics per year would be N_years times the cost for a
+        # debug-only code path. Picking the largest year as most
+        # representative of corpus-wide geometry; revisit if that's wrong.
+        diag_year = max(index.keys(), key=lambda y: index[y]["medium"].ntotal)
+        logger.info(f"[tier2] diagnostics using medium index for year={diag_year} "
+                    f"(largest of {len(index)} years)")
+        knn_diagnostics(lookup, index[diag_year]["medium"], CONCEPT_SETS["PREROGATIVE"]["forms"])
+        knn_diagnostics(lookup, index[diag_year]["medium"], CONCEPT_SETS["LAW"]["forms"])
 
     for concept_name, concept in concepts_to_run:
         output[concept_name] = analyse_concept(
@@ -935,16 +907,29 @@ def main():
     parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics", )
     parser.add_argument( "--depth", type=int, default=1, choices=[1, 2], help="Neighbour depth: 1=direct only (default), 2=include neighbours-of-neighbours", )
     parser.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
+    parser.add_argument("--pub-year", type=int, default=None, help="Restrict neighbour search to a single publication year (default: search all years)")
+    parser.add_argument("--max-load-workers", type=int, default=6, help="Maximum number of workers to spawn to load indicies")
     args = parser.parse_args()
 
     if args.no_mask:
         zarr_path = ZARR_PATH
-        faiss_index_paths_dict = faiss_index_paths(masked=False)
+        masked = False
         db_path = CORPUS_TIER2_DB_PATH
     else:
         zarr_path = MASKED_ZARR_PATH
-        faiss_index_paths_dict = faiss_index_paths(masked=True)
+        masked = True
         db_path = CORPUS_TIER2_MASKED_DB_PATH
+
+    years = discover_index_years(masked)
+    if not years:
+        raise RuntimeError(
+            f"No FAISS indices found for mode={'masked' if masked else 'unmasked'}. "
+            f"Run build_indices.py first."
+        )
+    faiss_index_paths_by_year = {
+        year: faiss_index_paths(masked=masked, year=year)
+        for year in years
+    }
 
     logger.info(f"[Tier 2.main] mode={'masked' if not args.no_mask else 'unmasked'}")
 
@@ -1015,16 +1000,17 @@ def main():
     )
 
     run_tier2_service(
-        doc_meta         = doc_meta,
-        concepts_to_run  = concepts_to_run,
-        db_path          = db_path,
-        faiss_index_paths = faiss_index_paths_dict,
-        lookup           = lookup,
-        false_positives  = target_fps,
-        clear            = args.clear,
-        diagnostics      = args.diagnostics,
-        depth            = args.depth,
-        emit             = None
+        doc_meta                    = doc_meta,
+        concepts_to_run             = concepts_to_run,
+        db_path                     = db_path,
+        faiss_index_paths_by_year   = faiss_index_paths_by_year,
+        lookup                      = lookup,
+        false_positives             = target_fps,
+        clear                       = args.clear,
+        diagnostics                 = args.diagnostics,
+        depth                       = args.depth,
+        max_load_workers            = args.max_load_workers,
+        emit                        = None
     )
     logger.info(f"[tier2.main] Complete, wrote {db_path}")
 

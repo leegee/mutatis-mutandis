@@ -32,6 +32,7 @@ import json
 from collections import defaultdict, Counter
 from datetime import datetime
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 import umap
@@ -45,6 +46,7 @@ from lib.eebo_config import (
     PLOT_DIR, faiss_index_paths,
     ZARR_PATH, MASKED_ZARR_PATH,
     CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH,
+    discover_index_years,
 )
 from lib.eebo_faiss import EeboFaissIndex, multiscale_search
 from lib.concept_resolve import resolve_concepts
@@ -62,6 +64,37 @@ CLUSTER_DIR       = PLOT_DIR / "concept_clusters"
 
 K = 25
 
+
+# Move to a lib, this is also in T2
+def load_all_year_indices(masked: bool, max_workers: int = 8) -> dict[int, dict[str, EeboFaissIndex]]:
+    years = discover_index_years(masked)
+    if not years:
+        raise RuntimeError(
+            f"No FAISS indices found for mode={'masked' if masked else 'unmasked'}. "
+            f"Run build_indices.py first."
+        )
+
+    jobs = [
+        (year, scale, path)
+        for year in years
+        for scale, path in faiss_index_paths(masked, year=year).items()
+    ]
+
+    index: dict[int, dict[str, EeboFaissIndex]] = {year: {} for year in years}
+
+    logger.info(f"[tier3] loading {len(jobs)} FAISS indices ({max_workers} workers)")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_to_job = {
+            pool.submit(EeboFaissIndex.load, path): (year, scale)
+            for year, scale, path in jobs
+        }
+        for future in as_completed(future_to_job):
+            year, scale = future_to_job[future]
+            index[year][scale] = future.result()
+
+    logger.info(f"[tier3] finished loading {len(jobs)} indices across {len(years)} years")
+    return index
 
 def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
     sqlite_conn = sqlite3_connection(db_path)
@@ -765,6 +798,8 @@ def run_tier3_core(
 ):
     logger.info("[tier3 run_tier3_core] Enter")
 
+    lookup.attach_index(index)
+
     false_positives = false_positives or []
     emb_cache = EmbeddingCache(lookup)
 
@@ -1043,14 +1078,18 @@ def main():
 
     if args.no_mask:
         zarr_path = ZARR_PATH
-        faiss_paths = faiss_index_paths(masked=False)
+        masked = False
         db_path = CORPUS_TIER2_DB_PATH
         use_concatenated_clustering = False
     else:
         zarr_path = MASKED_ZARR_PATH
-        faiss_paths = faiss_index_paths(masked=True)
+        masked = True
         db_path = CORPUS_TIER2_MASKED_DB_PATH
         use_concatenated_clustering = True
+
+    lookup = ZarrEventLookup(zarr_path)
+    index  = load_all_year_indices(masked)
+    lookup.attach_index(index)
 
     if args.no_ensemble:
         use_concatenated_clustering = True
@@ -1059,9 +1098,6 @@ def main():
         f"[Tier3.main] loading index+lookup, mode={'masked' if not args.no_mask else 'unmasked'}, "
         f"clustering={'concatenated' if use_concatenated_clustering else 'ensemble'}"
     )
-
-    lookup = ZarrEventLookup(zarr_path)
-    index  = {scale: EeboFaissIndex.load(path) for scale, path in faiss_paths.items()}
 
     run_tier3_core(
         db_path                      = db_path,

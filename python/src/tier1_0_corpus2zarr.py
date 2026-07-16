@@ -186,6 +186,7 @@ class Event:
 @dataclass
 class DocBuffer:
     doc_id: str
+    pub_year: int
 
     def __post_init__(self):
         self.tokens = []
@@ -549,16 +550,16 @@ class CorpusProcessor:
         cur.itersize = 10000
 
         if doc_id:
-            cur.execute("SELECT doc_id, token_idx, vector_id, token FROM pamphlet_tokens WHERE doc_id = %s ORDER BY token_idx", (doc_id,))
+            cur.execute("SELECT doc_id, token_idx, vector_id, token, pub_year FROM pamphlet_tokens WHERE doc_id = %s ORDER BY token_idx", (doc_id,))
         else:
-            cur.execute("SELECT doc_id, token_idx, vector_id, token FROM pamphlet_tokens ORDER BY doc_id, token_idx")
+            cur.execute("SELECT doc_id, token_idx, vector_id, token, pub_year FROM pamphlet_tokens ORDER BY doc_id, token_idx")
 
         logger.info("query executed for doc_id=%s", doc_id)
 
         buf = None
         docs_processed = 0
 
-        for row_doc_id, token_idx, vid, token in cur:
+        for row_doc_id, token_idx, vid, token, pub_year in cur:
             if row_doc_id in already_processed:
                 continue
 
@@ -568,7 +569,7 @@ class CorpusProcessor:
                     docs_processed += 1
                     if docs_processed % self.report_every == 0:
                         logger.info(f"Processed {docs_processed} documents")
-                buf = DocBuffer(doc_id=row_doc_id)
+                buf = DocBuffer(doc_id = row_doc_id, pub_year = pub_year)
 
             buf.append(token, vid, token_idx)
 
@@ -635,6 +636,7 @@ class CorpusProcessor:
             emb_broad           = np.stack(emb_broad),
             vector_id           = np.asarray(vector_ids, dtype=np.int64),
             doc_id              = np.asarray(doc_ids, dtype="U32"),
+            pub_year            = np.full(len(event_ids), buf.pub_year, dtype=np.int16),
             token_idx           = np.asarray(token_idxs, dtype=np.int64),
             token               = np.asarray(tokens, dtype=object),
             window_id           = np.asarray(window_ids, dtype=np.int64),
