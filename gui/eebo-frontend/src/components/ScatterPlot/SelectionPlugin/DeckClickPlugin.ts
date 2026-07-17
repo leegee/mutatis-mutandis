@@ -22,4 +22,6 @@ export class DeckClickPlugin<T extends { event_id: Id }> {
             payload: info.object,
         });
     };
+
+    destroy() { }
 }
