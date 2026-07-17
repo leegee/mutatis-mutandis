@@ -61,9 +61,6 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
-MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
-
 FAISS_INDEX_DIR = INDEXES_DIR / "faiss"
 FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 FAISS_TIER1_INDEX        = FAISS_INDEX_DIR / "tier1.index"
@@ -193,8 +190,7 @@ CanonicalRules = Dict[str, CanonicalRule]
 TEST_CONCEPT_SETS: CanonicalRules = {
     "PREROGATIVE": {
         "forms": {
-            "prerogative", "prerogatiue",
-            "prerogatives", "prerogatiues",
+            "prerogative",
         },
         "false_positives": set(),
     },
@@ -203,14 +199,13 @@ TEST_CONCEPT_SETS: CanonicalRules = {
 CONCEPT_SETS: CanonicalRules = {
     "PREROGATIVE": {
         "forms": {
-            "prerogative", "prerogatiue",
-            "prerogatives", "prerogatiues",
+            "prerogative", # "prerogatiue", "prerogatives", "prerogatiues",
         },
         "false_positives": set(),
     },
     "LAW": {
         "forms": {
-            "law", "laws", "lawe", "lawes",
+            "law", # "laws", "lawe", "lawes",
         },
         "false_positives": {
             "clawes", "claw", "flaw", "lawne",
@@ -221,27 +216,13 @@ CONCEPT_SETS: CanonicalRules = {
     "LIBERTY": {
         "forms": {
             "liberty",
-            "libe_ty", "liberry",
-            "libertie", "libertye", "liberte",
-            "liliberty", "libertv", "libertty", "lyliberty",
-            "libertyes", "libert", "liberties",
-            "libery", "libertly", "fulliberty", "lilibertyis",
-            "thliberties", "libertyby",
-            "iberty", "libertle", "libertles", "libertys",
-            "iiberty", "iberties", "libety", "liberts",
-            "libertynow", "libertees", "libetty",
-            "libertee", "libertes", "lyberty",
-            "lberty", "libertis", "leberty",
-            "liberrie", "lliberty"
+            # "libe_ty", "liberry", "libertie", "libertye", "liberte", "liliberty", "libertv", "libertty", "lyliberty", "libertyes", "libert", "liberties", "libery", "libertly", "fulliberty", "lilibertyis", "thliberties", "libertyby", "iberty", "libertle", "libertles", "libertys", "iiberty", "iberties", "libety", "liberts", "libertynow", "libertees", "libetty", "libertee", "libertes", "lyberty", "lberty", "libertis", "leberty", "liberrie", "lliberty"
 
             # Keep for now then remove after re-ingestion which will normalise:
-            "aliberty", "liberti", "berty",
+            # "aliberty", "liberti", "berty",
             # Need to pre-ingest fix "lib erty" etc
-            "generalliberty",
-            "understandingliberty",
-            "libe",
-            # Diagnostic only, remove later:
-            # "liber",
+            # "generalliberty",
+            # "understandingliberty",
         },
         "false_positives": {
             "libertine", "libertin", "libertins", "libertinage", "libertinism",
@@ -276,11 +257,11 @@ CONCEPT_SETS: CanonicalRules = {
 
     # Rough political/legal
     "KING": {
-        "forms": {"king", "kings", "kinges", }, # "monarch", "sovereign"
+        "forms": {"king", }, # "kings", "kinges",  # "monarch", "sovereign"
         "false_positives": {"kin", "kine", "sink", "sing"}
     },
     "PARLIAMENT": {
-        "forms": {"parliament", "parliment", "parliaments"},
+        "forms": {"parliament", }, # "parliment", "parliaments"
         "false_positives": { "parlour"} # "parliamentary",
     },
     "OBEDIENCE": {
@@ -288,7 +269,7 @@ CONCEPT_SETS: CanonicalRules = {
         "false_positives": {"obscene", "obeyed", "obed"}
     },
     "PEOPLE": {
-        "forms": {"people", "peoples", "peple",}, #  "populace", "subjects"
+        "forms": {"people"}, #  "peoples", "peple",   "populace", "subjects"
         "false_positives": {"peep", "peeps", "pepla"}
     },
     "COMMONWEALTH": {
@@ -319,7 +300,7 @@ CONCEPT_SETS: CanonicalRules = {
 
     "PROPERTY": {
         "forms": {
-            "property", "propertie", "propriety"
+            "property", #  "propertie", "propriety"
         },
         "false_positives": set() # { "properly" }
     },
@@ -327,23 +308,21 @@ CONCEPT_SETS: CanonicalRules = {
     # May 2026
     "REVOLUTION": {
         "forms": {
-            "revolution", "revolucion", "revolutio", "revolutions", "revolutión",
-            "revolucon", "revolucionary", "revolucioners", "revolutioners",
+            "revolution" # , "revolucion", "revolutio", "revolutions", "revolutión", "revolucon", "revolucionary", "revolucioners", "revolutioners",
             # "rebellion", "insurrection"
         },
         "false_positives": set(), # { "astronomical", "planetary", "celestial", "orb", "circle" }
     },
     "INTEREST": {
         "forms": {
-            "interest", "interesse", "intrest", "intrests", "interests",
-            "interestes", "interessed",
+            "interest", # "interesse", "intrest", "intrests", "interests", "interestes", "interessed",
         },
         "false_positives": set(),
         # { "usury", "usance", "money", "profit", "compound" }
     },
     "FANATIC": {
         "forms": {
-            "fanatic", "fanatick", "fanatique", # "fanaticism", "fanaticisme", "phanatic", "phanatique"
+            "fanatic", #  "fanatick", "fanatique", # "fanaticism", "fanaticisme", "phanatic", "phanatique"
         },
         "false_positives": set(),
     },
@@ -353,8 +332,8 @@ CONCEPT_SETS: CanonicalRules = {
     },
     "ENTHUSIASM": {
         "forms": {
-            "enthusiasm", "enthusiasme", "enthousiasm", "enthusiast", "enthusiasts",
-            "enthusiastick", "enthusiastical", "enthusiasms", "enthusiastical"
+            "enthusiasm",
+            # "enthusiasme", "enthousiasm", "enthusiast", "enthusiasts", "enthusiastick", "enthusiastical", "enthusiasms", "enthusiastical"
         },
         "false_positives": set(),
     }

@@ -101,6 +101,7 @@ from lib.eebo_logging import logger
 from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
+from lib.DocBuffer import DocBuffer
 
 
 WINDOW_CONFIGS = [
@@ -181,25 +182,6 @@ class Event:
             vector_id=vector_id, vec=vec.astype(np.float32),
             config_name=config_name
         )
-
-
-@dataclass
-class DocBuffer:
-    doc_id: str
-    pub_year: int
-
-    def __post_init__(self):
-        self.tokens = []
-        self.vector_ids = []
-        self.corpus_token_idxs = []
-
-    def append(self, token, vector_id, token_idx):
-        self.tokens.append(token)
-        self.vector_ids.append(vector_id)
-        self.corpus_token_idxs.append(token_idx)
-
-    def __bool__(self):
-        return bool(self.tokens)
 
 
 class EmbeddingPipeline:
@@ -463,6 +445,42 @@ class EmbeddingPipeline:
             start_word += stride
 
         return windows
+
+
+    @staticmethod
+    def _best_window_for_token(windows: list[dict], word_id: int) -> dict | None:
+        """
+        Given the windows for a (document, config) pair, as produced by
+        ``_compute_windows``, return the single window that gives
+        ``word_id`` (a word-level position, not an encoded/subword index)
+        the most *centered* placement.
+
+        A token can fall inside several overlapping windows (that's the
+        point of striding). Callers that want exactly one representative
+        window per occurrence — rather than one observation per window,
+        as Tier 1's own masked-job builder does — use this to pick
+        whichever window's covered span best centers the target, on the
+        theory that a token nearer the middle of its window has the most
+        balanced left/right context available to the model, rather than
+        being truncated near an edge.
+
+        Ties (equal distance to two windows' midpoints) resolve to
+        whichever window is encountered first in ``windows`` (i.e. the
+        earlier / smaller ``start_word``), which is deterministic given
+        ``_compute_windows`` always returns windows in start-word order.
+
+        Returns ``None`` if no window's [min_word, max_word] span covers
+        ``word_id`` at all (can happen right at a document boundary).
+        """
+        best = None
+        best_dist = None
+        for window in windows:
+            if window["min_word"] <= word_id <= window["max_word"]:
+                dist = abs(window["mid"] - word_id)
+                if best is None or dist < best_dist:
+                    best = window
+                    best_dist = dist
+        return best
 
 
     # Shared helper methods

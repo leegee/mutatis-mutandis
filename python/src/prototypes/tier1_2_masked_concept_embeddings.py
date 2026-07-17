@@ -163,7 +163,7 @@ def fetch_concept_targets(sqlite_db_path, concept: str) -> list[TargetOccurrence
     ]
 
 
-# --- doc buffer reconstruction (mirrors tier1_corpus2zarr.py exactly) ------
+# doc buffer reconstruction (mirrors tier1_corpus2zarr.py exactly)
 
 def build_doc_buffer(pg_conn, doc_id: str) -> DocBuffer:
     """

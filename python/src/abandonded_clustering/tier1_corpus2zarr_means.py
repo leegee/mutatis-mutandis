@@ -140,7 +140,7 @@ def iter_windows(input_ids, attention_mask, word_ids):
 
 
 # Forward pass
-def forward_windows(windows, model, device):
+def forward_windows(windows, mac):
     results = []
     batch = []
 
@@ -162,10 +162,10 @@ def forward_windows(windows, model, device):
         ).to(device)
 
         with torch.inference_mode():
-            out = model(
+            out = mac.encode(
                 input_ids=batch_input,
                 attention_mask=batch_mask,
-                return_dict=True
+                return_dict=True,
             )
 
         hidden = out.last_hidden_state.detach().cpu().numpy()
@@ -217,11 +217,11 @@ def finalise(pending: PendingDoc):
 
 
 # Per-document pipeline
-def process_doc(tokens, vector_ids, tokenizer, model, device):
-    input_ids, attention_mask, word_ids = encode_doc(tokens, tokenizer)
+def process_doc(tokens, vector_ids, mac):
+    input_ids, attention_mask, word_ids = encode_doc(tokens, mac.tokenizer)
 
     n = len(tokens)
-    dim = model.config.hidden_size
+    dim = mac.model.config.hidden_size
 
     pending = PendingDoc(
         vec_sum=np.zeros((n, dim), dtype=np.float32),
@@ -237,7 +237,7 @@ def process_doc(tokens, vector_ids, tokenizer, model, device):
         batch.append(w)
 
         if len(batch) >= EMBED_BATCH_SIZE:
-            results = forward_windows(batch, model, device)
+            results = forward_windows(batch, mac)
             for win, hidden in results:
                 accumulate(pending, win, hidden)
             batch.clear()
@@ -253,14 +253,14 @@ def process_doc(tokens, vector_ids, tokenizer, model, device):
 # Slice processor
 
 
-def process_slice(conn, slice_range, tokenizer, model, device, doc_index):
+def process_slice(conn, slice_range, mac, device, doc_index):
 
     slice_id = f"{slice_range[0]}-{slice_range[1]}"
     logger.info(f"[SLICE START] {slice_id}")
 
     store = ZarrVectorStore(
         path=str(ZARR_ROOT / "tier1" / slice_id),
-        dim=model.config.hidden_size,
+        dim=mac.model.config.hidden_size,
     )
 
     cur = conn.cursor(name=f"tier1_{slice_id}")
@@ -285,7 +285,7 @@ def process_slice(conn, slice_range, tokenizer, model, device, doc_index):
         if not buf_tokens:
             return
 
-        vecs, ids = process_doc(buf_tokens, buf_vids, tokenizer, model, device)
+        vecs, ids = process_doc(buf_tokens, buf_vids, mac)
 
         if len(vecs) == 0:
             return
@@ -352,7 +352,7 @@ def main():
     slices = SLICES[:1] if args.first_slice_only else SLICES
 
     for s in slices:
-        process_slice(conn, s, mac.tokenizer, mac.model, mac.device, {})
+        process_slice(conn, s, mac, {})
 
     conn.close()
 
