@@ -707,7 +707,7 @@ def main():
     proc.process(doc_id=args.doc_id)
 
     conn.close()
-    logger.info(f"[Tier 1 done] mode={'masked' if not args.mask else 'unmasked'}")
+    logger.info(f"[Tier 1 done] mode={'masked' if args.mask else 'unmasked'}")
 
 
 if __name__ == "__main__":
