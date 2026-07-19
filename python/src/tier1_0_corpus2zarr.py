@@ -5,11 +5,20 @@ tier1_corpus2zarr.py - Tier 1: Multi-scale Contextual Embedding Construction
 Construct the Tier 1 contextual observation store from the EEBO corpus.
 
 Each content token is embedded under multiple contextual windows
-(local, medium and broad), producing one contextual observation per
-(token, window) pair. By default the target token is replaced with
-[MASK] before inference so that the resulting embedding primarily
-captures contextual semantics rather than lexical identity. The
-original unmasked behaviour can be restored with ``--no-mask``.
+(local, medium and broad), producing contextual observations for
+downstream retrieval, clustering and semantic change analysis.
+
+The default mode uses standard MacBERTh contextual embeddings, where
+the original token remains visible to the model. This mode is intended
+for rapid iteration, index construction and general corpus exploration.
+
+An optional masked mode (``--mask``) replaces selected target tokens
+with ``[MASK]`` before inference. The hidden state at the masked position
+is then used as a context-driven semantic representation, reducing the
+contribution of lexical identity. Because masked inference requires a
+separate forward pass for each target occurrence, it is substantially
+more expensive and is intended for focused semantic analysis rather than
+routine rebuilding.
 
 The output is written to the Tier 1 Zarr observation store, where each
 row represents a single contextual observation and records:
@@ -45,34 +54,44 @@ Technical overview
 ------------------
 
 The pipeline streams tokenised documents from PostgreSQL, filters
-non-content tokens, and embeds each remaining token under multiple
-contextual windows using MacBERTh. Each contextual observation is
-assigned stable event and concept identifiers before aligned local,
-medium and broad embeddings are written to the Tier 1 Zarr store.
+non-content tokens, and embeds remaining tokens using MacBERTh under
+multiple contextual window configurations.
 
-Masked-target embeddings are the default. For each observation the
-target token is replaced with ``[MASK]`` and the hidden state at the
-masked position (or surrounding context) is pooled, encouraging the
-embedding to encode contextual meaning rather than lexical identity.
-The original unmasked embedding behaviour remains available via
-``--no-mask``.
+The unmasked pipeline embeds each context window once and extracts
+token-level hidden states for all content tokens in the window.
+
+The masked pipeline is an alternative analysis mode. For each selected
+target occurrence, the token is replaced with ``[MASK]`` and MacBERTh is
+run separately. The hidden state at the masked position captures the
+model's contextual expectation of the missing token. This representation
+is useful for semantic substitution and sense analysis, but is not used
+for normal Tier 1 rebuilding due to its computational cost.
+
+Window generation is shared conceptually between masked and unmasked
+pipelines. Window metadata, token alignment and event identifiers are
+kept explicit so that downstream processing can distinguish observations
+created under different contextual scales.
 
 Implementation notes
 --------------------
 
-The window-selection implementation now uses a single, consistent
-masked-job pipeline: ``_build_masked_jobs_for_config`` builds jobs,
-``_run_masked_batch`` runs them in integer-indexed batches, and
-An earlier duplicate set of these methods (keyed by string
-``event_key`` instead of integer batch index) has been removed — it
-silently shadowed the working implementation and caused
-``jobs[job_idx]`` to receive a string instead of an int.
+The window-selection implementation uses a consistent masked-job
+pipeline: ``_build_masked_window_jobs`` builds jobs,
+``_run_masked_window_batch`` performs batched inference, and
+``_events_from_masked_windows`` reconstructs observation records.
 
-The intended long-term design is for window generation to become a
-single, well-defined abstraction shared by both masked and unmasked
-pipelines, with explicit semantics for window selection, positioning
-and metadata generation.
+The masked and unmasked pipelines intentionally produce different
+observation populations:
 
+    unmasked:
+        all content tokens
+
+    masked:
+        only configured semantic targets (currently CONCEPT_SETS)
+
+This distinction should be preserved downstream. Masked embeddings are
+not a replacement for the general Tier 1 store; they are a specialised
+semantic analysis layer.
 """
 
 from __future__ import annotations
