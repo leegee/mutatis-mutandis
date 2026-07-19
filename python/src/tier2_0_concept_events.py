@@ -906,7 +906,7 @@ def main():
     parser.add_argument( "--clear", action="store_true", help="Wipe and recreate SQLite database before writing", )
     parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics", )
     parser.add_argument( "--depth", type=int, default=1, choices=[1, 2], help="Neighbour depth: 1=direct only (default), 2=include neighbours-of-neighbours", )
-    parser.add_argument("--mask", action="store_true", help="Disable masking (original unmasked behavior)")
+    parser.add_argument("--mask", action="store_true", help="With masked stores and indicies")
     parser.add_argument("--pub-year", type=int, default=None, help="Restrict neighbour search to a single publication year (default: search all years)")
     parser.add_argument("--max-load-workers", type=int, default=6, help="Maximum number of workers to spawn to load indicies")
     args = parser.parse_args()
@@ -918,7 +918,7 @@ def main():
         zarr_path = ZARR_PATH
         db_path = CORPUS_TIER2_DB_PATH
 
-    years = discover_index_years(mask)
+    years = discover_index_years(args.mask)
     if not years:
         raise RuntimeError(
             f"No FAISS indices found for mode={'masked' if args.mask else 'unmasked'}. "

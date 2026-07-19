@@ -118,7 +118,7 @@ def main():
     masked = args.mask
     zarr_path = MASKED_ZARR_PATH if args.mask else ZARR_PATH
 
-    logger.info(f"[faiss-build] mode={'unmasked' if args.no_mask else 'masked'} zarr={zarr_path}")
+    logger.info(f"[faiss-build] mode={'unmask' if args.mask else 'maskeded'} zarr={zarr_path}")
 
     stream = ZarrEventStream(str(zarr_path))
     existing_years = discover_years(masked)

@@ -673,7 +673,7 @@ def parse_args():
     p.add_argument("--clear", action="store_true", help="Wipe the store, start from scratch")
     p.add_argument("--doc-id", type=str, default=None, help="doc_id of a document to process")
     p.add_argument("--report-every", type=int, default=100)
-    p.add_argument("--mask", action="store_true", help="Disable masking (original unmasked behavior)")
+    p.add_argument("--mask", action="store_true", help="Use masking")
     p.add_argument("--pooling-scope", choices=["mask_only", "context"], default="mask_only")
     p.add_argument("--batch-size", type=int, default=EMBED_BATCH_SIZE)
     p.add_argument("--mask-only-position", action="store_true", default=True, help="Mask only the target token (recommended for semantics)")
