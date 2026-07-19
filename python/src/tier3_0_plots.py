@@ -1070,22 +1070,22 @@ def main():
     parser.add_argument("--concept", type=str, default=None)
     parser.add_argument("--mode", type=str, default="full", choices=["full", "clustering"])
     parser.add_argument("--false_positives", type=str, nargs="*", default=[])
-    parser.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
+    parser.add_argument("--mask", action="store_true", help="Use masked data")
     parser.add_argument("--no-ensemble", action="store_true", help="Cluster by concatinating ensemble vectors (legacy)")
     parser.add_argument("--skip-bfs", action="store_true", help="Skip the global BFS expansion pass (full mode only); useful for fast single-concept runs")
 
     args = parser.parse_args()
 
-    if args.no_mask:
-        zarr_path = ZARR_PATH
-        masked = False
-        db_path = CORPUS_TIER2_DB_PATH
-        use_concatenated_clustering = False
-    else:
+    if args.mask:
         zarr_path = MASKED_ZARR_PATH
         masked = True
         db_path = CORPUS_TIER2_MASKED_DB_PATH
         use_concatenated_clustering = True
+    else:
+        zarr_path = ZARR_PATH
+        masked = False
+        db_path = CORPUS_TIER2_DB_PATH
+        use_concatenated_clustering = False
 
     lookup = ZarrEventLookup(zarr_path)
     index  = load_all_year_indices(masked)
@@ -1095,7 +1095,7 @@ def main():
         use_concatenated_clustering = True
 
     logger.info(
-        f"[Tier3.main] loading index+lookup, mode={'masked' if not args.no_mask else 'unmasked'}, "
+        f"[Tier3.main] loading index+lookup, mode={'masked' if args.mask else 'unmasked'}, "
         f"clustering={'concatenated' if use_concatenated_clustering else 'ensemble'}"
     )
 
