@@ -109,7 +109,7 @@ ensemble embedding.
 Neighbourhoods were once expanded to two levels:
 
 - depth 1: direct semantic neighbours
-- depth 2: neighbours-of-neighbours
+- depth 2: neighbours-of-neighbours (disabled for now)
 
 Both levels retained full provenance and explicitly record the path through
 which secondary neighbours were discovered. This has been dropped.
@@ -173,9 +173,9 @@ from lib.tier2_diagnostics import (
     knn_diagnostics,
 )
 
-K           = 25
-RRF_K      = 60
-OVERSAMPLE = 3   # pull top_n * OVERSAMPLE candidates per scale before fusing
+K          = 50    # kNN
+RRF_K      = 60     # Reciprocal Rank Fusion smoothing - Smaller values make top ranks dominate more strongly; larger values flatten rank contribution.
+OVERSAMPLE = 3      # pull top_n * OVERSAMPLE candidates per scale before fusing
 
 # Sentinel for absent window_token_pos in the int64 column. -1 is never a
 # valid token position, so it is unambiguous as "not present".
@@ -293,8 +293,10 @@ def analyse_concept(
     *,
     diagnostics     = False,
     false_positives = None,
-    top_n: int      = K,
     depth: int      = 1,
+    top_n: int      = K,
+    rrf_k: int      = RRF_K,
+    oversample: int = OVERSAMPLE,
 ):
     """
     Compute neighbourhood structure for all events matching a concept.
@@ -354,7 +356,11 @@ def analyse_concept(
         for f in list(false_positives or []) + list(concept.get("false_positives", []))
     }
 
-    event_ids = list(lookup.iter_matching_event_ids(forms, false_positives))
+    event_ids = [
+        eid
+        for eid in lookup.iter_matching_event_ids(forms, false_positives)
+        if pub_year is None or lookup.pub_year[lookup.get_pos(eid)] == pub_year
+    ]
 
     logger.info(f"[tier2] concept={concept_name} | events={len(event_ids)}")
     if false_positives:
@@ -398,7 +404,7 @@ def analyse_concept(
         group_pos = event_pos[idxs]
         group_fused = multiscale_search(
             index, lookup, group_pos, top_n,
-            pub_year=year, rrf_k=RRF_K, oversample=OVERSAMPLE,
+            pub_year=year, rrf_k=rrf_k, oversample=oversample,
         )
         for local_i, global_i in enumerate(idxs):
             fused_per_query[global_i] = group_fused[local_i]
@@ -789,7 +795,11 @@ def run_tier2_service(
     diagnostics     = False,
     depth           = 1,
     max_load_workers = 6,
-    emit            = None
+    emit            = None,
+    top_n           = K,
+    rrf_k           = RRF_K,
+    oversample      = OVERSAMPLE,
+    pub_year        = None,
 ):
     concept_names = [name for name, _ in concepts_to_run]
     logger = setEmit(emit, "[tier2]", {"concepts": concept_names})
@@ -842,7 +852,11 @@ def run_tier2_service(
         false_positives  = false_positives,
         diagnostics      = diagnostics,
         depth            = depth,
-        emit             = emit
+        emit             = emit,
+        top_n            = top_n,
+        rrf_k            = rrf_k,
+        oversample       = oversample,
+        pub_year         = pub_year,
     )
 
     logger.info(f"[tier2.run_tier2_service] Write SQL")
@@ -864,6 +878,9 @@ def run_tier2_core(
     depth           = 1,
     pub_year        = None,
     emit            = None,
+    top_n           = K,
+    rrf_k           = RRF_K,
+    oversample      = OVERSAMPLE,
 ):
     logger.info("[tier2.run_tier2_core] Enter")
     output = {}
@@ -888,9 +905,13 @@ def run_tier2_core(
             lookup,
             concept_name,
             concept,
-            false_positives=false_positives,
-            diagnostics=diagnostics,
-            depth=depth,
+            false_positives = false_positives,
+            diagnostics      = diagnostics,
+            depth            = depth,
+            rrf_k            = rrf_k,
+            top_n            = top_n,
+            oversample       = oversample,
+            pub_year         = pub_year,
         )
     logger.info("[tier2.run_tier2_core] Leave")
     return output
@@ -907,8 +928,12 @@ def main():
     parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics", )
     parser.add_argument( "--depth", type=int, default=1, choices=[1, 2], help="Neighbour depth: 1=direct only (default), 2=include neighbours-of-neighbours", )
     parser.add_argument("--mask", action="store_true", help="With masked stores and indicies")
-    parser.add_argument("--pub-year", type=int, default=None, help="Restrict neighbour search to a single publication year (default: search all years)")
+    parser.add_argument("--query-year", type=int, default=None, help="Restrict neighbour search to a single publication year (default: search all years)")
     parser.add_argument("--max-load-workers", type=int, default=6, help="Maximum number of workers to spawn to load indicies")
+    parser.add_argument( "--rrf-k", type=int, default=RRF_K, help="Reciprocal rank fusion smoothing constant")
+    parser.add_argument( "--k", type=int, default=K, help="Top nearest neighbours")
+    parser.add_argument( "--oversample", type=int, default=OVERSAMPLE, help="Top-n * oversample")
+
     args = parser.parse_args()
 
     if args.mask:
@@ -1008,7 +1033,11 @@ def main():
         diagnostics                 = args.diagnostics,
         depth                       = args.depth,
         max_load_workers            = args.max_load_workers,
-        emit                        = None
+        emit                        = None,
+        top_n                       = args.k,
+        rrf_k                       = args.rrf_k,
+        oversample                  = args.oversample,
+        pub_year                    = args.query_year,
     )
     logger.info(f"[tier2.main] Complete, wrote {db_path}")
 
