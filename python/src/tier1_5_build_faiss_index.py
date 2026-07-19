@@ -59,6 +59,7 @@ def build_indices(
         per_scale = {"local": emb_local, "medium": emb_medium, "broad": emb_broad}
 
         if incremental:
+            # TODO Optimize
             new_mask = np.array([int(i) not in already_indexed for i in obs_ids])
             if not new_mask.any():
                 skipped += len(obs_ids)
@@ -108,14 +109,14 @@ def build_indices(
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--clear", action="store_true")
-    p.add_argument("--no-mask", action="store_true")
+    p.add_argument("--mask", action="store_true")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
-    masked = not args.no_mask
-    zarr_path = ZARR_PATH if args.no_mask else MASKED_ZARR_PATH
+    masked = args.mask
+    zarr_path = MASKED_ZARR_PATH if args.mask else ZARR_PATH
 
     logger.info(f"[faiss-build] mode={'unmasked' if args.no_mask else 'masked'} zarr={zarr_path}")
 

@@ -673,7 +673,7 @@ def parse_args():
     p.add_argument("--clear", action="store_true", help="Wipe the store, start from scratch")
     p.add_argument("--doc-id", type=str, default=None, help="doc_id of a document to process")
     p.add_argument("--report-every", type=int, default=100)
-    p.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
+    p.add_argument("--mask", action="store_true", help="Disable masking (original unmasked behavior)")
     p.add_argument("--pooling-scope", choices=["mask_only", "context"], default="mask_only")
     p.add_argument("--batch-size", type=int, default=EMBED_BATCH_SIZE)
     p.add_argument("--mask-only-position", action="store_true", default=True, help="Mask only the target token (recommended for semantics)")
@@ -683,10 +683,10 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if args.no_mask:
-        zarr_path = ZARR_PATH
-    else:
+    if args.mask:
         zarr_path = MASKED_ZARR_PATH
+    else:
+        zarr_path = ZARR_PATH
 
     if args.clear:
         logger.info("Clearing Tier 1 output")
@@ -697,7 +697,7 @@ def main():
 
     pipeline = EmbeddingPipeline(
         mac.tokenizer, mac.model, mac.device,
-        mask_targets        = not args.no_mask,
+        mask_targets        = args.mask,
         mask_only_position  = args.mask_only_position,
         pooling_scope       = args.pooling_scope,
         batch_size          = args.batch_size
@@ -707,7 +707,7 @@ def main():
     proc.process(doc_id=args.doc_id)
 
     conn.close()
-    logger.info(f"[Tier 1 done] mode={'masked' if not args.no_mask else 'unmasked'}")
+    logger.info(f"[Tier 1 done] mode={'masked' if not args.mask else 'unmasked'}")
 
 
 if __name__ == "__main__":

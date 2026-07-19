@@ -906,32 +906,30 @@ def main():
     parser.add_argument( "--clear", action="store_true", help="Wipe and recreate SQLite database before writing", )
     parser.add_argument( "-d", "--diagnostics", action="store_true", help="Enable Tier2 diagnostics", )
     parser.add_argument( "--depth", type=int, default=1, choices=[1, 2], help="Neighbour depth: 1=direct only (default), 2=include neighbours-of-neighbours", )
-    parser.add_argument("--no-mask", action="store_true", help="Disable masking (original unmasked behavior)")
+    parser.add_argument("--mask", action="store_true", help="Disable masking (original unmasked behavior)")
     parser.add_argument("--pub-year", type=int, default=None, help="Restrict neighbour search to a single publication year (default: search all years)")
     parser.add_argument("--max-load-workers", type=int, default=6, help="Maximum number of workers to spawn to load indicies")
     args = parser.parse_args()
 
-    if args.no_mask:
-        zarr_path = ZARR_PATH
-        masked = False
-        db_path = CORPUS_TIER2_DB_PATH
-    else:
+    if args.mask:
         zarr_path = MASKED_ZARR_PATH
-        masked = True
         db_path = CORPUS_TIER2_MASKED_DB_PATH
+    else:
+        zarr_path = ZARR_PATH
+        db_path = CORPUS_TIER2_DB_PATH
 
-    years = discover_index_years(masked)
+    years = discover_index_years(mask)
     if not years:
         raise RuntimeError(
-            f"No FAISS indices found for mode={'masked' if masked else 'unmasked'}. "
+            f"No FAISS indices found for mode={'masked' if args.mask else 'unmasked'}. "
             f"Run build_indices.py first."
         )
     faiss_index_paths_by_year = {
-        year: faiss_index_paths(masked=masked, year=year)
+        year: faiss_index_paths(masked = args.mask, year = year)
         for year in years
     }
 
-    logger.info(f"[Tier 2.main] mode={'masked' if not args.no_mask else 'unmasked'}")
+    logger.info(f"[Tier 2.main] mode={'masked' if args.mask else 'unmasked'}")
 
     if args.clear and args.concept:
         logger.warning( "[tier2.main] --clear with --concept will wipe all concepts before writing one" )

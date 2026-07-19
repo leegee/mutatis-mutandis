@@ -3,8 +3,8 @@
 tier1_2_masked_concept_embeddings.py - masked-target contextual embeddings,
 scoped to concept-matched token occurrences only.
 
-Background (see conversation)
-------------------------------
+Background
+----------
 Tier 1 (tier1_corpus2zarr.py) stores hidden[i] - the raw contextualized
 hidden state at each content token's OWN position - for every content
 token in the corpus, at three window scales. That vector still carries a
