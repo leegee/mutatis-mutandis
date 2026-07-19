@@ -955,6 +955,7 @@ def main():
     }
 
     logger.info(f"[Tier 2.main] mode={'masked' if args.mask else 'unmasked'}")
+    logger.info(f"[Tier 2.main] k={args.k}; rrf_k={args.rrf_k}; oversample={args.oversample}")
 
     if args.clear and args.concept:
         logger.warning( "[tier2.main] --clear with --concept will wipe all concepts before writing one" )
