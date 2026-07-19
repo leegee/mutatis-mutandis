@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 """
-tier2_0_concept_events.py - Tier 2: Concept Neighbourhood Analysis
+tier2_0_concept_events.py - Tier 2: Semantic Neighbourhood Analysis
 
-This module performs the first semantic analysis over the Tier 1 observation
-space. It uses the FAISS retrieval index to identify contextual
-neighbourhoods around lexical concepts while preserving complete provenance
-back to the original corpus observations.
+This module analyses the Tier 1 observation space by constructing semantic
+neighbourhoods around lexical concepts.
+
+Tier 2 does not generate embeddings or assign semantic categories. It operates
+on the geometric structure created by Tier 1 embeddings and the Tier 1.5
+retrieval indexes, preserving provenance back to individual corpus
+occurrences.
 
 Architecture
 ------------
@@ -14,7 +17,7 @@ Tier 1
 
     corpus
         →
-    semantic observations
+    contextual observations
         ├── metadata
         ├── emb_local
         ├── emb_medium
@@ -24,120 +27,145 @@ Tier 1
 
 Tier 1.5
 
-    weighted ensemble embeddings
-            │
-            ▼
-        FAISS index
+    ensemble retrieval geometry
+        ├── per-year FAISS indexes
+        ├── local scale
+        ├── medium scale
+        └── broad scale
 
             │
 
 Tier 2
 
-    concept forms
+    concept lexical forms
             │
             ▼
     matching observations
             │
             ▼
-    neighbourhood retrieval
+    multi-scale neighbourhood retrieval
             │
             ▼
-    contextual concept analysis
+    reciprocal rank fusion
             │
             ▼
-    SQLite analysis database
+    semantic neighbourhood database
 
-Tier 2 performs no embedding generation. It analyses the observation geometry
-constructed by earlier tiers.
+
+Retrieval model
+---------------
+
+Each query observation is represented by the ensemble embedding geometry
+created from the Tier 1 multi-scale representations.
+
+For each query event:
+
+    event
+        →
+    publication-year scoped FAISS retrieval
+        →
+    independent local / medium / broad rankings
+        →
+    reciprocal rank fusion
+        →
+    ranked semantic neighbours
+
+The resulting score is an RRF ranking score. It is not a cosine similarity
+and should not be interpreted as an absolute semantic distance.
+
+The purpose of using multiple scales is to combine different contextual
+views:
+
+- local: immediate lexical context
+- medium: sentence/paragraph-level context
+- broad: wider discourse context
+
+The fused neighbourhood represents agreement between these views rather
+than any single embedding space.
+
 
 Core invariants
 ---------------
 
 1. Tier 1 is the semantic source of truth
-   - All metadata and embeddings originate from the Tier 1 observation store.
 
-2. FAISS is a retrieval layer only
-   - Neighbourhoods are determined geometrically without assigning semantic
-     interpretation.
+   All observation metadata and embeddings originate from the Tier 1 store.
+
+2. FAISS is a retrieval mechanism only
+
+   FAISS identifies geometrically nearby observations. It does not define
+   concepts, semantic fields or interpretations.
 
 3. Observations remain atomic
-   - Every result corresponds to a single corpus-grounded contextual
-     observation identified by a stable event_id.
 
-4. Lexical identity is independent of observation identity
-   - Multiple observations may share the same vector_id while representing
-     different contextual occurrences.
+   Every result corresponds to a single corpus-grounded occurrence with a
+   stable event_id.
 
-5. Provenance is never lost
-   - Every neighbour can be traced back to its document, token position and
-     contextual window.
+4. Lexical identity and occurrence identity are separate
 
-6. Multi-scale representations are analysed through an ensemble embedding
-   - Queries use the weighted combination of local, medium and broad
-     embeddings generated in Tier 1.
+   The same lexical form may occur thousands of times, each with a distinct
+   contextual embedding and event_id.
 
-Performance model
------------------
-Tier 1 observation metadata are streamed from Zarr into an in-memory struct-of-arrays lookup.
-Embeddings remain in the per-year FAISS indices and are reconstructed lazily on demand,
-keeping memory usage proportional to metadata rather than embedding dimensionality.
+5. Provenance is preserved
 
-When analysing a single concept, only observations matching the requested
-forms are loaded, making memory consumption proportional to the concept
-rather than the corpus.
+   Every neighbour can be traced to:
+
+       - document
+       - publication year
+       - token position
+       - contextual window
+       - source event
+
+
+Temporal scoping
+----------------
+
+FAISS indexes are partitioned by publication year.
+
+A query event is searched only against the semantic space of its own year.
+This prevents later vocabulary distributions from influencing earlier
+contexts and makes diachronic comparison an explicit later analysis step.
+
+Tier 2 therefore measures local semantic neighbourhood structure within
+historical slices. It does not itself calculate semantic drift.
+
 
 Storage model
 -------------
-Metadata are stored as parallel NumPy arrays indexed by row position,
-together with an event_id → row lookup.
 
-The lookup contains observation metadata together with lazy array-like accessors for local,
- medium and broad embeddings. Embeddings are reconstructed on demand from the corresponding
- per-year FAISS indices, preserving the previous API while avoiding eager loading of the full
- embedding matrices.
+Tier 1 observation metadata are streamed from Zarr into a structured lookup.
 
-Ensemble embeddings are computed on demand rather than materialised separately.
+Embeddings remain in FAISS indexes and are reconstructed lazily when required.
 
-This design provides good cache locality while avoiding millions of small Python objects,
-which quickly becomes expensive.
+Tier 2 stores only analysis results:
 
-Neighbourhood model
--------------------
-Each query observation is searched against the global FAISS index using its
-ensemble embedding.
+    concepts
+    concept forms
+    query events
+    neighbour relationships
+    aggregate statistics
+    document metadata
 
-Neighbourhoods were once expanded to two levels:
+The database becomes the persistent semantic substrate for later stages:
 
-- depth 1: direct semantic neighbours
-- depth 2: neighbours-of-neighbours (disabled for now)
+    - clustering
+    - semantic field discovery
+    - temporal comparison
+    - visualisation
 
-Both levels retained full provenance and explicitly record the path through
-which secondary neighbours were discovered. This has been dropped.
-
-Outputs
--------
-Results are written to a normalised SQLite database containing:
-
-- concepts
-- concept_forms
-- query observations
-- neighbourhood relationships
-- aggregate statistics
-- document metadata
-
-The database is intended as the persistent semantic substrate for later
-visualisation, clustering and diachronic analysis.
 
 Design intent
 -------------
-Tier 2 intentionally performs neighbourhood analysis rather than concept
-modelling. It establishes the local semantic geometry surrounding lexical
-concepts while leaving to later tiers higher-level interpretation — such as
-clustering, semantic field induction, temporal comparison and semantic drift.
 
-This separation keeps retrieval, neighbourhood construction and semantic
-interpretation as distinct stages of the pipeline, allowing each to evolve
-independently without compromising provenance or reproducibility.
+Tier 2 deliberately separates retrieval from interpretation.
+
+It establishes the empirical semantic neighbourhood surrounding historical
+lexical forms while leaving later tiers responsible for discovering structure,
+including semantic fields, substitutions and diachronic change.
+
+This separation prevents researcher-defined concepts from being confused with
+the underlying corpus geometry and keeps the pipeline reproducible as models,
+retrieval strategies and analytical methods evolve.
 """
 
 from __future__ import annotations
@@ -297,6 +325,7 @@ def analyse_concept(
     top_n: int      = K,
     rrf_k: int      = RRF_K,
     oversample: int = OVERSAMPLE,
+    pub_year: int   = None,
 ):
     """
     Compute neighbourhood structure for all events matching a concept.
