@@ -227,7 +227,7 @@ class EmbeddingPipeline:
         return self._embed_doc_masked(buf)
 
 
-    # UNMASKED (the original fast path)
+    # UNMASKED (the fast path)
     def _embed_doc_unmasked(self, buf: DocBuffer) -> list[Event]:
         input_ids, attention_mask, word_ids = self._encode(buf.tokens)
         all_events = []
@@ -243,7 +243,7 @@ class EmbeddingPipeline:
         return all_events
 
 
-    # MAKSED
+    # MASKED
     def _embed_doc_masked(self, buf):
         input_ids, attention_mask, word_ids = self._encode(buf.tokens)
         all_events = []
