@@ -204,15 +204,17 @@ class Event:
 
 
 class EmbeddingPipeline:
-    def __init__(self, tokenizer, model, device,
+    def __init__(self,
+        mac,
         mask_targets: bool = True,
         pooling_scope: str = "mask_only",
         mask_only_position: bool = True,
         batch_size: int = EMBED_BATCH_SIZE
     ):
-        self.tokenizer = tokenizer
-        self.model = model
-        self.device = device
+        self.macberth = mac
+        self.tokenizer = mac.tokenizer
+        self.model = mac.model
+        self.device = mac.device
         self.mask_targets = mask_targets
         self.pooling_scope = pooling_scope
         self.mask_only_position = mask_only_position
@@ -512,9 +514,12 @@ class EmbeddingPipeline:
     def _forward_single_window(self, ids, mask):
         input_ids = torch.tensor([ids], dtype=torch.long).to(self.device)
         attention_mask = torch.tensor([mask], dtype=torch.long).to(self.device)
-
         with torch.inference_mode():
-            out = self.model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
+            out = self.macberth.encode(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                return_dict=True,
+            )
         return out.last_hidden_state[0].cpu().numpy()
 
 
@@ -715,7 +720,7 @@ def main():
     mac = load_macberth()
 
     pipeline = EmbeddingPipeline(
-        mac.tokenizer, mac.model, mac.device,
+        mac,
         mask_targets        = args.mask,
         mask_only_position  = args.mask_only_position,
         pooling_scope       = args.pooling_scope,
