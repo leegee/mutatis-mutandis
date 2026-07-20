@@ -316,7 +316,7 @@ class EeboFaissIndex:
         path = Path(path)
         if not path.is_file():
             raise FileNotFoundError(f"FAISS index not found: {path}")
-        logger.info(f"[faiss] loading index={path}")
+        # logger.debug(f"[faiss] loading index={path}")
 
         obj = cls(dim=1)
         obj._index = faiss.read_index(str(path))
@@ -351,7 +351,7 @@ class EeboFaissIndex:
 
         obj._ids = set(int(i) for i in faiss.vector_to_array(obj._index.id_map).tolist())  # NEW
 
-        logger.info(f"[faiss] loaded ntotal={obj._index.ntotal} dim={obj.dim}")
+        # logger.debug(f"[faiss] loaded ntotal={obj._index.ntotal} dim={obj.dim}")
         return obj
 
 
