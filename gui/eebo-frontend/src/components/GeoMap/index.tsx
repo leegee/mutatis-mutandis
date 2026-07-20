@@ -56,11 +56,11 @@ export default function ConceptClusterGeoMap() {
     const mapPoints = createMemo(() => {
         const rows = events() ?? [];
 
-        console.log("[geo] rows", rows.length);
+        console.debug("[geo] rows", rows.length);
 
         const points = aggregatePlaces(rows);
 
-        console.log("[geo] points", points.length);
+        console.debug("[geo] points", points.length);
 
         return points;
     });
