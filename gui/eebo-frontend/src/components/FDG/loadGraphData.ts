@@ -59,11 +59,21 @@ export async function loadGraphData(
 
   // 2. Neighbours + semantic edges
   const neighbourRows = await execRows(
-    `SELECT n.event_id, n.neighbour_event_id, n.token, n.doc_id,
-            n.pub_year, n.window_id, n.score, n.token_idx, n.nx, n.ny
-     FROM neighbours n
-     INNER JOIN events e ON e.event_id = n.event_id
-     WHERE e.concept = ?`,
+    `SELECT
+      n.event_id,
+      n.neighbour_event_id,
+      n.token,
+      n.doc_id,
+      n.pub_year,
+      n.window_id,
+      n.score,
+      n.token_idx,
+      e.nx,
+      e.ny
+   FROM neighbours n
+   INNER JOIN events e
+       ON e.event_id = n.neighbour_event_id
+   WHERE e.concept = ?`,
     [concept],
   );
 

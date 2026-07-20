@@ -174,13 +174,14 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
     )
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_concept           ON events(concept);
-CREATE INDEX IF NOT EXISTS idx_events_year              ON events(concept, pub_year);
-CREATE INDEX IF NOT EXISTS idx_events_event_id          ON events(event_id);
-CREATE INDEX IF NOT EXISTS idx_neighbours_event         ON neighbours(event_id);
-CREATE INDEX IF NOT EXISTS idx_neighbours_token         ON neighbours(token);
-CREATE INDEX IF NOT EXISTS idx_neighbours_concept_event ON neighbours(event_id);
-CREATE INDEX IF NOT EXISTS idx_aggregate_concept        ON concept_aggregate(concept);
+CREATE INDEX IF NOT EXISTS idx_events_concept               ON events(concept);
+CREATE INDEX IF NOT EXISTS idx_events_year                  ON events(concept, pub_year);
+CREATE INDEX IF NOT EXISTS idx_events_event_id              ON events(event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_event             ON neighbours(event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_neighbour_event   ON neighbours(neighbour_event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_token             ON neighbours(token);
+CREATE INDEX IF NOT EXISTS idx_neighbours_concept_event     ON neighbours(event_id);
+CREATE INDEX IF NOT EXISTS idx_aggregate_concept            ON concept_aggregate(concept);
 
 """
 

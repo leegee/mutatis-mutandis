@@ -200,9 +200,29 @@ self.onmessage = async (e: MessageEvent) => {
 
         await Promise.all([
           execRows("SELECT COUNT(*) FROM events", undefined, traceId),
-          execRows("SELECT nx, ny, gnx, gny FROM events LIMIT 1000", undefined, traceId),
+
+          execRows(
+            "SELECT nx, ny, gnx, gny FROM events LIMIT 1000",
+            undefined,
+            traceId
+          ),
+
           execRows("SELECT COUNT(*) FROM neighbours", undefined, traceId),
-          execRows("SELECT nx, ny, gnx, gny FROM neighbours LIMIT 2500", undefined, traceId),
+
+          execRows(`
+            SELECT
+                e.nx,
+                e.ny,
+                e.gnx,
+                e.gny
+            FROM neighbours n
+            JOIN events e
+                ON e.event_id = n.neighbour_event_id
+            LIMIT 2500
+        `,
+            undefined,
+            traceId
+          ),
         ]);
 
         const duration = performance.now() - start;

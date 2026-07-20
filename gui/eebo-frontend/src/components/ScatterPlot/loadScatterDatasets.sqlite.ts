@@ -68,7 +68,7 @@ export async function loadDatasets(
     try {
         const rv = await Promise.all(
             params.concepts.map(async (concept) => {
-                let pointsQuery = "";
+                let clusterInfo = "";
                 let queryParams: any[] = [];
 
                 if (params.dataType === "concept_neighbours") {
@@ -84,29 +84,37 @@ export async function loadDatasets(
                             ? authorMatchFilter(params.authorMatch)
                             : null;
 
-                    pointsQuery = `
-                        SELECT
+                    clusterInfo = ` SELECT
                             n.neighbour_event_id AS event_id,
-                            n.token, n.doc_id, n.pub_year,
-                            n.token_idx, n.window_id,
-                            n.nx, n.ny, n.gnx, n.gny,
+                            n.token,
+                            n.doc_id,
+                            n.pub_year,
+                            n.token_idx,
+                            n.window_id,
+                            neighbour.nx,
+                            neighbour.ny,
+                            neighbour.gnx,
+                            neighbour.gny,
                             n.depth
                         FROM neighbours n
-                        JOIN events e ON e.event_id = n.neighbour_event_id
-                        JOIN documents d ON d.doc_id = n.doc_id
-                        WHERE e.concept = ?
-                          AND n.pub_year IS NOT NULL
-                          ${ author ? author.sql : "" }
-                          ${ year.sql }
-                    `;
-
+                        JOIN events source
+                            ON source.event_id = n.event_id
+                        JOIN events neighbour
+                            ON neighbour.event_id = n.neighbour_event_id
+                        LEFT JOIN documents d
+                            ON d.doc_id = neighbour.doc_id
+                        WHERE source.concept = ?
+                        AND n.pub_year IS NOT NULL
+                        ${ author ? author.sql : "" }
+                        ${ year.sql }
+`                   ;
                     queryParams = [
                         concept,
                         ...(author ? author.params : []),
                         ...year.params,
                     ];
                 } else if (params.dataType === "concept_clusters") {
-                    pointsQuery = `
+                    clusterInfo = `
                         SELECT
                             cluster_id,
                             cluster_label,
@@ -136,14 +144,14 @@ export async function loadDatasets(
                             ? authorMatchFilter(params.authorMatch)
                             : null;
 
-                    pointsQuery = `
+                    clusterInfo = `
                         SELECT
                             event_id, token, d.doc_id, d.pub_year,
                             token_idx, window_id,
                             nx, ny, gnx, gny,
                             cluster_id, cluster_label
                         FROM events
-                        JOIN documents d ON d.doc_id = events.doc_id
+                        LEFT JOIN documents d ON d.doc_id = events.doc_id
                         WHERE concept = ?
                           AND d.pub_year IS NOT NULL
                           ${ author ? author.sql : "" }
@@ -157,11 +165,8 @@ export async function loadDatasets(
                     ];
                 }
 
-                const points = await execRows(pointsQuery, queryParams);
-
+                const points = await execRows(clusterInfo, queryParams);
                 console.debug(`[loadDatasets] ${ concept } | ${ params.dataType } | raw points: ${ points.length }`);
-
-                // const target = targetForDataType(params.dataType);
 
                 return {
                     concept,
@@ -237,19 +242,25 @@ export async function loadBfsDataset(params: {
         params.toYear
     );
 
-    const points = await execRows(
-        `
+    const points = await execRows(`
         SELECT
-            n.neighbour_event_id AS event_id,
-            n.token, n.doc_id, n.pub_year,
-            n.token_idx, n.window_id,
-            n.nx, n.ny,
-            n.gnx, n.gny,
-            n.depth
-        FROM neighbours n
-        WHERE n.pub_year IS NOT NULL
-          ${ year.sql }
-        `,
+        n.neighbour_event_id AS event_id,
+        n.token,
+        n.doc_id,
+        n.pub_year,
+        n.token_idx,
+        n.window_id,
+        neighbour.nx,
+        neighbour.ny,
+        neighbour.gnx,
+        neighbour.gny,
+        n.depth
+    FROM neighbours n
+    JOIN events neighbour
+        ON neighbour.event_id = n.neighbour_event_id
+    WHERE n.pub_year IS NOT NULL
+    ${ year.sql }
+    `,
         year.params
     );
 

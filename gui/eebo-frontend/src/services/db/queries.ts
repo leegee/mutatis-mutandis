@@ -145,11 +145,23 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
   if (!row) {
     type = 'neighbour';
     const neighbourRow = await execRows(
-      `SELECT event_id, score, vector_id, token, neighbours.doc_id, neighbours.pub_year, token_idx, window_id, window_token_pos,
-       documents.author, documents.pub_place
-       FROM neighbours
-       LEFT JOIN documents ON neighbours.doc_id = documents.doc_id
-       WHERE neighbour_event_id = ? LIMIT 1`,
+      `SELECT
+        event_id,
+        score,
+        vector_id,
+        token,
+        neighbours.doc_id,
+        neighbours.pub_year,
+        token_idx,
+        window_id,
+        window_token_pos,
+        documents.author,
+        documents.pub_place
+    FROM neighbours
+    LEFT JOIN documents
+        ON neighbours.doc_id = documents.doc_id
+    WHERE neighbour_event_id = ?
+    LIMIT 1`,
       [id],
     );
 
