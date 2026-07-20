@@ -54,57 +54,75 @@ export async function fetchEvents() {
   return parsedRows;
 }
 
-export async function fetchEventsGeo() {
+
+
+export type EventGeoRow = {
+  event_id: string;
+  doc_id: string;
+  pub_year: number;
+  token: string;
+  pub_place: string | null;
+  normalized_place: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+export async function fetchEventsGeo(): Promise<EventGeoRow[]> {
   const concepts = controls.conceptSelection ?? [];
 
   const conceptPlaceholders = concepts.length
     ? `IN (${ concepts.map(() => "?").join(",") })`
     : "IS NOT NULL";
 
-  const sql = `SELECT
+  const sql = `
+    SELECT
         events.event_id,
         events.doc_id,
         events.pub_year,
         events.token,
         documents.pub_place,
-        documents.normalized_places,
-        documents.lat,
-        documents.lng
+        document_places.normalized_place,
+        document_places.lat,
+        document_places.lng
     FROM events
-    LEFT JOIN documents ON events.doc_id = documents.doc_id
+    LEFT JOIN documents
+        ON events.doc_id = documents.doc_id
+    LEFT JOIN document_places
+        ON events.doc_id = document_places.doc_id
     WHERE events.pub_year BETWEEN ? AND ?
     AND concept ${ conceptPlaceholders }
-    `;
+  `;
 
-  const args = [controls.fromYear, controls.toYear, ...concepts];
-  console.debug("[queries.fetchEventsGeo] " + sql, args)
+  const args = [
+    controls.fromYear,
+    controls.toYear,
+    ...concepts,
+  ];
+
+  console.debug("[queries.fetchEventsGeo]", sql, args);
 
   const rows = await execRows(sql, args);
 
-  const parsedRows = rows
-    .map((r) => {
-      return {
-        event_id: r[0],
-        doc_id: r[1],
-        pub_year: r[2],
-        token: r[3],
-        pub_place: r[4],
-        normalized_places: r[5],
-        lat: r[6],
-        lng: r[7],
-      };
-    })
-    .filter(Boolean);
+  const parsedRows: EventGeoRow[] = rows.map((r) => ({
+    event_id: String(r[0]),
+    doc_id: String(r[1]),
+    pub_year: Number(r[2]),
+    token: String(r[3]),
+    pub_place: String(r[4]),
+    normalized_place: String(r[5]),
+    lat: Number(r[6]),
+    lng: Number(r[7]),
+  }));
 
-  console.debug("[queries.fetchEventsGeo] RV", [parsedRows])
+  console.debug("[queries.fetchEventsGeo] rows", parsedRows.length, parsedRows.slice(0, 5));
   return parsedRows;
 }
+
 
 export async function listConcepts(): Promise<string[]> {
   const rows = await execRows("SELECT concept FROM concepts ORDER BY concept");
   return rows.map((r) => r[0] as string);
 }
-
 
 export async function queryYearBounds(
   concept: string,

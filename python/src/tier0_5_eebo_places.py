@@ -10,9 +10,11 @@ import requests
 import re
 import unicodedata
 from collections import defaultdict
+import sqlite3
 
 from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
+from lib.eebo_config import CORPUS_TIER2_DB_PATH
 
 
 GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
@@ -468,7 +470,7 @@ def create_place(conn: psycopg.Connection):
     with conn.cursor() as cur:
         cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
 
-        cur.execute("DROP TABLE IF  EXISTS place_normalization;")
+        # cur.execute("DROP TABLE IF  EXISTS place_normalization;")
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS place_normalization (
@@ -510,8 +512,8 @@ def create_place(conn: psycopg.Connection):
 
         cur.execute("""
             CREATE INDEX IF NOT EXISTS place_normalization_geom_idx ON place_normalization USING GIST (geom);
-            CREATE INDEX place_normalization_lat_idx ON place_normalization (lat);
-            CREATE INDEX place_normalization_lng_idx ON place_normalization (lng);
+            CREATE INDEX IF NOT EXISTS place_normalization_lat_idx ON place_normalization (lat);
+            CREATE INDEX IF NOT EXISTS place_normalization_lng_idx ON place_normalization (lng);
         """)
 
     conn.commit()
@@ -585,12 +587,63 @@ def geocode_places(conn: psycopg.Connection):
     logger.info("Geocoding complete")
 
 
+def export_document_places_sqlite(conn, sqlite):
+    import sqlite3
+
+    pg_rows = []
+
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT
+                d.doc_id,
+                d.pub_place,
+                p.normalized_places[1],
+                p.lat,
+                p.lng
+            FROM documents d
+            LEFT JOIN place_normalization p
+                ON d.pub_place = p.raw_place
+        """)
+
+        pg_rows = cur.fetchall()
+
+    cur = sqlite.cursor()
+
+    cur.execute("DROP TABLE IF EXISTS document_places")
+
+    cur.execute("""
+        CREATE TABLE document_places (
+            doc_id TEXT PRIMARY KEY,
+            raw_place TEXT,
+            normalized_place TEXT,
+            lat REAL,
+            lng REAL
+        )
+    """)
+
+    cur.executemany("""
+        INSERT INTO document_places (
+            doc_id, raw_place, normalized_place, lat, lng
+        )
+        VALUES (?, ?, ?, ?, ?)
+    """, pg_rows)
+
+    cur.execute("CREATE INDEX document_places_lat_idx ON document_places(lat)")
+    cur.execute("CREATE INDEX document_places_lng_idx ON document_places(lng)")
+
+    sqlite.commit()
+    logger.info( "Exported %d document place rows", len(pg_rows) )
+
 
 def main():
     conn = get_connection(application_name="normalize_places")
     create_place(conn)
     geocode_places(conn)
+    sqlite = sqlite3.connect(CORPUS_TIER2_DB_PATH)
+    export_document_places_sqlite( conn, sqlite )
+    sqlite.close()
     final_sql(conn)
+
 
 if __name__ == "__main__":
     main()

@@ -1,28 +1,24 @@
 import { createMemo, createResource } from "solid-js";
 import GeoMap, { type EventPoint } from "./GeoMap";
 import { controls } from "../../state/controls.store";
-import { fetchEventsGeo } from "../../services/db";
+import { fetchEventsGeo, type EventGeoRow } from "../../services/db";
 import ControlsHeader from "../ControlsHeader";
 
-type RawRow = {
-    event_id: bigint;
-    doc_id: string;
-    pub_year: number;
-    token: string;
-    geom: string;
-    lat: number;
-    lng: number;
-    label: string;
-};
 
-export function aggregatePlaces(rows: RawRow[]) {
+export function aggregatePlaces(rows: EventGeoRow[]): EventPoint[] {
     const map = new Map<
         string,
-        { lat: number; lng: number; label: String; count: number }
+        EventPoint
     >();
 
     for (const r of rows) {
         if (r.lat == null || r.lng == null) continue;
+
+        const label = Array.isArray(r.normalized_place)
+            ? r.normalized_place[0]
+            : r.normalized_place;
+
+        if (!label) continue;
 
         // stable spatial key
         const key = `${ r.lat.toFixed(6) },${ r.lng.toFixed(6) }`;
@@ -33,7 +29,7 @@ export function aggregatePlaces(rows: RawRow[]) {
             map.set(key, {
                 lat: r.lat,
                 lng: r.lng,
-                label: r.label,
+                label,
                 count: 1,
             });
         } else {
@@ -41,7 +37,7 @@ export function aggregatePlaces(rows: RawRow[]) {
         }
     }
 
-    return [...map.entries()].map(([_, v]) => v);
+    return [...map.values()];
 }
 
 export default function ConceptClusterGeoMap() {
@@ -58,17 +54,15 @@ export default function ConceptClusterGeoMap() {
     );
 
     const mapPoints = createMemo(() => {
-        console.log("[geo] making map points");
-        const eventRows = events() ?? [];
-        const eventPoints = eventRows.map((eventPoint) => ({
-            lat: eventPoint.lat,
-            lng: eventPoint.lng,
-            label: eventPoint.normalized_places,
-        }));
+        const rows = events() ?? [];
 
-        return aggregatePlaces([
-            ...eventPoints as RawRow[]
-        ]) as EventPoint[];
+        console.log("[geo] rows", rows.length);
+
+        const points = aggregatePlaces(rows);
+
+        console.log("[geo] points", points.length);
+
+        return points;
     });
 
     return (
