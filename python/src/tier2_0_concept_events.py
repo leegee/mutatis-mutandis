@@ -306,9 +306,7 @@ def ensure_documents(con, lookup, doc_ids):
 def ensure_events(con, lookup, event_ids):
     existing = {
         row[0]
-        for row in con.execute(
-            "SELECT event_id FROM events"
-        )
+        for row in con.execute( "SELECT event_id FROM events" )
     }
 
     missing = set(event_ids) - existing
@@ -321,15 +319,14 @@ def ensure_events(con, lookup, event_ids):
         event = lookup.get_event(eid)
 
         if event is None:
-            logger.warning(
-                f"[tier2] missing zarr event {eid}"
-            )
+            logger.warning( f"[tier2] missing zarr event {eid}" )
             continue
 
         rows.append(
             (
                 int(eid),
-                "__neighbour__",
+                None,
+                "neighbour",
                 int(event["vector_id"]),
                 event["token"],
                 event["doc_id"],
@@ -348,6 +345,7 @@ def ensure_events(con, lookup, event_ids):
         INSERT OR IGNORE INTO events (
             event_id,
             concept,
+            event_role,
             vector_id,
             token,
             doc_id,
@@ -356,7 +354,7 @@ def ensure_events(con, lookup, event_ids):
             window_id,
             window_token_pos
         )
-        VALUES (?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
         """,
         rows,
     )
@@ -610,13 +608,25 @@ def analyse_concept(
 # rerunning a concept replaces its rows rather than merging history.
 
 def delete_concept(con, concept):
+
     con.execute(
-        "DELETE FROM neighbours WHERE event_id IN ( SELECT event_id FROM events WHERE concept = ? )",
+        """
+        DELETE FROM neighbours
+        WHERE event_id IN (
+            SELECT event_id
+            FROM concept_field_events
+            WHERE concept = ?
+              AND role = 'seed'
+        )
+        """,
         (concept,),
     )
 
     con.execute(
-        "DELETE FROM events WHERE concept = ?",
+        """
+        DELETE FROM concept_field_events
+        WHERE concept = ?
+        """,
         (concept,),
     )
 
@@ -632,11 +642,6 @@ def delete_concept(con, concept):
 
     con.execute(
         "DELETE FROM concepts WHERE concept = ?",
-        (concept,),
-    )
-
-    con.execute(
-        "DELETE FROM concept_field_events WHERE concept = ?",
         (concept,),
     )
 
@@ -684,11 +689,6 @@ def write_concept(con, data, lookup):
                     "neighbour",
                 )
             )
-
-    con.executemany(
-        "INSERT OR REPLACE INTO concept_field_events ( concept, event_id, role ) VALUES (?,?,?)",
-        field_rows,
-    )
 
     con.execute(
         "INSERT INTO concepts ( concept, n_events ) VALUES (?,?)",
@@ -774,6 +774,11 @@ def write_concept(con, data, lookup):
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         neighbour_rows,
+    )
+
+    con.executemany(
+        "INSERT OR REPLACE INTO concept_field_events ( concept, event_id, role ) VALUES (?,?,?)",
+        field_rows,
     )
 
     aggregate = data["aggregate"]

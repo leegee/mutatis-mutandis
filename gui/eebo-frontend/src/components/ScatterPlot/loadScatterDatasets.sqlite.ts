@@ -66,12 +66,10 @@ export async function loadDatasets(
     try {
         const rv = await Promise.all(
             params.concepts.map(async (concept) => {
-
                 let sql = "";
                 let queryParams: any[] = [];
 
                 if (params.dataType === "concept_neighbours") {
-
                     const year = yearFilter(
                         "neighbour.",
                         params.yearMode,
@@ -79,14 +77,11 @@ export async function loadDatasets(
                         params.toYear
                     );
 
-                    const author =
-                        params.authorMatch?.trim()
-                            ? authorMatchFilter(params.authorMatch)
-                            : null;
+                    const author = params.authorMatch?.trim()
+                        ? authorMatchFilter(params.authorMatch)
+                        : null;
 
-
-                    sql = `
-                        SELECT
+                    sql = `SELECT
                             neighbour.event_id,
                             neighbour.token,
                             neighbour.doc_id,
@@ -97,16 +92,16 @@ export async function loadDatasets(
                             neighbour.ny,
                             neighbour.gnx,
                             neighbour.gny,
+                            neighbour.cluster_id,
+                            neighbour.cluster_label,
                             n.depth
                         FROM concept_field_events f
-                        JOIN neighbours n
-                            ON n.event_id = f.event_id
-                        JOIN events neighbour
-                            ON neighbour.event_id = n.neighbour_event_id
-                        LEFT JOIN documents d
-                            ON d.doc_id = neighbour.doc_id
-                        WHERE f.concept = ?
-                          AND f.role = 'seed'
+                            JOIN neighbours n
+                                ON n.event_id = f.event_id
+                            JOIN events neighbour
+                                ON neighbour.event_id = n.neighbour_event_id
+                            WHERE f.concept = ?
+                            AND f.role = 'seed'
                           ${ author ? author.sql : "" }
                           ${ year.sql }
                     `;
@@ -117,8 +112,9 @@ export async function loadDatasets(
                         ...year.params,
                     ];
 
-                } else if (params.dataType === "concept_clusters") {
+                }
 
+                else if (params.dataType === "concept_clusters") {
                     sql = `
                         SELECT
                             cluster_id,
@@ -135,11 +131,10 @@ export async function loadDatasets(
                         ORDER BY cluster_id
                     `;
 
-                    queryParams = [
-                        concept,
-                    ];
+                    queryParams = [concept,];
+                }
 
-                } else {
+                else {
 
                     const year = yearFilter(
                         "e.",
@@ -152,7 +147,6 @@ export async function loadDatasets(
                         params.authorMatch?.trim()
                             ? authorMatchFilter(params.authorMatch)
                             : null;
-
 
                     sql = `
                         SELECT
@@ -169,11 +163,12 @@ export async function loadDatasets(
                             e.cluster_id,
                             e.cluster_label
                         FROM concept_field_events f
-                        JOIN events e
-                            ON e.event_id = f.event_id
-                        LEFT JOIN documents d
-                            ON d.doc_id = e.doc_id
-                        WHERE f.concept = ?
+                            JOIN events e
+                                ON e.event_id = f.event_id
+                            LEFT JOIN documents d
+                                ON d.doc_id = e.doc_id
+                            WHERE f.concept = ?
+                            AND f.role = 'seed'
                           ${ author ? author.sql : "" }
                           ${ year.sql }
                     `;
@@ -185,42 +180,27 @@ export async function loadDatasets(
                     ];
                 }
 
+                const points = await execRows(sql, queryParams);
 
-                const points = await execRows(
-                    sql,
-                    queryParams
-                );
-
-
-                console.debug(
-                    `[loadDatasets] ${ concept } | ${ params.dataType } | ${ points.length }`
-                );
-
+                console.debug(`[loadDatasets] ${ concept } | ${ params.dataType } | ${ points.length }`);
 
                 return {
                     concept,
                     type: params.dataType,
-
                     points: (points as any[]).map((p: any[]) => {
-
                         if (params.dataType === "concept_clusters") {
-
                             return {
                                 event_id: `cluster-${ p[0] }`,
                                 cluster_id: p[0],
                                 cluster_label: p[1],
-
                                 nx: p[2],
                                 ny: p[3],
                                 gnx: p[4],
                                 gny: p[5],
-
                                 point_count: p[6],
                                 label: p[7],
                                 description: p[8],
-
                                 concept,
-
                                 token: "_NULL_",
                                 token_idx: -999,
                                 doc_id: "_NULL_",
@@ -230,9 +210,7 @@ export async function loadDatasets(
                                 window_token_pos: -999,
                                 windowKey: "_NULL_",
                             } as PointData;
-
                         }
-
 
                         return {
                             event_id: String(p[0]),
@@ -241,43 +219,30 @@ export async function loadDatasets(
                             pub_year: p[3],
                             token_idx: p[4],
                             window_id: p[5],
-
                             nx: p[6],
                             ny: p[7],
                             gnx: p[8],
                             gny: p[9],
-
                             cluster_id: p[10],
                             cluster_label: p[11],
-
+                            depth: p[12],
                             concept,
-
                         } as PointData;
-
                     }),
                 } as ConceptDatasetSqlite;
 
             })
         );
 
-
-        console.debug(
-            `[loadDatasets] FINISHED in ${ (performance.now() - start).toFixed(1) }ms`
-        );
-
+        console.debug(`[loadDatasets] FINISHED in ${ (performance.now() - start).toFixed(1) }ms`);
         return rv;
+    }
 
-    } catch (error) {
-
-        console.error(
-            "loadDatasets error",
-            error
-        );
-
+    catch (error) {
+        console.error("loadDatasets error", error);
         return [];
     }
 }
-
 
 
 export async function loadBfsDataset(params: {
@@ -293,9 +258,7 @@ export async function loadBfsDataset(params: {
         };
     }
 
-
     console.time("[loadBfsDataset]");
-
 
     const year = yearFilter(
         "neighbour.",
@@ -304,9 +267,7 @@ export async function loadBfsDataset(params: {
         params.toYear
     );
 
-
-    const points = await execRows(
-        `
+    const points = await execRows(`
         SELECT
             neighbour.event_id,
             neighbour.token,
@@ -327,14 +288,10 @@ export async function loadBfsDataset(params: {
         `,
         year.params
     );
-
-
     console.timeEnd("[loadBfsDataset]");
-
 
     return {
         type: "bfs_global",
-
         points: (points as any[]).map((p) => ({
             ...p,
             event_id: String(p.event_id),

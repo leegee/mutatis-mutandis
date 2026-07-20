@@ -96,12 +96,9 @@ def load_event_rows(con, concept):
     """
     return con.execute(
         """
-        SELECT
-            e.event_id,
-            e.vector_id
+        SELECT e.event_id, e.vector_id
         FROM concept_field_events f
-        JOIN events e
-            ON e.event_id = f.event_id
+        JOIN events e ON e.event_id = f.event_id
         WHERE f.concept = ?
         ORDER BY e.event_id
         """,
