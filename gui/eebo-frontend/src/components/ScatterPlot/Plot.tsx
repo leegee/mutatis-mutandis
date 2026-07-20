@@ -18,6 +18,7 @@ import type { Id, ScreenRect } from "./SelectionPlugin/types";
 import { buildColorMap } from "../../lib/colour";
 import { controls, type ProjectionModeType } from "../../state/controls.store";
 import { labelsActions } from "../../state/labels.actions";
+import { fitDatasetBounds } from "./fitDatasetBounds";
 
 type RGB = [number, number, number];
 type RGBA = [number, number, number, number];
@@ -470,15 +471,25 @@ export default function Plot(props: PlotProps) {
     deck?.setProps({ layers: layers() });
   });
 
-  // Fit camera to dataset bounds whenever projection mode or datasets change.
+  // Fit camera to dataset bounds whenever projection mode or datasets change. This could be improved.
   createEffect(() => {
-    if (!deck) return;
+    const points = allPoints();
+    if (!points.length) return;
+    if (!deck || !points.length) return;
 
-    flyTo(
-      [0.5, 0.5, 0],
-      Math.log2(Math.min(canvas.clientWidth, canvas.clientHeight)),
-      400
+    const fit = fitDatasetBounds(points, props.projectionMode);
+    if (!fit) return;
+
+    const zoom = Math.max(
+      2,
+      Math.min(
+        20,
+        Math.log2(
+          Math.min(canvas.clientWidth, canvas.clientHeight) / fit.extent)
+      )
     );
+
+    flyTo([fit.cx, fit.cy, 0], zoom, 400);
   });
 
   onCleanup(() => {
