@@ -75,9 +75,36 @@ def sqlite_connection( path: Path, ):
     return con
 
 
-def load_event_rows( con, concept, ):
+# def load_event_rows( con, concept, ):
+#     return con.execute(
+#         "SELECT event_id, vector_id FROM events WHERE concept = ? ORDER BY event_id",
+#         (concept,),
+#     ).fetchall()
+
+
+def load_event_rows(con, concept):
+    """
+    Load the empirical semantic field for a concept.
+
+    concept_field_events is the authoritative relation:
+        concept -> observed corpus events
+
+    Seed events anchor the field.
+    Neighbour events are retrieved semantic context.
+
+    An event may belong to multiple fields.
+    """
     return con.execute(
-        "SELECT event_id, vector_id FROM events WHERE concept = ? ORDER BY event_id",
+        """
+        SELECT
+            e.event_id,
+            e.vector_id
+        FROM concept_field_events f
+        JOIN events e
+            ON e.event_id = f.event_id
+        WHERE f.concept = ?
+        ORDER BY e.event_id
+        """,
         (concept,),
     ).fetchall()
 
@@ -303,14 +330,14 @@ def write_cluster_info( con, concept, local_coords, global_coords, clusters, ):
 
 def build_global_projection(
     lookup,
-    all_event_ids,
+    all_field_event_ids,
 ):
-    logger.info( f"[tier3] global projection events={len(all_event_ids):,}" )
-    vectors = lookup.get_concatenated_embeddings( all_event_ids )
+    logger.info( f"[tier3] global projection events={len(all_field_event_ids):,}" )
+    vectors = lookup.get_concatenated_embeddings( all_field_event_ids )
     coords = project( vectors, GLOBAL_UMAP_PARAMS, )
     return {
         int(event_id): coords[idx]
-        for idx, event_id in enumerate(all_event_ids)
+        for idx, event_id in enumerate(all_field_event_ids)
     }
 
 
@@ -327,7 +354,7 @@ def process_concept( con, lookup, concept, global_coords, ):
     if len(event_ids) == 0:
         return
 
-    logger.info( f"[tier3] {concept}: vectors={len(event_ids):,}" )
+    logger.info( f"[tier3] {concept}: field events={len(event_ids):,}" )
 
     local_coords = project( vectors, LOCAL_UMAP_PARAMS, )
     clusters = leiden_cluster( vectors, )
@@ -385,16 +412,16 @@ def main():
     index = load_indices( years, masked=args.mask, )
     lookup.attach_index( index )
 
-    all_event_ids = []
+    all_field_event_ids = []
 
     for concept in global_concepts:
         rows = load_event_rows( con, concept, )
-        all_event_ids.extend(
+        all_field_event_ids.extend(
             int(row[0])
             for row in rows
         )
 
-    if not all_event_ids:
+    if not all_field_event_ids:
         logger.warning( "[tier3] no events found" )
         return
 
@@ -402,10 +429,10 @@ def main():
     #   - deterministic UMAP input order
     #   - stable SQLite updates
     #   - reproducible plots
-    all_event_ids = sorted( set(all_event_ids) )
-    logger.info( f"[tier3] global projection events={len(all_event_ids):,}" )
+    all_field_event_ids = sorted( set(all_field_event_ids) )
+    logger.info( f"[tier3] global projection events={len(all_field_event_ids):,}" )
 
-    global_coords = build_global_projection( lookup, all_event_ids, )
+    global_coords = build_global_projection( lookup, all_field_event_ids, )
 
     for concept in resolved_concepts:
         process_concept(

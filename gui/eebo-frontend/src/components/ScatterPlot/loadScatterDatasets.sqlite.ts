@@ -28,8 +28,8 @@ function yearFilter(
     };
 }
 
+
 function authorMatchFilter(str: string): SqlFragment {
-    // escape LIKE wildcards only (still safe since we're parameterized)
     const term = str
         .replace(/\\/g, "\\\\")
         .replace(/%/g, "\\%")
@@ -41,6 +41,7 @@ function authorMatchFilter(str: string): SqlFragment {
     };
 }
 
+
 interface LoadDatasetsParams {
     concepts: string[];
     fromYear: number;
@@ -51,77 +52,81 @@ interface LoadDatasetsParams {
 }
 
 
-function targetForDataType(dataType: string): string {
-    if (dataType === "concept_neighbours") return "concept_neighbours";
-    if (dataType === "concept_clusters") return "concept_clusters";
-    return "concept";
-}
-
-
 export async function loadDatasets(
     params: LoadDatasetsParams
 ): Promise<ConceptDatasetSqlite[]> {
-    console.debug(`[loadDatasets] START ${ params.dataType } for`, params.concepts);
+
+    console.debug(
+        `[loadDatasets] START ${ params.dataType }`,
+        params.concepts
+    );
 
     const start = performance.now();
 
     try {
         const rv = await Promise.all(
             params.concepts.map(async (concept) => {
-                let clusterInfo = "";
+
+                let sql = "";
                 let queryParams: any[] = [];
 
                 if (params.dataType === "concept_neighbours") {
+
                     const year = yearFilter(
-                        "n.",
+                        "neighbour.",
                         params.yearMode,
                         params.fromYear,
                         params.toYear
                     );
 
                     const author =
-                        params.authorMatch?.trim().length > 0
+                        params.authorMatch?.trim()
                             ? authorMatchFilter(params.authorMatch)
                             : null;
 
-                    clusterInfo = ` SELECT
-                            n.neighbour_event_id AS event_id,
-                            n.token,
-                            n.doc_id,
-                            n.pub_year,
-                            n.token_idx,
-                            n.window_id,
+
+                    sql = `
+                        SELECT
+                            neighbour.event_id,
+                            neighbour.token,
+                            neighbour.doc_id,
+                            neighbour.pub_year,
+                            neighbour.token_idx,
+                            neighbour.window_id,
                             neighbour.nx,
                             neighbour.ny,
                             neighbour.gnx,
                             neighbour.gny,
                             n.depth
-                        FROM neighbours n
-                        JOIN events source
-                            ON source.event_id = n.event_id
+                        FROM concept_field_events f
+                        JOIN neighbours n
+                            ON n.event_id = f.event_id
                         JOIN events neighbour
                             ON neighbour.event_id = n.neighbour_event_id
                         LEFT JOIN documents d
                             ON d.doc_id = neighbour.doc_id
-                        WHERE source.concept = ?
-                        AND n.pub_year IS NOT NULL
-                        ${ author ? author.sql : "" }
-                        ${ year.sql }
-`                   ;
+                        WHERE f.concept = ?
+                          AND f.role = 'seed'
+                          ${ author ? author.sql : "" }
+                          ${ year.sql }
+                    `;
+
                     queryParams = [
                         concept,
                         ...(author ? author.params : []),
                         ...year.params,
                     ];
+
                 } else if (params.dataType === "concept_clusters") {
-                    clusterInfo = `
+
+                    sql = `
                         SELECT
                             cluster_id,
                             cluster_label,
-                            centroid_nx as nx,
-                            centroid_ny as ny,
-                            centroid_gnx as gnx,
-                            centroid_gny as gny,
+                            centroid_nx AS nx,
+                            centroid_ny AS ny,
+                            centroid_gnx AS gnx,
+                            centroid_gny AS gny,
                             point_count,
                             label,
                             description
@@ -130,30 +135,45 @@ export async function loadDatasets(
                         ORDER BY cluster_id
                     `;
 
-                    queryParams = [concept];
+                    queryParams = [
+                        concept,
+                    ];
+
                 } else {
+
                     const year = yearFilter(
-                        "d.",
+                        "e.",
                         params.yearMode,
                         params.fromYear,
                         params.toYear
                     );
 
                     const author =
-                        params.authorMatch?.trim().length > 0
+                        params.authorMatch?.trim()
                             ? authorMatchFilter(params.authorMatch)
                             : null;
 
-                    clusterInfo = `
+
+                    sql = `
                         SELECT
-                            event_id, token, d.doc_id, d.pub_year,
-                            token_idx, window_id,
-                            nx, ny, gnx, gny,
-                            cluster_id, cluster_label
-                        FROM events
-                        LEFT JOIN documents d ON d.doc_id = events.doc_id
-                        WHERE concept = ?
-                          AND d.pub_year IS NOT NULL
+                            e.event_id,
+                            e.token,
+                            d.doc_id,
+                            d.pub_year,
+                            e.token_idx,
+                            e.window_id,
+                            e.nx,
+                            e.ny,
+                            e.gnx,
+                            e.gny,
+                            e.cluster_id,
+                            e.cluster_label
+                        FROM concept_field_events f
+                        JOIN events e
+                            ON e.event_id = f.event_id
+                        LEFT JOIN documents d
+                            ON d.doc_id = e.doc_id
+                        WHERE f.concept = ?
                           ${ author ? author.sql : "" }
                           ${ year.sql }
                     `;
@@ -165,26 +185,42 @@ export async function loadDatasets(
                     ];
                 }
 
-                const points = await execRows(clusterInfo, queryParams);
-                console.debug(`[loadDatasets] ${ concept } | ${ params.dataType } | raw points: ${ points.length }`);
+
+                const points = await execRows(
+                    sql,
+                    queryParams
+                );
+
+
+                console.debug(
+                    `[loadDatasets] ${ concept } | ${ params.dataType } | ${ points.length }`
+                );
+
 
                 return {
                     concept,
                     type: params.dataType,
+
                     points: (points as any[]).map((p: any[]) => {
+
                         if (params.dataType === "concept_clusters") {
+
                             return {
                                 event_id: `cluster-${ p[0] }`,
                                 cluster_id: p[0],
                                 cluster_label: p[1],
+
                                 nx: p[2],
                                 ny: p[3],
                                 gnx: p[4],
                                 gny: p[5],
+
                                 point_count: p[6],
                                 label: p[7],
                                 description: p[8],
+
                                 concept,
+
                                 token: "_NULL_",
                                 token_idx: -999,
                                 doc_id: "_NULL_",
@@ -194,80 +230,111 @@ export async function loadDatasets(
                                 window_token_pos: -999,
                                 windowKey: "_NULL_",
                             } as PointData;
-                        } else {
-                            return {
-                                event_id: String(p[0]),
-                                token: p[1],
-                                doc_id: p[2],
-                                pub_year: p[3],
-                                token_idx: p[4],
-                                window_id: p[5],
-                                nx: p[6],
-                                ny: p[7],
-                                gnx: p[8],
-                                gny: p[9],
-                                cluster_id: p[10],
-                                cluster_label: p[11],
-                                concept,
-                            } as PointData;
+
                         }
+
+
+                        return {
+                            event_id: String(p[0]),
+                            token: p[1],
+                            doc_id: p[2],
+                            pub_year: p[3],
+                            token_idx: p[4],
+                            window_id: p[5],
+
+                            nx: p[6],
+                            ny: p[7],
+                            gnx: p[8],
+                            gny: p[9],
+
+                            cluster_id: p[10],
+                            cluster_label: p[11],
+
+                            concept,
+
+                        } as PointData;
+
                     }),
                 } as ConceptDatasetSqlite;
+
             })
         );
 
-        const duration = performance.now() - start;
-        console.debug(`[loadDatasets] FINISHED ${ params.dataType } in ${ duration.toFixed(1) }ms`);
+
+        console.debug(
+            `[loadDatasets] FINISHED in ${ (performance.now() - start).toFixed(1) }ms`
+        );
+
         return rv;
-    }
-    catch (error) {
-        console.error("loadDatasets error", error);
+
+    } catch (error) {
+
+        console.error(
+            "loadDatasets error",
+            error
+        );
+
         return [];
     }
 }
+
+
 
 export async function loadBfsDataset(params: {
     fromYear: number;
     toYear: number;
     yearMode: YearMode;
 }) {
-    if (!params) return { type: "bfs_global", points: [] };
+
+    if (!params) {
+        return {
+            type: "bfs_global",
+            points: [],
+        };
+    }
+
 
     console.time("[loadBfsDataset]");
 
+
     const year = yearFilter(
-        "n.",
+        "neighbour.",
         params.yearMode,
         params.fromYear,
         params.toYear
     );
 
-    const points = await execRows(`
+
+    const points = await execRows(
+        `
         SELECT
-        n.neighbour_event_id AS event_id,
-        n.token,
-        n.doc_id,
-        n.pub_year,
-        n.token_idx,
-        n.window_id,
-        neighbour.nx,
-        neighbour.ny,
-        neighbour.gnx,
-        neighbour.gny,
-        n.depth
-    FROM neighbours n
-    JOIN events neighbour
-        ON neighbour.event_id = n.neighbour_event_id
-    WHERE n.pub_year IS NOT NULL
-    ${ year.sql }
-    `,
+            neighbour.event_id,
+            neighbour.token,
+            neighbour.doc_id,
+            neighbour.pub_year,
+            neighbour.token_idx,
+            neighbour.window_id,
+            neighbour.nx,
+            neighbour.ny,
+            neighbour.gnx,
+            neighbour.gny,
+            n.depth
+        FROM neighbours n
+        JOIN events neighbour
+            ON neighbour.event_id = n.neighbour_event_id
+        WHERE neighbour.pub_year IS NOT NULL
+        ${ year.sql }
+        `,
         year.params
     );
 
+
     console.timeEnd("[loadBfsDataset]");
+
 
     return {
         type: "bfs_global",
+
         points: (points as any[]).map((p) => ({
             ...p,
             event_id: String(p.event_id),

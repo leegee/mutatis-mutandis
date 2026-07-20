@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS concept_forms (
 
 CREATE TABLE IF NOT EXISTS events (
     event_id INTEGER PRIMARY KEY,
-    concept TEXT NOT NULL,
+    concept TEXT,
+    event_role TEXT NOT NULL DEFAULT 'neighbour',
     vector_id INTEGER,
     token TEXT,
     doc_id TEXT,
@@ -145,6 +146,20 @@ CREATE TABLE IF NOT EXISTS neighbours (
         depth
     )
 );
+
+CREATE TABLE IF NOT EXISTS concept_field_events (
+    concept TEXT NOT NULL,
+    event_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+
+    PRIMARY KEY(
+        concept,
+        event_id
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_field_events_concept ON concept_field_events(concept);
+CREATE INDEX IF NOT EXISTS idx_field_events_event   ON concept_field_events(event_id);
 
 CREATE TABLE IF NOT EXISTS concept_aggregate (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,16 +253,110 @@ def write_documents(con, documents):
     con.executemany(
         """
         INSERT OR REPLACE INTO documents (
-            doc_id,
-            title,
-            author,
-            pub_year,
-            publisher,
-            pub_place,
-            normalized_places,
-            lat,
-            lng
+            doc_id, title, author, pub_year, publisher, pub_place, normalized_places, lat, lng
         ) VALUES (?,?,?,?,?,?,?,?,?)
+        """,
+        rows,
+    )
+
+    con.commit()
+
+
+def ensure_documents(con, lookup, doc_ids):
+    existing = {
+        row[0]
+        for row in con.execute( "SELECT doc_id FROM documents" )
+    }
+
+    missing = set(doc_ids) - existing
+    if not missing:
+        return
+
+    rows = []
+
+    for doc_id in missing:
+        # Tier 1 has doc_id, but not catalogue metadata.
+        # Keep the row so joins remain valid.
+        rows.append(
+            (
+                str(doc_id),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+        )
+
+    con.executemany(
+        """
+        INSERT OR IGNORE INTO documents (
+            doc_id, title, author, pub_year, publisher, pub_place, normalized_places, lat, lng )
+        VALUES (?,?,?,?,?,?,?,?,?)
+        """,
+        rows,
+    )
+    con.commit()
+    logger.info( f"[tier2] backfilled {len(rows):,} documents" )
+
+
+def ensure_events(con, lookup, event_ids):
+    existing = {
+        row[0]
+        for row in con.execute(
+            "SELECT event_id FROM events"
+        )
+    }
+
+    missing = set(event_ids) - existing
+    if not missing:
+        return
+
+    rows = []
+
+    for eid in missing:
+        event = lookup.get_event(eid)
+
+        if event is None:
+            logger.warning(
+                f"[tier2] missing zarr event {eid}"
+            )
+            continue
+
+        rows.append(
+            (
+                int(eid),
+                "__neighbour__",
+                int(event["vector_id"]),
+                event["token"],
+                event["doc_id"],
+                int(event["pub_year"]),
+                int(event["token_idx"]),
+                int(event["window_id"]),
+                int(event["window_token_pos"]),
+            )
+        )
+
+    if not rows:
+        return
+
+    con.executemany(
+        """
+        INSERT OR IGNORE INTO events (
+            event_id,
+            concept,
+            vector_id,
+            token,
+            doc_id,
+            pub_year,
+            token_idx,
+            window_id,
+            window_token_pos
+        )
+        VALUES (?,?,?,?,?,?,?,?,?)
         """,
         rows,
     )
@@ -502,90 +611,121 @@ def analyse_concept(
 
 def delete_concept(con, concept):
     con.execute(
-        """
-        DELETE FROM neighbours
-        WHERE event_id IN
-        (
-            SELECT event_id FROM events WHERE concept = ?
-        )
-        """,
+        "DELETE FROM neighbours WHERE event_id IN ( SELECT event_id FROM events WHERE concept = ? )",
         (concept,),
     )
 
     con.execute(
-        """
-        DELETE FROM events WHERE concept = ?
-        """,
+        "DELETE FROM events WHERE concept = ?",
         (concept,),
     )
 
     con.execute(
-        """
-        DELETE FROM concept_forms WHERE concept = ?
-        """,
+        "DELETE FROM concept_forms WHERE concept = ?",
         (concept,),
     )
 
     con.execute(
-        """
-        DELETE FROM concept_aggregate
-        WHERE concept = ?
-        """,
+        "DELETE FROM concept_aggregate WHERE concept = ?",
         (concept,),
     )
 
     con.execute(
-        """
-        DELETE FROM concepts WHERE concept = ?
-        """,
+        "DELETE FROM concepts WHERE concept = ?",
+        (concept,),
+    )
+
+    con.execute(
+        "DELETE FROM concept_field_events WHERE concept = ?",
         (concept,),
     )
 
 
-
-def write_concept( con, data, ):
+def write_concept(con, data, lookup):
     concept = data["concept"]
+
     delete_concept( con, concept, )
 
+    event_ids = set()
+    doc_ids = set()
+
+    for event in data["events"]:
+        event_ids.add(event["event_id"])
+        doc_ids.add(event["doc_id"])
+
+        for neighbour in event["neighbours"]:
+            event_ids.add(neighbour["event_id"])
+            doc_ids.add(neighbour["doc_id"])
+
+    # Ensure every referenced event exists before neighbour insertion.
+    # Missing events are normal: FAISS discovers them before they become
+    # first-class rows in SQLite.
+    ensure_events( con, lookup, event_ids, )
+
+    # Every event referenced in events/neighbours must have a document row.
+    ensure_documents( con, lookup, doc_ids, )
+
+    field_rows = []
+
+    for event in data["events"]:
+        field_rows.append(
+            (
+                concept,
+                event["event_id"],
+                "seed",
+            )
+        )
+
+        for neighbour in event["neighbours"]:
+            field_rows.append(
+                (
+                    concept,
+                    neighbour["event_id"],
+                    "neighbour",
+                )
+            )
+
+    con.executemany(
+        "INSERT OR REPLACE INTO concept_field_events ( concept, event_id, role ) VALUES (?,?,?)",
+        field_rows,
+    )
+
     con.execute(
-        """
-        INSERT INTO concepts ( concept, n_events ) VALUES (?,?)
-        """,
+        "INSERT INTO concepts ( concept, n_events ) VALUES (?,?)",
         (
             concept,
             data["n_events"],
         ),
     )
 
-
-    for form in data.get( "forms", [], ):
+    for form in data.get("forms", []):
         con.execute(
-            """
-            INSERT INTO concept_forms ( concept, form ) VALUES (?,?)
-            """,
+            "INSERT INTO concept_forms ( concept, form ) VALUES (?,?)",
             (
                 concept,
                 form,
             ),
         )
 
-    for event in data["events"]:
-        con.execute(
-            """
-            INSERT INTO events (
-                event_id,
-                concept,
-                vector_id,
-                token,
-                doc_id,
-                pub_year,
-                token_idx,
-                window_id,
-                window_token_pos
-            ) VALUES (?,?,?,?,?,?,?,?,?)
-            """,
+    # Only update the actual seed events here.
+    # ensure_events() already inserted neighbours as __derived__.
+    con.executemany(
+        """
+        UPDATE events
+        SET
+            concept = ?,
+            event_role = 'seed',
+            vector_id = ?,
+            token = ?,
+            doc_id = ?,
+            pub_year = ?,
+            token_idx = ?,
+            window_id = ?,
+            window_token_pos = ?
+        WHERE event_id = ?
+        """,
+        [
             (
-                event["event_id"],
                 concept,
                 event["vector_id"],
                 event["token"],
@@ -594,31 +734,17 @@ def write_concept( con, data, ):
                 event["token_idx"],
                 event["window_id"],
                 event["window_token_pos"],
-            ),
-        )
+                event["event_id"],
+            )
+            for event in data["events"]
+        ],
+    )
 
+    neighbour_rows = []
+
+    for event in data["events"]:
         for neighbour in event["neighbours"]:
-            con.execute(
-                """
-                INSERT INTO neighbours (
-                    event_id,
-                    neighbour_event_id,
-                    depth,
-                    via_event_id,
-                    vector_id,
-                    token,
-                    doc_id,
-                    pub_year,
-                    token_idx,
-                    window_id,
-                    window_token_pos,
-                    score,
-                    score_local,
-                    score_medium,
-                    score_broad
-                )
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,
+            neighbour_rows.append(
                 (
                     event["event_id"],
                     neighbour["event_id"],
@@ -635,21 +761,29 @@ def write_concept( con, data, ):
                     neighbour["score_local"],
                     neighbour["score_medium"],
                     neighbour["score_broad"],
-                ),
+                )
             )
+
+    con.executemany(
+        """
+        INSERT OR REPLACE INTO neighbours (
+            event_id, neighbour_event_id, depth, via_event_id, vector_id, token,
+            doc_id, pub_year, token_idx, window_id, window_token_pos, score,
+            score_local, score_medium, score_broad
+         )
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        neighbour_rows,
+    )
 
     aggregate = data["aggregate"]
 
-    for rank, (value, count) in enumerate( aggregate["top_tokens"] ):
+    for rank, (value, count) in enumerate(
+        aggregate["top_tokens"]
+    ):
         con.execute(
             """
-            INSERT INTO concept_aggregate (
-                concept,
-                kind,
-                rank,
-                value,
-                count
-            )
+            INSERT INTO concept_aggregate ( concept, kind, rank, value, count )
             VALUES (?,?,?,?,?)
             """,
             (
@@ -661,50 +795,31 @@ def write_concept( con, data, ):
             ),
         )
 
-    for rank, (value, count) in enumerate( aggregate["top_docs"] ):
+    for rank, (value, count) in enumerate(
+        aggregate["top_docs"]
+    ):
         con.execute(
             """
-            INSERT INTO concept_aggregate (
-                concept,
-                kind,
-                rank,
-                value,
-                count
-            )
+            INSERT INTO concept_aggregate ( concept, kind, rank, value, count )
             VALUES (?,?,?,?,?)
             """,
             (
-                concept,
-                "doc",
-                rank,
-                value,
-                count,
+                concept, "doc", rank, value, count,
             ),
         )
 
-    for rank, ((doc_id, window_id), count) in enumerate( aggregate["top_windows"] ):
+    for rank, ((doc_id, window_id), count) in enumerate(
+        aggregate["top_windows"]
+    ):
         con.execute(
             """
-            INSERT INTO concept_aggregate (
-                concept,
-                kind,
-                rank,
-                window_doc_id,
-                window_id,
-                count
-            )
+            INSERT INTO concept_aggregate ( concept, kind, rank, window_doc_id, window_id, count )
             VALUES (?,?,?,?,?,?)
             """,
             (
-                concept,
-                "window",
-                rank,
-                doc_id,
-                window_id,
-                count,
+                concept, "window", rank, doc_id, window_id, count,
             ),
         )
-
 
 
 def get_processed_concepts(path):
@@ -765,10 +880,7 @@ def run_tier2_service(
         if result.get("empty"):
             continue
 
-        write_concept(
-            con,
-            result,
-        )
+        write_concept( con, result, lookup )
         con.commit()
 
     con.close()
