@@ -79,10 +79,8 @@ export default function ConceptClusterPlot() {
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
     function handleSelectionChange(points: PointData[] | null) {
-        if (controls.showClusterCentroids) {
-            console.debug("[ScattPlot] handleSelectionChange event:", points);
-            controlsActions.setSelectedPoints(points || []);
-        }
+        console.debug("[ScattPlot] handleSelectionChange event:", points);
+        controlsActions.setSelectedPoints(points || []);
     }
 
     function handleBoundsChange(_bounds: ViewBounds) {
