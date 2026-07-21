@@ -279,11 +279,9 @@ export async function loadClusterReport(
             ids
         );
 
-        console.log("DOC IDS REQUESTED", ids);
         for (const [id, author, title, pub_year] of rows as any[]) {
             docMeta[id] = { author, title, pub_year };
         }
-        console.log("DOC META LOADED", Object.keys(docMeta).length, docMeta);
     }
 
     // EXEMPLARS
