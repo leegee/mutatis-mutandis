@@ -71,7 +71,7 @@ export async function loadDatasets(
 
                 if (params.dataType === "concept_neighbours") {
                     const year = yearFilter(
-                        "neighbour.",
+                        "neighbourhood_event.",
                         params.yearMode,
                         params.fromYear,
                         params.toYear
@@ -267,7 +267,7 @@ export async function loadBfsDataset(params: {
     console.time("[loadBfsDataset]");
 
     const year = yearFilter(
-        "neighbour.",
+        "neighbourhood_event.",
         params.yearMode,
         params.fromYear,
         params.toYear
@@ -275,21 +275,21 @@ export async function loadBfsDataset(params: {
 
     const points = await execRows(`
         SELECT
-            neighbour.event_id,
-            neighbour.token,
-            neighbour.doc_id,
-            neighbour.pub_year,
-            neighbour.token_idx,
-            neighbour.window_id,
-            neighbour.nx,
-            neighbour.ny,
-            neighbour.gnx,
-            neighbour.gny,
+            neighbourhood_event.event_id,
+            neighbourhood_event.token,
+            neighbourhood_event.doc_id,
+            neighbourhood_event.pub_year,
+            neighbourhood_event.token_idx,
+            neighbourhood_event.window_id,
+            neighbourhood_event.nx,
+            neighbourhood_event.ny,
+            neighbourhood_event.gnx,
+            neighbourhood_event.gny,
             n.depth
         FROM neighbours n
-        JOIN events neighbour
-            ON neighbour.event_id = n.neighbour_event_id
-        WHERE neighbour.pub_year IS NOT NULL
+        JOIN events neighbourhood_event
+            ON neighbourhood_event.event_id = n.neighbour_event_id
+        WHERE neighbourhood_event.pub_year IS NOT NULL
         ${ year.sql }
         `,
         year.params
