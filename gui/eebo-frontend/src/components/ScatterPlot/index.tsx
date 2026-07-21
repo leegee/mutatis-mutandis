@@ -1,4 +1,5 @@
-import { createSignal, createResource, Show, Switch, Match, createEffect, onMount } from "solid-js";
+// Note clustering is very WIP - clustering is by full corpus span, so centroids are global to that regardless of oyear filter
+import { createSignal, createResource, Show, Switch, Match } from "solid-js";
 
 import type { BfsDataset, LabelPoint, PointData, ViewBounds } from "./types";
 
