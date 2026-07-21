@@ -7,11 +7,13 @@ import DocRow from "./DocRow";
 import ClusterExport from "./ClusterExport";
 
 import "./ConceptClusters.css";
+import { buildCssColorMap } from "../../lib/colour";
 
-const CLUSTER_COLORS = [
-    "#7F77DD", "#1D9E75", "#D85A30", "#D4537E",
-    "#378ADD", "#BA7517", "#639922", "#E24B4A",
-];
+// const CLUSTER_COLORS = [
+//     "#7F77DD", "#1D9E75", "#D85A30", "#D4537E",
+//     "#378ADD", "#BA7517", "#639922", "#E24B4A",
+// ];
+
 
 function clusterFetchParams() {
     const concept = controls.concept;
@@ -37,6 +39,15 @@ export default function ConceptClusters() {
     const [showExemplars, setShowExemplars] = createSignal(false);
 
     const clusters = () => clusterReport()?.clusters ?? [];
+
+    const clusterColors = createMemo(() =>
+        buildCssColorMap(
+            clusters().map(c => String(c.id)),
+            24
+        )
+    );
+
+    const getClusterColor = (id: number) => clusterColors().get(String(id)) ?? "rgba(128,128,128,0.86)";
 
     const visibleClusters = createMemo(() => {
         const list = clusters();
@@ -128,10 +139,9 @@ export default function ConceptClusters() {
                                 class="chip"
                                 onClick={() => setSelectedCluster(c.id)}
                                 style={{
-                                    background:
-                                        selectedCluster() === c.id
-                                            ? CLUSTER_COLORS[i() % CLUSTER_COLORS.length]
-                                            : "var(--color-background-secondary)"
+                                    background: selectedCluster() === c.id
+                                        ? getClusterColor(c.id)
+                                        : "var(--color-background-secondary)"
                                 }}
                             >
                                 <strong>{c.label ?? c.id}</strong>

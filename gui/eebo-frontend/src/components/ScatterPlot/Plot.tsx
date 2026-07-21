@@ -121,7 +121,10 @@ export default function Plot(props: PlotProps) {
 
   const getColor = createMemo(() => {
     return (p: PointData, origin?: string): RGBA => {
-      if (props.colorBy === "cluster_label" && p.cluster_id !== undefined && p.cluster_id !== -1) {
+      if (
+        (props.colorBy === "cluster_label" || props.colorBy === "cluster_id")
+        && p.cluster_id !== undefined && p.cluster_id !== -1
+      ) {
         const label = p.cluster_label || String(p.cluster_id);
         return colorMap().get(label) ?? GREY;
       }

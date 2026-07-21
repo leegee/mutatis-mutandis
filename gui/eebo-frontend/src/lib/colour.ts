@@ -57,3 +57,21 @@ export function hslToRgb(
     220,
   ];
 }
+
+export function buildCssColorMap(
+  values: string[],
+  topN = 24
+): Map<string, string> {
+  const rgbMap = buildColorMap(values, topN);
+
+  const cssMap = new Map<string, string>();
+
+  for (const [key, [r, g, b, a]] of rgbMap) {
+    cssMap.set(
+      key,
+      `rgba(${ r }, ${ g }, ${ b }, ${ (a / 255).toFixed(2) })`
+    );
+  }
+
+  return cssMap;
+}
