@@ -54,6 +54,7 @@ import os
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 MIN_LABEL_CLUSTER_SIZE = 20   # Limit LLM calls
+MAX_LLM_CONCENTRATION = 0.8   # Try to avoid dominance by one doc
 MAX_EVENTS_PER_DOC = 2        # cap per document, so no single text dominates
 SAMPLE_SIZE_PER_CLUSTER = 8   # total events sampled per cluster, post-cap
 CONTEXT_WINDOW_TOKENS = 15    # words either side of the anchor token
@@ -83,6 +84,7 @@ class ClusterSample:
     point_count: int
     concentration: float
     dominant_doc_id: Optional[str]
+    cluster_label: Optional[str] = None
     historical_start: Optional[int] = None
     historical_end: Optional[int] = None
     events: list[ClusterEvent] = field(default_factory=list)
@@ -98,11 +100,16 @@ def sqlite_cx(db_path=None):
 
 
 def fetch_clusters_for_concept(con, concept: str) -> list[dict]:
-    """All non-noise clusters for a concept, with point_count."""
     rows = con.execute(
-        "SELECT cluster_id, point_count FROM concept_cluster_info ORDER BY cluster_id",
+        """
+        SELECT cluster_id, cluster_label, point_count
+        FROM concept_cluster_info
+        WHERE concept = ?
+        ORDER BY point_count DESC
+        """,
         (concept,),
     ).fetchall()
+
     return [dict(r) for r in rows]
 
 
@@ -176,23 +183,51 @@ def diversify_sample(
 
 
 def write_label_to_sqlite(
-    db_path, concept: str, cluster_id: int, sense_name: str, description: str
+    db_path,
+    concept: str,
+    cluster_id: int,
+    sense_name: str,
+    description: str,
+    model: str,
+    prompt: str,
+    sample_event_ids: list[int],
+    concentration: float,
 ):
     con = sqlite3.connect(db_path or CORPUS_TIER2_DB_PATH)
+
     con.execute(
         """
-            UPDATE concept_cluster_info
-            SET cluster_label = ?, description = ?
-            WHERE concept = ? AND cluster_id = ?
+        UPDATE concept_cluster_info
+        SET
+            cluster_label = ?,
+            description = ?,
+            llm_model = ?,
+            llm_concentration = ?,
+            llm_prompt = ?,
+            llm_timestamp = datetime('now'),
+            llm_sample_size = ?,
+            llm_sample_event_ids = ?
+        WHERE concept = ?
+        AND cluster_id = ?
         """,
-        (sense_name, description, concept, cluster_id),
+        (
+            sense_name,
+            description,
+            model,
+            concentration,
+            prompt,
+            len(sample_event_ids),
+            json.dumps(sample_event_ids),
+            concept,
+            cluster_id,
+        ),
     )
+
     con.commit()
     con.close()
 
 
 #  Postgres side
-
 def fetch_window_text(
     pg_dbh,
     doc_id: str,
@@ -269,6 +304,15 @@ def build_cluster_sample(
     historical_start = min(years) if years else None
     historical_end = max(years) if years else None
 
+    events = sorted(
+        events,
+        key=lambda e: (
+            e.pub_year or 9999,
+            e.doc_id,
+            e.token_idx
+        )
+    )
+
     sampled = diversify_sample(events)
 
     context_lines = []
@@ -282,6 +326,7 @@ def build_cluster_sample(
     return ClusterSample(
         concept=concept,
         cluster_id=cluster_id,
+        cluster_label=cluster_info.get("cluster_label"),
         point_count=cluster_info["point_count"],
         concentration=concentration,
         dominant_doc_id=dominant_doc_id,
@@ -395,6 +440,13 @@ def label_concept_clusters(concept: str, db_path=None, dry_run: bool = False):
         for cluster_info in clusters:
             sample = build_cluster_sample(sqlite_dbh, pg_dbh, concept, cluster_info)
 
+            if sample.concentration >= MAX_LLM_CONCENTRATION:
+                logger.warning(
+                    f"[label_clusters] skipping document-dominated cluster "
+                    f"{concept} {sample.cluster_id}"
+                )
+                continue
+
             if not sample.context_lines:
                 logger.warning(
                     f"[label_clusters] {concept} cluster {sample.cluster_id}: "
@@ -431,6 +483,10 @@ def label_concept_clusters(concept: str, db_path=None, dry_run: bool = False):
                 sample.cluster_id,
                 result.get("sense_name", ""),
                 result.get("description", ""),
+                GROQ_MODEL,
+                build_prompt(sample),
+                [e.event_id for e in sample.events],
+                sample.concentration,
             )
 
     finally:

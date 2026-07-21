@@ -181,8 +181,13 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
     centroid_gnx REAL,
     centroid_gny REAL,
     point_count INTEGER,
-    label TEXT,
     description TEXT,
+    llm_model TEXT,
+    llm_prompt TEXT,
+    llm_timestamp TEXT,
+    llm_sample_size INTEGER,
+    llm_sample_event_ids TEXT,
+    llm_concentration REAL,
     PRIMARY KEY(
         concept,
         cluster_id
