@@ -77,7 +77,7 @@ interface PlotProps {
 
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];
 
-const getPosition = (p: PointData | LabelPoint, projection: ProjectionModeType): RGB =>
+const getPosition = (p: PointData | LabelPoint, projection: ProjectionModeType): [number, number, number] =>
   projection === "global" ? [p.gnx, p.gny, 0] : [p.nx, p.ny, 0];
 
 
@@ -85,8 +85,8 @@ export default function Plot(props: PlotProps) {
   let canvas!: HTMLCanvasElement;
   let deck: Deck<OrthographicView> | null = null;
   let controller: SelectionController<PointData> | undefined;
-
   let currentPoints: PointData[] = [];
+  let fontFamily = getComputedStyle(document.body).fontFamily;
 
   // Separate signal that only flips when the threshold actually crosses,
   // used solely to trigger a layer rebuild on that one frame.
@@ -121,12 +121,9 @@ export default function Plot(props: PlotProps) {
 
   const getColor = createMemo(() => {
     return (p: PointData, origin?: string): RGBA => {
-      if (
-        (props.colorBy === "cluster_label" || props.colorBy === "cluster_id")
-        && p.cluster_id !== undefined && p.cluster_id !== -1
-      ) {
-        const label = p.cluster_label || String(p.cluster_id);
-        return colorMap().get(label) ?? GREY;
+      if (props.colorBy === "cluster_id" && p.cluster_id !== undefined && p.cluster_id !== -1) {
+        console.log(props.colorBy, String(p.cluster_id))
+        return colorMap().get(String(p.cluster_id)) ?? GREY;
       }
 
       let base: RGBA;
@@ -202,31 +199,28 @@ export default function Plot(props: PlotProps) {
         new TextLayer<LabelPoint>({
           id: "clusters-labels",
           data: clusterPoints,
-
           coordinateSystem: "cartesian",
           getPosition: p => getPosition(p, proj),
-
-          getText: (p) => p.cluster_label ?? "",
-
           getSize: 12,
+          getPixelOffset: [0, 20],
+          fontFamily: fontFamily,
+          fontWeight: "bold",
+          fontSettings: {
+            sdf: true,
+          },
+          getText: (p) => p.cluster_label ?? "",
           sizeUnits: "pixels",
-
           getColor: [255, 255, 255, 220],
-
           getTextAnchor: "middle",
           getAlignmentBaseline: "center",
-
           background: true,
           getBackgroundColor: [0, 0, 0, 140],
           backgroundPadding: [4, 2],
-
           pickable: true,
-
           updateTriggers: {
             getPosition: [proj],
             getText: [props.colorBy],
           },
-
           onHover: (info: PickingInfo<PointData>) => {
             props.onPointHover?.(
               info.object ?? null,
