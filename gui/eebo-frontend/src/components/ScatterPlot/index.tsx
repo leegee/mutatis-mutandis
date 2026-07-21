@@ -10,7 +10,6 @@ import { controls, type ColorScatterByType, type ProjectionModeType, } from "../
 import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
-import TextWindow from "../TextWindow";
 import ClusterTooltip from "./ClusterTooltip";
 import ConceptTooltip from "./ConceptTooltip";
 
@@ -18,7 +17,6 @@ const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_id"];
 
 export default function ConceptClusterPlot() {
     const [pointHovered, setPointHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
-    const [labelHovered, setLabelHovered] = createSignal<{ label: LabelPoint; x: number; y: number } | null>(null);
 
     const sharedKey = () => ({
         concepts: controls.conceptSelection,

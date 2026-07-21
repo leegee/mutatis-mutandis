@@ -140,7 +140,9 @@ export default function Plot(props: PlotProps) {
           DEPTH_COLORS[depth][2],
           alpha,
         ];
-      } else {
+      }
+
+      else {
         const thisColourMap = colorMap();
         const thisColorBy = props.colorBy;
         base = thisColourMap.get(String(p[thisColorBy as keyof PointData] ?? "")) ?? GREY;
@@ -285,7 +287,6 @@ export default function Plot(props: PlotProps) {
           getFillColor: p => getColor()(p, "neighbours"),
           getRadius: p => (p.depth === 2 ? 1.8 : 2.8),
           radiusUnits: "pixels",
-          opacity: (props.neighbourOpacity ?? 140) / 255,
           pickable: true, // zoomed,
           autoHighlight: true, // zoomed,
           highlightColor: [255, 255, 255, 100],
