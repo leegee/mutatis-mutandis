@@ -175,6 +175,28 @@ export default function Plot(props: PlotProps) {
     const layersList: any[] = [];
 
 
+    if (props.bfsDataset?.points?.length && proj === "global" && props.bfsOpacity) {
+      layersList.push(
+        new GlowScatterplotLayer({
+          id: "bfs-global",
+          data: props.bfsDataset.points,
+          getPosition: getBfsPosition,
+          getFillColor: p => {
+            const depth = p.depth ?? 0;
+            const base = DEPTH_COLORS[depth] || DEPTH_COLORS[2];
+            return [base[0], base[1], base[2], props.bfsOpacity ?? 90];
+          },
+          getRadius: 3.5,
+          radiusUnits: "pixels",
+          opacity: (props.bfsOpacity ?? 90) / 255,
+          pickable: zoomed,
+          updateTriggers: {
+            getFillColor: [props.bfsOpacity],
+          }
+        })
+      );
+    }
+
     if (clusterPoints.length > 0) {
       layersList.push(new GlowScatterplotLayer<PointData>({
         id: "clusters-merged",
@@ -243,39 +265,6 @@ export default function Plot(props: PlotProps) {
       );
     }
 
-    if (conceptPoints.length > 0) {
-      layersList.push(
-        new GlowScatterplotLayer<PointData>({
-          id: "concepts-merged",
-          getRadius: 3, // 4.5, // TODO
-          coordinateSystem: "cartesian",
-          data: conceptPoints,
-          getPosition: p => getPosition(p, proj),
-          getFillColor: p => getColor()(p),
-          radiusUnits: "pixels",
-          opacity: 0.96,
-          pickable: true,
-          autoHighlight: true,
-          highlightColor: [255, 255, 255, 80],
-          transitions: {
-            getPosition: { duration: 600 },
-            getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
-            getRadius: { duration: 200 },
-          },
-          updateTriggers: {
-            getPosition: [proj],
-            getFillColor: [props.colorBy, selectedEventIds(), props.colorByFields],
-          },
-          onHover: info => {
-            if (isDragging) return;
-            const point = info.object
-              ? { ...info.object, origin: "concept", }
-              : null;
-            props.onPointHover?.(point, point ? [info.x, info.y] : null);
-          }
-        })
-      );
-    }
 
     if (neighbourPoints.length > 0) {
       layersList.push(
@@ -309,23 +298,35 @@ export default function Plot(props: PlotProps) {
       );
     }
 
-    if (props.bfsDataset?.points?.length && proj === "global" && props.bfsOpacity) {
+    if (conceptPoints.length > 0) {
       layersList.push(
-        new GlowScatterplotLayer({
-          id: "bfs-global",
-          data: props.bfsDataset.points,
-          getPosition: getBfsPosition,
-          getFillColor: p => {
-            const depth = p.depth ?? 0;
-            const base = DEPTH_COLORS[depth] || DEPTH_COLORS[2];
-            return [base[0], base[1], base[2], props.bfsOpacity ?? 90];
-          },
-          getRadius: 3.5,
+        new GlowScatterplotLayer<PointData>({
+          id: "concepts-merged",
+          getRadius: 3, // 4.5, // TODO
+          coordinateSystem: "cartesian",
+          data: conceptPoints,
+          getPosition: p => getPosition(p, proj),
+          getFillColor: p => getColor()(p),
           radiusUnits: "pixels",
-          opacity: (props.bfsOpacity ?? 90) / 255,
-          pickable: zoomed,
+          opacity: 0.96,
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 80],
+          transitions: {
+            getPosition: { duration: 600 },
+            getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
+            getRadius: { duration: 200 },
+          },
           updateTriggers: {
-            getFillColor: [props.bfsOpacity],
+            getPosition: [proj],
+            getFillColor: [props.colorBy, selectedEventIds(), props.colorByFields],
+          },
+          onHover: info => {
+            if (isDragging) return;
+            const point = info.object
+              ? { ...info.object, origin: "concept", }
+              : null;
+            props.onPointHover?.(point, point ? [info.x, info.y] : null);
           }
         })
       );
@@ -433,11 +434,14 @@ export default function Plot(props: PlotProps) {
         y: e.offsetY,
       });
 
+      // Avoid BFS and clsuter-markers
       const cleanPick = pick
-        // ?.filter((p) => p.origin !== "concept_clusters")
         ?.filter(p => !p.sourceLayer?.id.startsWith("bfs-"))
         .map(p => p.object)
-        .filter((o): o is PointData => !!o?.event_id) ?? [];
+        .filter((o): o is PointData =>
+          !!o?.event_id &&
+          o.origin !== "concept_clusters"
+        ) ?? [];
 
       if (cleanPick.length) {
         controller?.dispatch({ type: "click", payload: cleanPick });
