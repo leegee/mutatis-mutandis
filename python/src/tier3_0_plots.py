@@ -337,7 +337,14 @@ def fit_leiden_on_fused_graph(
     return labels
 
 
-def fit_cluster_local(X, event_ids, local_concept_coords=None, clustering_method="hdbscan", index=None, lookup=None):
+def fit_cluster_local(
+    X, event_ids,
+    local_concept_coords=None,
+    clustering_method="hdbscan", # TODO
+    index=None,
+    lookup=None,
+    leiden_resolution=1.0,
+):
     """
     Clustering pipeline:
 
@@ -787,6 +794,7 @@ def run_tier3_core(
     use_concatenated_clustering=True,
     skip_global_bfs=False,
     emit=None,
+    leiden_resolution=leiden_resolution
 ):
     logger.info("[tier3 run_tier3_core] Enter")
 
@@ -855,7 +863,8 @@ def run_tier3_core(
 
             cluster_local_coords, cluster_labels = fit_cluster_local(
                 X_cluster, concept_sample, local_concept_coords=None,
-                clustering_method="leiden", index=index, lookup=lookup
+                clustering_method="leiden", index=index, lookup=lookup,
+                leiden_resolution=leiden_resolution,
             )
 
             buffered_clusters.append((
@@ -1034,6 +1043,7 @@ def run_tier3_service(
     use_concatenated_clustering=True,
     skip_global_bfs=False,
     emit=None,
+    leiden_resolution=leiden_resolution,
 ):
     logger = setEmit(
         emit,
@@ -1052,6 +1062,7 @@ def run_tier3_service(
         use_concatenated_clustering = use_concatenated_clustering,
         skip_global_bfs             = skip_global_bfs,
         emit                        = emit,
+        leiden_resolution           = leiden_resolution,
     )
 
 
@@ -1065,6 +1076,9 @@ def main():
     parser.add_argument("--mask", action="store_true", help="Use masked data")
     parser.add_argument("--no-ensemble", action="store_true", help="Cluster by concatinating ensemble vectors (legacy)")
     parser.add_argument("--skip-bfs", action="store_true", help="Skip the global BFS expansion pass (full mode only); useful for fast single-concept runs")
+    parser.add_argument( "--leiden-resolution", type=float, default=1.0,
+        help=( "Leiden clustering resolution. Higher values produce more, smaller clusters; lower values produce fewer, larger clusters." ),
+    )
 
     args = parser.parse_args()
 
@@ -1101,6 +1115,7 @@ def main():
         use_concatenated_clustering  = use_concatenated_clustering,
         skip_global_bfs              = args.skip_bfs,
         emit                         = None,
+        leiden_resolution            = leiden_resolution,
     )
 
     logger.info("[tier3] complete")
