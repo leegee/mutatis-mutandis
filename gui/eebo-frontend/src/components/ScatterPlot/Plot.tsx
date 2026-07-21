@@ -446,15 +446,17 @@ export default function Plot(props: PlotProps) {
     const fit = fitDatasetBounds(points, props.projectionMode);
     if (!fit) return;
 
+    const padding = 1.2;
     const zoom = Math.max(
       2,
       Math.min(
         20,
         Math.log2(
-          Math.min(canvas.clientWidth, canvas.clientHeight) / fit.extent)
+          Math.min(canvas.clientWidth, canvas.clientHeight) /
+          (fit.extent * padding)
+        )
       )
     );
-
     flyTo([fit.cx, fit.cy, 0], zoom, 400);
   });
 
