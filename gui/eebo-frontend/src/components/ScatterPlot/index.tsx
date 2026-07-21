@@ -199,7 +199,7 @@ export default function ConceptClusterPlot() {
                 </Show>
             </Show>
 
-            {/* Piont-hover Tooltip */}
+            {/* Hover Tooltip */}
             <Show when={pointHovered()}>
                 {(hoveredPoint) => (
                     <aside class="surface-container-highest border large-elevate no-padding"
@@ -223,8 +223,12 @@ export default function ConceptClusterPlot() {
                                             {(hoveredPoint().point as unknown as LabelPoint).description}
                                         </div>
                                     </Show>
-                                    <div class={hoveredPoint().point.cluster_label ? "top-margin bottom-margin" : ""}>
-                                        Concept: {hoveredPoint().point.concept}
+                                    <div class={hoveredPoint().point.cluster_label ? "top-margin bottom-margin small-text large-opacity" : ""}>
+                                        <p>
+                                            Concept: {hoveredPoint().point.concept}
+                                            <br />
+                                            Cluster ID: {hoveredPoint().point.cluster_id}
+                                        </p>
                                     </div>
                                 </div>
                             </Match>
