@@ -1,21 +1,25 @@
 // Note clustering is very WIP - clustering is by full corpus span, so centroids are global to that regardless of oyear filter
-import { createSignal, createResource, Show, Switch, Match } from "solid-js";
+import { createSignal, createResource, Show, Switch, Match, createEffect } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 
 import type { BfsDataset, PointData, ViewBounds } from "./types";
 
-import Plot from "./Plot";
-import ControlsHeader from "../ControlsHeader";
-import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets.sqlite";
 import { controls, type ColorScatterByType, type ProjectionModeType, } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
+import { selectIds } from "../../state/controls.selectors";
+import ControlsHeader from "../ControlsHeader";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
+
 import ClusterTooltip from "./ClusterTooltip";
 import ConceptTooltip from "./ConceptTooltip";
+import Plot from "./Plot";
+import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets.sqlite";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_id"];
 
 export default function ConceptClusterPlot() {
+    const [searchParams] = useSearchParams();
     const [pointHovered, setPointHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
 
     const sharedKey = () => ({
@@ -86,6 +90,27 @@ export default function ConceptClusterPlot() {
     function handleBoundsChange(_bounds: ViewBounds) {
         // handle if needed
     }
+
+    // Select events where doc_id == the doc_id passed in the URL query string
+    createEffect(() => {
+        const docId = searchParams.doc_id;
+        if (!docId) {
+            return;
+        }
+
+        const points = activeDatasets().flatMap(d => d.points ?? []);
+        if (!points.length) return;
+
+        const ids = selectIds(
+            points,
+            p => p.doc_id === docId,
+            p => p.event_id
+        );
+
+        console.info(`[ScatterPlot] found doc_id ${ docId } in URL and matched ${ ids.size } points`)
+        controlsActions.setSelectedEventIds(ids);
+    });
+
 
     return (
         <>
@@ -196,17 +221,17 @@ export default function ConceptClusterPlot() {
                                 colorBy={controls.colorScatterBy}
                                 colorByFields={COLOR_FIELDS}
                                 datasets={activeDatasets()}
-                                showNeighbours={controls.showNeighbours}
-                                showClusterCentroids={
-                                    controls.projectionMode === "global" &&
-                                    controls.showClusterCentroids
-                                }
                                 neighbourOpacity={controls.neighbourOpacity}
                                 onBoundsChange={handleBoundsChange}
                                 onPointHover={(point, xy) => setPointHovered(point && xy ? { point: point, x: xy[0], y: xy[1] } : null)}
                                 onSelectionChange={handleSelectionChange}
                                 projectionMode={controls.projectionMode}
                                 selectedEventIds={controls.selectedEventIds}
+                                showNeighbours={controls.showNeighbours}
+                                showClusterCentroids={
+                                    controls.projectionMode === "global" &&
+                                    controls.showClusterCentroids
+                                }
                             />
                         </div>
 
