@@ -16,8 +16,7 @@ import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
 import type { Id, ScreenRect } from "./SelectionPlugin/types";
 import { buildColorMap } from "../../lib/colour";
-import { controls, type ProjectionModeType } from "../../state/controls.store";
-import { labelsActions } from "../../state/labels.actions";
+import { type ProjectionModeType } from "../../state/controls.store";
 import { fitDatasetBounds } from "./fitDatasetBounds";
 
 type RGB = [number, number, number];
