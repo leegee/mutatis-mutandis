@@ -1,7 +1,7 @@
 import type { PointData } from "../components/ScatterPlot/types";
 import { CORPUS_START_YEAR, CORPUS_END_YEAR } from "../corpus_config";
 import type { ViewMode, YearMode } from "../types";
-import { setControls, type ColorScatterByType, type ProjectionModeType, type ScatterPlotLayerType } from "./controls.store";
+import { setControls, type ColorScatterByType, type ProjectionModeType, } from "./controls.store";
 
 const clampYear = (y: number) =>
     Math.min(CORPUS_END_YEAR, Math.max(CORPUS_START_YEAR, y));
@@ -81,11 +81,9 @@ export const controlsActions = {
         });
     },
 
-    setScatterplotLayerMode(mode: ScatterPlotLayerType) {
-        setControls({
-            scatterPlotLayerMode: mode,
-        });
-    },
+    setShowNeighbours: (active: boolean) => setControls({ showNeighbours: active }),
+
+    setShowClusterCentroids: (active: boolean) => setControls({ showClusterCentroids: active }),
 
     setColorBy(byWhat: ColorScatterByType) {
         setControls('colorScatterBy', byWhat);

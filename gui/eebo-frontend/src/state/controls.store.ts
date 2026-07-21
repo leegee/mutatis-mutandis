@@ -9,7 +9,6 @@ import type { PointData } from "../components/ScatterPlot/types";
 export const MAX_TOP_N = 1000;
 
 export type ProjectionModeType = "local" | "global"
-export type ScatterPlotLayerType = "concept" | "neighbours" | "concept_clusters"
 export type ColorScatterByType = 'pub_year' | "cluster_label" | "doc_id"
 
 export type ControlsState = {
@@ -17,7 +16,8 @@ export type ControlsState = {
   bfsOpacity: number;
   neighbourOpacity: number;
   conceptSelection: string[];
-  scatterPlotLayerMode: ScatterPlotLayerType;
+  showNeighbours: boolean;
+  showClusterCentroids: boolean;
   colorScatterBy: ColorScatterByType;
   viewMode: ViewMode;
   maxHubs: number;
@@ -55,7 +55,8 @@ const initialControls: ControlsState = {
   toYear: CORPUS_END_YEAR,
   showEventLabels: false,
   projectionMode: 'global',
-  scatterPlotLayerMode: 'concept',
+  showNeighbours: true,
+  showClusterCentroids: true,
   colorScatterBy: 'pub_year',
   authorMatch: '',
 };

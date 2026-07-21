@@ -68,6 +68,9 @@ interface PlotProps {
   neighbourOpacity?: number;
   selectedEventIds?: Set<Id>;
 
+  showNeighbours?: boolean;
+  showClusterCentroids?: boolean;
+
   onPointRightClick?: (point: PointData) => void;
   onBoundsChange?: (bounds: ViewBounds) => void;
   onSelectionChange?: (points: PointData[] | null) => void;
@@ -164,10 +167,11 @@ export default function Plot(props: PlotProps) {
     const zoomed = zoomTier() === 1;
 
     const conceptPoints = mergedConceptPoints();
-    const neighbourPoints = mergedNeighbourPoints();
-    const clusterPoints = mergedClusterPoints();
+    const neighbourPoints = props.showNeighbours ? mergedNeighbourPoints() : [];
+    const clusterPoints = props.showClusterCentroids ? mergedClusterPoints() : [];
 
     const layersList: any[] = [];
+
 
     if (clusterPoints.length > 0) {
       layersList.push(new GlowScatterplotLayer<PointData>({
@@ -178,7 +182,7 @@ export default function Plot(props: PlotProps) {
         getFillColor: p => getColor()(p),
         getRadius: 10.0,
         radiusUnits: "pixels",
-        opacity: 0.95,
+        opacity: 0.5,
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 100, 180],
@@ -311,8 +315,6 @@ export default function Plot(props: PlotProps) {
         })
       );
     }
-
-    // layersList.push(labelLayer());
 
     return layersList;
   });

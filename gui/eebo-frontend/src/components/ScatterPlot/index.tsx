@@ -6,7 +6,7 @@ import type { BfsDataset, LabelPoint, PointData, ViewBounds } from "./types";
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
 import { loadDatasets, loadBfsDataset } from "./loadScatterDatasets.sqlite";
-import { controls, type ColorScatterByType, type ProjectionModeType, type ScatterPlotLayerType } from "../../state/controls.store";
+import { controls, type ColorScatterByType, type ProjectionModeType, } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
@@ -32,12 +32,12 @@ export default function ConceptClusterPlot() {
     );
 
     const [neighbourDatasets] = createResource(
-        () => controls.scatterPlotLayerMode === "neighbours" ? { ...sharedKey(), dataType: "concept_neighbours" } : null,
+        () => controls.showNeighbours ? { ...sharedKey(), dataType: "concept_neighbours" } : null,
         loadDatasets
     );
 
     const [clusterDatasets] = createResource(
-        () => controls.scatterPlotLayerMode === "concept_clusters" ? { ...sharedKey(), dataType: "concept_clusters" } : null,
+        () => controls.showClusterCentroids ? { ...sharedKey(), dataType: "concept_clusters" } : null,
         loadDatasets
     );
 
@@ -52,24 +52,34 @@ export default function ConceptClusterPlot() {
         loadBfsDataset
     );
 
-    // Concept is always shown; neighbours are layered on top when toggled.
+    // Concept is always shown; neighbours and clusters are layered on top when toggled.
     // BFS is always passed separately to Plot and rendered beneath.
     const activeDatasets = () => {
-        if (controls.scatterPlotLayerMode === "concept_clusters") {
-            return (clusterDatasets() ?? []).map(d => ({ ...d, origin: "concept_clusters" }));
-        }
-        const concept = (conceptDatasets() ?? []).map(d => ({ ...d, origin: "concept" }));
-        const neighbours = controls.scatterPlotLayerMode === "neighbours"
-            ? (neighbourDatasets() ?? []).map(d => ({ ...d, origin: "neighbours" }))
+        const concept = (conceptDatasets() ?? [])
+            .map(d => ({ ...d, origin: "concept" }));
+
+        const neighbours = controls.showNeighbours
+            ? (neighbourDatasets() ?? [])
+                .map(d => ({ ...d, origin: "neighbours" }))
             : [];
-        return [...concept, ...neighbours];
+
+        const clusters = controls.showClusterCentroids
+            ? (clusterDatasets() ?? [])
+                .map(d => ({ ...d, origin: "concept_clusters" }))
+            : [];
+
+        return [
+            ...concept,
+            ...neighbours,
+            ...clusters,
+        ];
     };
 
     const loading = () => conceptDatasets.loading || bfs.loading || clusterDatasets.loading;
     const error = () => conceptDatasets.error || bfs.error || clusterDatasets.error;
 
     function handleSelectionChange(points: PointData[] | null) {
-        if (controls.scatterPlotLayerMode !== 'concept_clusters') {
+        if (controls.showClusterCentroids) {
             console.debug("[ScattPlot] handleSelectionChange event:", points);
             controlsActions.setSelectedPoints(points || []);
         }
@@ -95,20 +105,25 @@ export default function ConceptClusterPlot() {
                 }>
                     <ControlsHeader multiConcept authorMatch>
                         <div class="field  border middle-align">
-                            <select class="small-padding" value={controls.scatterPlotLayerMode}
-                                onChange={e => {
-                                    controlsActions.setScatterplotLayerMode(e.currentTarget.value as ScatterPlotLayerType);
-                                    if (e.currentTarget.value === 'concept_clusters') {
-                                        controlsActions.setColorBy("cluster_label")
-                                    }
-                                }}>
-                                <option value="neighbours">All</option>
-                                <option value="concept">Concept</option>
-                                <option value="concept_clusters">Clusters</option>
-                            </select>
-                            <div class="tooltip bottom">
-                                Show concepts with neighbours (All), concepts without neighbours, or clusters.
-                            </div>
+                            <label class="switch icon">
+                                <input type="checkbox"
+                                    checked={controls.showNeighbours}
+                                    onInput={e => controlsActions.setShowNeighbours(e.currentTarget.checked)}
+                                />
+                                <span><i>tenancy</i></span>
+                            </label>
+                            <div class="tooltip bottom"> Show neighbours </div>
+                        </div>
+
+                        <div class="field  border middle-align">
+                            <label class="switch icon">
+                                <input type="checkbox"
+                                    checked={controls.showClusterCentroids}
+                                    onInput={e => controlsActions.setShowClusterCentroids(e.currentTarget.checked)}
+                                />
+                                <span><i>hive</i></span>
+                            </label>
+                            <div class="tooltip bottom"> Show cluster info </div>
                         </div>
 
                         <div class="field border middle-align">
@@ -159,7 +174,7 @@ export default function ConceptClusterPlot() {
                                         <nav>
                                             <div class="slider medium responsive">
                                                 <input type='range' min={1} max={255} step={1}
-                                                    disabled={controls.scatterPlotLayerMode !== "neighbours"}
+                                                    disabled={!controls.showNeighbours}
                                                     value={controls.neighbourOpacity}
                                                     onInput={(e) => controlsActions.setNeighbourOpacity(Number(e.currentTarget.value))}
                                                 />
@@ -183,6 +198,11 @@ export default function ConceptClusterPlot() {
                                 colorBy={controls.colorScatterBy}
                                 colorByFields={COLOR_FIELDS}
                                 datasets={activeDatasets()}
+                                showNeighbours={controls.showNeighbours}
+                                showClusterCentroids={
+                                    controls.projectionMode === "global" &&
+                                    controls.showClusterCentroids
+                                }
                                 neighbourOpacity={controls.neighbourOpacity}
                                 onBoundsChange={handleBoundsChange}
                                 onPointHover={(point, xy) => setPointHovered(point && xy ? { point: point, x: xy[0], y: xy[1] } : null)}
@@ -213,7 +233,7 @@ export default function ConceptClusterPlot() {
                         }}>
 
                         <Switch>
-                            <Match when={controls.scatterPlotLayerMode === 'concept_clusters'}>
+                            <Match when={controls.showClusterCentroids}>
                                 <header class="fill padding">
                                     <h2>{hoveredPoint().point.cluster_label ?? "No cluster"}</h2>
                                 </header>
@@ -233,13 +253,11 @@ export default function ConceptClusterPlot() {
                                 </div>
                             </Match>
 
-                            <Match when={controls.scatterPlotLayerMode !== 'concept_clusters'}>
+                            <Match when={!controls.showClusterCentroids}>
                                 <header class="bottom-margin fill">
                                     <h2 class="fill max"><q>{hoveredPoint().point.token}</q></h2>
                                     <Show when={hoveredPoint().point.depth
-                                        || (
-                                            controls.scatterPlotLayerMode === 'concept_clusters'
-                                            && hoveredPoint().point.concept)
+                                        || (controls.showClusterCentroids && hoveredPoint().point.concept)
                                     }>
                                         <div class="medium-opacity small-text no-space small small-margin tiny-padding">
                                             <span class="max no-space small small-margin no-padding">
