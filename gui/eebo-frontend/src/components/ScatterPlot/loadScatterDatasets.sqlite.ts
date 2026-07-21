@@ -82,26 +82,26 @@ export async function loadDatasets(
                         : null;
 
                     sql = `SELECT
-                            neighbour.event_id,
-                            neighbour.token,
-                            neighbour.doc_id,
-                            neighbour.pub_year,
-                            neighbour.token_idx,
-                            neighbour.window_id,
-                            neighbour.nx,
-                            neighbour.ny,
-                            neighbour.gnx,
-                            neighbour.gny,
-                            neighbour.cluster_id,
-                            neighbour.cluster_label,
+                            neighbourhood_event.event_id,
+                            neighbourhood_event.token,
+                            neighbourhood_event.doc_id,
+                            neighbourhood_event.pub_year,
+                            neighbourhood_event.token_idx,
+                            neighbourhood_event.window_id,
+                            neighbourhood_event.nx,
+                            neighbourhood_event.ny,
+                            neighbourhood_event.gnx,
+                            neighbourhood_event.gny,
+                            neighbourhood_event.cluster_id,
+                            neighbourhood_event.cluster_label,
                             n.depth
-                        FROM concept_field_events f
+                        FROM concept_field_events seed
                             JOIN neighbours n
-                                ON n.event_id = f.event_id
-                            JOIN events neighbour
-                                ON neighbour.event_id = n.neighbour_event_id
-                            WHERE f.concept = ?
-                            AND f.role = 'seed'
+                                ON n.event_id = seed.event_id
+                            JOIN events neighbourhood_event
+                                ON neighbourhood_event.event_id = n.neighbour_event_id
+                            WHERE seed.concept = ?
+                            AND seed.role = 'seed'
                           ${ author ? author.sql : "" }
                           ${ year.sql }
                     `;
