@@ -117,25 +117,31 @@ export async function loadDatasets(
                 else if (params.dataType === "concept_clusters") {
                     sql = `
                         SELECT
-                            cluster_id,
-                            cluster_label,
-                            centroid_nx AS nx,
-                            centroid_ny AS ny,
-                            centroid_gnx AS gnx,
-                            centroid_gny AS gny,
-                            point_count,
-                            label,
-                            description
-                        FROM concept_cluster_info
-                        WHERE concept = ?
-                        ORDER BY cluster_id
+                            c.cluster_id,
+                            c.cluster_label,
+                            c.centroid_nx AS nx,
+                            c.centroid_ny AS ny,
+                            c.centroid_gnx AS gnx,
+                            c.centroid_gny AS gny,
+                            c.point_count,
+                            c.label,
+                            c.description
+                        FROM concept_cluster_info c
+                        WHERE c.concept = ?
+                        AND EXISTS (
+                            SELECT 1
+                            FROM events e
+                            WHERE e.concept = c.concept
+                            AND e.cluster_id = c.cluster_id
+                            AND e.pub_year BETWEEN ? AND ?
+                        )
+                        ORDER BY c.cluster_id
                     `;
 
-                    queryParams = [concept,];
+                    queryParams = [concept, params.fromYear, params.toYear,];
                 }
 
                 else {
-
                     const year = yearFilter(
                         "e.",
                         params.yearMode,
@@ -190,7 +196,7 @@ export async function loadDatasets(
                     points: (points as any[]).map((p: any[]) => {
                         if (params.dataType === "concept_clusters") {
                             return {
-                                event_id: `cluster-${ p[0] }`,
+                                event_id: `${ concept }-cluster-${ p[0] }`,
                                 cluster_id: p[0],
                                 cluster_label: p[1],
                                 nx: p[2],

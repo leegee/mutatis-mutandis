@@ -154,38 +154,11 @@ export default function Plot(props: PlotProps) {
   });
 
 
-  const labelLayer = createMemo(() => {
-    const labels = labelsActions.getLabels(controls.concept);
-
-    return new TextLayer<LabelPoint>({
-      coordinateSystem: "cartesian",
-      id: "labels",
-      data: labels.length ? labels : [],
-      getPosition: d => getPosition(d, props.projectionMode),
-      updateTriggers: {
-        getPosition: [props.projectionMode],
-      },
-      getText: d => d.label || (d as any).title, // legacy
-      getSize: 12,
-      sizeUnits: "pixels",
-      getColor: [252, 252, 252, 222],
-      background: true,
-      getBackgroundColor: [10, 10, 10, 80],
-      backgroundPadding: [4, 2],
-      getTextAnchor: "middle",
-      getAlignmentBaseline: "center",
-      pickable: true,
-      onHover: (info: PickingInfo<LabelPoint>) => props.onLabelHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
-    });
-  });
-
-
   const mergedConceptPoints = createMemo(() => props.datasets.filter(d => d.type === "concept").flatMap(d => d.points || []));
 
   const mergedNeighbourPoints = createMemo(() => props.datasets.filter(d => d.type === "concept_neighbours").flatMap(d => d.points || []));
 
   const mergedClusterPoints = createMemo(() => props.datasets.filter(d => d.type === "concept_clusters").flatMap(d => d.points || []));
-
 
   const layers = createMemo(() => {
     const proj = props.projectionMode;
@@ -231,8 +204,7 @@ export default function Plot(props: PlotProps) {
           coordinateSystem: "cartesian",
           getPosition: p => getPosition(p, proj),
 
-          // prefer label, fallback to description, fallback empty
-          getText: (p) => p.label ?? p.description ?? "",
+          getText: (p) => p.cluster_label ?? "",
 
           getSize: 12,
           sizeUnits: "pixels",
@@ -346,7 +318,7 @@ export default function Plot(props: PlotProps) {
       );
     }
 
-    layersList.push(labelLayer());
+    // layersList.push(labelLayer());
 
     return layersList;
   });

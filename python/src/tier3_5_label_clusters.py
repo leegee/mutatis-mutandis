@@ -84,7 +84,7 @@ class ClusterSample:
     point_count: int
     concentration: float
     dominant_doc_id: Optional[str]
-    cluster_label: Optional[str] = None
+    document_count: int
     historical_start: Optional[int] = None
     historical_end: Optional[int] = None
     events: list[ClusterEvent] = field(default_factory=list)
@@ -104,7 +104,7 @@ def fetch_clusters_for_concept(con, concept: str) -> list[dict]:
         """
         SELECT cluster_id, cluster_label, point_count
         FROM concept_cluster_info
-        WHERE concept = ?
+        WHERE concept = ? AND cluster_label IS NULL
         ORDER BY point_count DESC
         """,
         (concept,),
@@ -295,6 +295,10 @@ def build_cluster_sample(
     cluster_id = cluster_info["cluster_id"]
     events = fetch_cluster_events(sqlite_dbh, concept, cluster_id)
     concentration, dominant_doc_id = compute_concentration(events)
+    document_count = len({
+        e.doc_id
+        for e in events
+    })
 
     years = [
         e.pub_year
@@ -326,10 +330,10 @@ def build_cluster_sample(
     return ClusterSample(
         concept=concept,
         cluster_id=cluster_id,
-        cluster_label=cluster_info.get("cluster_label"),
         point_count=cluster_info["point_count"],
         concentration=concentration,
         dominant_doc_id=dominant_doc_id,
+        document_count=document_count,
         historical_start=historical_start,
         historical_end=historical_end,
         events=sampled,
@@ -350,7 +354,9 @@ def build_prompt(sample: ClusterSample) -> str:
     return f"""
 Concept: {sample.concept}
 Cluster size: {sample.point_count} occurrences
+Documents represented: {sample.document_count}
 Historical span: {historical_span}
+Dominant document share: {sample.concentration:.0%}
 
 Representative occurrences:
 

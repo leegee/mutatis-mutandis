@@ -11,7 +11,7 @@ import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import TextWindow from "../TextWindow";
 
-const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_label"];
+const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_id"];
 
 export default function ConceptClusterPlot() {
     const [pointHovered, setPointHovered] = createSignal<{ point: PointData; x: number; y: number } | null>(null);
@@ -231,7 +231,7 @@ export default function ConceptClusterPlot() {
                         <Switch>
                             <Match when={controls.scatterPlotLayerMode === 'concept_clusters'}>
                                 <header class="bottom-margin fill">
-                                    <h2>{(hoveredPoint().point as unknown as LabelPoint).label || hoveredPoint().point.cluster_label}</h2>
+                                    <h2>{hoveredPoint().point.cluster_label ?? ""}</h2>
                                 </header>
                                 <div class="left-padding right-padding">
                                     <div>
