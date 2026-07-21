@@ -14,7 +14,7 @@ export interface PointData extends EnrichedEvent, Omit<SqliteEvent, "vector_id">
   concept: string;
 
   // [key: string]: unknown;
-
+  origin?: "concept" | "neighbours" | "concept_clusters";
   cluster_id?: number;
   cluster_label?: string;
 }

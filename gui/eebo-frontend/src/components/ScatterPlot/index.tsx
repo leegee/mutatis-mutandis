@@ -11,6 +11,8 @@ import { controlsActions } from "../../state/controls.actions";
 import SidebarMultiple from "../SidebarMultiple";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import TextWindow from "../TextWindow";
+import ClusterTooltip from "./ClusterTooltip";
+import ConceptTooltip from "./ConceptTooltip";
 
 const COLOR_FIELDS = ["doc_id", "pub_year", "concept", "cluster_id"];
 
@@ -233,63 +235,15 @@ export default function ConceptClusterPlot() {
                         }}>
 
                         <Switch>
-                            <Match when={controls.showClusterCentroids}>
-                                <header class="fill padding">
-                                    <h2>{hoveredPoint().point.cluster_label ?? "No cluster"}</h2>
-                                </header>
-                                <div class="left-padding right-padding">
-                                    <Show when={hoveredPoint().point.cluster_label}>
-                                        <div class="top-margin" style="width:100%">
-                                            {(hoveredPoint().point as unknown as LabelPoint).description}
-                                        </div>
-                                    </Show>
-                                    <div class={hoveredPoint().point.cluster_label ? "top-margin bottom-margin small-text large-opacity" : ""}>
-                                        <p>
-                                            Concept: {hoveredPoint().point.concept}
-                                            <br />
-                                            Cluster ID: {hoveredPoint().point.cluster_id}
-                                        </p>
-                                    </div>
-                                </div>
+                            <Match when={hoveredPoint().point.origin === "concept_clusters"}>
+                                <ClusterTooltip point={hoveredPoint().point} />
                             </Match>
 
-                            <Match when={!controls.showClusterCentroids}>
-                                <header class="bottom-margin fill">
-                                    <h2 class="fill max"><q>{hoveredPoint().point.token}</q></h2>
-                                    <Show when={hoveredPoint().point.depth
-                                        || (controls.showClusterCentroids && hoveredPoint().point.concept)
-                                    }>
-                                        <div class="medium-opacity small-text no-space small small-margin tiny-padding">
-                                            <span class="max no-space small small-margin no-padding">
-                                                <span class="bold">{hoveredPoint().point.pub_year} </span>
-                                                <Show when={hoveredPoint().point.depth}>
-                                                    {" "}{hoveredPoint().point.concept}
-                                                    <sup class="medium-text"> {hoveredPoint().point.depth}</sup>
-                                                </Show>
-                                            </span>
-                                        </div>
-                                    </Show>
-                                </header>
-
-                                <div class="left-padding right-padding">
-                                    <span class="medium-opacity">
-                                        Doc: {hoveredPoint().point.doc_id} T {hoveredPoint().point.token_idx}
-                                        <br />
-                                        Win: {hoveredPoint().point.window_id} T {hoveredPoint().point.window_token_pos}
-                                    </span>
-                                </div>
-
-                                <div class="left-padding right-padding">
-                                    <span class="medium-opacity">
-                                        Cluster {hoveredPoint().point.cluster_label || 'N/A'}
-                                    </span>
-                                </div>
-
-                                <footer class="row padding fill" style="bottom-padding: 1em; top-padding: 1em">
-                                    <TextWindow eventid={hoveredPoint().point.event_id} style="font-size: 12pt; line-height: 1.6;" />
-                                </footer>
+                            <Match when={hoveredPoint().point.origin !== "concept_clusters"}>
+                                <ConceptTooltip point={hoveredPoint().point} />
                             </Match>
                         </Switch>
+
                     </aside>
                 )}
             </Show >

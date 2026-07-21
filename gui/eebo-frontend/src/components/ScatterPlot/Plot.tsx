@@ -182,7 +182,7 @@ export default function Plot(props: PlotProps) {
         getFillColor: p => getColor()(p),
         getRadius: 10.0,
         radiusUnits: "pixels",
-        opacity: 0.5,
+        opacity: 0.25,
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 100, 180],
@@ -194,7 +194,14 @@ export default function Plot(props: PlotProps) {
           getPosition: [proj],
           getFillColor: [props.colorBy, selectedEventIds()],
         },
-        onHover: info => props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null),
+        onHover: info => {
+          if (isDragging) return;
+          const point = info.object
+            ? { ...info.object, origin: "concept_clusters", }
+            : null;
+          props.onPointHover?.(point, point ? [info.x, info.y] : null);
+        }
+
       }));
 
       layersList.push(
@@ -223,11 +230,12 @@ export default function Plot(props: PlotProps) {
             getPosition: [proj],
             getText: [props.colorBy],
           },
-          onHover: (info: PickingInfo<PointData>) => {
-            props.onPointHover?.(
-              info.object ?? null,
-              info.object ? [info.x, info.y] : null
-            );
+          onHover: info => {
+            if (isDragging) return;
+            const point = info.object
+              ? { ...info.object, origin: "concept_clusters", }
+              : null;
+            props.onPointHover?.(point, point ? [info.x, info.y] : null);
           }
         })
       );
@@ -258,8 +266,11 @@ export default function Plot(props: PlotProps) {
           },
           onHover: info => {
             if (isDragging) return;
-            props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null);
-          },
+            const point = info.object
+              ? { ...info.object, origin: "concept", }
+              : null;
+            props.onPointHover?.(point, point ? [info.x, info.y] : null);
+          }
         })
       );
     }
@@ -288,8 +299,11 @@ export default function Plot(props: PlotProps) {
           },
           onHover: info => {
             if (isDragging) return;
-            props.onPointHover?.(info.object ?? null, info.object ? [info.x, info.y] : null);
-          },
+            const point = info.object
+              ? { ...info.object, origin: "neighbours", }
+              : null;
+            props.onPointHover?.(point, point ? [info.x, info.y] : null);
+          }
         })
       );
     }
@@ -419,6 +433,7 @@ export default function Plot(props: PlotProps) {
       });
 
       const cleanPick = pick
+        // ?.filter((p) => p.origin !== "concept_clusters")
         ?.filter(p => !p.sourceLayer?.id.startsWith("bfs-"))
         .map(p => p.object)
         .filter((o): o is PointData => !!o?.event_id) ?? [];
