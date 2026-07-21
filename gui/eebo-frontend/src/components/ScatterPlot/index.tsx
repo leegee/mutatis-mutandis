@@ -1,7 +1,7 @@
 // Note clustering is very WIP - clustering is by full corpus span, so centroids are global to that regardless of oyear filter
 import { createSignal, createResource, Show, Switch, Match } from "solid-js";
 
-import type { BfsDataset, LabelPoint, PointData, ViewBounds } from "./types";
+import type { BfsDataset, PointData, ViewBounds } from "./types";
 
 import Plot from "./Plot";
 import ControlsHeader from "../ControlsHeader";
