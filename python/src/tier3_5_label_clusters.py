@@ -53,10 +53,10 @@ import os
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
-
+MIN_LABEL_CLUSTER_SIZE = 20   # Limit LLM calls
 MAX_EVENTS_PER_DOC = 2        # cap per document, so no single text dominates
-SAMPLE_SIZE_PER_CLUSTER = 12  # total events sampled per cluster, post-cap
-CONTEXT_WINDOW_TOKENS = 30    # words either side of the anchor token
+SAMPLE_SIZE_PER_CLUSTER = 8   # total events sampled per cluster, post-cap
+CONTEXT_WINDOW_TOKENS = 15    # words either side of the anchor token
 MAX_PROMPT_CHARS = 3000       # truncate assembled context before sending
 
 # concentration threshold: if the single most-common doc_id (or token,
@@ -73,6 +73,7 @@ class ClusterEvent:
     token_idx: int
     window_id: Optional[int]
     token: Optional[str]
+    pub_year: Optional[int]
 
 
 @dataclass
@@ -80,8 +81,10 @@ class ClusterSample:
     concept: str
     cluster_id: int
     point_count: int
-    concentration: float          # fraction of points from the top doc_id
+    concentration: float
     dominant_doc_id: Optional[str]
+    historical_start: Optional[int] = None
+    historical_end: Optional[int] = None
     events: list[ClusterEvent] = field(default_factory=list)
     context_lines: list[str] = field(default_factory=list)
 
@@ -107,9 +110,15 @@ def fetch_cluster_events(con, concept: str, cluster_id: int) -> list[ClusterEven
     """Raw event membership for one cluster - the full point set, not yet sampled."""
     rows = con.execute(
         """
-        SELECT event_id, doc_id, token_idx, window_id, token
+        SELECT event_id,
+            doc_id,
+            token_idx,
+            window_id,
+            token,
+            pub_year
         FROM events
-        WHERE concept = ? AND cluster_id = ?
+        WHERE concept = ?
+        AND cluster_id = ?
         """,
         (concept, cluster_id),
     ).fetchall()
@@ -120,6 +129,7 @@ def fetch_cluster_events(con, concept: str, cluster_id: int) -> list[ClusterEven
             token_idx=r["token_idx"],
             window_id=r["window_id"],
             token=r["token"],
+            pub_year=r["pub_year"],
         )
         for r in rows
     ]
@@ -251,6 +261,14 @@ def build_cluster_sample(
     events = fetch_cluster_events(sqlite_dbh, concept, cluster_id)
     concentration, dominant_doc_id = compute_concentration(events)
 
+    years = [
+        e.pub_year
+        for e in events
+        if e.pub_year is not None
+    ]
+    historical_start = min(years) if years else None
+    historical_end = max(years) if years else None
+
     sampled = diversify_sample(events)
 
     context_lines = []
@@ -267,6 +285,8 @@ def build_cluster_sample(
         point_count=cluster_info["point_count"],
         concentration=concentration,
         dominant_doc_id=dominant_doc_id,
+        historical_start=historical_start,
+        historical_end=historical_end,
         events=sampled,
         context_lines=context_lines,
     )
@@ -274,9 +294,21 @@ def build_cluster_sample(
 
 def build_prompt(sample: ClusterSample) -> str:
     joined = "\n\n".join(sample.context_lines)[:MAX_PROMPT_CHARS]
+
+    if sample.historical_start and sample.historical_end:
+        historical_span = (
+            f"{sample.historical_start}-{sample.historical_end}"
+        )
+    else:
+        historical_span = "unknown"
+
     return f"""
 Concept: {sample.concept}
-Sample text (each paragraph is one occurrence in its surrounding context):
+Cluster size: {sample.point_count} occurrences
+Historical span: {historical_span}
+
+Representative occurrences:
+
 {joined}
 """
 
@@ -354,6 +386,10 @@ def label_concept_clusters(concept: str, db_path=None, dry_run: bool = False):
 
     try:
         clusters = fetch_clusters_for_concept(sqlite_dbh, concept)
+        clusters = [
+            c for c in clusters
+            if c["point_count"] >= MIN_LABEL_CLUSTER_SIZE
+        ]
         logger.info(f"[label_clusters] {concept}: {len(clusters)} clusters")
 
         for cluster_info in clusters:
