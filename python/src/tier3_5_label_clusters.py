@@ -79,7 +79,6 @@ class ClusterEvent:
 class ClusterSample:
     concept: str
     cluster_id: int
-    cluster_label: Optional[str]
     point_count: int
     concentration: float          # fraction of points from the top doc_id
     dominant_doc_id: Optional[str]
@@ -98,12 +97,7 @@ def sqlite_cx(db_path=None):
 def fetch_clusters_for_concept(con, concept: str) -> list[dict]:
     """All non-noise clusters for a concept, with point_count."""
     rows = con.execute(
-        """
-        SELECT cluster_id, cluster_label, point_count
-        FROM concept_cluster_info
-        WHERE concept = ?
-        ORDER BY cluster_id
-        """,
+        "SELECT cluster_id, point_count FROM concept_cluster_info ORDER BY cluster_id",
         (concept,),
     ).fetchall()
     return [dict(r) for r in rows]
@@ -177,9 +171,9 @@ def write_label_to_sqlite(
     con = sqlite3.connect(db_path or CORPUS_TIER2_DB_PATH)
     con.execute(
         """
-        UPDATE concept_cluster_info
-        SET label = ?, description = ?
-        WHERE concept = ? AND cluster_id = ?
+            UPDATE concept_cluster_info
+            SET cluster_label = ?, description = ?
+            WHERE concept = ? AND cluster_id = ?
         """,
         (sense_name, description, concept, cluster_id),
     )
@@ -270,7 +264,6 @@ def build_cluster_sample(
     return ClusterSample(
         concept=concept,
         cluster_id=cluster_id,
-        cluster_label=cluster_info.get("cluster_label"),
         point_count=cluster_info["point_count"],
         concentration=concentration,
         dominant_doc_id=dominant_doc_id,
