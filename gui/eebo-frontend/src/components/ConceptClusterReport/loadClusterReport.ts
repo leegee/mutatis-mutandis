@@ -10,6 +10,7 @@ export interface DocMeta {
 export interface ClusterSummary {
     id: number;
     label: string | null;
+    // description: string | null;
     eventCount: number;
     topTokens: [string, number][];
     topDocs: [string, number][];
@@ -22,7 +23,7 @@ export interface ClusterReport {
     docMeta: Record<string, DocMeta>;
 
     docExemplars: Record<
-        string,
+        number,
         {
             event_id: string;
             doc_id: string;
@@ -81,27 +82,31 @@ export async function loadClusterReport(
 ): Promise<ClusterReport & { diagnostics: any }> {
     const { concept, yearMode, fromYear, toYear, authorMatch } = params;
 
-    const yearActive =
-        yearMode != null && fromYear != null && toYear != null;
+    const yearActive = yearMode != null && fromYear != null && toYear != null;
 
-    const year =
-        yearActive
-            ? yearFilter(yearMode!, fromYear!, toYear!)
-            : null;
+    const year = yearActive
+        ? yearFilter(yearMode!, fromYear!, toYear!)
+        : null;
 
     const author = authorMatch?.trim()
         ? authorFilter(authorMatch)
         : null;
 
-    const joins = author ? "JOIN documents d ON d.doc_id = e.doc_id" : "";
+    const joins = `
+    JOIN concept_field_events f
+        ON f.event_id = e.event_id
+    ${ author ? "JOIN documents d ON d.doc_id = e.doc_id" : "" }
+    `;
+
     const authorSql = author ? author.sql : "";
 
     const baseWhere = `
-        WHERE e.concept = ?
-          AND e.cluster_id IS NOT NULL
-          AND e.pub_year IS NOT NULL
-          ${ year ? year.sql : "" }
-          ${ authorSql }
+        WHERE f.concept = ?
+        AND f.role = 'seed'
+        AND e.cluster_id IS NOT NULL
+        AND e.pub_year IS NOT NULL
+        ${ year ? year.sql : "" }
+        ${ authorSql }
     `;
 
     const baseParams = [
@@ -111,18 +116,29 @@ export async function loadClusterReport(
     ];
 
     // CLUSTER SUMMARY
-    const clusterRows = await execRows(
-        `
-        SELECT e.cluster_id, e.cluster_label, COUNT(*) AS n
-        FROM events e
-        ${ joins }
-        ${ baseWhere }
-        GROUP BY e.cluster_id, e.cluster_label
+    const clusterRows = await execRows(`
+        SELECT
+            e.cluster_id,
+            c.cluster_label,
+            COUNT(*) AS n
+        FROM concept_field_events f
+        JOIN events e
+            ON e.event_id = f.event_id
+        JOIN concept_cluster_info c
+            ON c.concept = f.concept
+            AND c.cluster_id = e.cluster_id
+        ${ author ? "JOIN documents d ON d.doc_id = e.doc_id" : "" }
+        WHERE f.concept = ?
+        AND f.role = 'seed'
+        AND e.pub_year IS NOT NULL
+        AND e.cluster_id IS NOT NULL
+        ${ year ? year.sql : "" }
+        ${ authorSql }
+        GROUP BY e.cluster_id, c.cluster_label
         ORDER BY e.cluster_id
         `,
         baseParams
     );
-
     const clusters = new Map<number, ClusterSummary & { eventIds: string[] }>();
 
     for (const [cid, label, n] of clusterRows as any[]) {
@@ -243,14 +259,12 @@ export async function loadClusterReport(
 
     const docIds = new Set<string>();
 
-    for (const [cid, doc_id] of docRows as any[]) {
-        clusters.get(cid)?.topDocs.push([doc_id, 1]);
+    for (const [cid, doc_id, count] of docRows as any[]) {
+        clusters.get(cid)?.topDocs.push([doc_id, count]);
         docIds.add(doc_id);
     }
 
-    // -------------------------------------------------------
     // DOC METADATA
-    // -------------------------------------------------------
     const docMeta: Record<string, DocMeta> = {};
 
     if (docIds.size > 0) {
@@ -265,9 +279,11 @@ export async function loadClusterReport(
             ids
         );
 
+        console.log("DOC IDS REQUESTED", ids);
         for (const [id, author, title, pub_year] of rows as any[]) {
             docMeta[id] = { author, title, pub_year };
         }
+        console.log("DOC META LOADED", Object.keys(docMeta).length, docMeta);
     }
 
     // EXEMPLARS
@@ -333,7 +349,7 @@ export async function loadClusterReport(
                 : 0,
     };
 
-    console.log('docExemplars', clusterExemplars)
+    // console.log('docExemplars', clusterExemplars)
 
     return {
         concept,

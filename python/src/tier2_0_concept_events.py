@@ -53,6 +53,7 @@ from lib.eebo_faiss import (
     multiscale_search,
 )
 
+from lib.eebo_db import get_connection
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
@@ -232,80 +233,72 @@ def initialise_database(path: Path, clear: bool = False):
     return con
 
 
-def write_documents(con, documents):
-    """
-    Insert document metadata once.
 
-    Documents are corpus metadata, not concept output.
-    """
-    rows = []
-    for doc_id, meta in documents.items():
-        places = meta.get("places")
-        rows.append((
-            str(doc_id),
-            meta.get("title"),
-            meta.get("author"),
-            meta.get("pub_year"),
-            meta.get("publisher"),
-            meta.get("pub_place"),
-            json.dumps(places)
-            if places
-            else None,
-            meta.get("lat"),
-            meta.get("lng"),
-        ))
-
+def ensure_documents(con, doc_ids):
+    rows = [
+        (str(doc_id),)
+        for doc_id in doc_ids
+    ]
     con.executemany(
-        """
-        INSERT OR REPLACE INTO documents (
-            doc_id, title, author, pub_year, publisher, pub_place, normalized_places, lat, lng
-        ) VALUES (?,?,?,?,?,?,?,?,?)
-        """,
+        "INSERT OR IGNORE INTO documents ( doc_id ) VALUES (?)",
         rows,
     )
 
-    con.commit()
 
-
-def ensure_documents(con, lookup, doc_ids):
-    existing = {
+def enrich_documents(con, pg_connection, batch_size=1000):
+    doc_ids = [
         row[0]
-        for row in con.execute( "SELECT doc_id FROM documents" )
-    }
+        for row in con.execute("SELECT doc_id FROM documents WHERE title IS NULL")
+    ]
 
-    missing = set(doc_ids) - existing
-    if not missing:
-        return
-
-    rows = []
-
-    for doc_id in missing:
-        # Tier 1 has doc_id, but not catalogue metadata.
-        # Keep the row so joins remain valid.
-        rows.append(
-            (
-                str(doc_id),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
+    for batch in chunks(doc_ids, batch_size):
+        rows = pg_connection.execute(
+            """
+            SELECT
+                doc_id,
+                title,
+                author,
+                pub_year,
+                publisher,
+                pub_place,
+                normalized_places,
+                lat,
+                lng
+            FROM documents
+            WHERE doc_id = ANY(%s)
+            """,
+            (batch,),
         )
 
-    con.executemany(
-        """
-        INSERT OR IGNORE INTO documents (
-            doc_id, title, author, pub_year, publisher, pub_place, normalized_places, lat, lng )
-        VALUES (?,?,?,?,?,?,?,?,?)
-        """,
-        rows,
-    )
-    con.commit()
-    logger.info( f"[tier2] backfilled {len(rows):,} documents" )
+        con.executemany(
+            """
+            UPDATE documents
+            SET
+                title=?,
+                author=?,
+                pub_year=?,
+                publisher=?,
+                pub_place=?,
+                normalized_places=?,
+                lat=?,
+                lng=?
+            WHERE doc_id=?
+            """,
+            [
+                (
+                    r.title,
+                    r.author,
+                    r.pub_year,
+                    r.publisher,
+                    r.pub_place,
+                    r.normalized_places,
+                    r.lat,
+                    r.lng,
+                    r.doc_id,
+                )
+                for r in rows
+            ],
+        )
 
 
 def ensure_events(con, lookup, event_ids):
@@ -855,7 +848,6 @@ def get_processed_concepts(path):
 def run_tier2_service(
     *,
     lookup,
-    doc_meta,
     concepts_to_run,
     db_path,
     index_paths,
@@ -872,7 +864,6 @@ def run_tier2_service(
     indexes = load_indices( index_paths, workers, )
     lookup.attach_index( indexes )
     con = initialise_database( db_path, clear, )
-    write_documents( con, doc_meta, )
 
     for concept_name, concept in concepts_to_run:
         result = analyse_concept(
@@ -891,6 +882,7 @@ def run_tier2_service(
             continue
 
         write_concept( con, result, lookup )
+        enrich_documents(con, get_connection())
         con.commit()
 
     con.close()
@@ -977,11 +969,6 @@ def main():
         false_positives=target_fps,
     )
 
-    # Metadata provider intentionally left external.
-    # This replaces the old implicit PostgreSQL dependency.
-    # A later module can load EEBO catalogue metadata into this dictionary.
-    doc_meta = {}
-
     concepts = list( resolve_concepts( concept=args.concept ) )
     logger.info( f"[tier2] resolved concepts: {len(concepts)}" )
     logger.info( [x[0] for x in concepts[:20]] )
@@ -1002,7 +989,6 @@ def main():
 
     run_tier2_service(
         lookup=lookup,
-        doc_meta=doc_meta,
         concepts_to_run=concepts,
         db_path=db_path,
         index_paths=index_paths,
