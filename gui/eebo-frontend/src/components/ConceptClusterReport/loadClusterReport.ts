@@ -110,9 +110,7 @@ export async function loadClusterReport(
         ...(author ? author.params : []),
     ];
 
-    // -------------------------------------------------------
     // CLUSTER SUMMARY
-    // -------------------------------------------------------
     const clusterRows = await execRows(
         `
         SELECT e.cluster_id, e.cluster_label, COUNT(*) AS n

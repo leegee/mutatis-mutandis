@@ -657,14 +657,10 @@ def write_projections_to_sqlite(
             nx            REAL, ny REAL,
             gnx           REAL, gny REAL,
             cluster_id    INTEGER,
-            cluster_label TEXT,
             depth         INTEGER
         )
     """)
     con.execute("DELETE FROM _proj_update")
-
-    unique_clusters = sorted(c for c in set(cluster_labels or []) if c != -1)
-    label_map = {cid: chr(65 + i) for i, cid in enumerate(unique_clusters)}
 
     # Normalize into local_bounds / global_bounds...
     lx0, lx1 = local_bounds["minX"],  local_bounds["maxX"]
@@ -689,13 +685,12 @@ def write_projections_to_sqlite(
             float((lx - lx0) / ldx), float((ly - ly0) / ldy),
             float((gx - gx0) / gdx), float((gy - gy0) / gdy),
             cluster_labels[i] if cluster_labels is not None else None,
-            label_map.get(cluster_labels[i]) if cluster_labels is not None else None,
             depth_map.get(sid) if depth_map is not None else None,
         ))
 
     if data:
         con.executemany(
-            "INSERT OR IGNORE INTO _proj_update VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT OR IGNORE INTO _proj_update VALUES (?,?,?,?,?,?,?)",
             data
         )
 
@@ -708,16 +703,13 @@ def write_projections_to_sqlite(
                     ny            = _proj_update.ny,
                     gnx           = _proj_update.gnx,
                     gny           = _proj_update.gny,
-                    cluster_id    = _proj_update.cluster_id,
-                    cluster_label = _proj_update.cluster_label
+                    cluster_id    = _proj_update.cluster_id
                 FROM _proj_update
                 WHERE events.event_id = _proj_update.event_id
             """)
         else:
             con.execute("""
-                UPDATE events SET
-                    cluster_id    = _proj_update.cluster_id,
-                    cluster_label = _proj_update.cluster_label
+                UPDATE events SET cluster_id    = _proj_update.cluster_id
                 FROM _proj_update
                 WHERE events.event_id = _proj_update.event_id
             """)
