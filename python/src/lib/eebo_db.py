@@ -219,13 +219,9 @@ def create_tiered_token_indexes(conn: Connection) -> None:
             cur.execute(f"""
                 DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
                 CREATE MATERIALIZED VIEW pamphlet_corpus AS
-                SELECT *,
-                    CASE
-                        WHEN token_count <= 15000 THEN 'core'
-                        ELSE 'boundary'
-                    END AS corpus_zone
+                SELECT *
                 FROM documents
-                WHERE token_count BETWEEN 200 AND 20000
+                WHERE token_count BETWEEN 200 AND 350000
                 AND pub_year >= {earliest}
                 AND pub_year <= {latest}
                 AND title !~* '(tragedy|comedy|farce|interlude|play)'
