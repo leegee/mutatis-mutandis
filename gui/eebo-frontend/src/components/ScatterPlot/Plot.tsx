@@ -72,7 +72,6 @@ interface PlotProps {
   onBoundsChange?: (bounds: ViewBounds) => void;
   onSelectionChange?: (points: PointData[] | null) => void;
   onPointHover?: (point: PointData | null, screenXY: [number, number] | null) => void;
-  onLabelHover: (label: LabelPoint | null, screenXY: [number, number] | null) => void;
 }
 
 const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, number];

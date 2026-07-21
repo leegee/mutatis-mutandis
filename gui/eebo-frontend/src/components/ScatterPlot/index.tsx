@@ -183,7 +183,6 @@ export default function ConceptClusterPlot() {
                                 datasets={activeDatasets()}
                                 neighbourOpacity={controls.neighbourOpacity}
                                 onBoundsChange={handleBoundsChange}
-                                onLabelHover={(label, xy) => setLabelHovered(label && xy ? { label: label, x: xy[0], y: xy[1] } : null)}
                                 onPointHover={(point, xy) => setPointHovered(point && xy ? { point: point, x: xy[0], y: xy[1] } : null)}
                                 onSelectionChange={handleSelectionChange}
                                 projectionMode={controls.projectionMode}
@@ -198,23 +197,6 @@ export default function ConceptClusterPlot() {
                 </Show>
             </Show>
 
-            {/* Label-hover tooltip */}
-            <Show when={labelHovered()}>
-                {(h) => (
-                    <aside class="surface-container-highest border large-elevate padding"
-                        style={{
-                            position: "fixed",
-                            left: `${ h().x + 100 }px`,
-                            top: `${ h().y + 70 }px`,
-                            "z-index": 20,
-                            "pointer-events": "none",
-                            "width": "20em",
-                        }}>
-                        {JSON.stringify(h().label.description)}
-                    </aside>
-                )}
-            </Show>
-
             {/* Piont-hover Tooltip */}
             <Show when={pointHovered()}>
                 {(hoveredPoint) => (
@@ -225,21 +207,22 @@ export default function ConceptClusterPlot() {
                             top: `${ hoveredPoint().y + 70 }px`,
                             "z-index": 20,
                             "pointer-events": "none",
-                            "white-space": "nowrap",
                             "width": "20em",
                         }}>
 
                         <Switch>
                             <Match when={controls.scatterPlotLayerMode === 'concept_clusters'}>
-                                <header class="bottom-margin fill">
-                                    <h2>{hoveredPoint().point.cluster_label ?? ""}</h2>
+                                <header class="fill padding">
+                                    <h2>{hoveredPoint().point.cluster_label ?? "No cluster"}</h2>
                                 </header>
                                 <div class="left-padding right-padding">
-                                    <div>
-                                        <span>{(hoveredPoint().point as unknown as LabelPoint).description}</span>
-                                    </div>
-                                    <div>
-                                        {hoveredPoint().point.concept}
+                                    <Show when={hoveredPoint().point.cluster_label}>
+                                        <div class="top-margin" style="width:100%">
+                                            {(hoveredPoint().point as unknown as LabelPoint).description}
+                                        </div>
+                                    </Show>
+                                    <div class={hoveredPoint().point.cluster_label ? "top-margin bottom-margin" : ""}>
+                                        Concept: {hoveredPoint().point.concept}
                                     </div>
                                 </div>
                             </Match>
