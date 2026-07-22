@@ -114,26 +114,23 @@ from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCE
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 from lib.DocBuffer import DocBuffer
+from lib.stopwords_min import STOPWORDS
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# Documents are large (windows of 256-512 tokens, batched), tokenization is not the bottleneck:
+# the model forward pass is. Disabling this costs you essentially nothing in throughput and
+# removes a lot of uncontrolled thread requests.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+# When/if using openblas rather than mkl
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
 
 WINDOW_CONFIGS = [
     {"name": "local",  "size": 256,  "stride": 128},
     {"name": "medium", "size": 512,  "stride": 256},
     {"name": "broad",  "size": 512,  "stride": 384},
 ]
-
-
-
-STOPWORDS = {
-    "the", "a", "an", "i", "he", "she", "it", "we", "they", "who", "which", "that",
-    "his", "her", "its", "our", "their", "my", "thy", "your", "hast", "art", "is",
-    "thine", "mine", "him", "them", "us", "me", "and", "or", "but", "of", "in",
-    "to", "for", "with", "by", "at", "from", "as", "on", "into", "upon", "unto",
-    "not", "nor", "yet", "so", "if", "be", "are", "was", "were", "shall", "will",
-    "may", "should", "would", "could", "than", "then", "when", "this", "these",
-    "those", "all", "no", "any", "such", "many", "some",
-}
 
 
 def stable_hash(key: str) -> np.int64:

@@ -49,6 +49,7 @@ def main():
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(args.threads_per_shard)
     env["MKL_NUM_THREADS"] = str(args.threads_per_shard)
+    env["TOKENIZERS_PARALLELISM"] = "false"
 
     logger.info("Launching %d shards (%d threads each)", args.num_shards, args.threads_per_shard)
 
