@@ -221,7 +221,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 CREATE MATERIALIZED VIEW pamphlet_corpus AS
                 SELECT *
                 FROM documents
-                WHERE token_count BETWEEN 200 AND 350000
+                WHERE token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
                 AND pub_year >= {earliest}
                 AND pub_year <= {latest}
                 AND title !~* '(tragedy|comedy|farce|interlude|play)'

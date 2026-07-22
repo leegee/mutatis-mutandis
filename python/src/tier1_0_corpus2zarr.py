@@ -584,40 +584,118 @@ class CorpusProcessor:
         self.report_every = report_every
 
     def process(self, doc_id=None):
-        store = ZarrEmbeddingObservationStore(path=str(self.zarr_path), dim=self.pipeline.model.config.hidden_size)
+        store = ZarrEmbeddingObservationStore(
+            path=str(self.zarr_path),
+            dim=self.pipeline.model.config.hidden_size
+        )
+
         already_processed = set(store.get_doc_ids())
-        logger.info("already processed: %d", len(already_processed))
+        completed_docs = len(already_processed)
+
+        logger.info("Already processed: %d", completed_docs)
+
+        # Count total documents in this run's scope
+        count_cur = self.conn.cursor()
+
+        if doc_id:
+            count_cur.execute(
+                """
+                SELECT COUNT(DISTINCT doc_id)
+                FROM pamphlet_tokens
+                WHERE doc_id = %s
+                """,
+                (doc_id,)
+            )
+        else:
+            count_cur.execute(
+                """
+                SELECT COUNT(DISTINCT doc_id)
+                FROM pamphlet_tokens
+                """
+            )
+
+        total_docs = count_cur.fetchone()[0]
+        count_cur.close()
+
+        logger.info("Documents in scope: %d", total_docs)
 
         cur = self.conn.cursor(name="tier1_cursor")
         cur.itersize = 10000
 
         if doc_id:
-            cur.execute("SELECT doc_id, token_idx, vector_id, token, pub_year FROM pamphlet_tokens WHERE doc_id = %s ORDER BY token_idx", (doc_id,))
+            cur.execute(
+                """
+                SELECT doc_id, token_idx, vector_id, token, pub_year
+                FROM pamphlet_tokens
+                WHERE doc_id = %s
+                ORDER BY token_idx
+                """,
+                (doc_id,)
+            )
         else:
-            cur.execute("SELECT doc_id, token_idx, vector_id, token, pub_year FROM pamphlet_tokens ORDER BY doc_id, token_idx")
+            cur.execute(
+                """
+                SELECT doc_id, token_idx, vector_id, token, pub_year
+                FROM pamphlet_tokens
+                ORDER BY doc_id, token_idx
+                """
+            )
 
-        logger.info("query executed for doc_id=%s", doc_id)
+        logger.info("Query executed for doc_id=%s", doc_id)
 
         buf = None
-        docs_processed = 0
 
         for row_doc_id, token_idx, vid, token, pub_year in cur:
+
             if row_doc_id in already_processed:
                 continue
 
             if buf is None or row_doc_id != buf.doc_id:
+
                 if buf:
                     self._flush(buf, store)
-                    docs_processed += 1
-                    if docs_processed % self.report_every == 0:
-                        logger.info(f"Processed {docs_processed} documents")
-                buf = DocBuffer(doc_id = row_doc_id, pub_year = pub_year)
+
+                    completed_docs += 1
+
+                    if completed_docs % self.report_every == 0:
+                        pct = (
+                            completed_docs / total_docs * 100
+                            if total_docs
+                            else 0
+                        )
+
+                        logger.info(
+                            "Processed %d/%d documents (%.1f%%)",
+                            completed_docs,
+                            total_docs,
+                            pct
+                        )
+
+                buf = DocBuffer(
+                    doc_id=row_doc_id,
+                    pub_year=pub_year
+                )
 
             buf.append(token, vid, token_idx)
 
+        # Final document
         if buf and buf.doc_id not in already_processed:
             self._flush(buf, store)
 
+            completed_docs += 1
+
+            pct = (
+                completed_docs / total_docs * 100
+                if total_docs
+                else 0
+            )
+
+            logger.info(
+                "Processed %d/%d documents (%.1f%%)",
+                completed_docs,
+                total_docs,
+                pct
+            )
 
     def _flush(self, buf, store):
         start = time.perf_counter()

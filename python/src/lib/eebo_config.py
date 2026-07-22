@@ -23,6 +23,11 @@ try:
 except ModuleNotFoundError:
     COLAB_MODE = False
 
+# It would be good to have some large docs (A91273) but we do not need complete Bibles
+MIN_TOKENS_IN_DOC = 200
+# MAX_TOKENS_IN_DOC = 350000 takes > 24 hours on my PC
+MAX_TOKENS_IN_DOC = 20000
+
 # Could use env var
 OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else BASE_DIR / "out"
 
