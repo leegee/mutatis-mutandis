@@ -341,6 +341,15 @@ CONCEPT_SETS: CanonicalRules = {
             # "enthusiasme", "enthousiasm", "enthusiast", "enthusiasts", "enthusiastick", "enthusiastical", "enthusiasms", "enthusiastical"
         },
         "false_positives": set(),
+    },
+
+    "HEBREW REPUBLIC": {
+        "forms": {
+            "hebrew", "jewish", "mosaic",
+            "Hebraism",
+            "commonwealth of israel", "israelite commonwealth", "israelitish republic",
+            "polity of the Jews"
+        },
     }
 
 }
