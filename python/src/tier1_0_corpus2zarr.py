@@ -232,18 +232,44 @@ class EmbeddingPipeline:
     # UNMASKED (the fast path)
     def _embed_doc_unmasked(self, buf: DocBuffer) -> list[Event]:
         input_ids, attention_mask, word_ids = self._encode(buf.tokens)
-        all_events = []
 
+        # collect window specs across all configs first
+        window_specs = []
         for config in self.configs:
             for window_start, ids, mask, wids in self._iter_windows_config(
                 input_ids, attention_mask, word_ids, config["size"], config["stride"]
             ):
-                hidden = self._forward_single_window(ids, mask)
-                events = self._extract_events(buf, {"window_start": window_start, "word_ids": wids},
-                                              hidden, config["name"])
-                all_events.extend(events)
+                window_specs.append({
+                    "window_start": window_start,
+                    "input_ids": ids,
+                    "attention_mask": mask,
+                    "word_ids": wids,
+                    "config_name": config["name"],
+                })
+
+        all_events = []
+        for i in range(0, len(window_specs), self.batch_size):
+            chunk = window_specs[i:i + self.batch_size]
+            hiddens = self._forward_window_batch(chunk)
+            for item, hidden in zip(chunk, hiddens):
+                all_events.extend(self._extract_events(buf, item, hidden, item["config_name"]))
         return all_events
 
+
+    def _forward_window_batch(self, chunk):
+        max_len = max(len(c["input_ids"]) for c in chunk)
+        def pad(seq, value=0):
+            return seq + [value] * (max_len - len(seq))
+
+        input_ids_t = torch.tensor([pad(c["input_ids"]) for c in chunk], dtype=torch.long, device=self.device)
+        attention_mask_t = torch.tensor([pad(c["attention_mask"]) for c in chunk], dtype=torch.long, device=self.device)
+
+        with torch.inference_mode():
+            out = self.macberth.encode(input_ids=input_ids_t, attention_mask=attention_mask_t, return_dict=True)
+
+        hidden = out.last_hidden_state.cpu().numpy()
+        # slice back to each window's real (unpadded) length
+        return [hidden[j, :len(chunk[j]["input_ids"])] for j in range(len(chunk))]
 
     # MASKED
     def _embed_doc_masked(self, buf):
@@ -785,6 +811,9 @@ def parse_args():
 def main():
     args = parse_args()
 
+    torch.set_num_threads(4)          # match OMP/MKL env vars — intra-op parallelism
+    torch.set_num_interop_threads(1)  # not running parallel independent ops, so keep this low
+
     if args.mask:
         zarr_path = MASKED_ZARR_PATH
     else:
@@ -795,7 +824,7 @@ def main():
         clear_output_dir(zarr_path)
 
     conn = get_connection()
-    mac = load_macberth()
+    mac = load_macberth(use_qint8=True)
 
     pipeline = EmbeddingPipeline(
         mac,
