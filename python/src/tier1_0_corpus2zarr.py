@@ -97,6 +97,24 @@ semantic analysis layer.
 from __future__ import annotations
 
 import os
+
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# Documents are large (windows of 256-512 tokens, batched), tokenization is not the bottleneck:
+# the model forward pass is. Disabling this costs you essentially nothing in throughput and
+# removes a lot of uncontrolled thread requests.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ.setdefault("OMP_NUM_THREADS", "4")
+os.environ.setdefault("MKL_NUM_THREADS", "4")        # harmless no-op on this build, but keep for portability
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "4")   # the one that actually matters here
+
+# When/if using openblas rather than mkl
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
+
+
 import argparse
 import shutil
 import unicodedata
@@ -115,16 +133,6 @@ from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS
-
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
-# Documents are large (windows of 256-512 tokens, batched), tokenization is not the bottleneck:
-# the model forward pass is. Disabling this costs you essentially nothing in throughput and
-# removes a lot of uncontrolled thread requests.
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
-# When/if using openblas rather than mkl
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
 
 WINDOW_CONFIGS = [
     {"name": "local",  "size": 256,  "stride": 128},

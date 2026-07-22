@@ -49,6 +49,7 @@ def main():
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(args.threads_per_shard)
     env["MKL_NUM_THREADS"] = str(args.threads_per_shard)
+    env["OPENBLAS_NUM_THREADS"] = str(args.threads_per_shard)
     env["TOKENIZERS_PARALLELISM"] = "false"
 
     logger.info("Launching %d shards (%d threads each)", args.num_shards, args.threads_per_shard)
@@ -89,7 +90,7 @@ def main():
 
     logger.info("All shards completed. Merging into %s", base_path)
 
-    from merge_shards import merge_shard
+    from lib.zarr_merge_shards import merge_shard
     from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 
     target = ZarrEmbeddingObservationStore(path=str(base_path), dim=args.dim)
