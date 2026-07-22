@@ -603,11 +603,26 @@ class EmbeddingPipeline:
 
 
 class CorpusProcessor:
-    def __init__(self,  conn, zarr_path, pipeline, report_every: int = 100):
+    def __init__(
+        self, conn,
+        zarr_path,
+        pipeline,
+        report_every=100,
+        shard=None,
+        num_shards=1
+    ):
         self.zarr_path = zarr_path
         self.conn = conn
         self.pipeline = pipeline
         self.report_every = report_every
+        self.shard = shard
+        self.num_shards = num_shards
+
+    def _shard_clause(self):
+        if self.shard is None or self.num_shards <= 1:
+            return "", []
+        # abs() because hashtext can be negative; %% escapes the literal % for psycopg2
+        return " AND abs(hashtext(doc_id)) %% %s = %s", [self.num_shards, self.shard]
 
     def process(self, doc_id=None):
         store = ZarrEmbeddingObservationStore(
@@ -620,29 +635,22 @@ class CorpusProcessor:
 
         logger.info("Already processed: %d", completed_docs)
 
+        shard_sql, shard_params = self._shard_clause()
+
         # Count total documents in this run's scope
         count_cur = self.conn.cursor()
-
         if doc_id:
             count_cur.execute(
-                """
-                SELECT COUNT(DISTINCT doc_id)
-                FROM pamphlet_tokens
-                WHERE doc_id = %s
-                """,
-                (doc_id,)
+                f"SELECT COUNT(DISTINCT doc_id) FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}",
+                [doc_id] + shard_params
             )
         else:
             count_cur.execute(
-                """
-                SELECT COUNT(DISTINCT doc_id)
-                FROM pamphlet_tokens
-                """
+                f"SELECT COUNT(DISTINCT doc_id) FROM pamphlet_tokens WHERE 1=1{shard_sql}",
+                shard_params
             )
-
         total_docs = count_cur.fetchone()[0]
         count_cur.close()
-
         logger.info("Documents in scope: %d", total_docs)
 
         cur = self.conn.cursor(name="tier1_cursor")
@@ -650,37 +658,29 @@ class CorpusProcessor:
 
         if doc_id:
             cur.execute(
-                """
-                SELECT doc_id, token_idx, vector_id, token, pub_year
-                FROM pamphlet_tokens
-                WHERE doc_id = %s
-                ORDER BY token_idx
-                """,
-                (doc_id,)
+                f"""SELECT doc_id, token_idx, vector_id, token, pub_year
+                    FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}
+                    ORDER BY token_idx""",
+                [doc_id] + shard_params
             )
         else:
             cur.execute(
-                """
-                SELECT doc_id, token_idx, vector_id, token, pub_year
-                FROM pamphlet_tokens
-                ORDER BY doc_id, token_idx
-                """
+                f"""SELECT doc_id, token_idx, vector_id, token, pub_year
+                    FROM pamphlet_tokens WHERE 1=1{shard_sql}
+                    ORDER BY doc_id, token_idx""",
+                shard_params
             )
 
         logger.info("Query executed for doc_id=%s", doc_id)
-
         buf = None
 
         for row_doc_id, token_idx, vid, token, pub_year in cur:
-
             if row_doc_id in already_processed:
                 continue
 
             if buf is None or row_doc_id != buf.doc_id:
-
                 if buf:
                     self._flush(buf, store)
-
                     completed_docs += 1
 
                     if completed_docs % self.report_every == 0:
@@ -689,13 +689,7 @@ class CorpusProcessor:
                             if total_docs
                             else 0
                         )
-
-                        logger.info(
-                            "Processed %d/%d documents (%.1f%%)",
-                            completed_docs,
-                            total_docs,
-                            pct
-                        )
+                        logger.info( "Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct )
 
                 buf = DocBuffer(
                     doc_id=row_doc_id,
@@ -707,7 +701,6 @@ class CorpusProcessor:
         # Final document
         if buf and buf.doc_id not in already_processed:
             self._flush(buf, store)
-
             completed_docs += 1
 
             pct = (
@@ -715,13 +708,7 @@ class CorpusProcessor:
                 if total_docs
                 else 0
             )
-
-            logger.info(
-                "Processed %d/%d documents (%.1f%%)",
-                completed_docs,
-                total_docs,
-                pct
-            )
+            logger.info( "Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct )
 
     def _flush(self, buf, store):
         start = time.perf_counter()
@@ -805,19 +792,26 @@ def parse_args():
     p.add_argument("--pooling-scope", choices=["mask_only", "context"], default="mask_only")
     p.add_argument("--batch-size", type=int, default=EMBED_BATCH_SIZE)
     p.add_argument("--mask-only-position", action="store_true", default=True, help="Mask only the target token (recommended for semantics)")
+    p.add_argument("--shard", type=int, default=None, help="This process's shard index (0-based)")
+    p.add_argument("--num-shards", type=int, default=1, help="Total number of shards")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
 
-    torch.set_num_threads(4)          # match OMP/MKL env vars — intra-op parallelism
-    torch.set_num_interop_threads(1)  # not running parallel independent ops, so keep this low
+    torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))  # match OMP/MKL env vars — intra-op parallelism
+    torch.set_num_interop_threads(1)                                  # not running parallel independent ops, so keep this low
 
     if args.mask:
-        zarr_path = MASKED_ZARR_PATH
+        base_path = MASKED_ZARR_PATH
     else:
-        zarr_path = ZARR_PATH
+        base_path = ZARR_PATH
+
+    if args.num_shards > 1:
+        zarr_path = base_path.parent / f"{base_path.name}_shard{args.shard}"
+    else:
+        zarr_path = base_path
 
     if args.clear:
         logger.info("Clearing Tier 1 output")
@@ -834,7 +828,12 @@ def main():
         batch_size          = args.batch_size
     )
 
-    proc = CorpusProcessor(conn, zarr_path, pipeline, report_every=args.report_every)
+    proc = CorpusProcessor(
+        conn, zarr_path, pipeline,
+        report_every = args.report_every,
+        shard        = args.shard,
+        num_shards   = args.num_shards
+    )
     proc.process(doc_id=args.doc_id)
 
     conn.close()
