@@ -317,12 +317,28 @@ def write_cluster_info( con, concept, local_coords, global_coords, clusters, ):
             centroid_gnx,
             centroid_gny,
             point_count,
-            label,
             description
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?)
         """,
-        rows,
+        [
+            (
+                concept,
+                cluster_id,
+                (
+                    "noise"
+                    if cluster_id == -1
+                    else None
+                ),
+                float(local_coords[mask,0].mean()),
+                float(local_coords[mask,1].mean()),
+                float(global_coords[mask,0].mean()),
+                float(global_coords[mask,1].mean()),
+                int(mask.sum()),
+                None,
+            )
+            for cluster_id in cluster_ids
+        ],
     )
 
 def build_global_projection(
