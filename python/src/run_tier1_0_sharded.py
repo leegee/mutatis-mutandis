@@ -30,7 +30,7 @@ def clear_output_dir(zarr_path: Path):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--num-shards", type=int, default=3)
-    p.add_argument("--threads-per-shard", type=int, default=2)
+    p.add_argument("--threads-per-shard", type=int, default=1)
     p.add_argument("--mask", action="store_true")
     p.add_argument("--clear", action="store_true",
                    help="Wipe shard stores AND the final merged target for a fully fresh run")

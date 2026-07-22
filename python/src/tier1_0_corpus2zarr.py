@@ -96,14 +96,7 @@ semantic analysis layer.
 
 from __future__ import annotations
 
-
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["OMP_NUM_THREADS"] = "4"        # limit to avoid overload
-os.environ["MKL_NUM_THREADS"] = "4"
-
-
-
 import argparse
 import shutil
 import unicodedata
@@ -122,6 +115,7 @@ from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 from lib.DocBuffer import DocBuffer
 
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 WINDOW_CONFIGS = [
     {"name": "local",  "size": 256,  "stride": 128},
@@ -802,6 +796,7 @@ def main():
 
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))  # match OMP/MKL env vars — intra-op parallelism
     torch.set_num_interop_threads(1)                                  # not running parallel independent ops, so keep this low
+    logger.info("Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
 
     if args.mask:
         base_path = MASKED_ZARR_PATH
@@ -809,6 +804,8 @@ def main():
         base_path = ZARR_PATH
 
     if args.num_shards > 1:
+        from numcodecs import blosc # Used by Zarr
+        blosc.set_nthreads(1)
         zarr_path = base_path.parent / f"{base_path.name}_shard{args.shard}"
     else:
         zarr_path = base_path
