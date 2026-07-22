@@ -245,6 +245,14 @@ def ensure_documents(con, doc_ids):
     )
 
 
+def chunks(seq, size):
+    """
+    Yield successive slices from a sequence.
+    """
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
+
+
 def enrich_documents(con, pg_connection, batch_size=1000):
     doc_ids = [
         row[0]
@@ -260,10 +268,7 @@ def enrich_documents(con, pg_connection, batch_size=1000):
                 author,
                 pub_year,
                 publisher,
-                pub_place,
-                normalized_places,
-                lat,
-                lng
+                pub_place
             FROM documents
             WHERE doc_id = ANY(%s)
             """,
@@ -278,26 +283,20 @@ def enrich_documents(con, pg_connection, batch_size=1000):
                 author=?,
                 pub_year=?,
                 publisher=?,
-                pub_place=?,
-                normalized_places=?,
-                lat=?,
-                lng=?
+                pub_place=?
             WHERE doc_id=?
             """,
             [
                 (
-                    r.title,
-                    r.author,
-                    r.pub_year,
-                    r.publisher,
-                    r.pub_place,
-                    r.normalized_places,
-                    r.lat,
-                    r.lng,
-                    r.doc_id,
+                    r[1],  # title
+                    r[2],  # author
+                    r[3],  # pub_year
+                    r[4],  # publisher
+                    r[5],  # pub_place
+                    r[0],  # doc_id
                 )
                 for r in rows
-            ],
+            ]
         )
 
 
