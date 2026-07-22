@@ -52,13 +52,15 @@ def get_device() -> str:
 
 
 def load_macberth(
-    # local_files_only: bool = True,
+    *,
+    use_qint8: bool = True,
 ) -> MacberthModel:
     """
     Loads MacBERTh with encoder + MLM head.
 
     The encoder is accessed through model.base_model.
-    The MLM head is used by Tier 1.4.
+
+    (The MLM head is currently used by Tier 1.4.)
     """
 
     logger.info("Loading MacBERTh model...")
@@ -75,6 +77,12 @@ def load_macberth(
         MACBERTH_MODEL_PATH,
         local_files_only=True,
     )
+
+    if use_qint8:
+        model = torch.quantization.quantize_dynamic(
+            model, {torch.nn.Linear}, dtype=torch.qint8
+        )
+        logger.info("Set model to use qint8")
 
     device = get_device()
 
