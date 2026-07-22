@@ -434,7 +434,6 @@ def analyse_concept(
     concept,
     lookup,
     indexes,
-    doc_meta,
     top_n=K,
     rrf_k=RRF_K,
     oversample=OVERSAMPLE,
@@ -666,7 +665,7 @@ def write_concept(con, data, lookup):
     ensure_events( con, lookup, event_ids, )
 
     # Every event referenced in events/neighbours must have a document row.
-    ensure_documents( con, lookup, doc_ids, )
+    ensure_documents( con, doc_ids, )
 
     field_rows = []
 
@@ -871,7 +870,6 @@ def run_tier2_service(
             concept=concept,
             lookup=lookup,
             indexes=indexes,
-            doc_meta=doc_meta,
             top_n=top_n,
             rrf_k=rrf_k,
             oversample=oversample,
@@ -897,7 +895,6 @@ def run_tier2_core(
     *,
     lookup,
     indexes,
-    doc_meta,
     concepts_to_run,
     top_n=K,
     rrf_k=RRF_K,
@@ -912,7 +909,6 @@ def run_tier2_core(
             concept=concept,
             lookup=lookup,
             indexes=indexes,
-            doc_meta=doc_meta,
             top_n=top_n,
             rrf_k=rrf_k,
             oversample=oversample,
