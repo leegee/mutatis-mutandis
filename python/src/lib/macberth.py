@@ -52,7 +52,7 @@ def get_device() -> str:
 
 
 def load_macberth(
-    local_files_only: bool = True,
+    # local_files_only: bool = True,
 ) -> MacberthModel:
     """
     Loads MacBERTh with encoder + MLM head.
@@ -65,7 +65,7 @@ def load_macberth(
 
     tokenizer = AutoTokenizer.from_pretrained(
         MACBERTH_MODEL_PATH,
-        local_files_only=local_files_only,
+        local_files_only=True,
     )
 
     if not getattr(tokenizer, "is_fast", False):
@@ -73,7 +73,7 @@ def load_macberth(
 
     model = AutoModelForMaskedLM.from_pretrained(
         MACBERTH_MODEL_PATH,
-        local_files_only=local_files_only,
+        local_files_only=True,
     )
 
     device = get_device()
