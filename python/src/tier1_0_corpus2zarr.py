@@ -387,7 +387,6 @@ class EmbeddingPipeline:
             results.extend(self._forward_masked_window_batch(chunk))
         return results
 
-
     def _forward_masked_window_batch(self, jobs: list[dict]):
         """Forward pass and extract vector ONLY at the target masked position."""
         if not jobs:
@@ -402,7 +401,7 @@ class EmbeddingPipeline:
         attention_mask_t = torch.tensor([pad(j["attention_mask"]) for j in jobs], dtype=torch.long, device=self.device)
 
         with torch.inference_mode():
-            out = self.model(input_ids=input_ids_t, attention_mask=attention_mask_t, return_dict=True)
+            out = self.macberth.encode(input_ids=input_ids_t, attention_mask=attention_mask_t, return_dict=True)
 
         hidden = out.last_hidden_state.cpu().numpy()
         results = []

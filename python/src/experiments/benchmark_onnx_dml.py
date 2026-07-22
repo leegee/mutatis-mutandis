@@ -29,19 +29,17 @@ def make_dummy_batch(tokenizer, batch_size, seq_len):
 
 
 def bench_pytorch(mac, input_ids_np, attention_mask_np, n_batches):
-    model = mac.model
-    model.eval()
+    mac.model.eval()
     input_ids = torch.tensor(input_ids_np, dtype=torch.long)
     attention_mask = torch.tensor(attention_mask_np, dtype=torch.long)
 
-    # warmup
     with torch.inference_mode():
-        model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
+        mac.encode(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
 
     start = time.perf_counter()
     with torch.inference_mode():
         for _ in range(n_batches):
-            out = model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
+            out = mac.encode(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
     elapsed = time.perf_counter() - start
 
     return elapsed, out.last_hidden_state.numpy()
@@ -81,6 +79,16 @@ def bench_onnx(export_dir, providers, input_ids_np, attention_mask_np, n_batches
     elapsed = time.perf_counter() - start
 
     return elapsed, out[0]
+
+
+def get_hidden_states(out):
+    """Works whether the model is a bare encoder (last_hidden_state)
+    or has a task head attached (falls back to hidden_states[-1])."""
+    if hasattr(out, "last_hidden_state"):
+        return out.last_hidden_state
+    if hasattr(out, "hidden_states") and out.hidden_states is not None:
+        return out.hidden_states[-1]
+    raise AttributeError(f"Don't know how to extract hidden states from {type(out)}")
 
 
 def cosine_sim(a, b):
