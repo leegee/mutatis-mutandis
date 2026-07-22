@@ -124,7 +124,7 @@ export async function loadDatasets(
                             c.centroid_gnx AS gnx,
                             c.centroid_gny AS gny,
                             c.point_count,
-                            c.label,
+                            c.cluster_label,
                             c.description
                         FROM concept_cluster_info c
                         WHERE c.concept = ?

@@ -140,6 +140,7 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 1. api result paging
 1. expose tier 2's analytics
+1. run tier 1's 'masked' path in the Cloud
 
 ### DB
 

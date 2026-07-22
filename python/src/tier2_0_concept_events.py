@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS neighbours (
     )
 );
 
+--  concept_field_events is the authoritative relationship
 CREATE TABLE IF NOT EXISTS concept_field_events (
     concept TEXT NOT NULL,
     event_id INTEGER NOT NULL,

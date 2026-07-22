@@ -26,6 +26,7 @@ from lib.zarr_event_lookup import ZarrEventLookup
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
 
+MIN_IN_CLUSTER = 7
 
 LOCAL_UMAP_PARAMS = {
     "n_neighbors": 15,
@@ -74,12 +75,6 @@ def sqlite_connection( path: Path, ):
     )
     return con
 
-
-# def load_event_rows( con, concept, ):
-#     return con.execute(
-#         "SELECT event_id, vector_id FROM events WHERE concept = ? ORDER BY event_id",
-#         (concept,),
-#     ).fetchall()
 
 
 def load_event_rows(con, concept):
@@ -132,23 +127,10 @@ def load_vectors( lookup, event_rows, ):
 
 
 def project( vectors, params, ):
-    if len(vectors) < 3:
-        return np.zeros(
-            (
-                len(vectors),
-                2,
-            ),
-            dtype=np.float32,
-        )
-
-    reducer = umap.UMAP(
-        random_state=42,
-        **params,
-    )
-
-    return reducer.fit_transform(
-        vectors
-    )
+    if len(vectors) < MIN_IN_CLUSTER:
+        return np.zeros( ( len(vectors), 2, ), dtype=np.float32, )
+    reducer = umap.UMAP( random_state=42, **params, )
+    return reducer.fit_transform( vectors )
 
 
 def build_knn_graph( vectors, n_neighbors=15, ):
@@ -192,16 +174,10 @@ def build_knn_graph( vectors, n_neighbors=15, ):
 
 
 def leiden_cluster( vectors, ):
-    if len(vectors) < 5:
-        return np.full(
-            len(vectors),
-            -1,
-            dtype=np.int32,
-        )
+    if len(vectors) < MIN_IN_CLUSTER:
+        return np.full( len(vectors), -1, dtype=np.int32, )
 
-    edges = build_knn_graph(
-        vectors
-    )
+    edges = build_knn_graph( vectors )
 
     graph = ig.Graph(
         edges=edges,
@@ -269,77 +245,43 @@ def write_geometry(
     )
 
 
-def write_cluster_info( con, concept, local_coords, global_coords, clusters, ):
+def write_cluster_info(con, concept, local_coords, global_coords, clusters):
     con.execute(
         "DELETE FROM concept_cluster_info WHERE concept = ?",
         (concept,),
     )
 
-    cluster_ids = sorted(
-        set(
-            int(x)
-            for x in clusters
-        )
-    )
+    cluster_ids = sorted(set(int(x) for x in clusters))
 
-    rows = []
-
+    data = []
     for cluster_id in cluster_ids:
-        mask = ( clusters == cluster_id )
+        mask = (clusters == cluster_id)
+        if not np.any(mask):
+            continue
 
-        rows.append(
-            (
-                concept,
-                cluster_id,
-                None,
-                float( local_coords[mask, 0].mean() ),
-                float( local_coords[mask, 1].mean() ),
-                float( global_coords[mask, 0].mean() ),
-                float( global_coords[mask, 1].mean() ),
-                int(mask.sum()),
-                (
-                    "noise"
-                    if cluster_id == -1
-                    else None
-                ),
-                None,
-            )
-        )
+        data.append((
+            concept,
+            cluster_id,
+            "noise" if cluster_id == -1 else None,
+            float(local_coords[mask, 0].mean()),
+            float(local_coords[mask, 1].mean()),
+            float(global_coords[mask, 0].mean()),
+            float(global_coords[mask, 1].mean()),
+            int(mask.sum()),
+            None,                    # description
+        ))
 
     con.executemany(
         """
         INSERT INTO concept_cluster_info (
-            concept,
-            cluster_id,
-            cluster_label,
-            centroid_nx,
-            centroid_ny,
-            centroid_gnx,
-            centroid_gny,
-            point_count,
-            description
-        )
-        VALUES (?,?,?,?,?,?,?,?,?)
+            concept, cluster_id, cluster_label,
+            centroid_nx, centroid_ny, centroid_gnx, centroid_gny,
+            point_count, description
+        ) VALUES (?,?,?,?,?,?,?,?,?)
         """,
-        [
-            (
-                concept,
-                cluster_id,
-                (
-                    "noise"
-                    if cluster_id == -1
-                    else None
-                ),
-                float(local_coords[mask,0].mean()),
-                float(local_coords[mask,1].mean()),
-                float(global_coords[mask,0].mean()),
-                float(global_coords[mask,1].mean()),
-                int(mask.sum()),
-                None,
-            )
-            for cluster_id in cluster_ids
-        ],
+        data,
     )
+
 
 def build_global_projection(
     lookup,

@@ -93,18 +93,27 @@ class ClusterSample:
 
 #  SQLite side
 
-def sqlite_cx(db_path=None):
-    dbh = sqlite3.connect(db_path or CORPUS_TIER2_DB_PATH)
+def sqlite_cx():
+    dbh = sqlite3.connect(CORPUS_TIER2_DB_PATH)
     dbh.row_factory = sqlite3.Row
     return dbh
 
 
 def fetch_clusters_for_concept(con, concept: str) -> list[dict]:
-    rows = con.execute(
-        """
-        SELECT cluster_id, cluster_label, point_count
-        FROM concept_cluster_info
-        WHERE concept = ? AND cluster_label IS NULL
+    rows = con.execute( """
+        SELECT
+            c.cluster_id,
+            c.cluster_label,
+            COUNT(e.event_id) AS point_count
+        FROM concept_cluster_info c
+        JOIN events e
+            ON e.cluster_id = c.cluster_id
+        JOIN concept_field_events f
+            ON f.event_id = e.event_id
+        AND f.concept = c.concept
+        WHERE c.concept = ?
+        AND c.cluster_label IS NULL
+        GROUP BY c.cluster_id, c.cluster_label
         ORDER BY point_count DESC
         """,
         (concept,),
@@ -114,21 +123,24 @@ def fetch_clusters_for_concept(con, concept: str) -> list[dict]:
 
 
 def fetch_cluster_events(con, concept: str, cluster_id: int) -> list[ClusterEvent]:
-    """Raw event membership for one cluster - the full point set, not yet sampled."""
     rows = con.execute(
         """
-        SELECT event_id,
-            doc_id,
-            token_idx,
-            window_id,
-            token,
-            pub_year
-        FROM events
-        WHERE concept = ?
-        AND cluster_id = ?
+        SELECT
+            e.event_id,
+            e.doc_id,
+            e.token_idx,
+            e.window_id,
+            e.token,
+            e.pub_year
+        FROM concept_field_events f
+        JOIN events e
+            ON e.event_id = f.event_id
+        WHERE f.concept = ?
+          AND e.cluster_id = ?
         """,
         (concept, cluster_id),
     ).fetchall()
+
     return [
         ClusterEvent(
             event_id=r["event_id"],
@@ -183,7 +195,6 @@ def diversify_sample(
 
 
 def write_label_to_sqlite(
-    db_path,
     concept: str,
     cluster_id: int,
     sense_name: str,
@@ -193,7 +204,7 @@ def write_label_to_sqlite(
     sample_event_ids: list[int],
     concentration: float,
 ):
-    con = sqlite3.connect(db_path or CORPUS_TIER2_DB_PATH)
+    con = sqlite3.connect(CORPUS_TIER2_DB_PATH)
 
     con.execute(
         """
@@ -294,6 +305,13 @@ def build_cluster_sample(
 ) -> ClusterSample:
     cluster_id = cluster_info["cluster_id"]
     events = fetch_cluster_events(sqlite_dbh, concept, cluster_id)
+
+    logger.info(
+        f"[label_clusters] {concept} cluster={cluster_id} "
+        f"cluster_info_count={cluster_info['point_count']} "
+        f"events_found={len(events)}"
+    )
+
     concentration, dominant_doc_id = compute_concentration(events)
     document_count = len({
         e.doc_id
@@ -319,11 +337,19 @@ def build_cluster_sample(
 
     sampled = diversify_sample(events)
 
+    logger.info(
+        f"[label_clusters] {concept} cluster {cluster_id}: "
+        f"{len(events)} raw events -> {len(sampled)} sampled"
+    )
+
     context_lines = []
     for e in sampled:
+        # logger.debug( f"[label_clusters] Fetching context: doc_id={e.doc_id}, token_idx={e.token_idx}, window_id={e.window_id}, token={e.token}" )
         text = fetch_window_text(pg_dbh, e.doc_id, e.token_idx)
         if text:
             context_lines.append(text)
+        else:
+            logger.warn("[label_clusters] No text")
 
     context_lines = dedup_lines(context_lines)
 
@@ -425,8 +451,8 @@ def safe_json_parse(raw: str) -> dict:
 
 # Runners
 
-def label_concept_clusters(concept: str, db_path=None, dry_run: bool = False):
-    sqlite_dbh = sqlite_cx(db_path)
+def label_concept_clusters(concept: str, dry_run: bool = False):
+    sqlite_dbh = sqlite_cx()
     pg_dbh = get_connection()
 
     client = None
@@ -454,10 +480,7 @@ def label_concept_clusters(concept: str, db_path=None, dry_run: bool = False):
                 continue
 
             if not sample.context_lines:
-                logger.warning(
-                    f"[label_clusters] {concept} cluster {sample.cluster_id}: "
-                    f"no context text retrieved, skipping"
-                )
+                logger.warning( f"[label_clusters] {concept} cluster {sample.cluster_id}: no context text retrieved, skipping" )
                 continue
 
             if sample.concentration >= DEGENERATE_CONCENTRATION_THRESHOLD:
@@ -484,7 +507,6 @@ def label_concept_clusters(concept: str, db_path=None, dry_run: bool = False):
             )
 
             write_label_to_sqlite(
-                db_path,
                 concept,
                 sample.cluster_id,
                 result.get("sense_name", ""),
@@ -503,7 +525,6 @@ def label_concept_clusters(concept: str, db_path=None, dry_run: bool = False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--concept")
-    parser.add_argument("--db-path", default=CORPUS_TIER2_DB_PATH)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -512,16 +533,16 @@ def main():
     args = parser.parse_args()
 
     if args.concept:
-        label_concept_clusters(args.concept, db_path=args.db_path, dry_run=args.dry_run)
+        label_concept_clusters(args.concept, dry_run=args.dry_run)
     else:
-        sqlite_dbh = sqlite_cx(args.db_path)
+        sqlite_dbh = sqlite_cx()
         concepts = [
             row[0]
             for row in sqlite_dbh.execute("SELECT DISTINCT concept FROM concepts ORDER BY concept")
         ]
         sqlite_dbh.close()
         for concept in concepts:
-            label_concept_clusters(concept, db_path=args.db_path, dry_run=args.dry_run)
+            label_concept_clusters(concept, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
