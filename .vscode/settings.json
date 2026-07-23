@@ -11,7 +11,7 @@
     "editor.renderControlCharacters": true,
     "editor.renderFinalNewline": "on",
     "files.trimTrailingWhitespace": true,
-    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultEnvManager": "UV",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "cSpell.words": [
         "Bpedia",
