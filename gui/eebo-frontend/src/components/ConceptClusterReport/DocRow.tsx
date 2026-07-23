@@ -2,6 +2,7 @@ import { createSignal, createResource, createEffect, onCleanup, Show, For } from
 import { fetchWindowBatch } from "../../services/tokenWindowBatchApi";
 import { getWindow, setWindowCache } from "../../services/windowCache";
 import ExemplarSubRow from "./ExemplarSubRow";
+import { showDocument } from "../../services/documentApi";
 
 import './DocRow.css';
 
@@ -68,7 +69,11 @@ export default function DocRow(props: Props) {
             <tr ref={rowRef} class="surface-container-highest">
                 <td>{props.rank}</td>
                 <td>{props.count.toLocaleString()}</td>
-                <td>{props.doc_id}</td>
+                <td>
+                    <a class="link" onClick={() => showDocument(props.doc_id)}>
+                        {props.doc_id}
+                    </a>
+                </td>
                 <td>{props.author}</td>
                 <td>{props.pub_year}</td>
                 <td>
