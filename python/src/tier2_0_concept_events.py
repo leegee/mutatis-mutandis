@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
     centroid_ny REAL,
     centroid_gnx REAL,
     centroid_gny REAL,
+    centroid_vector BLOB,
     point_count INTEGER,
     description TEXT,
     llm_model TEXT,

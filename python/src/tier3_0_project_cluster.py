@@ -245,7 +245,7 @@ def write_geometry(
     )
 
 
-def write_cluster_info(con, concept, local_coords, global_coords, clusters):
+def write_cluster_info(con, concept, vectors, local_coords, global_coords, clusters):
     con.execute(
         "DELETE FROM concept_cluster_info WHERE concept = ?",
         (concept,),
@@ -259,25 +259,40 @@ def write_cluster_info(con, concept, local_coords, global_coords, clusters):
         if not np.any(mask):
             continue
 
+        centroid_vector = (
+            vectors[mask]
+            .mean(axis=0)
+            .astype(np.float32)
+        )
+        centroid_blob = centroid_vector.tobytes()
         data.append((
             concept,
             cluster_id,
             "noise" if cluster_id == -1 else None,
-            float(local_coords[mask, 0].mean()),
-            float(local_coords[mask, 1].mean()),
-            float(global_coords[mask, 0].mean()),
-            float(global_coords[mask, 1].mean()),
+            float(local_coords[mask,0].mean()),
+            float(local_coords[mask,1].mean()),
+            float(global_coords[mask,0].mean()),
+            float(global_coords[mask,1].mean()),
+            sqlite3.Binary(centroid_blob),
             int(mask.sum()),
-            None,                    # description
+            None,
         ))
 
     con.executemany(
         """
         INSERT INTO concept_cluster_info (
-            concept, cluster_id, cluster_label,
-            centroid_nx, centroid_ny, centroid_gnx, centroid_gny,
-            point_count, description
-        ) VALUES (?,?,?,?,?,?,?,?,?)
+            concept,
+            cluster_id,
+            cluster_label,
+            centroid_nx,
+            centroid_ny,
+            centroid_gnx,
+            centroid_gny,
+            centroid_vector,
+            point_count,
+            description
+        )
+        VALUES (?,?,?,?,?,?,?,?,?,?)
         """,
         data,
     )
@@ -323,7 +338,7 @@ def process_concept( con, lookup, concept, global_coords, ):
     )
 
     write_geometry( con, event_ids, local_coords, global_xy, clusters, )
-    write_cluster_info( con, concept, local_coords, global_xy, clusters, )
+    write_cluster_info( con, concept, vectors, local_coords, global_xy, clusters, )
     con.commit()
 
 
