@@ -121,18 +121,19 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
           </div>
         </Show>
 
+        <Show when={props.authorMatch}>
+          <nav class="toolbar no-round no-margin no-padding">
+            <div class="field label border small no-margin no-padding" >
+              <input type='search' value={controls.authorMatch || ''} onChange={(e) => A.setAuthorMatch(e.currentTarget.value)} />
+              <label>Match Author</label>
+              <span class="tooltip bottom">Match authors containing characters entered here</span>
+            </div>
+          </nav>
+        </Show>
+
         {resolved()}
       </nav>
 
-      <Show when={props.authorMatch}>
-        <nav class="toolbar no-round no-margin no-padding">
-          <div class="field label border small no-margin no-padding" >
-            <input type='search' value={controls.authorMatch || ''} onChange={(e) => A.setAuthorMatch(e.currentTarget.value)} />
-            <label>Match Author</label>
-            <span class="tooltip bottom">Match authors containing characters entered here</span>
-          </div>
-        </nav>
-      </Show>
     </>
   );
 };
