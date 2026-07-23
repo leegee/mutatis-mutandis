@@ -36,7 +36,9 @@ export default function ConceptClusters() {
 
     const clusterColors = createMemo(() =>
         buildCssColorMap(
-            clusters().map(c => String(c.id)),
+            clusters()
+                .sort((a, b) => b.eventCount - a.eventCount)
+                .map(c => String(c.id)),
             24
         )
     );

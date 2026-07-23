@@ -1,7 +1,7 @@
 import { createResource, Show } from "solid-js";
 import { queryEventById } from "../services/db";
-import { fetchWindowBatch, type TextWindowItem } from "../services/tokenWindowBatchApi";
-import { setWindowCache, getWindow } from "../services/windowCache";
+import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
+import { setWindowCache, getWindowCacheStore } from "../services/windowCache";
 
 interface TextWindowProps {
     eventid: string;
@@ -9,11 +9,14 @@ interface TextWindowProps {
 }
 
 export default function TextWindow(props: TextWindowProps) {
+    const cache = getWindowCacheStore();
+
     const [windowText] = createResource(
-        () => props.eventid,
-        async (eventId): Promise<string | null> => {
-            // already cached from a previous fetch elsewhere?
-            const cached = getWindow(eventId);
+        () => [
+            props.eventid,
+            cache[props.eventid],
+        ],
+        async ([eventId, cached]): Promise<string | null> => {
             if (cached) return cached;
 
             const event = await queryEventById(eventId);
@@ -26,7 +29,7 @@ export default function TextWindow(props: TextWindowProps) {
                 tokenIdx: event.token_idx,
             }]);
 
-            const item: TextWindowItem | undefined = res.results[0];
+            const item = res.results[0];
             if (!item) return null;
 
             setWindowCache(event.event_id, item.content);
@@ -34,7 +37,7 @@ export default function TextWindow(props: TextWindowProps) {
         }
     );
 
-    const style = () => "max-width: 100%;" + (props.style ?? '')
+    const style = () => "max-width: 100%;" + (props.style ?? "");
 
     return (
         <Show when={!windowText.loading} fallback={<progress />}>
