@@ -39,7 +39,7 @@ export default function ConceptTooltip(props: Props) {
 
             <div class="left-padding right-padding">
                 <span class="medium-opacity">
-                    Cluster {point().cluster_label || "N/A"}
+                    Cluster {point().cluster_id || "N/A"}
                 </span>
             </div>
 
