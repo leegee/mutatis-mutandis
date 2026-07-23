@@ -191,7 +191,7 @@ export default function Plot(props: PlotProps) {
             const base = DEPTH_COLORS[depth] || DEPTH_COLORS[2];
             return [base[0], base[1], base[2], props.bfsOpacity ?? 90];
           },
-          getRadius: 3.5,
+          getRadius: 4,
           radiusUnits: "pixels",
           opacity: (props.bfsOpacity ?? 90) / 255,
           pickable: zoomed,
@@ -279,8 +279,8 @@ export default function Plot(props: PlotProps) {
           data: neighbourPoints,
           getPosition: p => getPosition(p, proj),
           getFillColor: p => getColor()(p, "neighbours"),
-          getRadius: p => (p.depth === 2 ? 1.8 : 2.8),
           radiusUnits: "pixels",
+          getRadius: p => (p.depth === 2 ? 1.8 : 2.8),
           pickable: true, // zoomed,
           autoHighlight: true, // zoomed,
           highlightColor: [255, 255, 255, 100],
@@ -307,12 +307,12 @@ export default function Plot(props: PlotProps) {
       layersList.push(
         new GlowScatterplotLayer<PointData>({
           id: "concepts-merged",
-          getRadius: 3, // 4.5, // TODO
           coordinateSystem: "cartesian",
           data: conceptPoints,
           getPosition: p => getPosition(p, proj),
           getFillColor: p => getColor()(p),
           radiusUnits: "pixels",
+          getRadius: 5,
           opacity: 0.96,
           pickable: true,
           autoHighlight: true,
