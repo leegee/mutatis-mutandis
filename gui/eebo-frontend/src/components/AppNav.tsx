@@ -14,7 +14,7 @@ export default function AppNav() {
         <nav id="app-nav" class={`surface-container-low left no-margin top-padding scroll small-elevate ${ open() ? "full" : "small" }`} >
             <header class="fixed left-align top-margin tiny-margin no-padding">
                 <button
-                    class="extra transparent no-padding no-margin"
+                    class="transparent no-padding top-margin"
                     onClick={() => setOpen(!open())}
                 >
                     <Icon style="scale:3; margin-top: -.2rem; opacity: 0.5" />
