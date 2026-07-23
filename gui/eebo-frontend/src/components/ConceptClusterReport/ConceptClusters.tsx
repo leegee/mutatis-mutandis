@@ -9,12 +9,6 @@ import ClusterExport from "./ClusterExport";
 import "./ConceptClusters.css";
 import { buildCssColorMap, type CssClusterColor } from "../../lib/colour";
 
-// const CLUSTER_COLORS = [
-//     "#7F77DD", "#1D9E75", "#D85A30", "#D4537E",
-//     "#378ADD", "#BA7517", "#639922", "#E24B4A",
-// ];
-
-
 function clusterFetchParams() {
     const concept = controls.concept;
     if (!concept) return null;
