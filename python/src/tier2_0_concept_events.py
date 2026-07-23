@@ -320,20 +320,18 @@ def ensure_events(con, lookup, event_ids):
             logger.warning( f"[tier2] missing zarr event {eid}" )
             continue
 
-        rows.append(
-            (
-                int(eid),
-                None,
-                "neighbour",
-                int(event["vector_id"]),
-                event["token"],
-                event["doc_id"],
-                int(event["pub_year"]),
-                int(event["token_idx"]),
-                int(event["window_id"]),
-                int(event["window_token_pos"]),
-            )
-        )
+        rows.append( (
+            int(eid),
+            None,
+            "neighbour",
+            int(event["vector_id"]),
+            event["token"],
+            event["doc_id"],
+            int(event["pub_year"]),
+            int(event["token_idx"]),
+            int(event["window_id"]),
+            int(event["window_token_pos"]),
+        ) )
 
     if not rows:
         return
@@ -472,7 +470,6 @@ def analyse_concept(
         ],
         dtype=np.int64,
     )
-
 
     # Group by publication year.
     #
@@ -884,6 +881,7 @@ def run_tier2_service(
         con.commit()
 
     con.close()
+    logger.info( f"[tier2] Done" )
 
 
 
@@ -961,13 +959,12 @@ def main():
 
     lookup = ZarrEventLookup(
         zarr_path,
-        forms=target_forms,
-        false_positives=target_fps,
+        forms           = None, # target_forms,
+        false_positives = None, # target_fps,
     )
 
     concepts = list( resolve_concepts( concept=args.concept ) )
-    logger.info( f"[tier2] resolved concepts: {len(concepts)}" )
-    logger.info( [x[0] for x in concepts[:20]] )
+    logger.info( f"[tier2] resolved concepts: {len(concepts)} %s",  [x[0] for x in concepts[:20]] )
 
     processed = (
         set()
