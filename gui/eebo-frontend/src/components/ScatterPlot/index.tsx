@@ -112,6 +112,15 @@ export default function ConceptClusterPlot() {
         controlsActions.setSelectedEventIds(ids);
     });
 
+    function hoverPosition(x: number, y: number) {
+        const xo = x >= document.body.clientWidth / 2 ? 100 : -190;
+        const yo = y >= document.body.clientHeight / 2 ? -350 : 50;
+        return {
+            left: `${ x + xo }px`,
+            top: `${ y + yo }px`,
+        }
+    }
+
 
     return (
         <>
@@ -219,8 +228,7 @@ export default function ConceptClusterPlot() {
                     <aside class="surface-container-highest border large-elevate no-padding"
                         style={{
                             position: "fixed",
-                            left: `${ hoveredPoint().x + 100 }px`,
-                            top: `${ hoveredPoint().y + 70 }px`,
+                            ...hoverPosition(hoveredPoint().x, hoveredPoint().y),
                             "z-index": 20,
                             "pointer-events": "none",
                             "width": "20em",
