@@ -67,6 +67,7 @@ interface PlotProps {
   bfsOpacity?: number;
   neighbourOpacity?: number;
   selectedEventIds?: Set<Id>;
+  plotPointScaleFactor: number;
 
   showNeighbours?: boolean;
   showClusterCentroids?: boolean;
@@ -176,6 +177,7 @@ export default function Plot(props: PlotProps) {
     const conceptPoints = mergedConceptPoints();
     const neighbourPoints = props.showNeighbours ? mergedNeighbourPoints() : [];
     const clusterPoints = props.showClusterCentroids ? mergedClusterPoints() : [];
+    const psf = props.plotPointScaleFactor;
 
     const layersList: any[] = [];
 
@@ -191,7 +193,7 @@ export default function Plot(props: PlotProps) {
             const base = DEPTH_COLORS[depth] || DEPTH_COLORS[2];
             return [base[0], base[1], base[2], props.bfsOpacity ?? 90];
           },
-          getRadius: 4,
+          getRadius: 4 * psf,
           radiusUnits: "pixels",
           opacity: (props.bfsOpacity ?? 90) / 255,
           pickable: zoomed,
@@ -209,7 +211,7 @@ export default function Plot(props: PlotProps) {
         data: clusterPoints,
         getPosition: p => getPosition(p, proj),
         getFillColor: p => getColor()(p, 'concept_clusters'),
-        getRadius: 10.0,
+        getRadius: 10.0 * psf,
         radiusUnits: "pixels",
         opacity: 0.25,
         pickable: true,
@@ -220,6 +222,7 @@ export default function Plot(props: PlotProps) {
           getFillColor: { duration: 300 },
         },
         updateTriggers: {
+          getRadius: [props.plotPointScaleFactor],
           getPosition: [proj],
           getFillColor: [props.colorBy, selectedEventIds()],
         },
@@ -256,6 +259,7 @@ export default function Plot(props: PlotProps) {
           backgroundPadding: [4, 2],
           pickable: true,
           updateTriggers: {
+            getRadius: [props.plotPointScaleFactor],
             getPosition: [proj],
             getText: [props.colorBy],
           },
@@ -280,7 +284,7 @@ export default function Plot(props: PlotProps) {
           getPosition: p => getPosition(p, proj),
           getFillColor: p => getColor()(p, "neighbours"),
           radiusUnits: "pixels",
-          getRadius: p => (p.depth === 2 ? 1.8 : 2.8),
+          getRadius: p => (p.depth === 2 ? 1.8 : 2.8) * psf,
           pickable: true, // zoomed,
           autoHighlight: true, // zoomed,
           highlightColor: [255, 255, 255, 100],
@@ -289,6 +293,7 @@ export default function Plot(props: PlotProps) {
             getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
           },
           updateTriggers: {
+            getRadius: [props.plotPointScaleFactor],
             getPosition: [proj],
             getFillColor: [props.neighbourOpacity, props.colorBy, selectedEventIds()],
           },
@@ -312,7 +317,7 @@ export default function Plot(props: PlotProps) {
           getPosition: p => getPosition(p, proj),
           getFillColor: p => getColor()(p),
           radiusUnits: "pixels",
-          getRadius: 5,
+          getRadius: 5 * psf,
           opacity: 0.96,
           pickable: true,
           autoHighlight: true,
@@ -323,6 +328,7 @@ export default function Plot(props: PlotProps) {
             getRadius: { duration: 200 },
           },
           updateTriggers: {
+            getRadius: [props.plotPointScaleFactor],
             getPosition: [proj],
             getFillColor: [props.colorBy, selectedEventIds(), props.colorByFields],
           },

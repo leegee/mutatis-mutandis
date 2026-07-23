@@ -34,6 +34,7 @@ export type ControlsState = {
   showEventLabels: boolean;
   projectionMode: ProjectionModeType;
   authorMatch: string;
+  plotPointScaleFactor: number;
 };
 
 const initialControls: ControlsState = {
@@ -59,6 +60,7 @@ const initialControls: ControlsState = {
   showClusterCentroids: true,
   colorScatterBy: 'pub_year',
   authorMatch: '',
+  plotPointScaleFactor: 1,
 };
 
 export const [controls, setControls] = makePersisted(

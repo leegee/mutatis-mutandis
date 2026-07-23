@@ -195,6 +195,7 @@ export default function ConceptClusterPlot() {
                                 onBoundsChange={handleBoundsChange}
                                 onPointHover={(point, xy) => setPointHovered(point && xy ? { point: point, x: xy[0], y: xy[1] } : null)}
                                 onSelectionChange={handleSelectionChange}
+                                plotPointScaleFactor={controls.plotPointScaleFactor}
                                 projectionMode={controls.projectionMode}
                                 selectedEventIds={controls.selectedEventIds}
                                 showNeighbours={controls.showNeighbours}

@@ -20,6 +20,10 @@ export const controlsActions = {
         setControls("bfsOpacity", Number(bfsOpacity));
     },
 
+    setPlotPointScaleFactor(scaleFactor: number) {
+        setControls('plotPointScaleFactor', scaleFactor);
+    },
+
     setNeighbourOpacity(neighbourOpacity: number | string) {
         setControls("neighbourOpacity", Number(neighbourOpacity));
     },
