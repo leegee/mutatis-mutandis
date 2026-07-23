@@ -59,6 +59,11 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
           A.stepYear(1);
         }
         break;
+
+      case "Enter":
+        e.preventDefault();
+        A.setAllYears();
+        break;
     }
   }
 
@@ -76,7 +81,10 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
 
         <button class="circle chip tiny no-border" onClick={() => A.stepYear(-1)} disabled={controls.fromYear !== controls.toYear}>
           <i>chevron_left</i>
-          <span class="tooltip bottom">Retreat by one year</span>
+          <span class="tooltip bottom">
+            Retreat by one year
+            <kbd class="medium-opacity">CTRL ←</kbd>
+          </span>
         </button>
 
         <For each={yearBucketsResource()}>
@@ -148,14 +156,20 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
 
         <button class="circle chip tiny no-border" onClick={() => A.stepYear(1)} disabled={controls.fromYear !== controls.toYear}>
           <i>chevron_right</i>
-          <span class="tooltip bottom">Advance by one year</span>
+          <span class="tooltip bottom">
+            Advance by one year
+            <kbd class="medium-opacity">CTRL →</kbd>
+          </span>
         </button>
 
         <button class="circle chip tiny no-border small-text no-line" style="font-size:0.5rem"
           onClick={A.setAllYears}
         >
           <i>all_inclusive</i>
-          <span class="tooltip bottom">Show all years</span>
+          <span class="tooltip bottom">
+            Show all years
+            <kbd class="medium-opacity">CTRL ENTER</kbd>
+          </span>
         </button>
 
       </aside>
