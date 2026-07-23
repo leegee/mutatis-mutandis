@@ -155,12 +155,12 @@ def is_content_token(token: str) -> bool:
 
 
 def is_mask_target(token: str) -> bool:
-    normalised = unicodedata.normalize("NFKC", token).lower()
-
-    return any(
-        normalised in concept["forms"]
-        for concept in CONCEPT_SETS.values()
-    )
+    return is_content_token(token);
+    # normalised = unicodedata.normalize("NFKC", token).lower()
+    # return any(
+    #     normalised in concept["forms"]
+    #     for concept in CONCEPT_SETS.values()
+    # )
 
 
 @dataclass(slots=True)
