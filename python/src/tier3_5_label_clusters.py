@@ -22,20 +22,30 @@ groq-middleware.ts) with a data-driven pipeline that:
      from call order).
   6. Writes sense_name / sense_description back into concept_cluster_info.
 
-ASSUMPTION FLAGGED FOR REVIEW:
-    fetch_window_text() assumes a Postgres table `pamphlet_corpus` with a
-    `full_text` column, and reconstructs a window by splitting on
-    whitespace and slicing around `token_idx`. This is almost certainly
-    NOT your real schema - swap this function's body for whatever your
-    actual text storage looks like (a pre-tokenized table, a windows
-    table keyed by window_id, etc). Everything else in this script is
-    independent of that choice.
+RESUME / CLEAR MODEL:
+    - fetch_clusters_for_concept() only selects clusters where
+      cluster_label IS NULL, and write_label_to_sqlite() commits
+      immediately after each cluster. So a plain restart after a crash
+      (rate limit, network blip, OOM, ^C, whatever) already resumes from
+      wherever it left off - no special flag needed for that.
+    - --clear wipes existing labels (for --concept if given, else every
+      concept) back to NULL first, so the next run re-labels from
+      scratch instead of resuming. Use this when you've changed sampling
+      params and want a clean re-run, not just to pick up stragglers.
+    - Groq 429s (RateLimitError) are caught and retried with a sleep
+      derived from the error's own "try again in Xm Ys" message (falling
+      back to a fixed sleep if that can't be parsed), instead of killing
+      the whole process. Transient 5xx errors get a short exponential
+      backoff too. Non-retryable errors (4xx other than 429, bad
+      response bodies, etc) still raise, so genuinely broken requests
+      don't spin forever.
 """
 
 import argparse
 import json
 import re
 import sqlite3
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
@@ -45,9 +55,11 @@ from lib.eebo_logging import logger
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
 
 try:
-    from groq import Groq
+    from groq import Groq, RateLimitError, APIStatusError
 except ImportError:
-    Groq = None  # allow --dry-run without the groq package installed
+    Groq = None  # allow --dry-run / --clear without the groq package installed
+    RateLimitError = None
+    APIStatusError = None
 
 import os
 
@@ -65,6 +77,10 @@ MAX_PROMPT_CHARS = 3000       # truncate assembled context before sending
 # this fraction or more of a cluster's raw points, flag it rather than
 # silently labeling it as if it were a real semantic grouping.
 DEGENERATE_CONCENTRATION_THRESHOLD = 0.6
+
+# retry/backoff for the Groq call
+GROQ_MAX_RETRIES = 10
+GROQ_RETRY_FALLBACK_SECONDS = 30  # used if we can't parse a wait time from the 429
 
 
 @dataclass
@@ -233,6 +249,43 @@ def write_label_to_sqlite(
             cluster_id,
         ),
     )
+
+    con.commit()
+    con.close()
+
+
+def clear_labels(concept: Optional[str] = None):
+    """
+    Wipe existing labels back to NULL so the next run re-labels from
+    scratch instead of resuming. Scoped to `concept` if given, otherwise
+    clears every concept.
+    """
+    con = sqlite3.connect(CORPUS_TIER2_DB_PATH)
+
+    reset_sql = """
+        UPDATE concept_cluster_info
+        SET cluster_label = NULL,
+            description = NULL,
+            llm_model = NULL,
+            llm_concentration = NULL,
+            llm_prompt = NULL,
+            llm_timestamp = NULL,
+            llm_sample_size = NULL,
+            llm_sample_event_ids = NULL
+    """
+
+    if concept:
+        cur = con.execute(reset_sql + " WHERE concept = ?", (concept,))
+        logger.info(
+            f"[label_clusters] --clear: wiped {cur.rowcount} cluster label(s) "
+            f"for concept={concept}"
+        )
+    else:
+        cur = con.execute(reset_sql)
+        logger.info(
+            f"[label_clusters] --clear: wiped {cur.rowcount} cluster label(s) "
+            f"for ALL concepts"
+        )
 
     con.commit()
     con.close()
@@ -439,6 +492,70 @@ OUTPUT FORMAT (STRICT JSON ONLY):
     return safe_json_parse(raw)
 
 
+def _parse_retry_seconds(err: "RateLimitError") -> float:
+    """
+    Pull a concrete wait time out of a Groq 429. Groq's error body puts a
+    human-readable "Please try again in 2m38.976s" in the message, and
+    (when present) responses may also carry a Retry-After header - prefer
+    that if it's there, since it's the authoritative source.
+    """
+    resp = getattr(err, "response", None)
+    if resp is not None:
+        header = resp.headers.get("retry-after")
+        if header:
+            try:
+                return float(header)
+            except ValueError:
+                pass
+
+    match = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", str(err))
+    if match:
+        minutes = float(match.group(1)) if match.group(1) else 0.0
+        seconds = float(match.group(2))
+        return minutes * 60 + seconds
+
+    return GROQ_RETRY_FALLBACK_SECONDS
+
+
+def call_groq_with_retry(client, sample: ClusterSample, max_retries: int = GROQ_MAX_RETRIES) -> dict:
+    """
+    Same as call_groq(), but 429s and transient 5xx errors are retried
+    with a sleep instead of killing the whole run. Non-retryable errors
+    (bad requests, auth failures, malformed JSON we truly can't recover,
+    etc) still raise - we only want to eat the specific "this will work
+    if you wait" cases.
+    """
+    attempt = 0
+    while True:
+        try:
+            return call_groq(client, sample)
+        except RateLimitError as err:
+            attempt += 1
+            if attempt > max_retries:
+                logger.error(
+                    f"[label_clusters] giving up on {sample.concept} cluster "
+                    f"{sample.cluster_id} after {max_retries} rate-limit retries"
+                )
+                raise
+            wait = _parse_retry_seconds(err) + 1  # small buffer
+            logger.warning(
+                f"[label_clusters] rate limited on {sample.concept} cluster "
+                f"{sample.cluster_id} (attempt {attempt}/{max_retries}) - "
+                f"sleeping {wait:.0f}s"
+            )
+            time.sleep(wait)
+        except APIStatusError as err:
+            attempt += 1
+            if attempt > max_retries or err.status_code < 500:
+                raise
+            wait = min(60, 2 ** attempt)
+            logger.warning(
+                f"[label_clusters] Groq API error {err.status_code} on "
+                f"{sample.concept} cluster {sample.cluster_id} - retrying in {wait:.0f}s"
+            )
+            time.sleep(wait)
+
+
 def safe_json_parse(raw: str) -> dict:
     try:
         return json.loads(raw)
@@ -462,12 +579,17 @@ def label_concept_clusters(concept: str, dry_run: bool = False):
         client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
     try:
+        # NOTE: fetch_clusters_for_concept() only returns clusters where
+        # cluster_label IS NULL, so re-running this after a crash (rate
+        # limit, ^C, network blip) automatically skips everything already
+        # written - that's the resume mechanism. Use --clear first if you
+        # actually want to redo already-labeled clusters.
         clusters = fetch_clusters_for_concept(sqlite_dbh, concept)
         clusters = [
             c for c in clusters
             if c["point_count"] >= MIN_LABEL_CLUSTER_SIZE
         ]
-        logger.info(f"[label_clusters] {concept}: {len(clusters)} clusters")
+        logger.info(f"[label_clusters] {concept}: {len(clusters)} clusters remaining to label")
 
         for cluster_info in clusters:
             sample = build_cluster_sample(sqlite_dbh, pg_dbh, concept, cluster_info)
@@ -500,7 +622,7 @@ def label_concept_clusters(concept: str, dry_run: bool = False):
                 )
                 continue
 
-            result = call_groq(client, sample)
+            result = call_groq_with_retry(client, sample)
             logger.info(
                 f"[label_clusters] {concept} cluster {sample.cluster_id} -> "
                 f"{result.get('sense_name')!r}"
@@ -530,7 +652,20 @@ def main():
         action="store_true",
         help="skip the Groq API call; just show what would be sent per cluster",
     )
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help=(
+            "wipe existing labels before labeling (scoped to --concept if "
+            "given, else ALL concepts). Use this when you've changed "
+            "sampling params and want a clean re-run; without it, a rerun "
+            "resumes and only labels clusters still missing a label."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.clear:
+        clear_labels(args.concept)
 
     if args.concept:
         label_concept_clusters(args.concept, dry_run=args.dry_run)
@@ -542,7 +677,17 @@ def main():
         ]
         sqlite_dbh.close()
         for concept in concepts:
-            label_concept_clusters(concept, dry_run=args.dry_run)
+            try:
+                label_concept_clusters(concept, dry_run=args.dry_run)
+            except Exception:
+                # don't let one concept's unrecoverable failure (retries
+                # exhausted, bad data, etc) take down the rest of the batch -
+                # log it and move on; it'll show up again next run since its
+                # clusters are still unlabeled.
+                logger.exception(
+                    f"[label_clusters] concept={concept} failed - continuing "
+                    f"with remaining concepts (it will resume next run)"
+                )
 
 
 if __name__ == "__main__":
