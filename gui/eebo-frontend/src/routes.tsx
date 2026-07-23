@@ -1,4 +1,4 @@
-import { lazy } from "solid-js";
+import { lazy, type Component } from "solid-js";
 
 import { JobsApiComponent } from "./components/Jobs";
 const Graph2 = lazy(() => import("./components/FDG"));
@@ -11,9 +11,25 @@ const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
 import Map from "./components/GeoMap";
 import ScatterPlotGuide from "./components/ScatterPlot/ScatterPlotGuide";
+import Home from "./components/Home";
 const ConceptClusters = lazy(() => import("./components/ConceptClusterReport/ConceptClusters"));
 
+export interface RouteType {
+  path: string;
+  icon: string;
+  label: string;
+  component: Component;
+  help?: Component | undefined;
+}
+
 export const routes = [
+  {
+    path: "/",
+    icon: "home",
+    label: "Home",
+    component: Home,
+  },
+
   {
     path: "/scatter",
     icon: "scatter_plot",
@@ -75,4 +91,4 @@ export const routes = [
     help: () => <div>Temporal evolution of concepts.</div>
   }
 
-] as const;
+] as RouteType[];

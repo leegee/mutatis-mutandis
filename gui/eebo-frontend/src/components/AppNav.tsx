@@ -1,14 +1,20 @@
-import { createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import { A, useLocation } from "@solidjs/router";
 import { Icon } from "./Icon";
 import { routes } from "../routes";
 import { openHelp, setOpenHelp } from "../state/help.store";
+import { matchRoute } from "../lib/matchRoute";
 
 
 export default function AppNav() {
     const location = useLocation();
     const [open, setOpen] = createSignal(false);
     const isActive = (path: string) => location.pathname === path;
+
+    const isHelpEnabled = createMemo(() => {
+        const currentRoute = routes.find(r => matchRoute(r.path, location.pathname));
+        return currentRoute && currentRoute.hasOwnProperty("help");
+    });
 
     return (
         <nav id="app-nav" class={`surface-container-low left no-margin top-padding scroll small-elevate ${ open() ? "full" : "small" }`} >
@@ -41,7 +47,11 @@ export default function AppNav() {
 
             <hr class="max surface-container-low" />
 
-            <a class="no-margin no-space no-padding no-border button transparent" onClick={() => setOpenHelp(!openHelp())} >
+            <a class={"no-margin no-space no-padding no-border button transparent" + (
+                isHelpEnabled() ? '' : ' disabled '
+            )}
+                onClick={() => isHelpEnabled() ? setOpenHelp(!openHelp()) : {}}
+            >
                 <i>help</i>
                 <span>Guide</span>
             </a>

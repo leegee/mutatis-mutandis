@@ -129,6 +129,11 @@ mark {
   --_input: 1rem;
 }
 
+a.disabled {
+  pointer-events: none;
+  opacity: 50%;
+}
+
 q,
 blockquote {
   border-left: none;
