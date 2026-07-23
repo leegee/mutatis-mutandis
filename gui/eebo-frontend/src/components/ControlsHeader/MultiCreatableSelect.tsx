@@ -54,7 +54,7 @@ export default function MultiCreatableSelect(props: Props) {
       {/* Trigger */}
       <button type="button"
         class="border no-round"
-        style="width:100%"
+        style="width:100%; font-size: 180%"
         onClick={() => {
           setOpen(v => !v)
         }}

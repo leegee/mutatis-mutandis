@@ -28,7 +28,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
   return (
     <>
       <nav class="toolbar no-round no-margin no-padding">
-        <div class="field suffix border middle-align small">
+        <div class="field suffix border middle-align">
           <Show when={concepts().length > 0}>
             <Show when={props.multiConcept} fallback={
               <select value={controls.concept} onChange={(e) => A.setConceptSelection([e.currentTarget.value])} >
