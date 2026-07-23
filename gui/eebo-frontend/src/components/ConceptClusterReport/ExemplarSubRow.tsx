@@ -39,20 +39,15 @@ export default function ExemplarSubRow(props: { event: Exemplar }) {
         >
             <td colspan="7">
                 <div>
-                    token_idx {props.event.token_idx}
-                    {props.event.token ? ` · ${ props.event.token }` : ""}
-                </div>
-
-                <div>
-                    <Show when={!visible()}>
-                        &mdash;
-                    </Show>
-
                     <Show when={visible()}>
-                        <TextWindow eventid={props.event.event_id} />
+                        <span title={"token_idx " + props.event.token_idx}>
+                            {props.event.token ? ` · ${ props.event.token }` : ""}
+                        </span>
+
+                        ...<TextWindow eventid={props.event.event_id} />...
                     </Show>
                 </div>
             </td>
-        </tr>
+        </tr >
     );
 }
