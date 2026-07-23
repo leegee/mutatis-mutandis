@@ -45,7 +45,7 @@ export default function PlotSettings() {
                         <span><i>lens_blur</i></span>
                     </div>
                 </nav>
-                <output>Neighbour Opacity</output>
+                <output>Point Size</output>
             </div>
         </li>
     </>
