@@ -91,6 +91,15 @@ export default function ConceptClusters() {
                 <Show when={clusterReport()}>
                     <ClusterExport clusters={clusterReport()!} />
                 </Show>
+
+                <label class="switch">
+                    <input type="checkbox"
+                        checked={showExemplars()}
+                        onInput={e => setShowExemplars(e.currentTarget.checked)}
+                    />
+                    <span></span>
+                </label>
+                <span>Show exemplars</span>
             </ControlsHeader>
 
             <Show when={!controls.concept}>
@@ -104,26 +113,12 @@ export default function ConceptClusters() {
             </Show>
 
             <Show when={clusterReport()}>
-                <div class="field middle-align">
-                    <nav>
-                        <h2 class="max">
-                            Concept Clusters
-                        </h2>
-                        <span>Show top document exemplars</span>
-                        <label class="switch">
-                            <input type="checkbox"
-                                checked={showExemplars()}
-                                onInput={e => setShowExemplars(e.currentTarget.checked)}
-                            />
-                            <span></span>
-                        </label>
-                    </nav>
-                </div>
+                <h2 class="max"> Concept Clusters </h2>
 
                 <nav class="scroll bottom-padding">
                     <div class="field middle-align">
                         <label class="switch">
-                            <span>Dominant clusters only</span>
+                            <span class="small-text">Dominant <br />clusters only</span>
                             <input class="left-margin"
                                 type="checkbox"
                                 checked={showDominantOnly()}
