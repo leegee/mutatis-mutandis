@@ -5,7 +5,10 @@
 
 ## Code Synopsis
 
-    conda activate eebo_env             # Load Python environment
+    cd $PROJECT_ROOT/python
+    source .venv/Scripts/activate       # Load environment
+
+    cd $PROJECT_ROOT
     ./pipeline --all                    # Ingest the XML corpus from eebo_all
     ./run-ws.sh                         # Run the WebSocket service for diachronic search
     cd gui/eebo-frontend && bun dev     # Run the frontend dev server
