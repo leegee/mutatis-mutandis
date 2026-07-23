@@ -31,9 +31,11 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
         <div class="field suffix border middle-align">
           <Show when={concepts().length > 0}>
             <Show when={props.multiConcept} fallback={
-              <select value={controls.concept} onChange={(e) => A.setConceptSelection([e.currentTarget.value])} >
-                <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
-              </select>
+              <div class="field border small no-margin no-padding">
+                <select value={controls.concept} onChange={(e) => A.setConceptSelection([e.currentTarget.value])} >
+                  <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
+                </select>
+              </div>
             }>
 
               <div class="row no-space">
