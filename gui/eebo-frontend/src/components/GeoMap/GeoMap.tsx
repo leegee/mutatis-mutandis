@@ -35,13 +35,29 @@ export default function GeoMap(props: ClusterGeoMapProps) {
         markers.length = 0;
     }
 
+    function fitToPoints(points: EventPoint[]) {
+        if (!map || points.length === 0) return;
+
+        const bounds = new maplibregl.LngLatBounds();
+
+        for (const p of points) {
+            bounds.extend([p.lng, p.lat]);
+        }
+
+        map.fitBounds(bounds, {
+            padding: 80,
+            maxZoom: 7,      // don't zoom in closer than this
+            duration: 500
+        });
+    }
+
     function renderPoints(points: EventPoint[]) {
         if (!map) return;
 
         clearMarkers();
 
         for (const p of points) {
-            const size = Math.min(6 + Math.sqrt(p.count) * 2.5, 30);
+            const size = Math.min(32 + Math.sqrt(p.count) * 2.5, 30);
             const label = p.label || p.rawPlace || "Unknown";
             const el = document.createElement("div");
             el.className = "geo-event";
@@ -49,7 +65,7 @@ export default function GeoMap(props: ClusterGeoMapProps) {
             el.style.height = `${ size }px`;
             el.innerText = String(p.count);
             el.innerHTML = `
-                <div class="geo-circle" style=" width:${ size }px; height:${ size }px; ">
+                <div class="geo-circle" style=" width:${ size }px; height:${ size }px; font-size: ${ size - 15 }pt">
                 ${ p.count }
                 </div>
                 <div class="geo-label">
@@ -63,13 +79,15 @@ export default function GeoMap(props: ClusterGeoMapProps) {
                         .setHTML(`
                             <strong>${ label }</strong><br/>
                             Documents: ${ p.count }
-                            ${ p.rawPlace ? `<br/>EEBO: ${ p.rawPlace }` : "" }
+                            ${ p.rawPlace ? `<br/>Raw: ${ p.rawPlace }` : "" }
                             `)
                 )
                 .addTo(map);
 
             markers.push(marker);
         }
+
+        fitToPoints(points);
     }
 
     onMount(() => {

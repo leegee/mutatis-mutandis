@@ -23,6 +23,7 @@ GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
 # VARIANT to CANONICAL MAP (lowercase keys)
 PLACE_MAP = {
     "london": "London",
+    "lo": "London",
     "londres": "London",
     "llundain": "London",
     "oxford": "Oxford",
@@ -58,9 +59,11 @@ PLACE_MAP = {
 
     # Cambridge
     "cambridge": "Cambridge",
-    "cantabrigi": "Cambridge",
-    "cantabrigiae": "Cambridge",
     "cambridg": "Cambridge",
+
+    # Cant
+    "cantabrigi": "Canterbury",
+    "cantabrigiae": "Canterbury",
 
     # Boston
     "boston": "Boston, Mass.",
@@ -191,6 +194,7 @@ PLACE_MAP = {
     # Exeter
     "exeter": "Exeter",
     "exon": "Exeter",
+    "extern": "Exeter",
 
     # Falmouth
     "falmouth": "Falmouth",
@@ -220,6 +224,8 @@ PLACE_MAP = {
 
     # Kilkenny
     "kilkenny": "Kilkenny",
+
+    "kosmoburg": "London",
 
     # Leith
     "leith": "Leith",
@@ -273,6 +279,9 @@ PLACE_MAP = {
     # Oxford
     "oxen": "Oxford",   # OCR variant
 
+    # Philadelphia
+    "Philadelphia": "Philadelphia",
+
     # Reading
     "reading": "Reading",
 
@@ -320,7 +329,9 @@ PLACE_MAP = {
     "wakefield": "Wakefield",
 
     "gateside": "Gateside, Scotland",
+
     "carolopoli": "Charleville, France",
+
     "gottenberge": "Gothenburg",
     "edinb": "Edinburgh",
     "edin": "Edinburgh",
@@ -349,8 +360,8 @@ PLACE_MAP = {
     "L[ondo]n": "London",
     "[liège?": "Liège",
     "[lo]ndon": "London",
-    "nod-nol.": "Nödinge-Nol",
-    # "lo:": "Sine Loco",
+    "nod-nol.": "London",
+    "obedience": "Sine Loco",
 }
 
 
@@ -411,7 +422,12 @@ def normalize_pub_place(raw: str | None):
     # pure variant scan
     key = norm_key(s)
 
-    for variant, canonical in CLEAN_PLACE_MAP.items():
+    # Sort by length so Lo for London doesn't match Londonderry
+    for variant, canonical in sorted(
+        CLEAN_PLACE_MAP.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
         if variant in key:
             logger.info("VAR ---------- %s -> %s", variant, canonical)
             found.append(canonical)
