@@ -211,7 +211,7 @@ export default function ConceptClusters() {
                                                     <DocRow
                                                         rank={i() + 1}
                                                         doc_id={doc_id}
-                                                        count={0}
+                                                        count={clusterExemplarsByDoc()?.[doc_id].length}
                                                         author={clusterReport()?.docMeta[doc_id]?.author ?? null}
                                                         pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
                                                         title={clusterReport()?.docMeta[doc_id]?.title ?? null}
