@@ -196,7 +196,7 @@ export default function ConceptClusterPlot() {
                                     <div class="field middle-align prefix suffix">
                                         <nav>
                                             <div class="slider medium responsive">
-                                                <input type='range' min={1} max={255} step={1}
+                                                <input type='range' min={0} max={255} step={5}
                                                     disabled={!controls.showNeighbours}
                                                     value={controls.neighbourOpacity}
                                                     onInput={(e) => controlsActions.setNeighbourOpacity(Number(e.currentTarget.value))}

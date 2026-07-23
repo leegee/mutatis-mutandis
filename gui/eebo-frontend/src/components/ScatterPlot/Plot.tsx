@@ -43,16 +43,16 @@ const INITIAL_VIEW_STATE: OrthographicViewState = {
 };
 
 const brighten = ([r, g, b]: RGB | RGBA): RGBA => [
-  Math.min(r * 1.25, 255),
-  Math.min(g * 1.25, 255),
-  Math.min(b * 1.25, 255),
+  Math.min(r * 1.15, 255),
+  Math.min(g * 1.15, 255),
+  Math.min(b * 1.15, 255),
   255,
 ];
 
 const dim = ([r, g, b, a]: RGBA): RGBA => [
-  r * 0.5,
-  g * 0.5,
-  b * 0.5,
+  r * 0.75,
+  g * 0.75,
+  b * 0.75,
   a,
 ];
 
@@ -112,8 +112,7 @@ export default function Plot(props: PlotProps) {
 
   const selectedEventIds = createMemo(() => props.selectedEventIds ?? new Set<Id>());
 
-  // Split so colorMap only rebuilds when the colour field values change,
-  // not on every unrelated dataset mutation.
+  // Only rebuilds when the colour field values change, not every unrelated dataset mutation.
   const colorFieldValues = createMemo(() => {
     const field = props.colorBy;
     return allPoints().map(p => String(p[field as keyof PointData] ?? ""));
@@ -123,38 +122,44 @@ export default function Plot(props: PlotProps) {
 
   const getColor = createMemo(() => {
     return (p: PointData, origin?: string): RGBA => {
-      if (props.colorBy === "cluster_id" && p.cluster_id !== undefined && p.cluster_id !== -1) {
-        return colorMap().get(String(p.cluster_id)) ?? GREY;
+      let base: RGBA;
+
+      // Cluster centroids: always colour by cluster_id
+      if (origin === "concept_clusters") {
+        base = colorMap().get(String(p.cluster_id ?? "")) ?? GREY;
       }
 
-      let base: RGBA;
+      // Everything else: use normal colour mapping
+      else {
+        const field = props.colorBy;
+        base = colorMap().get(String(p[field as keyof PointData] ?? "")) ?? GREY;
+      }
+
+      // Neighbours: keep colour, modify alpha
       if (origin === "neighbours") {
-        const thisNeighbourOpacity = props.neighbourOpacity ?? 200;
+        const opacity = props.neighbourOpacity ?? 100;
         const depth = p.depth ?? 1;
+
         const alpha = depth === 2
-          ? Math.floor(thisNeighbourOpacity * 0.45)
-          : thisNeighbourOpacity;
+          ? Math.floor(opacity * 0.45)
+          : opacity;
+
         base = [
-          DEPTH_COLORS[depth][0],
-          DEPTH_COLORS[depth][1],
-          DEPTH_COLORS[depth][2],
+          base[0],
+          base[1],
+          base[2],
           alpha,
         ];
       }
 
-      else {
-        const thisColourMap = colorMap();
-        const thisColorBy = props.colorBy;
-        base = thisColourMap.get(String(p[thisColorBy as keyof PointData] ?? "")) ?? GREY;
-      }
+      // Selection highlighting
+      const selected = selectedEventIds();
+      if (!selected.size) return base;
+      if (selected.has(p.event_id)) return brighten(base);
 
-      const thisSelectedEventIds = selectedEventIds();
-      if (!thisSelectedEventIds.size) return base;
-      if (thisSelectedEventIds.has(p.event_id)) return brighten(base);
       return dim(base);
     };
   });
-
 
   const mergedConceptPoints = createMemo(() => props.datasets.filter(d => d.type === "concept").flatMap(d => d.points || []));
 
@@ -203,7 +208,7 @@ export default function Plot(props: PlotProps) {
         coordinateSystem: "cartesian",
         data: clusterPoints,
         getPosition: p => getPosition(p, proj),
-        getFillColor: p => getColor()(p),
+        getFillColor: p => getColor()(p, 'concept_clusters'),
         getRadius: 10.0,
         radiusUnits: "pixels",
         opacity: 0.25,

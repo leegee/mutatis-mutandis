@@ -14,7 +14,7 @@ export type ColorScatterByType = 'pub_year' | "cluster_label" | "doc_id"
 export type ControlsState = {
   concept: string;
   bfsOpacity: number;
-  neighbourOpacity: number;
+  neighbourOpacity: number; // = alpha in range 0 - 255
   conceptSelection: string[];
   showNeighbours: boolean;
   showClusterCentroids: boolean;
@@ -38,7 +38,7 @@ export type ControlsState = {
 
 const initialControls: ControlsState = {
   bfsOpacity: 3,
-  neighbourOpacity: 200,
+  neighbourOpacity: 100,
   concept: "LIBERTY",
   conceptSelection: ["LIBERTY"],
   viewMode: "events",
