@@ -1,5 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 
+import styles from "./MultiCreatableSelect.module.css";
+
 type Props = {
   options: string[];
   selected: string[];
@@ -50,11 +52,11 @@ export default function MultiCreatableSelect(props: Props) {
   };
 
   return (
-    <div class="field middle-align" style="min-width: 15em">
+    <div class={styles["concept-menu"] + " field middle-align"}>
       {/* Trigger */}
       <button type="button"
         class="border no-round"
-        style="width:100%; font-size: 180%"
+        style="width:100%; font-size: 150%; color: var(--fg)"
         onClick={() => {
           setOpen(v => !v)
         }}
@@ -65,10 +67,10 @@ export default function MultiCreatableSelect(props: Props) {
 
       {/* Dropdown */}
       <Show when={open()}>
-        <menu id="concept-menu" class="no-round ">
+        <div class={styles["concept-dropdown"] + " no-round large-elevate border padding surface-container-high"}>
 
           {/* INPUT FILTER */}
-          <li class="padding">
+          <li class="padding list">
             <div class="field">
               <input
                 class="input"
@@ -82,7 +84,7 @@ export default function MultiCreatableSelect(props: Props) {
           {/* OPTIONS */}
           <For each={filtered()}>
             {(c) => (
-              <li>
+              <li class="list top-padding">
                 <label class="checkbox small">
                   <input
                     type="checkbox"
@@ -118,8 +120,8 @@ export default function MultiCreatableSelect(props: Props) {
             </li>
           </Show>
 
-        </menu>
-      </Show>
-    </div>
+        </div>
+      </Show >
+    </div >
   );
 }
