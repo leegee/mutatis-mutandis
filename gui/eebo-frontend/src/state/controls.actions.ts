@@ -24,6 +24,10 @@ export const controlsActions = {
         setControls('plotPointScaleFactor', scaleFactor);
     },
 
+    setShowExemplars(show: boolean) {
+        setControls('showExemplars', show);
+    },
+
     setNeighbourOpacity(neighbourOpacity: number | string) {
         setControls("neighbourOpacity", Number(neighbourOpacity));
     },

@@ -35,6 +35,7 @@ export type ControlsState = {
   projectionMode: ProjectionModeType;
   authorMatch: string;
   plotPointScaleFactor: number;
+  showExemplars: boolean;
 };
 
 const initialControls: ControlsState = {
@@ -61,6 +62,7 @@ const initialControls: ControlsState = {
   colorScatterBy: 'pub_year',
   authorMatch: '',
   plotPointScaleFactor: 1,
+  showExemplars: false,
 };
 
 export const [controls, setControls] = makePersisted(

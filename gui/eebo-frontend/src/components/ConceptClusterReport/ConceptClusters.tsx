@@ -8,6 +8,7 @@ import ClusterExport from "./ClusterExport";
 
 import "./ConceptClusters.css";
 import { buildCssColorMap, type CssClusterColor } from "../../lib/colour";
+import { controlsActions } from "../../state/controls.actions";
 
 function clusterFetchParams() {
     const concept = controls.concept;
@@ -30,7 +31,6 @@ export default function ConceptClusters() {
 
     const [selectedCluster, setSelectedCluster] = createSignal<number | null>(null);
     const [showDominantOnly, setShowDominantOnly] = createSignal(true);
-    const [showExemplars, setShowExemplars] = createSignal(false);
 
     const clusters = () => clusterReport()?.clusters ?? [];
 
@@ -94,8 +94,8 @@ export default function ConceptClusters() {
 
                 <label class="switch">
                     <input type="checkbox"
-                        checked={showExemplars()}
-                        onInput={e => setShowExemplars(e.currentTarget.checked)}
+                        checked={controls.showExemplars}
+                        onInput={e => controlsActions.setShowExemplars(e.currentTarget.checked)}
                     />
                     <span></span>
                 </label>
@@ -216,7 +216,7 @@ export default function ConceptClusters() {
                                                         pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
                                                         title={clusterReport()?.docMeta[doc_id]?.title ?? null}
                                                         exemplars={
-                                                            showExemplars() ? clusterExemplarsByDoc()?.[doc_id] ?? [] : []
+                                                            controls.showExemplars ? clusterExemplarsByDoc()?.[doc_id] ?? [] : []
                                                         }
                                                     />
                                                 )}
