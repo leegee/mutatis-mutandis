@@ -1,4 +1,4 @@
-import { type Component, createResource, For } from "solid-js";
+import { type Component, createResource, For, onMount, onCleanup } from "solid-js";
 import { getYearBuckets } from "../../state/controls.selectors";
 import { controls } from "../../state/controls.store";
 import { controlsActions as A } from "../../state/controls.actions";
@@ -29,6 +29,46 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
       year <= controls.toYear
     );
   };
+
+  function handleKeyDown(e: KeyboardEvent) {
+    // Ignore if typing into a control
+    const target = e.target as HTMLElement | null;
+    if (
+      target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable)
+    ) {
+      return;
+    }
+
+    if (!e.ctrlKey) return;
+
+    switch (e.key) {
+      case "ArrowLeft":
+        if (controls.fromYear === controls.toYear) {
+          e.preventDefault();
+          A.stepYear(-1);
+        }
+        break;
+
+      case "ArrowRight":
+        if (controls.fromYear === controls.toYear) {
+          e.preventDefault();
+          A.stepYear(1);
+        }
+        break;
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener("keydown", handleKeyDown);
+  });
+
+  onCleanup(() => {
+    window.removeEventListener("keydown", handleKeyDown);
+  });
 
   return (
     <>
