@@ -32,13 +32,20 @@ RESUME / CLEAR MODEL:
       concept) back to NULL first, so the next run re-labels from
       scratch instead of resuming. Use this when you've changed sampling
       params and want a clean re-run, not just to pick up stragglers.
-    - Groq 429s (RateLimitError) are caught and retried with a sleep
-      derived from the error's own "try again in Xm Ys" message (falling
-      back to a fixed sleep if that can't be parsed), instead of killing
-      the whole process. Transient 5xx errors get a short exponential
-      backoff too. Non-retryable errors (4xx other than 429, bad
-      response bodies, etc) still raise, so genuinely broken requests
-      don't spin forever.
+    - 429s (RateLimitError) are caught and retried with a sleep derived
+      from the error's own "try again in Xm Ys" message (falling back to
+      a fixed sleep if that can't be parsed), instead of killing the
+      whole process. Transient 5xx errors get a short exponential
+      backoff too.
+    - PROVIDERS defines an ordered list of OpenAI-compatible endpoints
+      (Groq first, Cerebras as a free fallback). Once a provider's own
+      retries are exhausted, we move to the next configured provider
+      rather than dying - so a Groq daily-quota exhaustion doesn't stall
+      the run if CEREBRAS_API_KEY is set. Each row's llm_model column
+      records exactly which provider:model produced that label, so a
+      mixed-provider run is fully auditable and any cluster you want
+      relabeled with a specific model can be targeted individually.
+
 """
 
 import argparse
@@ -55,15 +62,40 @@ from lib.eebo_logging import logger
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
 
 try:
-    from groq import Groq, RateLimitError, APIStatusError
+    from openai import OpenAI, RateLimitError, APIStatusError
 except ImportError:
-    Groq = None  # allow --dry-run / --clear without the groq package installed
+    OpenAI = None  # allow --dry-run / --clear without the openai package installed
     RateLimitError = None
     APIStatusError = None
 
 import os
 
-GROQ_MODEL = "llama-3.3-70b-versatile"
+# Both providers below are OpenAI-compatible endpoints, so a single client
+# shape handles both - no need for the groq SDK specifically. Order matters:
+# we try providers top-to-bottom, falling over to the next one once a
+# provider's own retries are exhausted (not on the first 429 - that's often
+# just transient).
+#
+# NOTE (2026-06-17): Groq deprecated llama-3.3-70b-versatile for free/dev
+# tier usage; openai/gpt-oss-120b is their recommended replacement, so we
+# use that as the primary model now rather than the old Llama 3.3 name.
+PROVIDERS = [
+    {
+        "name": "groq",
+        "base_url": "https://api.groq.com/openai/v1",
+        "api_key_env": "GROQ_API_KEY",
+        "model": "openai/gpt-oss-120b",
+    },
+    # {
+    #     "name": "cerebras",
+    #     "base_url": "https://api.cerebras.ai/v1",
+    #     "api_key_env": "CEREBRAS_API_KEY",
+    #     "model": "gpt-oss-120b",
+    # },
+]
+
+# retries per provider before falling over to the next one in PROVIDERS
+PROVIDER_MAX_RETRIES = 4
 
 MIN_LABEL_CLUSTER_SIZE = 20   # Limit LLM calls
 MAX_LLM_CONCENTRATION = 0.8   # Try to avoid dominance by one doc
@@ -79,8 +111,7 @@ MAX_PROMPT_CHARS = 3000       # truncate assembled context before sending
 DEGENERATE_CONCENTRATION_THRESHOLD = 0.6
 
 # retry/backoff for the Groq call
-GROQ_MAX_RETRIES = 10
-GROQ_RETRY_FALLBACK_SECONDS = 30  # used if we can't parse a wait time from the 429
+RETRY_FALLBACK_SECONDS = 30  # used if we can't parse a wait time from a 429
 
 
 @dataclass
@@ -443,7 +474,7 @@ Representative occurrences:
 """
 
 
-def call_groq(client, sample: ClusterSample) -> dict:
+def call_llm(client, model: str, sample: ClusterSample) -> dict:
     prompt_body = build_prompt(sample)
 
     completion = client.chat.completions.create(
@@ -480,7 +511,7 @@ OUTPUT FORMAT (STRICT JSON ONLY):
 """,
             },
         ],
-        model=GROQ_MODEL,
+        model=model,
         temperature=0.3,
         response_format={"type": "json_object"},
     )
@@ -514,46 +545,96 @@ def _parse_retry_seconds(err: "RateLimitError") -> float:
         seconds = float(match.group(2))
         return minutes * 60 + seconds
 
-    return GROQ_RETRY_FALLBACK_SECONDS
+    return RETRY_FALLBACK_SECONDS
 
 
-def call_groq_with_retry(client, sample: ClusterSample, max_retries: int = GROQ_MAX_RETRIES) -> dict:
+def build_clients() -> list[dict]:
     """
-    Same as call_groq(), but 429s and transient 5xx errors are retried
-    with a sleep instead of killing the whole run. Non-retryable errors
-    (bad requests, auth failures, malformed JSON we truly can't recover,
-    etc) still raise - we only want to eat the specific "this will work
-    if you wait" cases.
+    Build one OpenAI-compatible client per entry in PROVIDERS that has an
+    API key set in the environment. Providers without a key configured are
+    skipped (with a log line) rather than erroring, so e.g. not having
+    CEREBRAS_API_KEY set just means "no fallback available", not a crash.
     """
-    attempt = 0
-    while True:
-        try:
-            return call_groq(client, sample)
-        except RateLimitError as err:
-            attempt += 1
-            if attempt > max_retries:
-                logger.error(
-                    f"[label_clusters] giving up on {sample.concept} cluster "
-                    f"{sample.cluster_id} after {max_retries} rate-limit retries"
+    clients = []
+    for provider in PROVIDERS:
+        api_key = os.environ.get(provider["api_key_env"])
+        if not api_key:
+            logger.info(
+                f"[label_clusters] {provider['api_key_env']} not set - "
+                f"skipping provider '{provider['name']}'"
+            )
+            continue
+        clients.append({
+            **provider,
+            "client": OpenAI(base_url=provider["base_url"], api_key=api_key),
+        })
+    return clients
+
+
+def call_llm_with_fallback(clients: list[dict], sample: ClusterSample) -> tuple[dict, str]:
+    """
+    Try each provider in order. Within a provider, retry 429s and
+    transient 5xx errors up to PROVIDER_MAX_RETRIES times (sleeping based
+    on the error's own retry-after info) before moving on to the next
+    provider. Only raises once every configured provider is exhausted.
+    Non-retryable errors (bad request, auth failure) move to the next
+    provider immediately rather than retrying pointlessly.
+    Returns (result_dict, model_name_actually_used) - model_name is
+    recorded in llm_model so mixed-provider runs stay auditable.
+    """
+    if not clients:
+        raise RuntimeError(
+            "no LLM provider configured - set GROQ_API_KEY and/or "
+            "CEREBRAS_API_KEY, or pass --dry-run"
+        )
+
+    last_err = None
+    for provider in clients:
+        attempt = 0
+        while attempt <= PROVIDER_MAX_RETRIES:
+            try:
+                result = call_llm(provider["client"], provider["model"], sample)
+                return result, f"{provider['name']}:{provider['model']}"
+            except RateLimitError as err:
+                attempt += 1
+                if attempt > PROVIDER_MAX_RETRIES:
+                    logger.warning(
+                        f"[label_clusters] {provider['name']} exhausted "
+                        f"({PROVIDER_MAX_RETRIES} retries) on {sample.concept} "
+                        f"cluster {sample.cluster_id} - trying next provider"
+                    )
+                    last_err = err
+                    break
+                wait = _parse_retry_seconds(err) + 1  # small buffer
+                logger.warning(
+                    f"[label_clusters] {provider['name']} rate limited on "
+                    f"{sample.concept} cluster {sample.cluster_id} "
+                    f"(attempt {attempt}/{PROVIDER_MAX_RETRIES}) - sleeping {wait:.0f}s"
                 )
-                raise
-            wait = _parse_retry_seconds(err) + 1  # small buffer
-            logger.warning(
-                f"[label_clusters] rate limited on {sample.concept} cluster "
-                f"{sample.cluster_id} (attempt {attempt}/{max_retries}) - "
-                f"sleeping {wait:.0f}s"
-            )
-            time.sleep(wait)
-        except APIStatusError as err:
-            attempt += 1
-            if attempt > max_retries or err.status_code < 500:
-                raise
-            wait = min(60, 2 ** attempt)
-            logger.warning(
-                f"[label_clusters] Groq API error {err.status_code} on "
-                f"{sample.concept} cluster {sample.cluster_id} - retrying in {wait:.0f}s"
-            )
-            time.sleep(wait)
+                time.sleep(wait)
+            except APIStatusError as err:
+                attempt += 1
+                if attempt > PROVIDER_MAX_RETRIES or err.status_code < 500:
+                    logger.warning(
+                        f"[label_clusters] {provider['name']} error "
+                        f"{err.status_code} on {sample.concept} cluster "
+                        f"{sample.cluster_id} - trying next provider"
+                    )
+                    last_err = err
+                    break
+                wait = min(60, 2 ** attempt)
+                logger.warning(
+                    f"[label_clusters] {provider['name']} API error "
+                    f"{err.status_code} on {sample.concept} cluster "
+                    f"{sample.cluster_id} - retrying in {wait:.0f}s"
+                )
+                time.sleep(wait)
+
+    logger.error(
+        f"[label_clusters] all providers exhausted for {sample.concept} "
+        f"cluster {sample.cluster_id}"
+    )
+    raise last_err if last_err else RuntimeError("all providers failed with no captured error")
 
 
 def safe_json_parse(raw: str) -> dict:
@@ -572,11 +653,11 @@ def label_concept_clusters(concept: str, dry_run: bool = False):
     sqlite_dbh = sqlite_cx()
     pg_dbh = get_connection()
 
-    client = None
+    clients = []
     if not dry_run:
-        if Groq is None:
-            raise RuntimeError("groq package not installed - pip install groq, or pass --dry-run")
-        client = Groq(api_key=os.environ["GROQ_API_KEY"])
+        if OpenAI is None:
+            raise RuntimeError("openai package not installed - pip install openai, or pass --dry-run")
+        clients = build_clients()
 
     try:
         # NOTE: fetch_clusters_for_concept() only returns clusters where
@@ -622,10 +703,10 @@ def label_concept_clusters(concept: str, dry_run: bool = False):
                 )
                 continue
 
-            result = call_groq_with_retry(client, sample)
+            result, model_used = call_llm_with_fallback(clients, sample)
             logger.info(
                 f"[label_clusters] {concept} cluster {sample.cluster_id} -> "
-                f"{result.get('sense_name')!r}"
+                f"{result.get('sense_name')!r} (via {model_used})"
             )
 
             write_label_to_sqlite(
@@ -633,7 +714,7 @@ def label_concept_clusters(concept: str, dry_run: bool = False):
                 sample.cluster_id,
                 result.get("sense_name", ""),
                 result.get("description", ""),
-                GROQ_MODEL,
+                model_used,
                 build_prompt(sample),
                 [e.event_id for e in sample.events],
                 sample.concentration,
