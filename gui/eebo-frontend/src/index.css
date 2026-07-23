@@ -97,8 +97,10 @@ main,
 }
 
 mark {
-  background-color: aqua;
-  color: black;
+  text-decoration: underline;
+  text-decoration-color: aqua;
+  text-decoration-thickness: 2pt;
+  background-color: transparent;
   padding: 0.1em 0.2em;
 }
 
