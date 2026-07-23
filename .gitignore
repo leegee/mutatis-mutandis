@@ -80,3 +80,4 @@ python/fastapi_jobs.sqlite3
 *.db-wal
 bibliography/cited
 clauses.notes.md
+python/macberth-onnx-fp32/

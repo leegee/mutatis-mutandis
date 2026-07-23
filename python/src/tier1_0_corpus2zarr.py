@@ -130,7 +130,6 @@ from lib.eebo_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
-from lib.macberth import load_macberth
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS
 
@@ -212,7 +211,7 @@ class EmbeddingPipeline:
     ):
         self.macberth = mac
         self.tokenizer = mac.tokenizer
-        self.model = mac.model
+        self.hidden_size = mac.hidden_size
         self.device = mac.device
         self.mask_targets = mask_targets
         self.pooling_scope = pooling_scope
@@ -625,7 +624,7 @@ class CorpusProcessor:
     def process(self, doc_id=None):
         store = ZarrEmbeddingObservationStore(
             path=str(self.zarr_path),
-            dim=self.pipeline.model.config.hidden_size
+            dim=self.pipeline.hidden_size
         )
 
         already_processed = set(store.get_doc_ids())
@@ -792,6 +791,7 @@ def parse_args():
     p.add_argument("--mask-only-position", action="store_true", default=True, help="Mask only the target token (recommended for semantics)")
     p.add_argument("--shard", type=int, default=None, help="This process's shard index (0-based)")
     p.add_argument("--num-shards", type=int, default=1, help="Total number of shards")
+    p.add_argument("--backend", choices=["onnx", "pytorch"], default="onnx", help="Inference backend for embedding (default: onnx/DirectML)")
     return p.parse_args()
 
 
@@ -801,6 +801,11 @@ def main():
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))  # match OMP/MKL env vars — intra-op parallelism
     torch.set_num_interop_threads(1)                                  # not running parallel independent ops, so keep this low
     logger.info("Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
+
+    if args.backend == "pytorch":
+        torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))
+        torch.set_num_interop_threads(1)
+        logger.info("Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
 
     if args.mask:
         base_path = MASKED_ZARR_PATH
@@ -819,7 +824,14 @@ def main():
         clear_output_dir(zarr_path)
 
     conn = get_connection()
-    mac = load_macberth(use_qint8=True)
+
+    if args.backend == "onnx":
+        from lib.macberth import load_macberth_onnx
+        mac = load_macberth_onnx()
+    else:
+        from lib.macberth import load_macberth
+        mac = load_macberth(use_qint8=False)
+
 
     pipeline = EmbeddingPipeline(
         mac,

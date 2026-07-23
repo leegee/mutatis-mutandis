@@ -7,22 +7,29 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List, Union
 
+from types import SimpleNamespace
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 from lib.eebo_logging import logger
-
+from lib.eebo_config import MODELS_DIR
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
+ONNX_MODEL_DIR = MODELS_DIR / "./macberth-onnx-fp32"
+ONNX_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 @dataclass
 class MacberthModel:
     tokenizer: AutoTokenizer
     model: AutoModelForMaskedLM
     device: str
+
+    @property
+    def hidden_size(self) -> int:
+        return self.model.config.hidden_size
 
     def encode(self, **kwargs):
         """
@@ -112,6 +119,11 @@ class MacBERThEmbedder:
         self.macberth = macberth
         self.pooling = pooling
         self.device = macberth.device
+
+
+    @property
+    def hidden_size(self) -> int:
+        return self._hidden_size
 
     def encode(
         self,
@@ -207,11 +219,127 @@ class MacBERThEmbedder:
         return sum_embeddings / sum_mask
 
 
+class OnnxMacberthModel:
+    """
+    ONNX Runtime-backed stand-in for MacberthModel. Exposes the same
+    .tokenizer / .device / .encode() surface so MacBERThEmbedder doesn't
+    need to know the difference.
+    """
+
+    def __init__(self, tokenizer, session):
+        self.tokenizer = tokenizer
+        self.session = session
+        # Device execution (CPU vs DML) is decided by the ORT providers
+        # inside the session, not by tensor placement -- keep this "cpu"
+        # so MacBERThEmbedder's `.to(self.device)` calls are no-ops.
+        self.device = "cpu"
+
+    def encode(self, input_ids, attention_mask, token_type_ids=None, **kwargs):
+        if token_type_ids is None:
+            token_type_ids = torch.zeros_like(input_ids)
+
+        feed = {
+            "input_ids": input_ids.cpu().numpy(),
+            "attention_mask": attention_mask.cpu().numpy(),
+            "token_type_ids": token_type_ids.cpu().numpy(),
+        }
+        outputs = self.session.run(None, feed)
+        last_hidden_state = torch.from_numpy(outputs[0])
+        return SimpleNamespace(last_hidden_state=last_hidden_state)
+
+
+ONNX_MODEL_DIR = Path("./macberth-onnx-fp32")
+
+
+def _export_macberth_onnx(export_dir: Path = ONNX_MODEL_DIR) -> None:
+    """
+    Exports a fresh fp32 (unquantized) MacBERTh to ONNX format.
+
+    Loads its own fp32 model instance rather than dequantizing an
+    existing one -- dynamic quantization (use_qint8=True) repacks
+    Linear weights into a non-tensor format with no clean reverse op.
+    """
+    from optimum.onnxruntime import ORTModelForFeatureExtraction
+    import shutil
+
+    logger.info(f"ONNX export not found at {export_dir}, exporting now...")
+
+    if export_dir.exists():
+        shutil.rmtree(export_dir)
+
+    mac_fp32 = load_macberth(use_qint8=False)
+    mac_fp32.model.eval()
+
+    temp_dir = Path(str(export_dir) + "_temp")
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+
+    mac_fp32.model.save_pretrained(temp_dir)
+
+    ort_model = ORTModelForFeatureExtraction.from_pretrained(
+        temp_dir,
+        export=True,
+        provider="CPUExecutionProvider",
+    )
+    ort_model.save_pretrained(export_dir)
+    mac_fp32.tokenizer.save_pretrained(export_dir)
+
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+    logger.info(f"ONNX export completed at {export_dir}")
+
+
+def load_macberth_onnx(
+    export_dir: Path = ONNX_MODEL_DIR,
+    providers: Optional[List[str]] = None,
+) -> OnnxMacberthModel:
+    """
+    Loads the fp32 ONNX MacBERTh model for inference. Exports it first
+    if it doesn't already exist on disk.
+
+    Prefers DirectML, falls back to CPU if unavailable.
+    """
+    import onnxruntime as ort
+
+    export_dir = Path(export_dir)
+
+    if not (export_dir / "model.onnx").exists():
+        _export_macberth_onnx(export_dir)
+
+    if providers is None:
+        providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
+
+    usable = [p for p in providers if p in ort.get_available_providers()]
+    if not usable:
+        raise RuntimeError(f"None of the requested providers are available: {providers}")
+
+    provider_options = [{"device_id": 0} if p == "DmlExecutionProvider" else {} for p in usable]
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+    session = ort.InferenceSession(
+        f"{export_dir}/model.onnx",
+        sess_options=sess_options,
+        providers=usable,
+        provider_options=provider_options,
+    )
+    logger.info(f"Loaded ONNX MacBERTh, providers: {session.get_providers()}")
+
+    tokenizer = AutoTokenizer.from_pretrained(export_dir, local_files_only=True)
+
+    return OnnxMacberthModel(tokenizer=tokenizer, session=session)
+
+
 def get_macberth_embedder(
     pooling: str = "mean",
+    backend: str = "onnx",  # "onnx" or "pytorch"
 ) -> MacBERThEmbedder:
 
-    macberth_model = load_macberth()
+    if backend == "onnx":
+        macberth_model = load_macberth_onnx()
+    else:
+        macberth_model = load_macberth()
 
     return MacBERThEmbedder(
         macberth_model,
