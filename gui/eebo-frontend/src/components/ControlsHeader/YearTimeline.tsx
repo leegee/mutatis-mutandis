@@ -96,7 +96,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
                 />
                 <div class={`tooltip max ${ props.tooltipPosition || 'top' }`}>
                   <span class="bold">{bucket.year} </span>
-                  &mdash;
+                  {" "}&mdash;{" "}
                   {bucket.count} events
                   <br /><br />
                   Hold <kbd>SHIFT</kbd> and click to select a range.
