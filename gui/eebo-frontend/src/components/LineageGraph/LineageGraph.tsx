@@ -130,53 +130,17 @@ export default function LineageGraph() {
             ]);
         }
 
-        //
-        // nodes grouped by year
-        //
-
-        // const nodesByYear =
-        //     d3.group(
-        //         graph.nodes,
-        //         d => d.year
-        //     );
-
-        // const positions = new Map<string, [number, number]>();
-
-        // for (const [year, nodes] of nodesByYear) {
-
-        //     const totalHeight = nodes.length * 80;
-        //     const start = (height - totalHeight) / 2;
-
-        //     nodes.forEach(
-        //         (node, index) => {
-        //             positions.set(
-        //                 node.id,
-        //                 [
-        //                     x(year)!,
-        //                     start + index * 80
-        //                 ]
-        //             );
-        //         }
-        //     );
-        // }
-
-
+        const yearColour = d3.scaleSequential()
+            .domain(
+                d3.extent(graph.nodes, d => d.year) as [number, number]
+            )
+            .interpolator(d3.interpolateViridis);
 
         //
-        // zoom container
+        // container
         //
 
         const root = svg.append("g");
-
-        d3.select(svgRef)
-            .call(
-                d3.zoom<SVGSVGElement, unknown>()
-                    .scaleExtent([0.3, 4])
-                    .on("zoom",
-                        e => { root.attr("transform", e.transform); }
-                    )
-            );
-
 
         //
         // edges
@@ -192,37 +156,35 @@ export default function LineageGraph() {
                 link => {
                     const a = positions.get(link.source);
                     const b = positions.get(link.target);
+
                     if (!a || !b)
                         return "";
 
                     const mid = (a[0] + b[0]) / 2;
 
                     return `
-                    M ${ a[0] } ${ a[1] }
-                    C ${ mid } ${ a[1] },
-                      ${ mid } ${ b[1] },
-                      ${ b[0] } ${ b[1] }
-                    `;
+                M ${ a[0] } ${ a[1] }
+                C ${ mid } ${ a[1] },
+                  ${ mid } ${ b[1] },
+                  ${ b[0] } ${ b[1] }
+            `;
                 }
             )
-            .attr(
-                "stroke-width",
-                d => Math.max(1, d.similarity * 5)
+            .attr("stroke-width", d => Math.max(1, d.confidence * 8))
+            .attr("opacity", d => Math.max(0.2, d.similarity))
+            .attr("stroke-dasharray", d => d.type === "CONTINUATION" ? null : "6,4"
             );
-
 
         //
         // nodes
         //
+
         const radius = d3.scaleSqrt()
             .domain([
                 0,
-                d3.max(
-                    graph.nodes,
-                    d => d.size
-                ) ?? 1
+                d3.max(graph.nodes, d => d.size) ?? 1
             ])
-            .range([5, 35]);
+            .range([6, 40]);
 
         root.selectAll("circle")
             .data(graph.nodes)
@@ -232,14 +194,16 @@ export default function LineageGraph() {
             .attr("cx", d => positions.get(d.id)![0])
             .attr("cy", d => positions.get(d.id)![1])
             .attr("r", d => radius(d.size))
+            .attr("fill", d => yearColour(d.year))
+            // .attr( "fill", d => lineageColour(String(d.lineage_id)) ) TODO
             .append("title")
-            .text(d =>
-                `${ graph.concept }
-${ d.year }
+            .text(
+                d =>
+                    `${ graph.concept }
+year ${ d.year }
 cluster ${ d.cluster }
 mass ${ d.size }`
             );
-
 
         //
         // years

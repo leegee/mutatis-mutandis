@@ -18,7 +18,7 @@
     }
 
     .node {
-        fill: var(--primary);
+        /* fill: var(--primary); */
         stroke: var(--on-background);
         color: var(--on-background);
         stroke-width: 1px;
