@@ -112,38 +112,53 @@ export default function LineageGraph() {
                 )
             );
 
+        const y = d3.scaleLinear()
+            .domain(
+                d3.extent(
+                    graph.nodes,
+                    d => d.local!.y
+                ) as [number, number]
+            )
+            .range([80, height - 80]);
 
+        const positions = new Map<string, [number, number]>();
+
+        for (const node of graph.nodes) {
+            positions.set(node.id, [
+                x(node.year)!,
+                y(node.local?.y ?? 0)
+            ]);
+        }
 
         //
         // nodes grouped by year
         //
 
-        const nodesByYear =
-            d3.group(
-                graph.nodes,
-                d => d.year
-            );
+        // const nodesByYear =
+        //     d3.group(
+        //         graph.nodes,
+        //         d => d.year
+        //     );
 
+        // const positions = new Map<string, [number, number]>();
 
-        const positions = new Map<string, [number, number]>();
+        // for (const [year, nodes] of nodesByYear) {
 
-        for (const [year, nodes] of nodesByYear) {
+        //     const totalHeight = nodes.length * 80;
+        //     const start = (height - totalHeight) / 2;
 
-            const totalHeight = nodes.length * 80;
-            const start = (height - totalHeight) / 2;
-
-            nodes.forEach(
-                (node, index) => {
-                    positions.set(
-                        node.id,
-                        [
-                            x(year)!,
-                            start + index * 80
-                        ]
-                    );
-                }
-            );
-        }
+        //     nodes.forEach(
+        //         (node, index) => {
+        //             positions.set(
+        //                 node.id,
+        //                 [
+        //                     x(year)!,
+        //                     start + index * 80
+        //                 ]
+        //             );
+        //         }
+        //     );
+        // }
 
 
 
