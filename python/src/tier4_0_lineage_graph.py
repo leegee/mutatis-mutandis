@@ -8,27 +8,24 @@ from __future__ import annotations
 
 import argparse
 import sqlite3
+import json
 
-import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from sklearn.metrics.pairwise import cosine_similarity
-
-from lib.eebo_config import CORPUS_TIER2_DB_PATH
+from lib.eebo_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
 from lib.eebo_logging import logger
 
-
-SIMILARITY_THRESHOLD = 0.80
-
+OUTPUT_DIR = GUI_PUBLIC_DIR / 'lineage'
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_clusters(con, concept):
     rows = con.execute(
         """
         SELECT concept, pub_year, cluster_id, centroid_vector, point_count
         FROM concept_year_cluster_info
-        WHERE concept=?
+        WHERE concept=? AND cluster_id >= 0
         ORDER BY pub_year, cluster_id
         """,
         (concept,),
@@ -55,7 +52,7 @@ def load_temporal_graph(con, concept):
         """
         SELECT concept, pub_year, cluster_id, point_count
         FROM concept_year_cluster_info
-        WHERE concept=?
+        WHERE concept=? AND cluster_id >= 0
         ORDER BY pub_year, cluster_id
         """,
         (concept,),
@@ -75,7 +72,7 @@ def load_temporal_graph(con, concept):
 
     edges = con.execute(
         """
-        SELECT source_year, source_cluster, target_year, target_cluster, similarity, edge_type
+        SELECT source_year, source_cluster, target_year, target_cluster, similarity, edge_type, confidence
         FROM temporal_cluster_edges
         WHERE concept=?
         """,
@@ -90,6 +87,7 @@ def load_temporal_graph(con, concept):
             tc,
             similarity,
             edge_type,
+            confidence,
         ) = row
 
         G.add_edge(
@@ -97,6 +95,9 @@ def load_temporal_graph(con, concept):
             f"{ty}:{tc}",
             similarity=float(similarity),
             edge_type=edge_type,
+            confidence=float(
+                confidence
+            ) if confidence is not None else 0.0,
         )
 
     return G
@@ -158,11 +159,7 @@ def draw_temporal_graph(G, output_png):
 
     ax.grid(True)
 
-    plt.savefig(
-        output_png,
-        dpi=300,
-        bbox_inches="tight"
-    )
+    plt.savefig( output_png, dpi=300, bbox_inches="tight" )
 
 
 def analyse_lineage(G):
@@ -205,12 +202,95 @@ def analyse_lineage(G):
         logger.info(x)
 
 
+def export_lineage(con, concept):
+    nodes = []
+
+    rows = con.execute(
+        """
+        SELECT concept, pub_year, cluster_id, point_count, centroid_nx, centroid_ny, centroid_gnx, centroid_gny
+        FROM concept_year_cluster_info
+        WHERE concept=?
+        ORDER BY pub_year, cluster_id
+        """,
+        (concept,)
+    )
+
+    for row in rows:
+        (
+            concept,
+            year,
+            cluster,
+            size,
+            nx,
+            ny,
+            gnx,
+            gny,
+        ) = row
+
+        nodes.append({
+            "id": f"{year}:{cluster}",
+            "year": year,
+            "cluster": cluster,
+            "size": size,
+            "local": {
+                "x": nx if nx is not None else 0,
+                "y": ny if ny is not None else 0,
+            },
+            "global": {
+                "x": gnx if gnx is not None else 0,
+                "y": gny if gny is not None else 0,
+            }
+        })
+
+
+    edges = []
+
+    rows = con.execute(
+        """
+        SELECT source_year, source_cluster, target_year, target_cluster, similarity, confidence, edge_type
+        FROM temporal_cluster_edges
+        WHERE concept=?
+        """,
+        (concept,)
+    )
+
+
+    for row in rows:
+        (
+            sy,
+            sc,
+            ty,
+            tc,
+            sim,
+            confidence,
+            edge_type,
+        ) = row
+
+        edges.append({
+            "source": f"{sy}:{sc}",
+            "target": f"{ty}:{tc}",
+            "similarity": sim,
+            "confidence": confidence,
+            "type": edge_type,
+        })
+
+
+    return {
+        "generated": "tier4_0_lineage_graph",
+        "concept": concept,
+        "nodes": nodes,
+        "links": edges,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument( "--concept", required=True, )
-    parser.add_argument( "--graphml", default="lineage.graphml" )
-    parser.add_argument( "--png", default="lineage.png", )
     args = parser.parse_args()
+
+    graphml_path = OUTPUT_DIR / f"{args.concept.upper()}_lineage.graphml"
+    png_path     = OUTPUT_DIR / f"{args.concept.upper()}_lineage.png"
+    json_path    = OUTPUT_DIR / f"{args.concept.upper()}_lineage.json"
 
     con = sqlite3.connect( CORPUS_TIER2_DB_PATH )
 
@@ -221,12 +301,21 @@ def main():
     logger.info( f"{G.number_of_nodes()} nodes" )
     logger.info( f"{G.number_of_edges()} edges" )
 
-    nx.write_graphml( G, args.graphml, )
+    nx.write_graphml( G, graphml_path )
+    logger.info( f"Wrote {graphml_path}" )
 
-    draw_temporal_graph( G, args.png, )
+    draw_temporal_graph( G, png_path )
+    logger.info( f"Wrote {png_path}" )
 
-    logger.info( f"Wrote {args.graphml}" )
-    logger.info( f"Wrote {args.png}" )
+    json_data = export_lineage(con, args.concept.upper())
+    con.close()
+
+    json.dump(
+        json_data,
+        open(json_path,"w"),
+        indent=2
+    )
+    logger.info( f"Wrote {json_path}" )
 
 
 if __name__ == "__main__":
