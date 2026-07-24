@@ -1,0 +1,30 @@
+.component {
+    min-width: 100%;
+    min-height: 100%;
+    overflow: auto;
+
+    svg {
+        display: block;
+        min-height: 100%;
+        flex-shrink: 0;
+    }
+
+    .edge {
+        fill: none;
+        stroke: var(--secondary);
+        opacity: 0.5;
+    }
+
+    .node {
+        fill: var(--primary);
+        stroke: var(--on-background);
+        color: var(--on-background);
+        stroke-width: 1px;
+    }
+
+
+    text {
+        fill: var(--on-background);
+        font-size: 12pt;
+    }
+}

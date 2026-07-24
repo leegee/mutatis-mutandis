@@ -1,6 +1,7 @@
 import { lazy, type Component } from "solid-js";
 
 import { JobsApiComponent } from "./components/Jobs";
+import Home from "./components/Home";
 const Graph2 = lazy(() => import("./components/FDG"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
 const NeighbourhoodBrowserGuide = lazy(() => import("./components/NeighbourhoodBrowser/Guide"));
@@ -11,8 +12,8 @@ const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
 import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
 import Map from "./components/GeoMap";
 import ScatterPlotGuide from "./components/ScatterPlot/ScatterPlotGuide";
-import Home from "./components/Home";
 const ConceptClusters = lazy(() => import("./components/ConceptClusterReport/ConceptClusters"));
+const LineageGraph = lazy(() => import("./components/LineageGraph/LineageGraph"));
 
 export interface RouteType {
   path: string;
@@ -28,6 +29,13 @@ export const routes = [
     icon: "home",
     label: "Home",
     component: Home,
+  },
+
+  {
+    path: "/lineage",
+    icon: "family_history",
+    label: "Lineage",
+    component: LineageGraph,
   },
 
   {
