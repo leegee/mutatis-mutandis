@@ -10,11 +10,6 @@ from pathlib import Path
 
 import numpy as np
 
-import umap
-import igraph as ig
-import leidenalg
-from sklearn.neighbors import NearestNeighbors
-
 from lib.eebo_config import (
     CORPUS_TIER2_DB_PATH,
     ZARR_PATH,
@@ -25,21 +20,17 @@ from lib.concept_resolve import resolve_concepts
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.eebo_faiss import EeboFaissIndex
 from lib.eebo_logging import logger
-
-MIN_IN_CLUSTER = 7
-
-LOCAL_UMAP_PARAMS = {
-    "n_neighbors": 15,
-    "min_dist": 0.05,
-    "metric": "cosine",
-}
-
-GLOBAL_UMAP_PARAMS = {
-    "n_neighbors": 50,
-    "min_dist": 0.1,
-    "metric": "cosine",
-}
-
+from lib.sqlite_vector_blob import vector_to_blob
+from lib.cluster import (
+    LOCAL_UMAP_PARAMS,
+    GLOBAL_UMAP_PARAMS,
+    load_event_rows,
+    load_vectors,
+    project,
+    leiden_cluster,
+    build_global_projection,
+    compute_cluster_centroids,
+)
 
 
 def load_indices(
@@ -75,133 +66,6 @@ def sqlite_connection( path: Path, ):
     )
     return con
 
-
-
-def load_event_rows(con, concept):
-    """
-    Load the empirical semantic field for a concept.
-
-    concept_field_events is the authoritative relation:
-        concept -> observed corpus events
-
-    Seed events anchor the field.
-    Neighbour events are retrieved semantic context.
-
-    An event may belong to multiple fields.
-    """
-    return con.execute(
-        """
-        SELECT e.event_id, e.vector_id
-        FROM concept_field_events f
-        JOIN events e ON e.event_id = f.event_id
-        WHERE f.concept = ?
-        ORDER BY e.event_id
-        """,
-        (concept,),
-    ).fetchall()
-
-
-def load_vectors( lookup, event_rows, ):
-    event_ids = [
-        int(row[0])
-        for row in event_rows
-    ]
-
-    if not event_ids:
-        return (
-            [],
-            np.empty(
-                (0, 0),
-                dtype=np.float32,
-            ),
-        )
-
-    vectors = lookup.get_concatenated_embeddings(
-        event_ids
-    )
-
-    return (
-        event_ids,
-        vectors,
-    )
-
-
-def project( vectors, params, ):
-    if len(vectors) < MIN_IN_CLUSTER:
-        return np.zeros( ( len(vectors), 2, ), dtype=np.float32, )
-    reducer = umap.UMAP( random_state=42, **params, )
-    return reducer.fit_transform( vectors )
-
-
-def build_knn_graph( vectors, n_neighbors=15, ):
-    if len(vectors) < 3:
-        return []
-
-    n_neighbors = min(
-        n_neighbors,
-        len(vectors) - 1,
-    )
-
-    if len(vectors) <= n_neighbors:
-        n_neighbors = len(vectors) - 1
-
-    if n_neighbors < 2:
-        return []
-
-    nn = NearestNeighbors(
-        n_neighbors=n_neighbors + 1,
-        metric="cosine",
-    )
-
-    nn.fit(vectors)
-
-    _, indices = nn.kneighbors(
-        vectors
-    )
-
-    edges = []
-
-    for idx, neighbours in enumerate(indices):
-        for neighbour in neighbours[1:]:
-            edges.append(
-                (
-                    idx,
-                    int(neighbour),
-                )
-            )
-
-    return edges
-
-
-def leiden_cluster( vectors, ):
-    if len(vectors) < MIN_IN_CLUSTER:
-        return np.full( len(vectors), -1, dtype=np.int32, )
-
-    edges = build_knn_graph( vectors )
-
-    graph = ig.Graph(
-        edges=edges,
-        directed=False,
-    )
-
-    partition = leidenalg.find_partition(
-        graph,
-        leidenalg.RBConfigurationVertexPartition,
-        seed=42,
-        resolution_parameter=0.8,
-    )
-
-    labels = np.full(
-        len(vectors),
-        -1,
-        dtype=np.int32,
-    )
-
-    for cluster_id, members in enumerate(partition):
-        for member in members:
-            labels[member] = cluster_id
-
-    return labels
 
 
 def write_geometry(
@@ -245,7 +109,14 @@ def write_geometry(
     )
 
 
-def write_cluster_info(con, concept, vectors, local_coords, global_coords, clusters):
+def write_cluster_info(
+    con,
+    concept,
+    vectors,
+    local_coords,
+    global_coords,
+    clusters,
+):
     con.execute(
         "DELETE FROM concept_cluster_info WHERE concept = ?",
         (concept,),
@@ -254,8 +125,10 @@ def write_cluster_info(con, concept, vectors, local_coords, global_coords, clust
     cluster_ids = sorted(set(int(x) for x in clusters))
 
     data = []
+
     for cluster_id in cluster_ids:
         mask = (clusters == cluster_id)
+
         if not np.any(mask):
             continue
 
@@ -264,19 +137,26 @@ def write_cluster_info(con, concept, vectors, local_coords, global_coords, clust
             .mean(axis=0)
             .astype(np.float32)
         )
-        centroid_blob = centroid_vector.tobytes()
-        data.append((
-            concept,
-            cluster_id,
-            "noise" if cluster_id == -1 else None,
-            float(local_coords[mask,0].mean()),
-            float(local_coords[mask,1].mean()),
-            float(global_coords[mask,0].mean()),
-            float(global_coords[mask,1].mean()),
-            sqlite3.Binary(centroid_blob),
-            int(mask.sum()),
-            None,
-        ))
+
+        data.append(
+            (
+                concept,
+                cluster_id,
+                "noise" if cluster_id == -1 else None,
+
+                float(local_coords[mask, 0].mean()),
+                float(local_coords[mask, 1].mean()),
+
+                float(global_coords[mask, 0].mean()),
+                float(global_coords[mask, 1].mean()),
+
+                vector_to_blob(centroid_vector),
+
+                int(mask.sum()),
+
+                None,   # description
+            )
+        )
 
     con.executemany(
         """
@@ -284,31 +164,23 @@ def write_cluster_info(con, concept, vectors, local_coords, global_coords, clust
             concept,
             cluster_id,
             cluster_label,
+
             centroid_nx,
             centroid_ny,
+
             centroid_gnx,
             centroid_gny,
+
             centroid_vector,
+
             point_count,
+
             description
         )
         VALUES (?,?,?,?,?,?,?,?,?,?)
         """,
         data,
     )
-
-
-def build_global_projection(
-    lookup,
-    all_field_event_ids,
-):
-    logger.info( f"[tier3] global projection events={len(all_field_event_ids):,}" )
-    vectors = lookup.get_concatenated_embeddings( all_field_event_ids )
-    coords = project( vectors, GLOBAL_UMAP_PARAMS, )
-    return {
-        int(event_id): coords[idx]
-        for idx, event_id in enumerate(all_field_event_ids)
-    }
 
 
 def process_concept( con, lookup, concept, global_coords, ):

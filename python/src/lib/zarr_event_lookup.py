@@ -22,10 +22,20 @@ class _LazyScaleEmbeddings:
     contract the eager array previously provided, so multiscale_search
     and every other caller needs no changes.
 
-    No caching here by design — this is a thin on-demand layer. Callers
-    that repeatedly touch the same event_ids across multiple phases
-    (UMAP, clustering, BFS) should go through EmbeddingCache, which
-    caches on top of this and needs no changes either.
+    PERF: array indexing groups requested positions by pub_year before
+    reconstructing, and issues one batched EeboFaissIndex.reconstruct_many()
+    call per year instead of one EeboFaissIndex.reconstruct() call per
+    position. This is called on every concept-year (via load_vectors ->
+    get_concatenated_embeddings) as well as once for the corpus-wide
+    global projection, so avoiding a Python-level FAISS call per single
+    event -- multiplied by 3 scales -- matters across the whole pipeline,
+    not just for the one-time global fit. Output order always matches
+    the order of the input positions, regardless of grouping.
+
+    No result caching here by design — this is a thin on-demand layer.
+    Callers that repeatedly touch the same event_ids across multiple
+    phases (UMAP, clustering, BFS) should go through EmbeddingCache,
+    which caches on top of this and needs no changes either.
     """
 
     def __init__(self, lookup: "ZarrEventLookup", index, scale: str, dim: int):
@@ -45,15 +55,57 @@ class _LazyScaleEmbeddings:
             )
         return year_indices[self._scale].reconstruct(eid)
 
+    def _reconstruct_batch(self, positions: np.ndarray) -> np.ndarray:
+        """
+        Reconstruct multiple positions, batched per pub_year so each
+        FAISS index is called once with all the ids it owns rather than
+        once per id. `positions` may span any mix of years in any order;
+        output rows are returned in the same order as `positions`.
+        """
+        years = self._lookup.pub_year[positions]
+        eids = self._lookup.event_id[positions]
+
+        # Stable sort so equal-year runs are contiguous; we scatter back
+        # to original order at the end via `order`.
+        order = np.argsort(years, kind="stable")
+        sorted_years = years[order]
+        sorted_eids = eids[order]
+
+        out_sorted = np.empty((len(positions), self._dim), dtype=np.float32)
+
+        n = len(order)
+        start = 0
+        while start < n:
+            end = start + 1
+            year = sorted_years[start]
+            while end < n and sorted_years[end] == year:
+                end += 1
+
+            year_int = int(year)
+            year_indices = self._index.get(year_int)
+            if year_indices is None:
+                bad_eid = int(sorted_eids[start])
+                raise KeyError(
+                    f"No FAISS index for pub_year={year_int} (event_id={bad_eid}, "
+                    f"scale={self._scale}). Available years: {sorted(self._index.keys())}"
+                )
+
+            batch_ids = sorted_eids[start:end]
+            out_sorted[start:end] = year_indices[self._scale].reconstruct_many(batch_ids)
+            start = end
+
+        out = np.empty_like(out_sorted)
+        out[order] = out_sorted
+        return out
+
     def __getitem__(self, idx):
         is_scalar = isinstance(idx, (int, np.integer))
-        positions = [idx] if is_scalar else np.atleast_1d(idx)
 
-        out = np.empty((len(positions), self._dim), dtype=np.float32)
-        for i, pos in enumerate(positions):
-            out[i] = self._reconstruct_one(int(pos))
+        if is_scalar:
+            return self._reconstruct_one(int(idx))
 
-        return out[0] if is_scalar else out
+        positions = np.atleast_1d(idx).astype(np.int64)
+        return self._reconstruct_batch(positions)
 
 
 class ZarrEventLookup:
