@@ -4,12 +4,13 @@ import * as d3 from "d3";
 import styles from "./LineageGraph.module.css";
 
 
+
 type LineageNode = {
     id: string;
     year: number;
     cluster: number;
     size: number;
-
+    lineage?: number;
     local?: {
         x: number;
         y: number;
@@ -130,12 +131,6 @@ export default function LineageGraph() {
             ]);
         }
 
-        const yearColour = d3.scaleSequential()
-            .domain(
-                d3.extent(graph.nodes, d => d.year) as [number, number]
-            )
-            .interpolator(d3.interpolateViridis);
-
         //
         // container
         //
@@ -186,6 +181,20 @@ export default function LineageGraph() {
             ])
             .range([6, 40]);
 
+        const lineageColour =
+            d3.scaleOrdinal<number, string>()
+                .domain(
+                    graph.nodes.map(n => n.lineage!)
+                )
+                .range(
+                    d3.quantize(
+                        d3.interpolateRainbow,
+                        new Set(
+                            graph.nodes.map(n => n.lineage)
+                        ).size
+                    )
+                );
+
         root.selectAll("circle")
             .data(graph.nodes)
             .enter()
@@ -194,8 +203,8 @@ export default function LineageGraph() {
             .attr("cx", d => positions.get(d.id)![0])
             .attr("cy", d => positions.get(d.id)![1])
             .attr("r", d => radius(d.size))
-            .attr("fill", d => yearColour(d.year))
-            // .attr( "fill", d => lineageColour(String(d.lineage_id)) ) TODO
+            // .attr("fill", d => yearColour(d.year))
+            .attr("fill", d => lineageColour(d.lineage ?? 0))
             .append("title")
             .text(
                 d =>
