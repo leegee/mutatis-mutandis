@@ -1,48 +1,89 @@
 import { createEffect, createSignal, onMount } from "solid-js";
+import { Show } from "solid-js";
 import * as d3 from "d3";
 
 import styles from "./LineageGraph.module.css";
+import Tooltip from "./Tooltip";
+import DetailPanel from "./DetailPanel";
+import type { LineageData, TooltipState, LineageNode } from "./types";
 
 
+/**
+ * Projects a set of 2D points onto their principal axis (first principal
+ * component), returning one scalar per point.
+ *
+ * Why: a UMAP embedding's two output axes carry no inherent ranking or
+ * meaning -- there's no reason "y" holds more real structure than "x".
+ * Rendering position from raw y alone (or from y plus an arbitrary x
+ * jitter) risks flattening away separation that actually falls along
+ * some other direction, e.g. a diagonal -- which is exactly what caused
+ * genuinely distinct clusters to render on top of each other before.
+ *
+ * The principal axis is, provably (Eckart-Young), the single linear
+ * projection that preserves the most variance -- equivalently, distorts
+ * relative distances the least -- of any 2D-to-1D linear projection. So
+ * rather than picking an axis, we compute the one direction that's
+ * actually justified by the data's own spread.
+ */
+function projectOntoPrincipalAxis(
+    points: { x: number; y: number }[]
+): number[] {
+    const n = points.length;
 
-type LineageNode = {
-    id: string;
-    year: number;
-    cluster: number;
-    size: number;
-    lineage?: number;
-    local?: {
-        x: number;
-        y: number;
-    };
+    if (n === 0)
+        return [];
 
-    global?: {
-        x: number;
-        y: number;
-    };
-};
+    const meanX = d3.mean(points, p => p.x) ?? 0;
+    const meanY = d3.mean(points, p => p.y) ?? 0;
 
+    let varX = 0, varY = 0, covXY = 0;
 
-type LineageLink = {
-    source: string;
-    target: string;
-    similarity: number;
-    confidence: number;
-    type: string;
-};
+    for (const p of points) {
+        const dx = p.x - meanX;
+        const dy = p.y - meanY;
+        varX += dx * dx;
+        varY += dy * dy;
+        covXY += dx * dy;
+    }
 
-type LineageData = {
-    concept: string;
-    nodes: LineageNode[];
-    links: LineageLink[];
-};
+    varX /= n;
+    varY /= n;
+    covXY /= n;
+
+    // Closed-form largest eigenvalue of a symmetric 2x2 covariance matrix.
+    const trace = varX + varY;
+    const det = varX * varY - covXY * covXY;
+    const discriminant = Math.sqrt(Math.max(0, trace * trace - 4 * det));
+    const lambdaMax = (trace + discriminant) / 2;
+
+    // Corresponding eigenvector = the principal axis direction.
+    let ex = covXY;
+    let ey = lambdaMax - varX;
+
+    const norm = Math.hypot(ex, ey);
+
+    if (norm < 1e-9) {
+        // Degenerate (near-zero variance, or already axis-aligned):
+        // fall back to the x-axis rather than divide by ~0.
+        ex = 1;
+        ey = 0;
+    } else {
+        ex /= norm;
+        ey /= norm;
+    }
+
+    return points.map(p => (p.x - meanX) * ex + (p.y - meanY) * ey);
+}
 
 
 
 export default function LineageGraph() {
     let svgRef!: SVGSVGElement;
+    let containerRef!: HTMLDivElement;
 
     const [data, setData] = createSignal<LineageData>();
+    const [tooltip, setTooltip] = createSignal<TooltipState | null>(null);
+    const [selectedNode, setSelectedNode] = createSignal<LineageNode | null>(null);
 
     onMount(async () => {
         const response = await fetch(
@@ -60,6 +101,15 @@ export default function LineageGraph() {
 
         render(graph);
     });
+
+    function pointerPosition(event: MouseEvent) {
+        const containerRect = containerRef.getBoundingClientRect();
+
+        return {
+            x: event.clientX - containerRect.left,
+            y: event.clientY - containerRect.top,
+        };
+    }
 
     function render(graph: LineageData) {
         const svg = d3.select(svgRef);
@@ -104,6 +154,9 @@ export default function LineageGraph() {
             "xMinYMin meet"
         );
 
+        // Clicking empty canvas dismisses the detail panel.
+        svg.on("click", () => setSelectedNode(null));
+
         const x = d3.scaleOrdinal<number, number>()
             .domain(years)
             .range(
@@ -113,23 +166,27 @@ export default function LineageGraph() {
                 )
             );
 
+        // Combine global.x and global.y into a single, principled vertical
+        // coordinate rather than using global.y alone.
+        const principalCoords = projectOntoPrincipalAxis(
+            graph.nodes.map(n => ({
+                x: n.global?.x ?? 0,
+                y: n.global?.y ?? 0,
+            }))
+        );
+
         const y = d3.scaleLinear()
-            .domain(
-                d3.extent(
-                    graph.nodes,
-                    d => d.local!.y
-                ) as [number, number]
-            )
+            .domain(d3.extent(principalCoords) as [number, number])
             .range([80, height - 80]);
 
         const positions = new Map<string, [number, number]>();
 
-        for (const node of graph.nodes) {
+        graph.nodes.forEach((node, i) => {
             positions.set(node.id, [
                 x(node.year)!,
-                y(node.local?.y ?? 0)
+                y(principalCoords[i])
             ]);
-        }
+        });
 
         //
         // container
@@ -199,20 +256,35 @@ export default function LineageGraph() {
             .data(graph.nodes)
             .enter()
             .append("circle")
-            .attr("class", styles.node)
+            .attr("class", d =>
+                d.id === selectedNode()?.id
+                    ? `${ styles.node } ${ styles.nodeSelected }`
+                    : styles.node
+            )
             .attr("cx", d => positions.get(d.id)![0])
             .attr("cy", d => positions.get(d.id)![1])
             .attr("r", d => radius(d.size))
-            // .attr("fill", d => yearColour(d.year))
             .attr("fill", d => lineageColour(d.lineage ?? 0))
-            .append("title")
-            .text(
-                d =>
-                    `${ graph.concept }
-year ${ d.year }
-cluster ${ d.cluster }
-mass ${ d.size }`
-            );
+            .attr(
+                "stroke-dasharray",
+                d => d.lineage_stable === false ? "3,2" : null
+            )
+            .on("mouseenter", (event, d) => {
+                const pos = pointerPosition(event);
+                setTooltip({ node: d, x: pos.x, y: pos.y });
+            })
+            .on("mousemove", (event, d) => {
+                const pos = pointerPosition(event);
+                setTooltip({ node: d, x: pos.x, y: pos.y });
+            })
+            .on("mouseleave", () => setTooltip(null))
+            .on("click", (event, d) => {
+                event.stopPropagation();
+                setTooltip(null);
+                setSelectedNode(
+                    selectedNode()?.id === d.id ? null : d
+                );
+            });
 
         //
         // years
@@ -229,8 +301,22 @@ mass ${ d.size }`
     }
 
     return (
-        <article class={styles.component}>
+        <article class={styles.component} ref={containerRef}>
             <svg ref={svgRef} />
+
+            <Show when={tooltip()}>
+                {t => <Tooltip tooltip={t()} concept={data()?.concept} />}
+            </Show>
+
+            <Show when={selectedNode()}>
+                {n => (
+                    <DetailPanel
+                        node={n()}
+                        concept={data()?.concept}
+                        onClose={() => setSelectedNode(null)}
+                    />
+                )}
+            </Show>
         </article>
     );
 }

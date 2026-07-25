@@ -13,7 +13,7 @@ import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
 import Map from "./components/GeoMap";
 import ScatterPlotGuide from "./components/ScatterPlot/ScatterPlotGuide";
 const ConceptClusters = lazy(() => import("./components/ConceptClusterReport/ConceptClusters"));
-const LineageGraph = lazy(() => import("./components/LineageGraph/LineageGraph"));
+const LineageGraph = lazy(() => import("./components/LineageGraph"));
 
 export interface RouteType {
   path: string;

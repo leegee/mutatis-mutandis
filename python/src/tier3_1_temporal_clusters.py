@@ -64,6 +64,29 @@ CREATE TABLE IF NOT EXISTS concept_year_cluster_info (
 
 CREATE INDEX IF NOT EXISTS idx_year_clusters ON concept_year_cluster_info ( concept, pub_year );
 
+-- Per-event cluster assignment for a (concept, pub_year) Leiden run.
+-- process_concept_year() already computes this (event_ids, clusters)
+-- before collapsing it into centroid rows via compute_cluster_centroids();
+-- previously that per-event mapping was discarded once the centroids
+-- were written. Without it, nothing can answer "which events actually
+-- belong to this node" -- e.g. tier4's event sampling was joining
+-- against events.cluster_id, which is a *different* clustering
+-- (tier3_0's whole-concept Leiden run) with an unrelated ID space.
+CREATE TABLE IF NOT EXISTS concept_year_event_cluster (
+    concept TEXT NOT NULL,
+    pub_year INTEGER NOT NULL,
+    event_id INTEGER NOT NULL,
+    cluster_id INTEGER NOT NULL,
+    PRIMARY KEY (
+        concept,
+        pub_year,
+        event_id
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_year_event_cluster_lookup
+    ON concept_year_event_cluster ( concept, pub_year, cluster_id );
+
 CREATE TABLE IF NOT EXISTS temporal_cluster_edges (
     concept TEXT,
     source_year INTEGER,
@@ -103,6 +126,7 @@ def clear_temporal_clusters(con):
     """
     logger.info("[tier3.1] clearing concept_year_cluster_info")
     con.execute( "DROP TABLE IF EXISTS concept_year_cluster_info" )
+    con.execute( "DROP TABLE IF EXISTS concept_year_event_cluster" )
     con.execute( "DROP TABLE IF EXISTS temporal_cluster_edges" )
     con.commit()
     initialise_temporal_tables(con)
@@ -114,7 +138,8 @@ def delete_temporal_edges( con, concept, ):
 
 def delete_concept_clusters( con, concept, ):
     """
-    Remove all Tier 3.1 cluster rows for a concept, across every year.
+    Remove all Tier 3.1 cluster rows for a concept, across every year --
+    both the aggregate centroid rows and the per-event membership map.
 
     PERF: previously this was called once per (concept, year) inside
     write_year_cluster_info. Since we now batch-load and process all of
@@ -123,6 +148,7 @@ def delete_concept_clusters( con, concept, ):
     then do plain INSERTs per year.
     """
     con.execute( "DELETE FROM concept_year_cluster_info WHERE concept=?", ( concept, ), )
+    con.execute( "DELETE FROM concept_year_event_cluster WHERE concept=?", ( concept, ), )
 
 
 def sqlite_connection(path: Path, busy_timeout_ms: int = 30000):
@@ -274,6 +300,44 @@ def write_year_cluster_info(
     )
 
 
+def write_year_event_cluster_map(
+    con,
+    concept,
+    pub_year,
+    event_ids,
+    clusters,
+):
+    """
+    Persists the per-event -> cluster_id assignment that leiden_cluster()
+    produces for this (concept, pub_year). This is exactly what
+    compute_cluster_centroids() consumes to build the aggregate rows in
+    concept_year_cluster_info -- it was already sitting in memory in
+    process_concept_year(), just never written anywhere. Downstream
+    consumers (e.g. tier4's per-node event sampling) need this table to
+    answer "which concrete events are in this node" at all; joining
+    against events.cluster_id is wrong here, since that column belongs
+    to tier3_0's separate, whole-concept clustering pass and uses an
+    unrelated cluster_id numbering.
+    """
+    rows = [
+        ( concept, pub_year, int(event_id), int(cluster_id), )
+        for event_id, cluster_id in zip( event_ids, clusters, )
+    ]
+
+    con.executemany(
+        """
+        INSERT OR REPLACE INTO concept_year_event_cluster (
+            concept,
+            pub_year,
+            event_id,
+            cluster_id
+        )
+        VALUES (?,?,?,?)
+        """,
+        rows,
+    )
+
+
 def process_concept_year( con, lookup, concept, pub_year, rows, global_coords, ):
     logger.info( f"[tier3.1] {concept} {pub_year}" )
 
@@ -311,6 +375,7 @@ def process_concept_year( con, lookup, concept, pub_year, rows, global_coords, )
         )
 
     write_year_cluster_info( con, concept, pub_year, cluster_records, )
+    write_year_event_cluster_map( con, concept, pub_year, event_ids, clusters, )
 
 
 def process_concept( con, lookup, concept, global_coords, ):
@@ -719,7 +784,7 @@ def main():
     parser.add_argument( "--concept", default=None, )
     parser.add_argument( "--mask", action="store_true", )
     parser.add_argument( "--clear", action="store_true", help="Delete all temporal cluster output before processing.", )
-    parser.add_argument( "--workers", type=int, default=1, help=( "Number of concepts to process in parallel ), )
+    parser.add_argument( "--workers", type=int, default=1, help="Number of concepts to process in parallel", )
 
     args = parser.parse_args()
 

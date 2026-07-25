@@ -3,36 +3,64 @@ import { queryEventById } from "../services/db";
 import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
 import { setWindowCache, getWindowCacheStore } from "../services/windowCache";
 
-interface TextWindowProps {
-    eventid: string;
-    style?: string;
-}
+type TextWindowProps =
+    | {
+        eventid: string;
+        style?: string;
+    }
+    | {
+        doc_id: string;
+        token_idx: number;
+        style?: string;
+    };
 
 export default function TextWindow(props: TextWindowProps) {
     const cache = getWindowCacheStore();
 
+    const windowKey = () => {
+        if ("eventid" in props) {
+            return props.eventid;
+        }
+
+        return `${ props.doc_id }:${ props.token_idx }`;
+    };
+
     const [windowText] = createResource(
-        () => [
-            props.eventid,
-            cache[props.eventid],
-        ],
-        async ([eventId, cached]): Promise<string | null> => {
+        windowKey,
+        async (key): Promise<string | null> => {
+            const cached = cache[key];
             if (cached) return cached;
 
-            const event = await queryEventById(eventId);
-            if (!event || event.doc_id == null || event.token_idx == null) {
-                return null;
+            let docId: string | null = null;
+            let tokenIdx: number | null = null;
+            let cacheKey = key;
+
+            if ("eventid" in props) {
+                const event = await queryEventById(props.eventid);
+
+                if (!event || event.doc_id == null || event.token_idx == null) {
+                    return null;
+                }
+
+                docId = event.doc_id;
+                tokenIdx = event.token_idx;
+                cacheKey = event.event_id;
+            } else {
+                docId = props.doc_id;
+                tokenIdx = props.token_idx;
             }
 
-            const res = await fetchWindowBatch([{
-                docId: event.doc_id,
-                tokenIdx: event.token_idx,
-            }]);
+            const res = await fetchWindowBatch([
+                {
+                    docId,
+                    tokenIdx,
+                },
+            ]);
 
             const item = res.results[0];
             if (!item) return null;
 
-            setWindowCache(event.event_id, item.content);
+            setWindowCache(cacheKey, item.content);
             return item.content;
         }
     );

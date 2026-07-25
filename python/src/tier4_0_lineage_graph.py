@@ -396,14 +396,24 @@ def sample_cluster_events(
     first N or a random draw) so the sample isn't biased toward
     whichever documents happened to be indexed first, and stays stable
     across re-runs.
+
+    NOTE: this joins through concept_year_event_cluster, NOT
+    events.cluster_id. events.cluster_id is written by the separate
+    tier3_0 whole-concept clustering pass and uses an unrelated
+    cluster_id numbering to tier3.1's per-year clustering, which is
+    what this lineage graph's nodes actually are. Requires
+    tier3_1_temporal_clusters.py to have been (re-)run with the
+    concept_year_event_cluster table added, since the mapping isn't
+    backfillable from events.cluster_id alone.
     """
 
     rows = con.execute(
         """
-        SELECT event_id, doc_id, token_idx, token, pub_year
-        FROM events
-        WHERE concept=? AND pub_year=? AND cluster_id=?
-        ORDER BY event_id
+        SELECT e.event_id, e.doc_id, e.token_idx, e.token, e.pub_year
+        FROM concept_year_event_cluster c
+        JOIN events e ON e.event_id = c.event_id
+        WHERE c.concept=? AND c.pub_year=? AND c.cluster_id=?
+        ORDER BY e.event_id
         """,
         (concept, year, cluster_id),
     ).fetchall()
@@ -639,3 +649,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
