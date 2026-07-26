@@ -57,6 +57,7 @@ from lib.eebo_db import get_connection
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
+from lib.get_processed_concepts import get_processed_concepts
 
 
 K = 50
@@ -822,87 +823,31 @@ def write_concept(con, data, lookup):
         )
 
 
-def get_processed_concepts(path):
-    if not path.exists():
-        return set()
-
-    con = sqlite_connection(path)
-
-    try:
-        rows = con.execute("SELECT concept FROM concepts")
-        return {
-            r[0]
-            for r in rows
-        }
-
-    except sqlite3.OperationalError:
-        return set()
-    finally:
-        con.close()
-
-
-# Service layer
-def run_tier2_service(
-    *,
-    lookup,
-    concepts_to_run,
-    db_path,
-    index_paths,
-    clear=False,
-    workers=6,
-    top_n=K,
-    rrf_k=RRF_K,
-    oversample=OVERSAMPLE,
-    false_positives=None,
-    emit=None,
-):
-    setEmit( emit, "[tier2]", {}, )
-
-    indexes = load_indices( index_paths, workers, )
-    lookup.attach_index( indexes )
-    con = initialise_database( db_path, clear, )
-
-    for concept_name, concept in concepts_to_run:
-        result = analyse_concept(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            indexes=indexes,
-            top_n=top_n,
-            rrf_k=rrf_k,
-            oversample=oversample,
-            false_positives=false_positives,
-        )
-
-        if result.get("empty"):
-            continue
-
-        write_concept( con, result, lookup )
-        enrich_documents(con, get_connection())
-        con.commit()
-
-    con.close()
-    logger.info( f"[tier2] Done" )
-
-
-
-# Public compatibility wrapper
-#
-# Keeps the existing pipeline entry point while making the internals simpler.
-
+# Core is pure analysis, no I/O
 def run_tier2_core(
     *,
     lookup,
     indexes,
     concepts_to_run,
-    top_n=K,
-    rrf_k=RRF_K,
-    oversample=OVERSAMPLE,
+    top_n: int = K,
+    rrf_k: int = RRF_K,
+    oversample: int = OVERSAMPLE,
     false_positives=None,
+    emit=None,
 ):
+    """
+    Heart of Tier 2: neighbourhood retrieval for every requested concept.
+
+    Takes already-constructed resources and returns a pure result dict.
+    No database writes, no index loading, no side effects beyond logging.
+    """
+    logger.info("[tier2.run_tier2_core] Enter")
     output = {}
 
     for concept_name, concept in concepts_to_run:
+        if emit:
+            emit("concept_start", {"concept": concept_name})
+
         output[concept_name] = analyse_concept(
             concept_name=concept_name,
             concept=concept,
@@ -913,22 +858,94 @@ def run_tier2_core(
             oversample=oversample,
             false_positives=false_positives,
         )
+
+        if emit:
+            emit("concept_done", {"concept": concept_name})
+
+    logger.info("[tier2.run_tier2_core] Leave")
     return output
 
 
-# CLI
+# Service accepts persistent resources, orchestrates core + persistence
+def run_tier2_service(
+    *,
+    lookup,
+    indexes,
+    concepts_to_run,
+    db_path,
+    clear: bool = False,
+    top_n: int = K,
+    rrf_k: int = RRF_K,
+    oversample: int = OVERSAMPLE,
+    false_positives=None,
+    emit=None,
+):
+    """
+    Reusable entry point for long-lived processes (UI, FastAPI, etc.).
 
+    Expects already-built lookup and FAISS indexes.
+    Calls core, then writes results to SQLite.
+    """
+    concept_names = [name for name, _ in concepts_to_run]
+    logger = setEmit(emit, "[tier2]", {"concepts": concept_names})
+    logger.info("[tier2.run_tier2_service] Enter")
+
+    # Attach indexes so any lookup helpers that need them can see them
+    if hasattr(lookup, "attach_index"):
+        lookup.attach_index(indexes)
+
+    con = initialise_database(db_path, clear=clear)
+
+    output = run_tier2_core(
+        lookup=lookup,
+        indexes=indexes,
+        concepts_to_run=concepts_to_run,
+        top_n=top_n,
+        rrf_k=rrf_k,
+        oversample=oversample,
+        false_positives=false_positives,
+        emit=emit,
+    )
+
+    logger.info("[tier2.run_tier2_service] Writing results")
+    for concept_name, data in output.items():
+        if data.get("empty"):
+            continue
+        write_concept(con, data, lookup)
+
+    # Enrich any newly-inserted document stubs
+    try:
+        pg = get_connection()
+        try:
+            enrich_documents(con, pg)
+        finally:
+            pg.close()
+    except Exception as exc:
+        logger.warning(f"[tier2] document enrichment skipped: {exc}")
+
+    con.commit()
+    con.close()
+
+    logger.info("[tier2.run_tier2_service] Done")
+    return output
+
+
+# CLI  creates resources and hands them to the service
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--concept", default=None, )
-    parser.add_argument( "--mask", action="store_true", )
-    parser.add_argument( "--clear", action="store_true", )
-    parser.add_argument( "--k", type=int, default=K, )
-    parser.add_argument( "--rrf-k", type=int, default=RRF_K, )
-    parser.add_argument( "--oversample", type=int, default=OVERSAMPLE, )
-    parser.add_argument( "--max-load-workers", type=int, default=6, )
+    parser.add_argument("-c", "--concept", default=None)
+    parser.add_argument("-m", "--mask", action="store_true")
+    parser.add_argument("--clear", action="store_true")
+    parser.add_argument("-k", "--k", type=int, default=K)
+    parser.add_argument("--rrf-k", type=int, default=RRF_K)
+    parser.add_argument("--oversample", type=int, default=OVERSAMPLE)
+    parser.add_argument( "-w", "--max-load-workers", type=int, default=6)
+    parser.add_argument( "-r", "--repair-neighbours", action="store_true", help="Backfill neighbour lists for events that are missing them.", )
+    parser.add_argument("--batch-size", type=int, default=5000)
+    parser.add_argument("-fp", "--false-positives", type=str, default=None)
     args = parser.parse_args()
 
+    # Paths
     if args.mask:
         zarr_path = MASKED_ZARR_PATH
         db_path = CORPUS_TIER2_MASKED_DB_PATH
@@ -936,63 +953,89 @@ def main():
         zarr_path = ZARR_PATH
         db_path = CORPUS_TIER2_DB_PATH
 
-    years = discover_index_years( args.mask )
-
+    # Discover & load FAISS indexes (resource construction lives here)
+    years = discover_index_years(args.mask)
     if not years:
-        raise RuntimeError(
-            "No FAISS indices found"
-        )
+        raise RuntimeError("No FAISS indices found")
 
     index_paths = {
-        year:
-            faiss_index_paths( masked=args.mask, year=year, )
+        year: faiss_index_paths(masked=args.mask, year=year)
         for year in years
     }
+    indexes = load_indices(index_paths, workers=args.max_load_workers)
 
+    # Build the Zarr event lookup
+    # Restrict forms only when a single concept is requested (keeps memory proportional)
     target_forms = None
     target_fps = None
-
     if args.concept:
         concept_name = args.concept.upper()
-        concept = dict(resolve_concepts(concept=concept_name))[concept_name]
-        target_forms = set( concept.get("forms", []) )
-        target_fps = set( concept.get("false_positives", []) )
+        resolved = dict(resolve_concepts(
+            concept=concept_name,
+            false_positives=args.false_positives,
+        ))
+        concept = resolved[concept_name]
+        target_forms = set(concept.get("forms", []))
+        target_fps = set(concept.get("false_positives", []))
 
     lookup = ZarrEventLookup(
         zarr_path,
-        forms           = None, # target_forms,
-        false_positives = None, # target_fps,
+        forms=target_forms,
+        false_positives=target_fps,
     )
 
-    concepts = list( resolve_concepts( concept=args.concept ) )
-    logger.info( f"[tier2] resolved concepts: {len(concepts)} %s",  [x[0] for x in concepts[:20]] )
+    # Repair mode is a separate work path
+    if args.repair_neighbours:
+        lookup.attach_index(indexes) from lib.repair_neighbours import repair_missing_neighbours
+        con = sqlite_connection(db_path)
+        try:
+            repair_missing_neighbours(
+                con=con,
+                lookup=lookup,
+                indexes=indexes,
+                top_n=args.k,
+                rrf_k=args.rrf_k,
+                oversample=args.oversample,
+                batch_size=args.batch_size,
+            )
+        finally:
+            con.close()
+        return
 
-    processed = (
-        set()
-        if args.clear
-        else get_processed_concepts(
-            db_path
-        )
+    # Resolve which concepts still need work
+    concepts = list(resolve_concepts(
+        concept=args.concept,
+        false_positives=args.false_positives,
+    ))
+    logger.info(
+        "[tier2] resolved concepts: %d %s",
+        len(concepts),
+        [c[0] for c in concepts[:20]],
     )
 
-    concepts = [
-        c
-        for c in concepts
-        if c[0] not in processed
-    ]
+    processed = set() if args.clear else get_processed_concepts(db_path)
+    concepts_to_run = [c for c in concepts if c[0] not in processed]
 
+    if not concepts_to_run:
+        logger.info("[tier2.main] nothing to write — all concepts already processed")
+        return
+
+    # Hand live resources to the service
     run_tier2_service(
         lookup=lookup,
-        concepts_to_run=concepts,
+        indexes=indexes,
+        concepts_to_run=concepts_to_run,
         db_path=db_path,
-        index_paths=index_paths,
         clear=args.clear,
-        workers=args.max_load_workers,
         top_n=args.k,
         rrf_k=args.rrf_k,
         oversample=args.oversample,
         false_positives=target_fps,
+        emit=None,
     )
+
+    logger.info(f"[tier2.main] Complete → {db_path}")
+
 
 
 if __name__ == "__main__":
