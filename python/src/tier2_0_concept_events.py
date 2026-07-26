@@ -986,7 +986,8 @@ def main():
 
     # Repair mode is a separate work path
     if args.repair_neighbours:
-        lookup.attach_index(indexes) from lib.repair_neighbours import repair_missing_neighbours
+        from lib.repair_neighbours import repair_missing_neighbours
+        lookup.attach_index(indexes)
         con = sqlite_connection(db_path)
         try:
             repair_missing_neighbours(
