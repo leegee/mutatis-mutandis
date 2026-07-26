@@ -204,7 +204,6 @@ CREATE INDEX IF NOT EXISTS idx_events_event_id              ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_event             ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_neighbour_event   ON neighbours(neighbour_event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_token             ON neighbours(token);
-CREATE INDEX IF NOT EXISTS idx_neighbours_concept_event     ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept            ON concept_aggregate(concept);
 
 """
