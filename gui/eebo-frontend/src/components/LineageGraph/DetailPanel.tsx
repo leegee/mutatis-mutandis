@@ -73,12 +73,10 @@ export default function DetailPanel(props: DetailPanelProps) {
                             <li class={styles.eventItem}>
                                 <TextWindow
                                     doc_id={String(ev.doc_id)}
-                                    token_idx={String(ev.token_idx)}
+                                    token_idx={ev.token_idx}
                                 />
 
-                                <div class="tooltip top">
-                                    {ev.doc_id} @ {ev.token_idx}
-                                </div>
+                                <div class="tooltip top"> {ev.doc_id} @ {ev.token_idx} </div>
 
                                 <Show when={ev.neighbours.length}>
                                     <ul class={styles.neighbourList}>

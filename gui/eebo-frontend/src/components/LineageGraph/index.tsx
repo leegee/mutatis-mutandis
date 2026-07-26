@@ -1,7 +1,7 @@
-import LineageGraph from "./LineageGraph";
+import LineageExplorer from "./LineageExplorer";
 
 export default function LineageGraphView() {
     return (
-        <LineageGraph />
+        <LineageExplorer />
     )
 }

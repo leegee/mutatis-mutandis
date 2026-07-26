@@ -1,11 +1,12 @@
-import { children, createResource, For, Show, type ParentComponent, } from "solid-js";
+import { children, Show, type ParentComponent, } from "solid-js";
 import { controls, MAX_TOP_N } from "../../state/controls.store";
 import { controlsActions as A } from "../../state/controls.actions";
-import { listConcepts } from "../../services/db";
 
 import "./ControlsHeader.css";
 import { YearTimeline } from "./YearTimeline";
 import MultiCreatableSelect from "./MultiCreatableSelect";
+import { conceptsList } from "./conceptsList";
+import SingleConceptSelect from "./SingleConceptSelect";
 
 interface Props {
   children?: any;
@@ -21,28 +22,17 @@ interface Props {
 const ControlsHeader: ParentComponent<Props> = (props) => {
   const resolved = children(() => props.children);
 
-  // Concepts list - refetches if dbReady changes (i.e. once, on init)
-  const [conceptsResource] = createResource(listConcepts);
-  const concepts = () => conceptsResource() ?? [];
-
   return (
     <>
       <nav class="toolbar no-round no-margin no-padding">
         <div class="field suffix border middle-align">
-          <Show when={concepts().length > 0}>
-            <Show when={props.multiConcept} fallback={
-              <div class="field border small no-margin no-padding">
-                <select value={controls.concept} onChange={(e) => A.setConceptSelection([e.currentTarget.value])} >
-                  <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
-                </select>
-              </div>
-            }>
+          <Show when={conceptsList().length > 0}>
+            <Show when={props.multiConcept} fallback={<SingleConceptSelect />}>
 
               <div class="row no-space">
-
                 <MultiCreatableSelect
                   selected={controls.conceptSelection}
-                  options={concepts()}
+                  options={conceptsList()}
                   onChange={A.setConceptSelection}
                   onCreateOption={() => Promise.resolve(false)}
                 />
@@ -52,7 +42,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                     <i>more_vert</i>
                   </button>
                   <menu class="no-round  bottom left no-wrap">
-                    <li onClick={() => A.setConceptSelection(concepts())}>
+                    <li onClick={() => A.setConceptSelection(conceptsList())}>
                       <i>select_all</i>
                       <span>Select all</span>
                     </li>
@@ -60,7 +50,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
                       <i>deselect</i>
                       <span>Select none</span>
                     </li>
-                    <li onClick={() => A.setConceptSelection(concepts().filter(c => !controls.conceptSelection.includes(c)))}>
+                    <li onClick={() => A.setConceptSelection(conceptsList().filter(c => !controls.conceptSelection.includes(c)))}>
                       <i>published_with_changes</i>
                       <span>Invert</span>
                     </li>

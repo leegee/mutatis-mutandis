@@ -1,12 +1,49 @@
-import { createEffect, createSignal, onMount } from "solid-js";
-import { Show } from "solid-js";
+import { createEffect, createSignal, onMount, onCleanup, Show } from "solid-js";
 import * as d3 from "d3";
 
 import styles from "./LineageGraph.module.css";
 import Tooltip from "./Tooltip";
 import DetailPanel from "./DetailPanel";
-import type { LineageData, TooltipState, LineageNode } from "./types";
+import type {
+    LineageData,
+    LineageNode,
+    ViewportRatio,
+    ScrollState,
+} from "./types";
 
+
+
+type LineageGraphProps = {
+    data: LineageData;
+
+    // "detail" (default): the full, scrollable, interactive timeline.
+    // "overview": a compact, full-width strip with no scroll -- every
+    // year fitted into the available width -- used as a minimap.
+    variant?: "detail" | "overview";
+
+    // --- overview mode only ---
+    // Range (as 0..1 fractions of the detail view's scroll width) to
+    // highlight as "currently visible in the paired detail view".
+    viewport?: ViewportRatio;
+    // Called with a 0..1 position when the overview strip is clicked
+    // or dragged, so the parent can scroll the detail view to match.
+    onNavigate?: (ratio: number) => void;
+
+    // --- detail mode only ---
+    // Hands the detail view's scrollable DOM node up to the parent,
+    // so the parent can imperatively scroll it in response to
+    // onNavigate from the paired overview.
+    onContainerReady?: (el: HTMLDivElement) => void;
+    // Reports the detail view's scroll position whenever it changes,
+    // so the parent can compute the overview's highlighted band.
+    onViewportChange?: (state: ScrollState) => void;
+};
+
+type TooltipState = {
+    node: LineageNode;
+    x: number;
+    y: number;
+};
 
 /**
  * Projects a set of 2D points onto their principal axis (first principal
@@ -14,16 +51,10 @@ import type { LineageData, TooltipState, LineageNode } from "./types";
  *
  * Why: a UMAP embedding's two output axes carry no inherent ranking or
  * meaning -- there's no reason "y" holds more real structure than "x".
- * Rendering position from raw y alone (or from y plus an arbitrary x
- * jitter) risks flattening away separation that actually falls along
- * some other direction, e.g. a diagonal -- which is exactly what caused
- * genuinely distinct clusters to render on top of each other before.
- *
  * The principal axis is, provably (Eckart-Young), the single linear
- * projection that preserves the most variance -- equivalently, distorts
- * relative distances the least -- of any 2D-to-1D linear projection. So
- * rather than picking an axis, we compute the one direction that's
- * actually justified by the data's own spread.
+ * projection that preserves the most variance of any 2D-to-1D linear
+ * projection, so we compute the direction actually justified by the
+ * data's own spread rather than picking an axis arbitrarily.
  */
 function projectOntoPrincipalAxis(
     points: { x: number; y: number }[]
@@ -50,21 +81,17 @@ function projectOntoPrincipalAxis(
     varY /= n;
     covXY /= n;
 
-    // Closed-form largest eigenvalue of a symmetric 2x2 covariance matrix.
     const trace = varX + varY;
     const det = varX * varY - covXY * covXY;
     const discriminant = Math.sqrt(Math.max(0, trace * trace - 4 * det));
     const lambdaMax = (trace + discriminant) / 2;
 
-    // Corresponding eigenvector = the principal axis direction.
     let ex = covXY;
     let ey = lambdaMax - varX;
 
     const norm = Math.hypot(ex, ey);
 
     if (norm < 1e-9) {
-        // Degenerate (near-zero variance, or already axis-aligned):
-        // fall back to the x-axis rather than divide by ~0.
         ex = 1;
         ey = 0;
     } else {
@@ -77,29 +104,43 @@ function projectOntoPrincipalAxis(
 
 
 
-export default function LineageGraph() {
+export default function LineageGraph(props: LineageGraphProps) {
     let svgRef!: SVGSVGElement;
     let containerRef!: HTMLDivElement;
 
-    const [data, setData] = createSignal<LineageData>();
     const [tooltip, setTooltip] = createSignal<TooltipState | null>(null);
     const [selectedNode, setSelectedNode] = createSignal<LineageNode | null>(null);
 
-    onMount(async () => {
-        const response = await fetch(
-            "/lineage/CHURCH_lineage.json"
-        );
+    const variant = () => props.variant ?? "detail";
 
-        setData(await response.json());
+    onMount(() => {
+        if (variant() !== "detail")
+            return;
+
+        props.onContainerReady?.(containerRef);
+
+        const reportScroll = () => {
+            props.onViewportChange?.({
+                scrollLeft: containerRef.scrollLeft,
+                scrollWidth: containerRef.scrollWidth,
+                clientWidth: containerRef.clientWidth,
+            });
+        };
+
+        containerRef.addEventListener("scroll", reportScroll, { passive: true });
+
+        // Layout (and therefore scrollWidth) isn't settled on the very
+        // first tick -- report once after the browser's had a frame.
+        requestAnimationFrame(reportScroll);
+
+        onCleanup(() => containerRef.removeEventListener("scroll", reportScroll));
     });
 
     createEffect(() => {
-        const graph = data();
-
-        if (!graph || !svgRef)
+        if (!svgRef || !props.data)
             return;
 
-        render(graph);
+        render(props.data);
     });
 
     function pointerPosition(event: MouseEvent) {
@@ -115,59 +156,60 @@ export default function LineageGraph() {
         const svg = d3.select(svgRef);
         svg.selectAll("*").remove();
 
+        const isOverview = variant() === "overview";
+
         const rect = svgRef.getBoundingClientRect();
         const height = rect.height;
 
         const years = [
-            ...new Set(
-                graph.nodes.map(n => n.year)
-            )
+            ...new Set(graph.nodes.map(n => n.year))
         ].sort();
 
+        const margin = isOverview
+            ? { left: 0, right: 10, top: 4, bottom: 4 }
+            : { left: 120, right: 120, top: 80, bottom: 80 };
 
-        //
-        // virtual timeline width
-        //
+        let x: d3.ScaleOrdinal<number, number>;
+        let graphWidth: number;
 
-        const yearSpacing = 180;
+        if (isOverview) {
+            // Overview fits width
+            const containerRect = containerRef.getBoundingClientRect();
+            graphWidth = Math.max(containerRect.width, 1);
 
-        const margin = {
-            left: 120,
-            right: 120,
-            top: 80,
-            bottom: 80
-        };
+            const usableWidth = graphWidth - margin.left - margin.right;
 
+            x = d3.scaleOrdinal<number, number>()
+                .domain(years)
+                .range(
+                    years.map((_, i) =>
+                        years.length <= 1
+                            ? graphWidth / 2
+                            : margin.left + (i / (years.length - 1)) * usableWidth
+                    )
+                );
+        } else {
+            const yearSpacing = 180;
 
-        const graphWidth =
-            margin.left +
-            margin.right +
-            Math.max(
-                0,
-                years.length - 1
-            ) * yearSpacing;
+            graphWidth =
+                margin.left + margin.right +
+                Math.max(0, years.length - 1) * yearSpacing;
 
-        svg.attr(
-            "viewBox", `0 0 ${ graphWidth } ${ height }`
-        ).attr(
-            "preserveAspectRatio",
-            "xMinYMin meet"
-        );
+            x = d3.scaleOrdinal<number, number>()
+                .domain(years)
+                .range(
+                    years.map((_, i) => margin.left + i * yearSpacing)
+                );
+        }
 
-        // Clicking empty canvas dismisses the detail panel.
-        svg.on("click", () => setSelectedNode(null));
+        svg.attr("viewBox", `0 0 ${ graphWidth } ${ height }`)
+            .attr("preserveAspectRatio", "xMinYMin meet");
 
-        const x = d3.scaleOrdinal<number, number>()
-            .domain(years)
-            .range(
-                years.map(
-                    (_, i) =>
-                        margin.left + i * yearSpacing
-                )
-            );
+        if (!isOverview) {
+            // Clicking empty canvas dismisses the detail panel.
+            svg.on("click", () => setSelectedNode(null));
+        }
 
-        // Combine global.x and global.y into a single, principled vertical
-        // coordinate rather than using global.y alone.
         const principalCoords = projectOntoPrincipalAxis(
             graph.nodes.map(n => ({
                 x: n.global?.x ?? 0,
@@ -177,7 +219,7 @@ export default function LineageGraph() {
 
         const y = d3.scaleLinear()
             .domain(d3.extent(principalCoords) as [number, number])
-            .range([80, height - 80]);
+            .range([margin.top, height - margin.bottom]);
 
         const positions = new Map<string, [number, number]>();
 
@@ -188,11 +230,90 @@ export default function LineageGraph() {
             ]);
         });
 
-        //
-        // container
-        //
+        const radius = d3.scaleSqrt()
+            .domain([
+                0,
+                d3.max(graph.nodes, d => d.size) ?? 1
+            ])
+            .range(isOverview ? [1, 5] : [6, 40]);
+
+        if (!isOverview) {
+            // The PCA axis preserves true relative distance -- including
+            // when several nodes are genuinely almost co-located (e.g. an
+            // early, narrow year whose whole spread of clusters occupies
+            // a tiny corner of the corpus-wide embedding). That's correct
+            // data, but two circles can't render on top of each other and
+            // both stay legible. This nudges only nodes that actually
+            // overlap at render scale apart, pulled back toward their
+            // true position the rest of the time -- it adds no
+            // information, it just stops real proximity from becoming
+            // total occlusion. Column spacing (yearSpacing) already
+            // exceeds twice the max node radius, so this naturally stays
+            // scoped within each year without needing to constrain it
+            // explicitly.
+            const simNodes = graph.nodes.map(node => {
+                const [px, py] = positions.get(node.id)!;
+                return { id: node.id, x: px, y: py, targetX: px, targetY: py };
+            });
+
+            d3.forceSimulation(simNodes)
+                .force("x", d3.forceX<typeof simNodes[number]>(d => d.targetX).strength(0.9))
+                .force("y", d3.forceY<typeof simNodes[number]>(d => d.targetY).strength(0.9))
+                .force(
+                    "collide",
+                    d3.forceCollide<typeof simNodes[number]>(
+                        d => radius(graph.nodes.find(n => n.id === d.id)!.size) + 1
+                    )
+                )
+                .stop()
+                .tick(120);
+
+            for (const sim of simNodes) {
+                positions.set(sim.id, [sim.x, sim.y]);
+            }
+        }
 
         const root = svg.append("g");
+
+        if (isOverview) {
+            const vp = props.viewport ?? { startRatio: 0, endRatio: 1 };
+            const usableWidth = graphWidth - margin.left - margin.right;
+
+            // Highlights which slice of the (much wider) detail view is
+            // currently scrolled into view.
+            root.append("rect")
+                .attr("class", styles.viewportBand)
+                .attr("x", margin.left + vp.startRatio * usableWidth)
+                .attr("y", 0)
+                .attr(
+                    "width",
+                    Math.max(2, (vp.endRatio - vp.startRatio) * usableWidth)
+                )
+                .attr("height", height);
+
+            const navigate = (event: MouseEvent) => {
+                const localX = pointerPosition(event).x;
+                const ratio = (localX - margin.left) / usableWidth;
+                props.onNavigate?.(Math.max(0, Math.min(1, ratio)));
+            };
+
+            let dragging = false;
+
+            svg.on("mousedown", (event: MouseEvent) => {
+                dragging = true;
+                navigate(event);
+            });
+
+            svg.on("mousemove", (event: MouseEvent) => {
+                if (dragging)
+                    navigate(event);
+            });
+
+            const stopDrag = () => { dragging = false; };
+
+            svg.on("mouseup", stopDrag);
+            svg.on("mouseleave", stopDrag);
+        }
 
         //
         // edges
@@ -222,21 +343,20 @@ export default function LineageGraph() {
             `;
                 }
             )
-            .attr("stroke-width", d => Math.max(1, d.confidence * 8))
+            .attr(
+                "stroke-width",
+                d => Math.max(isOverview ? 0.5 : 1, d.confidence * (isOverview ? 3 : 8))
+            )
             .attr("opacity", d => Math.max(0.2, d.similarity))
-            .attr("stroke-dasharray", d => d.type === "CONTINUATION" ? null : "6,4"
+            .attr(
+                "stroke-dasharray",
+                d => (!isOverview && d.type !== "CONTINUATION") ? "6,4" : null
             );
 
         //
         // nodes
         //
-
-        const radius = d3.scaleSqrt()
-            .domain([
-                0,
-                d3.max(graph.nodes, d => d.size) ?? 1
-            ])
-            .range([6, 40]);
+        // (radius scale computed earlier, alongside the collision pass)
 
         const lineageColour =
             d3.scaleOrdinal<number, string>()
@@ -252,7 +372,7 @@ export default function LineageGraph() {
                     )
                 );
 
-        root.selectAll("circle")
+        const circles = root.selectAll("circle")
             .data(graph.nodes)
             .enter()
             .append("circle")
@@ -268,51 +388,70 @@ export default function LineageGraph() {
             .attr(
                 "stroke-dasharray",
                 d => d.lineage_stable === false ? "3,2" : null
-            )
-            .on("mouseenter", (event, d) => {
-                const pos = pointerPosition(event);
-                setTooltip({ node: d, x: pos.x, y: pos.y });
-            })
-            .on("mousemove", (event, d) => {
-                const pos = pointerPosition(event);
-                setTooltip({ node: d, x: pos.x, y: pos.y });
-            })
-            .on("mouseleave", () => setTooltip(null))
-            .on("click", (event, d) => {
-                event.stopPropagation();
-                setTooltip(null);
-                setSelectedNode(
-                    selectedNode()?.id === d.id ? null : d
-                );
-            });
+            );
 
-        //
-        // years
-        //
+        if (!isOverview) {
+            // Per-node hover/click detail only makes sense at detail
+            // scale -- at a few em tall, individual nodes are navigation
+            // targets for the strip as a whole, not inspectable on their
+            // own.
+            circles
+                .on("mouseenter", (event, d) => {
+                    const pos = pointerPosition(event);
+                    setTooltip({ node: d, x: pos.x, y: pos.y });
+                })
+                .on("mousemove", (event, d) => {
+                    const pos = pointerPosition(event);
+                    setTooltip({ node: d, x: pos.x, y: pos.y });
+                })
+                .on("mouseleave", () => setTooltip(null))
+                .on("click", (event, d) => {
+                    event.stopPropagation();
+                    setTooltip(null);
+                    if (selectedNode()?.id === d.id) {
+                        event.target.classList.remove(styles.nodeSelected);
+                        setSelectedNode(null);
+                    } else {
+                        event.target.classList.add(styles.nodeSelected);
+                        setSelectedNode(d);
+                    }
+                });
 
-        root.selectAll("text")
-            .data(years)
-            .enter()
-            .append("text")
-            .attr("x", y => x(y)!)
-            .attr("y", 40)
-            .attr("text-anchor", "middle")
-            .text(y => y);
+            //
+            // years
+            //
+
+            root.selectAll("text")
+                .data(years)
+                .enter()
+                .append("text")
+                .attr("x", yr => x(yr)!)
+                .attr("y", 40)
+                .attr("text-anchor", "middle")
+                .text(yr => yr);
+        }
     }
 
     return (
-        <article class={styles.component} ref={containerRef}>
+        <article
+            class={
+                variant() === "overview"
+                    ? `${ styles.component } ${ styles.overview }`
+                    : styles.component
+            }
+            ref={containerRef}
+        >
             <svg ref={svgRef} />
 
-            <Show when={tooltip()}>
-                {t => <Tooltip tooltip={t()} concept={data()?.concept} />}
+            <Show when={variant() === "detail" && tooltip()}>
+                {t => <Tooltip tooltip={t()} concept={props.data.concept} />}
             </Show>
 
-            <Show when={selectedNode()}>
+            <Show when={variant() === "detail" && selectedNode()}>
                 {n => (
                     <DetailPanel
                         node={n()}
-                        concept={data()?.concept}
+                        concept={props.data.concept}
                         onClose={() => setSelectedNode(null)}
                     />
                 )}

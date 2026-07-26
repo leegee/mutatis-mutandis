@@ -9,11 +9,11 @@ type TooltipProps = {
 
 export default function Tooltip(props: TooltipProps) {
     return (
-        <div
-            class={styles.tooltip}
+        <aside
+            class={styles.tooltip + " large-elevate surface-container-highest"}
             style={{
-                left: `${ props.tooltip.x + 14 }px`,
-                top: `${ props.tooltip.y + 14 }px`,
+                left: `${ props.tooltip.x }px`,
+                top: `${ props.tooltip.y }px`,
             }}
         >
             <strong>
@@ -39,6 +39,6 @@ export default function Tooltip(props: TooltipProps) {
                     click for events →
                 </div>
             </Show>
-        </div>
+        </aside>
     );
 }

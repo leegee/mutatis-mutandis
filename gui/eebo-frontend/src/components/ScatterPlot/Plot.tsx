@@ -218,7 +218,7 @@ export default function Plot(props: PlotProps) {
         autoHighlight: true,
         highlightColor: [255, 255, 100, 180],
         transitions: {
-          getPosition: { duration: 600 },
+          getPosition: { duration: 300 },
           getFillColor: { duration: 300 },
         },
         updateTriggers: {
@@ -289,7 +289,7 @@ export default function Plot(props: PlotProps) {
           autoHighlight: true, // zoomed,
           highlightColor: [255, 255, 255, 100],
           transitions: {
-            getPosition: { duration: 450 },
+            getPosition: { duration: 300 },
             getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
           },
           updateTriggers: {
@@ -323,7 +323,7 @@ export default function Plot(props: PlotProps) {
           autoHighlight: true,
           highlightColor: [255, 255, 255, 80],
           transitions: {
-            getPosition: { duration: 600 },
+            getPosition: { duration: 300 },
             getFillColor: { duration: 300, easing: (t: number) => t * (2 - t) },
             getRadius: { duration: 200 },
           },

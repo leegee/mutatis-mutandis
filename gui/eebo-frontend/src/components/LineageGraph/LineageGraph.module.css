@@ -60,9 +60,10 @@
     opacity: 0.85;
 }
 
-.nodeSelected {
-    stroke: var(--overlay-accent);
-    stroke-width: 3px;
+.node.nodeSelected {
+    stroke: var(--highlight-clr, yellow) !important;
+    stroke-width: 5px !important;
+    vector-effect: non-scaling-stroke;
 }
 
 /* ---------------------------------------------------------- */
@@ -71,6 +72,7 @@
 
 .tooltip {
     position: fixed;
+    transform: translateY(-80%);
     z-index: 20;
     pointer-events: none;
     /* never intercept the mouse mid-hover */
@@ -112,12 +114,10 @@
 @keyframes tooltip-in {
     from {
         opacity: 0;
-        transform: translateY(2px);
     }
 
     to {
         opacity: 1;
-        transform: translateY(0);
     }
 }
 
