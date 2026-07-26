@@ -12,7 +12,7 @@ type DetailPanelProps = {
 
 export default function DetailPanel(props: DetailPanelProps) {
     return (
-        <aside class={styles.detailPanel}>
+        <aside class={styles.detailPanel + " padding"}>
             <header class={styles.detailPanelHeader}>
                 <div>
                     <strong>{props.concept}</strong>
