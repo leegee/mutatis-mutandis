@@ -338,7 +338,7 @@ def write_year_event_cluster_map(
     )
 
 
-def process_concept_year( con, lookup, concept, pub_year, rows, global_coords, ):
+def process_concept_year( con, lookup, concept, pub_year, rows, global_coords, resolution_parameter, n_neighbors):
     logger.info( f"[tier3.1] {concept} {pub_year}" )
 
     if not rows:
@@ -350,7 +350,11 @@ def process_concept_year( con, lookup, concept, pub_year, rows, global_coords, )
         return
 
     local_coords = project( vectors, LOCAL_UMAP_PARAMS, )
-    clusters = leiden_cluster( vectors, )
+    clusters = leiden_cluster(
+        vectors,
+        resolution_parameter=resolution_parameter,
+        n_neighbors=n_neighbors,
+    )
 
     global_xy = np.asarray(
         [
@@ -378,7 +382,7 @@ def process_concept_year( con, lookup, concept, pub_year, rows, global_coords, )
     write_year_event_cluster_map( con, concept, pub_year, event_ids, clusters, )
 
 
-def process_concept( con, lookup, concept, global_coords, ):
+def process_concept( con, lookup, concept, global_coords, resolution_parameter, n_neighbors):
     """
     Process every year for a single concept, then commit once.
 
@@ -397,7 +401,7 @@ def process_concept( con, lookup, concept, global_coords, ):
     delete_concept_clusters( con, concept, )
 
     for pub_year, rows in by_year.items():
-        process_concept_year( con, lookup, concept, pub_year, rows, global_coords, )
+        process_concept_year( con, lookup, concept, pub_year, rows, global_coords, resolution_parameter, n_neighbors)
 
     con.commit()
 
@@ -696,7 +700,12 @@ def _init_worker(
     }
 
 
-def _process_concept_worker(concept):
+def _process_concept_worker(
+    concept,
+    similarity_threshold,
+    resolution_parameter,
+    n_neighbors,
+):
     global _WORKER_LOOKUP, _WORKER_GLOBAL_COORDS, _WORKER_CON
 
     try:
@@ -709,11 +718,14 @@ def _process_concept_worker(concept):
                     _WORKER_LOOKUP,
                     concept,
                     _WORKER_GLOBAL_COORDS,
+                    resolution_parameter,
+                    n_neighbors
                 )
 
                 build_temporal_edges(
                     _WORKER_CON,
                     concept,
+                    similarity_threshold
                 )
 
                 _WORKER_CON.commit()
@@ -734,7 +746,7 @@ def _process_concept_worker(concept):
         return (concept, repr(exc))
 
 
-def run_parallel( con, concepts, workers, db_path, years, masked, ):
+def run_parallel( con, concepts, workers, db_path, years, masked, similarity_threshold, resolution_parameter, n_neighbors):
     global _WORKER_LOOKUP, _WORKER_GLOBAL_COORDS
 
     _WORKER_LOOKUP = None
@@ -765,7 +777,14 @@ def run_parallel( con, concepts, workers, db_path, years, masked, ):
             30000,
         ),
     ) as pool:
-        for concept, err in pool.imap_unordered(_process_concept_worker, concepts):
+        from functools import partial
+        worker = partial(
+            _process_concept_worker,
+            similarity_threshold=similarity_threshold,
+            resolution_parameter=resolution_parameter,
+            n_neighbors=n_neighbors,
+        )
+        for concept, err in pool.imap_unordered(worker, concepts):
             if err is None:
                 logger.info( f"[tier3.1] done: {concept}" )
             else:
@@ -781,12 +800,16 @@ def run_parallel( con, concepts, workers, db_path, years, masked, ):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument( "--concept", default=None, )
+    parser.add_argument( "-c", "--concept", default=None, )
+    parser.add_argument("-t", "--similarity-threshold", type=float, default=0.85)
+    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help="Leiden resolution parameter (default: 0.8)", )
+    parser.add_argument( "-n", "--neighbors", type=int, default=15, help="kNN graph neighbours (default: 15)", )
     parser.add_argument( "--mask", action="store_true", )
     parser.add_argument( "--clear", action="store_true", help="Delete all temporal cluster output before processing.", )
     parser.add_argument( "--workers", type=int, default=1, help="Number of concepts to process in parallel", )
 
     args = parser.parse_args()
+    logger.info( "[tier3.1] options: %s", vars(args) )
 
     lookup = ZarrEventLookup( ZARR_PATH )
 
@@ -818,16 +841,16 @@ def main():
     concepts = [ c for c, _ in resolve_concepts( concept=args.concept ) ]
 
     if args.workers > 1:
-        run_parallel( con, concepts, args.workers, CORPUS_TIER2_DB_PATH, years, args.mask, )
+        run_parallel( con, concepts, args.workers, CORPUS_TIER2_DB_PATH, years, args.mask, args.similarity_threshold, args.resolution, args.neighbors,)
     else:
         lookup.attach_index( load_indices( years, masked=args.mask, ) )
         for concept in concepts:
-            process_concept( con, lookup, concept, global_coords, )
+            process_concept( con, lookup, concept, global_coords, args.resolution, args.neighbors)
 
             # This must run once per concept -- previously it was
             # dedented to run only once after the loop, using whichever
             # `concept` was left over from the final iteration.
-            build_temporal_edges( con, concept )
+            build_temporal_edges( con, concept, args.similarity_threshold )
         con.close()
     logger.info( "[tier3.1] Done." )
 

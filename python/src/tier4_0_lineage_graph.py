@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from lib.eebo_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
 from lib.eebo_logging import logger
+from lib.get_processed_concepts import get_processed_concepts
 
 OUTPUT_DIR = GUI_PUBLIC_DIR / 'lineage'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -330,9 +331,6 @@ def draw_temporal_graph(G, output_png):
 
 
 def analyse_lineage(G):
-    logger.info("nodes:", G.number_of_nodes())
-    logger.info("edges:", G.number_of_edges())
-
     births = [
         n
         for n in G.nodes
@@ -344,9 +342,6 @@ def analyse_lineage(G):
         for n in G.nodes
         if G.out_degree(n) == 0
     ]
-
-    logger.info("births:", len(births))
-    logger.info("deaths:", len(deaths))
 
     branching = [
         (n, G.out_degree(n))
@@ -360,22 +355,14 @@ def analyse_lineage(G):
         if G.in_degree(n) > 1
     ]
 
-    logger.info("branching:")
-    for x in branching[:20]:
-        logger.info(x)
-
-    logger.info("merging:")
-    for x in merging[:20]:
-        logger.info(x)
-
     unstable = [
         lid
         for lid, stable in G.graph.get("lineage_stability", {}).items()
         if not stable
     ]
 
-    logger.info(f"unstable lineages (drifted below {DRIFT_THRESHOLD}):")
-    logger.info(unstable)
+    logger.debug(f"[tier4] unstable lineages (drifted below {DRIFT_THRESHOLD}):")
+    logger.debug(unstable)
 
 
 def sample_cluster_events(
@@ -579,73 +566,48 @@ def export_lineage(con, concept, G):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--concept", required=True, )
+    parser.add_argument( "--concept", help="Process a single concept" )
     args = parser.parse_args()
-
-    png_path     = OUTPUT_DIR / f"{args.concept.upper()}_lineage.png"
-    json_path    = OUTPUT_DIR / f"{args.concept.upper()}_lineage.json"
 
     con = sqlite3.connect( CORPUS_TIER2_DB_PATH )
 
-    logger.debug("[tier4] Load graph")
-    G = load_temporal_graph(con, args.concept.upper())
-    logger.debug("[tier4] Loaded graph")
+    if args.concept:
+        concepts = [args.concept.upper()]
+    else:
+        concepts = get_processed_concepts(CORPUS_TIER2_DB_PATH)
 
-    G = assign_lineages(G)
-    logger.debug("[tier4] Assigned lineage")
+    for concept in concepts:
+        logger.info(f"[tier4] Process concept {concept}")
 
+        png_path     = OUTPUT_DIR / f"{concept}_lineage.png"
+        json_path    = OUTPUT_DIR / f"{concept}_lineage.json"
 
-    from collections import Counter
+        logger.debug("[tier4] Load graph")
+        G = load_temporal_graph(con, concept)
+        logger.debug("[tier4] Loaded graph")
 
-    lineage_counts = Counter(
-        nx.get_node_attributes(G, "lineage").values()
-    )
+        G = assign_lineages(G)
+        logger.debug("[tier4] Assigned lineage")
 
-    print("Lineages:", len(lineage_counts))
+        analyse_lineage(G)
 
-    for lineage, count in lineage_counts.most_common(20):
-        print(
-            "lineage",
-            lineage,
-            "nodes",
-            count,
-            "min_persistence",
-            G.graph["lineage_min_persistence"].get(lineage),
-            "stable",
-            G.graph["lineage_stability"].get(lineage),
+        logger.info( f"[tier4] {G.number_of_nodes()} nodes" )
+        logger.info( f"[tier4] {G.number_of_edges()} edges" )
+
+        draw_temporal_graph( G, png_path )
+        logger.info( f"[tier4] Wrote {png_path}" )
+
+        json_data = export_lineage(con, concept, G)
+
+        json.dump(
+            json_data,
+            open(json_path,"w"),
+            indent=2
         )
+        logger.info( f"[tier4] Wrote {json_path}" )
 
-    scores = [
-        data["confidence"]
-        for _,_,data in G.edges(data=True)
-    ]
-
-    if scores:
-        print(
-            np.percentile(
-                scores,
-                [0,25,50,75,90,95,99,100]
-            )
-        )
-
-    analyse_lineage(G)
-
-    logger.info( f"{G.number_of_nodes()} nodes" )
-    logger.info( f"{G.number_of_edges()} edges" )
-
-    draw_temporal_graph( G, png_path )
-    logger.info( f"Wrote {png_path}" )
-
-    json_data = export_lineage(con, args.concept.upper(), G)
     con.close()
-
-    json.dump(
-        json_data,
-        open(json_path,"w"),
-        indent=2
-    )
-    logger.info( f"Wrote {json_path}" )
-
+    logger.info(f"[tier4] Complete")
 
 if __name__ == "__main__":
     main()

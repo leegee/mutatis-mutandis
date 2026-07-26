@@ -92,9 +92,6 @@ def build_knn_graph( vectors, n_neighbors=15, ):
         len(vectors) - 1,
     )
 
-    if len(vectors) <= n_neighbors:
-        n_neighbors = len(vectors) - 1
-
     if n_neighbors < 2:
         return []
 
@@ -121,11 +118,11 @@ def build_knn_graph( vectors, n_neighbors=15, ):
     return edges
 
 
-def leiden_cluster( vectors, ):
+def leiden_cluster( vectors, resolution_parameter=0.8, n_neighbors=15 ):
     if len(vectors) < MIN_IN_CLUSTER:
         return np.full( len(vectors), -1, dtype=np.int32, )
 
-    edges = build_knn_graph( vectors )
+    edges = build_knn_graph( vectors, n_neighbors=n_neighbors )
 
     graph = ig.Graph(
         edges=edges,
@@ -136,7 +133,7 @@ def leiden_cluster( vectors, ):
         graph,
         leidenalg.RBConfigurationVertexPartition,
         seed=42,
-        resolution_parameter=0.8,
+        resolution_parameter=resolution_parameter,
     )
 
     labels = np.full(

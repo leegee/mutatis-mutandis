@@ -44,6 +44,7 @@ src/fast_api/routes/jobs.py
 src/fast_api/routes/topics.py
 src/lib/DocBuffer.py
 src/lib/__init__.py
+src/lib/cluster.py
 src/lib/concept_resolve.py
 src/lib/eebo_config.py
 src/lib/eebo_db.py
@@ -52,12 +53,14 @@ src/lib/eebo_faiss.py
 src/lib/eebo_logging.py
 src/lib/eebo_ocr_fixes.py
 src/lib/embedding_cache.py
+src/lib/get_processed_concepts.py
 src/lib/js_divergence.py
 src/lib/json.py
 src/lib/macberth.py
 src/lib/macberth_instance.py
 src/lib/segment_boundary.py
 src/lib/set_lang.py
+src/lib/sqlite_vector_blob.py
 src/lib/stopwords_min.py
 src/lib/tier2_diagnostics.py
 src/lib/vector_store_zarr.py

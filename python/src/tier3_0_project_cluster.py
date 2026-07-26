@@ -183,7 +183,7 @@ def write_cluster_info(
     )
 
 
-def process_concept( con, lookup, concept, global_coords, ):
+def process_concept( con, lookup, concept, global_coords, resolution_parameter, n_neighbors):
     logger.info( f"[tier3] processing {concept}" )
 
     rows = load_event_rows( con, concept, )
@@ -199,7 +199,11 @@ def process_concept( con, lookup, concept, global_coords, ):
     logger.info( f"[tier3] {concept}: field events={len(event_ids):,}" )
 
     local_coords = project( vectors, LOCAL_UMAP_PARAMS, )
-    clusters = leiden_cluster( vectors, )
+    clusters = leiden_cluster(
+        vectors,
+        resolution_parameter=resolution_parameter,
+        n_neighbors=n_neighbors,
+    )
 
     global_xy = np.asarray(
         [
@@ -218,6 +222,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument( "--concept", default=None, )
     parser.add_argument( "--mask", action="store_true", )
+    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help="Leiden resolution parameter (default: 0.8)", )
+    parser.add_argument( "-n", "--neighbors", type=int, default=15, help="kNN graph neighbours (default: 15)", )
     args = parser.parse_args()
 
     con = sqlite_connection( CORPUS_TIER2_DB_PATH )
@@ -282,6 +288,8 @@ def main():
             lookup,
             concept,
             global_coords,
+            args.resolution,
+            args.neighbors,
         )
 
     con.close()
