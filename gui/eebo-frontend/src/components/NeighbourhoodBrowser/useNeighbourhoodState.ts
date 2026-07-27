@@ -74,7 +74,7 @@ export function useNeighbourhoodState(): NeighbourhoodState {
     const eventButtonRefs = new Map<string, HTMLButtonElement>();
 
     // Resources
-    const resourceKey = () => [controls.concept, controls.fromYear, controls.toYear] as const;
+    const resourceKey = () => [controls.conceptSelection[0], controls.fromYear, controls.toYear] as const;
 
     const [yearFilteredResource] = createResource(
         resourceKey,
@@ -87,7 +87,7 @@ export function useNeighbourhoodState(): NeighbourhoodState {
     const yearFiltered = (): SqliteEventWithNeighbours[] => yearFilteredResource() ?? [];
 
     const [yearBoundsResource] = createResource(
-        () => controls.concept,
+        () => controls.conceptSelection[0],
         (concept) => getYearBounds(concept),
     );
 

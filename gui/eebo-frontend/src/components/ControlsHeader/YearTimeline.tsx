@@ -13,7 +13,7 @@ interface YearTimelineProps {
 
 export const YearTimeline: Component<YearTimelineProps> = (props) => {
   const [yearBucketsResource] = createResource(
-    () => controls.concept,
+    () => controls.conceptSelection[0],
     (concept) => getYearBuckets(concept),
   );
 

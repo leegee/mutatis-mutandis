@@ -19,7 +19,7 @@ export default function LineageExplorer() {
     let detailContainer: HTMLDivElement | undefined;
 
     createEffect(on(
-        () => controls.concept,
+        () => controls.conceptSelection[0],
         (concept) => {
             if (!concept)
                 return;

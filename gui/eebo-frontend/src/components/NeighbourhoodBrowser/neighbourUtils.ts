@@ -47,7 +47,7 @@ export function buildNeighbourIndex(events: SqliteEventWithNeighbours[]): Neighb
       if (!summary) {
         summary = {
           token: nb.token,
-          token_idx: nb.token_idx,
+          token_idx: String(nb.token_idx),
           occurrenceCount: 0,
           eventCount: 0,
           meanScore: 0,

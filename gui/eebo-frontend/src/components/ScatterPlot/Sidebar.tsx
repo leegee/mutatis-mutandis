@@ -37,7 +37,7 @@ export default function Sidebar() {
                                     <h2 class="max large">
                                         <q>{e().token}</q>
                                     </h2>
-                                    <button class="link border" onClick={() => controlsActions.setSelectedEventId(null)} >
+                                    <button class="link border" onClick={() => controlsActions.setSelectedEventIds(null)} >
                                         <i>close</i>
                                     </button>
                                 </div>

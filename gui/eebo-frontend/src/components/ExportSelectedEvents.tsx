@@ -88,13 +88,8 @@ export default function ExportSelectedEvents() {
           </menu>
         </li>
 
-        {/* <TopicAnalysisButton
-          exportedData={exportedData}
-          concept={controls.conceptSelection[0]}
-        /> */}
-
         <li onClick={async () => {
-          const positionOk = labelsActions.getAcceptableCentroid(controls.concept, controls.selectedPoints);
+          const positionOk = labelsActions.getAcceptableCentroid(controls.conceptSelection[0], controls.selectedPoints);
           if (!positionOk) {
             pushToast({
               type: "error",
@@ -105,12 +100,12 @@ export default function ExportSelectedEvents() {
 
           console.log('[ExportSelectedEvents] Call cluster2groq')
           const result = await cluster2groq({
-            concept: exportedData()!.events[0].concept?.toLowerCase() || controls.concept,
+            concept: exportedData()!.events[0].concept?.toLowerCase() || controls.conceptSelection[0],
             rawText: allText()
           });
 
           const success = labelsActions.createFromCluster(
-            controls.concept,
+            controls.conceptSelection[0],
             controls.selectedPoints,
             result.sense_name,
             result.description,

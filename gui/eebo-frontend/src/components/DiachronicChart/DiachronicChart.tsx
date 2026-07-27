@@ -99,7 +99,7 @@ const DiachronicChart: Component = () => {
   const [focusPos, setFocusPos] = createSignal<GridPosition | null>(null);
 
   const [filteredEventsResource] = createResource(
-    () => [controls.concept, controls.fromYear, controls.toYear] as const,
+    () => [controls.conceptSelection[0], controls.fromYear, controls.toYear] as const,
     ([concept, from, to]) => getYearFiltered(concept, from, to),
   );
   const filteredEvents = () => filteredEventsResource() ?? [];

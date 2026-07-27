@@ -203,7 +203,7 @@ export const ConceptGraph: Component = () => {
   let nodeMeta: NodeMeta[] = []; // Keep a ref to current node list so onPointMouseOver can resolve index to meta
 
   const [data] = createResource(
-    () => [controls.concept] as [string],
+    () => [controls.conceptSelection[0]] as [string],
     ([concept]) => {
       if (graph) graph.destroy();
       return loadFDGData(concept);

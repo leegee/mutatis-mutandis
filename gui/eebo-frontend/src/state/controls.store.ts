@@ -12,10 +12,9 @@ export type ProjectionModeType = "local" | "global"
 export type ColorScatterByType = 'pub_year' | "cluster_label" | "doc_id"
 
 export type ControlsState = {
-  concept: string;
+  conceptSelection: string[];
   bfsOpacity: number;
   neighbourOpacity: number; // = alpha in range 0 - 255
-  conceptSelection: string[];
   showNeighbours: boolean;
   showClusterCentroids: boolean;
   colorScatterBy: ColorScatterByType;
@@ -41,7 +40,6 @@ export type ControlsState = {
 const initialControls: ControlsState = {
   bfsOpacity: 3,
   neighbourOpacity: 100,
-  concept: "LIBERTY",
   conceptSelection: ["LIBERTY"],
   viewMode: "events",
   maxHubs: 50,

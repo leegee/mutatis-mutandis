@@ -6,7 +6,7 @@ const SQLITE_MAX_VARIABLES = 900; // stay safely under SQLite's c999 limit
 
 export function buildEventQuery(): EventQuery {
   return {
-    concept: controls.concept,
+    concept: controls.conceptSelection[0],
     fromYear: controls.fromYear,
     toYear: controls.toYear,
     selectedEventIds: controls.selectedEventIds

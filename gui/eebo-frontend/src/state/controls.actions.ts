@@ -39,7 +39,6 @@ export const controlsActions = {
     setConcept(concept: string) {
         console.log('[actions] setConcept', concept);
         setControls({
-            concept,
             selectedNode: null,
         });
     },
@@ -53,7 +52,6 @@ export const controlsActions = {
             return {
                 ...prev,
                 conceptSelection: nextConceptSelection,
-                concept: nextConceptSelection.length === 1 ? nextConceptSelection[0] : prev.concept, // null to clear it
                 selectedNode: null,
             };
         });

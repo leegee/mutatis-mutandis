@@ -24,7 +24,7 @@ export async function getConcepts(): Promise<string[]> {
 export async function getYearBounds(
   concept?: string,
 ): Promise<[number, number]> {
-  const c = concept ?? controls.concept;
+  const c = concept ?? controls.conceptSelection[0];
   if (!c) return [CORPUS_START_YEAR, CORPUS_END_YEAR];
   return (await queryYearBounds(c)) ?? [CORPUS_START_YEAR, CORPUS_END_YEAR];
 }
@@ -35,7 +35,7 @@ export async function getYearFiltered(
   toYear?: number,
 ): Promise<SqliteEventWithNeighbours[]> {
   console.debug(`[getYearFiltered] ${ concept } ${ fromYear } ${ toYear }`);
-  const c = concept ?? controls.concept;
+  const c = concept ?? controls.conceptSelection[0];
   const fy = fromYear ?? controls.fromYear;
   const ty = toYear ?? controls.toYear;
   if (!c) return [];
@@ -43,7 +43,7 @@ export async function getYearFiltered(
 }
 
 export async function totalEventsForConcept(concept?: string): Promise<number> {
-  const c = concept ?? controls.concept;
+  const c = concept ?? controls.conceptSelection[0];
   if (!c) return 0;
   return await queryNEvents(c);
 }
@@ -77,7 +77,7 @@ interface YearBucket {
 export async function getYearBuckets(
   concept?: string,
 ): Promise<YearBucket[]> {
-  const c = concept ?? controls.concept;
+  const c = concept ?? controls.conceptSelection[0];
   if (!c) return [];
 
   const [[minYear, maxYear], tally] = await Promise.all([

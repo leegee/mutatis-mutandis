@@ -11,7 +11,7 @@ import { buildCssColorMap, type CssClusterColor } from "../../lib/colour";
 import { controlsActions } from "../../state/controls.actions";
 
 function clusterFetchParams() {
-    const concept = controls.concept;
+    const concept = controls.conceptSelection[0];
     if (!concept) return null;
 
     return {
@@ -102,7 +102,7 @@ export default function ConceptClusters() {
                 <span>Show exemplars</span>
             </ControlsHeader>
 
-            <Show when={!controls.concept}>
+            <Show when={!controls.conceptSelection.length}>
                 <p>Select a concept to view clusters.</p>
             </Show>
 

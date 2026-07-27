@@ -26,7 +26,7 @@ export const labelsActions = {
         return centroid;
     },
 
-    createFromCluster(concept: string, points: PointData[], label: string, description: string,) {
+    createFromCluster(concept: string, points: PointData[], cluster_label: string, description: string,) {
         const centroid = this.getAcceptableCentroid(concept, points);
         console.debug(`[label.actions] enter with points:`, JSON.stringify(points), "\nGot centroid", centroid)
 
@@ -43,7 +43,7 @@ export const labelsActions = {
 
         const labelPoint: LabelPoint = {
             id: crypto.randomUUID(),
-            label,
+            cluster_label,
             description,
             nx: centroid.nx,
             ny: centroid.ny,
@@ -51,7 +51,7 @@ export const labelsActions = {
             gny: centroid.gny,
             type: "cluster_summary"
         };
-        console.log(`[label.actions] label! ${ label }`, labelPoint)
+        console.log(`[label.actions] label! ${ cluster_label }`, labelPoint)
 
         this.addLabel(concept, labelPoint);
         return true;

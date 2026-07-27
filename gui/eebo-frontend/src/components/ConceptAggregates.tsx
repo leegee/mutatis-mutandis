@@ -72,7 +72,7 @@ export default function ConceptAggregates() {
   };
 
   createEffect(() => {
-    const currentConcept = controls.concept;
+    const currentConcept = controls.conceptSelection[0];
     if (currentConcept) {
       runQuery(currentConcept);
     } else {
@@ -177,11 +177,11 @@ export default function ConceptAggregates() {
 
       </div>
 
-      <Show when={!controls.concept}>
+      <Show when={!controls.conceptSelection[0]}>
         <p>Select a concept to view its neighbourhood aggregates.</p>
       </Show>
 
-      <Show when={controls.concept && tokenRows().length === 0 && docRows().length === 0 && !loading()}>
+      <Show when={controls.conceptSelection[0] && tokenRows().length === 0 && docRows().length === 0 && !loading()}>
         <p>No aggregates found for this concept.</p>
       </Show>
     </article>
