@@ -10,8 +10,6 @@ export const [conceptsResource] = createResource(
         if (!ready)
             return [];
 
-        console.log("[concepts] loading");
-
         return listConcepts();
     }
 );

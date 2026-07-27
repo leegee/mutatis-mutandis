@@ -13,8 +13,7 @@ export default function SingleConceptSelect() {
   return (
     <div class="field border small no-margin no-padding">
       <Show when={concepts().length}>
-        <select
-          value={controls.conceptSelection[0] ?? ""}
+        <select value={controls.conceptSelection[0] ?? ""}
           onChange={(e) => {
             controlsActions.setConceptSelection([
               e.currentTarget.value,
