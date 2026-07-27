@@ -42,6 +42,20 @@ type TooltipState = {
     y: number;
 };
 
+
+function semanticDistance(
+    a: LineageNode,
+    b: LineageNode
+): number {
+    if (!a.global || !b.global)
+        return 0;
+
+    return Math.hypot(
+        a.global.x - b.global.x,
+        a.global.y - b.global.y
+    );
+}
+
 /**
  * Projects a set of 2D points onto their principal axis (first principal
  * component), returning one scalar per point.
@@ -373,22 +387,66 @@ export default function LineageGraph(props: LineageGraphProps) {
 
         //
         // nodes
-        //
-        // (radius scale computed earlier, alongside the collision pass)
+
+        const nodeById = new Map(
+            graph.nodes.map(n => [n.id, n])
+        );
+
+        // Distance from immediate predecessor.
+        const driftDistance = new Map<string, number>();
+
+        for (const node of graph.nodes) {
+            const incoming = graph.links.find(
+                l =>
+                    l.target === node.id &&
+                    l.type === "CONTINUATION"
+            );
+
+            if (!incoming) {
+                // Founder node: no previous meaning state.
+                driftDistance.set(node.id, 0);
+                continue;
+            }
+
+            const parent = nodeById.get(incoming.source);
+
+            driftDistance.set(
+                node.id,
+                parent
+                    ? semanticDistance(node, parent)
+                    : 0
+            );
+        }
+
+        const persistenceScore = new Map<string, number>();
+
+        for (const node of graph.nodes) {
+            // CONTINUATION is only the single best-scoring match per
+            // source cluster; SIGNIFICANT covers every other
+            // above-threshold match (e.g. the non-dominant branch of a
+            // split). Both represent a structurally plausible
+            // predecessor, so both should count -- otherwise every
+            // split's secondary branch renders as a false "new lineage".
+            const incoming = graph.links.filter(
+                l =>
+                    l.target === node.id &&
+                    (l.type === "CONTINUATION" || l.type === "SIGNIFICANT")
+            );
+
+            if (incoming.length === 0) {
+                persistenceScore.set(node.id, NaN);
+            } else {
+                persistenceScore.set(
+                    node.id,
+                    d3.max(incoming, e => e.similarity) ?? NaN
+                );
+            }
+        }
 
         const lineageColour =
-            d3.scaleOrdinal<number, string>()
-                .domain(
-                    graph.nodes.map(n => n.lineage!)
-                )
-                .range(
-                    d3.quantize(
-                        d3.interpolateRainbow,
-                        new Set(
-                            graph.nodes.map(n => n.lineage)
-                        ).size
-                    )
-                );
+            d3.scaleSequential<string>()
+                .domain([0.85, 1])
+                .interpolator(d3.interpolateRdYlGn);
 
         const circles = root.selectAll("circle")
             .data(graph.nodes)
@@ -402,7 +460,16 @@ export default function LineageGraph(props: LineageGraphProps) {
             .attr("cx", d => positions.get(d.id)![0])
             .attr("cy", d => positions.get(d.id)![1])
             .attr("r", d => radius(d.size))
-            .attr("fill", d => lineageColour(d.lineage ?? 0))
+            .attr("fill", d => {
+                const score = persistenceScore.get(d.id);
+
+                // no predecessor = new lineage
+                if (score === undefined || Number.isNaN(score)) {
+                    return "#999";
+                }
+
+                return lineageColour(score);
+            })
             .attr(
                 "stroke-dasharray",
                 d => d.lineage_stable === false ? "3,2" : null

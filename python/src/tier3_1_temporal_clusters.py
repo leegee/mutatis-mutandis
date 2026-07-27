@@ -97,11 +97,7 @@ CREATE TABLE IF NOT EXISTS temporal_cluster_edges (
     edge_type TEXT,
     confidence REAL,
     PRIMARY KEY (
-        concept,
-        source_year,
-        source_cluster,
-        target_year,
-        target_cluster
+        concept, source_year, source_cluster, target_year, target_cluster, edge_type
     )
 );
 
@@ -506,7 +502,19 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
                 if len(sorted_scores) > 1
                 else 0.0
             )
-            confidence = best_score - second_score
+            # NOTE: `confidence` must stay on the same scale as the raw
+            # similarity score used for SIGNIFICANT edges below (~0..1),
+            # since tier4_0_lineage_graph.py's CONFIDENCE_THRESHOLD and
+            # its "rank candidate parents by confidence" logic compare
+            # confidence values across edge types directly. Previously
+            # this stored (best_score - second_score) -- the margin over
+            # the runner-up -- which is typically small (0.02-0.15) and
+            # almost never clears a 0.95 threshold, so tier4 treated
+            # nearly every node as a fresh lineage founder. The margin is
+            # still useful as a tie-break/ambiguity signal, so we keep it
+            # around, just not as the value that gets thresholded.
+            margin = best_score - second_score
+            confidence = best_score
             if best_score >= similarity_threshold:
                 edges.append( (
                     concept,
@@ -521,10 +529,16 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
 
         # Splits/merges:
         for i, source_cluster in enumerate(source_ids):
+            best_j = int(np.argmax(similarity[i]))
+
             for j, target_cluster in enumerate(target_ids):
                 score = float(similarity[i, j])
+
                 if score >= similarity_threshold:
-                    edges.append( (
+                    if j == best_j:
+                        continue
+
+                    edges.append((
                         concept,
                         source_year,
                         source_cluster,
@@ -533,7 +547,7 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
                         score,
                         "SIGNIFICANT",
                         score
-                    ) )
+                    ))
 
     con.executemany(
         """
