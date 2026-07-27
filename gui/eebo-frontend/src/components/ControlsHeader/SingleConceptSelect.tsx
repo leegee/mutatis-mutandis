@@ -5,16 +5,29 @@ import { getConcepts } from "../../state/controls.selectors";
 
 export default function SingleConceptSelect() {
   const [conceptsResource] = createResource(
-    () => controls.concept,
     () => getConcepts(),
   );
-  const concepts = (): string[] => conceptsResource() ?? [];
+
+  const concepts = () => conceptsResource() ?? [];
 
   return (
     <div class="field border small no-margin no-padding">
-      <select value={controls.concept} onChange={(e) => controlsActions.setConceptSelection([e.currentTarget.value])} >
-        <For each={concepts()}>{(c) => <option value={c}>{c}</option>}</For>
+      <select
+        value={controls.concept ?? ""}
+        onChange={(e) =>
+          controlsActions.setConceptSelection([
+            e.currentTarget.value,
+          ])
+        }
+      >
+        <For each={concepts()}>
+          {(concept) => (
+            <option value={concept}>
+              {concept}
+            </option>
+          )}
+        </For>
       </select>
     </div>
-  )
+  );
 }

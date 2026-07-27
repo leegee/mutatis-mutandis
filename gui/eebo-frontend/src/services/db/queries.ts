@@ -162,24 +162,25 @@ export async function queryEventById(id: string): Promise<SqliteEvent | null> {
 
   if (!row) {
     type = 'neighbour';
-    const neighbourRow = await execRows(
-      `SELECT
-        event_id,
-        score,
-        vector_id,
-        token,
-        neighbours.doc_id,
-        neighbours.pub_year,
-        token_idx,
-        window_id,
-        window_token_pos,
-        documents.author,
-        documents.pub_place
-    FROM neighbours
-    LEFT JOIN documents
-        ON neighbours.doc_id = documents.doc_id
-    WHERE neighbour_event_id = ?
-    LIMIT 1`,
+    const neighbourRow = await execRows(`
+      SELECT
+        n.neighbour_event_id,
+        n.score,
+        e.vector_id,
+        e.token,
+        e.doc_id,
+        e.pub_year,
+        e.token_idx,
+        e.window_id,
+        e.window_token_pos,
+        d.author,
+        d.pub_place
+    FROM neighbours n
+    JOIN events e ON e.event_id = n.neighbour_event_id
+    LEFT JOIN documents d ON e.doc_id = d.doc_id
+    WHERE n.neighbour_event_id = ?
+    LIMIT 1
+      `,
       [id],
     );
 
@@ -266,7 +267,7 @@ export async function getEventsByIds(
       pub_year, window_id, window_token_pos, concept
     FROM events
     WHERE event_id IN (${ chunk.map(id => `'${ id }'`).join(",") });
-  `;
+  `; // Should escape that
 
     const rows = await execRows(sql);
 
@@ -328,17 +329,27 @@ export async function queryEventsByConcept(
 
   const ids = [...eventMap.keys()].join(",");
   const nbRows = await execRows(
-    `SELECT event_id, neighbour_event_id, vector_id, token,
-            doc_id, pub_year, token_idx, window_id,
-            window_token_pos, score
-     FROM   neighbours
-     WHERE  event_id IN (${ ids })
-     ORDER  BY event_id, score DESC`,
+    `SELECT
+      n.event_id,
+      n.neighbour_event_id,
+      e.vector_id,
+      e.token,
+      e.doc_id,
+      e.pub_year,
+      e.token_idx,
+      e.window_id,
+      e.window_token_pos,
+      n.score
+   FROM neighbours n
+   JOIN events e
+       ON e.event_id = n.neighbour_event_id
+   WHERE n.event_id IN (${ ids })
+   ORDER BY n.event_id, n.score DESC`,
   );
 
   for (const r of nbRows) {
     const nb: SqliteNeighbour = {
-      event_id: String(r[1]),        // neighbour_event_id
+      event_id: String(r[1]),
       vector_id: String(r[2]),
       token: r[3] as string,
       doc_id: r[4] as string,
@@ -348,6 +359,7 @@ export async function queryEventsByConcept(
       window_token_pos: Number(r[8]),
       score: Number(r[9]),
     };
+
     eventMap.get(r[0] as string)?.neighbours.push(nb);
   }
 

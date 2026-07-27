@@ -62,24 +62,31 @@ export async function loadGraphData(
     `SELECT
       n.event_id,
       n.neighbour_event_id,
-      n.token,
-      n.doc_id,
-      n.pub_year,
-      n.window_id,
+      e.token,
+      e.doc_id,
+      e.pub_year,
+      e.window_id,
       n.score,
-      n.token_idx,
+      e.token_idx,
       e.nx,
       e.ny
    FROM neighbours n
    INNER JOIN events e
        ON e.event_id = n.neighbour_event_id
-   WHERE e.concept = ?`,
+   WHERE n.event_id IN (
+       SELECT event_id
+       FROM events
+       WHERE concept = ?
+   )`,
     [concept],
   );
 
   for (const row of neighbourRows) {
-    const [event_id, neighbour_event_id, token, doc_id, pub_year, window_id, score, token_idx, nx, ny] =
-      row as [string, string, string, string, number | null, number | null, number, number, number, number];
+    const [
+      event_id, neighbour_event_id, token, doc_id, pub_year, window_id, score, token_idx, nx, ny
+    ] = row as [
+      string, string, string, string, number | null, number | null, number, number, number, number
+    ];
 
     // Prefer the event-node id if this neighbour is also a concept event
     const nStringId = idToIdx.has(`e:${ neighbour_event_id }`)

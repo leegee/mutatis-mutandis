@@ -2,7 +2,6 @@
  * useNeighbourhoodState.ts
  *
  * All reactive state for the NeighbourhoodBrowser lives here.
- * The component itself becomes pure layout once this hook is consumed.
  */
 
 import {

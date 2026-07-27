@@ -12,15 +12,16 @@ type DetailPanelProps = {
 
 export default function DetailPanel(props: DetailPanelProps) {
     return (
-        <aside class={styles.detailPanel + " padding"}>
-            <header class={styles.detailPanelHeader}>
-                <div>
+        <aside class={styles.detailPanel + " left-padding right-padding"}>
+            <header class={styles.detailPanelHeader + " middle-align"}>
+                <h6 class="max medium-text">
                     <strong>{props.concept}</strong>
-                    <span>
+                    · {props.node.year}
+                    <span class="max small-text">
                         {" "}
-                        · {props.node.year} · cluster {props.node.cluster}
+                        · cluster {props.node.cluster}
                     </span>
-                </div>
+                </h6>
 
                 <button
                     class={styles.detailPanelClose}

@@ -183,7 +183,6 @@ export default function LineageGraph(props: LineageGraphProps) {
             )
         ].sort();
 
-
         const margin = isOverview
             ? { left: 0, right: 10, top: 4, bottom: 4 }
             : { left: 120, right: 120, top: 80, bottom: 80 };
