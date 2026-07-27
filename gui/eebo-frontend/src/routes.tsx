@@ -1,7 +1,9 @@
 import { lazy, type Component } from "solid-js";
 
 import { JobsApiComponent } from "./components/Jobs";
+
 import Home from "./components/Home";
+
 const FDG = lazy(() => import("./components/FDG"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
 const NeighbourhoodBrowserGuide = lazy(() => import("./components/NeighbourhoodBrowser/Guide"));
@@ -9,11 +11,12 @@ const DiachronicChart = lazy(() => import("./components/DiachronicChart/Diachron
 const DiachronicChartGuide = lazy(() => import("./components/DiachronicChart/Guide"));
 const ScatterPlot = lazy(() => import("./components/ScatterPlot"));
 const ConceptAggregates = lazy(() => import("./components/ConceptAggregates"));
-import ConceptAggregatesGuide from "./components/ConceptAggregatesGuide";
-import Map from "./components/GeoMap";
-import ScatterPlotGuide from "./components/ScatterPlot/ScatterPlotGuide";
+const ConceptAggregatesGuide = lazy(() => import("./components/ConceptAggregatesGuide"));
+const Map = lazy(() => import("./components/GeoMap"));
+const ScatterPlotGuide = lazy(() => import("./components/ScatterPlot/ScatterPlotGuide"));
 const ConceptClusters = lazy(() => import("./components/ConceptClusterReport/ConceptClusters"));
 const LineageGraph = lazy(() => import("./components/LineageGraph"));
+const LineageGraphGuide = lazy(() => import("./components/LineageGraph/Guide"));
 
 export interface RouteType {
   path: string;
@@ -36,6 +39,7 @@ export const routes = [
     icon: "family_history",
     label: "Lineage",
     component: LineageGraph,
+    help: LineageGraphGuide,
   },
 
   {
