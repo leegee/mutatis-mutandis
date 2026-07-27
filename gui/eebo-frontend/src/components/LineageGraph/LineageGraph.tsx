@@ -12,7 +12,6 @@ import type {
 } from "./types";
 
 
-
 type LineageGraphProps = {
     data: LineageData;
 
@@ -127,6 +126,23 @@ export default function LineageGraph(props: LineageGraphProps) {
             });
         };
 
+        const onWheel = (e: WheelEvent) => {
+            // Ignore pinch zoom
+            if (e.ctrlKey)
+                return;
+
+            // If the user is already scrolling horizontally (ie trackpad), preserve that.
+            const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY)
+                ? e.deltaX
+                : e.deltaY;
+
+            if (delta !== 0) {
+                e.preventDefault();
+                containerRef.scrollLeft += delta;
+            }
+        };
+
+        containerRef.addEventListener("wheel", onWheel, { passive: false });
         containerRef.addEventListener("scroll", reportScroll, { passive: true });
 
         // Layout (and therefore scrollWidth) isn't settled on the very

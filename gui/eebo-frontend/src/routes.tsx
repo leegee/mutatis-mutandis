@@ -2,7 +2,7 @@ import { lazy, type Component } from "solid-js";
 
 import { JobsApiComponent } from "./components/Jobs";
 import Home from "./components/Home";
-const Graph2 = lazy(() => import("./components/FDG"));
+const FDG = lazy(() => import("./components/FDG"));
 const NeighbourhoodBrowser = lazy(() => import("./components/NeighbourhoodBrowser/NeighbourhoodBrowser"));
 const NeighbourhoodBrowserGuide = lazy(() => import("./components/NeighbourhoodBrowser/Guide"));
 const DiachronicChart = lazy(() => import("./components/DiachronicChart/DiachronicChart"));
@@ -67,7 +67,7 @@ export const routes = [
     path: "/graph2/:token_idx?",
     icon: "orbit",
     label: "FDG",
-    component: Graph2,
+    component: FDG,
     help: () => <div>Force-directed graph exploration view.</div>
   },
   {

@@ -20,12 +20,28 @@ export default function Tooltip(props: TooltipProps) {
                 {props.concept} · {props.tooltip.node.year}
             </strong>
 
-            <div>
-                cluster {props.tooltip.node.cluster} · mass {props.tooltip.node.size}
-            </div>
+            <Show when={props.tooltip.node.context_profile?.length}>
+                <div class={styles.tooltipSection}>
+                    <div class={styles.tooltipHeading}>
+                        context profile
+                    </div>
+
+                    <ul>
+                        {props.tooltip.node.context_profile!.map(term => (
+                            <li>
+                                {term.token}
+                                <span>
+                                    {" "}
+                                    {term.count}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </Show>
 
             <Show when={props.tooltip.node.persistence_score !== undefined}>
-                <div>
+                <div class={styles.tooltipMeta}>
                     persistence{" "}
                     {props.tooltip.node.persistence_score!.toFixed(2)}
 
@@ -36,7 +52,7 @@ export default function Tooltip(props: TooltipProps) {
 
             <Show when={props.tooltip.node.event_sample?.length}>
                 <div class={styles.tooltipHint}>
-                    click for events →
+                    click for textual evidence →
                 </div>
             </Show>
         </aside>

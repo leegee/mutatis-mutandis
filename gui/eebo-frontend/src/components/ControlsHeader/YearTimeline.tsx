@@ -69,11 +69,10 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
 
   onMount(() => {
     window.addEventListener("keydown", handleKeyDown);
+
+    if (window) onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
   });
 
-  onCleanup(() => {
-    window.removeEventListener("keydown", handleKeyDown);
-  });
 
   return (
     <>

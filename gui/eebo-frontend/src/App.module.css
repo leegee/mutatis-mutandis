@@ -26,3 +26,18 @@ main {
 .results {
     border-right: 1pt solid #ddd2;
 }
+
+#app-nav.small a span {
+    display: none !important;
+}
+
+#app-nav.full a {
+    padding-left: var(--size) !important;
+    border-radius: 0 !important;
+    align-self: flex-start;
+}
+
+#app-nav a.active {
+    font-weight: bold;
+    color: var(--primary) !important;
+}

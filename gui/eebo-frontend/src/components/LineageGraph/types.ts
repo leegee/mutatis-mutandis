@@ -8,6 +8,11 @@ export type Neighbour = {
     depth: number;
 };
 
+export type ContextProfileItem = {
+    token: string;
+    count: number;
+}
+
 export type EventSample = {
     event_id: string;
     doc_id: string;
@@ -27,6 +32,7 @@ export type LineageNode = {
     persistence_score?: number;
     lineage_stable?: boolean;
     event_sample?: EventSample[];
+    context_profile: ContextProfileItem[]
     local?: {
         x: number;
         y: number;
