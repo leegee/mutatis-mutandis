@@ -1,16 +1,14 @@
 import { createEffect, createSignal, onMount, onCleanup, Show } from "solid-js";
 import * as d3 from "d3";
 
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
+
 import styles from "./LineageGraph.module.css";
 import Tooltip from "./Tooltip";
 import DetailPanel from "./DetailPanel";
-import type {
-    LineageData,
-    LineageNode,
-    ViewportRatio,
-    ScrollState,
-} from "./types";
+import type { LineageData, LineageNode, ViewportRatio, ScrollState, } from "./types";
 
+const YEAR_RANGE_FROM_DATA = false;
 
 type LineageGraphProps = {
     data: LineageData;
@@ -178,8 +176,13 @@ export default function LineageGraph(props: LineageGraphProps) {
         const height = rect.height;
 
         const years = [
-            ...new Set(graph.nodes.map(n => n.year))
+            ...new Set(
+                YEAR_RANGE_FROM_DATA
+                    ? graph.nodes.map(n => n.year)
+                    : d3.range(CORPUS_START_YEAR, CORPUS_END_YEAR + 1)
+            )
         ].sort();
+
 
         const margin = isOverview
             ? { left: 0, right: 10, top: 4, bottom: 4 }
