@@ -1,14 +1,16 @@
 import { execRows } from "../../services/db";
-import { type EdgeMeta, type NodeMeta, type Graph2Data, EDGE_KIND, NODE_KIND } from "./types";
+import { type EdgeMeta, type NodeMeta, type FDGData, EDGE_KIND, NODE_KIND } from "./types";
 
-export async function loadGraphData(
+export async function loadFDGData(
   concept: string
-): Promise<Graph2Data> {
-  console.debug('[graph2 loadGraphData]', concept)
+): Promise<FDGData> {
+  console.debug('[loadFDGData loadGraphData]', concept)
   // node id string to array index
   const idToIdx = new Map<string, number>();
   const nodes: NodeMeta[] = [];
   const edges: EdgeMeta[] = [];
+
+  const tokenCounts = new Map<number, Map<string, number>>();
 
   function addNode(n: NodeMeta): number {
     const existing = idToIdx.get(n.id);
@@ -58,26 +60,15 @@ export async function loadGraphData(
     }));
 
   // 2. Neighbours + semantic edges
-  const neighbourRows = await execRows(
-    `SELECT
-      n.event_id,
-      n.neighbour_event_id,
-      e.token,
-      e.doc_id,
-      e.pub_year,
-      e.window_id,
-      n.score,
-      e.token_idx,
-      e.nx,
-      e.ny
-   FROM neighbours n
-   INNER JOIN events e
-       ON e.event_id = n.neighbour_event_id
-   WHERE n.event_id IN (
-       SELECT event_id
-       FROM events
-       WHERE concept = ?
-   )`,
+  const neighbourRows = await execRows(`
+    SELECT
+      n.event_id, n.neighbour_event_id, e.token, e.doc_id,
+      e.pub_year, e.window_id, n.score, e.token_idx, e.nx, e.ny
+    FROM neighbours n
+    JOIN events e ON e.event_id = n.neighbour_event_id
+    JOIN events src ON src.event_id = n.event_id
+    WHERE src.concept = ?
+   `,
     [concept],
   );
 
@@ -88,14 +79,9 @@ export async function loadGraphData(
       string, string, string, string, number | null, number | null, number, number, number, number
     ];
 
-    // Prefer the event-node id if this neighbour is also a concept event
-    const nStringId = idToIdx.has(`e:${ neighbour_event_id }`)
-      ? `e:${ neighbour_event_id }`
-      : `n:${ neighbour_event_id }`;
-
     const tgtIdx = addNode({
-      id: nStringId,
-      kind: idToIdx.has(`e:${ neighbour_event_id }`) ? 0 : 1,
+      id: `e:${ neighbour_event_id }`,
+      kind: NODE_KIND.EVENT,
       label: String(token),
       docId: String(doc_id),
       pubYear: pub_year,
@@ -108,7 +94,16 @@ export async function loadGraphData(
     const srcIdx = idToIdx.get(`e:${ event_id }`);
     if (srcIdx === undefined) continue; // event must exist
 
-    edges.push({ srcIdx, tgtIdx, kind: 0, weight: Math.max(0, Number(score)) });
+    const tokenMap = tokenCounts.get(srcIdx) ?? new Map<string, number>();
+    tokenMap.set(token, (tokenMap.get(token) ?? 0) + 1);
+    tokenCounts.set(srcIdx, tokenMap);
+
+    edges.push({
+      srcIdx,
+      tgtIdx,
+      kind: EDGE_KIND.SEMANTIC,
+      weight: Math.max(0, Number(score))
+    });
   }
 
   // 3. Count neighbours
@@ -129,8 +124,14 @@ export async function loadGraphData(
   const buckets = new Map<string, number[]>(); // key to [nodeIdx, …]
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
-    if (n.kind !== 0 || n.docId == null || n.windowId == null) continue;
-    const key = `${ n.docId }::${ n.windowId }`;
+    if (
+      n.kind !== NODE_KIND.EVENT ||
+      n.docId == null ||
+      n.windowId == null
+    )
+      continue;
+
+    const key = `${ n.docId }::${ n.windowId } `;
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key)!.push(i);
   }
@@ -149,10 +150,10 @@ export async function loadGraphData(
   // 5. Concept membership
   if (true) {
     const cIdx = addNode({
-      id: `c:${ concept }`,
+      id: `c:${ concept } `,
       kind: NODE_KIND.CONCEPT,
       label: concept,
-      tokenIdx: -1 // TODO what?!
+      tokenIdx: -1 // No token Idx but required by the type
     });
     for (let i = 0; i < nodes.length; i++) {
       if (nodes[i].kind === NODE_KIND.EVENT) {
@@ -161,48 +162,22 @@ export async function loadGraphData(
     }
   }
 
-  // console.log("[ConceptGraph debug]");
-  // console.log("nodes:", nodes.length);
-  // console.log("edges:", edges.length);
+  for (const [idx, counts] of tokenCounts) {
+    nodes[idx].neighbourTokens = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+  }
 
-  // console.log(
-  //   "node kinds:",
-  //   nodes.reduce((a, n) => {
-  //     a[n.kind] = (a[n.kind] ?? 0) + 1;
-  //     return a;
-  //   }, {} as Record<number, number>)
-  // );
-
-  // console.log(
-  //   "edge kinds:",
-  //   edges.reduce((a, e) => {
-  //     a[e.kind] = (a[e.kind] ?? 0) + 1;
-  //     return a;
-  //   }, {} as Record<number, number>)
-  // );
-
-  // console.log(
-  //   "coordinates:",
-  //   {
-  //     x: [
-  //       Math.min(...nodes.map(n => n.x ?? Infinity)),
-  //       Math.max(...nodes.map(n => n.x ?? -Infinity)),
-  //     ],
-  //     y: [
-  //       Math.min(...nodes.map(n => n.y ?? Infinity)),
-  //       Math.max(...nodes.map(n => n.y ?? -Infinity)),
-  //     ],
-  //   }
-  // );
-
-  // console.table(
-  //   nodes.slice(0, 20).map(n => ({
-  //     id: n.id,
-  //     kind: n.kind,
-  //     x: n.x,
-  //     y: n.y
-  //   }))
-  // );
+  console.log(
+    "[loadFDGData] sample semantic fields",
+    [...tokenCounts.entries()]
+      .slice(0, 5)
+      .map(([idx]) => ({
+        idx,
+        label: nodes[idx].label,
+        tokens: nodes[idx].neighbourTokens,
+      }))
+  );
 
   return { nodes, edges, years };
 }

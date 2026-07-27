@@ -21,11 +21,12 @@ import { Graph } from "@cosmos.gl/graph";
 import type { YearMode } from "../../types";
 import { controls } from "../../state/controls.store";
 import { controlsActions } from "../../state/controls.actions";
-import { loadGraphData } from "./loadGraphData";
+import { loadFDGData } from "./loadFDGData";
 import MsgSettingLayout from "../MsgSettingLayout";
 import ControlsHeader from "../ControlsHeader";
 import SidebarMultiple from "../SidebarMultiple";
 import { NODE_KIND, EDGE_KIND, type NodeMeta, type EdgeMeta } from "./types";
+import { Tooltip, type TipData } from "./Tooltip";
 
 const USE_FIT_INTERVAL = false;
 
@@ -52,13 +53,17 @@ const NODE_SIZE: Record<number, number> = {
 };
 
 // queries
-
 function isNodeVisibleByTime(
   n: NodeMeta,
   yearMode: YearMode,
   fromYear: number,
   toYear: number
 ): boolean {
+
+  if (n.kind === NODE_KIND.CONCEPT) {
+    return true;
+  }
+
   if (yearMode === 'single') {
     return fromYear === n.pubYear;
   }
@@ -181,24 +186,6 @@ const Line: Component<{ color: string; label: string }> = (p) => (
   </div>
 );
 
-interface TipData { node: NodeMeta; x: number; y: number }
-
-const Tooltip: Component<{ tip: TipData }> = (p) => (
-  <aside class="surface-container-highest border padding large-elevate" style={{
-    position: "absolute",
-    left: `${ p.tip.x + 14 }px`,
-    top: `${ p.tip.y - 10 }px`,
-    "max-width": "240px",
-    "z-index": "10",
-  }}>
-    <h6> {p.tip.node.label} </h6>
-    {p.tip.node.docId && <div><span style={{ opacity: "0.45" }}>doc  </span>{p.tip.node.docId.slice(0, 20)}</div>}
-    {p.tip.node.pubYear && <div><span style={{ opacity: "0.45" }}>year </span>{p.tip.node.pubYear}</div>}
-    {p.tip.node.windowId != null && <div><span style={{ opacity: "0.45" }}>win  </span>{p.tip.node.windowId}</div>}
-    <div style={{ "margin-top": "4px", opacity: "0.35", "font-size": "10px" }}>{p.tip.node.id}</div>
-  </aside>
-);
-
 // Main component
 
 export const ConceptGraph: Component = () => {
@@ -219,7 +206,7 @@ export const ConceptGraph: Component = () => {
     () => [controls.concept] as [string],
     ([concept]) => {
       if (graph) graph.destroy();
-      return loadGraphData(concept);
+      return loadFDGData(concept);
     },
   );
 
@@ -227,7 +214,7 @@ export const ConceptGraph: Component = () => {
     let fitViewIntervalId: number;
 
     if (graph) {
-      console.debug("[graph2.setGraph] destroy old graph");
+      console.debug("[loadFDGData.setGraph] destroy old graph");
       graph.destroy();
     }
 
@@ -277,11 +264,11 @@ export const ConceptGraph: Component = () => {
     });
 
     if (USE_FIT_INTERVAL) fitViewIntervalId = setInterval(() => graph?.fitView(500), 1_000) as unknown as number;
-    console.debug("[graph2.setGraph] created new graph");
+    console.debug("[loadFDGData.setGraph] created new graph");
   }
 
   onMount(() => {
-    console.debug("[graph2.onMount] enter");
+    console.debug("[loadFDGData.onMount] enter");
     graphDivRef.addEventListener("mousemove", (e: MouseEvent) => {
       const rect = graphDivRef.getBoundingClientRect();
       mouseClientX = e.clientX - rect.left;
@@ -295,7 +282,7 @@ export const ConceptGraph: Component = () => {
 
   const handleCLick = (index: number | undefined) => {
     if (index) {
-      console.debug('[graph2.onClick]', nodeMeta[index]);
+      console.debug('[loadFDGData.onClick]', nodeMeta[index]);
       controlsActions.setSelectedEventIds(new Set([nodeMeta2EventId(index)]));
       graph?.selectPointByIndex(index);
     } else {
@@ -327,7 +314,7 @@ export const ConceptGraph: Component = () => {
     if (d !== data.latest) return;
 
     if (graph) {
-      console.debug("[graph2.effect 1] reset graph");
+      console.debug("[loadFDGData.effect 1] reset graph");
       setGraphProgress(0);
       setTooltip(null);
       controlsActions.setSelectedEventIds(null);
@@ -336,7 +323,7 @@ export const ConceptGraph: Component = () => {
 
     setGraph();
 
-    console.debug("[graph2.effect 1] set graph structure");
+    console.debug("[loadFDGData.effect 1] set graph structure");
 
     // graph!.setPointPositions(new Float32Array(d.nodes.length * 2));
     graph!.setPointPositions(buildPointPositions(d.nodes));
@@ -348,7 +335,7 @@ export const ConceptGraph: Component = () => {
 
     graph!.render();
     graph!.unpause();
-    console.debug("[graph2.effect 1] unpause");
+    console.debug("[loadFDGData.effect 1] unpause");
   });
 
   // Effect 2: visual-only, runs when filters change
@@ -358,7 +345,7 @@ export const ConceptGraph: Component = () => {
     if (data.loading || data.error) return;
     if (d !== data.latest) return;
 
-    console.debug("[graph2.effect 2] enter");
+    console.debug("[loadFDGData.effect 2] enter");
 
     const { yearMode, fromYear, toYear, topN } = controls;
 
@@ -374,10 +361,10 @@ export const ConceptGraph: Component = () => {
     graph.setLinkColors(buildLinkColors(d.edges, nodeVisible));
 
     graph.render();
-    console.debug("[graph2.effect 2] rendered");
+    console.debug("[loadFDGData.effect 2] rendered");
 
     if (paramsTokenIdx()) {
-      console.debug("[graph2.effect 2] find URL's token", params.token_idx);
+      console.debug("[loadFDGData.effect 2] find URL's token", params.token_idx);
       let foundPointIndex = -1;
       const buf: Float32Array = graph.getPointColors();
 
@@ -389,7 +376,7 @@ export const ConceptGraph: Component = () => {
           buf[i * 4 + 1] = HIGHLIGHTED_RGBA[1];
           buf[i * 4 + 2] = HIGHLIGHTED_RGBA[2];
           buf[i * 4 + 3] = HIGHLIGHTED_RGBA[3];
-          console.debug("[graph2.effect 2] found and highlighted", params.token_idx, 'at', i);
+          console.debug("[loadFDGData.effect 2] found and highlighted", params.token_idx, 'at', i);
           break;
         }
       }
@@ -399,15 +386,15 @@ export const ConceptGraph: Component = () => {
         controlsActions.setSelectedEventIds(new Set([nodeMeta2EventId(foundPointIndex)]));
         setSelectedPointIndex(foundPointIndex);
         graph.render();
-        console.debug("[graph2.effect 2] rendered  URL's token", params.token_idx);
+        console.debug("[loadFDGData.effect 2] rendered  URL's token", params.token_idx);
       } else {
-        console.debug("[graph2.effect 2] failed to find URL's token", params.token_idx);
+        console.debug("[loadFDGData.effect 2] failed to find URL's token", params.token_idx);
       }
     }
   });
 
   onCleanup(() => {
-    console.debug("[graph2.cleanup] enter");
+    console.debug("[loadFDGData.cleanup] enter");
     graph?.pause?.();
   });
 

@@ -13,6 +13,7 @@ export interface NodeMeta {
   tokenIdx: number;
   x?: number;
   y?: number;
+  neighbourTokens?: [string, number][];
 }
 
 export type EdgeKind = 0 | 1 | 2;
@@ -24,7 +25,7 @@ export interface EdgeMeta {
   weight: number; // 0–1
 }
 
-export type Graph2Data = {
+export type FDGData = {
   nodes: NodeMeta[];
   edges: EdgeMeta[];
   years?: YearBucket[];

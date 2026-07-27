@@ -64,7 +64,7 @@ export const routes = [
     )
   },
   {
-    path: "/graph2/:token_idx?",
+    path: "/fdg/:token_idx?",
     icon: "orbit",
     label: "FDG",
     component: FDG,
