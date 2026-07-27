@@ -2,6 +2,61 @@
 
 """
 tier4_0_lineage_graph.py
+
+Constructs and exports a temporal semantic lineage graph from Tier 3.1
+concept-year clusters.
+
+The graph is intended to show how regions of semantic usage space persist,
+split, merge, emerge, and disappear through time. Each node represents a
+cluster of contextual observations for a concept in a particular publication
+year.
+
+A contextual observation is a single occurrence of a concept-bearing lexical
+form in its source text, represented not merely by the token itself but by a
+vector encoding the surrounding textual context in which that occurrence
+appears.
+
+These observations are produced from Tier 1 contextual embeddings: each
+occurrence of a concept-bearing token in EEBO is located within its local
+linguistic environment and encoded by MacBERTh. Thus two occurrences of the
+same lexical form (for example, "law") are separate observations if they
+appear in different passages, documents, or rhetorical contexts. Conversely,
+occurrences from different documents may occupy nearby regions of semantic
+space when their surrounding contexts are similar.
+
+Clustering these observations therefore groups recurring patterns of
+meaning-in-use rather than occurrences of the same spelling alone. A node
+represents a historically situated pattern of usage: a set of contextual
+configurations in which a concept was employed during a particular period.
+
+Nodes are connected when their centroid representations indicate a likely
+continuation of the same semantic region in the following period.
+
+The graph does not claim that individual words or concepts have a single
+continuous historical identity. Instead, it models continuity and change in
+the distribution of observed meanings: a cluster may persist because its
+contextual usage remains close to its founding semantic position, branch into
+multiple descendants as usage differentiates, merge with other semantic
+regions, or terminate when no subsequent cluster provides a plausible
+continuation.
+
+Lineage assignment therefore combines two signals:
+
+    1. structural continuity:
+       whether a high-confidence temporal edge links two clusters;
+
+    2. semantic persistence:
+       whether the descendant cluster remains sufficiently close to the
+       founding centroid of its lineage rather than merely following a chain
+       of locally similar but progressively drifting clusters.
+
+The resulting graph is designed as an exploratory Digital Humanities
+instrument: a way to inspect possible trajectories of meaning change in the
+EEBO corpus, linking computationally identified semantic movements back to
+concrete contextual observations and source documents.
+
+The graph should therefore be read as a map of changing semantic landscapes,
+not as a deterministic model of lexical evolution.
 """
 
 from __future__ import annotations
@@ -144,6 +199,53 @@ def load_temporal_graph(con, concept):
     return G
 
 
+def aggregate_cluster_context(
+    con,
+    concept,
+    year,
+    cluster_id,
+    limit=10,
+):
+    rows = con.execute(
+        """
+        SELECT e.token
+        FROM concept_year_event_cluster c
+        JOIN events e
+             ON e.event_id = c.event_id
+        WHERE c.concept=?
+          AND c.pub_year=?
+          AND c.cluster_id=?
+        """,
+        (
+            concept,
+            year,
+            cluster_id,
+        ),
+    )
+
+    counts = {}
+
+    for (token,) in rows:
+        if not token:
+            continue
+
+        token = token.lower()
+
+        counts[token] = counts.get(token, 0) + 1
+
+    return [
+        {
+            "token": token,
+            "count": count,
+        }
+        for token, count in sorted(
+            counts.items(),
+            key=lambda x: x[1],
+            reverse=True,
+        )[:limit]
+    ]
+
+
 def assign_lineages(G):
     """
     Assigns a lineage id to every node, and additionally tracks semantic
@@ -166,11 +268,13 @@ def assign_lineages(G):
 
     nodes = sorted(
         G.nodes,
-        key=lambda n: G.nodes[n]["year"]
+        key=lambda n: (
+            G.nodes[n]["year"],
+            G.nodes[n]["cluster"],
+        )
     )
 
     for node in nodes:
-
         incoming = list(G.predecessors(node))
         node_vector = G.nodes[node].get("vector")
 
@@ -422,10 +526,19 @@ def sample_cluster_events(
     for event_id, doc_id, token_idx, token, ev_year in rows:
         neighbour_rows = con.execute(
             """
-            SELECT neighbour_event_id, token, doc_id, pub_year, token_idx, score, depth
-            FROM neighbours
-            WHERE event_id=?
-            ORDER BY score DESC
+            SELECT
+                n.neighbour_event_id,
+                e.token,
+                e.doc_id,
+                e.pub_year,
+                e.token_idx,
+                n.score,
+                n.depth
+            FROM neighbours n
+            JOIN events e
+                ON e.event_id = n.neighbour_event_id
+            WHERE n.event_id=?
+            ORDER BY n.score DESC
             LIMIT ?
             """,
             (event_id, neighbour_limit),
@@ -510,6 +623,9 @@ def export_lineage(con, concept, G):
             "event_sample": sample_cluster_events(
                 con, concept, year, cluster,
             ),
+            "context_profile": aggregate_cluster_context(
+                con, concept, year, cluster,
+            ),
         })
 
 
@@ -566,7 +682,7 @@ def export_lineage(con, concept, G):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--concept", help="Process a single concept" )
+    parser.add_argument( "--concept", help="Process a single concept rathan than all" )
     args = parser.parse_args()
 
     con = sqlite3.connect( CORPUS_TIER2_DB_PATH )

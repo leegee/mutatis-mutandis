@@ -114,13 +114,6 @@ class ZarrEventLookup:
     arrays (struct-of-arrays) keyed by row position, plus a single
     event_id -> row position dict.
 
-    When forms is provided, only events whose token matches one of the
-    supplied forms are loaded. This is the normal path for single-concept
-    runs and keeps memory use proportional to the concept, not the corpus.
-
-    When forms is None, all events are loaded. This is required when
-    querying across multiple concepts in a single run.
-
     vector_id is stored as metadata only — NOT used as a lookup key.
 
     Metadata is loaded eagerly into compact NumPy arrays. Embeddings remain in
@@ -145,17 +138,12 @@ class ZarrEventLookup:
     }
 
 
-    def __init__(self, root, forms: set[str] | None = None, false_positives: set[str] | None = None):
+    def __init__(self, root):
         self.root            = root
-        self.forms           = {f.lower() for f in forms} if forms else None
-        self.false_positives = {f.lower() for f in false_positives} if false_positives else set()
-
         self._pos: dict[int, int] = {}
         self._chunks: dict[str, list] = {field: [] for field in self._FIELDS}
-
         self._index = None
         self.emb_local = self.emb_medium = self.emb_broad = None   # set via attach_index()
-
         self._build()
 
 
@@ -175,17 +163,11 @@ class ZarrEventLookup:
 
     def _build(self):
         logger.info("[tier2] building event lookup with multi-scale embeddings")
-        if self.forms:
-            logger.info(f"[tier2] filtering to forms={self.forms}")
-        if self.false_positives:
-            logger.info(f"[tier2] excluding false_positives={self.false_positives}")
-
         for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
             if "events" not in g:
                 continue
             self._load_store(g["events"], store_dir)
-
         self._finalize()
         logger.info(f"[tier2] events={len(self._pos)}")
 
@@ -194,12 +176,6 @@ class ZarrEventLookup:
         """
         Load event metadata only. Embeddings remain resident in the per-year
         FAISS indices and are reconstructed lazily when accessed.
-
-        Performance note: Only metadata columns are read from the Zarr stores.
-        Embedding matrices are no longer loaded during lookup construction; instead,
-        vectors are reconstructed on demand from the corresponding per-year FAISS indices.
-        Concept filtering therefore only affects metadata loading, and lookup construction
-        is now essentially independent of embedding dimensionality.
         """
         if "event_id" not in e:
             raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
@@ -223,21 +199,7 @@ class ZarrEventLookup:
             b_docs = b_docs.astype(str)
             b_toks_lower = np.char.lower(b_toks)
 
-            if self.forms is not None:
-                keep = np.isin(b_toks_lower, list(self.forms))
-            else:
-                keep = np.ones(end - start, dtype=bool)
-
-            if self.false_positives:
-                keep &= ~np.isin(b_toks_lower, list(self.false_positives))
-
-            # Skip the expensive embedding reads entirely for batches with
-            # no matches - this is the actual fix. Previously b_local/
-            # b_medium/b_broad were read unconditionally above this point,
-            # so every batch paid full decompression cost regardless of
-            # whether `keep` had any True values.
-            if not keep.any():
-                continue
+            keep = np.ones(end - start, dtype=bool)
 
             self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
             self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
@@ -272,9 +234,7 @@ class ZarrEventLookup:
 
     def _require_index(self):
         if self.emb_local is None:
-            raise RuntimeError(
-                "attach_index() must be called before accessing embeddings."
-            )
+            raise RuntimeError( "attach_index() must be called before accessing embeddings." )
 
 
     def _finalize(self):
@@ -352,6 +312,19 @@ class ZarrEventLookup:
                 continue
             seen.add(eid)
             yield eid
+
+
+    def find_matching_event_ids(
+        self,
+        forms,
+        false_positives=None,
+    ):
+        return list(
+            self.iter_matching_event_ids(
+                forms,
+                false_positives,
+            )
+        )
 
 
     def get_pos(self, event_id: int) -> int:

@@ -126,16 +126,9 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS neighbours (
     event_id INTEGER NOT NULL,
     neighbour_event_id INTEGER NOT NULL,
+
     depth INTEGER NOT NULL DEFAULT 1,
     via_event_id INTEGER,
-
-    vector_id INTEGER,
-    token TEXT,
-    doc_id TEXT,
-    pub_year INTEGER,
-    token_idx INTEGER,
-    window_id INTEGER,
-    window_token_pos INTEGER,
 
     score REAL,
     score_local REAL,
@@ -203,7 +196,6 @@ CREATE INDEX IF NOT EXISTS idx_events_year                  ON events(concept, p
 CREATE INDEX IF NOT EXISTS idx_events_event_id              ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_event             ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_neighbour_event   ON neighbours(neighbour_event_id);
-CREATE INDEX IF NOT EXISTS idx_neighbours_token             ON neighbours(token);
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept            ON concept_aggregate(concept);
 
 """
@@ -228,6 +220,7 @@ def initialise_database(path: Path, clear: bool = False):
     """
 
     if clear and path.exists():
+        logger.info(f"Removing SQLite3 db from {path}")
         path.unlink()
     con = sqlite_connection(path)
     con.executescript(SCHEMA)
@@ -302,7 +295,7 @@ def enrich_documents(con, pg_connection, batch_size=1000):
         )
 
 
-def ensure_events(con, lookup, event_ids):
+def ensure_seed_events(con, lookup, event_ids):
     existing = {
         row[0]
         for row in con.execute( "SELECT event_id FROM events" )
@@ -318,8 +311,7 @@ def ensure_events(con, lookup, event_ids):
         event = lookup.get_event(eid)
 
         if event is None:
-            logger.warning( f"[tier2] missing zarr event {eid}" )
-            continue
+            raise RuntimeError( f"Tier1 event missing: {eid}" )
 
         rows.append( (
             int(eid),
@@ -400,33 +392,6 @@ def load_indices(paths_by_year, workers=6):
     return indexes
 
 
-# Concept retrieval
-#
-# The only semantic operation performed here is neighbourhood retrieval.
-# Interpretation and clustering happen later.
-def find_concept_events( lookup, forms, false_positives=None ):
-    forms = {
-        x.lower()
-        for x in forms
-    }
-
-    false_positives = {
-        x.lower()
-        for x in (false_positives or [])
-    }
-
-    events = []
-
-    for event_id in lookup.iter_matching_event_ids(
-        forms,
-        false_positives,
-    ):
-        events.append(event_id)
-
-    return events
-
-
-
 def analyse_concept(
     *,
     concept_name,
@@ -440,10 +405,7 @@ def analyse_concept(
 ):
     forms = {
         f.lower()
-        for f in concept.get(
-            "forms",
-            []
-        )
+        for f in concept.get("forms", [])
     }
 
     false_positives = {
@@ -453,7 +415,17 @@ def analyse_concept(
 
     logger.info( f"[tier2] {concept_name} forms: {sorted(forms)[:50]}" )
 
-    event_ids = find_concept_events( lookup, forms, false_positives)
+    event_ids = lookup.find_matching_event_ids(
+        forms,
+        false_positives,
+    )
+
+    logger.info( f"[tier2] {concept_name}: {len(event_ids)} events" )
+
+    event_ids = lookup.find_matching_event_ids(
+        forms,
+        false_positives,
+    )
 
     logger.info( f"[tier2] {concept_name}: {len(event_ids)} events" )
 
@@ -644,30 +616,28 @@ def delete_concept(con, concept):
 def write_concept(con, data, lookup):
     concept = data["concept"]
 
-    delete_concept( con, concept, )
+    delete_concept(con, concept)
 
-    event_ids = set()
-    doc_ids = set()
+    seed_events = data["events"]
 
-    for event in data["events"]:
-        event_ids.add(event["event_id"])
-        doc_ids.add(event["doc_id"])
+    event_ids = {
+        event["event_id"]
+        for event in seed_events
+    }
 
-        for neighbour in event["neighbours"]:
-            event_ids.add(neighbour["event_id"])
-            doc_ids.add(neighbour["doc_id"])
+    doc_ids = {
+        event["doc_id"]
+        for event in seed_events
+    }
 
-    # Ensure every referenced event exists before neighbour insertion.
-    # Missing events are normal: FAISS discovers them before they become
-    # first-class rows in SQLite.
-    ensure_events( con, lookup, event_ids, )
+    ensure_seed_events(con, lookup, event_ids)
 
-    # Every event referenced in events/neighbours must have a document row.
-    ensure_documents( con, doc_ids, )
+    # Documents belong to materialised Tier 2 events only.
+    ensure_documents(con, doc_ids)
 
     field_rows = []
 
-    for event in data["events"]:
+    for event in seed_events:
         field_rows.append(
             (
                 concept,
@@ -686,7 +656,13 @@ def write_concept(con, data, lookup):
             )
 
     con.execute(
-        "INSERT INTO concepts ( concept, n_events ) VALUES (?,?)",
+        """
+        INSERT INTO concepts (
+            concept,
+            n_events
+        )
+        VALUES (?,?)
+        """,
         (
             concept,
             data["n_events"],
@@ -695,21 +671,26 @@ def write_concept(con, data, lookup):
 
     for form in data.get("forms", []):
         con.execute(
-            "INSERT INTO concept_forms ( concept, form ) VALUES (?,?)",
+            """
+            INSERT INTO concept_forms (
+                concept,
+                form
+            )
+            VALUES (?,?)
+            """,
             (
                 concept,
                 form,
             ),
         )
 
-    # Only update the actual seed events here.
-    # ensure_events() already inserted neighbours as __derived__.
+    # Update only seed events.
+    # Retrieved neighbours remain Tier 1 references only.
     con.executemany(
         """
         UPDATE events
         SET
             concept = ?,
-            event_role = 'seed',
             vector_id = ?,
             token = ?,
             doc_id = ?,
@@ -731,13 +712,13 @@ def write_concept(con, data, lookup):
                 event["window_token_pos"],
                 event["event_id"],
             )
-            for event in data["events"]
+            for event in seed_events
         ],
     )
 
     neighbour_rows = []
 
-    for event in data["events"]:
+    for event in seed_events:
         for neighbour in event["neighbours"]:
             neighbour_rows.append(
                 (
@@ -745,13 +726,6 @@ def write_concept(con, data, lookup):
                     neighbour["event_id"],
                     neighbour["depth"],
                     neighbour["via_event_id"],
-                    neighbour["vector_id"],
-                    neighbour["token"],
-                    neighbour["doc_id"],
-                    neighbour["pub_year"],
-                    neighbour["token_idx"],
-                    neighbour["window_id"],
-                    neighbour["window_token_pos"],
                     neighbour["score"],
                     neighbour["score_local"],
                     neighbour["score_medium"],
@@ -762,17 +736,29 @@ def write_concept(con, data, lookup):
     con.executemany(
         """
         INSERT OR REPLACE INTO neighbours (
-            event_id, neighbour_event_id, depth, via_event_id, vector_id, token,
-            doc_id, pub_year, token_idx, window_id, window_token_pos, score,
-            score_local, score_medium, score_broad
-         )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            event_id,
+            neighbour_event_id,
+            depth,
+            via_event_id,
+            score,
+            score_local,
+            score_medium,
+            score_broad
+        )
+        VALUES (?,?,?,?,?,?,?,?)
         """,
         neighbour_rows,
     )
 
     con.executemany(
-        "INSERT OR REPLACE INTO concept_field_events ( concept, event_id, role ) VALUES (?,?,?)",
+        """
+        INSERT OR REPLACE INTO concept_field_events (
+            concept,
+            event_id,
+            role
+        )
+        VALUES (?,?,?)
+        """,
         field_rows,
     )
 
@@ -783,7 +769,13 @@ def write_concept(con, data, lookup):
     ):
         con.execute(
             """
-            INSERT INTO concept_aggregate ( concept, kind, rank, value, count )
+            INSERT INTO concept_aggregate (
+                concept,
+                kind,
+                rank,
+                value,
+                count
+            )
             VALUES (?,?,?,?,?)
             """,
             (
@@ -800,11 +792,21 @@ def write_concept(con, data, lookup):
     ):
         con.execute(
             """
-            INSERT INTO concept_aggregate ( concept, kind, rank, value, count )
+            INSERT INTO concept_aggregate (
+                concept,
+                kind,
+                rank,
+                value,
+                count
+            )
             VALUES (?,?,?,?,?)
             """,
             (
-                concept, "doc", rank, value, count,
+                concept,
+                "doc",
+                rank,
+                value,
+                count,
             ),
         )
 
@@ -813,11 +815,23 @@ def write_concept(con, data, lookup):
     ):
         con.execute(
             """
-            INSERT INTO concept_aggregate ( concept, kind, rank, window_doc_id, window_id, count )
+            INSERT INTO concept_aggregate (
+                concept,
+                kind,
+                rank,
+                window_doc_id,
+                window_id,
+                count
+            )
             VALUES (?,?,?,?,?,?)
             """,
             (
-                concept, "window", rank, doc_id, window_id, count,
+                concept,
+                "window",
+                rank,
+                doc_id,
+                window_id,
+                count,
             ),
         )
 
@@ -939,7 +953,6 @@ def main():
     parser.add_argument("--rrf-k", type=int, default=RRF_K)
     parser.add_argument("--oversample", type=int, default=OVERSAMPLE)
     parser.add_argument( "-w", "--max-load-workers", type=int, default=6)
-    parser.add_argument( "-r", "--repair-neighbours", action="store_true", help="Backfill neighbour lists for events that are missing them.", )
     parser.add_argument("--batch-size", type=int, default=5000)
     parser.add_argument("-fp", "--false-positives", type=str, default=None)
     args = parser.parse_args()
@@ -979,28 +992,9 @@ def main():
 
     lookup = ZarrEventLookup(
         zarr_path,
-        forms=target_forms,
-        false_positives=target_fps,
+        # forms=target_forms,
+        # false_positives=target_fps,
     )
-
-    # Repair mode is a separate work path
-    if args.repair_neighbours:
-        from lib.repair_neighbours import repair_missing_neighbours
-        lookup.attach_index(indexes)
-        con = sqlite_connection(db_path)
-        try:
-            repair_missing_neighbours(
-                con=con,
-                lookup=lookup,
-                indexes=indexes,
-                top_n=args.k,
-                rrf_k=args.rrf_k,
-                oversample=args.oversample,
-                batch_size=args.batch_size,
-            )
-        finally:
-            con.close()
-        return
 
     # Resolve which concepts still need work
     concepts = list(resolve_concepts(

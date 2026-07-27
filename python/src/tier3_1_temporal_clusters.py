@@ -678,7 +678,6 @@ def _init_worker(
     _WORKER_CON.execute("PRAGMA busy_timeout=30000")
 
     _WORKER_LOOKUP = ZarrEventLookup(zarr_path)
-
     _WORKER_LOOKUP.attach_index(
         load_indices(
             years,
@@ -797,6 +796,7 @@ def run_parallel( con, concepts, workers, db_path, years, masked, similarity_thr
         )
 
 
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -824,6 +824,9 @@ def main():
         if y > 0
     } )
 
+    lookup.attach_index(
+        load_indices( years, masked=args.mask, )
+    )
 
     all_rows = con.execute( "SELECT event_id FROM concept_field_events" )
 
@@ -843,7 +846,7 @@ def main():
     if args.workers > 1:
         run_parallel( con, concepts, args.workers, CORPUS_TIER2_DB_PATH, years, args.mask, args.similarity_threshold, args.resolution, args.neighbors,)
     else:
-        lookup.attach_index( load_indices( years, masked=args.mask, ) )
+        # lookup.attach_index( load_indices( years, masked=args.mask, ) )
         for concept in concepts:
             process_concept( con, lookup, concept, global_coords, args.resolution, args.neighbors)
 
