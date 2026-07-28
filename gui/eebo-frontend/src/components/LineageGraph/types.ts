@@ -1,11 +1,14 @@
 export type Neighbour = {
-    neighbour_event_id: number;
     token: string;
-    doc_id: string;
-    pub_year: number;
-    token_idx: number;
-    score: number;
-    depth: number;
+    count: number;
+    max_score: number;
+    examples: {
+        doc_id: string;
+        token_idx: number;
+        pub_year: number;
+        score: number;
+        depth: number;
+    }[];
 };
 
 export type ContextProfileItem = {

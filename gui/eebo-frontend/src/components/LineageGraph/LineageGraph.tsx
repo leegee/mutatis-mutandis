@@ -503,15 +503,14 @@ export default function LineageGraph(props: LineageGraphProps) {
                 });
 
             //
-            // years
+            // years labels
             //
-
             root.selectAll("text")
                 .data(years)
                 .enter()
                 .append("text")
                 .attr("x", yr => x(yr)!)
-                .attr("y", 40)
+                .attr("y", 20)
                 .attr("text-anchor", "middle")
                 .text(yr => yr);
         }

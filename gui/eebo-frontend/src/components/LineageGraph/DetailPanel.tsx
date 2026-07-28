@@ -3,6 +3,7 @@ import TextWindow from "../TextWindow";
 import styles from "./LineageGraph.module.css";
 
 import type { LineageNode } from "./types";
+import { showDocument } from "../../services/documentApi";
 
 type DetailPanelProps = {
     node: LineageNode;
@@ -60,39 +61,57 @@ export default function DetailPanel(props: DetailPanelProps) {
             </div>
 
 
-            <Show
-                when={props.node.event_sample?.length}
-                fallback={
-                    <p class={styles.detailPanelEmpty}>
-                        No sampled events.
-                    </p>
-                }
-            >
+            <Show when={props.node.event_sample?.length} fallback={
+                <p class={styles.detailPanelEmpty}> No sampled events. </p>
+            } >
                 <ul class={styles.eventList}>
                     <For each={props.node.event_sample}>
                         {ev => (
                             <li class={styles.eventItem}>
-                                <TextWindow
-                                    doc_id={String(ev.doc_id)}
-                                    token_idx={ev.token_idx}
-                                />
+                                <div onDblClick={() => showDocument(ev.doc_id, ev.token_idx)}>
+                                    <TextWindow
+                                        doc_id={String(ev.doc_id)}
+                                        token_idx={ev.token_idx}
+                                    />
+                                </div>
 
-                                <div class="tooltip top"> {ev.doc_id} @ {ev.token_idx} </div>
+                                <div class="tooltip top max">
+                                    {ev.doc_id} @ {ev.token_idx}<br />
+                                    <small>Double-click the excerpt for the full text</small>
+                                </div>
 
                                 <Show when={ev.neighbours.length}>
-                                    <ul class={styles.neighbourList}>
+                                    <ul class={"list no-space border"}>
                                         <For each={ev.neighbours}>
                                             {nb => (
                                                 <li class={styles.neighbourItem}>
-                                                    <span class={styles.neighbourToken}>
-                                                        {nb.token}
-                                                    </span>
+                                                    <div>
+                                                        <span class={styles.neighbourToken}>
+                                                            {nb.token}
+                                                        </span>
+                                                        <br />
 
-                                                    <span class={styles.neighbourMeta}>
-                                                        {nb.doc_id} @ {nb.token_idx}
-                                                        {" · "}
-                                                        {nb.score.toFixed(2)}
-                                                    </span>
+                                                        <span class={styles.neighbourMeta}>
+                                                            {"×"}
+                                                            {nb.count}
+                                                            {" · "}
+                                                            {nb.max_score.toFixed(2)}
+                                                        </span>
+                                                    </div>
+
+                                                    <ul class="list no-space border small-text">
+                                                        <For each={nb.examples}>
+                                                            {example => (
+                                                                <li>
+                                                                    {example.doc_id}
+                                                                    {" @ "}
+                                                                    {example.token_idx}
+                                                                    {" · "}
+                                                                    {example.score.toFixed(2)}
+                                                                </li>
+                                                            )}
+                                                        </For>
+                                                    </ul>
                                                 </li>
                                             )}
                                         </For>

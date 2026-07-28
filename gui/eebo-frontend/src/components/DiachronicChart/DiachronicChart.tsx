@@ -1,16 +1,10 @@
-import {
-  createSignal,
-  createMemo,
-  createResource,
-  For,
-  type Component,
-  Show,
-} from "solid-js";
+import { createSignal, createMemo, createResource, For, type Component, Show, } from "solid-js";
 
 import { type SortKey, type YearSlices, buildYearSlices } from "../../lib/yearUtils";
 import { getYearFiltered } from "../../state/controls.selectors";
 import ControlsHeader from "../ControlsHeader";
 import { controls } from "../../state/controls.store";
+
 import "./style.css";
 
 const CELL_WIDTH = 92;

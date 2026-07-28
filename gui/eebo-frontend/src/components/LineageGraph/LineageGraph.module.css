@@ -208,6 +208,7 @@
 
 .detailPanelMeta {
     display: flex;
+    align-items: flex-start;
     flex-wrap: wrap;
     gap: 6px 10px;
 
@@ -250,13 +251,6 @@
 
 .eventItem:last-child {
     border-bottom: none;
-}
-
-.neighbourList {
-    list-style: none;
-    margin: 0;
-    padding: 0 0 0 10px;
-    border-left: 2px solid var(--overlay-border);
 }
 
 .neighbourItem {
