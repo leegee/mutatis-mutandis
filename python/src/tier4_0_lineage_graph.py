@@ -64,7 +64,7 @@ from __future__ import annotations
 import argparse
 import sqlite3
 import json
-
+from collections import defaultdict
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -478,24 +478,14 @@ def sample_cluster_events(
     neighbour_limit=NEIGHBOUR_SAMPLE_SIZE,
 ):
     """
-    Pulls a small, deterministic sample of concrete events belonging to
-    this (concept, year, cluster) node -- doc_id/token_idx pairs the
-    reader can look up directly in the source text -- and, for each
-    sampled event, its top neighbours.
+    Pulls a small deterministic sample of concrete events belonging to
+    this (concept, year, cluster).
 
-    Sampling is spread evenly across event_id order (rather than the
-    first N or a random draw) so the sample isn't biased toward
-    whichever documents happened to be indexed first, and stays stable
-    across re-runs.
+    Events remain individual historical observations. Neighbours are
+    aggregated by lexical form for display so repeated contextual matches
+    do not overwhelm the detail panel.
 
-    NOTE: this joins through concept_year_event_cluster, NOT
-    events.cluster_id. events.cluster_id is written by the separate
-    tier3_0 whole-concept clustering pass and uses an unrelated
-    cluster_id numbering to tier3.1's per-year clustering, which is
-    what this lineage graph's nodes actually are. Requires
-    tier3_1_temporal_clusters.py to have been (re-)run with the
-    concept_year_event_cluster table added, since the mapping isn't
-    backfillable from events.cluster_id alone.
+    The underlying event ids and positions are retained inside examples.
     """
 
     rows = con.execute(
@@ -503,27 +493,54 @@ def sample_cluster_events(
         SELECT e.event_id, e.doc_id, e.token_idx, e.token, e.pub_year
         FROM concept_year_event_cluster c
         JOIN events e ON e.event_id = c.event_id
-        WHERE c.concept=? AND c.pub_year=? AND c.cluster_id=?
+        WHERE c.concept=?
+          AND c.pub_year=?
+          AND c.cluster_id=?
         ORDER BY e.event_id
         """,
-        (concept, year, cluster_id),
+        (
+            concept,
+            year,
+            cluster_id,
+        ),
     ).fetchall()
 
     if not rows:
         return []
 
+    # Protect against duplicate joins producing repeated observations.
+    seen_events = set()
+    unique_rows = []
+
+    for row in rows:
+        event_id = row[0]
+
+        if event_id in seen_events:
+            continue
+
+        seen_events.add(event_id)
+        unique_rows.append(row)
+
+    rows = unique_rows
+
     if len(rows) > event_limit:
         indices = sorted(
             set(
                 int(round(i))
-                for i in np.linspace(0, len(rows) - 1, event_limit)
+                for i in np.linspace(
+                    0,
+                    len(rows) - 1,
+                    event_limit,
+                )
             )
         )
+
         rows = [rows[i] for i in indices]
 
     samples = []
 
     for event_id, doc_id, token_idx, token, ev_year in rows:
+
         neighbour_rows = con.execute(
             """
             SELECT
@@ -541,38 +558,69 @@ def sample_cluster_events(
             ORDER BY n.score DESC
             LIMIT ?
             """,
-            (event_id, neighbour_limit),
+            (
+                event_id,
+                neighbour_limit * 5,
+            ),
         ).fetchall()
+
+        grouped = defaultdict(list)
+
+        for (
+            neighbour_event_id,
+            neighbour_token,
+            neighbour_doc_id,
+            neighbour_year,
+            neighbour_token_idx,
+            score,
+            depth,
+        ) in neighbour_rows:
+
+            grouped[neighbour_token.lower()].append(
+                {
+                    "neighbour_event_id": neighbour_event_id,
+                    "doc_id": neighbour_doc_id,
+                    "pub_year": neighbour_year,
+                    "token_idx": neighbour_token_idx,
+                    "score": score,
+                    "depth": depth,
+                }
+            )
 
         neighbours = [
             {
-                "neighbour_event_id": n_event_id,
-                "token": n_token,
-                "doc_id": n_doc_id,
-                "pub_year": n_pub_year,
-                "token_idx": n_token_idx,
-                "score": n_score,
-                "depth": depth,
+                "token": neighbour_token,
+                "count": len(events),
+                "max_score": max(
+                    e["score"]
+                    for e in events
+                ),
+                "examples": events[:3],
             }
-            for (
-                n_event_id,
-                n_token,
-                n_doc_id,
-                n_pub_year,
-                n_token_idx,
-                n_score,
-                depth,
-            ) in neighbour_rows
+            for neighbour_token, events in grouped.items()
         ]
 
-        samples.append({
-            "event_id": event_id,
-            "doc_id": doc_id,
-            "token_idx": token_idx,
-            "token": token,
-            "pub_year": ev_year,
-            "neighbours": neighbours,
-        })
+        # Rank semantic neighbours by recurrence first, similarity second.
+        neighbours.sort(
+            key=lambda n: (
+                n["count"],
+                n["max_score"],
+            ),
+            reverse=True,
+        )
+
+        neighbours = neighbours[:neighbour_limit]
+
+        samples.append(
+            {
+                "event_id": event_id,
+                "doc_id": doc_id,
+                "token_idx": token_idx,
+                "token": token,
+                "pub_year": ev_year,
+                "neighbours": neighbours,
+            }
+        )
 
     return samples
 

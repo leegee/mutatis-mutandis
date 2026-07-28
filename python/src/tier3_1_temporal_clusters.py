@@ -150,15 +150,6 @@ def delete_concept_clusters( con, concept, ):
 def sqlite_connection(path: Path, busy_timeout_ms: int = 30000):
     con = sqlite3.connect(path)
     con.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
-    # PERF: WAL lets readers and the writer coexist without blocking,
-    # and NORMAL synchronous still fsyncs at WAL checkpoints (safe against
-    # app crashes) but skips the fsync-per-commit that DELETE-mode/FULL
-    # synchronous does. Big win given how many commits this script used
-    # to issue. WAL is also what makes it safe for multiple worker
-    # processes (see --workers) to hold their own connection and commit
-    # concurrently -- writers still serialize at commit time, but readers
-    # are never blocked, and busy_timeout absorbs the brief serialization
-    # wait instead of raising "database is locked".
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=NORMAL")
     con.execute("PRAGMA wal_autocheckpoint=1000")
@@ -254,9 +245,6 @@ def write_year_cluster_info(
     pub_year,
     cluster_records,
 ):
-    # NOTE: the per-year delete that used to live here has moved to
-    # delete_concept_clusters(), called once per concept before the
-    # year loop -- see process_concept().
     rows = []
     for c in cluster_records:
         rows.append( (
@@ -444,13 +432,22 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
     logger.info( f"[tier3.1] building temporal edges {concept}" )
     delete_temporal_edges( con, concept )
 
+    # NOTE: must filter to cluster_id >= 0 here, matching
+    # load_year_clusters below. Without it, a year where the concept had
+    # observations but every one of them was classified as noise (no
+    # real cluster formed) still occupies a slot in this list. zip()
+    # then pairs that noise-only year as the immediate neighbor on both
+    # sides, both pairings hit the "if not source_clusters or not
+    # target_clusters: continue" guard below, and the two real years on
+    # either side of the gap never get compared at all -- silently
+    # orphaning whatever comes after the gap as a false "new lineage".
     years = [
         row[0]
         for row in con.execute(
             """
             SELECT DISTINCT pub_year
             FROM concept_year_cluster_info
-            WHERE concept=?
+            WHERE concept=? AND cluster_id >= 0
             ORDER BY pub_year
             """,
             (concept,),
@@ -506,13 +503,7 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
             # similarity score used for SIGNIFICANT edges below (~0..1),
             # since tier4_0_lineage_graph.py's CONFIDENCE_THRESHOLD and
             # its "rank candidate parents by confidence" logic compare
-            # confidence values across edge types directly. Previously
-            # this stored (best_score - second_score) -- the margin over
-            # the runner-up -- which is typically small (0.02-0.15) and
-            # almost never clears a 0.95 threshold, so tier4 treated
-            # nearly every node as a fresh lineage founder. The margin is
-            # still useful as a tie-break/ambiguity signal, so we keep it
-            # around, just not as the value that gets thresholded.
+            # confidence values across edge types directly.
             margin = best_score - second_score
             confidence = best_score
             if best_score >= similarity_threshold:
@@ -863,10 +854,6 @@ def main():
         # lookup.attach_index( load_indices( years, masked=args.mask, ) )
         for concept in concepts:
             process_concept( con, lookup, concept, global_coords, args.resolution, args.neighbors)
-
-            # This must run once per concept -- previously it was
-            # dedented to run only once after the loop, using whichever
-            # `concept` was left over from the final iteration.
             build_temporal_edges( con, concept, args.similarity_threshold )
         con.close()
     logger.info( "[tier3.1] Done." )
