@@ -60,9 +60,9 @@ from lib.concept_resolve import resolve_concepts
 from lib.get_processed_concepts import get_processed_concepts
 
 
-K = 50
+K = 60
 RRF_K = 60
-OVERSAMPLE = 3
+OVERSAMPLE = 5
 _NO_WPOS = -1
 
 
