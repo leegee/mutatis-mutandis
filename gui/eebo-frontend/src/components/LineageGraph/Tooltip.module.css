@@ -1,0 +1,66 @@
+/* hover tooltip  */
+
+.tooltip {
+    position: fixed;
+    z-index: 20;
+    pointer-events: none;
+    /* never intercept the mouse mid-hover */
+
+    max-width: 320px;
+    padding: 8px 10px;
+    /* appear instantly, no lag while scanning many nodes */
+    animation: tooltip-in 80ms ease-out;
+}
+
+.tooltipList {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.15rem 1rem;
+
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tooltipList li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    break-inside: avoid;
+}
+
+.tooltipList li span:last-child {
+    min-width: 2ch;
+    text-align: right;
+    opacity: 0.7;
+}
+
+@keyframes tooltip-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+
+@media (max-width: 640px) {
+    .detailPanel {
+        width: 100vw;
+    }
+
+    .tooltip {
+        max-width: 70vw;
+    }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+    .tooltip,
+    .detailPanel {
+        animation: none;
+    }
+}

@@ -295,7 +295,7 @@ def enrich_documents(con, pg_connection, batch_size=1000):
         )
 
 
-def ensure_seed_events(con, lookup, event_ids):
+def ensure_events(con, lookup, event_ids):
     existing = {
         row[0]
         for row in con.execute( "SELECT event_id FROM events" )
@@ -630,7 +630,15 @@ def write_concept(con, data, lookup):
         for event in seed_events
     }
 
-    ensure_seed_events(con, lookup, event_ids)
+    ensure_events(con, lookup, event_ids)
+
+    neighbour_event_ids = {
+        neighbour["event_id"]
+        for event in seed_events
+        for neighbour in event["neighbours"]
+    }
+
+    ensure_events(con, lookup, neighbour_event_ids)
 
     # Documents belong to materialised Tier 2 events only.
     ensure_documents(con, doc_ids)
@@ -684,8 +692,6 @@ def write_concept(con, data, lookup):
             ),
         )
 
-    # Update only seed events.
-    # Retrieved neighbours remain Tier 1 references only.
     con.executemany(
         """
         UPDATE events

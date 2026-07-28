@@ -66,60 +66,6 @@
     vector-effect: non-scaling-stroke;
 }
 
-/* ---------------------------------------------------------- */
-/* hover tooltip                                                */
-/* ---------------------------------------------------------- */
-
-.tooltip {
-    position: fixed;
-    transform: translateY(-80%);
-    z-index: 20;
-    pointer-events: none;
-    /* never intercept the mouse mid-hover */
-
-    max-width: 220px;
-    padding: 8px 10px;
-    border-radius: var(--overlay-radius);
-    border: 1px solid var(--overlay-border);
-    background: var(--overlay-bg);
-    color: var(--overlay-text);
-
-    font-family: var(--overlay-sans);
-    font-size: 12px;
-    line-height: 1.45;
-
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-
-    /* appear instantly, no lag while scanning many nodes */
-    animation: tooltip-in 80ms ease-out;
-}
-
-.tooltip strong {
-    display: block;
-    font-size: 12.5px;
-    font-weight: 600;
-    margin-bottom: 2px;
-}
-
-.tooltip div {
-    color: var(--overlay-text-dim);
-}
-
-.tooltipHint {
-    margin-top: 4px;
-    color: var(--overlay-accent) !important;
-    font-size: 11px;
-}
-
-@keyframes tooltip-in {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
 
 /* ---------------------------------------------------------- */
 /* click detail panel                                          */
@@ -282,10 +228,6 @@
     .detailPanel {
         width: 100vw;
     }
-
-    .tooltip {
-        max-width: 70vw;
-    }
 }
 
 /* ---------------------------------------------------------- */
@@ -294,7 +236,6 @@
 
 @media (prefers-reduced-motion: reduce) {
 
-    .tooltip,
     .detailPanel {
         animation: none;
     }
