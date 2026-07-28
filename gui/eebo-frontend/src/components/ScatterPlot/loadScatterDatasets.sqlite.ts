@@ -96,8 +96,7 @@ export async function loadDatasets(
                             neighbourhood_event.cluster_label,
                             n.depth
                         FROM concept_field_events seed
-                            JOIN neighbours n
-                                ON n.event_id = seed.event_id
+                            JOIN neighbours n ON n.event_id = seed.event_id
                             JOIN events neighbourhood_event
                                 ON neighbourhood_event.event_id = n.neighbour_event_id
                             WHERE seed.concept = ?
@@ -169,10 +168,8 @@ export async function loadDatasets(
                             e.cluster_id,
                             e.cluster_label
                         FROM concept_field_events f
-                            JOIN events e
-                                ON e.event_id = f.event_id
-                            LEFT JOIN documents d
-                                ON d.doc_id = e.doc_id
+                            JOIN events e         ON e.event_id = f.event_id
+                            LEFT JOIN documents d ON d.doc_id = e.doc_id
                             WHERE f.concept = ?
                             AND f.role = 'seed'
                           ${ author ? author.sql : "" }
