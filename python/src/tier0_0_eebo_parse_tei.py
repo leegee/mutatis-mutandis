@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
 eebo_parse_tei.py - Multi-process streaming EEBO TEI XML ingestion pipeline
+
+NB Currently all files  must originate in config.XML_ROOT
+
 """
 
 from __future__ import annotations
@@ -26,13 +29,15 @@ import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.eebo_logging import logger
 from lib.set_lang import set_document_languages
 
-MAX_DOCS: Optional[int] = None
-INGEST_ALL = True
+NUM_WORKERS = 4
+BATCH_DOCS = 100
+BATCH_TOKENS = 10000
 
 LOG_EVERY_N_DOCS = 100
-
 ALLOWED_PUNCT = r"\.\,\;\:\!\?\'\"\-\(\)"
 
+MAX_DOCS: Optional[int] = None
+INGEST_ALL = True
 
 def normalize_early_modern(text: str) -> str:
     text = text.lower()
@@ -171,9 +176,7 @@ def process_file(xml_path: Path):
         "pub_year": pub_year,
         "source_date_raw": date_raw,
         "token_count": len(tokens),
-        "filepath": str(
-            xml_path.relative_to(config.XML_ROOT_DIR).as_posix()
-        ),
+        "filepath": str( xml_path.relative_to(config.XML_ROOT_DIR).as_posix() ),
         "lang": lang,
     }
 
@@ -350,9 +353,9 @@ def main():
     if not args.justindex:
         ingest_xml_parallel(
             xml_dir=config.XML_ROOT_DIR,
-            max_workers=config.NUM_WORKERS,
-            batch_docs=config.BATCH_DOCS,
-            batch_tokens=config.BATCH_TOKENS,
+            max_workers=NUM_WORKERS,
+            batch_docs=BATCH_DOCS,
+            batch_tokens=BATCH_TOKENS,
         )
         # set_document_languages() - try to avoid this using lang detection above
 

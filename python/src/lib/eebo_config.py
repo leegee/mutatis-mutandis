@@ -3,19 +3,8 @@
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
-class FastTextParams(TypedDict):
-    model: str
-    dim: int
-    epoch: int
-    ws: int
-    minCount: int
-    thread: int
-    minn: int
-    maxn: int
-
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-EEBO_SRC_DIR = Path(__file__).resolve().parent
-XML_ROOT_DIR = BASE_DIR / "eebo_all"
+XML_ROOT_DIR = BASE_DIR / "texts"
 
 try:
     import google.colab  # noqa: F401
@@ -23,7 +12,8 @@ try:
 except ModuleNotFoundError:
     COLAB_MODE = False
 
-# It would be good to have some large docs (A91273) but we do not need complete Bibles
+# It would be good to have some large docs (A91273)
+# but complete Bibles maybe oveor-balance the index?
 MIN_TOKENS_IN_DOC = 200
 # MAX_TOKENS_IN_DOC = 350000 takes > 24 hours on my PC
 MAX_TOKENS_IN_DOC = 20000
@@ -111,14 +101,9 @@ def discover_index_years(masked: bool) -> list[int]:
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
-BATCH_DOCS = 100
-BATCH_TOKENS = 10000
 FASTTEXT_BATCH_SIZE = 50_000
 EMBED_BATCH_SIZE = 256
-INGEST_TOKEN_WINDOW_FALLBACK = 5  # around 5 tokens if sentence unavailable
-NUM_WORKERS = 4
 
-STOPWORD_FILE = EEBO_SRC_DIR / "stopwords" / "english_basic.txt"
 TOP_K = 30
 
 # For now, mirror in JSON file gui/eebo-frontend/corpus_config.ts
