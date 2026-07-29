@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TypedDict, Set, Dict
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-XML_ROOT_DIR = BASE_DIR / "texts"
+XML_ROOT_DIR = BASE_DIR / "corpus"
 
 try:
     import google.colab  # noqa: F401

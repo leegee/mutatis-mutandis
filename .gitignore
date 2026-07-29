@@ -34,18 +34,16 @@ faiss-cache/
 docs/uml/lib/plantuml*.jar
 
 __pycache__
-python/venv_spacy/
-python/macberth_env/
 python/test_output/
 python/src/macberth_pipe.egg-info/
 python/lib/
+python/lib/macberth-huggingface/pytorch_model.bin
+
 out/
 !./docs/uml/output
-out_old/
 faiss_cache/
 cache/
 *.zip
-python/lib/macberth-huggingface/pytorch_model.bin
 vard_outupt
 .mypy_cache
 .ruff_cache
@@ -84,5 +82,4 @@ python/macberth-onnx-fp32/
 python/temp.*
 gui/eebo-frontend/public/lineage/
 gui/dss-explorer/*
-
-texts/
+corpus/

@@ -36,8 +36,10 @@ BATCH_TOKENS = 10000
 LOG_EVERY_N_DOCS = 100
 ALLOWED_PUNCT = r"\.\,\;\:\!\?\'\"\-\(\)"
 
+# Threading these through everything is silly.
 MAX_DOCS: Optional[int] = None
 INGEST_ALL = True
+SCAN_ROOT: Path = config.XML_ROOT_DIR
 
 def normalize_early_modern(text: str) -> str:
     text = text.lower()
@@ -130,16 +132,6 @@ def process_file(xml_path: Path):
 
     doc_id = doc_id_elem.text.strip()
 
-    lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
-    if (lang == "en"):
-        lang = "eng"
-    elif not lang:
-        try:
-            detected_lang = langdetect.detect(raw_text[:5000])
-        except Exception:
-            detected_lang = None
-        lang = detected_lang
-
     title_elem = tree.find(".//HEADER//TITLESTMT/TITLE")
     author_elem = tree.find(".//HEADER//TITLESTMT/AUTHOR")
     pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
@@ -164,6 +156,16 @@ def process_file(xml_path: Path):
 
     if len(normalized) < 100:
         return None
+
+    lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
+    if (lang == "en"):
+        lang = "eng"
+    elif not lang:
+        try:
+            detected_lang = langdetect.detect(raw_text[:5000])
+        except Exception:
+            detected_lang = None
+        lang = detected_lang
 
     tokens = re.findall(r"\w+|[^\w\s]", normalized)
 
@@ -310,8 +312,16 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
     logger.info(f"[worker {os.getpid()}] finished: {docs_seen} docs processed")
 
 
-def ingest_xml_parallel(xml_dir: Path, max_workers: int = 4, batch_docs: int = 50, batch_tokens: int = 50000):
-    xml_files = list(Path(xml_dir).rglob("*.xml"))
+def ingest_xml_parallel(
+    xml_dir: Path | None = None,
+    max_workers: int     = 4,
+    batch_docs: int      = 50,
+    batch_tokens: int    = 50000
+):
+    if xml_dir is None:
+        xml_dir = SCAN_ROOT
+
+    xml_files = list(xml_dir.rglob("*.xml"))
 
     if MAX_DOCS:
         xml_files = xml_files[:MAX_DOCS]
@@ -332,12 +342,17 @@ def main():
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--create", action="store_true")
     parser.add_argument("--justindex", action="store_true")
+    parser.add_argument( "--input", type=Path, default=config.XML_ROOT_DIR, )
 
     args = parser.parse_args()
 
-    global MAX_DOCS, INGEST_ALL
-    MAX_DOCS = args.limit
-    INGEST_ALL = args.create or False
+    global MAX_DOCS, INGEST_ALL, SCAN_ROOT
+    MAX_DOCS    = args.limit
+    INGEST_ALL  = args.create or False
+    SCAN_ROOT   = args.input.resolve()
+
+    if not SCAN_ROOT.is_dir():
+        parser.error(f"Input directory does not exist: {SCAN_ROOT}")
 
     with eebo_db.get_connection() as conn:
         if args.create:
@@ -352,10 +367,10 @@ def main():
 
     if not args.justindex:
         ingest_xml_parallel(
-            xml_dir=config.XML_ROOT_DIR,
-            max_workers=NUM_WORKERS,
-            batch_docs=BATCH_DOCS,
-            batch_tokens=BATCH_TOKENS,
+            xml_dir      = SCAN_ROOT,
+            max_workers  = NUM_WORKERS,
+            batch_docs   = BATCH_DOCS,
+            batch_tokens = BATCH_TOKENS,
         )
         # set_document_languages() - try to avoid this using lang detection above
 
