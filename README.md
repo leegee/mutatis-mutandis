@@ -19,7 +19,9 @@
 >
 > Who during the 1600s was expressing in their own language concepts we differntly express today?
 >
-> Who were the terrorists of the 17th century? (Fanatics, Sectaries, Enthusiasts, Levellers, Diggers, Muggltonians, Anabaptists, Jesuits...)
+> How was our contemporary concept of privacy referenced in the past? Cf Entick v Carrington (1765)
+>
+> Who were considered terrorists in the 17th century? (Fanatics, Sectaries, Enthusiasts, Levellers, Diggers, Muggltonians, Anabaptists, Jesuits...)
 >
 > How in the past was the concept we term X referenced  if at all?
 
@@ -29,9 +31,13 @@ Can we recursively reverse search over diachronic ranges, taking top results for
 
 Ideally this project would build a complete Ontological Topology of a corpus, a gigantic semantic space as a structured geometric object, where meaning is illustrated by relative positions, continuity and deformation of distributions across time, rather than through dictionaries. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...
 
-So: instead of corpus-wide embedding, we recursively probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation.
+So: instead of corpus-wide embedding, we recursively probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation, and performed recursively in reverse chronological order:
 
-    EEBO-TCP TEI XML
+1. Search 2026-1926: search 'privacy' - store semantic neighbours
+1. Search 1826-2026: search above neighbours, store and repeat for previous century, etc
+
+
+        XML Corpus
             |
     Postgres (text + meta)
             |
@@ -44,8 +50,6 @@ So: instead of corpus-wide embedding, we recursively probe system where semantic
     Analysis (drift, clustering, interpretation)
             |
     GUI (Solid, d3, CosmosGL, DeckGL)
-
-
 
 Currently experimenting with ensemble embeddings. Ideally would process  clauses, sentances and paragraphs, but MacBERTh is somewhat restricted and EEBO somewhat noisy, so that is not trivial.
 
