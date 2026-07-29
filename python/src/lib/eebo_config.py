@@ -103,7 +103,6 @@ def discover_index_years(masked: bool) -> list[int]:
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
-FASTTEXT_BATCH_SIZE = 50_000
 EMBED_BATCH_SIZE = 256
 
 TOP_K = 30
@@ -111,7 +110,6 @@ TOP_K = 30
 CORPUS_MIN_YEAR = 1000
 CORPUS_MAX_YEAR = 1800
 
-# For now, mirror in JSON file gui/eebo-frontend/corpus_config.ts
 # These are no longer used.
 OLD_SLICES = [
     (1625, 1629),
