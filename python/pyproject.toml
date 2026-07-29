@@ -43,6 +43,8 @@ dependencies = [
     "zarr>=3.1.6",
     "grok>=6.2",
     "openai>=2.48.0",
+    "xxhash>=3.8.1",
+    "onnxruntime>=1.28.0",
 ]
 
 [tool.setuptools]

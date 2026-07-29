@@ -123,7 +123,7 @@ class MacBERThEmbedder:
 
     @property
     def hidden_size(self) -> int:
-        return self._hidden_size
+        return self.macberth.hidden_size
 
     def encode(
         self,
@@ -229,10 +229,17 @@ class OnnxMacberthModel:
     def __init__(self, tokenizer, session):
         self.tokenizer = tokenizer
         self.session = session
-        # Device execution (CPU vs DML) is decided by the ORT providers
-        # inside the session, not by tensor placement -- keep this "cpu"
-        # so MacBERThEmbedder's `.to(self.device)` calls are no-ops.
+
         self.device = "cpu"
+
+        # Read once from ONNX metadata rather than requiring transformers config.
+        # The exported encoder output shape is [batch, sequence, hidden_size].
+        output_shape = session.get_outputs()[0].shape
+        self._hidden_size = output_shape[-1]
+
+    @property
+    def hidden_size(self) -> int:
+        return self._hidden_size
 
     def encode(self, input_ids, attention_mask, token_type_ids=None, **kwargs):
         if token_type_ids is None:
@@ -243,12 +250,14 @@ class OnnxMacberthModel:
             "attention_mask": attention_mask.cpu().numpy(),
             "token_type_ids": token_type_ids.cpu().numpy(),
         }
+
         outputs = self.session.run(None, feed)
+
         last_hidden_state = torch.from_numpy(outputs[0])
-        return SimpleNamespace(last_hidden_state=last_hidden_state)
 
-
-ONNX_MODEL_DIR = Path("./macberth-onnx-fp32")
+        return SimpleNamespace(
+            last_hidden_state=last_hidden_state
+        )
 
 
 def _export_macberth_onnx(export_dir: Path = ONNX_MODEL_DIR) -> None:

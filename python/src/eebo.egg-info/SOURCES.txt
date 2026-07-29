@@ -58,6 +58,7 @@ src/lib/js_divergence.py
 src/lib/json.py
 src/lib/macberth.py
 src/lib/macberth_instance.py
+src/lib/repair_neighbours.py
 src/lib/segment_boundary.py
 src/lib/set_lang.py
 src/lib/sqlite_vector_blob.py

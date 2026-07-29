@@ -38,3 +38,5 @@ Requires-Dist: uvicorn==0.51.0
 Requires-Dist: zarr>=3.1.6
 Requires-Dist: grok>=6.2
 Requires-Dist: openai>=2.48.0
+Requires-Dist: xxhash>=3.8.1
+Requires-Dist: onnxruntime>=1.28.0
