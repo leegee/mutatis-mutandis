@@ -6,6 +6,8 @@ from typing import TypedDict, Set, Dict
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 XML_ROOT_DIR = BASE_DIR / "corpus"
 
+ECCO_HEADER_DIR = Path( "s:/src/pamphlets/corpus/ecco_all/ecco/headers" )
+
 try:
     import google.colab  # noqa: F401
     COLAB_MODE = True
@@ -106,9 +108,12 @@ EMBED_BATCH_SIZE = 256
 
 TOP_K = 30
 
+CORPUS_MIN_YEAR = 1000
+CORPUS_MAX_YEAR = 1800
+
 # For now, mirror in JSON file gui/eebo-frontend/corpus_config.ts
 # These are no longer used.
-SLICES = [
+OLD_SLICES = [
     (1625, 1629),
     (1630, 1634),
     (1635, 1639),

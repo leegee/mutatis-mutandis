@@ -36,6 +36,9 @@ BATCH_TOKENS = 10000
 LOG_EVERY_N_DOCS = 100
 ALLOWED_PUNCT = r"\.\,\;\:\!\?\'\"\-\(\)"
 
+# Per-worker lazy cache
+_ECCO_HEADER_INDEX = None
+
 # Threading these through everything is silly.
 MAX_DOCS: Optional[int] = None
 INGEST_ALL = True
@@ -49,8 +52,9 @@ def normalize_early_modern(text: str) -> str:
     text = text.encode("ascii", "ignore").decode("ascii")
 
     text = re.sub(r"-\s*", " ", text)
-    text = re.sub(r"\bv(?=[aeiou])", "u", text)
-    text = re.sub(r"\bj(?=[aeiou])", "i", text)
+    # I'm really not sure we ought to be messing with actual alphabetic chars
+    # text = re.sub(r"\bv(?=[aeiou])", "u", text)
+    # text = re.sub(r"\bj(?=[aeiou])", "i", text)
     text = re.sub(r"tv\b", "ty", text)
 
     text = re.sub(rf"[^{ALLOWED_PUNCT}a-z\s]", " ", text)
@@ -81,21 +85,27 @@ def render_text(node):
     return "".join(parts)
 
 
-def extract_year_and_slice(date_raw: str | None):
+def extract_year(date_raw: str | None):
     if not date_raw:
-        return None, None, None
+        return None
 
     m = re.search(r"\b(\d{4})\b", date_raw)
+
     if not m:
-        return None, None, None
+        return None
 
-    pub_year = int(m.group(1))
+    return int(m.group(1))
 
-    for start, end in config.SLICES:
-        if start <= pub_year <= end:
-            return start, end, pub_year
 
-    return None, None, None
+def year_in_corpus(pub_year: int | None):
+    if pub_year is None:
+        return False
+
+    return (
+        config.CORPUS_MIN_YEAR
+        <= pub_year
+        <= config.CORPUS_MAX_YEAR
+    )
 
 
 def safe_text(x):
@@ -119,17 +129,119 @@ def to_doc_row(meta: dict) -> tuple:
     )
 
 
-def process_file(xml_path: Path):
-    try:
-        tree = etree.parse(str(xml_path))
-    except Exception:
-        logger.warning(f"Failed to parse {xml_path}")
+def get_ecco_header_index():
+    """
+    Lazy-load ECCO header lookup on first ECCO document.
+    Each worker gets its own cache.
+    """
+    global _ECCO_HEADER_INDEX
+    if _ECCO_HEADER_INDEX is None:
+        logger.info( f"[worker {os.getpid()}] loading ECCO header index" )
+        _ECCO_HEADER_INDEX = {
+            p.name.removesuffix(".hdr"): p
+            for p in config.ECCO_HEADER_DIR.rglob("*.hdr")
+        }
+        logger.info( f"[worker {os.getpid()}] loaded {len(_ECCO_HEADER_INDEX)} ECCO headers" )
+    return _ECCO_HEADER_INDEX
+
+
+def find_ecco_header(doc_id):
+    index = get_ecco_header_index()
+    return index.get(doc_id)
+
+
+def extract_ecco_header_metadata(header_path):
+    tree = etree.parse(str(header_path))
+    title = tree.findtext(".//TITLESTMT/TITLE")
+    author = tree.findtext(".//TITLESTMT/AUTHOR")
+    pub = tree.find(".//SOURCEDESC//PUBLICATIONSTMT")
+    publisher = None
+    pub_place = None
+    date_raw = None
+    if pub is not None:
+        publisher = pub.findtext("PUBLISHER")
+        pub_place = pub.findtext("PUBPLACE")
+        date_raw = pub.findtext("DATE")
+    year = None
+    if date_raw:
+        m = re.search(r"\b(\d{4})\b", date_raw)
+        if m:
+            year = int(m.group(1))
+
+    return {
+        "title": title,
+        "author": author,
+        "publisher": publisher,
+        "pub_place": pub_place,
+        "source_date_raw": date_raw,
+        "pub_year": year,
+    }
+
+
+def process_ecco_file(tree, xml_path):
+    idg = tree.find(".//EEBO/IDG")
+
+    if idg is None:
+        logger.warning(f"No IDG")
         return None
 
+    doc_id = idg.attrib["ID"]
+
+    header_path = find_ecco_header(doc_id)
+    if header_path is None:
+        logger.warning(f"No ECCO header for {doc_id}")
+        return None
+
+    metadata = extract_ecco_header_metadata(header_path)
+
+    pub_year = extract_year(date_raw)
+    if not pub_year:
+        logger.warn(f"No pub_year in {doc_id}")
+        return
+    if not year_in_corpus(pub_year):
+        return None
+
+    body = tree.findall(".//EEBO/TEXT/BODY")
+
+    if not body:
+        logger.warning(f"No BODY for {doc_id}")
+        return None
+
+    raw_text = " ".join(
+        render_text(b)
+        for b in body
+    )
+
+    normalized = normalize_early_modern( eebo_ocr_fixes.apply_ocr_fixes(raw_text) )
+
+    if len(normalized) < 100:
+        return None
+
+    tokens = re.findall( r"\w+|[^\w\s]", normalized )
+
+    lang = tree.find(".//EEBO/TEXT").attrib.get("LANG")
+
+    meta = {
+        "doc_id": doc_id,
+        "title": metadata["title"],
+        "author": metadata["author"],
+        "publisher": metadata["publisher"],
+        "pub_place": metadata["pub_place"],
+        "pub_year": pub_year,
+        "source_date_raw": metadata["date_raw"],
+        "token_count": len(tokens),
+        "filepath": str( xml_path.relative_to(config.XML_ROOT_DIR).as_posix() ),
+        "lang": lang,
+    }
+
+    return meta, tokens
+
+
+def procses_eebo_file(tree, xml_path):
     doc_id_elem = tree.find(".//HEADER//IDNO[@TYPE='DLPS']")
     if doc_id_elem is None or not doc_id_elem.text:
+        logger.warning("process_file bailing as doc_id_elem not found")
         return None
-
     doc_id = doc_id_elem.text.strip()
 
     title_elem = tree.find(".//HEADER//TITLESTMT/TITLE")
@@ -137,15 +249,18 @@ def process_file(xml_path: Path):
     pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
     place_elem = tree.find(".//HEADER//SOURCEDESC//PUBPLACE")
     date_elem = tree.find(".//HEADER//SOURCEDESC//DATE")
-
     date_raw = safe_text(date_elem)
-    slice_start, slice_end, pub_year = extract_year_and_slice(date_raw)
 
-    if pub_year is None:
+    pub_year = extract_year(date_raw)
+    if not pub_year:
+        logger.warn(f"No pub_year in {doc_id}")
+        return
+    if not year_in_corpus(pub_year):
         return None
 
     body = tree.findall(".//EEBO//TEXT//BODY")
     if not body:
+        logger.warning("process_file bailing as BODY not defined")
         return None
 
     raw_text = " ".join(render_text(b) for b in body)
@@ -155,6 +270,7 @@ def process_file(xml_path: Path):
     )
 
     if len(normalized) < 100:
+        logger.warning("process_file bailing as normalised text length < 100")
         return None
 
     lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
@@ -183,6 +299,24 @@ def process_file(xml_path: Path):
     }
 
     return meta, tokens
+
+
+def process_file(xml_path: Path):
+    try:
+        tree = etree.parse(str(xml_path))
+    except Exception:
+        logger.warning(f"Failed to parse {xml_path}")
+        return None
+
+    root = tree.getroot()
+
+    if root.tag == "ETS":
+        return process_ecco_file(tree, xml_path)
+    elif root.tag == "TEI":
+        return procses_eebo_file(tree, xml_path)
+    else:
+        logger.warning(f"Failed to parse {xml_path}")
+        return None
 
 
 def process_file_to_temp(xml_path: Path):
@@ -232,6 +366,7 @@ def stream_copy(table: str, columns: list[str], rows):
 
 
 def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
+    logger.info( f"[worker {os.getpid()}] received {len(files)} files" )
     doc_batch = []
     token_batch = []
     inserted_doc_ids = set()
@@ -323,6 +458,12 @@ def ingest_xml_parallel(
 
     xml_files = list(xml_dir.rglob("*.xml"))
 
+    logger.info(f"Input directory: {xml_dir}")
+    logger.info(f"Found {len(xml_files)} XML files")
+
+    for x in xml_files[:5]:
+        logger.info(f"Example: {x}")
+
     if MAX_DOCS:
         xml_files = xml_files[:MAX_DOCS]
 
@@ -337,14 +478,28 @@ def ingest_xml_parallel(
             f.result()
 
 
+def validate_corpus_years():
+    if not isinstance(config.CORPUS_MIN_YEAR, int):
+        raise TypeError("CORPUS_MIN_YEAR must be an int")
+
+    if not isinstance(config.CORPUS_MAX_YEAR, int):
+        raise TypeError("CORPUS_MAX_YEAR must be an int")
+
+    if config.CORPUS_MIN_YEAR > config.CORPUS_MAX_YEAR:
+        raise ValueError(
+            "CORPUS_MIN_YEAR cannot be greater than CORPUS_MAX_YEAR"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--create", action="store_true")
     parser.add_argument("--justindex", action="store_true")
     parser.add_argument( "--input", type=Path, default=config.XML_ROOT_DIR, )
-
     args = parser.parse_args()
+
+    validate_corpus_years() # Eventually allow flags
 
     global MAX_DOCS, INGEST_ALL, SCAN_ROOT
     MAX_DOCS    = args.limit

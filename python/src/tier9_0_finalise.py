@@ -1,9 +1,9 @@
 from pathlib import Path
-from lib.eebo_config import GUI_PUBLIC_ROOT, CORPUS_TIER2_DB_URL, CORPUS_TIER2_MASKED_DB_URL, SLICES
+from lib.eebo_config import GUI_PUBLIC_ROOT, CORPUS_TIER2_DB_URL, CORPUS_TIER2_MASKED_DB_URL, CORPUS_MIN_YEAR, CORPUS_MAX_YEAR
 from lib.eebo_logging import logger
 
-CORPUS_START_YEAR = SLICES[0][0]
-CORPUS_END_YEAR = SLICES[-1][-1]
+CORPUS_START_YEAR = CORPUS_MIN_YEAR
+CORPUS_END_YEAR = CORPUS_MAX_YEAR
 
 output_path = Path(GUI_PUBLIC_ROOT) / "src" / "corpus_config.ts"
 
