@@ -27,7 +27,6 @@ import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.eebo_logging import logger
-from lib.set_lang import set_document_languages
 
 NUM_WORKERS = 4
 BATCH_DOCS = 100
@@ -41,7 +40,7 @@ _ECCO_HEADER_INDEX = None
 
 # Threading these through everything is silly.
 MAX_DOCS: Optional[int] = None
-INGEST_ALL = True
+SKIP_EXISTING_DOCS  = True
 SCAN_ROOT: Path = config.XML_ROOT_DIR
 
 def normalize_early_modern(text: str) -> str:
@@ -129,6 +128,33 @@ def to_doc_row(meta: dict) -> tuple:
     )
 
 
+def extract_language(tree, raw_text):
+    lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
+
+    if not lang:
+        text_node = tree.find(".//TEXT")
+        if text_node is not None:
+            lang = text_node.attrib.get("LANG")
+
+    if lang:
+        langs = re.findall(r"[a-z]{2,3}", lang.lower())
+
+        # Normalise English variants
+        if "eng" in langs or "en" in langs:
+            return "eng"
+
+        # Otherwise keep first recognised code
+        if langs:
+            return langs[0][:3]
+
+    # Last resort: detect from text
+    try:
+        detected = langdetect.detect(raw_text[:5000])
+        return detected[:3] if detected else None
+    except Exception:
+        return None
+
+
 def get_ecco_header_index():
     """
     Lazy-load ECCO header lookup on first ECCO document.
@@ -174,6 +200,7 @@ def extract_ecco_header_metadata(header_path):
         "publisher": publisher,
         "pub_place": pub_place,
         "source_date_raw": date_raw,
+        "date_raw": date_raw,
         "pub_year": year,
     }
 
@@ -194,14 +221,16 @@ def process_ecco_file(tree, xml_path):
 
     metadata = extract_ecco_header_metadata(header_path)
 
-    pub_year = extract_year(date_raw)
-    if not pub_year:
-        logger.warn(f"No pub_year in {doc_id}")
-        return
+    pub_year = metadata["pub_year"]
+
+    if pub_year is None:
+        logger.warning(f"No pub_year in {doc_id}")
+        return None
+
     if not year_in_corpus(pub_year):
         return None
 
-    body = tree.findall(".//EEBO/TEXT/BODY")
+    body = tree.findall(".//TEXT/BODY")
 
     if not body:
         logger.warning(f"No BODY for {doc_id}")
@@ -219,7 +248,7 @@ def process_ecco_file(tree, xml_path):
 
     tokens = re.findall( r"\w+|[^\w\s]", normalized )
 
-    lang = tree.find(".//EEBO/TEXT").attrib.get("LANG")
+    lang = extract_language(tree, raw_text)
 
     meta = {
         "doc_id": doc_id,
@@ -237,7 +266,7 @@ def process_ecco_file(tree, xml_path):
     return meta, tokens
 
 
-def procses_eebo_file(tree, xml_path):
+def process_eebo_file(tree, xml_path):
     doc_id_elem = tree.find(".//HEADER//IDNO[@TYPE='DLPS']")
     if doc_id_elem is None or not doc_id_elem.text:
         logger.warning("process_file bailing as doc_id_elem not found")
@@ -248,13 +277,13 @@ def procses_eebo_file(tree, xml_path):
     author_elem = tree.find(".//HEADER//TITLESTMT/AUTHOR")
     pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
     place_elem = tree.find(".//HEADER//SOURCEDESC//PUBPLACE")
+
     date_elem = tree.find(".//HEADER//SOURCEDESC//DATE")
     date_raw = safe_text(date_elem)
-
     pub_year = extract_year(date_raw)
-    if not pub_year:
-        logger.warn(f"No pub_year in {doc_id}")
-        return
+    if pub_year is None:
+        logger.warning(f"No pub_year in {doc_id}")
+        return None
     if not year_in_corpus(pub_year):
         return None
 
@@ -273,15 +302,7 @@ def procses_eebo_file(tree, xml_path):
         logger.warning("process_file bailing as normalised text length < 100")
         return None
 
-    lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
-    if (lang == "en"):
-        lang = "eng"
-    elif not lang:
-        try:
-            detected_lang = langdetect.detect(raw_text[:5000])
-        except Exception:
-            detected_lang = None
-        lang = detected_lang
+    lang = extract_language(tree, raw_text)
 
     tokens = re.findall(r"\w+|[^\w\s]", normalized)
 
@@ -313,7 +334,7 @@ def process_file(xml_path: Path):
     if root.tag == "ETS":
         return process_ecco_file(tree, xml_path)
     elif root.tag == "TEI":
-        return procses_eebo_file(tree, xml_path)
+        return process_eebo_file(tree, xml_path)
     else:
         logger.warning(f"Failed to parse {xml_path}")
         return None
@@ -365,7 +386,28 @@ def stream_copy(table: str, columns: list[str], rows):
                 copy.write(buf.read())
 
 
-def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
+# Temporary solution:
+def filter_existing_docs(rows):
+    if not rows:
+        return []
+
+    doc_ids = [r[0] for r in rows]
+
+    with eebo_db.get_connection() as conn:
+        cur = conn.execute(
+            "SELECT doc_id FROM documents WHERE doc_id = ANY(%s)",
+            (doc_ids,)
+        )
+
+        existing = {r[0] for r in cur.fetchall()}
+
+    return [
+        row for row in rows
+        if row[0] not in existing
+    ]
+
+
+def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs):
     logger.info( f"[worker {os.getpid()}] received {len(files)} files" )
     doc_batch = []
     token_batch = []
@@ -385,8 +427,8 @@ def _worker_ingest(files, batch_docs, batch_tokens, ingest_all):
         rows = doc_batch
         doc_batch = []
 
-        if not ingest_all:
-            rows = filter_existing_docs(rows)   # Make sure this function exists
+        if skip_existing_docs:
+            rows = filter_existing_docs(rows)
 
         if not rows:
             return
@@ -464,14 +506,14 @@ def ingest_xml_parallel(
     for x in xml_files[:5]:
         logger.info(f"Example: {x}")
 
-    if MAX_DOCS:
+    if MAX_DOCS is not None:
         xml_files = xml_files[:MAX_DOCS]
 
     chunks = [xml_files[i::max_workers] for i in range(max_workers)]
 
     with ProcessPoolExecutor(max_workers=max_workers) as ex:
         futures = [
-            ex.submit(_worker_ingest, chunk, batch_docs, batch_tokens, INGEST_ALL)
+            ex.submit(_worker_ingest, chunk, batch_docs, batch_tokens, SKIP_EXISTING_DOCS )
             for chunk in chunks
         ]
         for f in futures:
@@ -481,14 +523,16 @@ def ingest_xml_parallel(
 def validate_corpus_years():
     if not isinstance(config.CORPUS_MIN_YEAR, int):
         raise TypeError("CORPUS_MIN_YEAR must be an int")
-
     if not isinstance(config.CORPUS_MAX_YEAR, int):
         raise TypeError("CORPUS_MAX_YEAR must be an int")
-
     if config.CORPUS_MIN_YEAR > config.CORPUS_MAX_YEAR:
         raise ValueError(
             "CORPUS_MIN_YEAR cannot be greater than CORPUS_MAX_YEAR"
         )
+    if config.CORPUS_MIN_YEAR < 1000:
+        raise ValueError(f"Corpus CORPUS_MIN_YEAR appears invalid: '{config.CORPUS_MIN_YEAR}'")
+    if config.CORPUS_MAX_YEAR > 2100:
+        raise ValueError(f"Corpus CORPUS_MAX_YEAR appears invalid: '{config.CORPUS_MAX_YEAR}'")
 
 
 def main():
@@ -501,10 +545,10 @@ def main():
 
     validate_corpus_years() # Eventually allow flags
 
-    global MAX_DOCS, INGEST_ALL, SCAN_ROOT
-    MAX_DOCS    = args.limit
-    INGEST_ALL  = args.create or False
-    SCAN_ROOT   = args.input.resolve()
+    global MAX_DOCS, SKIP_EXISTING_DOCS , SCAN_ROOT
+    MAX_DOCS             = args.limit
+    SKIP_EXISTING_DOCS   = not args.create
+    SCAN_ROOT            = args.input.resolve()
 
     if not SCAN_ROOT.is_dir():
         parser.error(f"Input directory does not exist: {SCAN_ROOT}")
@@ -527,7 +571,6 @@ def main():
             batch_docs   = BATCH_DOCS,
             batch_tokens = BATCH_TOKENS,
         )
-        # set_document_languages() - try to avoid this using lang detection above
 
     # Wait for other connections to finish
     with eebo_db.get_connection() as conn:
