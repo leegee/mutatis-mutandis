@@ -61,6 +61,7 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
         break;
 
       case "Enter":
+      case "a":
         e.preventDefault();
         A.setAllYears();
         break;
