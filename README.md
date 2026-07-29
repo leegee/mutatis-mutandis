@@ -145,11 +145,13 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 ## To Do
 
-1. Update ZarrEventLookup to stream/yield
+1. metrics
+1. update ZarrEventLookup to stream/yield
 1. expose tier 2's analytics
 1. run tier 1's 'masked' path in the Cloud
 1. Finish remote job execution
 1. api result paging
+1. tier 1 should adopt fsspec
 
 ### DB
 
