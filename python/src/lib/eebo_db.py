@@ -207,7 +207,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
     logger.info("Creating tiered token indexes")
 
     earliest = config.CORPUS_MIN_YEAR
-    latest   = CORPUS_MAX_YEAR
+    latest   = config.CORPUS_MAX_YEAR
 
     # Create non-concurrent indexes and materialized views inside a transaction
     with conn.transaction():
