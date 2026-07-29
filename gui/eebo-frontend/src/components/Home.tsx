@@ -1,3 +1,5 @@
+import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../corpus_config";
+
 export default function Home() {
     return (
 
@@ -6,6 +8,7 @@ export default function Home() {
 
                 <header>
                     <h1>Corpus Viewer</h1>
+                    <h5>Selected short texts from {CORPUS_START_YEAR} - {CORPUS_END_YEAR}</h5>
                 </header>
 
                 <div class="s4 margin">
@@ -14,9 +17,6 @@ export default function Home() {
                     </p>
                 </div>
 
-                <footer class="fixed medium-opacity">
-                    Copyright &copy; Lee Goddard 2025-ff
-                </footer>
             </div>
         </article >
     );
