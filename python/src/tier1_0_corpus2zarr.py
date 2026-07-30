@@ -155,12 +155,12 @@ def is_content_token(token: str) -> bool:
 
 
 def is_mask_target(token: str) -> bool:
-    return is_content_token(token);
-    # normalised = unicodedata.normalize("NFKC", token).lower()
-    # return any(
-    #     normalised in concept["forms"]
-    #     for concept in CONCEPT_SETS.values()
-    # )
+    # return is_content_token(token);
+    normalised = unicodedata.normalize("NFKC", token).lower()
+    return any(
+        normalised in concept["forms"]
+        for concept in CONCEPT_SETS.values()
+    )
 
 
 @dataclass(slots=True)
@@ -168,6 +168,7 @@ class Event:
     event_id: np.int64
     concept_id: np.int64
     doc_id: str
+    corpus: str
     corpus_token_idx: int
     window_start: int
     window_start_token_idx: int
@@ -184,15 +185,29 @@ class Event:
 
 
     @staticmethod
-    def make(doc_id: str, corpus_token_idx: int, window_start_token_idx: int,
-             window_start: int, window_token_pos: int, token: str, vector_id: int,
-             vec: np.ndarray, config_name: str = "medium") -> Event:
-        concept_id = stable_hash(f"{doc_id}:{corpus_token_idx}")
+    def make(
+        corpus: str,
+        doc_id: str,
+        corpus_token_idx: int,
+        window_start_token_idx: int,
+        window_start: int,
+        window_token_pos: int,
+        token: str,
+        vector_id: int,
+        vec: np.ndarray,
+        config_name: str = "medium"
+    ) -> Event:
+        # concept_id = stable_hash(f"{doc_id}:{corpus_token_idx}")
+        # event_id = stable_hash( f"{doc_id}:{corpus_token_idx}:{window_start_token_idx}:{window_token_pos}:{config_name}" )
+        concept_id = stable_hash(
+            f"{corpus}:{doc_id}:{corpus_token_idx}"
+        )
         event_id = stable_hash(
-            f"{doc_id}:{corpus_token_idx}:{window_start_token_idx}:{window_token_pos}:{config_name}"
+            f"{corpus}:{doc_id}:{corpus_token_idx}:"
+            f"{window_start_token_idx}:{window_token_pos}:{config_name}"
         )
         return Event(
-            event_id=event_id, concept_id=concept_id, doc_id=doc_id,
+            event_id=event_id, concept_id=concept_id, doc_id=doc_id, corpus=corpus,
             corpus_token_idx=corpus_token_idx, window_start=window_start,
             window_start_token_idx=window_start_token_idx,
             window_token_pos=window_token_pos, token=token,
@@ -283,7 +298,7 @@ class EmbeddingPipeline:
             vectors = self._run_masked_window_batch(jobs)
             all_events.extend( self._events_from_masked_windows(buf, jobs, vectors, config["name"]) )
 
-        logger.info("Document %s: %d masked observations (target-only=%s)",
+        logger.info("[tier1] Document %s: %d masked observations (target-only=%s)",
                     buf.doc_id, len(all_events), self.mask_only_position)
         return all_events
 
@@ -302,7 +317,7 @@ class EmbeddingPipeline:
         self._window_alignment_checked = True  # disable after this call, pass or fail
 
         if not jobs:
-            logger.warning("Window-alignment check skipped: no jobs in first doc/config")
+            logger.warning("[tier1] Window-alignment check skipped: no jobs in first doc/config")
             return
 
         positions_by_word = defaultdict(set)
@@ -313,19 +328,19 @@ class EmbeddingPipeline:
 
         if not repeated:
             logger.warning(
-                "Window-alignment check: no word appeared in >1 window for this doc "
+                "[tier1] Window-alignment check: no word appeared in >1 window for this doc "
                 "(doc too short to exercise overlap) — check inconclusive, not a failure"
             )
             return
 
         sample_wid, n_positions = next(iter(repeated.items()))
         logger.info(
-            "Window-alignment check passed: word_id=%d appears in %d windows with distinct target_encoded_pos values (%s)",
+            "[tier1] Window-alignment check passed: word_id=%d appears in %d windows with distinct target_encoded_pos values (%s)",
             sample_wid, n_positions, sorted(positions_by_word[sample_wid])
         )
 
         assert all(n >= 2 for n in repeated.values()), (
-            "Window-alignment check failed: a word repeated across windows but target_encoded_pos did not vary: ",
+            "[tier1] Window-alignment check failed: a word repeated across windows but target_encoded_pos did not vary: ",
             "window_token_pos will collapse distinct window observations in _flush's grouping key."
         )
 
@@ -430,6 +445,7 @@ class EmbeddingPipeline:
 
             events.append( Event.make(
                     doc_id=buf.doc_id,
+                    corpus=buf.corpus,
                     corpus_token_idx=buf.corpus_token_idxs[word_id],
                     window_start_token_idx=buf.corpus_token_idxs[
                         job.get("window_start", 0)
@@ -587,6 +603,7 @@ class EmbeddingPipeline:
                 continue
             events.append(Event.make(
                 doc_id=buf.doc_id,
+                corpus=buf.corpus,
                 corpus_token_idx=buf.corpus_token_idxs[wid],
                 window_start_token_idx=window_start_token_idx,
                 window_start=window_start,
@@ -619,7 +636,7 @@ class CorpusProcessor:
         if self.shard is None or self.num_shards <= 1:
             return "", []
         # abs() because hashtext can be negative; %% escapes the literal % for psycopg2
-        return " AND abs(hashtext(doc_id)) %% %s = %s", [self.num_shards, self.shard]
+        return " AND abs(hashtext(corpus || ':' || doc_id)) %% %s = %s", [self.num_shards, self.shard]
 
     def process(self, doc_id=None):
         store = ZarrEmbeddingObservationStore(
@@ -627,10 +644,11 @@ class CorpusProcessor:
             dim=self.pipeline.hidden_size
         )
 
-        already_processed = set(store.get_doc_ids())
+        # already_processed = set(store.get_doc_ids())
+        already_processed = set(store.get_doc_keys())
         completed_docs = len(already_processed)
 
-        logger.info("Already processed: %d", completed_docs)
+        logger.info("[tier1] Already processed: %d", completed_docs)
 
         shard_sql, shard_params = self._shard_clause()
 
@@ -638,44 +656,46 @@ class CorpusProcessor:
         count_cur = self.conn.cursor()
         if doc_id:
             count_cur.execute(
-                f"SELECT COUNT(DISTINCT doc_id) FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}",
+                f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}",
                 [doc_id] + shard_params
             )
         else:
             count_cur.execute(
-                f"SELECT COUNT(DISTINCT doc_id) FROM pamphlet_tokens WHERE 1=1{shard_sql}",
+                f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE 1=1{shard_sql}",
                 shard_params
             )
         total_docs = count_cur.fetchone()[0]
         count_cur.close()
-        logger.info("Documents in scope: %d", total_docs)
+        logger.info("[tier1] Documents in scope: %d", total_docs)
 
         cur = self.conn.cursor(name="tier1_cursor")
         cur.itersize = 10000
 
         if doc_id:
             cur.execute(
-                f"""SELECT doc_id, token_idx, vector_id, token, pub_year
+                f"""SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
                     FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}
                     ORDER BY token_idx""",
                 [doc_id] + shard_params
             )
         else:
             cur.execute(
-                f"""SELECT doc_id, token_idx, vector_id, token, pub_year
+                f"""SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
                     FROM pamphlet_tokens WHERE 1=1{shard_sql}
-                    ORDER BY doc_id, token_idx""",
+                    ORDER BY corpus, doc_id, token_idx""",
                 shard_params
             )
 
-        logger.info("Query executed for doc_id=%s", doc_id)
+        logger.info("[tier1] Query executed for doc_id=%s", doc_id)
         buf = None
 
-        for row_doc_id, token_idx, vid, token, pub_year in cur:
-            if row_doc_id in already_processed:
+        for row_corpus, row_doc_id, token_idx, vid, token, pub_year in cur:
+            doc_key = (row_corpus, row_doc_id)
+
+            if doc_key in already_processed:
                 continue
 
-            if buf is None or row_doc_id != buf.doc_id:
+            if buf is None or doc_key != buf.key:
                 if buf:
                     self._flush(buf, store)
                     completed_docs += 1
@@ -686,9 +706,10 @@ class CorpusProcessor:
                             if total_docs
                             else 0
                         )
-                        logger.info( "Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct )
+                        logger.info( "[tier1] Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct )
 
                 buf = DocBuffer(
+                    corpus=row_corpus,
                     doc_id=row_doc_id,
                     pub_year=pub_year
                 )
@@ -696,7 +717,7 @@ class CorpusProcessor:
             buf.append(token, vid, token_idx)
 
         # Final document
-        if buf and buf.doc_id not in already_processed:
+        if buf and buf.key not in already_processed:
             self._flush(buf, store)
             completed_docs += 1
 
@@ -705,14 +726,14 @@ class CorpusProcessor:
                 if total_docs
                 else 0
             )
-            logger.info( "Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct )
+            logger.info( "[tier1] Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct )
 
     def _flush(self, buf, store):
         start = time.perf_counter()
 
         raw_events = self.pipeline.embed_doc(buf)
 
-        logger.info( "Embedding %s took %.2fs", buf.doc_id, time.perf_counter() - start )
+        logger.info( "[tier1] Embedding %s took %.2fs", buf.doc_id, time.perf_counter() - start )
 
         if not raw_events:
             return
@@ -721,16 +742,23 @@ class CorpusProcessor:
         events_by_token = defaultdict(dict)
 
         for e in raw_events:
-            key = (e.corpus_token_idx, e.window_token_pos)
+            # key = (e.corpus_token_idx, e.window_token_pos)
+            key = (
+                e.corpus,
+                e.doc_id,
+                e.corpus_token_idx,
+                e.window_token_pos
+            )
             events_by_token[key][e.config_name] = e
 
-        logger.info( "aligned observations: %d", len(events_by_token) )
+        logger.info( "[tier1] Aligned observations: %d", len(events_by_token) )
 
         # Build aligned arrays (same schema as before)
         event_ids, concept_ids = [], []
         emb_local, emb_medium, emb_broad = [], [], []
         vector_ids, doc_ids, token_idxs, tokens = [], [], [], []
         window_ids, window_token_poss = [], []
+        corpora = []
 
         for key, config_dict in events_by_token.items():
             if len(config_dict) < 2:
@@ -746,6 +774,7 @@ class CorpusProcessor:
             emb_broad.append(config_dict.get("broad", canonical).vec)
 
             vector_ids.append(canonical.vector_id)
+            corpora.append(canonical.corpus)
             doc_ids.append(canonical.doc_id)
             token_idxs.append(canonical.corpus_token_idx)
             tokens.append(canonical.token)
@@ -755,7 +784,7 @@ class CorpusProcessor:
         if not event_ids:
             return
 
-        logger.info(f"Doc {buf.doc_id}: {len(event_ids):,} tokens with multi-scale embeddings "
+        logger.info(f"[tier1] Doc {buf.doc_id}: {len(event_ids):,} tokens with multi-scale embeddings "
                    f"({'masked' if self.pipeline.mask_targets else 'unmasked'})")
 
         store.append_events(
@@ -765,7 +794,8 @@ class CorpusProcessor:
             emb_medium          = np.stack(emb_medium),
             emb_broad           = np.stack(emb_broad),
             vector_id           = np.asarray(vector_ids, dtype=np.int64),
-            doc_id              = np.asarray(doc_ids, dtype="U32"),
+            doc_id              = np.asarray(doc_ids, dtype="U64"),
+            corpus              = np.asarray(corpora, dtype="U32"),
             pub_year            = np.full(len(event_ids), buf.pub_year, dtype=np.int16),
             token_idx           = np.asarray(token_idxs, dtype=np.int64),
             token               = np.asarray(tokens, dtype=object),
@@ -800,12 +830,12 @@ def main():
 
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))  # match OMP/MKL env vars — intra-op parallelism
     torch.set_num_interop_threads(1)                                  # not running parallel independent ops, so keep this low
-    logger.info("Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
+    logger.info("[tier1] Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
 
     if args.backend == "pytorch":
         torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))
         torch.set_num_interop_threads(1)
-        logger.info("Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
+        logger.info("[tier1] Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
 
     if args.mask:
         base_path = MASKED_ZARR_PATH
@@ -820,7 +850,7 @@ def main():
         zarr_path = base_path
 
     if args.clear:
-        logger.info("Clearing Tier 1 output")
+        logger.info("[tier1] Clearing Tier 1 output")
         clear_output_dir(zarr_path)
 
     conn = get_connection()
