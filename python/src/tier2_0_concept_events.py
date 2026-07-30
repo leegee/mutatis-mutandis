@@ -30,13 +30,11 @@ Important invariants:
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import sqlite3
 from pathlib import Path
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+from psycopg import sql
 import numpy as np
 
 from lib.eebo_config import (
@@ -75,17 +73,6 @@ _NO_WPOS = -1
 
 SCHEMA = """
 
-CREATE TABLE IF NOT EXISTS documents (
-    doc_id TEXT PRIMARY KEY,
-    title TEXT,
-    author TEXT,
-    pub_year INTEGER,
-    publisher TEXT,
-    pub_place TEXT,
-    normalized_places TEXT,
-    lat REAL,
-    lng REAL
-);
 
 CREATE TABLE IF NOT EXISTS concepts (
     concept TEXT PRIMARY KEY,
@@ -99,7 +86,22 @@ CREATE TABLE IF NOT EXISTS concept_forms (
     PRIMARY KEY(concept, form)
 );
 
+CREATE TABLE IF NOT EXISTS documents (
+    corpus TEXT NOT NULL,
+    doc_id TEXT NOT NULL,
+    title TEXT,
+    author TEXT,
+    pub_year INTEGER,
+    publisher TEXT,
+    pub_place TEXT,
+    normalized_places TEXT,
+    lat REAL,
+    lng REAL,
+    PRIMARY KEY(corpus, doc_id)
+);
+
 CREATE TABLE IF NOT EXISTS events (
+    corpus TEXT NOT NULL,
     event_id INTEGER PRIMARY KEY,
     concept TEXT,
     event_role TEXT NOT NULL DEFAULT 'neighbour',
@@ -192,7 +194,8 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_concept               ON events(concept);
-CREATE INDEX IF NOT EXISTS idx_events_year                  ON events(concept, pub_year);
+CREATE INDEX IF NOT EXISTS idx_events_year                  ON events(corpus, concept, pub_year);
+CREATE INDEX IF NOT EXISTS idx_events_document              ON events(corpus, doc_id);
 CREATE INDEX IF NOT EXISTS idx_events_event_id              ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_event             ON neighbours(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_neighbour_event   ON neighbours(neighbour_event_id);
@@ -231,11 +234,11 @@ def initialise_database(path: Path, clear: bool = False):
 
 def ensure_documents(con, doc_ids):
     rows = [
-        (str(doc_id),)
-        for doc_id in doc_ids
+        (corpus, str(doc_id))
+        for corpus, doc_id in doc_ids
     ]
     con.executemany(
-        "INSERT OR IGNORE INTO documents ( doc_id ) VALUES (?)",
+        "INSERT OR IGNORE INTO documents ( corpus, doc_id ) VALUES (?, ?)",
         rows,
     )
 
@@ -249,25 +252,44 @@ def chunks(seq, size):
 
 
 def enrich_documents(con, pg_connection, batch_size=1000):
-    doc_ids = [
-        row[0]
-        for row in con.execute("SELECT doc_id FROM documents WHERE title IS NULL")
+    doc_keys = [
+        (row[0], row[1])
+        for row in con.execute(
+            """
+            SELECT corpus, doc_id
+            FROM documents
+            WHERE title IS NULL
+            """
+        )
     ]
 
-    for batch in chunks(doc_ids, batch_size):
+    for batch in chunks(doc_keys, batch_size):
+
+        placeholders = sql.SQL(",").join(
+            sql.SQL("(%s,%s)")
+            for _ in batch
+        )
+
         rows = pg_connection.execute(
-            """
-            SELECT
-                doc_id,
-                title,
-                author,
-                pub_year,
-                publisher,
-                pub_place
-            FROM documents
-            WHERE doc_id = ANY(%s)
-            """,
-            (batch,),
+            sql.SQL(
+                """
+                SELECT
+                    corpus,
+                    doc_id,
+                    title,
+                    author,
+                    pub_year,
+                    publisher,
+                    pub_place
+                FROM documents
+                WHERE (corpus, doc_id) IN ({})
+                """
+            ).format(placeholders),
+            [
+                value
+                for key in batch
+                for value in key
+            ],
         )
 
         con.executemany(
@@ -279,21 +301,21 @@ def enrich_documents(con, pg_connection, batch_size=1000):
                 pub_year=?,
                 publisher=?,
                 pub_place=?
-            WHERE doc_id=?
+            WHERE corpus=? AND doc_id=?
             """,
             [
                 (
-                    r[1],  # title
-                    r[2],  # author
-                    r[3],  # pub_year
-                    r[4],  # publisher
-                    r[5],  # pub_place
-                    r[0],  # doc_id
+                    r[2],
+                    r[3],
+                    r[4],
+                    r[5],
+                    r[6],
+                    r[0],
+                    r[1],
                 )
                 for r in rows
-            ]
+            ],
         )
-
 
 def ensure_events(con, lookup, event_ids):
     existing = {
@@ -313,8 +335,9 @@ def ensure_events(con, lookup, event_ids):
         if event is None:
             raise RuntimeError( f"Tier1 event missing: {eid}" )
 
-        rows.append( (
+        rows.append((
             int(eid),
+            event["corpus"],
             None,
             "neighbour",
             int(event["vector_id"]),
@@ -324,7 +347,7 @@ def ensure_events(con, lookup, event_ids):
             int(event["token_idx"]),
             int(event["window_id"]),
             int(event["window_token_pos"]),
-        ) )
+        ))
 
     if not rows:
         return
@@ -333,6 +356,7 @@ def ensure_events(con, lookup, event_ids):
         """
         INSERT OR IGNORE INTO events (
             event_id,
+            corpus,
             concept,
             event_role,
             vector_id,
@@ -343,7 +367,7 @@ def ensure_events(con, lookup, event_ids):
             window_id,
             window_token_pos
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """,
         rows,
     )
@@ -414,13 +438,6 @@ def analyse_concept(
     }
 
     logger.info( f"[tier2] {concept_name} forms: {sorted(forms)[:50]}" )
-
-    event_ids = lookup.find_matching_event_ids(
-        forms,
-        false_positives,
-    )
-
-    logger.info( f"[tier2] {concept_name}: {len(event_ids)} events" )
 
     event_ids = lookup.find_matching_event_ids(
         forms,
@@ -539,6 +556,7 @@ def analyse_concept(
                 "event_id": event_id,
                 "vector_id": int( lookup.vector_id[pos] ),
                 "token": str( lookup.token[pos] ),
+                "corpus": str(lookup.corpus[pos]),
                 "doc_id": str( lookup.doc_id[pos] ),
                 "pub_year": int( lookup.pub_year[pos] ),
                 "token_idx": int( lookup.token_idx[pos] ),
@@ -625,8 +643,11 @@ def write_concept(con, data, lookup):
         for event in seed_events
     }
 
-    doc_ids = {
-        event["doc_id"]
+    doc_keys = {
+        (
+            event["corpus"],
+            event["doc_id"]
+        )
         for event in seed_events
     }
 
@@ -641,7 +662,7 @@ def write_concept(con, data, lookup):
     ensure_events(con, lookup, neighbour_event_ids)
 
     # Documents belong to materialised Tier 2 events only.
-    ensure_documents(con, doc_ids)
+    ensure_documents(con, doc_keys)
 
     field_rows = []
 
@@ -959,7 +980,7 @@ def main():
     parser.add_argument("--rrf-k", type=int, default=RRF_K)
     parser.add_argument("--oversample", type=int, default=OVERSAMPLE)
     parser.add_argument( "-w", "--max-load-workers", type=int, default=6)
-    parser.add_argument("--batch-size", type=int, default=5000)
+    # parser.add_argument("--batch-size", type=int, default=5000)
     parser.add_argument("-fp", "--false-positives", type=str, default=None)
     args = parser.parse_args()
 

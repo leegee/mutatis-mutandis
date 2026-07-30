@@ -203,6 +203,8 @@ def create_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX idx_tokens_token_lower ON tokens (lower(token));")
             cur.execute("CREATE INDEX idx_documents_lang ON documents(lang);")
             cur.execute("CREATE INDEX idx_documents_filepath ON documents(filepath);")
+            # TODO Try this:
+            cur.execute("CREATE INDEX pamphlet_tokens_doc_shard_idx ON pamphlet_tokens ( abs(hashtext(corpus || ':' || doc_id)), corpus, doc_id, token_idx );")
 
     logger.info("Basic token indexes created")
 

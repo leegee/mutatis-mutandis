@@ -108,7 +108,7 @@ def discover_index_years(masked: bool) -> list[int]:
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
-EMBED_BATCH_SIZE = 256
+EMBED_BATCH_SIZE = 512
 
 TOP_K = 30
 

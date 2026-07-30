@@ -51,6 +51,7 @@ def merge_shard(shard_path: Path, target: ZarrEmbeddingObservationStore):
             emb_medium         = sel(src.emb_medium),
             emb_broad          = sel(src.emb_broad),
             vector_id          = sel(src.vector_id),
+            corpus             = sel(src.corpus),
             doc_id             = sel(src.doc_id),
             pub_year           = sel(src.pub_year),
             token_idx          = sel(src.token_idx),

@@ -139,6 +139,7 @@ class ZarrEmbeddingObservationStore:
 
         token = np.asarray(token, dtype="U32")
         doc_id = np.asarray(doc_id, dtype="U32")
+        corpus = np.asarray(corpus, dtype="U32")
         pub_year = np.asarray(pub_year, dtype=np.int16)
 
         window_id = np.asarray(window_id, dtype=np.int64)
@@ -157,6 +158,7 @@ class ZarrEmbeddingObservationStore:
         self._check(token_idx, n)
         self._check(token, n)
         self._check(doc_id, n)
+        self._check(corpus, n)
         self._check(pub_year, n)
         self._check(window_id, n)
         self._check(window_token_pos, n)
@@ -173,6 +175,7 @@ class ZarrEmbeddingObservationStore:
         self._append(self.token_idx, token_idx)
         self._append(self.token, token)
         self._append(self.doc_id, doc_id)
+        self._append(self.corpus, corpus)
         self._append(self.pub_year, pub_year)
         self._append(self.window_id, window_id)
         self._append(self.window_token_pos, window_token_pos)
@@ -207,10 +210,13 @@ class ZarrEmbeddingObservationStore:
         if self.doc_id.shape[0] == 0:
             return set()
 
-        return set(zip(
-            self.corpus[:],
-            self.doc_id[:]
-        ))
+        if self.corpus.shape[0] != self.doc_id.shape[0]:
+            raise ValueError(
+                f"corpus/doc_id length mismatch: corpus={self.corpus.shape[0]}, "
+                f"doc_id={self.doc_id.shape[0]} — store is corrupted"
+            )
+
+        return set(zip(self.corpus[:], self.doc_id[:]))
 
 
     def get_event_ids(self) -> set[int]:

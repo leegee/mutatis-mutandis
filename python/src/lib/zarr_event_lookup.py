@@ -129,6 +129,7 @@ class ZarrEventLookup:
     _FIELDS = {
         "event_id":         np.int64,
         "vector_id":        np.int64,
+        "corpus":           object,
         "doc_id":           object,
         "token":            object,
         "token_idx":        np.int64,
@@ -177,8 +178,14 @@ class ZarrEventLookup:
         Load event metadata only. Embeddings remain resident in the per-year
         FAISS indices and are reconstructed lazily when accessed.
         """
-        if "event_id" not in e:
-            raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
+        print(e.tree())
+        print(e["event_id"].shape)
+        print(e["corpus"].shape)
+
+        required = {"event_id", "corpus", "doc_id", "vector_id"}
+        missing = required - set(e.keys())
+        if missing:
+            raise KeyError( f"Missing Tier1 event fields {sorted(missing)} in {store_dir}" )
 
         wpos = e.get("window_token_pos")
         n = e["event_id"].shape[0]
@@ -187,16 +194,19 @@ class ZarrEventLookup:
             end = min(start + BATCH_SIZE, n)
 
             # --- cheap fields first ---
-            b_eids = e["event_id"][start:end]
-            b_vids = e["vector_id"][start:end]
-            b_docs = e["doc_id"][start:end]
-            b_toks = e["token"][start:end]
-            b_idxs = e["token_idx"][start:end]
-            b_wins = e["window_id"][start:end]
-            b_years = e["pub_year"][start:end]
-            b_wpos = wpos[start:end] if wpos is not None else None
-            b_toks = b_toks.astype(str)
-            b_docs = b_docs.astype(str)
+            b_eids   = e["event_id"][start:end]
+            b_vids   = e["vector_id"][start:end]
+            b_docs   = e["doc_id"][start:end]
+            b_corpus = e["corpus"][start:end]
+            b_toks   = e["token"][start:end]
+            b_idxs   = e["token_idx"][start:end]
+            b_wins   = e["window_id"][start:end]
+            b_years  = e["pub_year"][start:end]
+
+            b_wpos       = wpos[start:end] if wpos is not None else None
+            b_toks       = b_toks.astype(str)
+            b_docs       = b_docs.astype(str)
+            b_corpus     = b_corpus.astype(str)
             b_toks_lower = np.char.lower(b_toks)
 
             keep = np.ones(end - start, dtype=bool)
@@ -204,6 +214,7 @@ class ZarrEventLookup:
             self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
             self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
             self._chunks["doc_id"].append(b_docs[keep])
+            self._chunks["corpus"].append(b_corpus[keep])
             self._chunks["token"].append(b_toks[keep])
             self._chunks["token_idx"].append(np.asarray(b_idxs, dtype=np.int64)[keep])
             self._chunks["window_id"].append(np.asarray(b_wins, dtype=np.int64)[keep])
@@ -276,6 +287,7 @@ class ZarrEventLookup:
             "event_id": int(self.event_id[pos]),
             "vector_id": int(self.vector_id[pos]),
             "doc_id": str(self.doc_id[pos]),
+            "corpus": str(self.corpus[pos]),
             "token": str(self.token[pos]),
             "token_idx": int(self.token_idx[pos]),
             "window_id": int(self.window_id[pos]),
