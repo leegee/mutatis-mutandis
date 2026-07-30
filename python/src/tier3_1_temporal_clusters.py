@@ -125,7 +125,7 @@ def clear_temporal_clusters(con):
     con.execute( "DROP TABLE IF EXISTS concept_year_event_cluster" )
     con.execute( "DROP TABLE IF EXISTS temporal_cluster_edges" )
     con.commit()
-    initialise_temporal_tables(con)
+
 
 
 def delete_temporal_edges( con, concept, ):
@@ -387,7 +387,7 @@ def process_concept( con, lookup, concept, global_coords, resolution_parameter, 
     for pub_year, rows in by_year.items():
         process_concept_year( con, lookup, concept, pub_year, rows, global_coords, resolution_parameter, n_neighbors)
 
-    con.commit()
+    # con.commit()
 
 
 def load_year_clusters(
@@ -445,10 +445,8 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
         row[0]
         for row in con.execute(
             """
-            SELECT DISTINCT pub_year
-            FROM concept_year_cluster_info
-            WHERE concept=? AND cluster_id >= 0
-            ORDER BY pub_year
+            SELECT DISTINCT pub_year FROM concept_year_cluster_info
+            WHERE concept=? AND cluster_id >= 0 ORDER BY pub_year
             """,
             (concept,),
         )
@@ -543,21 +541,14 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
     con.executemany(
         """
         INSERT OR REPLACE INTO temporal_cluster_edges (
-            concept,
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster,
-            similarity,
-            edge_type,
-            confidence
+            concept, source_year, source_cluster, target_year, target_cluster, similarity, edge_type, confidence
         )
         VALUES (?,?,?,?,?,?,?,?)
         """,
         edges,
     )
 
-    # con.commit()
+    # con.commit() - done by callers
     logger.info( f"[tier3.1] edges created: {len(edges)}" )
 
 
@@ -816,22 +807,20 @@ def main():
     args = parser.parse_args()
     logger.info( "[tier3.1] options: %s", vars(args) )
 
-    lookup = ZarrEventLookup( ZARR_PATH )
 
     con = sqlite_connection( CORPUS_TIER2_DB_PATH )
-    initialise_temporal_tables(con)
     if args.clear:
         clear_temporal_clusters(con)
+    initialise_temporal_tables(con)
 
+    lookup = ZarrEventLookup( ZARR_PATH )
     years = sorted( {
         int(y)
         for y in lookup.pub_year
         if y > 0
     } )
 
-    lookup.attach_index(
-        load_indices( years, masked=args.mask, )
-    )
+    lookup.attach_index( load_indices( years, masked=args.mask, ) )
 
     all_rows = con.execute( "SELECT event_id FROM concept_field_events" )
 
@@ -854,7 +843,9 @@ def main():
         # lookup.attach_index( load_indices( years, masked=args.mask, ) )
         for concept in concepts:
             process_concept( con, lookup, concept, global_coords, args.resolution, args.neighbors)
+            con.commit()
             build_temporal_edges( con, concept, args.similarity_threshold )
+            con.commit()
         con.close()
     logger.info( "[tier3.1] Done." )
 
