@@ -1,18 +1,7 @@
 """
 ZarrEmbeddingObservationStore - Tier 1 contextual observation layer
 
-Each row is a contextual observation event:
-
-    event = (
-        event_id,             # unique contextual observation identity
-        concept_id,           # stable corpus token identity
-        vector_id,            # lexical identity from corpus event log
-        doc_id,               # document provenance
-        token_idx,            # corpus position anchor
-        window_id,            # transformer window start coordinate
-        window_token_pos,     # token position within window
-        emb_raw               # raw contextual embedding
-    )
+Each row is a contextual observation event
 
 Core invariants
 ----------------
@@ -89,8 +78,9 @@ class ZarrEmbeddingObservationStore:
         # corpus coordinates
         self.vector_id = self._ds( g, "vector_id", (), compressor, "int64" )
         self.token_idx = self._ds( g, "token_idx", (), compressor, "int64" )
-        self.token = self._ds( g, "token", (), compressor, "U32" )
-        self.doc_id = self._ds( g, "doc_id", (), compressor, "U32" )
+        self.token = self._ds( g, "token", (), compressor, "U64" )
+        self.corpus = self._ds( g, "corpus", (), compressor, "U32" )
+        self.doc_id = self._ds( g, "doc_id", (), compressor, "U64" )
         self.pub_year = self._ds( g, "pub_year", (), compressor, "int16" )
 
         # contextual coordinates
@@ -126,6 +116,7 @@ class ZarrEmbeddingObservationStore:
         emb_medium,
         emb_broad,
         vector_id,
+        corpus,
         doc_id,
         pub_year,
         token_idx,
@@ -212,10 +203,14 @@ class ZarrEmbeddingObservationStore:
         return int(self.event_id.shape[0])
 
 
-    def get_doc_ids(self) -> set[str]:
+    def get_doc_keys(self) -> set[tuple[str, str]]:
         if self.doc_id.shape[0] == 0:
             return set()
-        return set(self.doc_id[:])
+
+        return set(zip(
+            self.corpus[:],
+            self.doc_id[:]
+        ))
 
 
     def get_event_ids(self) -> set[int]:
@@ -231,11 +226,13 @@ class ZarrEmbeddingObservationStore:
         return set(map(int, self.event_id[:]))
 
 
-    def embedding_dim(self) -> int:
-        if len(self.emb_raw.shape) <= 1:
-            return 0
+    def validate_event_ids(self, ids):
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate event_ids in append batch")
 
-        return int(self.emb_raw.shape[1])
+
+    def embedding_dim(self) -> int:
+        return int(self.emb_medium.shape[1])
 
 
     def __len__(self) -> int:

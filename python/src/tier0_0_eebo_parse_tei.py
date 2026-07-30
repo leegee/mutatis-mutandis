@@ -2,7 +2,7 @@
 """
 eebo_parse_tei.py - Multi-process streaming EEBO TEI XML ingestion pipeline
 
-NB Currently all files  must originate in config.XML_ROOT
+NB Corpus roots are defined in config.CORPUS_INPUT_DIRS
 
 """
 
@@ -41,7 +41,7 @@ _ECCO_HEADER_INDEX = None
 # Threading these through everything is silly.
 MAX_DOCS: Optional[int] = None
 SKIP_EXISTING_DOCS  = True
-SCAN_ROOT: Path = config.XML_ROOT_DIR
+
 
 def normalize_early_modern(text: str) -> str:
     text = text.lower()
@@ -113,6 +113,7 @@ def safe_text(x):
 
 def to_doc_row(meta: dict) -> tuple:
     return (
+        meta["corpus"],
         meta["doc_id"],
         meta["title"],
         meta["author"],
@@ -123,8 +124,6 @@ def to_doc_row(meta: dict) -> tuple:
         meta["token_count"],
         meta.get("filepath"),
         meta.get("lang"),
-        # meta["slice_start"],
-        # meta["slice_end"],
     )
 
 
@@ -162,12 +161,12 @@ def get_ecco_header_index():
     """
     global _ECCO_HEADER_INDEX
     if _ECCO_HEADER_INDEX is None:
-        logger.info( f"[worker {os.getpid()}] loading ECCO header index" )
+        logger.info( f"[tier0 worker {os.getpid()}] loading ECCO header index" )
         _ECCO_HEADER_INDEX = {
             p.name.removesuffix(".hdr"): p
             for p in config.ECCO_HEADER_DIR.rglob("*.hdr")
         }
-        logger.info( f"[worker {os.getpid()}] loaded {len(_ECCO_HEADER_INDEX)} ECCO headers" )
+        logger.info( f"[tier0 worker {os.getpid()}] loaded {len(_ECCO_HEADER_INDEX)} ECCO headers" )
     return _ECCO_HEADER_INDEX
 
 
@@ -209,14 +208,14 @@ def process_ecco_file(tree, xml_path):
     idg = tree.find(".//EEBO/IDG")
 
     if idg is None:
-        logger.warning(f"No IDG")
+        logger.warning(f"[tier0] No IDG in {xml_path}")
         return None
 
     doc_id = idg.attrib["ID"]
 
     header_path = find_ecco_header(doc_id)
     if header_path is None:
-        logger.warning(f"No ECCO header for {doc_id}")
+        logger.warning(f"[tier0] No ECCO header for {doc_id} at {xml_path}")
         return None
 
     metadata = extract_ecco_header_metadata(header_path)
@@ -224,7 +223,7 @@ def process_ecco_file(tree, xml_path):
     pub_year = metadata["pub_year"]
 
     if pub_year is None:
-        logger.warning(f"No pub_year in {doc_id}")
+        logger.warning(f"[tier0] No pub_year in {doc_id} {xml_path}")
         return None
 
     if not year_in_corpus(pub_year):
@@ -233,7 +232,7 @@ def process_ecco_file(tree, xml_path):
     body = tree.findall(".//TEXT/BODY")
 
     if not body:
-        logger.warning(f"No BODY for {doc_id}")
+        logger.warning(f"[tier0] No BODY for {doc_id} {xml_path}")
         return None
 
     raw_text = " ".join(
@@ -269,7 +268,7 @@ def process_ecco_file(tree, xml_path):
 def process_eebo_file(tree, xml_path):
     doc_id_elem = tree.find(".//HEADER//IDNO[@TYPE='DLPS']")
     if doc_id_elem is None or not doc_id_elem.text:
-        logger.warning("process_file bailing as doc_id_elem not found")
+        logger.warning(f"[tier0] process_file bailing as doc_id_elem not found in {xml_path}")
         return None
     doc_id = doc_id_elem.text.strip()
 
@@ -282,14 +281,14 @@ def process_eebo_file(tree, xml_path):
     date_raw = safe_text(date_elem)
     pub_year = extract_year(date_raw)
     if pub_year is None:
-        logger.warning(f"No pub_year in {doc_id}")
+        logger.warning(f"[tier0] No pub_year in {doc_id}")
         return None
     if not year_in_corpus(pub_year):
         return None
 
     body = tree.findall(".//EEBO//TEXT//BODY")
     if not body:
-        logger.warning("process_file bailing as BODY not defined")
+        logger.warning(f"[tier0] process_file bailing as BODY not defined in {xml_path}")
         return None
 
     raw_text = " ".join(render_text(b) for b in body)
@@ -299,7 +298,7 @@ def process_eebo_file(tree, xml_path):
     )
 
     if len(normalized) < 100:
-        logger.warning("process_file bailing as normalised text length < 100")
+        logger.warning(f"[tier0] process_file bailing as normalised text length < 100 in {xml_path}")
         return None
 
     lang = extract_language(tree, raw_text)
@@ -322,36 +321,41 @@ def process_eebo_file(tree, xml_path):
     return meta, tokens
 
 
-def process_file(xml_path: Path):
+def process_file(xml_path: Path, corpus):
     try:
         tree = etree.parse(str(xml_path))
     except Exception:
-        logger.warning(f"Failed to parse {xml_path}")
+        logger.warning(f"[tier0] Failed to parse {xml_path}")
         return None
 
-    root = tree.getroot()
-
-    if root.tag == "ETS":
-        return process_ecco_file(tree, xml_path)
-    elif root.tag == "TEI":
+    if corpus == "eebo":
         return process_eebo_file(tree, xml_path)
+    elif corpus == "ecco":
+        return process_ecco_file(tree, xml_path)
     else:
-        logger.warning(f"Failed to parse {xml_path}")
+        logger.warning(f"[tier0] Unknown corpus {corpus} - ignoring path {xml_path}")
         return None
 
 
-def process_file_to_temp(xml_path: Path):
-    result = process_file(xml_path)
+def process_file_to_temp(xml_path: Path, corpus: str):
+    result = process_file(xml_path, corpus)
     if not result:
         return None
 
     meta, tokens = result
 
+    meta["corpus"] = corpus
+
     tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="", suffix=".tsv")
     writer = csv.writer(tmp, delimiter="\t")
 
-    for i, tok in enumerate(tokens):          # Simplified
-        writer.writerow([meta["doc_id"], i, tok])
+    for i, tok in enumerate(tokens):
+        writer.writerow([
+            meta["corpus"],
+            meta["doc_id"],
+            i,
+            tok
+        ])
 
     tmp.close()
 
@@ -387,28 +391,33 @@ def stream_copy(table: str, columns: list[str], rows):
 
 
 # Temporary solution:
-def filter_existing_docs(rows):
+def filter_existing_docs(rows, corpus):
     if not rows:
         return []
 
-    doc_ids = [r[0] for r in rows]
+    doc_ids = [r[1] for r in rows]
 
     with eebo_db.get_connection() as conn:
         cur = conn.execute(
-            "SELECT doc_id FROM documents WHERE doc_id = ANY(%s)",
-            (doc_ids,)
+            """
+            SELECT doc_id
+            FROM documents
+            WHERE corpus = %s
+            AND doc_id = ANY(%s)
+            """,
+            (corpus, doc_ids,),
         )
 
         existing = {r[0] for r in cur.fetchall()}
 
     return [
         row for row in rows
-        if row[0] not in existing
+        if row[1] not in existing
     ]
 
 
-def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs):
-    logger.info( f"[worker {os.getpid()}] received {len(files)} files" )
+def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs, corpus):
+    logger.info( f"[tier0 worker {os.getpid()}] received {len(files)} {corpus} files" )
     doc_batch = []
     token_batch = []
     inserted_doc_ids = set()
@@ -417,7 +426,7 @@ def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs):
 
     def log_progress():
         if docs_seen % LOG_EVERY_N_DOCS == 0 and docs_seen > 0:
-            logger.info(f"[worker {os.getpid()}] ingested {docs_seen} docs")
+            logger.info(f"[tier0 worker {os.getpid()}] ingested {docs_seen} docs")
 
     def flush_docs():
         nonlocal doc_batch, inserted_doc_ids
@@ -428,19 +437,22 @@ def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs):
         doc_batch = []
 
         if skip_existing_docs:
-            rows = filter_existing_docs(rows)
+            rows = filter_existing_docs(rows, corpus)
 
         if not rows:
             return
 
-        inserted_doc_ids.update(r[0] for r in rows)
+        inserted_doc_ids.update(
+            (r[0], r[1])
+            for r in rows
+        )
 
         stream_copy(
             "documents",
             [
-                "doc_id", "title", "author", "pub_year",
+                "corpus", "doc_id", "title", "author", "pub_year",
                 "publisher", "pub_place", "source_date_raw",
-                "token_count", "filepath", "lang", # "slice_start", "slice_end"
+                "token_count", "filepath", "lang",
             ],
             rows,
         )
@@ -450,15 +462,23 @@ def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs):
         if not token_batch:
             return
 
-        rows = [t for t in token_batch if t[0] in inserted_doc_ids]
+        rows = [
+            t for t in token_batch
+            if (t[0], t[1]) in inserted_doc_ids
+        ]
+
         token_batch = []
 
         if rows:
-            stream_copy("tokens", ["doc_id", "token_idx", "token"], rows)
+            stream_copy(
+                "tokens",
+                ["corpus", "doc_id", "token_idx", "token"],
+                rows,
+            )
 
     for fp in files:
         try:
-            result = process_file_to_temp(fp)
+            result = process_file_to_temp(fp, corpus)
             if not result:
                 continue
 
@@ -468,8 +488,8 @@ def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs):
 
             with open(token_file, "r", encoding="utf-8") as f:
                 for line in f:
-                    doc_id, idx, tok = line.rstrip("\n").split("\t")
-                    token_batch.append((doc_id, int(idx), tok))
+                    corpus, doc_id, idx, tok = line.rstrip("\n").split("\t")
+                    token_batch.append((corpus, doc_id, int(idx), tok))
 
             if len(doc_batch) >= batch_docs:
                 flush_docs()
@@ -481,30 +501,28 @@ def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs):
             log_progress()
 
         except Exception:
-            logger.error(f"FAILED FILE: {fp}")
+            logger.error(f"[tier0] FAILED FILE: {fp}")
             logger.error(traceback.format_exc())
 
     flush_docs()
     flush_tokens()
-    logger.info(f"[worker {os.getpid()}] finished: {docs_seen} docs processed")
+    logger.info(f"[tier0 worker {os.getpid()}] finished: {docs_seen} docs processed")
 
 
 def ingest_xml_parallel(
     xml_dir: Path | None = None,
     max_workers: int     = 4,
     batch_docs: int      = 50,
-    batch_tokens: int    = 50000
+    batch_tokens: int    = 50000,
+    corpus: str          = None
 ):
-    if xml_dir is None:
-        xml_dir = SCAN_ROOT
-
     xml_files = list(xml_dir.rglob("*.xml"))
 
-    logger.info(f"Input directory: {xml_dir}")
-    logger.info(f"Found {len(xml_files)} XML files")
+    logger.info(f"[tier0] Input directory: {xml_dir}")
+    logger.info(f"[tier0] Found {len(xml_files)} XML files")
 
     for x in xml_files[:5]:
-        logger.info(f"Example: {x}")
+        logger.info(f"[tier0] Example: {x}")
 
     if MAX_DOCS is not None:
         xml_files = xml_files[:MAX_DOCS]
@@ -513,7 +531,7 @@ def ingest_xml_parallel(
 
     with ProcessPoolExecutor(max_workers=max_workers) as ex:
         futures = [
-            ex.submit(_worker_ingest, chunk, batch_docs, batch_tokens, SKIP_EXISTING_DOCS )
+            ex.submit(_worker_ingest, chunk, batch_docs, batch_tokens, SKIP_EXISTING_DOCS, corpus )
             for chunk in chunks
         ]
         for f in futures:
@@ -540,18 +558,13 @@ def main():
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--create", action="store_true")
     parser.add_argument("--justindex", action="store_true")
-    parser.add_argument( "--input", type=Path, default=config.XML_ROOT_DIR, )
     args = parser.parse_args()
 
     validate_corpus_years() # Eventually allow flags
 
-    global MAX_DOCS, SKIP_EXISTING_DOCS , SCAN_ROOT
+    global MAX_DOCS, SKIP_EXISTING_DOCS
     MAX_DOCS             = args.limit
     SKIP_EXISTING_DOCS   = not args.create
-    SCAN_ROOT            = args.input.resolve()
-
-    if not SCAN_ROOT.is_dir():
-        parser.error(f"Input directory does not exist: {SCAN_ROOT}")
 
     with eebo_db.get_connection() as conn:
         if args.create:
@@ -565,12 +578,18 @@ def main():
         conn.commit()
 
     if not args.justindex:
-        ingest_xml_parallel(
-            xml_dir      = SCAN_ROOT,
-            max_workers  = NUM_WORKERS,
-            batch_docs   = BATCH_DOCS,
-            batch_tokens = BATCH_TOKENS,
-        )
+        for corpus, xml_dir in config.CORPUS_INPUT_DIRS.items():
+            logger.info(f"[tier0] Process {corpus} from {xml_dir}")
+            if not xml_dir.is_dir():
+                parser.error(f"Input directory for {corpus} does not exist: {xml_dir}")
+
+            ingest_xml_parallel(
+                xml_dir=xml_dir,
+                max_workers=NUM_WORKERS,
+                batch_docs=BATCH_DOCS,
+                batch_tokens=BATCH_TOKENS,
+                corpus=corpus,
+            )
 
     # Wait for other connections to finish
     with eebo_db.get_connection() as conn:
@@ -587,6 +606,7 @@ def main():
 
     with eebo_db.get_connection() as conn:
         eebo_db.create_tokens_fk(conn)
+        eebo_db.create_views(conn)
         eebo_db.create_token_indexes(conn)
         eebo_db.create_tiered_token_indexes(conn)
         eebo_db.refresh_views(conn)

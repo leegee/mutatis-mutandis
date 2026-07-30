@@ -3,8 +3,13 @@
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-XML_ROOT_DIR = BASE_DIR / "corpus"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+XML_ROOT_DIR = PROJECT_ROOT / "corpus"
+
+CORPUS_INPUT_DIRS = {
+    "eebo": XML_ROOT_DIR / "eebo_all",
+    "ecco": XML_ROOT_DIR / "ecco_all",
+}
 
 ECCO_HEADER_DIR = Path( "s:/src/pamphlets/corpus/ecco_all/ecco/headers" )
 
@@ -21,14 +26,14 @@ MIN_TOKENS_IN_DOC = 200
 MAX_TOKENS_IN_DOC = 20000
 
 # Could use env var
-OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else BASE_DIR / "out"
+OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TMP_DIR = OUT_DIR / "tmp"
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-GUI_PUBLIC_ROOT      = Path(BASE_DIR / 'gui' / 'eebo-frontend' )
+GUI_PUBLIC_ROOT      = Path(PROJECT_ROOT / 'gui' / 'eebo-frontend' )
 GUI_PUBLIC_DIR       = Path(GUI_PUBLIC_ROOT / 'public')
 GUI_PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -1,9 +1,11 @@
 # lib/eebo_db.py
 
 """
-eebo_db.py - EEBO database access
+eebo_db.py - Corpus database access
 
 Connections, schema (wip that should use .sql files), etc
+
+Todo: rename stuff after including more than eebo
 
 """
 
@@ -145,7 +147,8 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
             cur.execute("""
                 /* Core document metadata */
                 CREATE TABLE documents (
-                    doc_id TEXT PRIMARY KEY,
+                    corpus TEXT NOT NULL,
+                    doc_id TEXT,
                     filepath TEXT,
                     title TEXT,
                     author TEXT,
@@ -154,23 +157,25 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     pub_place TEXT,
                     source_date_raw TEXT,
                     token_count INTEGER,
-                    lang CHAR(3) NOT NULL DEFAULT 'eng'
+                    lang CHAR(3) NOT NULL DEFAULT 'eng',
+                    PRIMARY KEY (corpus, doc_id)
                 );
 
                 CREATE SEQUENCE vector_id_seq;
                 CREATE TABLE tokens (
+                    corpus TEXT NOT NULL,
                     doc_id TEXT NOT NULL,
                     token_idx INTEGER NOT NULL,
                     token TEXT NOT NULL,
                     raw_token text,
                     canonical TEXT,
                     vector_id BIGINT UNIQUE DEFAULT nextval('vector_id_seq'),
-                    PRIMARY KEY (doc_id, token_idx),
-                    FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
+                    PRIMARY KEY (corpus, doc_id, token_idx),
+                    FOREIGN KEY (corpus, doc_id) REFERENCES documents(corpus, doc_id) ON DELETE CASCADE
                 );
             """)
 
-    logger.info("Database schema created")
+    logger.info("Database schema initiated")
 
 
 
@@ -194,7 +199,7 @@ def create_token_indexes(conn: Connection) -> None:
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(doc_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(corpus, doc_id);")
             cur.execute("CREATE INDEX idx_tokens_token_lower ON tokens (lower(token));")
             cur.execute("CREATE INDEX idx_documents_lang ON documents(lang);")
             cur.execute("CREATE INDEX idx_documents_filepath ON documents(filepath);")
@@ -203,8 +208,9 @@ def create_token_indexes(conn: Connection) -> None:
 
 
 
-def create_tiered_token_indexes(conn: Connection) -> None:
-    logger.info("Creating tiered token indexes")
+
+def create_views(conn: Connection) -> None:
+    logger.info("Creating view")
 
     earliest = config.CORPUS_MIN_YEAR
     latest   = config.CORPUS_MAX_YEAR
@@ -230,14 +236,16 @@ def create_tiered_token_indexes(conn: Connection) -> None:
             """)
 
             # Index for fast joins (non-concurrent)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(doc_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(corpus, doc_id);")
 
-            # Materialized view for pamphlet_tokens
+            # Materialized view for pamphlet_tokens -- we should replace hashtext with xxhash64 in the Python
             logger.info("Creating materialised view pamphlet_tokens")
+            cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;")
             cur.execute("""
-                CREATE MATERIALIZED VIEW IF NOT EXISTS pamphlet_tokens AS
+                CREATE MATERIALIZED VIEW pamphlet_tokens AS
                 SELECT
-                    hashtext(t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
+                    hashtext(t.corpus || '_' || t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
+                    t.corpus,
                     t.doc_id,
                     t.token_idx,
                     t.vector_id,
@@ -245,7 +253,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     t.token,
                     t.canonical
                 FROM tokens t
-                JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
+                JOIN pamphlet_corpus d ON t.corpus = d.corpus AND t.doc_id = d.doc_id;
             """)
 
             # Materialized view for document_search
@@ -254,22 +262,25 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                 CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
                 WITH numbered_tokens AS (
                     SELECT
+                        t.corpus,
                         t.doc_id,
                         t.token,
                         t.token_idx,
-                        (row_number() OVER (PARTITION BY t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
+                        (row_number() OVER (PARTITION BY t.corpus, t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
                     FROM tokens t
-                    JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
+                    JOIN pamphlet_corpus pc ON t.corpus = pc.corpus AND pc.doc_id = t.doc_id
                 ),
                 block_text AS (
                     SELECT
+                        corpus,
                         doc_id,
                         block_idx,
                         string_agg(token, ' ') AS text
                     FROM numbered_tokens
-                    GROUP BY doc_id, block_idx
+                    GROUP BY corpus, doc_id, block_idx
                 )
                 SELECT
+                    d.corpus,
                     d.doc_id,
                     d.title,
                     d.author,
@@ -280,12 +291,22 @@ def create_tiered_token_indexes(conn: Connection) -> None:
                     bt.text,
                     to_tsvector('english', bt.text) AS tsv
                 FROM pamphlet_corpus d
-                JOIN block_text bt ON bt.doc_id = d.doc_id;
+                JOIN block_text bt ON bt.corpus = d.corpus AND bt.doc_id = d.doc_id;
             """)
 
+
+def create_tiered_token_indexes(conn: Connection) -> None:
+    logger.info("Creating tiered token indexes")
+
+    earliest = config.CORPUS_MIN_YEAR
+    latest   = config.CORPUS_MAX_YEAR
+
+    # Create non-concurrent indexes and materialized views inside a transaction
+    with conn.transaction():
+        with conn.cursor() as cur:
             # GIN index can stay in transaction
             cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(doc_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
 
     logger.info("create_tiered_token_indexes complete")
 
@@ -296,8 +317,7 @@ def create_concurrent_indexes():
         with conn.cursor() as cur:
             with conn.cursor() as cur:
                 cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_occurrence_id ON pamphlet_tokens(token_occurrence_id);")
-                # cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pamphlet_tokens_docid_pub_year ON pamphlet_tokens(doc_id, pub_year);")
-                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(doc_id, token, token_idx);")
+                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(corpus, doc_id, token, token_idx);")
     logger.info("create_concurrent_indexes complete")
 
 
@@ -312,17 +332,6 @@ def drop_tokens_fk(conn: Connection) -> None:
 
 def create_tokens_fk(conn: Connection) -> None:
     logger.info("NOT creating tokens.doc_id foreign key as v slow and immutable data  makes it irrelevant")
-    # logger.info("Creating tokens.doc_id foreign key")
-    # with conn.transaction():
-    #     with conn.cursor() as cur:
-    #         cur.execute("""
-    #             ALTER TABLE tokens
-    #             ADD CONSTRAINT tokens_doc_id_fkey FOREIGN KEY (doc_id)
-    #             REFERENCES documents(doc_id)
-    #             ON DELETE CASCADE;
-    #         """)
-    # logger.info("tokens.doc_id foreign key created")
-
 
 def refresh_views(conn: Connection) -> None:
     logger.info("Refreshing materialized views")
