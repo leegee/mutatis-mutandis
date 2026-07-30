@@ -42,7 +42,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Iterable
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_logging import logger
 
 

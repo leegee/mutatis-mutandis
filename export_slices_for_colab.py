@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from collections import defaultdict
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_config import SLICES_DIR, SLICES
 
 OUT_DIR = Path("exported_slices")

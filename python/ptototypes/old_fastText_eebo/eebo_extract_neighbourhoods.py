@@ -4,7 +4,7 @@ import sys
 import fasttext
 
 import eebo_config as config
-import eebo_db
+import corpus_db
 
 def load_wordlist(path):
     if not path.exists():
@@ -58,7 +58,7 @@ for model_path in model_files:
                 continue
 
             rank += 1
-            eebo_db.dbh.execute("""
+            corpus_db.dbh.execute("""
                 INSERT INTO neighbourhoods
                 (slice_start, slice_end, query, neighbour, rank, cosine)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -78,7 +78,7 @@ for model_path in model_files:
             if rank >= config.TOP_K:
                 break
 
-    eebo_db.dbh.commit()
+    corpus_db.dbh.commit()
 
-eebo_db.dbh.close()
+corpus_db.dbh.close()
 print("[DONE] Neighbourhood extraction complete.")

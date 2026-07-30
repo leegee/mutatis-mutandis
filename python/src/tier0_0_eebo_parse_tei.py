@@ -24,7 +24,7 @@ from psycopg import sql
 import xml.etree.ElementTree as etree
 import langdetect
 import lib.eebo_config as config
-import lib.eebo_db as eebo_db
+import lib.corpus_db as corpus_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.eebo_logging import logger
 
@@ -384,7 +384,7 @@ def stream_copy(table: str, columns: list[str], rows):
         buf.write(encode(r))
     buf.seek(0)
 
-    with eebo_db.get_autocommit_connection() as conn:
+    with corpus_db.get_autocommit_connection() as conn:
         with conn.cursor() as cur:
             with cur.copy(stmt) as copy:
                 copy.write(buf.read())
@@ -397,7 +397,7 @@ def filter_existing_docs(rows, corpus):
 
     doc_ids = [r[1] for r in rows]
 
-    with eebo_db.get_connection() as conn:
+    with corpus_db.get_connection() as conn:
         cur = conn.execute(
             """
             SELECT doc_id
@@ -566,15 +566,15 @@ def main():
     MAX_DOCS             = args.limit
     SKIP_EXISTING_DOCS   = not args.create
 
-    with eebo_db.get_connection() as conn:
+    with corpus_db.get_connection() as conn:
         if args.create:
             confirm = input("DESTROY DB? type YES: ")
             if confirm != "YES":
                 sys.exit(1)
-            eebo_db.init_db(conn)
+            corpus_db.init_db(conn)
 
-        eebo_db.drop_token_indexes(conn)
-        eebo_db.drop_tokens_fk(conn)
+        corpus_db.drop_token_indexes(conn)
+        corpus_db.drop_tokens_fk(conn)
         conn.commit()
 
     if not args.justindex:
@@ -592,7 +592,7 @@ def main():
             )
 
     # Wait for other connections to finish
-    with eebo_db.get_connection() as conn:
+    with corpus_db.get_connection() as conn:
         while True:
             cur = conn.execute("""
                 SELECT count(*) FROM pg_stat_activity
@@ -604,14 +604,14 @@ def main():
             if n == 0:
                 break
 
-    with eebo_db.get_connection() as conn:
-        eebo_db.create_tokens_fk(conn)
-        eebo_db.create_views(conn)
-        eebo_db.create_token_indexes(conn)
-        eebo_db.create_tiered_token_indexes(conn)
-        eebo_db.refresh_views(conn)
+    with corpus_db.get_connection() as conn:
+        corpus_db.create_tokens_fk(conn)
+        corpus_db.create_views(conn)
+        corpus_db.create_token_indexes(conn)
+        corpus_db.create_tiered_token_indexes(conn)
+        corpus_db.refresh_views(conn)
 
-    eebo_db.create_concurrent_indexes()
+    corpus_db.create_concurrent_indexes()
 
 
 if __name__ == "__main__":

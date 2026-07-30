@@ -59,12 +59,12 @@ from collections import defaultdict
 import numpy as np
 import torch
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import MASKED_ZARR_PATH, EMBED_BATCH_SIZE
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
-from lib.eebo_db import sqlite3_connection  # matches usage pattern in tier2/tier3
+from lib.corpus_db import sqlite3_connection  # matches usage pattern in tier2/tier3
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
 
 from tier1_0_corpus2zarr import (

@@ -145,6 +145,7 @@ For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB se
 
 ## To Do
 
+1. phrases
 1. metrics
 1. update ZarrEventLookup to stream/yield
 1. expose tier 2's analytics

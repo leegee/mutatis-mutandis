@@ -118,7 +118,7 @@ from typing import Dict, List, Any
 import numpy as np
 import zarr
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_config import ZARR_ROOT, SLICES, CONCEPT_SETS, OUT_DIR
 from lib.eebo_logging import logger
 

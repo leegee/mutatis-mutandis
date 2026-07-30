@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from typing import Optional, Dict, Any
-from src.lib.eebo_db import get_connection
+from src.lib.corpus_db import get_connection
 import src.lib.eebo_config as eebo_config
 
 XML_ROOT = eebo_config.XML_ROOT_DIR

@@ -1,6 +1,6 @@
 from psycopg import sql
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_logging import logger
 
 

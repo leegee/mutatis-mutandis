@@ -126,7 +126,7 @@ import numpy as np
 import torch
 import xxhash
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore

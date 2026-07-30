@@ -1,7 +1,7 @@
-# lib/eebo_db.py
+# lib/corpus_db.py
 
 """
-eebo_db.py - Corpus database access
+corpus_db.py - Corpus database access
 
 Connections, schema (wip that should use .sql files), etc
 

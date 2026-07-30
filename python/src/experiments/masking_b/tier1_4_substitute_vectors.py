@@ -170,7 +170,7 @@ import scipy.sparse as sp
 import torch
 
 from lib.macberth import load_macberth
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_logging import logger
 from lib.eebo_config import ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 

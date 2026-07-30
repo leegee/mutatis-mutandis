@@ -52,7 +52,7 @@ import zarr
 from sklearn.decomposition import PCA
 
 from lib.eebo_config import CONCEPT_SETS, ZARR_ROOT, OUT_DIR
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_logging import logger
 
 

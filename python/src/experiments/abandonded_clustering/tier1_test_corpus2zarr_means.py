@@ -16,7 +16,7 @@ import zarr
 import numpy as np
 from collections import Counter, defaultdict
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_config import ZARR_ROOT, SLICES
 
 
