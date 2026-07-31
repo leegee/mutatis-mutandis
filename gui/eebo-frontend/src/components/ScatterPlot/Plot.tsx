@@ -130,7 +130,7 @@ export default function Plot(props: PlotProps) {
         base = colorMap().get(String(p.cluster_id ?? "")) ?? GREY;
       }
 
-      // Everything else: use normal colour mapping
+      // Everything else: use normal colourBy mapping
       else {
         const field = props.colorBy;
         base = colorMap().get(String(p[field as keyof PointData] ?? "")) ?? GREY;
