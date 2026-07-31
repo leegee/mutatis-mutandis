@@ -461,6 +461,15 @@ def analyse_concept(
         dtype=np.int64,
     )
 
+    seed_positions = {
+        (
+            str(lookup.corpus[pos]),
+            str(lookup.doc_id[pos]),
+            int(lookup.token_idx[pos]),
+        )
+        for pos in positions
+    }
+
     # Group by publication year.
     #
     # This is deliberately based on Tier 1 Zarr metadata.
@@ -504,16 +513,32 @@ def analyse_concept(
     for pos in positions:
         event_id = int( lookup.event_id[pos] )
 
+
         neighbours_out = []
         for item in fused[event_id]:
             neighbour_id = item["event_id"]
             if neighbour_id == event_id:
                 continue
 
-            npos = lookup.get_pos( neighbour_id )
-            token = str( lookup.token[npos] )
+            npos = lookup.get_pos(neighbour_id)
 
-            if token.lower() in false_positives:
+            candidate_key = (
+                str(lookup.doc_id[npos]),
+                int(lookup.token_idx[npos]),
+            )
+
+            # Do not allow overlapping-window observations of the seed occurrence
+            if candidate_key in seed_positions:
+                continue
+
+            token = str(lookup.token[npos])
+            token_lower = token.lower()
+
+            if token_lower in false_positives:
+                continue
+
+            # Do not allow the seed lexical forms as semantic neighbours
+            if token_lower in forms:
                 continue
 
             doc_id = str( lookup.doc_id[npos] )
