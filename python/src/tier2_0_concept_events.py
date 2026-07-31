@@ -560,6 +560,7 @@ def analyse_concept(
                     "event_id": neighbour_id,
                     "vector_id": int( lookup.vector_id[npos] ),
                     "token": token,
+                    "corpus": str(lookup.corpus[npos]),
                     "doc_id": doc_id,
                     "pub_year": int( lookup.pub_year[npos] ),
                     "token_idx": int( lookup.token_idx[npos] ),
@@ -669,14 +670,6 @@ def write_concept(con, data, lookup):
         for event in seed_events
     }
 
-    doc_keys = {
-        (
-            event["corpus"],
-            event["doc_id"]
-        )
-        for event in seed_events
-    }
-
     ensure_events(con, lookup, event_ids)
 
     neighbour_event_ids = {
@@ -686,6 +679,17 @@ def write_concept(con, data, lookup):
     }
 
     ensure_events(con, lookup, neighbour_event_ids)
+
+    all_event_ids = event_ids | neighbour_event_ids
+
+    doc_keys = {
+        (
+            str(lookup.corpus[pos]),
+            str(lookup.doc_id[pos]),
+        )
+        for eid in all_event_ids
+        for pos in [lookup.get_pos(eid)]
+    }
 
     # Documents belong to materialised Tier 2 events only.
     ensure_documents(con, doc_keys)
@@ -744,6 +748,7 @@ def write_concept(con, data, lookup):
         UPDATE events
         SET
             concept = ?,
+            event_role = 'seed',
             vector_id = ?,
             token = ?,
             doc_id = ?,
