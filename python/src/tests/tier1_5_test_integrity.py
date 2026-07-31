@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_config import ZARR_ROOT, FAISS_INDEX_DIR
 from lib.zarr_event_stream import ZarrEventStream
 from lib.eebo_faiss import EeboFaissIndex

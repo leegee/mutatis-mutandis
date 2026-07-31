@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_config import MODELS_DIR
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")

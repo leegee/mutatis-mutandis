@@ -36,7 +36,7 @@ import numpy as np
 import torch
 
 from lib.corpus_db import get_connection
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_config import ZARR_ROOT, SLICES, EMBED_BATCH_SIZE
 from lib.vector_store_zarr import ZarrVectorStore
 from lib.macberth import load_macberth, normalize

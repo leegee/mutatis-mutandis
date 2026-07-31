@@ -19,7 +19,7 @@ from lib.eebo_config import (
 from lib.concept_resolve import resolve_concepts
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.eebo_faiss import EeboFaissIndex
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.sqlite_vector_blob import vector_to_blob
 from lib.cluster import (
     LOCAL_UMAP_PARAMS,

@@ -49,7 +49,7 @@ import numpy as np
 from lib.macberth import get_macberth_embedder
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.eebo_faiss import EeboFaissIndex
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_config import ZARR_PATH
 
 

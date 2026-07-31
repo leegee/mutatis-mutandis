@@ -12,7 +12,7 @@ TODO Make sure this is called prior to materialising pamphlet_corpus view.
 from psycopg.rows import dict_row
 
 from lib.corpus_db import get_connection
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 
 LATIN_FUNCTION = {

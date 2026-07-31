@@ -1,7 +1,7 @@
 import zarr
 import numpy as np
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.zarr_store_dirs import store_dirs
 
 BATCH_SIZE = 8192

@@ -53,7 +53,7 @@ from sklearn.decomposition import PCA
 
 from lib.eebo_config import CONCEPT_SETS, ZARR_ROOT, OUT_DIR
 from lib.corpus_db import get_connection
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 
 OUTPUT_PATH = OUT_DIR / "tier2_5_concept_neighbours_temporal.json"

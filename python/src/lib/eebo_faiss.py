@@ -75,7 +75,7 @@ from typing import Sequence, Tuple
 import faiss
 import numpy as np
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_config import faiss_index_paths, discover_index_years
 
 class EeboFaissIndex:

@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 # Sentinels / constants shared with tier2
 _NO_WPOS = -1

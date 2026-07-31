@@ -32,7 +32,7 @@ from collections import Counter, defaultdict
 import numpy as np
 
 from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, CORPUS_TIER2_DB_PATH
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.embedding_cache import EmbeddingCache
 
 from tier2_0_concept_events import ZarrEventLookup, sqlite3_connection

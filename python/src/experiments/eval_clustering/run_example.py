@@ -1,7 +1,7 @@
 import sqlite3
 import faiss
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 from lib.embedding_cache import EmbeddingCache
 from lib.eebo_config import (

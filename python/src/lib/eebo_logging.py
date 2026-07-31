@@ -1,4 +1,4 @@
-# eebo_logging.py
+# corpus_logging.py
 
 import json
 import logging
@@ -7,7 +7,7 @@ from typing import Any, Callable
 EmitFn = Callable[[str, str], None]
 
 # Base logger used by the application
-logger = logging.getLogger("eebo")
+logger = logging.getLogger("corpus")
 
 if logger.level == logging.NOTSET:
     logger.setLevel(logging.DEBUG)
@@ -18,7 +18,7 @@ if not logger.handlers:
     logger.addHandler(_h)
 
 
-class EeboLogger(logging.LoggerAdapter):
+class CorpusLogger(logging.LoggerAdapter):
     def __init__(
         self,
         logger: logging.Logger,
@@ -89,8 +89,8 @@ def setEmit(
     emit: EmitFn,
     tag: str = "",
     context: dict[str, Any] | None = None,
-) -> EeboLogger:
-    return EeboLogger(
+) -> CorpusLogger:
+    return CorpusLogger(
         logger,
         emit=emit,
         tag=tag,

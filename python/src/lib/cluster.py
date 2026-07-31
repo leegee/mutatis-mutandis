@@ -8,7 +8,7 @@ import igraph as ig
 import leidenalg
 from sklearn.neighbors import NearestNeighbors
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_config import (
     CORPUS_TIER2_DB_PATH,
     ZARR_PATH,

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from lib.eebo_config import GUI_PUBLIC_ROOT, CORPUS_TIER2_DB_URL, CORPUS_TIER2_MASKED_DB_URL
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.get_corpus_year_range import get_corpus_year_range
 
 

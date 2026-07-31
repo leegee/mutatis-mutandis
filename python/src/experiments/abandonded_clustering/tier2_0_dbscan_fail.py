@@ -120,7 +120,7 @@ import zarr
 
 from lib.corpus_db import get_connection
 from lib.eebo_config import ZARR_ROOT, SLICES, CONCEPT_SETS, OUT_DIR
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 out_dir = OUT_DIR
 out_dir.mkdir(parents=True, exist_ok=True)

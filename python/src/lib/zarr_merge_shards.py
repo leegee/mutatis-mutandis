@@ -10,7 +10,7 @@ import argparse
 from pathlib import Path
 
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 CHUNK = 20_000  # rows per append_events call
 

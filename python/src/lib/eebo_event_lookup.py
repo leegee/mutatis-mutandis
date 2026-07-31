@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable
 
 from lib.corpus_db import get_connection
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 
 # ------------------------------------------------------------

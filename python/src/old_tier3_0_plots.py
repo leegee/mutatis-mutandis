@@ -50,7 +50,7 @@ from lib.eebo_config import (
 )
 from lib.eebo_faiss import EeboFaissIndex, multiscale_search
 from lib.concept_resolve import resolve_concepts
-from lib.eebo_logging import logger, setEmit
+from lib.corpus_logging import logger, setEmit
 from lib.corpus_db import get_connection
 from lib.embedding_cache import EmbeddingCache
 from tier2_0_concept_events import ZarrEventLookup

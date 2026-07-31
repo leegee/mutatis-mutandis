@@ -14,7 +14,7 @@ import psycopg
 from psycopg import sql, Connection
 import time
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 import lib.eebo_config as config
 
 _DB_RETRIES = 3
