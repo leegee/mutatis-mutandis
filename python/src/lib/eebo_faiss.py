@@ -76,6 +76,7 @@ import faiss
 import numpy as np
 
 from lib.eebo_logging import logger
+from lib.eebo_config import faiss_index_paths, discover_index_years
 
 class EeboFaissIndex:
     """
@@ -355,6 +356,87 @@ class EeboFaissIndex:
         return obj
 
 
+    @classmethod
+    def load_range(
+        cls,
+        years,
+        masked: bool = False,
+    ) -> dict[int, dict[str, "EeboFaissIndex"]]:
+        """
+        Load all FAISS indices for a selected set of years.
+
+        Returns
+        -------
+        dict[int, dict[str, EeboFaissIndex]]
+            Nested index layout:
+
+                {
+                    year: {
+                        "local": EeboFaissIndex,
+                        "medium": EeboFaissIndex,
+                        "broad": EeboFaissIndex,
+                    }
+                }
+
+        Parameters
+        ----------
+        years:
+            Iterable of publication years to load.
+
+        masked:
+            Whether to load masked-index variants.
+
+        Failure modes
+        -------------
+        Propagates FileNotFoundError or validation errors from cls.load().
+        """
+
+        return {
+            year: {
+                scale: cls.load(path)
+                for scale, path in faiss_index_paths(
+                    masked=masked,
+                    year=year,
+                ).items()
+            }
+            for year in years
+        }
+
+
+    @classmethod
+    def load_all(
+        cls,
+        masked: bool = False,
+    ) -> dict[int, dict[str, "EeboFaissIndex"]]:
+        """
+        Load all available FAISS indices discovered on disk.
+
+        Discovery is delegated to discover_index_years(), which determines
+        which publication years have persisted indices.
+
+        Parameters
+        ----------
+        masked:
+            Whether to load masked-index variants.
+
+        Returns
+        -------
+        dict[int, dict[str, EeboFaissIndex]]
+            Nested index layout:
+
+                {
+                    year: {
+                        "local": EeboFaissIndex,
+                        "medium": EeboFaissIndex,
+                        "broad": EeboFaissIndex,
+                    }
+                }
+        """
+
+        return cls.load_range(
+            years=discover_index_years(masked),
+            masked=masked,
+        )
 
     def reconstruct_many(
         self,
