@@ -60,7 +60,7 @@ import argparse
 
 import numpy as np
 
-from lib.eebo_config import ZARR_PATH
+from lib.corpus_config import ZARR_PATH
 from lib.eebo_faiss import EeboFaissIndex
 from lib.corpus_logging import logger
 from lib.macberth import get_macberth_embedder

@@ -1,5 +1,5 @@
 from lib.zarr_event_stream import ZarrEventStream
-from lib.eebo_config import ZARR_ROOT
+from lib.corpus_config import ZARR_ROOT
 
 stream = ZarrEventStream(str(ZARR_ROOT / "tier1"))
 

@@ -4,7 +4,7 @@ from typing import Set
 import nltk
 from nltk.corpus import stopwords
 
-import lib.eebo_config as config
+import lib.corpus_config as config
 
 def load_wordlist() -> Set[str]:
     """

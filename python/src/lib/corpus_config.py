@@ -1,4 +1,4 @@
-# lib/eebo_config.py
+# lib/corpus_config.py
 
 from pathlib import Path
 from typing import TypedDict, Set, Dict

@@ -23,7 +23,7 @@ from typing import Counter as CounterType
 import psycopg
 
 import corpus_db
-import eebo_config as config
+import corpus_config as config
 
 
 QUERY_WORD = "liberty"

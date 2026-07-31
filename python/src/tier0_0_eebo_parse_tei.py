@@ -23,7 +23,7 @@ from concurrent.futures import ProcessPoolExecutor
 from psycopg import sql
 import xml.etree.ElementTree as etree
 import langdetect
-import lib.eebo_config as config
+import lib.corpus_config as config
 import lib.corpus_db as corpus_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.corpus_logging import logger

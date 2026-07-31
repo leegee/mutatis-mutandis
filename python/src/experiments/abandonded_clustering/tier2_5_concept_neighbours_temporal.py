@@ -51,7 +51,7 @@ import numpy as np
 import zarr
 from sklearn.decomposition import PCA
 
-from lib.eebo_config import CONCEPT_SETS, ZARR_ROOT, OUT_DIR
+from lib.corpus_config import CONCEPT_SETS, ZARR_ROOT, OUT_DIR
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 

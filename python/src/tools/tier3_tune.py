@@ -37,7 +37,7 @@ import numpy as np
 import igraph as ig
 import leidenalg
 
-from lib.eebo_config import (
+from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     ZARR_PATH,
     TMP_DIR,

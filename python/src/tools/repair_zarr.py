@@ -2,7 +2,7 @@ import zarr
 import numpy as np
 from numcodecs import Blosc
 from lib.corpus_db import get_connection
-from lib.eebo_config import ZARR_PATH
+from lib.corpus_config import ZARR_PATH
 
 root = zarr.open_group(str(ZARR_PATH), mode="a", zarr_version=2)
 events = root["events"]

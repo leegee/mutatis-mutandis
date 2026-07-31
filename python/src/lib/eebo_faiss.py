@@ -76,7 +76,7 @@ import faiss
 import numpy as np
 
 from lib.corpus_logging import logger
-from lib.eebo_config import faiss_index_paths, discover_index_years
+from lib.corpus_config import faiss_index_paths, discover_index_years
 
 class EeboFaissIndex:
     """

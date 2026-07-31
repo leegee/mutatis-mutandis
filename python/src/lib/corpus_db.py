@@ -15,7 +15,7 @@ from psycopg import sql, Connection
 import time
 
 from lib.corpus_logging import logger
-import lib.eebo_config as config
+import lib.corpus_config as config
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds

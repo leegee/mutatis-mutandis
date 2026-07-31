@@ -1,6 +1,6 @@
 import sys
 
-import eebo_config as config
+import corpus_config as config
 import corpus_db
 
 def make_slices():

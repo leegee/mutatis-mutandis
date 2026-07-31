@@ -41,7 +41,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from pathlib import Path
-from lib.eebo_config import OUT_DIR, XML_ROOT_DIR
+from lib.corpus_config import OUT_DIR, XML_ROOT_DIR
 from lib.corpus_logging import logger
 from tier2_5_concept_neighbours_temporal import OUTPUT_PATH as INPUT_PATH
 

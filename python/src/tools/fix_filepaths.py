@@ -3,7 +3,7 @@
 from pathlib import Path
 import xml.etree.ElementTree as etree
 
-import lib.eebo_config as config
+import lib.corpus_config as config
 import lib.corpus_db as corpus_db
 
 

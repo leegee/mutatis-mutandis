@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.metrics.pairwise import cosine_similarity
 
-from lib.eebo_config import OUT_DIR
+from lib.corpus_config import OUT_DIR
 
 
 INPUT_PATH = OUT_DIR / "tier2_5_concept_neighbours_temporal.json"

@@ -17,7 +17,7 @@ import numpy as np
 from collections import Counter, defaultdict
 
 from lib.corpus_db import get_connection
-from lib.eebo_config import ZARR_ROOT, SLICES
+from lib.corpus_config import ZARR_ROOT, SLICES
 
 
 def parse_args():

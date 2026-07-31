@@ -69,7 +69,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from lib.eebo_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
+from lib.corpus_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
 from lib.corpus_logging import logger
 from lib.get_processed_concepts import get_processed_concepts

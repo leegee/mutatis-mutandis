@@ -119,7 +119,7 @@ import numpy as np
 import zarr
 
 from lib.corpus_db import get_connection
-from lib.eebo_config import ZARR_ROOT, SLICES, CONCEPT_SETS, OUT_DIR
+from lib.corpus_config import ZARR_ROOT, SLICES, CONCEPT_SETS, OUT_DIR
 from lib.corpus_logging import logger
 
 out_dir = OUT_DIR

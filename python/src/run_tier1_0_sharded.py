@@ -16,7 +16,7 @@ import sys
 import os
 from pathlib import Path
 
-from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, LOG_DIR
+from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, LOG_DIR
 from lib.corpus_logging import logger
 
 T1_PATH = "src/tier1_0_corpus2zarr.py"

@@ -13,7 +13,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 from lib.corpus_logging import logger
-from lib.eebo_config import MODELS_DIR
+from lib.corpus_config import MODELS_DIR
 
 MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
 MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"

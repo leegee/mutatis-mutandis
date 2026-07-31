@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from lib.eebo_config import (
+from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     ZARR_PATH,
     faiss_index_paths,

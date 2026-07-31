@@ -37,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from psycopg import sql
 import numpy as np
 
-from lib.eebo_config import (
+from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     CORPUS_TIER2_MASKED_DB_PATH,
     ZARR_PATH,

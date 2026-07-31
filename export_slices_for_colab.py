@@ -9,7 +9,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from lib.corpus_db import get_connection
-from lib.eebo_config import SLICES_DIR, SLICES
+from lib.corpus_config import SLICES_DIR, SLICES
 
 OUT_DIR = Path("exported_slices")
 OUT_DIR.mkdir(exist_ok=True, parents=True)

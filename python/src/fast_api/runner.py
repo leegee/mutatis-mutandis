@@ -5,7 +5,7 @@ import traceback
 
 from lib.corpus_logging import setEmit, EmitFn
 from lib.corpus_db import get_connection
-from lib.eebo_config import CORPUS_TIER2_DB_PATH
+from lib.corpus_config import CORPUS_TIER2_DB_PATH
 from fast_api.jobs_dao import ( update_stage, mark_done, mark_error, )
 from fast_api.event_bus import job_streams
 from tier2_0_concept_events import ( run_tier2_service, load_doc_metadata, sqlite3_connection as events_sqlite3_connection )

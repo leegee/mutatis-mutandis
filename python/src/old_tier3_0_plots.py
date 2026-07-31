@@ -42,7 +42,7 @@ import sqlite3
 import leidenalg
 import igraph as ig
 
-from lib.eebo_config import (
+from lib.corpus_config import (
     PLOT_DIR, faiss_index_paths,
     ZARR_PATH, MASKED_ZARR_PATH,
     CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH,

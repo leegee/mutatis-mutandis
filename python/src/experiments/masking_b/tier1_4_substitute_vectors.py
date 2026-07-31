@@ -172,7 +172,7 @@ import torch
 from lib.macberth import load_macberth
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.eebo_config import ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
+from lib.corpus_config import ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 
 # Reuse Tier 1's window-selection machinery and shared filtering logic
 # directly, rather than re-implementing it, so both tiers are
@@ -188,7 +188,7 @@ from lib.DocBuffer import DocBuffer
 
 
 # Where the Tier 1.4 store lives. This should really be its own entry in
-# lib.eebo_config alongside ZARR_PATH — using a sibling directory here as
+# lib.corpus_config alongside ZARR_PATH — using a sibling directory here as
 # a placeholder so this script runs standalone; swap for a proper config
 # constant once you've decided on final layout.
 TIER1_4_PATH = ZARR_PATH.parent / "tier1_4_substitutes"

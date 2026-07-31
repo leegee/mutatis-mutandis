@@ -61,11 +61,11 @@ import torch
 
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.eebo_config import MASKED_ZARR_PATH, EMBED_BATCH_SIZE
+from lib.corpus_config import MASKED_ZARR_PATH, EMBED_BATCH_SIZE
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.macberth import load_macberth
 from lib.corpus_db import sqlite3_connection  # matches usage pattern in tier2/tier3
-from lib.eebo_config import CORPUS_TIER2_DB_PATH
+from lib.corpus_config import CORPUS_TIER2_DB_PATH
 
 from tier1_0_corpus2zarr import (
     WINDOW_CONFIGS,

@@ -4,7 +4,7 @@ import faiss
 from lib.corpus_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 from lib.embedding_cache import EmbeddingCache
-from lib.eebo_config import (
+from lib.corpus_config import (
     ZARR_PATH,
     FAISS_TIER1_INDEX,
     CORPUS_TIER2_DB_PATH,
