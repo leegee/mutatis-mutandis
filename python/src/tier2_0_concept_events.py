@@ -523,6 +523,7 @@ def analyse_concept(
             npos = lookup.get_pos(neighbour_id)
 
             candidate_key = (
+                str(lookup.corpus[npos]),
                 str(lookup.doc_id[npos]),
                 int(lookup.token_idx[npos]),
             )
