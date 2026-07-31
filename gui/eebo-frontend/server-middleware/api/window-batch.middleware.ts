@@ -7,16 +7,14 @@
  *
  * {
  *  "queries": [
- *     { "docId": "a", "tokenIdx": 12 },
- *     { "docId": "a", "tokenIdx": 88 },
- *     { "docId": "b", "tokenIdx": 5 }
+ *     { "corpus": "eebo", "docId": "a", "tokenIdx": 12 },
  *   ]
  * }
  *
  * OUT:
  * {
  *  "results": [
- *    { "docId": "A", "tokenIdx": 12, "content": "...", token: "T" },
+ *    {"corpus": "eebo",  "docId": "A", "tokenIdx": 12, "content": "...", token: "T" },
  *  ]
  * }
  */
@@ -27,6 +25,7 @@ import { serverError, text } from "../lib/response";
 const TOKEN_WINDOW_HALF = 10;
 
 type QueryItem = {
+  corpus: string;
   docId: string;
   tokenIdx: number;
 };
@@ -55,6 +54,7 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
       }
 
       const queries: QueryItem[] = parsed.queries.map((q: any) => ({
+        corpus: String(q.corpus),
         docId: String(q.docId),
         tokenIdx: Number(q.tokenIdx),
       }));
@@ -75,6 +75,7 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
 
       // per-doc batch query
       for (const [docId, items] of grouped.entries()) {
+        const corpus = items[0].corpus;
         const tokenIds = items.map(i => i.tokenIdx);
 
         const min = Math.min(...tokenIds) - TOKEN_WINDOW_HALF;
@@ -84,11 +85,12 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
           `
           SELECT token, token_idx
           FROM pamphlet_tokens
-          WHERE doc_id = $1
-            AND token_idx BETWEEN $2 AND $3
+          WHERE corpus = $1
+            AND doc_id = $2
+            AND token_idx BETWEEN $3 AND $4
           ORDER BY token_idx
           `,
-          [docId, min, max],
+          [corpus, docId, min, max],
         );
 
         // slice out each item's own window and mark only its own token
@@ -106,6 +108,7 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
             .join(" ");
 
           results.push({
+            corpus,
             docId,
             tokenIdx: item.tokenIdx,
             content: format(content),

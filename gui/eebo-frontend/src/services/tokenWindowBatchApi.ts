@@ -1,6 +1,7 @@
 import { createResource } from "solid-js";
 
 export type WindowQueryOld = {
+  corpus: string;
   docId: string;
   tokenIdx: number;
 };
@@ -12,6 +13,7 @@ export type WindowQueryEventId = {
 export type WindowQuery = WindowQueryEventId | WindowQueryOld;
 
 export type TextWindowItem = {
+  corpus: string;
   docId: string;
   tokenIdx: number;
   content: string;
