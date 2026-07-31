@@ -354,3 +354,33 @@ def get_macberth_embedder(
         macberth_model,
         pooling=pooling,
     )
+
+
+def embed_query(
+    text: str,
+    *,
+    backend: str = "onnx",
+    pooling: str = "mean",
+) -> np.ndarray:
+    """
+    Encode a short natural-language query for vector retrieval.
+
+    Returns a single L2-normalized vector with shape (1, hidden_size),
+    suitable for FAISS inner-product search.
+
+    Query vectors must follow the same normalization convention as the
+    stored Tier 1 vectors; otherwise inner-product scores are not comparable.
+    """
+
+    embedder = get_macberth_embedder(
+        pooling=pooling,
+        backend=backend
+    )
+
+    embedding = embedder.encode( text )[0]
+    vector = normalize(embedding)
+
+    if vector is None:
+        raise RuntimeError( "MacBERTh produced zero-length query embedding" )
+
+    return vector.astype(np.float32)[None, :]
