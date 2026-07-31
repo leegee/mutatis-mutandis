@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-eebo_event_lookup.py
+faiss_event_lookup.py
 
 Event metadata resolution layer for EEBO semantic event embeddings.
 
