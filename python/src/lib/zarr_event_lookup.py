@@ -158,6 +158,11 @@ class ZarrEventLookup:
         return np.float32
 
 
+    @property
+    def available_years(self) -> np.ndarray:
+        return np.unique(self.pub_year)
+
+
     def __len__(self):
         return len(self._lookup.event_id)
 
