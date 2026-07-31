@@ -104,7 +104,6 @@ CREATE TABLE IF NOT EXISTS events (
     corpus TEXT NOT NULL,
     event_id INTEGER PRIMARY KEY,
     concept TEXT,
-    event_role TEXT NOT NULL DEFAULT 'neighbour',
     vector_id INTEGER,
     token TEXT,
     doc_id TEXT,
@@ -144,7 +143,9 @@ CREATE TABLE IF NOT EXISTS neighbours (
     )
 );
 
---  concept_field_events is the authoritative relationship
+-- concept_field_events is the authoritative relationship between
+-- corpus observations and concepts. Event role is concept-relative
+-- and therefore does not belong on events.
 CREATE TABLE IF NOT EXISTS concept_field_events (
     concept TEXT NOT NULL,
     event_id INTEGER NOT NULL,
@@ -339,7 +340,6 @@ def ensure_events(con, lookup, event_ids):
             int(eid),
             event["corpus"],
             None,
-            "neighbour",
             int(event["vector_id"]),
             event["token"],
             event["doc_id"],
@@ -358,7 +358,6 @@ def ensure_events(con, lookup, event_ids):
             event_id,
             corpus,
             concept,
-            event_role,
             vector_id,
             token,
             doc_id,
@@ -367,7 +366,7 @@ def ensure_events(con, lookup, event_ids):
             window_id,
             window_token_pos
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
         """,
         rows,
     )
@@ -715,13 +714,7 @@ def write_concept(con, data, lookup):
             )
 
     con.execute(
-        """
-        INSERT INTO concepts (
-            concept,
-            n_events
-        )
-        VALUES (?,?)
-        """,
+        "INSERT INTO concepts ( concept, n_events ) VALUES (?,?)",
         (
             concept,
             data["n_events"],
@@ -730,13 +723,7 @@ def write_concept(con, data, lookup):
 
     for form in data.get("forms", []):
         con.execute(
-            """
-            INSERT INTO concept_forms (
-                concept,
-                form
-            )
-            VALUES (?,?)
-            """,
+            "INSERT INTO concept_forms ( concept, form ) VALUES (?,?)",
             (
                 concept,
                 form,
@@ -748,7 +735,6 @@ def write_concept(con, data, lookup):
         UPDATE events
         SET
             concept = ?,
-            event_role = 'seed',
             vector_id = ?,
             token = ?,
             doc_id = ?,

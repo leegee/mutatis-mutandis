@@ -183,9 +183,9 @@ class ZarrEventLookup:
         Load event metadata only. Embeddings remain resident in the per-year
         FAISS indices and are reconstructed lazily when accessed.
         """
-        print(e.tree())
-        print(e["event_id"].shape)
-        print(e["corpus"].shape)
+        # print(e.tree())
+        # print(e["event_id"].shape)
+        # print(e["corpus"].shape)
 
         required = {"event_id", "corpus", "doc_id", "vector_id"}
         missing = required - set(e.keys())
@@ -350,17 +350,49 @@ class ZarrEventLookup:
             yield eid
 
 
-    def find_matching_event_ids(
-        self,
-        forms,
-        false_positives=None,
-    ):
+    def find_matching_event_ids( self, forms, false_positives=None, ):
         return list(
             self.iter_matching_event_ids(
                 forms,
                 false_positives,
             )
         )
+
+
+    def find_event_ids_by_positions(self, positions):
+        """
+        Resolve corpus occurrence positions to Tier 1 observation events.
+
+        A single corpus occurrence may have multiple Tier 1 events because it can
+        be observed under multiple contextual windows.
+
+        Corpus is part of the key because doc_id is not globally unique.
+        """
+        wanted = {
+            (
+                str(corpus),
+                str(doc_id),
+                int(token_idx),
+            )
+            for corpus, doc_id, token_idx in positions
+        }
+
+        result = {
+            key: []
+            for key in wanted
+        }
+
+        for pos in range(len(self.event_id)):
+            key = (
+                str(self.corpus[pos]),
+                str(self.doc_id[pos]),
+                int(self.token_idx[pos]),
+            )
+
+            if key in result:
+                result[key].append(int(self.event_id[pos]))
+
+        return result
 
 
     def get_pos(self, event_id: int) -> int:
