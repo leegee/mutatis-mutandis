@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-eebo_faiss.py
+corpus_faiss.py
 
 FAISS retrieval layer for EEBO semantic event embeddings.
 
@@ -31,7 +31,7 @@ It does NOT own:
 Vector reconstruction
 ---------------------
 
-EeboFaissIndex exposes a reconstruct() method that retrieves the
+CorpusFaissIndex exposes a reconstruct() method that retrieves the
 unit-normalised vector stored for a given event_id directly from the
 FAISS index, without reaching back into the Zarr store.
 
@@ -78,7 +78,7 @@ import numpy as np
 from lib.corpus_logging import logger
 from lib.corpus_config import faiss_index_paths, discover_index_years
 
-class EeboFaissIndex:
+class CorpusFaissIndex:
     """
     Thin wrapper around FAISS IndexIDMap2.
 
@@ -313,7 +313,7 @@ class EeboFaissIndex:
 
 
     @classmethod
-    def load(cls, path: Path) -> "EeboFaissIndex":
+    def load(cls, path: Path) -> "CorpusFaissIndex":
         path = Path(path)
         if not path.is_file():
             raise FileNotFoundError(f"FAISS index not found: {path}")
@@ -361,20 +361,20 @@ class EeboFaissIndex:
         cls,
         years,
         masked: bool = False,
-    ) -> dict[int, dict[str, "EeboFaissIndex"]]:
+    ) -> dict[int, dict[str, "CorpusFaissIndex"]]:
         """
         Load all FAISS indices for a selected set of years.
 
         Returns
         -------
-        dict[int, dict[str, EeboFaissIndex]]
+        dict[int, dict[str, CorpusFaissIndex]]
             Nested index layout:
 
                 {
                     year: {
-                        "local": EeboFaissIndex,
-                        "medium": EeboFaissIndex,
-                        "broad": EeboFaissIndex,
+                        "local": CorpusFaissIndex,
+                        "medium": CorpusFaissIndex,
+                        "broad": CorpusFaissIndex,
                     }
                 }
 
@@ -407,7 +407,7 @@ class EeboFaissIndex:
     def load_all(
         cls,
         masked: bool = False,
-    ) -> dict[int, dict[str, "EeboFaissIndex"]]:
+    ) -> dict[int, dict[str, "CorpusFaissIndex"]]:
         """
         Load all available FAISS indices discovered on disk.
 
@@ -421,14 +421,14 @@ class EeboFaissIndex:
 
         Returns
         -------
-        dict[int, dict[str, EeboFaissIndex]]
+        dict[int, dict[str, CorpusFaissIndex]]
             Nested index layout:
 
                 {
                     year: {
-                        "local": EeboFaissIndex,
-                        "medium": EeboFaissIndex,
-                        "broad": EeboFaissIndex,
+                        "local": CorpusFaissIndex,
+                        "medium": CorpusFaissIndex,
+                        "broad": CorpusFaissIndex,
                     }
                 }
         """
@@ -497,7 +497,7 @@ def _merge_topk_across_years(
     per query, for one scale.
 
     Each entry in year_results is (scores, ids) as returned by
-    EeboFaissIndex.search() for one year's index at this scale, shape
+    CorpusFaissIndex.search() for one year's index at this scale, shape
     (n_queries, search_k). Since event_ids are globally unique (stable-hashed
     from doc_id/token_idx/window position, not scoped per year), there's no
     cross-year collision risk here — merging is a straightforward top-k
@@ -525,7 +525,7 @@ def _merge_topk_across_years(
 
 
 def multiscale_search(
-    index: dict[int, dict[str, "EeboFaissIndex"]],
+    index: dict[int, dict[str, "CorpusFaissIndex"]],
     lookup,
     positions,
     top_n: int,
@@ -537,7 +537,7 @@ def multiscale_search(
     Search local/medium/broad FAISS indices for the queries at `positions`,
     fuse the three ranked lists per query via RRF.
 
-    `index` is keyed as index[year][scale] -> EeboFaissIndex, matching the
+    `index` is keyed as index[year][scale] -> CorpusFaissIndex, matching the
     per-year, per-scale layout produced by build_indices.py.
 
     pub_year:

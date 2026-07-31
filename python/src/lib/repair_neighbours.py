@@ -50,7 +50,7 @@ def backfill_neighbours_for_year(
 
     Returns the number of neighbour rows written.
     """
-    from lib.eebo_faiss import multiscale_search
+    from lib.corpus_faiss import multiscale_search
     # ensure_events lives in the tier2 module; import locally to avoid cycles
     from tier2_0_concept_events import ensure_events
 

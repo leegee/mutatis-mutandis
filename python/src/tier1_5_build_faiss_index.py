@@ -7,7 +7,7 @@ import numpy as np
 
 from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, faiss_index_paths
 from lib.corpus_logging import logger
-from lib.eebo_faiss import EeboFaissIndex
+from lib.corpus_faiss import CorpusFaissIndex
 from lib.zarr_event_stream import ZarrEventStream
 
 BATCH_SIZE = 8192
@@ -35,12 +35,12 @@ def discover_years(masked: bool) -> list[int]:
 
 def build_indices(
     stream: ZarrEventStream,
-    indices: dict[int, dict[str, EeboFaissIndex]] | None = None,
+    indices: dict[int, dict[str, CorpusFaissIndex]] | None = None,
     already_indexed: set[int] | None = None,
-) -> dict[int, dict[str, EeboFaissIndex]]:
+) -> dict[int, dict[str, CorpusFaissIndex]]:
     """
     Build/update per-year, per-scale FAISS indices from a single streamed
-    pass. Each (year, scale) pair gets its own EeboFaissIndex, so downstream
+    pass. Each (year, scale) pair gets its own CorpusFaissIndex, so downstream
     fusion can happen both across scales and within/across year ranges.
     """
     total = 0
@@ -86,7 +86,7 @@ def build_indices(
                 for scale, emb in per_scale.items():
                     year_emb = emb[year_mask]
                     if scale not in indices[year]:
-                        indices[year][scale] = EeboFaissIndex(dim=year_emb.shape[1], exact=True)
+                        indices[year][scale] = CorpusFaissIndex(dim=year_emb.shape[1], exact=True)
                     indices[year][scale].add(year_emb, year_obs_ids)
 
                 total += len(year_obs_ids)
@@ -127,7 +127,7 @@ def main():
         for year in existing_years:
             for scale, path in faiss_index_paths(masked, year=year).items():
                 logger.info(f"[faiss-build] clearing existing {scale}/{year} index")
-                EeboFaissIndex.wipe_faiss_index(path)
+                CorpusFaissIndex.wipe_faiss_index(path)
         indices = build_indices(stream)
 
     elif not existing_years:
@@ -136,7 +136,7 @@ def main():
 
     else:
         logger.info(f"[faiss-build] incremental mode — loading {len(existing_years)} existing years")
-        indices: dict[int, dict[str, EeboFaissIndex]] = {}
+        indices: dict[int, dict[str, CorpusFaissIndex]] = {}
         already_indexed: set[int] = set()
 
         for year in existing_years:
@@ -144,7 +144,7 @@ def main():
             year_id_sets = {}
 
             for scale, path in faiss_index_paths(masked, year=year).items():
-                idx = EeboFaissIndex.load(path)
+                idx = CorpusFaissIndex.load(path)
                 indices[year][scale] = idx
                 year_id_sets[scale] = idx.ids()
 

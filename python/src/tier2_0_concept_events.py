@@ -46,8 +46,8 @@ from lib.corpus_config import (
     discover_index_years,
 )
 
-from lib.eebo_faiss import (
-    EeboFaissIndex,
+from lib.corpus_faiss import (
+    CorpusFaissIndex,
     multiscale_search,
 )
 
@@ -397,7 +397,7 @@ def load_indices(paths_by_year, workers=6):
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
             pool.submit(
-                EeboFaissIndex.load,
+                CorpusFaissIndex.load,
                 path,
             ):
             (year, scale)

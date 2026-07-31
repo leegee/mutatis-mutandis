@@ -23,7 +23,7 @@ from lib.corpus_config import (
 )
 
 from lib.concept_resolve import resolve_concepts
-from lib.eebo_faiss import EeboFaissIndex
+from lib.corpus_faiss import CorpusFaissIndex
 from lib.corpus_logging import logger
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.sqlite_vector_blob import vector_to_blob
@@ -204,7 +204,7 @@ def load_indices(years, masked=False):
         index[year] = {}
 
         for scale, path in paths.items():
-            index[year][scale] = EeboFaissIndex.load(path)
+            index[year][scale] = CorpusFaissIndex.load(path)
 
     return index
 

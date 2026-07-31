@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 
 """
-test_eebo_faiss_load.py
+test_corpus_faiss_load.py
 
 Smoke test for loading persisted EEBO FAISS indices.
 """
 
-from lib.eebo_faiss import EeboFaissIndex
+from lib.corpus_faiss import CorpusFaissIndex
 
 
 def main():
 
 
     # Load entire available corpus
-    index = EeboFaissIndex.load_all()
+    index = CorpusFaissIndex.load_all()
 
     logger.debug(f"Loaded years: {sorted(index.keys())}")
 
@@ -21,14 +21,14 @@ def main():
         assert set(scales) == {"local", "medium", "broad"}
 
         for scale, idx in scales.items():
-            assert isinstance(idx, EeboFaissIndex)
+            assert isinstance(idx, CorpusFaissIndex)
             assert idx.ntotal > 0
             print( f"{year} {scale}: {idx.ntotal:,} vectors dim={idx.dim}" )
 
 
     # Load selected years only
     years = sorted(index.keys())[:2]
-    subset = EeboFaissIndex.load_range( years=years, )
+    subset = CorpusFaissIndex.load_range( years=years, )
 
     print("\nSelected years:")
     for year, scales in subset.items():

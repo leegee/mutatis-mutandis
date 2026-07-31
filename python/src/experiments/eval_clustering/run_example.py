@@ -2,7 +2,7 @@ import sqlite3
 import faiss
 
 from lib.corpus_logging import logger
-from lib.eebo_faiss import EeboFaissIndex
+from lib.corpus_faiss import CorpusFaissIndex
 from lib.embedding_cache import EmbeddingCache
 from lib.corpus_config import (
     ZARR_PATH,
@@ -23,7 +23,7 @@ def run_all():
     db = sqlite3.connect(CORPUS_TIER2_DB_PATH)
 
     lookup = ZarrEventLookup(ZARR_PATH)
-    index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
+    index = CorpusFaissIndex.load(FAISS_TIER1_INDEX)
 
     substrate = Substrate(db, lookup, index)
     writer = ClusterWriter(CORPUS_TIER2_DB_PATH)

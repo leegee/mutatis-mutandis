@@ -31,7 +31,7 @@ import numpy as np
 from lib.corpus_logging import logger
 from lib.corpus_config import ZARR_ROOT, FAISS_INDEX_DIR
 from lib.zarr_event_stream import ZarrEventStream
-from lib.eebo_faiss import EeboFaissIndex
+from lib.corpus_faiss import CorpusFaissIndex
 
 
 FAISS_PATH = FAISS_TIER1_INDEX
@@ -65,7 +65,7 @@ def check_zarr(stream: ZarrEventStream) -> int:
 
 # FAISS sanity
 
-def check_faiss(index: EeboFaissIndex, expected_n: int) -> None:
+def check_faiss(index: CorpusFaissIndex, expected_n: int) -> None:
     if index.ntotal != expected_n:
         raise AssertionError(
             f"FAISS/Zarr mismatch: ntotal={index.ntotal}, expected={expected_n}"
@@ -89,7 +89,7 @@ def check_faiss(index: EeboFaissIndex, expected_n: int) -> None:
 
 # stream consistency check (sampled)
 
-def check_stream_consistency(stream: ZarrEventStream, index: EeboFaissIndex) -> None:
+def check_stream_consistency(stream: ZarrEventStream, index: CorpusFaissIndex) -> None:
     """
     Light-weight cross-check: ensures stream → FAISS mapping is valid.
     """
@@ -115,7 +115,7 @@ def main():
     stream = ZarrEventStream(str(ZARR_ROOT / "tier1"))
 
     logger.info("[integrity] loading FAISS")
-    index = EeboFaissIndex.load(FAISS_PATH)
+    index = CorpusFaissIndex.load(FAISS_PATH)
 
     logger.info("[integrity] checking Zarr event stream")
     n_events = check_zarr(stream)

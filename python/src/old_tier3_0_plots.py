@@ -48,7 +48,7 @@ from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH, CORPUS_TIER2_MASKED_DB_PATH,
     discover_index_years,
 )
-from lib.eebo_faiss import EeboFaissIndex, multiscale_search
+from lib.corpus_faiss import CorpusFaissIndex, multiscale_search
 from lib.concept_resolve import resolve_concepts
 from lib.corpus_logging import logger, setEmit
 from lib.corpus_db import get_connection
@@ -66,7 +66,7 @@ K = 25
 
 
 # Move to a lib, this is also in T2
-def load_all_year_indices(masked: bool, max_workers: int = 8) -> dict[int, dict[str, EeboFaissIndex]]:
+def load_all_year_indices(masked: bool, max_workers: int = 8) -> dict[int, dict[str, CorpusFaissIndex]]:
     years = discover_index_years(masked)
     if not years:
         raise RuntimeError(
@@ -80,13 +80,13 @@ def load_all_year_indices(masked: bool, max_workers: int = 8) -> dict[int, dict[
         for scale, path in faiss_index_paths(masked, year=year).items()
     ]
 
-    index: dict[int, dict[str, EeboFaissIndex]] = {year: {} for year in years}
+    index: dict[int, dict[str, CorpusFaissIndex]] = {year: {} for year in years}
 
     logger.info(f"[tier3] loading {len(jobs)} FAISS indices ({max_workers} workers)")
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         future_to_job = {
-            pool.submit(EeboFaissIndex.load, path): (year, scale)
+            pool.submit(CorpusFaissIndex.load, path): (year, scale)
             for year, scale, path in jobs
         }
         for future in as_completed(future_to_job):
@@ -163,7 +163,7 @@ def backfill_missing_events_from_zarr(db_path, lookup, event_ids):
 
 
 def build_depth_layers(
-    index,    # dict[str, EeboFaissIndex] — local/medium/broad
+    index,    # dict[str, CorpusFaissIndex] — local/medium/broad
     lookup,   # CHANGED: was emb_cache
     seed_ids,
     k: int = 25,
@@ -273,7 +273,7 @@ def fit_umap_global(X, event_ids):
 
 def fit_leiden_on_fused_graph(
     event_ids,
-    index,  # dict of scale -> EeboFaissIndex
+    index,  # dict of scale -> CorpusFaissIndex
     lookup,
     k: int = 25,
     resolution: float = 1.0,

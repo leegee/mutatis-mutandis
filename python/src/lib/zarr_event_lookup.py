@@ -11,7 +11,7 @@ _NO_WPOS = -1
 class _LazyScaleEmbeddings:
     """
     Array-like accessor for one embedding scale (local/medium/broad),
-    backed by EeboFaissIndex.reconstruct() instead of an eagerly loaded
+    backed by CorpusFaissIndex.reconstruct() instead of an eagerly loaded
     (N, 768) matrix for the whole corpus. Full-corpus eager loading of
     all three scales does not fit in memory (~15.7 GiB for ~1.8M events);
     this replaces it with on-demand reconstruction from the per-year
@@ -23,8 +23,8 @@ class _LazyScaleEmbeddings:
     and every other caller needs no changes.
 
     PERF: array indexing groups requested positions by pub_year before
-    reconstructing, and issues one batched EeboFaissIndex.reconstruct_many()
-    call per year instead of one EeboFaissIndex.reconstruct() call per
+    reconstructing, and issues one batched CorpusFaissIndex.reconstruct_many()
+    call per year instead of one CorpusFaissIndex.reconstruct() call per
     position. This is called on every concept-year (via load_vectors ->
     get_concatenated_embeddings) as well as once for the corpus-wide
     global projection, so avoiding a Python-level FAISS call per single
@@ -40,7 +40,7 @@ class _LazyScaleEmbeddings:
 
     def __init__(self, lookup: "ZarrEventLookup", index, scale: str, dim: int):
         self._lookup = lookup
-        self._index = index   # dict[year][scale] -> EeboFaissIndex
+        self._index = index   # dict[year][scale] -> CorpusFaissIndex
         self._scale = scale
         self._dim = dim
 
@@ -118,7 +118,7 @@ class ZarrEventLookup:
 
     Metadata is loaded eagerly into compact NumPy arrays. Embeddings remain in
     the per-year FAISS indices and are reconstructed lazily on demand via
-    EeboFaissIndex.reconstruct(). This avoids loading approximately 16 GiB of
+    CorpusFaissIndex.reconstruct(). This avoids loading approximately 16 GiB of
     embedding matrices into memory while preserving the existing array-like API.
 
     Exposes three embedding scales (local, medium, broad) through lazy array-like
@@ -232,7 +232,7 @@ class ZarrEventLookup:
             self._chunks["window_token_pos"].append(wpos_col)
 
 
-    def attach_index(self, index: dict[int, dict[str, "EeboFaissIndex"]]) -> None:
+    def attach_index(self, index: dict[int, dict[str, "CorpusFaissIndex"]]) -> None:
         """
         Attach the per-year, per-scale FAISS indices used for lazy embedding reconstruction.
         After attachment, emb_local, emb_medium, and emb_broad behave like NumPy arrays,
