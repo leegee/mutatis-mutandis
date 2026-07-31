@@ -70,6 +70,7 @@ FAISS_TIER1_INDEX_MASKED = FAISS_INDEX_DIR / "tier1-masked.index"
 
 FAISS_SCALES = ("local", "medium", "broad")
 
+# TODO Move to lib
 def faiss_index_paths(masked: bool, year: int | None = None) -> dict[str, Path]:
     """
     e.g. faiss_index_paths(masked=True)         -> tier1_local_masked.faiss
@@ -86,6 +87,7 @@ def faiss_index_paths(masked: bool, year: int | None = None) -> dict[str, Path]:
     }
 
 
+# TODO Move to lib
 def discover_index_years(masked: bool) -> list[int]:
     """
     Find which years already have on-disk FAISS indices, by globbing for
