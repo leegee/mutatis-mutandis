@@ -67,9 +67,6 @@ class ZarrEmbeddingObservationStore:
         # stable corpus token identity
         self.concept_id = self._ds( g, "concept_id", (), compressor, "int64" )
 
-        # contextual embedding
-        self.emb_raw = self._ds( g, "emb_raw", (dim,), compressor, "float32" )
-
         # Multi-scale contextual embeddings
         self.emb_local  = self._ds(g, "emb_local",  (self.dim,), compressor, "float32")
         self.emb_medium = self._ds(g, "emb_medium", (self.dim,), compressor, "float32")
