@@ -321,12 +321,12 @@ class EeboFaissIndex:
         obj = cls(dim=1)
         obj._index = faiss.read_index(str(path))
 
-        # logger.info(
+        # logger.debug(
         #     f"[faiss] loaded wrapper={type(obj._index).__name__} "
         #     f"base={type(obj._index.index).__name__}"
         # )
 
-        # logger.info(
+        # logger.debug(
         #     f"[faiss] reconstruct capability: "
         #     f"wrapper={hasattr(obj._index, 'reconstruct')} "
         #     f"base={hasattr(obj._index.index, 'reconstruct')}"
