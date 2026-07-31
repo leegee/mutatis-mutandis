@@ -274,6 +274,25 @@ class ZarrEventLookup:
         )
 
 
+    def get_event_metadata(self, event_id: int) -> dict:
+        """
+        Return event provenance without reconstructing embeddings.
+
+        Embedding reconstruction is deliberately excluded because it requires
+        attached FAISS indices and is expensive. Most consumers only need the
+        corpus coordinates of an event.
+        """
+        pos = self._pos[int(event_id)]
+        return self._row_to_dict(pos)
+
+
+    def get_event(self, event_id: int) -> dict:
+        pos = self._pos[int(event_id)]
+        d = self._row_to_dict(pos)
+        d["embedding"] = self.get_ensemble_embedding(pos)
+        return d
+
+
     def get_event(self, event_id: int) -> dict:
         pos = self._pos[int(event_id)]
         d = self._row_to_dict(pos)
@@ -396,3 +415,41 @@ class ZarrEventLookup:
         broad  = _norm_rows(self.emb_broad[positions])
 
         return np.concatenate([local, medium, broad], axis=1).astype(np.float32)
+
+
+    def get_window_events( self, doc_id, window_id, ):
+        mask = (
+            (self.doc_id == doc_id)
+            &
+            (self.window_id == window_id)
+        )
+
+        positions = np.where(mask)[0]
+
+        return [
+            self._row_to_dict(int(pos))
+            for pos in positions
+        ]
+
+
+    def get_window_text( self, doc_id, window_id, ):
+        mask = (
+            (self.doc_id == doc_id)
+            &
+            (self.window_id == window_id)
+        )
+
+        positions = np.where(mask)[0]
+
+        events = sorted(
+            (
+                self._row_to_dict(int(pos))
+                for pos in positions
+            ),
+            key=lambda x: x["token_idx"],
+        )
+
+        return " ".join(
+            e["token"]
+            for e in events
+        )
