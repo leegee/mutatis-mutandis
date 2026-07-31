@@ -5,12 +5,14 @@ test_concept_probe.py
 
 Probe Tier 1 contextual observations with a natural-language concept.
 
-Retrieval happens over contextual events. Results are aggregated to
-transformer windows before display. Individual token neighbours are retained
-only as evidence for why a context matched.
+Retrieval happens over contextual events, but results are aggregated to
+transformer windows before display.
 
-The search space defaults to the whole corpus. Publication year filtering
-is available for diachronic experiments.
+FAISS owns geometric retrieval.
+Zarr owns event identity and provenance.
+
+The default search spans the corpus. Publication-year restriction is an
+experimental filter, not part of the retrieval model.
 """
 
 from collections import defaultdict
@@ -20,12 +22,12 @@ import numpy as np
 from lib.eebo_logging import logger
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.eebo_faiss import EeboFaissIndex
-from lib.eebo_config import ZARR_PATH, faiss_index_paths
+from lib.eebo_config import ZARR_PATH
 
 
-TOP_EVENTS = 500
 TOP_WINDOWS = 20
 TOP_ANCHORS = 10
+TOP_EVENTS = 500
 
 
 PROBE = [
@@ -40,8 +42,17 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--from-year", type=int)
-    parser.add_argument("--to-year", type=int)
+    parser.add_argument(
+        "--from-year",
+        type=int,
+        default=None,
+    )
+
+    parser.add_argument(
+        "--to-year",
+        type=int,
+        default=None,
+    )
 
     parser.add_argument(
         "--top",
@@ -53,46 +64,17 @@ def parse_args():
 
 
 
-def load_indices(years, masked=False):
-
-    index_paths = {
-        year: faiss_index_paths(
-            masked=masked,
-            year=year,
-        )
-        for year in years
-    }
-
-    index = {}
-
-    for year, paths in index_paths.items():
-
-        index[year] = {}
-
-        for scale, path in paths.items():
-
-            index[year][scale] = EeboFaissIndex.load(path)
-
-    return index
-
-
-
 def load_lookup():
 
     lookup = ZarrEventLookup(
         ZARR_PATH
     )
 
-    years = sorted(
-        set(
-            int(y)
-            for y in lookup.pub_year
-        )
+    index = EeboFaissIndex.load_all()
+
+    lookup.attach_index(
+        index
     )
-
-    index = load_indices(years)
-
-    lookup.attach_index(index)
 
     return lookup
 
@@ -100,20 +82,31 @@ def load_lookup():
 
 def build_query_embedding():
 
-    from lib.macberth import embed_text
+    from lib.macberth import get_macberth_embedder
+
+    embedder = get_macberth_embedder()
 
     text = " ".join(PROBE)
 
-    return embed_text(text)
+    return embedder.encode_normalized(
+        text
+    )
 
 
 
-def search_all_years(
+def search_all_scales(
     lookup,
     query,
     from_year=None,
     to_year=None,
 ):
+
+    """
+    Retrieve candidates across local/medium/broad spaces.
+
+    Year filtering happens here because publication year is metadata.
+    FAISS only knows event geometry.
+    """
 
     results = []
 
@@ -126,31 +119,29 @@ def search_all_years(
             continue
 
 
-        # Use local FAISS for retrieval.
-        # Aggregation later happens over contextual windows.
-        index = scales["local"]
+        for scale, index in scales.items():
 
-        distances, event_ids = index.search(
-            query,
-            TOP_EVENTS,
-        )
-
-
-        for distance, event_id in zip(
-            distances[0],
-            event_ids[0],
-        ):
-
-            if event_id < 0:
-                continue
-
-            results.append(
-                {
-                    "event_id": int(event_id),
-                    "score": float(distance),
-                    "year": year,
-                }
+            scores, ids = index.search(
+                query,
+                TOP_EVENTS,
             )
+
+            for score, event_id in zip(
+                scores[0],
+                ids[0],
+            ):
+
+                if event_id < 0:
+                    continue
+
+                results.append(
+                    {
+                        "event_id": int(event_id),
+                        "score": float(score),
+                        "scale": scale,
+                        "year": year,
+                    }
+                )
 
 
     return sorted(
@@ -173,8 +164,7 @@ def score_window(scores):
 
     return (
         0.5 * values[0]
-        +
-        0.5 * np.mean(
+        + 0.5 * np.mean(
             values[: min(5, len(values))]
         )
     )
@@ -189,10 +179,10 @@ def aggregate_windows(
     windows = defaultdict(list)
 
 
-    for item in results:
+    for result in results:
 
         pos = lookup.get_pos(
-            item["event_id"]
+            result["event_id"]
         )
 
         key = (
@@ -202,7 +192,7 @@ def aggregate_windows(
 
         windows[key].append(
             {
-                **item,
+                **result,
                 "pos": pos,
             }
         )
@@ -212,24 +202,14 @@ def aggregate_windows(
 
     for (doc, window), anchors in windows.items():
 
-        positions = [
-            a["pos"]
-            for a in anchors
-        ]
-
         ranked.append(
             {
                 "doc": doc,
-                "year": int(
-                    lookup.pub_year[
-                        positions[0]
-                    ]
-                ),
                 "window": window,
                 "score": score_window(
                     [
-                        a["score"]
-                        for a in anchors
+                        x["score"]
+                        for x in anchors
                     ]
                 ),
                 "anchors": sorted(
@@ -249,6 +229,69 @@ def aggregate_windows(
 
 
 
+def extract_window_text(
+    lookup,
+    result,
+):
+
+    """
+    Reconstruct diagnostic context from the same document.
+
+    The Zarr token stream is corpus ordered, so do not blindly slice
+    around the global event position.
+    """
+
+    anchor = result["anchors"][0]
+
+    pos = anchor["pos"]
+
+    doc = lookup.doc_id[pos]
+
+    token_idx = int(
+        lookup.token_idx[pos]
+    )
+
+
+    positions = np.where(
+        lookup.doc_id[:] == doc
+    )[0]
+
+
+    before = positions[
+        lookup.token_idx[positions] < token_idx
+    ]
+
+    after = positions[
+        lookup.token_idx[positions] >= token_idx
+    ]
+
+
+    start_positions = before[-40:]
+    end_positions = after[:40]
+
+
+    selected = np.concatenate(
+        [
+            start_positions,
+            end_positions,
+        ]
+    )
+
+
+    selected = selected[
+        np.argsort(
+            lookup.token_idx[selected]
+        )
+    ]
+
+
+    return " ".join(
+        lookup.token[p]
+        for p in selected
+    )
+
+
+
 def print_result(
     result,
     lookup,
@@ -262,69 +305,34 @@ def print_result(
     )
 
     print(
-        result["year"],
         result["doc"],
         "window=",
         result["window"],
     )
 
+    print()
+
+    print("TEXT:")
+    print(
+        extract_window_text(
+            lookup,
+            result,
+        )
+    )
 
     print()
-    print("ANCHORS:")
 
+    print("ANCHORS:")
 
     for anchor in result["anchors"][:TOP_ANCHORS]:
 
         pos = anchor["pos"]
 
         print(
-            f"  {anchor['score']:.4f}",
-            str(lookup.token[pos]),
-            f"(position={lookup.token_idx[pos]})"
-        )
-
-
-
-def print_summary(results, lookup):
-
-    docs = defaultdict(int)
-    years = defaultdict(int)
-
-    for result in results:
-
-        pos = lookup.get_pos(
-            result["event_id"]
-        )
-
-        docs[str(lookup.doc_id[pos])] += 1
-        years[int(lookup.pub_year[pos])] += 1
-
-
-    print()
-    print("DOCUMENT DISTRIBUTION")
-
-    for doc, count in sorted(
-        docs.items(),
-        key=lambda x: x[1],
-        reverse=True,
-    )[:10]:
-
-        print(
-            count,
-            doc,
-        )
-
-
-    print()
-    print("YEAR DISTRIBUTION")
-
-    for year, count in sorted(
-        years.items()
-    ):
-
-        print(
-            year,
-            count,
+            f"{anchor['score']:.4f}",
+            anchor["scale"],
+            lookup.token[pos],
+            f"@{lookup.token_idx[pos]}",
         )
 
 
@@ -333,7 +341,13 @@ def main():
 
     args = parse_args()
 
+
+    logger.info(
+        "Loading Tier 1 event lookup"
+    )
+
     lookup = load_lookup()
+
 
     print()
     print("Concept probe:")
@@ -348,7 +362,7 @@ def main():
     query = build_query_embedding()
 
 
-    results = search_all_years(
+    results = search_all_scales(
         lookup,
         query,
         args.from_year,
@@ -363,18 +377,13 @@ def main():
 
 
     print()
+
     print(
         f"retrieved events: {len(results)}"
     )
 
     print(
         f"ranked windows: {len(windows)}"
-    )
-
-
-    print_summary(
-        results,
-        lookup,
     )
 
 
