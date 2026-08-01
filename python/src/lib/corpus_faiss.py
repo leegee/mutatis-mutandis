@@ -313,6 +313,48 @@ class CorpusFaissIndex:
 
 
     @classmethod
+    def _load_paths(
+        cls,
+        paths_by_year,
+        workers=6,
+    ):
+        jobs = [
+            (year, scale, path)
+            for year, scales in paths_by_year.items()
+            for scale, path in scales.items()
+        ]
+
+        logger.info(
+            f"[faiss] loading {len(jobs)} indices with {workers} workers"
+        )
+
+        indexes = {
+            year: {}
+            for year in paths_by_year
+        }
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(cls.load, path):
+                (year, scale)
+                for year, scale, path in jobs
+            }
+
+            for future in as_completed(futures):
+                year, scale = futures[future]
+                indexes[year][scale] = future.result()
+
+        for year, scales in indexes.items():
+            for scale, index in scales.items():
+                if index.ntotal == 0:
+                    raise RuntimeError(
+                        f"Empty FAISS index: {year}/{scale}"
+                    )
+
+        return indexes
+
+
+    @classmethod
     def load(cls, path: Path) -> "CorpusFaissIndex":
         path = Path(path)
         if not path.is_file():
@@ -357,50 +399,12 @@ class CorpusFaissIndex:
 
 
     @classmethod
-    def load_range(
-        cls,
-        years,
-        masked: bool = False,
-    ) -> dict[int, dict[str, "CorpusFaissIndex"]]:
-        """
-        Load all FAISS indices for a selected set of years.
-
-        Returns
-        -------
-        dict[int, dict[str, CorpusFaissIndex]]
-            Nested index layout:
-
-                {
-                    year: {
-                        "local": CorpusFaissIndex,
-                        "medium": CorpusFaissIndex,
-                        "broad": CorpusFaissIndex,
-                    }
-                }
-
-        Parameters
-        ----------
-        years:
-            Iterable of publication years to load.
-
-        masked:
-            Whether to load masked-index variants.
-
-        Failure modes
-        -------------
-        Propagates FileNotFoundError or validation errors from cls.load().
-        """
-
-        return {
-            year: {
-                scale: cls.load(path)
-                for scale, path in faiss_index_paths(
-                    masked=masked,
-                    year=year,
-                ).items()
-            }
+    def load_range( cls, years, masked=False, workers=6 ):
+        paths_by_year = {
+            year: faiss_index_paths( masked=masked, year=year )
             for year in years
         }
+        return cls._load_paths( paths_by_year, workers=workers, )
 
 
     @classmethod
@@ -410,67 +414,17 @@ class CorpusFaissIndex:
             for year in discover_index_years(masked)
             if start_year <= year <= end_year
         ]
-
+        if not years:
+            raise RuntimeError( f"No FAISS indices found between {start_year}-{end_year}" )
         paths_by_year = {
             year: faiss_index_paths( masked=masked, year=year, )
             for year in years
         }
-
-        jobs = [
-            (year, scale, path)
-            for year, scales in paths_by_year.items()
-            for scale, path in scales.items()
-        ]
-
-        logger.info( f"[faiss] loading {len(jobs)} indices for years {min(years)}-{max(years)}" )
-
-        indexes = {
-            year: {}
-            for year in years
-        }
-
-        from concurrent.futures import ( ThreadPoolExecutor, as_completed )
-
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(
-                    cls.load, path,
-                ): (year, scale)
-                for year, scale, path in jobs
-            }
-
-            for future in as_completed(futures):
-                year, scale = futures[future]
-                indexes[year][scale] = future.result()
-
-        for year, scales in indexes.items():
-            for scale, index in scales.items():
-                if index.ntotal == 0:
-                    raise RuntimeError( f"Empty FAISS index: {year}/{scale}" )
-        return indexes
+        return cls._load_paths( paths_by_year, workers=workers, )
 
 
     @classmethod
-    def load_all(
-        cls,
-        masked: bool = False,
-        workers: int = 6,
-    ) -> dict[int, dict[str, "CorpusFaissIndex"]]:
-        """
-        Load all available FAISS indices discovered on disk.
-
-        Loading is parallel because each year/scale index is independent.
-
-        Returns:
-            {
-                year: {
-                    "local": CorpusFaissIndex,
-                    "medium": CorpusFaissIndex,
-                    "broad": CorpusFaissIndex,
-                }
-            }
-        """
-
+    def load_all( cls, masked=False, workers=6, ):
         paths_by_year = {
             year: faiss_index_paths(
                 masked=masked,
@@ -478,44 +432,9 @@ class CorpusFaissIndex:
             )
             for year in discover_index_years(masked)
         }
-
-        jobs = [
-            (year, scale, path)
-            for year, scales in paths_by_year.items()
-            for scale, path in scales.items()
-        ]
-
-        logger.info(
-            f"[faiss] loading {len(jobs)} indices with {workers} workers"
-        )
-
-        indexes = {
-            year: {}
-            for year in paths_by_year
-        }
-
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(
-                    cls.load,
-                    path,
-                ):
-                (year, scale)
-                for year, scale, path in jobs
-            }
-
-            for future in as_completed(futures):
-                year, scale = futures[future]
-                indexes[year][scale] = future.result()
-
-        for year, scales in indexes.items():
-            for scale, index in scales.items():
-                if index.ntotal == 0:
-                    raise RuntimeError(
-                        f"Empty FAISS index: {year}/{scale}"
-                    )
-
-        return indexes
+        if not paths_by_year:
+            raise RuntimeError("No FAISS indices found")
+        return cls._load_paths( paths_by_year, workers=workers, )
 
 
     def reconstruct_many(
