@@ -71,7 +71,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 from typing import Sequence, Tuple
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import faiss
 import numpy as np
 
@@ -404,39 +404,119 @@ class CorpusFaissIndex:
 
 
     @classmethod
+    def load_existing_range( cls, start_year, end_year, masked=False, workers=6, ):
+        years = [
+            year
+            for year in discover_index_years(masked)
+            if start_year <= year <= end_year
+        ]
+
+        paths_by_year = {
+            year: faiss_index_paths( masked=masked, year=year, )
+            for year in years
+        }
+
+        jobs = [
+            (year, scale, path)
+            for year, scales in paths_by_year.items()
+            for scale, path in scales.items()
+        ]
+
+        logger.info( f"[faiss] loading {len(jobs)} indices for years {min(years)}-{max(years)}" )
+
+        indexes = {
+            year: {}
+            for year in years
+        }
+
+        from concurrent.futures import ( ThreadPoolExecutor, as_completed )
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(
+                    cls.load, path,
+                ): (year, scale)
+                for year, scale, path in jobs
+            }
+
+            for future in as_completed(futures):
+                year, scale = futures[future]
+                indexes[year][scale] = future.result()
+
+        for year, scales in indexes.items():
+            for scale, index in scales.items():
+                if index.ntotal == 0:
+                    raise RuntimeError( f"Empty FAISS index: {year}/{scale}" )
+        return indexes
+
+
+    @classmethod
     def load_all(
         cls,
         masked: bool = False,
+        workers: int = 6,
     ) -> dict[int, dict[str, "CorpusFaissIndex"]]:
         """
         Load all available FAISS indices discovered on disk.
 
-        Discovery is delegated to discover_index_years(), which determines
-        which publication years have persisted indices.
+        Loading is parallel because each year/scale index is independent.
 
-        Parameters
-        ----------
-        masked:
-            Whether to load masked-index variants.
-
-        Returns
-        -------
-        dict[int, dict[str, CorpusFaissIndex]]
-            Nested index layout:
-
-                {
-                    year: {
-                        "local": CorpusFaissIndex,
-                        "medium": CorpusFaissIndex,
-                        "broad": CorpusFaissIndex,
-                    }
+        Returns:
+            {
+                year: {
+                    "local": CorpusFaissIndex,
+                    "medium": CorpusFaissIndex,
+                    "broad": CorpusFaissIndex,
                 }
+            }
         """
 
-        return cls.load_range(
-            years=discover_index_years(masked),
-            masked=masked,
+        paths_by_year = {
+            year: faiss_index_paths(
+                masked=masked,
+                year=year,
+            )
+            for year in discover_index_years(masked)
+        }
+
+        jobs = [
+            (year, scale, path)
+            for year, scales in paths_by_year.items()
+            for scale, path in scales.items()
+        ]
+
+        logger.info(
+            f"[faiss] loading {len(jobs)} indices with {workers} workers"
         )
+
+        indexes = {
+            year: {}
+            for year in paths_by_year
+        }
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(
+                    cls.load,
+                    path,
+                ):
+                (year, scale)
+                for year, scale, path in jobs
+            }
+
+            for future in as_completed(futures):
+                year, scale = futures[future]
+                indexes[year][scale] = future.result()
+
+        for year, scales in indexes.items():
+            for scale, index in scales.items():
+                if index.ntotal == 0:
+                    raise RuntimeError(
+                        f"Empty FAISS index: {year}/{scale}"
+                    )
+
+        return indexes
+
 
     def reconstruct_many(
         self,

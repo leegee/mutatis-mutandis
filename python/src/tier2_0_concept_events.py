@@ -33,7 +33,6 @@ import argparse
 import sqlite3
 from pathlib import Path
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from psycopg import sql
 import numpy as np
 
@@ -42,8 +41,6 @@ from lib.corpus_config import (
     CORPUS_TIER2_MASKED_DB_PATH,
     ZARR_PATH,
     MASKED_ZARR_PATH,
-    faiss_index_paths,
-    discover_index_years,
 )
 
 from lib.corpus_faiss import (
@@ -372,47 +369,6 @@ def ensure_events(con, lookup, event_ids):
     )
 
     con.commit()
-
-
-# FAISS loading
-#
-# Each year has independent local / medium / broad indices.
-# Loading is isolated from analysis so failures are visible.
-
-def load_indices(paths_by_year, workers=6):
-    jobs = [
-        (year, scale, path)
-        for year, scales in paths_by_year.items()
-        for scale, path in scales.items()
-    ]
-
-    logger.info( f"[tier2] loading {len(jobs)} FAISS indices" )
-
-    indexes = {
-        year: {}
-        for year in paths_by_year
-    }
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(
-                CorpusFaissIndex.load,
-                path,
-            ):
-            (year, scale)
-            for year, scale, path in jobs
-        }
-
-        for future in as_completed(futures):
-            year, scale = futures[future]
-            indexes[year][scale] = future.result()
-
-    for year, scales in indexes.items():
-        for scale, index in scales.items():
-            if index.ntotal == 0:
-                raise RuntimeError( f"Empty FAISS index: {year}/{scale}" )
-
-    return indexes
 
 
 def analyse_concept(
@@ -1009,16 +965,13 @@ def main():
         zarr_path = ZARR_PATH
         db_path = CORPUS_TIER2_DB_PATH
 
-    # Discover & load FAISS indexes (resource construction lives here)
-    years = discover_index_years(args.mask)
-    if not years:
-        raise RuntimeError("No FAISS indices found")
+    indexes = CorpusFaissIndex.load_all(
+        masked=args.mask,
+        workers=args.max_load_workers,
+    )
 
-    index_paths = {
-        year: faiss_index_paths(masked=args.mask, year=year)
-        for year in years
-    }
-    indexes = load_indices(index_paths, workers=args.max_load_workers)
+    if not indexes:
+        raise RuntimeError("No FAISS indices found")
 
     # Build the Zarr event lookup
     # Restrict forms only when a single concept is requested (keeps memory proportional)
