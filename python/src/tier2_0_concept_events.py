@@ -70,7 +70,6 @@ _NO_WPOS = -1
 
 SCHEMA = """
 
-
 CREATE TABLE IF NOT EXISTS concepts (
     concept TEXT PRIMARY KEY,
     n_events INTEGER NOT NULL
@@ -155,8 +154,9 @@ CREATE TABLE IF NOT EXISTS concept_field_events (
     )
 );
 
-CREATE INDEX IF NOT EXISTS idx_field_events_concept ON concept_field_events(concept);
-CREATE INDEX IF NOT EXISTS idx_field_events_event   ON concept_field_events(event_id);
+CREATE INDEX IF NOT EXISTS idx_field_events_concept      ON concept_field_events(concept);
+CREATE INDEX IF NOT EXISTS idx_field_events_event        ON concept_field_events(event_id);
+CREATE INDEX IF NOT EXISTS idx_field_events_concept_role ON concept_field_events(concept, role);
 
 CREATE TABLE IF NOT EXISTS concept_aggregate (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,13 +192,17 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
     )
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_concept               ON events(concept);
-CREATE INDEX IF NOT EXISTS idx_events_year                  ON events(corpus, concept, pub_year);
 CREATE INDEX IF NOT EXISTS idx_events_document              ON events(corpus, doc_id);
 CREATE INDEX IF NOT EXISTS idx_events_event_id              ON events(event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_concept_event     ON neighbours(concept,event_id);
 CREATE INDEX IF NOT EXISTS idx_neighbours_concept_neighbour ON neighbours(concept, neighbour_event_id);
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept            ON concept_aggregate(concept);
+
+CREATE INDEX IF NOT EXISTS idx_events_year                  ON events(corpus, pub_year);
+CREATE INDEX IF NOT EXISTS idx_events_document              ON events(corpus, doc_id);
+CREATE INDEX IF NOT EXISTS idx_events_event_id              ON events(event_id);
+CREATE INDEX IF NOT EXISTS idx_events_token                 ON events(token);
+CREATE INDEX IF NOT EXISTS idx_events_token_position        ON events(corpus, doc_id, token_idx);
 
 """
 
