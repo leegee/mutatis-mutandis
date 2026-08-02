@@ -211,7 +211,7 @@ def aggregate_cluster_context(
         SELECT e.token
         FROM concept_year_event_cluster c
         JOIN events e
-             ON e.event_id = c.event_id
+             ON e.event_id = c.event_id AND e.concept = concept
         WHERE c.concept=?
           AND c.pub_year=?
           AND c.cluster_id=?
@@ -492,7 +492,7 @@ def sample_cluster_events(
         """
         SELECT e.event_id, e.doc_id, e.token_idx, e.token, e.pub_year
         FROM concept_year_event_cluster c
-        JOIN events e ON e.event_id = c.event_id
+        JOIN events e ON e.event_id = c.event_id AND e.concept = e.concept
         WHERE c.concept=?
           AND c.pub_year=?
           AND c.cluster_id=?
