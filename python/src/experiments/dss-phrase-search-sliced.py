@@ -18,6 +18,20 @@ The two periods must not overlap, so the inferred label is always well-defined.
 No centroids.
 No clustering.
 No dimensionality reduction.
+
+Notebook Use
+------------
+
+    from importlib import import_module
+    dss = import_module("experiments/dss-phrase-search-sliced")
+
+    result = dss.run(
+        "revolution",
+        source_start=2006, source_end=2026,
+        compare_start=1630, compare_end=1650,
+        table_limit=5,
+    )
+    result["trajectory"]["1642"]["tokens"][:5]
 """
 
 from __future__ import annotations
@@ -706,6 +720,178 @@ def print_trajectory(q, source, direction, trajectory, limit=5):
             )
 
 
+def run(
+    q="REVOLUTION",
+    *,
+    source_start,
+    source_end,
+    compare_start,
+    compare_end,
+    neighbours=10,
+    slice_width=10,
+    granularity="year",
+    output=None,
+    table_limit=5,
+    lookup=None,
+):
+    """
+    Run a full backcast/forecast and return the trajectory dict (the same
+    shape written to `output`, plus the resolved metadata alongside it).
+
+    This is the notebook/library entry point -- plain keyword arguments,
+    no argparse.Namespace, no sys.argv. main() is a thin CLI wrapper
+    around this: it builds an argparse.ArgumentParser, parses sys.argv,
+    and calls this with the parsed values. Calling run() directly (e.g.
+    from a notebook) skips the CLI layer entirely and is just as
+    supported -- nothing here is CLI-specific except which exception it
+    raises on bad input.
+
+    Raises ValueError for user-input problems (overlapping periods, zero
+    source observations) rather than calling something like argparse's
+    parser.error(), since there is no parser in this context and
+    parser.error() calls sys.exit() -- which would kill a notebook
+    kernel rather than raise a catchable error. main() catches ValueError
+    and re-raises it through parser.error() so CLI behaviour (print
+    usage, exit non-zero) is unchanged.
+
+    `lookup` can be passed in to reuse an already-loaded ZarrEventLookup
+    (e.g. across repeated calls in a notebook session) instead of
+    rebuilding the FAISS index and re-opening the Zarr store on every
+    call, which is the dominant cost of a run. If omitted, one is built
+    fresh, matching the previous (CLI-only) behaviour.
+    """
+    if output is None:
+        q_slug = "".join(
+            c if c.isalnum() else "_"
+            for c in q.strip().lower()
+        )
+        output = TMP_DIR / f"dss_semantic_trajectory_{q_slug}.json"
+
+    # The two periods must not overlap -- otherwise a comparison slice can
+    # overlap the source period and events can match themselves (this is
+    # belt-and-braces on top of the exclude_ids check below, which handles
+    # the case at the individual-event level; this handles it at the
+    # range level so a mostly-overlapping run fails fast instead of just
+    # silently losing most of its candidates to exclusion).
+    if source_start <= compare_end and compare_start <= source_end:
+        raise ValueError(
+            f"source period ({source_start}-{source_end}) and compare "
+            f"period ({compare_start}-{compare_end}) must not overlap"
+        )
+
+    # Which period is chronologically earlier is inferred from the ranges
+    # themselves, purely to label logging and the output JSON. Everything
+    # downstream of this -- search_historical, combine_historical_tokens
+    # [_by_year], serialise_field, print_trajectory -- never branches on
+    # this label; it just operates on whichever source_vectors/
+    # historical_index it's handed.
+    direction = "backcast" if compare_end < source_start else "forecast"
+
+    logger.info(
+        f"[dss] direction={direction} "
+        f"source={source_start}-{source_end} "
+        f"compare={compare_start}-{compare_end}"
+    )
+
+    if lookup is None:
+        source_index = CorpusFaissIndex.load_all( workers=8, )
+        lookup = ZarrEventLookup( ZARR_PATH )
+        lookup.attach_index( source_index )
+
+    source_events = load_field_events( lookup, q, source_start, source_end, )
+
+    event_ids = [
+        int(row[0])
+        for row in source_events
+    ]
+
+    exclude_ids = set(event_ids)
+
+    logger.info( f"[dss] source observations={len(event_ids)}" )
+
+    if not event_ids:
+        raise ValueError(
+            f"no source observations for q={q!r} in "
+            f"{source_start}-{source_end} -- nothing to compare. "
+            f"See the [dss] phrase search log line above for why "
+            f"(0 corpus occurrences vs. 0 Tier 1 matches vs. all outside "
+            f"the year window are different problems)."
+        )
+
+    positions = [
+        lookup.get_pos(eid)
+        for eid in event_ids
+    ]
+
+    source_vectors = {
+        "local": lookup.emb_local[positions],
+        "medium": lookup.emb_medium[positions],
+        "broad": lookup.emb_broad[positions],
+    }
+
+    trajectory = {}
+
+    for start, end in comparison_slices(
+        compare_start,
+        compare_end,
+        slice_width,
+    ):
+        logger.info( f"[dss] comparing={start}-{end}" )
+
+        try:
+            historical_index = load_indexes( start, end, )
+        except RuntimeError:
+            logger.info( f"[dss] skipping empty slice={start}-{end}" )
+            continue
+
+        matches = search_historical(
+            historical_index,
+            source_vectors,
+            neighbours,
+            exclude_ids,
+        )
+
+        if granularity == "year":
+            year_results = combine_historical_tokens_by_year( matches, lookup, )
+
+            # Sorted so trajectory stays chronological across slices too --
+            # dict insertion order is what print_trajectory (and anything
+            # else iterating the JSON) relies on for display order.
+            for year in sorted(year_results):
+                field, stats = year_results[year]
+                trajectory[str(year)] = serialise_field( field, stats, period_width=1, )
+        else:
+            field, stats = combine_historical_tokens( matches, lookup, )
+            trajectory[f"{start}-{end}"] = serialise_field( field, stats, end - start + 1, )
+
+    result = {
+        "q": q,
+        "direction": direction,
+        "source": f"{source_start}-{source_end}",
+        "compare": f"{compare_start}-{compare_end}",
+        "trajectory": trajectory,
+    }
+
+    with open( output, "w", encoding="utf8", ) as f:
+        json.dump( result, f, indent=2, )
+
+    logger.info( f"[dss] wrote {output}" )
+
+    if table_limit > 0:
+        print_trajectory(
+            q,
+            f"{source_start}-{source_end}",
+            direction,
+            trajectory,
+            limit=table_limit,
+        )
+
+    result["output"] = output
+    result["lookup"] = lookup
+
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -735,141 +921,31 @@ def main():
              "--granularity=slice.",
     )
     # No filesystem-safe default here -- it depends on --q, which
-    # isn't known until after parsing. Resolved just below. Passing
+    # isn't known until after parsing. Resolved just below, inside run(),
+    # since it's needed there too (a notebook caller of run() gets the
+    # same default-output-path behaviour, not just the CLI). Passing
     # --output explicitly always overrides this.
     parser.add_argument( "--output", default=None, )
     parser.add_argument( "--table_limit", type=int, default=5, help="Top-N tokens per period to print to the terminal after the run. Set to 0 to skip printing the table.", )
     args = parser.parse_args()
 
-    if args.output is None:
-        q_slug = "".join(
-            c if c.isalnum() else "_"
-            for c in args.q.strip().lower()
-        )
-        args.output = TMP_DIR / f"dss_semantic_trajectory_{q_slug}.json"
-
-    source_start, source_end = args.source_start, args.source_end
-    compare_start, compare_end = args.compare_start, args.compare_end
-
-    # The two periods must not overlap -- otherwise a comparison slice can
-    # overlap the source period and events can match themselves (this is
-    # belt-and-braces on top of the exclude_ids check below, which handles
-    # the case at the individual-event level; this handles it at the
-    # range level so a mostly-overlapping run fails fast instead of just
-    # silently losing most of its candidates to exclusion).
-    if source_start <= compare_end and compare_start <= source_end:
-        parser.error(
-            f"source period ({source_start}-{source_end}) and compare "
-            f"period ({compare_start}-{compare_end}) must not overlap"
-        )
-
-    # No --direction flag: which period is chronologically earlier is
-    # inferred from the ranges themselves, purely to label logging and
-    # the output JSON. Everything downstream of this -- search_historical,
-    # combine_historical_tokens[_by_year], serialise_field, print_trajectory
-    # -- never branches on this label; it just operates on whichever
-    # source_vectors/historical_index it's handed.
-    direction = "backcast" if compare_end < source_start else "forecast"
-
-    logger.info(
-        f"[dss] direction={direction} "
-        f"source={source_start}-{source_end} "
-        f"compare={compare_start}-{compare_end}"
-    )
-
-    source_index = CorpusFaissIndex.load_all( workers=8, )
-    lookup = ZarrEventLookup( ZARR_PATH )
-    lookup.attach_index( source_index )
-
-    source_events = load_field_events( lookup, args.q, source_start, source_end, )
-
-    event_ids = [
-        int(row[0])
-        for row in source_events
-    ]
-
-    exclude_ids = set(event_ids)
-
-    logger.info( f"[dss] source observations={len(event_ids)}" )
-
-    if not event_ids:
-        parser.error(
-            f"no source observations for q={args.q!r} in "
-            f"{source_start}-{source_end} -- nothing to compare. "
-            f"See the [dss] phrase search log line above for why "
-            f"(0 corpus occurrences vs. 0 Tier 1 matches vs. all outside "
-            f"the year window are different problems)."
-        )
-
-    positions = [
-        lookup.get_pos(eid)
-        for eid in event_ids
-    ]
-
-    source_vectors = {
-        "local": lookup.emb_local[positions],
-        "medium": lookup.emb_medium[positions],
-        "broad": lookup.emb_broad[positions],
-    }
-
-    trajectory = {}
-
-    for start, end in comparison_slices(
-        compare_start,
-        compare_end,
-        args.slice_width,
-    ):
-        logger.info( f"[dss] comparing={start}-{end}" )
-
-        try:
-            historical_index = load_indexes( start, end, )
-        except RuntimeError:
-            logger.info( f"[dss] skipping empty slice={start}-{end}" )
-            continue
-
-        matches = search_historical(
-            historical_index,
-            source_vectors,
-            args.neighbours,
-            exclude_ids,
-        )
-
-        if args.granularity == "year":
-            year_results = combine_historical_tokens_by_year( matches, lookup, )
-
-            # Sorted so trajectory stays chronological across slices too --
-            # dict insertion order is what print_trajectory (and anything
-            # else iterating the JSON) relies on for display order.
-            for year in sorted(year_results):
-                field, stats = year_results[year]
-                trajectory[str(year)] = serialise_field( field, stats, period_width=1, )
-        else:
-            field, stats = combine_historical_tokens( matches, lookup, )
-            trajectory[f"{start}-{end}"] = serialise_field( field, stats, end - start + 1, )
-
-    with open( args.output, "w", encoding="utf8", ) as f:
-        json.dump(
-            {
-                "q": args.q,
-                "direction": direction,
-                "source": f"{source_start}-{source_end}",
-                "compare": f"{compare_start}-{compare_end}",
-                "trajectory": trajectory,
-            },
-            f,
-            indent=2,
-        )
-
-    logger.info( f"[dss] wrote {args.output}" )
-
-    if args.table_limit > 0:
-        print_trajectory(
+    try:
+        run(
             args.q,
-            f"{source_start}-{source_end}",
-            direction,
-            trajectory,
-            limit=args.table_limit,
+            source_start=args.source_start,
+            source_end=args.source_end,
+            compare_start=args.compare_start,
+            compare_end=args.compare_end,
+            neighbours=args.neighbours,
+            slice_width=args.slice_width,
+            granularity=args.granularity,
+            output=args.output,
+            table_limit=args.table_limit,
         )
+    except ValueError as e:
+        # Re-raised through parser.error() so CLI behaviour (print usage,
+        # exit non-zero) is unchanged from before the run()/main() split.
+        parser.error(str(e))
 
 
 if __name__ == "__main__":
