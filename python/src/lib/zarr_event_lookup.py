@@ -260,14 +260,49 @@ class ZarrEventLookup:
             for field, dtype in self._FIELDS.items():
                 setattr(self, field, np.empty(0, dtype=dtype))
             self.emb_local = self.emb_medium = self.emb_broad = np.empty((0, 768), dtype=np.float32)
+            self._pos_by_occurrence = {}
             return
 
         for field, dtype in self._FIELDS.items():
             setattr(self, field, np.concatenate(self._chunks[field]).astype(dtype, copy=False))
 
         self._pos = {int(eid): pos for pos, eid in enumerate(self.event_id)}
+        self._build_position_index()
         self._chunks.clear()
         logger.info(f"[tier2] loaded {n_total:,} events with multi-scale embeddings")
+
+
+    def _build_position_index(self):
+        """
+        Build a (corpus, doc_id, token_idx) -> [event_id, ...] index for
+        find_event_ids_by_positions(), so repeated corpus-occurrence lookups
+        don't have to linear-scan the entire event table on every call.
+
+        A single corpus occurrence can correspond to multiple Tier 1 events
+        (observed under multiple contextual windows), hence the list value.
+
+        Built once, eagerly, alongside self._pos -- same tradeoff as
+        event_id -> pos: O(n) to build once at load time, O(1) amortized per
+        lookup after that, instead of O(n) per call.
+        """
+        self._pos_by_occurrence: dict[tuple[str, str, int], list[int]] = {}
+
+        # .tolist() up front so the loop body is pure-Python scalars, not
+        # repeated numpy scalar boxing/unboxing per element.
+        corpus_list    = self.corpus.tolist()
+        doc_id_list    = self.doc_id.tolist()
+        token_idx_list = self.token_idx.tolist()
+        event_id_list  = self.event_id.tolist()
+
+        for corpus, doc_id, token_idx, eid in zip(
+            corpus_list, doc_id_list, token_idx_list, event_id_list
+        ):
+            key = (corpus, doc_id, token_idx)
+            bucket = self._pos_by_occurrence.get(key)
+            if bucket is None:
+                self._pos_by_occurrence[key] = [eid]
+            else:
+                bucket.append(eid)
 
 
     def get_ensemble_embedding(self, pos: int, weights=[0.25, 0.50, 0.25]):
@@ -367,30 +402,26 @@ class ZarrEventLookup:
         be observed under multiple contextual windows.
 
         Corpus is part of the key because doc_id is not globally unique.
+
+        O(1) dict lookups against the (corpus, doc_id, token_idx) index built
+        once in _finalize() / _build_position_index(), rather than a linear
+        scan of every event in the lookup per call.
         """
-        wanted = {
-            (
+        result = {}
+
+        for corpus, doc_id, token_idx in positions:
+            key = (
                 str(corpus),
                 str(doc_id),
                 int(token_idx),
             )
-            for corpus, doc_id, token_idx in positions
-        }
-
-        result = {
-            key: []
-            for key in wanted
-        }
-
-        for pos in range(len(self.event_id)):
-            key = (
-                str(self.corpus[pos]),
-                str(self.doc_id[pos]),
-                int(self.token_idx[pos]),
-            )
 
             if key in result:
-                result[key].append(int(self.event_id[pos]))
+                continue
+
+            result[key] = list(
+                self._pos_by_occurrence.get(key, [])
+            )
 
         return result
 
