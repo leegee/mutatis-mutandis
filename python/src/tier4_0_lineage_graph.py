@@ -540,7 +540,6 @@ def sample_cluster_events(
     samples = []
 
     for event_id, doc_id, token_idx, token, ev_year in rows:
-
         neighbour_rows = con.execute(
             """
             SELECT
@@ -554,11 +553,13 @@ def sample_cluster_events(
             FROM neighbours n
             JOIN events e
                 ON e.event_id = n.neighbour_event_id
-            WHERE n.event_id=?
+            WHERE n.concept = ?
+            AND n.event_id = ?
             ORDER BY n.score DESC
             LIMIT ?
             """,
             (
+                concept,
                 event_id,
                 neighbour_limit * 5,
             ),

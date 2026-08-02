@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS events (
 
 
 CREATE TABLE IF NOT EXISTS neighbours (
+    concept TEXT NOT NULL,
     event_id INTEGER NOT NULL,
     neighbour_event_id INTEGER NOT NULL,
 
@@ -133,6 +134,7 @@ CREATE TABLE IF NOT EXISTS neighbours (
     score_broad REAL,
 
     PRIMARY KEY(
+        concept,
         event_id,
         neighbour_event_id,
         depth
@@ -194,8 +196,8 @@ CREATE INDEX IF NOT EXISTS idx_events_concept               ON events(concept);
 CREATE INDEX IF NOT EXISTS idx_events_year                  ON events(corpus, concept, pub_year);
 CREATE INDEX IF NOT EXISTS idx_events_document              ON events(corpus, doc_id);
 CREATE INDEX IF NOT EXISTS idx_events_event_id              ON events(event_id);
-CREATE INDEX IF NOT EXISTS idx_neighbours_event             ON neighbours(event_id);
-CREATE INDEX IF NOT EXISTS idx_neighbours_neighbour_event   ON neighbours(neighbour_event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_concept_event     ON neighbours(concept,event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbours_concept_neighbour ON neighbours(concept, neighbour_event_id);
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept            ON concept_aggregate(concept);
 
 """
@@ -576,23 +578,12 @@ def analyse_concept(
 def delete_concept(con, concept):
 
     con.execute(
-        """
-        DELETE FROM neighbours
-        WHERE event_id IN (
-            SELECT event_id
-            FROM concept_field_events
-            WHERE concept = ?
-              AND role = 'seed'
-        )
-        """,
+        """ DELETE FROM neighbours WHERE concept = ? """,
         (concept,),
     )
 
     con.execute(
-        """
-        DELETE FROM concept_field_events
-        WHERE concept = ?
-        """,
+        """ DELETE FROM concept_field_events WHERE concept = ? """,
         (concept,),
     )
 
@@ -715,6 +706,7 @@ def write_concept(con, data, lookup):
         for neighbour in event["neighbours"]:
             neighbour_rows.append(
                 (
+                    concept,
                     event["event_id"],
                     neighbour["event_id"],
                     neighbour["depth"],
@@ -729,6 +721,7 @@ def write_concept(con, data, lookup):
     con.executemany(
         """
         INSERT OR REPLACE INTO neighbours (
+            concept,
             event_id,
             neighbour_event_id,
             depth,
@@ -738,7 +731,7 @@ def write_concept(con, data, lookup):
             score_medium,
             score_broad
         )
-        VALUES (?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?)
         """,
         neighbour_rows,
     )
