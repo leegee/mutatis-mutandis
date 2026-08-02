@@ -341,7 +341,6 @@ def ensure_events(con, lookup, event_ids):
         rows.append((
             int(eid),
             event["corpus"],
-            None,
             int(event["vector_id"]),
             event["token"],
             event["doc_id"],
@@ -359,7 +358,6 @@ def ensure_events(con, lookup, event_ids):
         INSERT OR IGNORE INTO events (
             event_id,
             corpus,
-            concept,
             vector_id,
             token,
             doc_id,
@@ -368,7 +366,7 @@ def ensure_events(con, lookup, event_ids):
             window_id,
             window_token_pos
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?)
         """,
         rows,
     )
