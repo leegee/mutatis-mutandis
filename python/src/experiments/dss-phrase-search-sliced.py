@@ -19,19 +19,30 @@ No centroids.
 No clustering.
 No dimensionality reduction.
 
-Notebook Use
-------------
+Four entry points, one shared core:
 
-    from importlib import import_module
-    dss = import_module("experiments/dss-phrase-search-sliced")
+  core()    -- pure computation, no side effects. Takes an already-built
+               `lookup` (required) and optional `conn`/`faiss_index` to
+               reuse; creates nothing, writes nothing, prints nothing.
+               Raises ValueError on bad input (overlapping periods, zero
+               source observations). Everything below calls this.
 
-    result = dss.run(
-        "revolution",
-        source_start=2006, source_end=2026,
-        compare_start=1630, compare_end=1650,
-        table_limit=5,
-    )
-    result["trajectory"]["1642"]["tokens"][:5]
+  run()     -- one-shot CLI/notebook use. Builds `lookup` (and opens a
+               DB connection per phrase search) itself if not given one,
+               calls core(), writes the result to `--output`, optionally
+               prints a table. Lets ValueError propagate.
+
+  service() -- persistent-process use. Takes `conn`, `lookup`, and
+               `faiss_index` as *required* arguments -- all built once by
+               the caller at process startup and reused across every
+               call -- and just calls core() and returns the result
+               dict. No file writing, no printing, no protocol handling
+               (HTTP/WS/CGI/etc. is the caller's problem). Lets
+               ValueError propagate for the caller's protocol layer to
+               translate into an error response.
+
+  main()    -- CLI wrapper. Parses sys.argv, calls run(), turns
+               ValueError into a parser.error() exit.
 """
 
 from __future__ import annotations
@@ -179,16 +190,26 @@ def search_phrase(
     *,
     corpus: str | None = None,
     lookup=None,
+    conn=None,
 ):
     """
     Resolve a corpus phrase to Tier 1 event IDs.
 
     The returned counts deliberately distinguish corpus occurrences,
     matched corpus occurrences, and Tier 1 observation events.
+
+    If `conn` is passed in, it's used as-is and left open -- the caller
+    owns its lifecycle (this is the persistent-service path: one
+    long-lived connection reused across many calls). If omitted, a
+    connection is opened here and closed before returning, exactly as
+    before (the one-shot CLI/notebook path).
     """
     tokens = normalise_phrase(phrase)
 
-    conn = get_connection()
+    owns_conn = conn is None
+
+    if owns_conn:
+        conn = get_connection()
 
     try:
         occurrences = find_phrase_occurrences(
@@ -197,7 +218,8 @@ def search_phrase(
             corpus=corpus,
         )
     finally:
-        conn.close()
+        if owns_conn:
+            conn.close()
 
     if lookup is None:
         lookup = ZarrEventLookup(ZARR_PATH)
@@ -227,7 +249,7 @@ def search_phrase(
 # --- end copied from experiments/corpus_phrase_search.py -------------------
 
 
-def load_field_events(lookup, q, start_year, end_year):
+def load_field_events(lookup, q, start_year, end_year, conn=None):
     """
     Resolve a q to Tier 1 observation events via corpus phrase search.
 
@@ -235,8 +257,11 @@ def load_field_events(lookup, q, start_year, end_year):
     (case-insensitive, consecutive tokens -- see search_phrase() above).
     Every corpus occurrence can resolve to multiple Tier 1 events; those are
     deduplicated by event_id and then filtered to [start_year, end_year].
+
+    `conn`, if given, is passed straight through to search_phrase() and
+    reused rather than opened fresh -- see search_phrase()'s docstring.
     """
-    result = search_phrase(q, lookup=lookup)
+    result = search_phrase(q, lookup=lookup, conn=conn)
 
     logger.info(
         f"[dss] q={q!r} phrase search: "
@@ -277,11 +302,46 @@ def load_field_events(lookup, q, start_year, end_year):
 
 
 def load_indexes(start_year, end_year):
+    """
+    Disk-backed load of the per-year comparison indices for
+    [start_year, end_year]. Used by the one-shot CLI/notebook path
+    (run(), with no faiss_index supplied): fine for a single run, but
+    re-reads from disk on every call, which is wasteful for a persistent
+    service handling many requests against overlapping year ranges --
+    see slice_preloaded_index() below for that path instead.
+    """
     return CorpusFaissIndex.load_existing_range(
         start_year=start_year,
         end_year=end_year,
         workers=8,
     )
+
+
+def slice_preloaded_index(faiss_index, start_year, end_year):
+    """
+    Extract the per-year comparison-index mapping for [start_year,
+    end_year] out of a CorpusFaissIndex instance that has *already*
+    loaded every year (e.g. via CorpusFaissIndex.load_all()), instead of
+    hitting disk again the way load_indexes() does. This is what lets
+    service() answer repeated requests without re-reading FAISS indices
+    off disk per request.
+
+    ASSUMPTION, please verify against the real lib.corpus_faiss module
+    (not visible from this script): this expects `faiss_index` to expose
+    its loaded per-year data as `faiss_index.indexes`, a mapping of
+    {year: {scale: <per-scale searchable index>}} -- the same shape
+    CorpusFaissIndex.load_existing_range() returns and that
+    search_historical() already consumes unchanged either way. If the
+    real attribute is named differently, or access goes through a method
+    rather than a plain attribute, this is the only function that needs
+    to change -- core()/search_historical() don't care how the mapping
+    was produced.
+    """
+    return {
+        year: scales
+        for year, scales in faiss_index.indexes.items()
+        if start_year <= year <= end_year
+    }
 
 
 def comparison_slices(start, end, width=10):
@@ -720,53 +780,59 @@ def print_trajectory(q, source, direction, trajectory, limit=5):
             )
 
 
-def run(
-    q="REVOLUTION",
+def core(
+    q,
     *,
     source_start,
     source_end,
     compare_start,
     compare_end,
+    lookup,
     neighbours=10,
     slice_width=10,
     granularity="year",
-    output=None,
-    table_limit=5,
-    lookup=None,
+    conn=None,
+    faiss_index=None,
 ):
     """
-    Run a full backcast/forecast and return the trajectory dict (the same
-    shape written to `output`, plus the resolved metadata alongside it).
+    Run a single backcast/forecast and return the result dict -- q,
+    direction, source, compare, trajectory. No side effects: doesn't
+    write a file, doesn't print, and doesn't create or tear down any
+    expensive resource. Every caller (run(), service(), and indirectly
+    main() through run()) funnels through here; this is the one place
+    the actual comparison logic lives.
 
-    This is the notebook/library entry point -- plain keyword arguments,
-    no argparse.Namespace, no sys.argv. main() is a thin CLI wrapper
-    around this: it builds an argparse.ArgumentParser, parses sys.argv,
-    and calls this with the parsed values. Calling run() directly (e.g.
-    from a notebook) skips the CLI layer entirely and is just as
-    supported -- nothing here is CLI-specific except which exception it
-    raises on bad input.
+    `lookup` is required and must already have a full-corpus index
+    attached (via lookup.attach_index(...)) -- core() never builds one
+    itself, since building it is exactly the expensive step callers with
+    persistent resources (service()) want to do once, not per call.
+
+    `conn`, if given, is passed through to load_field_events() ->
+    search_phrase() and reused as-is rather than opened fresh -- see
+    search_phrase()'s docstring. If omitted, a connection is opened and
+    closed internally for this call only, matching the original
+    one-shot behaviour.
+
+    `faiss_index`, if given, must be a CorpusFaissIndex instance that has
+    already loaded every year (e.g. via CorpusFaissIndex.load_all()) --
+    each comparison slice is then read out of it in memory via
+    slice_preloaded_index() instead of hitting disk. If omitted, each
+    slice is loaded from disk on demand via load_indexes(), matching the
+    original one-shot behaviour. This is the other half of what makes
+    service() cheap to call repeatedly: no per-request disk reads for
+    comparison-period indices, same as no per-request DB connection via
+    `conn` above.
 
     Raises ValueError for user-input problems (overlapping periods, zero
-    source observations) rather than calling something like argparse's
-    parser.error(), since there is no parser in this context and
-    parser.error() calls sys.exit() -- which would kill a notebook
-    kernel rather than raise a catchable error. main() catches ValueError
-    and re-raises it through parser.error() so CLI behaviour (print
-    usage, exit non-zero) is unchanged.
-
-    `lookup` can be passed in to reuse an already-loaded ZarrEventLookup
-    (e.g. across repeated calls in a notebook session) instead of
-    rebuilding the FAISS index and re-opening the Zarr store on every
-    call, which is the dominant cost of a run. If omitted, one is built
-    fresh, matching the previous (CLI-only) behaviour.
+    source observations). There's no argparse.Namespace or parser here,
+    so this can't call parser.error() (which calls sys.exit() -- fine
+    for a CLI process, fatal for a notebook kernel or a persistent
+    service handling many independent requests). Each caller decides
+    what to do with the exception: main() turns it into parser.error(),
+    run() lets it propagate to the notebook/script caller, service()
+    lets it propagate to whatever protocol layer is calling it (e.g. to
+    become an HTTP 400).
     """
-    if output is None:
-        q_slug = "".join(
-            c if c.isalnum() else "_"
-            for c in q.strip().lower()
-        )
-        output = TMP_DIR / f"dss_semantic_trajectory_{q_slug}.json"
-
     # The two periods must not overlap -- otherwise a comparison slice can
     # overlap the source period and events can match themselves (this is
     # belt-and-braces on top of the exclude_ids check below, which handles
@@ -780,11 +846,11 @@ def run(
         )
 
     # Which period is chronologically earlier is inferred from the ranges
-    # themselves, purely to label logging and the output JSON. Everything
+    # themselves, purely to label logging and the output. Everything
     # downstream of this -- search_historical, combine_historical_tokens
-    # [_by_year], serialise_field, print_trajectory -- never branches on
-    # this label; it just operates on whichever source_vectors/
-    # historical_index it's handed.
+    # [_by_year], serialise_field -- never branches on this label; it
+    # just operates on whichever source_vectors/historical_index it's
+    # handed.
     direction = "backcast" if compare_end < source_start else "forecast"
 
     logger.info(
@@ -793,12 +859,9 @@ def run(
         f"compare={compare_start}-{compare_end}"
     )
 
-    if lookup is None:
-        source_index = CorpusFaissIndex.load_all( workers=8, )
-        lookup = ZarrEventLookup( ZARR_PATH )
-        lookup.attach_index( source_index )
-
-    source_events = load_field_events( lookup, q, source_start, source_end, )
+    source_events = load_field_events(
+        lookup, q, source_start, source_end, conn=conn,
+    )
 
     event_ids = [
         int(row[0])
@@ -838,11 +901,18 @@ def run(
     ):
         logger.info( f"[dss] comparing={start}-{end}" )
 
-        try:
-            historical_index = load_indexes( start, end, )
-        except RuntimeError:
-            logger.info( f"[dss] skipping empty slice={start}-{end}" )
-            continue
+        if faiss_index is not None:
+            historical_index = slice_preloaded_index( faiss_index, start, end, )
+
+            if not historical_index:
+                logger.info( f"[dss] skipping empty slice={start}-{end}" )
+                continue
+        else:
+            try:
+                historical_index = load_indexes( start, end, )
+            except RuntimeError:
+                logger.info( f"[dss] skipping empty slice={start}-{end}" )
+                continue
 
         matches = search_historical(
             historical_index,
@@ -864,13 +934,81 @@ def run(
             field, stats = combine_historical_tokens( matches, lookup, )
             trajectory[f"{start}-{end}"] = serialise_field( field, stats, end - start + 1, )
 
-    result = {
+    return {
         "q": q,
         "direction": direction,
         "source": f"{source_start}-{source_end}",
         "compare": f"{compare_start}-{compare_end}",
         "trajectory": trajectory,
     }
+
+
+def run(
+    q="REVOLUTION",
+    *,
+    source_start,
+    source_end,
+    compare_start,
+    compare_end,
+    neighbours=10,
+    slice_width=10,
+    granularity="year",
+    output=None,
+    table_limit=5,
+    lookup=None,
+    conn=None,
+    faiss_index=None,
+):
+    """
+    One-shot CLI/notebook entry point: build (or reuse) resources, call
+    core(), write the result to `output`, optionally print a table, and
+    return the result dict. main() is a thin wrapper around this: it
+    parses sys.argv and calls this with the parsed values. Calling run()
+    directly (e.g. from a notebook) skips the CLI layer entirely.
+
+    `lookup` and `faiss_index` can be passed in to reuse resources across
+    repeated calls (e.g. in a notebook session) instead of rebuilding the
+    FAISS index and re-opening the Zarr store every call, which is the
+    dominant cost of a run. If omitted, they're built fresh here -- this
+    is still the one-shot path, not the persistent-service path; for
+    that, build the resources once yourself and call service() (or
+    core() directly) repeatedly instead of run().
+
+    `conn` behaves the same way: pass one in to reuse it, omit it to have
+    one opened and closed per call.
+
+    ValueError (from core(), for overlapping periods or zero source
+    observations) propagates to the caller uncaught -- there's no parser
+    here to hand it to. main() is the one place that catches it and
+    turns it into a parser.error() exit.
+    """
+    owns_lookup = lookup is None
+
+    if owns_lookup:
+        source_index = CorpusFaissIndex.load_all( workers=8, )
+        lookup = ZarrEventLookup( ZARR_PATH )
+        lookup.attach_index( source_index )
+
+    result = core(
+        q,
+        source_start=source_start,
+        source_end=source_end,
+        compare_start=compare_start,
+        compare_end=compare_end,
+        lookup=lookup,
+        neighbours=neighbours,
+        slice_width=slice_width,
+        granularity=granularity,
+        conn=conn,
+        faiss_index=faiss_index,
+    )
+
+    if output is None:
+        q_slug = "".join(
+            c if c.isalnum() else "_"
+            for c in q.strip().lower()
+        )
+        output = TMP_DIR / f"dss_semantic_trajectory_{q_slug}.json"
 
     with open( output, "w", encoding="utf8", ) as f:
         json.dump( result, f, indent=2, )
@@ -880,9 +1018,9 @@ def run(
     if table_limit > 0:
         print_trajectory(
             q,
-            f"{source_start}-{source_end}",
-            direction,
-            trajectory,
+            result["source"],
+            result["direction"],
+            result["trajectory"],
             limit=table_limit,
         )
 
@@ -890,6 +1028,64 @@ def run(
     result["lookup"] = lookup
 
     return result
+
+
+def service(
+    q,
+    *,
+    source_start,
+    source_end,
+    compare_start,
+    compare_end,
+    conn,
+    lookup,
+    faiss_index,
+    neighbours=10,
+    slice_width=10,
+    granularity="year",
+):
+    """
+    Single-request entry point for a persistent process (an HTTP handler,
+    a WebSocket handler, a CGI-style long-lived loop -- service() has no
+    opinion on protocol and doesn't do any transport itself; it just
+    takes one request's worth of arguments and returns a plain result
+    dict for the caller to serialise however it likes).
+
+    Unlike run(), service() never builds or tears down resources: `conn`
+    (a live DB connection), `lookup` (a ZarrEventLookup with a
+    full-corpus index already attached), and `faiss_index` (a
+    CorpusFaissIndex instance that has loaded every year, not just a
+    range) are all required and are expected to be built once by the
+    calling process at startup and passed into every service() call for
+    the process's lifetime. That's what makes it safe to call this once
+    per incoming request without re-opening a DB connection, re-opening
+    the Zarr store, or re-reading FAISS indices off disk each time --
+    the same work run() does fresh on every call, done once instead.
+
+    Doesn't write an output file and doesn't print a table -- both are
+    display/persistence concerns for a one-shot run, not a per-request
+    service call. The caller decides what to do with the returned dict
+    (serialise to JSON for an HTTP response, etc.).
+
+    Raises ValueError on bad input (overlapping periods, zero source
+    observations), same as core() -- propagates uncaught. The caller's
+    protocol layer should catch this and translate it into whatever
+    error response its transport expects (e.g. HTTP 400), the same way
+    main() translates it into a parser.error() exit for the CLI.
+    """
+    return core(
+        q,
+        source_start=source_start,
+        source_end=source_end,
+        compare_start=compare_start,
+        compare_end=compare_end,
+        lookup=lookup,
+        neighbours=neighbours,
+        slice_width=slice_width,
+        granularity=granularity,
+        conn=conn,
+        faiss_index=faiss_index,
+    )
 
 
 def main():
@@ -950,3 +1146,61 @@ def main():
 
 if __name__ == "__main__":
     main()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument( "--q", default="REVOLUTION", )
+    parser.add_argument( "--neighbours", type=int, default=10, )
+    parser.add_argument( "--source_start", type=int, default=CORPUS_MAX_YEAR - 20,
+        help="Start year of the period phrase occurrences are drawn from "
+             "-- these are the events whose vectors get searched against "
+             "the comparison period. Defaults to a recent window, i.e. "
+             "backcasting; pass an early range here (with a later "
+             "--compare_start/--compare_end) to forecast instead.",
+    )
+    parser.add_argument( "--source_end", type=int, default=CORPUS_MAX_YEAR, )
+    parser.add_argument( "--compare_start", type=int, default=1630,
+        help="Start year of the period whose FAISS indices are searched "
+             "for neighbours of the source events.",
+    )
+    parser.add_argument( "--compare_end", type=int, default=1650, )
+    parser.add_argument( "--slice_width", type=int, default=10, )
+    parser.add_argument( "--granularity", choices=("year", "slice"), default="year",
+        help="'year' (default) reports one row per individual publication "
+             "year of the matched comparison-period events. 'slice' rolls "
+             "results up into --slice_width-year bands instead (the old "
+             "behaviour). --slice_width still controls how many per-year "
+             "FAISS indices are loaded together either way -- it's a "
+             "loading batch size, not the reporting granularity, unless "
+             "--granularity=slice.",
+    )
+    # No filesystem-safe default here -- it depends on --q, which
+    # isn't known until after parsing. Resolved just below, inside run(),
+    # since it's needed there too (a notebook caller of run() gets the
+    # same default-output-path behaviour, not just the CLI). Passing
+    # --output explicitly always overrides this.
+    parser.add_argument( "--output", default=None, )
+    parser.add_argument( "--table_limit", type=int, default=5, help="Top-N tokens per period to print to the terminal after the run. Set to 0 to skip printing the table.", )
+    args = parser.parse_args()
+
+    try:
+        run(
+            args.q,
+            source_start=args.source_start,
+            source_end=args.source_end,
+            compare_start=args.compare_start,
+            compare_end=args.compare_end,
+            neighbours=args.neighbours,
+            slice_width=args.slice_width,
+            granularity=args.granularity,
+            output=args.output,
+            table_limit=args.table_limit,
+        )
+    except ValueError as e:
+        # Re-raised through parser.error() so CLI behaviour (print usage,
+        # exit non-zero) is unchanged from before the run()/main() split.
+        parser.error(str(e))
+
+
+if __name__ == "__main__":
+    main()
+
