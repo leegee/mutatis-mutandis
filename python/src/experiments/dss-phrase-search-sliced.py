@@ -43,6 +43,30 @@ Four entry points, one shared core:
 
   main()    -- CLI wrapper. Parses sys.argv, calls run(), turns
                ValueError into a parser.error() exit.
+
+TODO
+----
+Next steps:
+
+- Instead of immediately aggregating to tokens, keep the matched events. Eg:
+
+    matched_event = {
+        "event_id": eid,
+        "score": data["rrf_score"],
+        "year": year,
+        "doc_id": ...,
+        "token": ...,
+        "position": ...,
+    }
+
+- Retrieve context from the observation positions so we have the literal content.
+
+- Graph: instead of summing token/weight, build matched event -> kNN -> co-occurence graph.
+
+- Record distribution over docs.
+
+- Cluster kNN
+
 """
 
 from __future__ import annotations
@@ -1146,61 +1170,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument( "--q", default="REVOLUTION", )
-    parser.add_argument( "--neighbours", type=int, default=10, )
-    parser.add_argument( "--source_start", type=int, default=CORPUS_MAX_YEAR - 20,
-        help="Start year of the period phrase occurrences are drawn from "
-             "-- these are the events whose vectors get searched against "
-             "the comparison period. Defaults to a recent window, i.e. "
-             "backcasting; pass an early range here (with a later "
-             "--compare_start/--compare_end) to forecast instead.",
-    )
-    parser.add_argument( "--source_end", type=int, default=CORPUS_MAX_YEAR, )
-    parser.add_argument( "--compare_start", type=int, default=1630,
-        help="Start year of the period whose FAISS indices are searched "
-             "for neighbours of the source events.",
-    )
-    parser.add_argument( "--compare_end", type=int, default=1650, )
-    parser.add_argument( "--slice_width", type=int, default=10, )
-    parser.add_argument( "--granularity", choices=("year", "slice"), default="year",
-        help="'year' (default) reports one row per individual publication "
-             "year of the matched comparison-period events. 'slice' rolls "
-             "results up into --slice_width-year bands instead (the old "
-             "behaviour). --slice_width still controls how many per-year "
-             "FAISS indices are loaded together either way -- it's a "
-             "loading batch size, not the reporting granularity, unless "
-             "--granularity=slice.",
-    )
-    # No filesystem-safe default here -- it depends on --q, which
-    # isn't known until after parsing. Resolved just below, inside run(),
-    # since it's needed there too (a notebook caller of run() gets the
-    # same default-output-path behaviour, not just the CLI). Passing
-    # --output explicitly always overrides this.
-    parser.add_argument( "--output", default=None, )
-    parser.add_argument( "--table_limit", type=int, default=5, help="Top-N tokens per period to print to the terminal after the run. Set to 0 to skip printing the table.", )
-    args = parser.parse_args()
-
-    try:
-        run(
-            args.q,
-            source_start=args.source_start,
-            source_end=args.source_end,
-            compare_start=args.compare_start,
-            compare_end=args.compare_end,
-            neighbours=args.neighbours,
-            slice_width=args.slice_width,
-            granularity=args.granularity,
-            output=args.output,
-            table_limit=args.table_limit,
-        )
-    except ValueError as e:
-        # Re-raised through parser.error() so CLI behaviour (print usage,
-        # exit non-zero) is unchanged from before the run()/main() split.
-        parser.error(str(e))
-
-
-if __name__ == "__main__":
-    main()
-
