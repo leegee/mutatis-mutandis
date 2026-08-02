@@ -100,7 +100,6 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE TABLE IF NOT EXISTS events (
     corpus TEXT NOT NULL,
     event_id INTEGER PRIMARY KEY,
-    concept TEXT,
     vector_id INTEGER,
     token TEXT,
     doc_id TEXT,
@@ -607,10 +606,6 @@ def delete_concept(con, concept):
         (concept,),
     )
 
-    con.execute(
-        "DELETE FROM concepts WHERE concept = ?",
-        (concept,),
-    )
 
 
 def write_concept(con, data, lookup):
@@ -690,7 +685,6 @@ def write_concept(con, data, lookup):
         """
         UPDATE events
         SET
-            concept = ?,
             vector_id = ?,
             token = ?,
             doc_id = ?,
@@ -702,7 +696,6 @@ def write_concept(con, data, lookup):
         """,
         [
             (
-                concept,
                 event["vector_id"],
                 event["token"],
                 event["doc_id"],
