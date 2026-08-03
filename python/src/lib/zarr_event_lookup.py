@@ -1,7 +1,7 @@
 import zarr
 import numpy as np
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.zarr_store_dirs import store_dirs
 
 BATCH_SIZE = 8192
@@ -11,7 +11,7 @@ _NO_WPOS = -1
 class _LazyScaleEmbeddings:
     """
     Array-like accessor for one embedding scale (local/medium/broad),
-    backed by EeboFaissIndex.reconstruct() instead of an eagerly loaded
+    backed by CorpusFaissIndex.reconstruct() instead of an eagerly loaded
     (N, 768) matrix for the whole corpus. Full-corpus eager loading of
     all three scales does not fit in memory (~15.7 GiB for ~1.8M events);
     this replaces it with on-demand reconstruction from the per-year
@@ -23,8 +23,8 @@ class _LazyScaleEmbeddings:
     and every other caller needs no changes.
 
     PERF: array indexing groups requested positions by pub_year before
-    reconstructing, and issues one batched EeboFaissIndex.reconstruct_many()
-    call per year instead of one EeboFaissIndex.reconstruct() call per
+    reconstructing, and issues one batched CorpusFaissIndex.reconstruct_many()
+    call per year instead of one CorpusFaissIndex.reconstruct() call per
     position. This is called on every concept-year (via load_vectors ->
     get_concatenated_embeddings) as well as once for the corpus-wide
     global projection, so avoiding a Python-level FAISS call per single
@@ -40,7 +40,7 @@ class _LazyScaleEmbeddings:
 
     def __init__(self, lookup: "ZarrEventLookup", index, scale: str, dim: int):
         self._lookup = lookup
-        self._index = index   # dict[year][scale] -> EeboFaissIndex
+        self._index = index   # dict[year][scale] -> CorpusFaissIndex
         self._scale = scale
         self._dim = dim
 
@@ -118,7 +118,7 @@ class ZarrEventLookup:
 
     Metadata is loaded eagerly into compact NumPy arrays. Embeddings remain in
     the per-year FAISS indices and are reconstructed lazily on demand via
-    EeboFaissIndex.reconstruct(). This avoids loading approximately 16 GiB of
+    CorpusFaissIndex.reconstruct(). This avoids loading approximately 16 GiB of
     embedding matrices into memory while preserving the existing array-like API.
 
     Exposes three embedding scales (local, medium, broad) through lazy array-like
@@ -129,6 +129,7 @@ class ZarrEventLookup:
     _FIELDS = {
         "event_id":         np.int64,
         "vector_id":        np.int64,
+        "corpus":           object,
         "doc_id":           object,
         "token":            object,
         "token_idx":        np.int64,
@@ -157,6 +158,11 @@ class ZarrEventLookup:
         return np.float32
 
 
+    @property
+    def available_years(self) -> np.ndarray:
+        return np.unique(self.pub_year)
+
+
     def __len__(self):
         return len(self._lookup.event_id)
 
@@ -177,8 +183,14 @@ class ZarrEventLookup:
         Load event metadata only. Embeddings remain resident in the per-year
         FAISS indices and are reconstructed lazily when accessed.
         """
-        if "event_id" not in e:
-            raise KeyError(f"Missing event_id in {store_dir} - rebuild Tier 1")
+        # print(e.tree())
+        # print(e["event_id"].shape)
+        # print(e["corpus"].shape)
+
+        required = {"event_id", "corpus", "doc_id", "vector_id"}
+        missing = required - set(e.keys())
+        if missing:
+            raise KeyError( f"Missing Tier1 event fields {sorted(missing)} in {store_dir}" )
 
         wpos = e.get("window_token_pos")
         n = e["event_id"].shape[0]
@@ -187,16 +199,19 @@ class ZarrEventLookup:
             end = min(start + BATCH_SIZE, n)
 
             # --- cheap fields first ---
-            b_eids = e["event_id"][start:end]
-            b_vids = e["vector_id"][start:end]
-            b_docs = e["doc_id"][start:end]
-            b_toks = e["token"][start:end]
-            b_idxs = e["token_idx"][start:end]
-            b_wins = e["window_id"][start:end]
-            b_years = e["pub_year"][start:end]
-            b_wpos = wpos[start:end] if wpos is not None else None
-            b_toks = b_toks.astype(str)
-            b_docs = b_docs.astype(str)
+            b_eids   = e["event_id"][start:end]
+            b_vids   = e["vector_id"][start:end]
+            b_docs   = e["doc_id"][start:end]
+            b_corpus = e["corpus"][start:end]
+            b_toks   = e["token"][start:end]
+            b_idxs   = e["token_idx"][start:end]
+            b_wins   = e["window_id"][start:end]
+            b_years  = e["pub_year"][start:end]
+
+            b_wpos       = wpos[start:end] if wpos is not None else None
+            b_toks       = b_toks.astype(str)
+            b_docs       = b_docs.astype(str)
+            b_corpus     = b_corpus.astype(str)
             b_toks_lower = np.char.lower(b_toks)
 
             keep = np.ones(end - start, dtype=bool)
@@ -204,6 +219,7 @@ class ZarrEventLookup:
             self._chunks["event_id"].append(np.asarray(b_eids, dtype=np.int64)[keep])
             self._chunks["vector_id"].append(np.asarray(b_vids, dtype=np.int64)[keep])
             self._chunks["doc_id"].append(b_docs[keep])
+            self._chunks["corpus"].append(b_corpus[keep])
             self._chunks["token"].append(b_toks[keep])
             self._chunks["token_idx"].append(np.asarray(b_idxs, dtype=np.int64)[keep])
             self._chunks["window_id"].append(np.asarray(b_wins, dtype=np.int64)[keep])
@@ -216,7 +232,7 @@ class ZarrEventLookup:
             self._chunks["window_token_pos"].append(wpos_col)
 
 
-    def attach_index(self, index: dict[int, dict[str, "EeboFaissIndex"]]) -> None:
+    def attach_index(self, index: dict[int, dict[str, "CorpusFaissIndex"]]) -> None:
         """
         Attach the per-year, per-scale FAISS indices used for lazy embedding reconstruction.
         After attachment, emb_local, emb_medium, and emb_broad behave like NumPy arrays,
@@ -244,14 +260,49 @@ class ZarrEventLookup:
             for field, dtype in self._FIELDS.items():
                 setattr(self, field, np.empty(0, dtype=dtype))
             self.emb_local = self.emb_medium = self.emb_broad = np.empty((0, 768), dtype=np.float32)
+            self._pos_by_occurrence = {}
             return
 
         for field, dtype in self._FIELDS.items():
             setattr(self, field, np.concatenate(self._chunks[field]).astype(dtype, copy=False))
 
         self._pos = {int(eid): pos for pos, eid in enumerate(self.event_id)}
+        self._build_position_index()
         self._chunks.clear()
         logger.info(f"[tier2] loaded {n_total:,} events with multi-scale embeddings")
+
+
+    def _build_position_index(self):
+        """
+        Build a (corpus, doc_id, token_idx) -> [event_id, ...] index for
+        find_event_ids_by_positions(), so repeated corpus-occurrence lookups
+        don't have to linear-scan the entire event table on every call.
+
+        A single corpus occurrence can correspond to multiple Tier 1 events
+        (observed under multiple contextual windows), hence the list value.
+
+        Built once, eagerly, alongside self._pos -- same tradeoff as
+        event_id -> pos: O(n) to build once at load time, O(1) amortized per
+        lookup after that, instead of O(n) per call.
+        """
+        self._pos_by_occurrence: dict[tuple[str, str, int], list[int]] = {}
+
+        # .tolist() up front so the loop body is pure-Python scalars, not
+        # repeated numpy scalar boxing/unboxing per element.
+        corpus_list    = self.corpus.tolist()
+        doc_id_list    = self.doc_id.tolist()
+        token_idx_list = self.token_idx.tolist()
+        event_id_list  = self.event_id.tolist()
+
+        for corpus, doc_id, token_idx, eid in zip(
+            corpus_list, doc_id_list, token_idx_list, event_id_list
+        ):
+            key = (corpus, doc_id, token_idx)
+            bucket = self._pos_by_occurrence.get(key)
+            if bucket is None:
+                self._pos_by_occurrence[key] = [eid]
+            else:
+                bucket.append(eid)
 
 
     def get_ensemble_embedding(self, pos: int, weights=[0.25, 0.50, 0.25]):
@@ -261,6 +312,25 @@ class ZarrEventLookup:
             weights[1] * self.emb_medium[pos] +
             weights[2] * self.emb_broad[pos]
         )
+
+
+    def get_event_metadata(self, event_id: int) -> dict:
+        """
+        Return event provenance without reconstructing embeddings.
+
+        Embedding reconstruction is deliberately excluded because it requires
+        attached FAISS indices and is expensive. Most consumers only need the
+        corpus coordinates of an event.
+        """
+        pos = self._pos[int(event_id)]
+        return self._row_to_dict(pos)
+
+
+    def get_event(self, event_id: int) -> dict:
+        pos = self._pos[int(event_id)]
+        d = self._row_to_dict(pos)
+        d["embedding"] = self.get_ensemble_embedding(pos)
+        return d
 
 
     def get_event(self, event_id: int) -> dict:
@@ -276,6 +346,7 @@ class ZarrEventLookup:
             "event_id": int(self.event_id[pos]),
             "vector_id": int(self.vector_id[pos]),
             "doc_id": str(self.doc_id[pos]),
+            "corpus": str(self.corpus[pos]),
             "token": str(self.token[pos]),
             "token_idx": int(self.token_idx[pos]),
             "window_id": int(self.window_id[pos]),
@@ -314,17 +385,45 @@ class ZarrEventLookup:
             yield eid
 
 
-    def find_matching_event_ids(
-        self,
-        forms,
-        false_positives=None,
-    ):
+    def find_matching_event_ids( self, forms, false_positives=None, ):
         return list(
             self.iter_matching_event_ids(
                 forms,
                 false_positives,
             )
         )
+
+
+    def find_event_ids_by_positions(self, positions):
+        """
+        Resolve corpus occurrence positions to Tier 1 observation events.
+
+        A single corpus occurrence may have multiple Tier 1 events because it can
+        be observed under multiple contextual windows.
+
+        Corpus is part of the key because doc_id is not globally unique.
+
+        O(1) dict lookups against the (corpus, doc_id, token_idx) index built
+        once in _finalize() / _build_position_index(), rather than a linear
+        scan of every event in the lookup per call.
+        """
+        result = {}
+
+        for corpus, doc_id, token_idx in positions:
+            key = (
+                str(corpus),
+                str(doc_id),
+                int(token_idx),
+            )
+
+            if key in result:
+                continue
+
+            result[key] = list(
+                self._pos_by_occurrence.get(key, [])
+            )
+
+        return result
 
 
     def get_pos(self, event_id: int) -> int:
@@ -384,3 +483,41 @@ class ZarrEventLookup:
         broad  = _norm_rows(self.emb_broad[positions])
 
         return np.concatenate([local, medium, broad], axis=1).astype(np.float32)
+
+
+    def get_window_events( self, doc_id, window_id, ):
+        mask = (
+            (self.doc_id == doc_id)
+            &
+            (self.window_id == window_id)
+        )
+
+        positions = np.where(mask)[0]
+
+        return [
+            self._row_to_dict(int(pos))
+            for pos in positions
+        ]
+
+
+    def get_window_text( self, doc_id, window_id, ):
+        mask = (
+            (self.doc_id == doc_id)
+            &
+            (self.window_id == window_id)
+        )
+
+        positions = np.where(mask)[0]
+
+        events = sorted(
+            (
+                self._row_to_dict(int(pos))
+                for pos in positions
+            ),
+            key=lambda x: x["token_idx"],
+        )
+
+        return " ".join(
+            e["token"]
+            for e in events
+        )

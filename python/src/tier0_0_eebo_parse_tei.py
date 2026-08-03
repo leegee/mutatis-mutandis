@@ -247,6 +247,10 @@ def process_ecco_file(tree, xml_path):
 
     tokens = re.findall( r"\w+|[^\w\s]", normalized )
 
+    if len(tokens) > config.MAX_TOKENS_IN_DOC:
+        logger.warning(f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}")
+        return None
+
     lang = extract_language(tree, raw_text)
 
     meta = {
@@ -304,6 +308,11 @@ def process_eebo_file(tree, xml_path):
     lang = extract_language(tree, raw_text)
 
     tokens = re.findall(r"\w+|[^\w\s]", normalized)
+
+    if len(tokens) > config.MAX_TOKENS_IN_DOC:
+        logger.warning(f"EEBO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}")
+        return None
+
 
     meta = {
         "doc_id": doc_id,
@@ -606,10 +615,9 @@ def main():
 
     with eebo_db.get_connection() as conn:
         eebo_db.create_tokens_fk(conn)
-        eebo_db.create_views(conn)
         eebo_db.create_token_indexes(conn)
+        eebo_db.create_views(conn)
         eebo_db.create_tiered_token_indexes(conn)
-        eebo_db.refresh_views(conn)
 
     eebo_db.create_concurrent_indexes()
 

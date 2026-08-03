@@ -1,7 +1,7 @@
 from psycopg import sql
 
-from lib.eebo_db import get_connection
-from lib.eebo_logging import logger
+from lib.corpus_db import get_connection
+from lib.corpus_logging import logger
 
 
 def get_corpus_year_range(view_name: str = "pamphlet_corpus") -> tuple[int | None, int | None]:

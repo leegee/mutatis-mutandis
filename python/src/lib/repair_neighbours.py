@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 # Sentinels / constants shared with tier2
 _NO_WPOS = -1
@@ -50,7 +50,7 @@ def backfill_neighbours_for_year(
 
     Returns the number of neighbour rows written.
     """
-    from lib.eebo_faiss import multiscale_search
+    from lib.corpus_faiss import multiscale_search
     # ensure_events lives in the tier2 module; import locally to avoid cycles
     from tier2_0_concept_events import ensure_events
 

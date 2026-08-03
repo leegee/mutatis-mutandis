@@ -143,9 +143,27 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 
 For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup so fastText over MacBERTh.
 
-## To Do
+## APIs
+
+Every tier has the folllowing:
+
+        main()    = argument parsing, constructs expensive resources
+        core()    = the implementation, uses expensive resources
+        run()     = one-shot CLI/notebook convenience wrapper
+        service() = reusable programmatic API, requires expensive resources
+
+## In Progress
 
 1. phrases
+1. extending API to tiers 3+
+
+## To Do
+
+This work was originally based on EEBO but needs to include other datasources including ECCO which will require
+a new primary key to avoid collision on `doc_id`. I have tried adding a joint key with a new field, `corpus`,
+but it was horrendous. Might be easier to prepend a corpus ID to the doc_id and add a new field to maintain
+the actual doc ID. But then if this is to all be rewritten....
+
 1. metrics
 1. update ZarrEventLookup to stream/yield
 1. expose tier 2's analytics

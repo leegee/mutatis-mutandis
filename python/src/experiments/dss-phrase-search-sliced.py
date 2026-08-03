@@ -81,10 +81,13 @@ from lib.corpus_config import (
     TMP_DIR
 )
 
-from lib.corpus_faiss import CorpusFaissIndex
+from lib.corpus_faiss import EeboFaissIndex
 from lib.corpus_logging import logger
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.corpus_db import get_connection
+
+
+MAX_WORKERS = 6
 
 
 # --- copied from experiments/corpus_phrase_search.py -----------------------
@@ -325,27 +328,11 @@ def load_field_events(lookup, q, start_year, end_year, conn=None):
     return events
 
 
-def load_indexes(start_year, end_year):
-    """
-    Disk-backed load of the per-year comparison indices for
-    [start_year, end_year]. Used by the one-shot CLI/notebook path
-    (run(), with no faiss_index supplied): fine for a single run, but
-    re-reads from disk on every call, which is wasteful for a persistent
-    service handling many requests against overlapping year ranges --
-    see slice_preloaded_index() below for that path instead.
-    """
-    return CorpusFaissIndex.load_existing_range(
-        start_year=start_year,
-        end_year=end_year,
-        workers=8,
-    )
-
-
 def slice_preloaded_index(faiss_index, start_year, end_year):
     """
     Extract the per-year comparison-index mapping for [start_year,
-    end_year] out of a CorpusFaissIndex instance that has *already*
-    loaded every year (e.g. via CorpusFaissIndex.load_all()), instead of
+    end_year] out of a EeboFaissIndex instance that has *already*
+    loaded every year (e.g. via EeboFaissIndex.load_all()), instead of
     hitting disk again the way load_indexes() does. This is what lets
     service() answer repeated requests without re-reading FAISS indices
     off disk per request.
@@ -354,7 +341,7 @@ def slice_preloaded_index(faiss_index, start_year, end_year):
     (not visible from this script): this expects `faiss_index` to expose
     its loaded per-year data as `faiss_index.indexes`, a mapping of
     {year: {scale: <per-scale searchable index>}} -- the same shape
-    CorpusFaissIndex.load_existing_range() returns and that
+    EeboFaissIndex.load_existing_range() returns and that
     search_historical() already consumes unchanged either way. If the
     real attribute is named differently, or access goes through a method
     rather than a plain attribute, this is the only function that needs
@@ -837,8 +824,8 @@ def core(
     closed internally for this call only, matching the original
     one-shot behaviour.
 
-    `faiss_index`, if given, must be a CorpusFaissIndex instance that has
-    already loaded every year (e.g. via CorpusFaissIndex.load_all()) --
+    `faiss_index`, if given, must be a EeboFaissIndex instance that has
+    already loaded every year (e.g. via EeboFaissIndex.load_all()) --
     each comparison slice is then read out of it in memory via
     slice_preloaded_index() instead of hitting disk. If omitted, each
     slice is loaded from disk on demand via load_indexes(), matching the
@@ -933,7 +920,11 @@ def core(
                 continue
         else:
             try:
-                historical_index = load_indexes( start, end, )
+                historical_index = EeboFaissIndex.load_existing_range(
+                    start_year=start,
+                    end_year=end,
+                    workers=MAX_WORKERS,
+                )
             except RuntimeError:
                 logger.info( f"[dss] skipping empty slice={start}-{end}" )
                 continue
@@ -1009,7 +1000,7 @@ def run(
     owns_lookup = lookup is None
 
     if owns_lookup:
-        source_index = CorpusFaissIndex.load_all( workers=8, )
+        source_index = EeboFaissIndex.load_all( workers=8, )
         lookup = ZarrEventLookup( ZARR_PATH )
         lookup.attach_index( source_index )
 
@@ -1078,7 +1069,7 @@ def service(
     Unlike run(), service() never builds or tears down resources: `conn`
     (a live DB connection), `lookup` (a ZarrEventLookup with a
     full-corpus index already attached), and `faiss_index` (a
-    CorpusFaissIndex instance that has loaded every year, not just a
+    EeboFaissIndex instance that has loaded every year, not just a
     range) are all required and are expected to be built once by the
     calling process at startup and passed into every service() call for
     the process's lifetime. That's what makes it safe to call this once
