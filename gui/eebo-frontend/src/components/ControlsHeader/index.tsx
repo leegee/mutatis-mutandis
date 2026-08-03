@@ -66,7 +66,9 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         <Show when={!props.noYearTimeline}>
           <hr class="divider vertical max no-margin no-padding" />
-          <YearTimeline tooltipPosition="bottom" />
+          <span style="flex:1">
+            <YearTimeline tooltipPosition="bottom" />
+          </span>
         </Show>
 
 

@@ -38,7 +38,7 @@ export interface NeighbourhoodState {
     selectedEvent: () => { event: SqliteEventWithNeighbours; key: string } | null;
     selectedEventNeighbours: () => SqliteNeighbour[];
     selectedScoreRange: () => [number, number];
-    rightPanelDocs: () => Array<{ docId: string; year?: number; token_idx: number }>;
+    rightPanelDocs: () => Array<{ corpus: string, docId: string; year?: number; token_idx: number }>;
     focusEventKeys: () => Set<string>;
     tokenTemporalProfile: () => TemporalProfile;
     toSeries: (profile: TemporalProfile, token: string) => TemporalPoint[];
@@ -46,7 +46,7 @@ export interface NeighbourhoodState {
     // Signals (readable)
     selectedEventId: () => string | null;
     focusToken: () => string | null;
-    rightPanelEvent: () => { doc_id: string; token_idx: number } | null;
+    rightPanelEvent: () => { corpus: string; doc_id: string; token_idx: number } | null;
     // Loading / error state
     isLoading: () => boolean;
     // Setters
@@ -54,9 +54,9 @@ export interface NeighbourhoodState {
     setFocusToken: (updater: string | null | ((prev: string | null) => string | null)) => void;
     setRightPanelEvent: (
         updater:
-            | { doc_id: string; token_idx: number }
+            | { corpus: string; doc_id: string; token_idx: number }
             | null
-            | ((prev: { doc_id: string; token_idx: number } | null) => { doc_id: string; token_idx: number } | null),
+            | ((prev: { corpus: string; doc_id: string; token_idx: number } | null) => { corpus: string; doc_id: string; token_idx: number } | null),
     ) => void;
     // Keyboard helpers
     eventButtonRefs: Map<string, HTMLButtonElement>;
@@ -67,6 +67,7 @@ export function useNeighbourhoodState(): NeighbourhoodState {
     const [selectedEventId, setSelectedEventId] = createSignal<string | null>(null);
     const [focusToken, setFocusToken] = createSignal<string | null>(null);
     const [rightPanelEvent, setRightPanelEvent] = createSignal<{
+        corpus: string;
         doc_id: string;
         token_idx: number;
     } | null>(null);
@@ -143,19 +144,24 @@ export function useNeighbourhoodState(): NeighbourhoodState {
     });
 
     const rightPanelDocs = createMemo<
-        Array<{ docId: string; year?: number; token_idx: number }>
+        Array<{ corpus: string, docId: string; year?: number; token_idx: number }>
     >(() => {
         const focusedToken = focusToken();
         if (focusedToken) {
             const summary = neighbourIndex().get(focusedToken);
             if (!summary) return [];
-            return [...summary.docYears.entries()]
-                .map(([docId, { year, token_idx }]) => ({ docId, year, token_idx }))
+            // docYears is keyed by a synthetic `${corpus}:${docId}` string
+            // (see neighbourUtils.ts) precisely because doc_id alone isn't
+            // unique -- so read corpus/docId back out of the *value*, not
+            // the map key.
+            return [...summary.docYears.values()]
+                .map(({ corpus, docId, year, token_idx }) => ({ corpus, docId, year, token_idx }))
                 .sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
         }
         const sel = selectedEvent();
         if (sel?.event.doc_id) {
             return [{
+                corpus: sel.event.corpus,
                 docId: sel.event.doc_id,
                 year: sel.event.pub_year,
                 token_idx: sel.event.token_idx,

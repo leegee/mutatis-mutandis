@@ -31,7 +31,10 @@ interface Props {
   toSeries: (profile: TemporalProfile, token: string) => TemporalPoint[];
   windowText: () => string | null | undefined;
   onFocusToken: (token: string) => void;
-  rightPanelEvent: () => { doc_id: string; token_idx: number } | null;
+  // Was missing corpus, even though the actual value passed in from
+  // useNeighbourhoodState always has it (documents' PK is composite
+  // (corpus, doc_id), so doc_id alone can't identify a document).
+  rightPanelEvent: () => { corpus: string; doc_id: string; token_idx: number } | null;
 }
 
 function PanelHeading(props: {

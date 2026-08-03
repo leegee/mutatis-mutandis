@@ -13,8 +13,12 @@ export interface NeighbourSummary {
   occurrenceCount: number;
   eventCount: number;
   meanScore: number;
+  // Composite `${corpus}:${doc_id}` keys -- doc_id alone isn't unique
+  // (documents' PK is the composite (corpus, doc_id)), so two documents in
+  // different corpora that happen to share a doc_id would otherwise
+  // collide here.
   docIds: Set<string>;
-  docYears: Map<string, { year: number | undefined; token_idx: number }>;
+  docYears: Map<string, { corpus: string; docId: string; year: number | undefined; token_idx: number }>;
   eventKeys: Set<string>;
 }
 
@@ -30,6 +34,10 @@ export interface TemporalPoint {
 // Event identity
 export function eventKey(event: SqliteEventWithNeighbours, idx: number): string {
   return event.event_id !== undefined ? String(event.event_id) : `idx:${ idx }`;
+}
+
+function docKey(corpus: string, docId: string): string {
+  return `${ corpus }:${ docId }`;
 }
 
 // Index construction
@@ -52,7 +60,7 @@ export function buildNeighbourIndex(events: SqliteEventWithNeighbours[]): Neighb
           eventCount: 0,
           meanScore: 0,
           docIds: new Set(),
-          docYears: new Map<string, { year: number | undefined; token_idx: number }>,
+          docYears: new Map(),
           eventKeys: new Set(),
         };
         index.set(nb.token, summary);
@@ -69,9 +77,15 @@ export function buildNeighbourIndex(events: SqliteEventWithNeighbours[]): Neighb
       summary.meanScore += nb.score;
 
       if (event.doc_id) {
-        summary.docIds.add(event.doc_id);
-        if (!summary.docYears.has(event.doc_id)) {
-          summary.docYears.set(event.doc_id, { year: event.pub_year, token_idx: event.token_idx });
+        const dKey = docKey(event.corpus, event.doc_id);
+        summary.docIds.add(dKey);
+        if (!summary.docYears.has(dKey)) {
+          summary.docYears.set(dKey, {
+            corpus: event.corpus,
+            docId: event.doc_id,
+            year: event.pub_year,
+            token_idx: event.token_idx,
+          });
         }
       }
     }
@@ -137,4 +151,3 @@ export function toSeries(
     .map(([year, set]) => ({ year, value: set.size }))
     .sort((a, b) => a.year - b.year);
 }
-

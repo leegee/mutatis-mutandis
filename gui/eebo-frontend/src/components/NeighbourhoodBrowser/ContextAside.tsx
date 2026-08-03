@@ -10,7 +10,7 @@ import type { SqliteEventWithNeighbours } from "../../types";
 import { showDocument } from "../../services/documentApi";
 
 interface Props {
-  event: () => Pick<SqliteEventWithNeighbours, "doc_id" | "token_idx">;
+  event: () => Pick<SqliteEventWithNeighbours, "corpus" | "doc_id" | "token_idx">;
   windowText: () => string | null | undefined;
 }
 
@@ -27,7 +27,17 @@ const ContextAside: Component<Props> = (props) => (
       {(text) => (
         <Show when={props.event().doc_id}>
           <blockquote innerHTML={text()} />
-          <button class="chip" onClick={() => showDocument(props.event().doc_id, props.event().token_idx)} >
+          {/*
+            NOTE: showDocument previously took (doc_id, token_idx) only.
+            documents' PK is the composite (corpus, doc_id), so doc_id alone
+            can't identify a document once more than one corpus is in play
+            -- added corpus, matching the (corpus, docId, tokenIdx) argument
+            order already used by onSelectDoc/handleSelectDoc elsewhere in
+            this codebase. services/documentApi.ts wasn't part of this
+            upload, so please confirm showDocument's actual signature
+            accepts corpus in this position before shipping.
+          */}
+          <button class="chip" onClick={() => showDocument(props.event().corpus, props.event().doc_id, props.event().token_idx)} >
             <span> {props.event().doc_id}</span>
             <i class="small medium-opacity"> open_in_new</i>
           </button>

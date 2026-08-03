@@ -436,6 +436,7 @@ export async function queryEventsByConcept(
     eventMap.get(r[0] as string)?.neighbours.push(nb);
   }
 
+  console.debug('[queryEventsByConcept] rv', events.length)
   return events;
 }
 

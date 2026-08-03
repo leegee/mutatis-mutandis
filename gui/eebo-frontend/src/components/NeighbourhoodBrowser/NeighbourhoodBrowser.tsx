@@ -30,9 +30,9 @@ const NeighbourhoodBrowser: Component = () => {
     state.setFocusToken((prev) => (prev === token ? null : token));
   }
 
-  function handleSelectDoc(docId: string, tokenIdx: number) {
+  function handleSelectDoc(corpus: string, docId: string, tokenIdx: number) {
     state.setRightPanelEvent((prev) =>
-      prev?.doc_id === docId ? null : { doc_id: docId, token_idx: tokenIdx },
+      prev?.doc_id === docId ? null : { corpus: corpus, doc_id: docId, token_idx: tokenIdx },
     );
   }
 
