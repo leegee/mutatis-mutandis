@@ -11,6 +11,8 @@ CORPUS_START_YEAR, CORPUS_END_YEAR = get_corpus_year_range()
 if CORPUS_START_YEAR is None or CORPUS_END_YEAR is None:
     raise RuntimeError("Could not determine corpus year range from database")
 
+CORPUS_START_YEAR = 1620
+
 pg_conn = get_connection()
 
 try:
