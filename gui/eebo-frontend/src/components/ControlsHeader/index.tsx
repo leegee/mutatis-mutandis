@@ -24,7 +24,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
   return (
     <>
-      <nav class="toolbar no-round no-margin no-padding">
+      <nav class="toolbar no-round no-margin no-padding max">
         <div class="field suffix border middle-align">
           <Show when={conceptsList().length > 0}>
             <Show when={props.multiConcept} fallback={<SingleConceptSelect />}>

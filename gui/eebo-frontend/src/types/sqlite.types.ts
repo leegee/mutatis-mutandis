@@ -1,4 +1,5 @@
 export interface SqliteNeighbour {
+  corpus: string;
   event_id: string;
   vector_id: string;
   token: string;

@@ -94,6 +94,7 @@ export default function LineageExplorer() {
             <Show when={data()}>
                 {graph => (
                     <>
+                        {/* Use the usual ControlsHeader */}
                         <nav>
                             <SingleConceptSelect />
                             <LineageGraph

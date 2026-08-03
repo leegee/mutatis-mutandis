@@ -36,7 +36,8 @@ export async function fetchWindowBatch(
   queries: WindowQuery[]
 ) {
   const body = JSON.stringify({ queries });
-  // console.debug("[tokenWindowBatchApi]", body);
+
+  console.trace("[tokenWindowBatchApi]", body);
 
   const res = await fetch(`/api/window/batch`, {
     method: "POST",

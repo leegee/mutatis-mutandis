@@ -13,13 +13,18 @@ export interface ClusterSummary {
     // description: string | null;
     eventCount: number;
     topTokens: [string, number][];
-    topDocs: [string, number][];
+    // doc_id, corpus, count -- corpus is needed alongside doc_id because
+    // documents' PK is the composite (corpus, doc_id); a cluster can be
+    // backed by events from more than one corpus, so doc_id alone can't
+    // disambiguate which document a row refers to.
+    topDocs: [string, string, number][];
 }
 
 export interface ClusterReport {
     concept: string;
     generated_at: string;
     clusters: ClusterSummary[];
+    // Keyed by `${corpus}:${doc_id}`, not doc_id alone -- see topDocs note.
     docMeta: Record<string, DocMeta>;
 
     docExemplars: Record<
@@ -27,6 +32,7 @@ export interface ClusterReport {
         {
             event_id: string;
             doc_id: string;
+            corpus: string;
             token_idx: number;
         }[]
     >;
@@ -75,7 +81,15 @@ interface loadClusterReportParams {
     authorMatch?: string;
 }
 
-
+// documents' PK is the composite (corpus, doc_id) -- doc_id alone can
+// collide across corpora, so the author-match join has to disambiguate on
+// both. (concept_field_events / concept_cluster_info / neighbours have no
+// corpus column at all, so those joins stay as-is.)
+function documentsJoinSql(alias = "d"): string {
+    return `JOIN documents ${ alias }
+                ON ${ alias }.doc_id = e.doc_id
+                AND ${ alias }.corpus = e.corpus`;
+}
 
 export async function loadClusterReport(
     params: loadClusterReportParams
@@ -95,7 +109,7 @@ export async function loadClusterReport(
     const joins = `
     JOIN concept_field_events f
         ON f.event_id = e.event_id
-    ${ author ? "JOIN documents d ON d.doc_id = e.doc_id" : "" }
+    ${ author ? documentsJoinSql() : "" }
     `;
 
     const authorSql = author ? author.sql : "";
@@ -127,7 +141,7 @@ export async function loadClusterReport(
         JOIN concept_cluster_info c
             ON c.concept = f.concept
             AND c.cluster_id = e.cluster_id
-        ${ author ? "JOIN documents d ON d.doc_id = e.doc_id" : "" }
+        ${ author ? documentsJoinSql() : "" }
         WHERE f.concept = ?
         AND f.role = 'seed'
         AND e.pub_year IS NOT NULL
@@ -177,7 +191,7 @@ export async function loadClusterReport(
     // -------------------------------------------------------
     const eventRows = await execRows(
         `
-        SELECT e.event_id, e.cluster_id, e.doc_id
+        SELECT e.event_id, e.cluster_id, e.doc_id, e.corpus
         FROM events e
         ${ joins }
         ${ baseWhere }
@@ -186,15 +200,17 @@ export async function loadClusterReport(
     );
 
     const eventClusters: Record<string, number[]> = {};
+    // event_id -> `${corpus}:${doc_id}` -- doc_id alone isn't a safe key
+    // once a report can span multiple corpora.
     const eventToDoc: Record<string, string> = {};
 
-    for (const [event_id, cluster_id, doc_id] of eventRows as any[]) {
+    for (const [event_id, cluster_id, doc_id, corpus] of eventRows as any[]) {
         const sid = String(event_id);
 
         if (!eventClusters[sid]) eventClusters[sid] = [];
         eventClusters[sid].push(cluster_id);
 
-        eventToDoc[sid] = doc_id;
+        eventToDoc[sid] = `${ corpus }:${ doc_id }`;
     }
 
     // populate cluster event lists
@@ -206,6 +222,8 @@ export async function loadClusterReport(
     // -------------------------------------------------------
     // TOP TOKENS
     // -------------------------------------------------------
+    // No corpus dimension here -- token counts are aggregated per cluster
+    // across all corpora, same as before.
     const tokenRows = await execRows(
         `
         SELECT cluster_id, token, c
@@ -235,13 +253,18 @@ export async function loadClusterReport(
     // -------------------------------------------------------
     // TOP DOCS
     // -------------------------------------------------------
+    // Grouped by (cluster_id, doc_id, corpus) rather than just
+    // (cluster_id, doc_id) -- otherwise two different documents in
+    // different corpora that happen to share a doc_id would get counted
+    // together as if they were the same document.
     const docRows = await execRows(
         `
-        SELECT cluster_id, doc_id, c
+        SELECT cluster_id, doc_id, corpus, c
         FROM (
             SELECT
                 e.cluster_id,
                 e.doc_id,
+                e.corpus,
                 COUNT(*) AS c,
                 ROW_NUMBER() OVER (
                     PARTITION BY e.cluster_id
@@ -250,17 +273,22 @@ export async function loadClusterReport(
             FROM events e
             ${ joins }
             ${ baseWhere }
-            GROUP BY e.cluster_id, e.doc_id
+            GROUP BY e.cluster_id, e.doc_id, e.corpus
         )
         WHERE rn <= 25
         `,
         baseParams
     );
 
+    // Distinct (corpus, doc_id) pairs seen across all clusters' top docs,
+    // for the docMeta lookup below.
+    const docKeys = new Set<string>();
     const docIds = new Set<string>();
 
-    for (const [cid, doc_id, count] of docRows as any[]) {
-        clusters.get(cid)?.topDocs.push([doc_id, count]);
+    for (const [cid, doc_id, corpus, count] of docRows as any[]) {
+        clusters.get(cid)?.topDocs.push([doc_id, corpus, count]);
+
+        docKeys.add(`${ corpus }:${ doc_id }`);
         docIds.add(doc_id);
     }
 
@@ -270,29 +298,35 @@ export async function loadClusterReport(
     if (docIds.size > 0) {
         const ids = [...docIds];
 
+        // Filtering by doc_id alone can return rows for corpora we don't
+        // actually need (if the same doc_id string exists in an unrelated
+        // corpus) -- harmless, since we only key/read the composite pairs
+        // that showed up in docKeys above.
         const rows = await execRows(
             `
-            SELECT doc_id, author, title, pub_year
+            SELECT corpus, doc_id, author, title, pub_year
             FROM documents
             WHERE doc_id IN (${ ids.map(() => "?").join(",") })
             `,
             ids
         );
 
-        for (const [id, author, title, pub_year] of rows as any[]) {
-            docMeta[id] = { author, title, pub_year };
+        for (const [corpus, id, author, title, pub_year] of rows as any[]) {
+            const key = `${ corpus }:${ id }`;
+            if (!docKeys.has(key)) continue;
+            docMeta[key] = { author, title, pub_year };
         }
     }
 
     // EXEMPLARS
     const clusterExemplars: Record<
         number,
-        { event_id: string; doc_id: string; token_idx: number }[]
+        { event_id: string; doc_id: string; corpus: string; token_idx: number }[]
     > = {};
 
     const exemplarRows = await execRows(
         `
-        SELECT e.cluster_id, e.event_id, e.doc_id, e.token_idx
+        SELECT e.cluster_id, e.event_id, e.doc_id, e.corpus, e.token_idx
         FROM events e
         ${ joins }
         ${ baseWhere }
@@ -301,12 +335,13 @@ export async function loadClusterReport(
         baseParams
     );
 
-    for (const [cid, event_id, doc_id, token_idx] of exemplarRows as any[]) {
+    for (const [cid, event_id, doc_id, corpus, token_idx] of exemplarRows as any[]) {
         if (!clusterExemplars[cid]) clusterExemplars[cid] = [];
 
         clusterExemplars[cid].push({
             event_id: String(event_id),
             doc_id,
+            corpus,
             token_idx,
         });
     }
@@ -322,13 +357,13 @@ export async function loadClusterReport(
     const docClusterMap: Record<string, Set<number>> = {};
 
     for (const [event_id, clustersArr] of Object.entries(eventClusters)) {
-        const doc_id = eventToDoc[event_id];
-        if (!doc_id) continue;
+        const docKey = eventToDoc[event_id];
+        if (!docKey) continue;
 
-        if (!docClusterMap[doc_id]) docClusterMap[doc_id] = new Set();
+        if (!docClusterMap[docKey]) docClusterMap[docKey] = new Set();
 
         for (const c of clustersArr) {
-            docClusterMap[doc_id].add(c);
+            docClusterMap[docKey].add(c);
         }
     }
 

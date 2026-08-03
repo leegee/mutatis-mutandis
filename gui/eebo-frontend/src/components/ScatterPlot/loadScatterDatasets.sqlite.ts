@@ -94,11 +94,16 @@ export async function loadDatasets(
                             neighbourhood_event.gny,
                             neighbourhood_event.cluster_id,
                             neighbourhood_event.cluster_label,
-                            n.depth
+                            n.depth,
+                            neighbourhood_event.corpus
                         FROM concept_field_events seed
-                            JOIN neighbours n ON n.event_id = seed.event_id
+                            JOIN neighbours n
+                                ON n.event_id = seed.event_id
                             JOIN events neighbourhood_event
                                 ON neighbourhood_event.event_id = n.neighbour_event_id
+                            LEFT JOIN documents d
+                                ON d.doc_id = neighbourhood_event.doc_id
+                                AND d.corpus = neighbourhood_event.corpus
                             WHERE seed.concept = ?
                             AND seed.role = 'seed'
                           ${ author ? author.sql : "" }
@@ -114,8 +119,16 @@ export async function loadDatasets(
                 }
 
                 else if (params.dataType === "concept_clusters") {
+                    const year = yearFilter(
+                        "e.",
+                        params.yearMode,
+                        params.fromYear,
+                        params.toYear
+                    );
+
                     sql = `
-                        SELECT
+                        SELECT DISTINCT
+                            e.corpus,
                             c.cluster_id,
                             c.cluster_label,
                             c.centroid_nx AS nx,
@@ -123,21 +136,20 @@ export async function loadDatasets(
                             c.centroid_gnx AS gnx,
                             c.centroid_gny AS gny,
                             c.point_count,
-                            c.cluster_label,
                             c.description
                         FROM concept_cluster_info c
+                            JOIN concept_field_events f
+                                ON f.concept = c.concept
+                            JOIN events e
+                                ON e.event_id = f.event_id
                         WHERE c.concept = ?
-                        AND EXISTS (
-                            SELECT 1
-                            FROM events e
-                            WHERE e.concept = c.concept
-                            AND e.cluster_id = c.cluster_id
-                            AND e.pub_year BETWEEN ? AND ?
-                        )
+                        AND f.role = 'seed'
+                        AND e.cluster_id = c.cluster_id
+                          ${ year.sql }
                         ORDER BY c.cluster_id
                     `;
 
-                    queryParams = [concept, params.fromYear, params.toYear,];
+                    queryParams = [concept, ...year.params];
                 }
 
                 else {
@@ -166,10 +178,14 @@ export async function loadDatasets(
                             e.gnx,
                             e.gny,
                             e.cluster_id,
-                            e.cluster_label
+                            e.cluster_label,
+                            e.corpus
                         FROM concept_field_events f
-                            JOIN events e         ON e.event_id = f.event_id
-                            LEFT JOIN documents d ON d.doc_id = e.doc_id
+                            JOIN events e
+                                ON e.event_id = f.event_id
+                            LEFT JOIN documents d
+                                ON d.doc_id = e.doc_id
+                                AND d.corpus = e.corpus
                             WHERE f.concept = ?
                             AND f.role = 'seed'
                           ${ author ? author.sql : "" }
@@ -193,17 +209,18 @@ export async function loadDatasets(
                     points: (points as any[]).map((p: any[]) => {
                         if (params.dataType === "concept_clusters") {
                             return {
-                                event_id: `${ concept }-cluster-${ p[0] }`,
-                                cluster_id: p[0],
-                                cluster_label: p[1],
-                                nx: p[2],
-                                ny: p[3],
-                                gnx: p[4],
-                                gny: p[5],
-                                point_count: p[6],
-                                label: p[7],
+                                event_id: `${ concept }-cluster-${ p[1] }-${ p[0] }`,
+                                cluster_id: p[1],
+                                cluster_label: p[2],
+                                nx: p[3],
+                                ny: p[4],
+                                gnx: p[5],
+                                gny: p[6],
+                                point_count: p[7],
+                                label: p[2],
                                 description: p[8],
                                 concept,
+                                corpus: p[0],
                                 token: "_NULL_",
                                 token_idx: -999,
                                 doc_id: "_NULL_",
@@ -214,6 +231,10 @@ export async function loadDatasets(
                                 windowKey: "_NULL_",
                             } as PointData;
                         }
+
+                        // concept_neighbours has an extra `n.depth` column before
+                        // `corpus`, so the corpus index shifts for that branch.
+                        const corpusIdx = params.dataType === "concept_neighbours" ? 13 : 12;
 
                         return {
                             event_id: String(p[0]),
@@ -229,6 +250,7 @@ export async function loadDatasets(
                             cluster_id: p[10],
                             cluster_label: p[11],
                             depth: p[12],
+                            corpus: p[corpusIdx],
                             concept,
                         } as PointData;
                     }),
@@ -282,7 +304,8 @@ export async function loadBfsDataset(params: {
             neighbourhood_event.ny,
             neighbourhood_event.gnx,
             neighbourhood_event.gny,
-            n.depth
+            n.depth,
+            neighbourhood_event.corpus
         FROM neighbours n
         JOIN events neighbourhood_event
             ON neighbourhood_event.event_id = n.neighbour_event_id
