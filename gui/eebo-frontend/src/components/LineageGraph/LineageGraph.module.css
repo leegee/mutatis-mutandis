@@ -264,6 +264,9 @@
     max-height: 3.5em;
     overflow-x: hidden;
     cursor: pointer;
+    padding: 0 !important;
+    margin-top: 0 !important;
+    opacity: 70%;
 }
 
 .viewportBand {

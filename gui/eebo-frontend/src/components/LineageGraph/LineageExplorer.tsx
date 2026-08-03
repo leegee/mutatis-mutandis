@@ -95,7 +95,7 @@ export default function LineageExplorer() {
                 {graph => (
                     <>
                         {/* Use the usual ControlsHeader */}
-                        <nav>
+                        <nav style="width:90%;">
                             <SingleConceptSelect />
                             <LineageGraph
                                 data={graph()}
