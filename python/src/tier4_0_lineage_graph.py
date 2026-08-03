@@ -62,12 +62,13 @@ not as a deterministic model of lexical evolution.
 from __future__ import annotations
 
 import argparse
+import time
 import sqlite3
+from sqlite3 import Connection
 import json
 from collections import defaultdict
 import numpy as np
 import networkx as nx
-import matplotlib.pyplot as plt
 
 from lib.eebo_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
@@ -370,70 +371,6 @@ def assign_lineages(G):
     return G
 
 
-def draw_temporal_graph(G, output_png):
-    years = sorted(
-        {
-            G.nodes[n]["year"]
-            for n in G.nodes
-        }
-    )
-
-    pos = {}
-
-    for year in years:
-        nodes = [
-            n for n in G.nodes
-            if G.nodes[n]["year"] == year
-        ]
-
-        for idx, node in enumerate(nodes):
-            pos[node] = ( year, idx )
-
-    fig, ax = plt.subplots(figsize=(20,12))
-
-
-    # edges first
-    for u,v,data in G.edges(data=True):
-        x1,y1 = pos[u]
-        x2,y2 = pos[v]
-
-        ax.plot(
-            [x1,x2],
-            [y1,y2],
-            linewidth=max( 0.5, data["similarity"] * 3 ),
-            alpha=0.5,
-        )
-
-
-    # nodes -- colour by persistence so drift is visible at a glance
-    xs=[]
-    ys=[]
-    sizes=[]
-    colours=[]
-
-    for n in G.nodes:
-        x,y = pos[n]
-        xs.append(x)
-        ys.append(y)
-        sizes.append( max( 50, G.nodes[n]["size"] ) )
-        colours.append( G.nodes[n].get("persistence", 1.0) )
-
-    scatter = ax.scatter(
-        xs, ys, s=sizes, c=colours, cmap="RdYlGn", vmin=0.0, vmax=1.0,
-    )
-    plt.colorbar(scatter, ax=ax, label="semantic persistence")
-
-    for n,(x,y) in pos.items():
-        ax.text( x, y, n, fontsize=7, )
-
-    ax.set_xlabel("Publication year")
-    ax.set_ylabel("Cluster lineage")
-
-    ax.grid(True)
-
-    plt.savefig( output_png, dpi=300, bbox_inches="tight" )
-
-
 def analyse_lineage(G):
     births = [
         n
@@ -467,6 +404,13 @@ def analyse_lineage(G):
 
     logger.debug(f"[tier4] unstable lineages (drifted below {DRIFT_THRESHOLD}):")
     logger.debug(unstable)
+    return {
+        "births": births,
+        "deaths": deaths,
+        "branching": branching,
+        "merging": merging,
+        "unstable": unstable,
+    }
 
 
 def sample_cluster_events(
@@ -625,7 +569,7 @@ def sample_cluster_events(
     return samples
 
 
-def export_lineage(con, concept, G):
+def export_lineage(con, concept, G, analysis=None,):
     nodes = []
 
     rows = con.execute(
@@ -725,53 +669,86 @@ def export_lineage(con, concept, G):
         "lineages": lineages_summary,
         "drift_threshold": DRIFT_THRESHOLD,
         "confidence_threshold": CONFIDENCE_THRESHOLD,
+        "analysis": analysis or {},
+        "summary": {
+            "nodes": G.number_of_nodes(),
+            "edges": G.number_of_edges(),
+            "lineages": len(lineage_min_persistence),
+            "stable_lineages": sum(lineage_stability.values()),
+            "births": len(analysis["births"]) if analysis else 0,
+            "deaths": len(analysis["deaths"]) if analysis else 0,
+            "branching": len(analysis["branching"]) if analysis else 0,
+            "merging": len(analysis["merging"]) if analysis else 0,
+        }
     }
+
+
+def analyse_concept_lineage(
+    con: Connection,
+    concept: str,
+) -> dict[str, object]:
+    logger.info( f"[tier4] analysing {concept}" )
+
+    G = load_temporal_graph( con, concept, )
+
+    G = assign_lineages(G)
+    analysis = analyse_lineage(G)
+
+    return export_lineage(
+        con,
+        concept,
+        G,
+        analysis=analysis,
+    )
+
+
+def service(
+    *,
+    con: Connection,
+    concept: str,
+    write_json: bool = False,
+) -> dict[str, object]:
+
+    started = time.perf_counter()
+    result = analyse_concept_lineage( con, concept, )
+    elapsed = time.perf_counter() - started
+
+    result["elapsed_seconds"] = round( elapsed, 3, )
+
+    if write_json:
+        json_path = ( OUTPUT_DIR / f"{concept}_lineage.json" )
+        with open( json_path, "w", encoding="utf8", ) as f:
+            json.dump( result, f, indent=2, )
+        result["json_path"] = str(json_path)
+
+    logger.info( f"[tier4-service] completed {concept} in {elapsed:.2f}s" )
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--concept", help="Process a single concept rathan than all" )
+    parser.add_argument( "--concept", )
+    parser.add_argument( "--json", action="store_true", )
     args = parser.parse_args()
 
     con = sqlite3.connect( CORPUS_TIER2_DB_PATH )
 
-    if args.concept:
-        concepts = [args.concept.upper()]
-    else:
-        concepts = get_processed_concepts(CORPUS_TIER2_DB_PATH)
-
-    for concept in concepts:
-        logger.info(f"[tier4] Process concept {concept}")
-
-        png_path     = OUTPUT_DIR / f"{concept}_lineage.png"
-        json_path    = OUTPUT_DIR / f"{concept}_lineage.json"
-
-        logger.debug("[tier4] Load graph")
-        G = load_temporal_graph(con, concept)
-        logger.debug("[tier4] Loaded graph")
-
-        G = assign_lineages(G)
-        logger.debug("[tier4] Assigned lineage")
-
-        analyse_lineage(G)
-
-        logger.info( f"[tier4] {G.number_of_nodes()} nodes" )
-        logger.info( f"[tier4] {G.number_of_edges()} edges" )
-
-        draw_temporal_graph( G, png_path )
-        logger.info( f"[tier4] Wrote {png_path}" )
-
-        json_data = export_lineage(con, concept, G)
-
-        json.dump(
-            json_data,
-            open(json_path,"w"),
-            indent=2
+    try:
+        concepts = (
+            [args.concept.upper()]
+            if args.concept
+            else get_processed_concepts(
+                CORPUS_TIER2_DB_PATH
+            )
         )
-        logger.info( f"[tier4] Wrote {json_path}" )
 
-    con.close()
-    logger.info(f"[tier4] Complete")
+        for concept in concepts:
+            result = service( con=con, concept=concept, write_json=args.json, )
+            logger.info( f"[tier4-main] {result['concept']} complete" )
+
+    finally:
+        con.close()
+
 
 if __name__ == "__main__":
     main()
