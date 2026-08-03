@@ -49,7 +49,7 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
       });
 
       const parsed = JSON.parse(body);
-      console.log(req.url, body);
+      // console.log(req.url, body);
 
       if (!parsed || !Array.isArray(parsed.queries)) {
         throw new TypeError("queries must be an array");
