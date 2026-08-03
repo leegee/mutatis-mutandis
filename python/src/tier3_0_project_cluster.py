@@ -3,12 +3,16 @@
 # tier3_0_project_cluster.py
 
 from __future__ import annotations
+from typing import Tuple
 
 import argparse
 import sqlite3
+from sqlite3 import Connection
 from pathlib import Path
+import time
 
 import numpy as np
+from numpy.typing import NDArray
 
 from lib.eebo_config import (
     CORPUS_TIER2_DB_PATH,
@@ -23,13 +27,11 @@ from lib.eebo_logging import logger
 from lib.sqlite_vector_blob import vector_to_blob
 from lib.cluster import (
     LOCAL_UMAP_PARAMS,
-    GLOBAL_UMAP_PARAMS,
     load_event_rows,
     load_vectors,
     project,
     leiden_cluster,
     build_global_projection,
-    compute_cluster_centroids,
 )
 
 
@@ -183,18 +185,34 @@ def write_cluster_info(
     )
 
 
-def process_concept( con, lookup, concept, global_coords, resolution_parameter, n_neighbors):
-    logger.info( f"[tier3] processing {concept}" )
+def cluster_concept(
+    con: Connection,
+    lookup: ZarrEventLookup,
+    concept: str,
+    global_coords: dict[int, NDArray[np.float32]],
+    resolution_parameter: float,
+    n_neighbors: int,
+) -> dict[str, object]:
 
+    logger.info( f"[tier3] processing {concept}" )
     rows = load_event_rows( con, concept, )
 
     if not rows:
         logger.warning( f"[tier3] {concept}: no events" )
-        return
+        return {
+            "concept": concept,
+            "status": "no-op",
+            "reason": "No events",
+        }
 
     event_ids, vectors = load_vectors( lookup, rows, )
     if len(event_ids) == 0:
-        return
+        return {
+            "concept": concept,
+            "status": "no-op",
+            "reason": "No events",
+        }
+
 
     logger.info( f"[tier3] {concept}: field events={len(event_ids):,}" )
 
@@ -216,37 +234,28 @@ def process_concept( con, lookup, concept, global_coords, resolution_parameter, 
     write_geometry( con, event_ids, local_coords, global_xy, clusters, )
     write_cluster_info( con, concept, vectors, local_coords, global_xy, clusters, )
     con.commit()
+    return {
+        "concept": concept,
+        "status": "complete","c"
+        "events": len(event_ids),
+        "clusters": len({
+            int(c)
+            for c in clusters
+            if c != -1
+        } ),
+        "noise_points": int( np.sum(clusters == -1) )
+    }
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument( "--concept", default=None, )
-    parser.add_argument( "--mask", action="store_true", )
-    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help="Leiden resolution parameter (default: 0.8)", )
-    parser.add_argument( "-n", "--neighbors", type=int, default=15, help="kNN graph neighbours (default: 15)", )
-    args = parser.parse_args()
-
+def build_tier3_resources(
+    *,
+    masked=False,
+) -> tuple[
+    Connection,
+    ZarrEventLookup,
+    dict[int, np.ndarray],
+]:
     con = sqlite_connection( CORPUS_TIER2_DB_PATH )
-
-    resolved_concepts = [
-        concept
-        for concept, _ in resolve_concepts( concept=args.concept )
-    ]
-
-    if not resolved_concepts:
-        logger.warning( "[tier3] no concepts resolved" )
-        return
-
-    global_concepts = [
-        concept
-        for concept, _ in resolve_concepts(concept=None)
-    ]
-
-    logger.info( f"[tier3] concepts={len(resolved_concepts)}" )
-    logger.info( f"[tier3] global concepts={len(global_concepts)}" )
-
-    # Global lookup intentionally has no form restriction.
-    # Global geometry must remain comparable between concepts.
     lookup = ZarrEventLookup( ZARR_PATH )
 
     years = sorted(
@@ -257,43 +266,121 @@ def main():
         )
     )
 
-    index = load_indices( years, masked=args.mask, )
-    lookup.attach_index( index )
+    index = load_indices(
+        years,
+        masked=masked,
+    )
+
+    lookup.attach_index(index)
+
+    global_concepts = [
+        concept
+        for concept, _ in resolve_concepts(concept=None)
+    ]
 
     all_field_event_ids = []
 
     for concept in global_concepts:
-        rows = load_event_rows( con, concept, )
+        rows = load_event_rows(
+            con,
+            concept,
+        )
         all_field_event_ids.extend(
             int(row[0])
             for row in rows
         )
 
-    if not all_field_event_ids:
-        logger.warning( "[tier3] no events found" )
-        return
+    global_coords = build_global_projection(
+        lookup,
+        sorted(set(all_field_event_ids)),
+    )
+    return (
+        con,
+        lookup,
+        global_coords,
+    )
 
-    # Defensive ordering guarantees:
-    #   - deterministic UMAP input order
-    #   - stable SQLite updates
-    #   - reproducible plots
-    all_field_event_ids = sorted( set(all_field_event_ids) )
-    logger.info( f"[tier3] global projection events={len(all_field_event_ids):,}" )
 
-    global_coords = build_global_projection( lookup, all_field_event_ids, )
+def service(
+    *,
+    con: Connection,
+    lookup: ZarrEventLookup,
+    global_coords: dict[int, NDArray[np.float32]],
+    concept: str,
+    resolution_parameter: float = 0.8,
+    n_neighbors: int = 15,
+) -> dict[str, object]:
+    """
+    Cluster one concept semantic field.
 
-    for concept in resolved_concepts:
-        process_concept(
-            con,
-            lookup,
-            concept,
-            global_coords,
-            args.resolution,
-            args.neighbors,
-        )
+    Resources are expected to be pre-built and reused:
+        - SQLite connection
+        - Zarr event lookup
+        - global projection coordinates
 
-    con.close()
-    logger.info( f"[tier3] Done." )
+    Returns summary metadata describing the clustering operation.
+    """
+    started = time.perf_counter()
+    logger.info( f"[tier3-service] processing {concept}" )
+
+    report = cluster_concept(
+        con,
+        lookup,
+        concept,
+        global_coords,
+        resolution_parameter,
+        n_neighbors,
+    )
+
+    elapsed = time.perf_counter() - started
+    logger.info( f"[tier3-service] completed {concept} in {elapsed:.2f}s" )
+
+    return {
+        **report,
+        "resolution_parameter": resolution_parameter,
+        "n_neighbors": n_neighbors,
+        "elapsed_seconds": round(elapsed, 3),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument( "--concept", default=None, )
+    parser.add_argument( "--mask", action="store_true", )
+    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help="Leiden resolution parameter (default: 0.8)", )
+    parser.add_argument( "-n", "--neighbors", type=int, default=15, help="kNN graph neighbours (default: 15)", )
+    args = parser.parse_args()
+
+    try:
+        con, lookup, global_coords = build_tier3_resources( masked=args.mask, )
+
+        resolved_concepts = [
+            concept
+            for concept, _ in resolve_concepts( concept=args.concept )
+        ]
+
+        if not resolved_concepts:
+            logger.warning( "[tier3-main] no concepts resolved" )
+            return
+
+        logger.info( f"[tier3-main] concepts={len(resolved_concepts)}" )
+
+        for concept in resolved_concepts:
+            result = service(
+                con                  = con,
+                lookup               = lookup,
+                global_coords        = global_coords,
+                concept              = concept,
+                resolution_parameter = args.resolution,
+                n_neighbors          = args.neighbors,
+            )
+            logger.info( f"[tier3-main] completed {result['concept']}" )
+
+    finally:
+        con.close()
+
+    logger.info( "[tier3-main] Done." )
+
 
 if __name__ == "__main__":
     main()
