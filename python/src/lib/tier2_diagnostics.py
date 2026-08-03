@@ -4,7 +4,7 @@ import numpy as np
 from collections import Counter
 from itertools import combinations
 
-from lib.corpus_logging import logger
+from lib.eebo_logging import logger
 
 def knn_diagnostics(lookup, index, concept_forms, sample_n=25, k=25):
     """Dev utility: print kNN overlap and Jaccard stats for a concept's events."""

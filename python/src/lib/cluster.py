@@ -8,8 +8,8 @@ import igraph as ig
 import leidenalg
 from sklearn.neighbors import NearestNeighbors
 
-from lib.corpus_logging import logger
-from lib.corpus_config import (
+from lib.eebo_logging import logger
+from lib.eebo_config import (
     CORPUS_TIER2_DB_PATH,
     ZARR_PATH,
     faiss_index_paths,
@@ -125,7 +125,6 @@ def leiden_cluster( vectors, resolution_parameter=0.8, n_neighbors=15 ):
     edges = build_knn_graph( vectors, n_neighbors=n_neighbors )
 
     graph = ig.Graph(
-        n=len(vectors),      # explicit vertex count, no longer inferred from edges
         edges=edges,
         directed=False,
     )

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from lib.corpus_config import (
+from lib.eebo_config import (
     CORPUS_TIER2_DB_PATH,
     ZARR_PATH,
     faiss_index_paths,
@@ -18,8 +18,8 @@ from lib.corpus_config import (
 
 from lib.concept_resolve import resolve_concepts
 from lib.zarr_event_lookup import ZarrEventLookup
-from lib.corpus_faiss import CorpusFaissIndex
-from lib.corpus_logging import logger
+from lib.eebo_faiss import EeboFaissIndex
+from lib.eebo_logging import logger
 from lib.sqlite_vector_blob import vector_to_blob
 from lib.cluster import (
     LOCAL_UMAP_PARAMS,
@@ -52,7 +52,7 @@ def load_indices(
         index[year] = {}
 
         for scale, path in paths.items():
-            index[year][scale] = CorpusFaissIndex.load(
+            index[year][scale] = EeboFaissIndex.load(
                 path
             )
 

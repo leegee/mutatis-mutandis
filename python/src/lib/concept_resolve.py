@@ -1,5 +1,5 @@
 # from difflib import get_close_matches
-from lib.corpus_config import CONCEPT_SETS
+from lib.eebo_config import CONCEPT_SETS
 
 def resolve_concepts(*, concept, forms=None, false_positives=None, concept_sets=CONCEPT_SETS):
     if not concept:

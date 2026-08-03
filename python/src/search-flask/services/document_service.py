@@ -2,10 +2,10 @@
 
 from pathlib import Path
 from typing import Optional, Dict, Any
-from src.lib.corpus_db import get_connection
-import src.lib.corpus_config as corpus_config
+from src.lib.eebo_db import get_connection
+import src.lib.eebo_config as eebo_config
 
-XML_ROOT = corpus_config.XML_ROOT_DIR
+XML_ROOT = eebo_config.XML_ROOT_DIR
 
 
 def get_xml_path(doc_id: str) -> Path:

@@ -33,7 +33,7 @@ Nodes are connected when their centroid representations indicate a likely
 continuation of the same semantic region in the following period.
 
 The graph does not claim that individual words or concepts have a single
-continuous historical identity, but models continuity and change in
+continuous historical identity. Instead, it models continuity and change in
 the distribution of observed meanings: a cluster may persist because its
 contextual usage remains close to its founding semantic position, branch into
 multiple descendants as usage differentiates, merge with other semantic
@@ -50,10 +50,13 @@ Lineage assignment therefore combines two signals:
        founding centroid of its lineage rather than merely following a chain
        of locally similar but progressively drifting clusters.
 
-The resulting graph is designed as an exploratory instrument: a way to inspect
-possible trajectories of meaning change in the corpus, linking computationally
-identified semantic movements back to concrete contextual observations and
-source documents.
+The resulting graph is designed as an exploratory Digital Humanities
+instrument: a way to inspect possible trajectories of meaning change in the
+EEBO corpus, linking computationally identified semantic movements back to
+concrete contextual observations and source documents.
+
+The graph should therefore be read as a map of changing semantic landscapes,
+not as a deterministic model of lexical evolution.
 """
 
 from __future__ import annotations
@@ -66,9 +69,9 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from lib.corpus_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
+from lib.eebo_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
-from lib.corpus_logging import logger
+from lib.eebo_logging import logger
 from lib.get_processed_concepts import get_processed_concepts
 
 OUTPUT_DIR = GUI_PUBLIC_DIR / 'lineage'
@@ -142,11 +145,11 @@ def load_temporal_graph(con, concept):
     )
 
     for row in nodes:
-        node_concept, year, cluster, size, centroid_vector = row
+        concept, year, cluster, size, centroid_vector = row
         node_id = f"{year}:{cluster}"
         G.add_node(
             node_id,
-            concept=node_concept,
+            concept=concept,
             year=int(year),
             cluster=int(cluster),
             size=int(size),
@@ -487,7 +490,7 @@ def sample_cluster_events(
 
     rows = con.execute(
         """
-        SELECT e.event_id, e.doc_id, e.token_idx, e.token, e.pub_year, e.corpus
+        SELECT e.event_id, e.doc_id, e.token_idx, e.token, e.pub_year
         FROM concept_year_event_cluster c
         JOIN events e ON e.event_id = c.event_id
         WHERE c.concept=?
@@ -536,7 +539,8 @@ def sample_cluster_events(
 
     samples = []
 
-    for event_id, doc_id, token_idx, token, ev_year, ev_corpus in rows:
+    for event_id, doc_id, token_idx, token, ev_year in rows:
+
         neighbour_rows = con.execute(
             """
             SELECT
@@ -545,19 +549,16 @@ def sample_cluster_events(
                 e.doc_id,
                 e.pub_year,
                 e.token_idx,
-                e.corpus,
                 n.score,
                 n.depth
             FROM neighbours n
             JOIN events e
                 ON e.event_id = n.neighbour_event_id
-            WHERE n.concept = ?
-            AND n.event_id = ?
+            WHERE n.event_id=?
             ORDER BY n.score DESC
             LIMIT ?
             """,
             (
-                concept,
                 event_id,
                 neighbour_limit * 5,
             ),
@@ -571,7 +572,6 @@ def sample_cluster_events(
             neighbour_doc_id,
             neighbour_year,
             neighbour_token_idx,
-            neighbour_corpus,
             score,
             depth,
         ) in neighbour_rows:
@@ -582,7 +582,6 @@ def sample_cluster_events(
                     "doc_id": neighbour_doc_id,
                     "pub_year": neighbour_year,
                     "token_idx": neighbour_token_idx,
-                    "corpus": neighbour_corpus,
                     "score": score,
                     "depth": depth,
                 }
@@ -619,7 +618,6 @@ def sample_cluster_events(
                 "token_idx": token_idx,
                 "token": token,
                 "pub_year": ev_year,
-                "corpus": ev_corpus,
                 "neighbours": neighbours,
             }
         )
@@ -644,7 +642,7 @@ def export_lineage(con, concept, G):
     lineage_stability = G.graph.get("lineage_stability", {})
 
     for row in rows:
-        ( row_concept, year, cluster, size, nx, ny, gnx, gny, ) = row
+        ( concept, year, cluster, size, nx, ny, gnx, gny, ) = row
         node_id = f"{year}:{cluster}"
 
         if node_id not in G:
@@ -652,22 +650,6 @@ def export_lineage(con, concept, G):
             continue
 
         node_lineage = G.nodes[node_id].get("lineage")
-
-        event_sample = sample_cluster_events(
-            con, concept, year, cluster,
-        )
-
-        # concept_year_cluster_info has no corpus of its own -- a node can
-        # be backed by events from more than one corpus. Summarise which
-        # corpora actually showed up in this node's sample so that's
-        # visible without scoping/filtering the query itself.
-        corpora = sorted(
-            {
-                s["corpus"]
-                for s in event_sample
-                if s.get("corpus") is not None
-            }
-        )
 
         nodes.append({
             "id": f"{year}:{cluster}",
@@ -678,7 +660,6 @@ def export_lineage(con, concept, G):
             "merged_from": G.nodes[node_id].get("merged_from", []),
             "persistence_score": G.nodes[node_id].get("persistence"),
             "lineage_stable": lineage_stability.get(node_lineage),
-            "corpora": corpora,
             "local": {
                 "x": nx if nx is not None else 0,
                 "y": ny if ny is not None else 0,
@@ -687,7 +668,9 @@ def export_lineage(con, concept, G):
                 "x": gnx if gnx is not None else 0,
                 "y": gny if gny is not None else 0,
             },
-            "event_sample": event_sample,
+            "event_sample": sample_cluster_events(
+                con, concept, year, cluster,
+            ),
             "context_profile": aggregate_cluster_context(
                 con, concept, year, cluster,
             ),
@@ -792,3 +775,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

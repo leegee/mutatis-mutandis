@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import fasttext
 import sys
-import corpus_config as config
+import eebo_config as config
 
 # Ensure models directory exists
 try:

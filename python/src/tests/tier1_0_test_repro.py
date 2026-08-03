@@ -15,9 +15,9 @@ We validate embedding stability across batching regimes.
 import numpy as np
 from dataclasses import dataclass
 
-from lib.corpus_db import get_connection
+from lib.eebo_db import get_connection
 from lib.macberth import load_macberth
-from lib.corpus_logging import logger
+from lib.eebo_logging import logger
 
 from tier1_corpus2zarr import process_doc
 

@@ -47,7 +47,7 @@ src/lib/__init__.py
 src/lib/cluster.py
 src/lib/concept_resolve.py
 src/lib/eebo_config.py
-src/lib/corpus_db.py
+src/lib/eebo_db.py
 src/lib/eebo_event_lookup.py
 src/lib/eebo_faiss.py
 src/lib/eebo_logging.py

@@ -1,7 +1,7 @@
 from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
-from lib.corpus_config import CORPUS_TIER2_DB_PATH
+from lib.eebo_config import CORPUS_TIER2_DB_PATH
 from fast_api.jobs_dao import create_job
 from fast_api.models import CreateConceptRequest, CreateConceptAndRunRequest, RunJobRequest
 from fast_api.connections import get_corpus_tier2_conn

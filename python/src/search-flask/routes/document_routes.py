@@ -2,7 +2,7 @@
 from flask import Blueprint, jsonify, send_file, abort, request, Response
 
 from src.services.document_service import get_document_by_id
-import src.lib.corpus_config as corpus_config
+import src.lib.eebo_config as eebo_config
 
 documents_bp = Blueprint("documents_bp", __name__)
 
@@ -23,7 +23,7 @@ def get_document_xml(doc_id):
     """
     Returns XML file for a document, ready to be displayed in an <iframe>.
     """
-    xml_path = corpus_config.XML_ROOT_DIR / f"{doc_id}.P4.xml"
+    xml_path = eebo_config.XML_ROOT_DIR / f"{doc_id}.P4.xml"
 
     if not xml_path.exists():
         print(f"No XML found at {xml_path}")

@@ -37,13 +37,13 @@ import numpy as np
 import igraph as ig
 import leidenalg
 
-from lib.corpus_config import (
+from lib.eebo_config import (
     CORPUS_TIER2_DB_PATH,
     ZARR_PATH,
     TMP_DIR,
     faiss_index_paths,
 )
-from lib.corpus_logging import logger
+from lib.eebo_logging import logger
 
 # Reuse the plumbing from the real pipeline instead of duplicating it.
 from tier3_0_project_cluster import (

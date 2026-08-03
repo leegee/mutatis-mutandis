@@ -4,7 +4,7 @@ import nltk
 from bertopic import BERTopic
 from umap import UMAP
 
-from lib.corpus_logging import logger
+from lib.eebo_logging import logger
 from lib.json import sanitize
 
 from fast_api.models import embedder, representation_model, make_umap

@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 import zarr
 
-from lib.corpus_logging import logger
+from lib.eebo_logging import logger
 from lib.zarr_store_dirs import store_dirs
 
 class ZarrEventStream:

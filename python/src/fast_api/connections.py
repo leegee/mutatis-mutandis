@@ -3,8 +3,8 @@
 
 import sqlite3
 
-from lib.corpus_faiss import CorpusFaissIndex
-from lib.corpus_config import FAISS_TIER1_INDEX, ZARR_PATH, JOBS_DB_PATH, CORPUS_TIER2_DB_PATH
+from lib.eebo_faiss import EeboFaissIndex
+from lib.eebo_config import FAISS_TIER1_INDEX, ZARR_PATH, JOBS_DB_PATH, CORPUS_TIER2_DB_PATH
 from tier2_0_concept_events import ZarrEventLookup # NB Still contains embeddings that might better be reconstructed
 
 
@@ -18,7 +18,7 @@ _jobs_conn              = None
 def get_index():
     global _index
     if _index is None:
-        _index = CorpusFaissIndex.load(FAISS_TIER1_INDEX)
+        _index = EeboFaissIndex.load(FAISS_TIER1_INDEX)
     return _index
 
 

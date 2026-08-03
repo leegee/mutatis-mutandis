@@ -1,7 +1,7 @@
 import sys
 
-import corpus_config as config
-import corpus_db
+import eebo_config as config
+import eebo_db
 
 def make_slices():
     # Ensure slices directory exists
@@ -12,7 +12,7 @@ def make_slices():
         sys.exit(1)
 
 
-    cursor = corpus_db.dbh.cursor()
+    cursor = eebo_db.dbh.cursor()
 
     # Process each slice
     for start_year, end_year in config.SLICES:
@@ -48,7 +48,7 @@ def make_slices():
         except Exception as e:
             print(f"[ERROR] Failed to write slice {slice_name}: {e}")
 
-    corpus_db.dbh.close()
+    eebo_db.dbh.close()
     print("[INFO] All slices processed.")
 
 

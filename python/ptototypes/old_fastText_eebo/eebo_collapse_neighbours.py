@@ -22,8 +22,8 @@ from typing import Counter as CounterType
 
 import psycopg
 
-import corpus_db
-import corpus_config as config
+import eebo_db
+import eebo_config as config
 
 
 QUERY_WORD = "liberty"
@@ -262,7 +262,7 @@ def summarise_absorption(rows) -> None:
 
 
 def main() -> None:
-    conn = corpus_db.dbh
+    conn = eebo_db.dbh
 
     populate_minimal_spelling_map(conn)
 
