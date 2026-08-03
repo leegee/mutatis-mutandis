@@ -669,7 +669,6 @@ def export_lineage(con, concept, G, analysis=None,):
         "lineages": lineages_summary,
         "drift_threshold": DRIFT_THRESHOLD,
         "confidence_threshold": CONFIDENCE_THRESHOLD,
-        "analysis": analysis or {},
         "summary": {
             "nodes": G.number_of_nodes(),
             "edges": G.number_of_edges(),
@@ -679,7 +678,15 @@ def export_lineage(con, concept, G, analysis=None,):
             "deaths": len(analysis["deaths"]) if analysis else 0,
             "branching": len(analysis["branching"]) if analysis else 0,
             "merging": len(analysis["merging"]) if analysis else 0,
-        }
+            "unstable_lineages": len(analysis["unstable"]) if analysis else 0,
+        },
+        "events": {
+            "births": analysis["births"] if analysis else [],
+            "deaths": analysis["deaths"] if analysis else [],
+            "branching": analysis["branching"] if analysis else [],
+            "merging": analysis["merging"] if analysis else [],
+            "unstable": analysis["unstable"] if analysis else [],
+        },
     }
 
 
