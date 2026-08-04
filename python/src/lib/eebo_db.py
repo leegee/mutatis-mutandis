@@ -19,7 +19,16 @@ import lib.eebo_config as config
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
-dbname = os.environ.get("PGDATABASE", "eebo")
+
+# dbname = os.environ.get("PGDATABASE", "eebo")
+dbname = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
+if not dbname:
+    raise RuntimeError("Database name must be set via CORPUS_PGDATABASE or PGDATABASE")
+
+host = os.environ.get("PGHOST", "localhost")
+user = os.environ.get("PGUSER", "postgres")
+password = os.environ.get("PGPASSWORD")
+port = os.environ.get("PGPORT", 5432)
 host = os.environ.get("PGHOST", "localhost")
 user = os.environ.get("PGUSER", "postgres")
 password = os.environ.get("PGPASSWORD")
