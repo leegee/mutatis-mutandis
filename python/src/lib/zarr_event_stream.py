@@ -43,19 +43,23 @@ class ZarrEventStream:
         self._doc_by_id = None
 
 
-    #
-    def iter_multi_scale_embeddings(self, batch_size: int = 8192):
+    def iter_multi_scale_embeddings(self, batch_size: int = 8192, year_filter: set[int] | None = None):
         """
         Yields tuples of (emb_local, emb_medium, emb_broad, obs_ids, pub_years)
 
         pub_years is int16, one per event, sourced from the 'pub_year' dataset
         written alongside doc_id at ingestion time (tier 1).
+
+        year_filter:
+            If given, stores whose pub_year range doesn't overlap the filter
+            at all are skipped before any embedding data is touched — pub_year
+            is int16 and cheap to read fully, so this is a fast pre-check
+            regardless of how stores are laid out on disk.
         """
         for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
             group = g["events"]
 
-            # Die on legacy store use:
             if "pub_year" not in group:
                 raise KeyError(
                     f"Missing 'pub_year' in {store_dir} — this store predates "
@@ -63,23 +67,46 @@ class ZarrEventStream:
                     f"multi-scale streaming can proceed."
                 )
 
+            years = group["pub_year"]
+            n = years.shape[0]
+
+            if n == 0:
+                continue
+
+            if year_filter is not None:
+                store_years = np.asarray(years[:], dtype=np.int16)
+                store_lo, store_hi = int(store_years.min()), int(store_years.max())
+                filter_lo, filter_hi = min(year_filter), max(year_filter)
+                if store_hi < filter_lo or store_lo > filter_hi:
+                    continue  # no overlap at all — skip embeddings for this store entirely
+            else:
+                store_years = None
+
             eids = group["event_id"]
             emb_l = group["emb_local"]
             emb_m = group["emb_medium"]
             emb_b = group["emb_broad"]
-            years = group["pub_year"]
-
-            n = eids.shape[0]
 
             for start in range(0, n, batch_size):
                 end = min(start + batch_size, n)
+
+                batch_years = (
+                    store_years[start:end]
+                    if store_years is not None
+                    else np.asarray(years[start:end], dtype=np.int16)
+                )
+
+                if year_filter is not None:
+                    keep = np.isin(batch_years, list(year_filter))
+                    if not keep.any():
+                        continue
 
                 yield (
                     np.asarray(emb_l[start:end], dtype=np.float32),
                     np.asarray(emb_m[start:end], dtype=np.float32),
                     np.asarray(emb_b[start:end], dtype=np.float32),
                     np.asarray(eids[start:end], dtype=np.int64),
-                    np.asarray(years[start:end], dtype=np.int16),
+                    batch_years,
                 )
 
 
@@ -173,3 +200,19 @@ class ZarrEventStream:
                     )
 
                 yield vecs, ids
+
+
+    def year_bounds(self) -> tuple[int, int]:
+        lo, hi = None, None
+        for store_dir in store_dirs(self.root):
+            g = zarr.open_group(str(store_dir), mode="r")
+            group = g["events"]
+            years = np.asarray(group["pub_year"][:], dtype=np.int16)
+            if years.size == 0:
+                continue
+            ymin, ymax = int(years.min()), int(years.max())
+            lo = ymin if lo is None else min(lo, ymin)
+            hi = ymax if hi is None else max(hi, ymax)
+        if lo is None:
+            raise RuntimeError("No pub_year data found in any store")
+        return lo, hi
