@@ -106,11 +106,11 @@ def build_indices(
     return indices
 
 
-def build_faiss_service(
+def service(
     *,
     stream,
-    masked: bool,
-    clear: bool = False,
+    masked: bool = False,
+    clear:  bool = False,
 ):
     started = time.perf_counter()
     existing_years = discover_years(masked)
@@ -287,7 +287,7 @@ def main():
 
     stream = ZarrEventStream(str(zarr_path))
 
-    result = build_faiss_service(
+    result = service(
         stream=stream,
         masked=args.mask,
         clear=args.clear,
