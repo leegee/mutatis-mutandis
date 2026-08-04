@@ -2,7 +2,7 @@
 """
 eebo_faiss.py
 
-FAISS retrieval layer for EEBO semantic event embeddings.
+FAISS retrieval layer for corpus semantic event embeddings.
 
 This module intentionally treats FAISS as a *derived geometric index*,
 not as a canonical data store.
@@ -10,7 +10,7 @@ not as a canonical data store.
 Architectural role
 ------------------
 
-The EEBO embedding pipeline now operates as:
+The corpus embedding pipeline now operates as:
 
     Postgres (identity + text provenance)
         ↓
@@ -537,7 +537,7 @@ def multiscale_search(
     fuse the three ranked lists per query via RRF.
 
     `index` is keyed as index[year][scale] -> EeboFaissIndex, matching the
-    per-year, per-scale layout produced by build_indices.py.
+    per-year, per-scale layout produced by the old build_indices.py.
 
     pub_year:
         If given, search only that year's three scale indices.
@@ -615,3 +615,4 @@ def multiscale_search(
             for eid, rrf_score in fused_ids
         ])
     return fused
+
