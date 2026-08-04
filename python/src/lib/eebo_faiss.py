@@ -76,7 +76,7 @@ import faiss
 import numpy as np
 
 from lib.corpus_logging import logger
-from lib.corpus_config import faiss_index_paths, discover_index_years
+from lib.corpus_config import faiss_index_paths, discover_index_years, FAISS_INDEX_DIR
 
 class EeboFaissIndex:
     """
@@ -104,7 +104,7 @@ class EeboFaissIndex:
         self._ids = set()
 
     @staticmethod
-    def wipe_faiss_index(path: Path) -> None:
+    def wipe_faiss_index() -> None:
         """
         Deletes persisted FAISS index from disk.
 
@@ -115,19 +115,8 @@ class EeboFaissIndex:
         This must always be followed by rebuild_from_tier1().
         """
 
-        path = Path(path)
-        logger.info(f"[faiss] deleting index={path}")
-
-        if path.is_file():
-            path.unlink()
-            logger.info(f"[faiss] deleted file index={path}")
-        elif path.exists():
-            shutil.rmtree(path)
-            logger.info(f"[faiss] deleted directory index={path}")
-        else:
-            logger.info(f"[faiss] no index found at={path}")
-
-        logger.info(f"[faiss] deleted index={path}")
+        shutil.rmtree( FAISS_INDEX_DIR )
+        logger.info(f"[faiss] deleted index={FAISS_INDEX_DIR}")
 
     @staticmethod
     def _normalize(
@@ -308,7 +297,7 @@ class EeboFaissIndex:
             metric geometry must survive round-trip.
         """
         path = Path(path)
-        logger.info(f"[faiss] saving index={path} ntotal={self._index.ntotal}")
+        # logger.debug(f"[faiss] saving index={path} ntotal={self._index.ntotal}")
         faiss.write_index(self._index, str(path))
 
 
@@ -459,6 +448,34 @@ class EeboFaissIndex:
         X = np.empty((len(event_ids), self.dim), dtype=np.float32)
 
         for i, eid in enumerate(event_ids):
+            if int(eid) not in self._ids:
+                logger.error(
+                    "[faiss] index size=%d",
+                    len(self._ids),
+                )
+
+                logger.error(
+                    "[faiss] missing ids sample=%s",
+                    list(map(int, event_ids[:10])),
+                )
+
+                logger.error(
+                    "[faiss] index sample ids=%s",
+                    list(sorted(self._ids))[:10],
+                )
+
+                logger.error(
+                    "[faiss] index size=%d min=%d max=%d",
+                    len(self._ids),
+                    min(self._ids),
+                    max(self._ids),
+                )
+
+                raise KeyError(
+                    f"FAISS missing event_id={eid}. "
+                    f"Index contains {len(self._ids)} ids."
+                )
+
             self._index.reconstruct(int(eid), X[i])
 
         return X

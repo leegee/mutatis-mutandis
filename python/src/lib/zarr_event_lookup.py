@@ -90,8 +90,52 @@ class _LazyScaleEmbeddings:
                     f"scale={self._scale}). Available years: {sorted(self._index.keys())}"
                 )
 
+            for scale in ("local", "medium", "broad"):
+                idx = year_indices[scale]
+                logger.info(
+                    "[lookup-check] year=%d scale=%s contains=%s ntotal=%d",
+                    year_int,
+                    scale,
+                    int(sorted_eids[start]) in idx.ids(),
+                    idx.ntotal,
+                )
+
             batch_ids = sorted_eids[start:end]
-            out_sorted[start:end] = year_indices[self._scale].reconstruct_many(batch_ids)
+            try:
+                missing = [
+                    int(eid)
+                    for eid in batch_ids
+                    if int(eid) not in year_indices[self._scale].ids()
+                ]
+
+                if missing:
+                    logger.error(
+                        "[lookup] FAISS mismatch year=%d scale=%s requested=%d missing=%d",
+                        year_int,
+                        self._scale,
+                        len(batch_ids),
+                        len(missing),
+                    )
+                    logger.error(
+                        "[lookup] missing sample=%s",
+                        missing[:10],
+                    )
+                out_sorted[start:end] = year_indices[self._scale].reconstruct_many(batch_ids)
+            except KeyError:
+                logger.error(
+                    "[lookup] year=%d scale=%s batch=%d",
+                    year_int,
+                    self._scale,
+                    len(batch_ids),
+                )
+
+                logger.error(
+                    "[lookup] first ids=%s",
+                    batch_ids[:10].tolist(),
+                )
+
+                raise
+
             start = end
 
         out = np.empty_like(out_sorted)
@@ -168,14 +212,15 @@ class ZarrEventLookup:
 
 
     def _build(self):
-        logger.info("[tier2] building event lookup with multi-scale embeddings")
+        logger.info("[tier2 zarr-stream] building event lookup with multi-scale embeddings")
         for store_dir in store_dirs(self.root):
+            logger.info("[tier2 zarr-stream] reading store %s", store_dir)
             g = zarr.open_group(str(store_dir), mode="r")
             if "events" not in g:
                 continue
             self._load_store(g["events"], store_dir)
         self._finalize()
-        logger.info(f"[tier2] events={len(self._pos)}")
+        logger.info(f"[tier2 zarr-stream] events={len(self._pos)}")
 
 
     def _load_store(self, e, store_dir):

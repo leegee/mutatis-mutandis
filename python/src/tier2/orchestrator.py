@@ -12,6 +12,7 @@ Preserves the original service and CLI entry points:
 from __future__ import annotations
 
 import argparse
+import time
 
 from lib.eebo_config import (
     CORPUS_TIER2_DB_PATH,

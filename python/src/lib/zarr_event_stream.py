@@ -1,3 +1,4 @@
+# lib/zarr_event_stream.py
 from pathlib import Path
 import numpy as np
 import zarr
@@ -43,77 +44,145 @@ class ZarrEventStream:
         self._doc_by_id = None
 
 
-    def iter_multi_scale_embeddings(
-        self,
-        batch_size: int = 8192,
-        year_filter: set[int] | None = None,
-        year_manifest: dict[Path, np.ndarray] | None = None,
-    ):
-        """
-        Yields tuples of (emb_local, emb_medium, emb_broad, obs_ids, pub_years)
+def iter_multi_scale_embeddings(
+    self,
+    batch_size: int = 8192,
+    year_filter: set[int] | None = None,
+    year_manifest: dict[Path, np.ndarray] | None = None,
+):
+    """
+    Yields tuples of:
+        (emb_local, emb_medium, emb_broad, event_ids, pub_years)
 
-        year_filter:
-            If given, stores/batches whose pub_year range doesn't overlap the
-            filter at all are skipped before embedding data is touched.
+    Invariant:
+        All yielded arrays are aligned:
+            emb_local[i]
+            emb_medium[i]
+            emb_broad[i]
+            event_ids[i]
+            pub_years[i]
 
-        year_manifest:
-            Optional cache from build_year_manifest() — store_dir -> full
-            pub_year array. When provided, skips re-reading 'pub_year' from
-            disk for the overlap check and batch slicing; falls back to a
-            live read per store if a store isn't in the manifest (e.g. new
-            stores added after the manifest was built).
-        """
-        for store_dir in store_dirs(self.root):
-            g = zarr.open_group(str(store_dir), mode="r")
-            group = g["events"]
+        describe the same semantic observation event.
 
-            if "pub_year" not in group:
-                raise KeyError(
-                    f"Missing 'pub_year' in {store_dir} — this store predates "
-                    f"per-event pub_year and needs to be backfilled before "
-                    f"multi-scale streaming can proceed."
+    year_filter:
+        If given, only events whose pub_year is in the filter are yielded.
+        Filtering must happen before yield so that embeddings and IDs remain
+        aligned with years.
+    """
+
+    for store_dir in store_dirs(self.root):
+        g = zarr.open_group(str(store_dir), mode="r")
+        group = g["events"]
+
+        if "pub_year" not in group:
+            raise KeyError(
+                f"Missing 'pub_year' in {store_dir} — this store predates "
+                f"per-event pub_year and needs to be backfilled before "
+                f"multi-scale streaming can proceed."
+            )
+
+        years_dataset = group["pub_year"]
+        eids = group["event_id"]
+
+        emb_l = group["emb_local"]
+        emb_m = group["emb_medium"]
+        emb_b = group["emb_broad"]
+
+        n = years_dataset.shape[0]
+
+        if n == 0:
+            continue
+
+        cached_years = (
+            year_manifest.get(store_dir)
+            if year_manifest is not None
+            else None
+        )
+
+        if year_filter is not None:
+            store_years_full = (
+                cached_years
+                if cached_years is not None
+                else np.asarray(
+                    years_dataset[:],
+                    dtype=np.int16,
                 )
+            )
 
-            years_dataset = group["pub_year"]
-            n = years_dataset.shape[0]
+            store_lo = int(store_years_full.min())
+            store_hi = int(store_years_full.max())
 
-            if n == 0:
+            filter_lo = min(year_filter)
+            filter_hi = max(year_filter)
+
+            if store_hi < filter_lo or store_lo > filter_hi:
                 continue
 
-            cached_years = year_manifest.get(store_dir) if year_manifest is not None else None
+        for start in range(0, n, batch_size):
+            end = min(start + batch_size, n)
+
+            if cached_years is not None:
+                batch_years = cached_years[start:end]
+            else:
+                batch_years = np.asarray(
+                    years_dataset[start:end],
+                    dtype=np.int16,
+                )
+
+            batch_eids = np.asarray(
+                eids[start:end],
+                dtype=np.int64,
+            )
+
+            batch_emb_l = np.asarray(
+                emb_l[start:end],
+                dtype=np.float32,
+            )
+
+            batch_emb_m = np.asarray(
+                emb_m[start:end],
+                dtype=np.float32,
+            )
+
+            batch_emb_b = np.asarray(
+                emb_b[start:end],
+                dtype=np.float32,
+            )
 
             if year_filter is not None:
-                store_years_full = cached_years if cached_years is not None else np.asarray(years_dataset[:], dtype=np.int16)
-                store_lo, store_hi = int(store_years_full.min()), int(store_years_full.max())
-                filter_lo, filter_hi = min(year_filter), max(year_filter)
-                if store_hi < filter_lo or store_lo > filter_hi:
+                keep = np.isin(
+                    batch_years,
+                    list(year_filter),
+                )
+
+                if not keep.any():
                     continue
 
-            eids = group["event_id"]
-            emb_l = group["emb_local"]
-            emb_m = group["emb_medium"]
-            emb_b = group["emb_broad"]
+                batch_years = batch_years[keep]
+                batch_eids = batch_eids[keep]
 
-            for start in range(0, n, batch_size):
-                end = min(start + batch_size, n)
+                batch_emb_l = batch_emb_l[keep]
+                batch_emb_m = batch_emb_m[keep]
+                batch_emb_b = batch_emb_b[keep]
 
-                if cached_years is not None:
-                    batch_years = cached_years[start:end]
-                else:
-                    batch_years = np.asarray(years_dataset[start:end], dtype=np.int16)
+                if 1734 in year_filter:
+                    logger.info(
+                        "[stream-debug] store=%s filtered batch years=%s count=%d",
+                        store_dir,
+                        {
+                            int(y): int((batch_years == y).sum())
+                            for y in np.unique(batch_years)
+                        },
+                        len(batch_eids),
+                    )
 
-                if year_filter is not None:
-                    keep = np.isin(batch_years, list(year_filter))
-                    if not keep.any():
-                        continue
-
-                yield (
-                    np.asarray(emb_l[start:end], dtype=np.float32),
-                    np.asarray(emb_m[start:end], dtype=np.float32),
-                    np.asarray(emb_b[start:end], dtype=np.float32),
-                    np.asarray(eids[start:end], dtype=np.int64),
-                    batch_years,
-                )
+            yield (
+                batch_emb_l,
+                batch_emb_m,
+                batch_emb_b,
+                batch_eids,
+                batch_years,
+            )
 
 
     def _build_lookup(self):
@@ -222,3 +291,13 @@ class ZarrEventStream:
         if lo is None:
             raise RuntimeError("No pub_year data found in any store")
         return lo, hi
+
+
+    def build_year_manifest(self) -> dict[Path, np.ndarray]:
+        """One-time scan: store_dir -> full pub_year array, cached in memory
+        (int16, so even a huge corpus is a few MB total)."""
+        manifest = {}
+        for store_dir in store_dirs(self.root):
+            g = zarr.open_group(str(store_dir), mode="r")
+            manifest[store_dir] = np.asarray(g["events"]["pub_year"][:], dtype=np.int16)
+        return manifest

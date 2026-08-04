@@ -79,16 +79,6 @@ BATCH_SIZE = 8192
 SCALES = ("local", "medium", "broad")
 
 
-def build_year_manifest(self) -> dict[Path, np.ndarray]:
-    """One-time scan: store_dir -> full pub_year array, cached in memory
-    (int16, so even a huge corpus is a few MB total)."""
-    manifest = {}
-    for store_dir in store_dirs(self.root):
-        g = zarr.open_group(str(store_dir), mode="r")
-        manifest[store_dir] = np.asarray(g["events"]["pub_year"][:], dtype=np.int16)
-    return manifest
-
-
 def discover_years(masked: bool) -> list[int]:
     """
     Find which years already have on-disk indices, by globbing the 'medium'
@@ -117,82 +107,182 @@ def build_indices(
 ) -> dict[int, dict[str, EeboFaissIndex]]:
     """
     Build/update per-year, per-scale FAISS indices from a single streamed
-    pass. Each (year, scale) pair gets its own EeboFaissIndex, so downstream
-    fusion can happen both across scales and within/across year ranges.
+    pass.
+
+    Each (year, scale) pair receives the same event_id set. FAISS stores
+    only event geometry; event_id remains the stable semantic observation id.
 
     year_filter:
         If given, only events whose pub_year is in this set are indexed.
-        Everything else is skipped before any per-scale slicing happens.
-        Used by service() to process the corpus in bounded year-chunks so
-        we never hold every year's indices in memory at once.
     """
+
+    if indices is None:
+        indices = {}
+
+    seen_stream_ids = set()
     total = 0
     skipped = 0
     incremental = already_indexed is not None
-    indices = indices or {}
+
+    debug_1734 = 0
 
     logger.info("[faiss-build] streaming Tier1 multi-scale embeddings by year")
 
-    for emb_local, emb_medium, emb_broad, obs_ids, pub_years in stream.iter_multi_scale_embeddings(
-        batch_size=BATCH_SIZE, year_filter=year_filter, year_manifest=year_manifest
+    for (
+        emb_local,
+        emb_medium,
+        emb_broad,
+        obs_ids,
+        pub_years,
+    ) in stream.iter_multi_scale_embeddings(
+        batch_size=BATCH_SIZE,
+        year_filter=year_filter,
+        year_manifest=year_manifest,
     ):
+
+        duplicates = [
+            int(eid)
+            for eid in obs_ids
+            if int(eid) in seen_stream_ids
+        ]
+
+        if duplicates:
+            raise RuntimeError(
+                f"Duplicate event_ids from Tier1 stream: {duplicates[:20]}"
+            )
+
+        seen_stream_ids.update(int(eid) for eid in obs_ids)
+
+        count_1734 = int((pub_years == 1734).sum())
+        if count_1734:
+            debug_1734 += count_1734
+            logger.info(
+                "[build-debug] incoming 1734 batch=%d cumulative=%d total_batch=%d",
+                count_1734,
+                debug_1734,
+                len(pub_years),
+            )
+
         if len(obs_ids) == 0:
             continue
 
-        per_scale = {"local": emb_local, "medium": emb_medium, "broad": emb_broad}
+        logger.debug(
+            "[faiss-build-debug] batch=%d years=%s events=%d",
+            len(obs_ids),
+            sorted(set(map(int, pub_years))),
+            len(obs_ids),
+        )
+
+        per_scale = {
+            "local": emb_local,
+            "medium": emb_medium,
+            "broad": emb_broad,
+        }
 
         if incremental:
-            new_mask = np.array([int(i) not in already_indexed for i in obs_ids])
+            new_mask = np.array(
+                [int(eid) not in already_indexed for eid in obs_ids]
+            )
+
             if not new_mask.any():
                 skipped += len(obs_ids)
                 continue
-            skipped += (~new_mask).sum()
+
+            skipped += int((~new_mask).sum())
+
             obs_ids = obs_ids[new_mask]
             pub_years = pub_years[new_mask]
-            per_scale = {s: e[new_mask] for s, e in per_scale.items()}
+            per_scale = {
+                scale: emb[new_mask]
+                for scale, emb in per_scale.items()
+            }
 
-        unique_years = np.unique(pub_years)
+        for year in np.unique(pub_years):
 
-        try:
-            for year in unique_years:
-                year = int(year)
-                year_mask = pub_years == year
-                year_obs_ids = obs_ids[year_mask]
+            year = int(year)
+            year_mask = pub_years == year
+            year_obs_ids = obs_ids[year_mask]
 
-                if year not in indices:
-                    indices[year] = {}
+            if year not in indices:
+                indices[year] = {}
 
-                for scale, emb in per_scale.items():
-                    year_emb = emb[year_mask]
-                    if scale not in indices[year]:
-                        indices[year][scale] = EeboFaissIndex(dim=year_emb.shape[1], exact=True)
-                    indices[year][scale].add(year_emb, year_obs_ids)
+            logger.debug(
+                "[faiss-build-debug] adding year=%d count=%d",
+                year,
+                len(year_obs_ids),
+            )
 
-                total += len(year_obs_ids)
+            for scale, emb in per_scale.items():
 
-            if total % 100_000 < len(obs_ids):
-                logger.info(f"[faiss-build] indexed {total:,} events so far "
-                            f"across {len(indices)} years...")
-        except Exception as e:
-            logger.error(f"[faiss-build] add failed: {e}", exc_info=True)
-            raise
+                year_emb = emb[year_mask]
+
+                if scale not in indices[year]:
+                    indices[year][scale] = EeboFaissIndex(
+                        dim=year_emb.shape[1],
+                        exact=True,
+                    )
+
+                if year == 1734:
+                    logger.info(
+                        "[build-debug] year=1734 scale=%s adding vectors=%d ids=%d ntotal_before=%d",
+                        scale,
+                        len(year_emb),
+                        len(year_obs_ids),
+                        indices[year][scale].ntotal,
+                    )
+
+                indices[year][scale].add(
+                    year_emb,
+                    year_obs_ids,
+                )
+
+                logger.debug(
+                    "[faiss-build-debug] year=%d scale=%s ntotal=%d",
+                    year,
+                    scale,
+                    indices[year][scale].ntotal,
+                )
+
+            total += len(year_obs_ids)
+
+        if total % 100_000 < len(obs_ids):
+            logger.info(
+                "[faiss-build] indexed %d events so far across %d years...",
+                total,
+                len(indices),
+            )
 
     if not indices:
-        raise RuntimeError("No embeddings found in Tier1 observation store")
+        raise RuntimeError(
+            "No embeddings found in Tier1 observation store"
+        )
 
-    logger.info(f"[faiss-build] finished - added={total:,} skipped={skipped:,} "
-                f"years={sorted(indices.keys())}")
+    logger.info(
+        "[build-debug] total incoming 1734=%d",
+        debug_1734,
+    )
+
+    logger.info(
+        "[faiss-build] finished - added=%d skipped=%d years=%s",
+        total,
+        skipped,
+        sorted(indices.keys()),
+    )
+
     return indices
 
 
-def service(*, stream, masked: bool = False, clear: bool = False, year_chunk: int = 20):
+def service(*,
+    stream,
+    masked: bool = False,
+    clear: bool = False,
+    year_chunk: int = 20
+):
     started = time.perf_counter()
     existing_years = set(discover_years(masked))
 
     if clear:
-        for year in existing_years:
-            for scale, path in faiss_index_paths(masked, year=year).items():
-                EeboFaissIndex.wipe_faiss_index(path)
+        EeboFaissIndex.wipe_faiss_index()
         existing_years = set()
 
     logger.info("[faiss-build] building year manifest (one-time pub_year scan)")
@@ -232,6 +322,10 @@ def service(*, stream, masked: bool = False, clear: bool = False, year_chunk: in
         )
 
         saved.update(persist_indices(indices, masked))
+        logger.info(
+            "Chunk summary: %s",
+            {y: indices[y]["medium"].ntotal for y in sorted(indices)}
+        )
         del indices
 
     elapsed = time.perf_counter() - started
@@ -251,10 +345,13 @@ def persist_indices(
 
     for year, scale_indices in indices.items():
         paths = faiss_index_paths(masked, year=year)
+        expected = scale_indices["medium"].ids()
 
         saved[year] = {}
 
         for scale, idx in scale_indices.items():
+            if idx.ids() != expected:
+                raise RuntimeError(f"FAISS divergence before save: year={year} scale={scale}")
             path = paths[scale]
             path.parent.mkdir(parents=True, exist_ok=True)
             idx.save(path)
@@ -288,7 +385,7 @@ def old_main():
         for year in existing_years:
             for scale, path in faiss_index_paths(masked, year=year).items():
                 logger.info(f"[faiss-build] clearing existing {scale}/{year} index")
-                EeboFaissIndex.wipe_faiss_index(path)
+                EeboFaissIndex.wipe_faiss_index()
         indices = build_indices(stream)
 
     elif not existing_years:
