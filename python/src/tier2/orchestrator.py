@@ -5,7 +5,7 @@ Orchestrates Tier 2 resource construction, pure analysis, and persistence.
 
 Preserves the original service and CLI entry points:
 
-- run_tier2_service: accepts already-built lookup + indexes
+- service: accepts already-built lookup + indexes
 - main / CLI: discovers paths, loads resources, then hands them to the service
 """
 
@@ -41,7 +41,7 @@ from tier2.persistence import (
 from tier2.resources import load_indices
 
 
-def run_tier2_service(
+def service(
     *,
     lookup,
     indexes,
@@ -60,9 +60,10 @@ def run_tier2_service(
     Expects already-built lookup and FAISS indexes.
     Calls core, then writes results to SQLite.
     """
+    started = time.perf_counter()
     concept_names = [name for name, _ in concepts_to_run]
     logger = setEmit(emit, "[tier2]", {"concepts": concept_names})
-    logger.info("[tier2.run_tier2_service] Enter")
+    logger.info("[tier2.service] Enter")
 
     # Attach indexes so any lookup helpers that need them can see them
     if hasattr(lookup, "attach_index"):
@@ -81,11 +82,13 @@ def run_tier2_service(
         emit=emit,
     )
 
-    logger.info("[tier2.run_tier2_service] Writing results")
+    logger.info("[tier2.service] Writing results")
+    written = 0
     for concept_name, data in output.items():
         if data.get("empty"):
             continue
         write_concept(con, data, lookup)
+        written += 1
 
     # Enrich any newly-inserted document stubs
     try:
@@ -99,9 +102,20 @@ def run_tier2_service(
 
     con.commit()
     con.close()
+    elapsed = time.perf_counter() - started
 
-    logger.info("[tier2.run_tier2_service] Done")
-    return output
+
+    logger.info("[tier2.service] Done")
+    return {
+        "generated": "tier2_concept_neighbours",
+        "summary": {
+            "concepts_requested": len(concepts_to_run),
+            "concepts_processed": len(output),
+            "concepts_written": written,
+        },
+        "results": output,
+        "elapsed_seconds": round(elapsed, 3),
+    }
 
 
 def main():
@@ -115,6 +129,7 @@ def main():
     parser.add_argument("-w", "--max-load-workers", type=int, default=6)
     parser.add_argument("--batch-size", type=int, default=5000)
     parser.add_argument("-fp", "--false-positives", type=str, default=None)
+    parser.add_argument("--json", default=None, help="Path at which to write JSON if required")
     args = parser.parse_args()
 
     # Paths
@@ -175,7 +190,7 @@ def main():
         return
 
     # Hand live resources to the service
-    run_tier2_service(
+    output = service(
         lookup=lookup,
         indexes=indexes,
         concepts_to_run=concepts_to_run,
@@ -187,6 +202,10 @@ def main():
         false_positives=target_fps,
         emit=None,
     )
+
+
+    if args.json:
+        json.dump( result, open(json, "w") )
 
     logger.info(f"[tier2.main] Complete → {db_path}")
 
