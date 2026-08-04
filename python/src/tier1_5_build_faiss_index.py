@@ -106,6 +106,113 @@ def build_indices(
     return indices
 
 
+def build_faiss_service(
+    *,
+    stream,
+    masked: bool,
+    clear: bool = False,
+):
+    started = time.perf_counter()
+    existing_years = discover_years(masked)
+
+    if clear:
+        for year in existing_years:
+            for scale, path in faiss_index_paths(masked, year=year).items():
+                logger.info(
+                    f"[faiss-build] clearing existing {scale}/{year} index"
+                )
+                EeboFaissIndex.wipe_faiss_index(path)
+        indices = build_indices(stream)
+    elif not existing_years:
+        logger.info( "[faiss-build] no existing per-year indices found — building fresh" )
+        indices = build_indices(stream)
+    else:
+        logger.info(
+            f"[faiss-build] incremental mode — loading "
+            f"{len(existing_years)} existing years"
+        )
+
+        indices = {}
+        already_indexed = set()
+
+        for year in existing_years:
+            indices[year] = {}
+            year_id_sets = {}
+
+            for scale, path in faiss_index_paths(masked, year=year).items():
+                idx = EeboFaissIndex.load(path)
+                indices[year][scale] = idx
+                year_id_sets[scale] = idx.ids()
+
+            medium_ids = year_id_sets["medium"]
+
+            for scale, ids in year_id_sets.items():
+                if ids != medium_ids:
+                    raise RuntimeError(
+                        f"FAISS indices out of sync for year {year}: "
+                        f"'{scale}' has {len(ids)} ids, "
+                        f"'medium' has {len(medium_ids)}. "
+                        "Rebuild with --clear."
+                    )
+
+            already_indexed |= medium_ids
+
+        logger.info(
+            f"[faiss-build] existing indices ntotal={len(already_indexed)} "
+            f"across {len(existing_years)} years"
+        )
+
+        indices = build_indices(
+            stream,
+            indices=indices,
+            already_indexed=already_indexed,
+        )
+
+    saved = persist_indices(
+        indices,
+        masked,
+    )
+
+    elapsed = time.perf_counter() - started
+    return {
+        "generated": "tier1_5_faiss_build",
+        "summary": {
+            "years": len(indices),
+            "indices": sum(
+                len(scales)
+                for scales in indices.values()
+            ),
+            "scales": list(SCALES),
+        },
+        "indices": saved,
+        "elapsed_seconds": round(elapsed, 3),
+    }
+
+
+def persist_indices(
+    indices,
+    masked,
+):
+    saved = {}
+
+    for year, scale_indices in indices.items():
+        paths = faiss_index_paths(masked, year=year)
+
+        saved[year] = {}
+
+        for scale, idx in scale_indices.items():
+            path = paths[scale]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            idx.save(path)
+
+            saved[year][scale] = {
+                "path": str(path),
+                "ntotal": idx.ntotal,
+            }
+
+    return saved
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--clear", action="store_true")
@@ -113,7 +220,7 @@ def parse_args():
     return p.parse_args()
 
 
-def main():
+def old_main():
     args = parse_args()
     masked = args.mask
     zarr_path = MASKED_ZARR_PATH if args.mask else ZARR_PATH
@@ -166,13 +273,27 @@ def main():
                     f"across {len(existing_years)} years")
         indices = build_indices(stream, indices=indices, already_indexed=already_indexed)
 
-    for year, scale_indices in indices.items():
-        paths = faiss_index_paths(masked, year=year)
-        for scale, idx in scale_indices.items():
-            path = paths[scale]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            idx.save(path)
-            logger.info(f"[faiss-build] done -> {path}")
+    persist_indicies(indices, masked)
+
+
+def main():
+    args = parse_args()
+
+    zarr_path = (
+        MASKED_ZARR_PATH
+        if args.mask
+        else ZARR_PATH
+    )
+
+    stream = ZarrEventStream(str(zarr_path))
+
+    result = build_faiss_service(
+        stream=stream,
+        masked=args.mask,
+        clear=args.clear,
+    )
+
+    logger.info( f"[faiss-build] complete: {result['summary']}" )
 
 
 if __name__ == "__main__":
