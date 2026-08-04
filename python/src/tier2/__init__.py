@@ -30,7 +30,7 @@ from tier2.persistence import (
 )
 from tier2.resources import load_indices
 from tier2.orchestrator import (
-    run_tier2_service,
+    service,
     main,
 )
 
@@ -49,6 +49,6 @@ __all__ = [
     "write_concept",
     "enrich_documents",
     "load_indices",
-    "run_tier2_service",
+    "service",
     "main",
 ]

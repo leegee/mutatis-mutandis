@@ -85,26 +85,28 @@ class ZarrEmbeddingObservationStore:
         self.window_token_pos = self._ds( g, "window_token_pos", (), compressor, "int32", )
 
 
-    # dataset helper
+    # dataset
     def _ds(self, g, name, shape_suffix, compressor, dtype):
         if name in g:
             return g[name]
 
+        # New field being added to a group that may already have data —
+        # refuse to silently create a 0-length dataset that would desync
+        # from siblings already on disk.
+        existing_lengths = {k: g[k].shape[0] for k in g.array_keys()}
+        if existing_lengths and any(n > 0 for n in existing_lengths.values()):
+            raise RuntimeError(
+                f"Cannot add new field '{name}' to non-empty store — existing "
+                f"fields have data (e.g. {existing_lengths}), but '{name}' has "
+                f"none. Backfill '{name}' explicitly for existing rows before "
+                f"resuming writes, or this store will silently desync."
+            )
+
         shape = (0,) + shape_suffix
+        chunks = (4096,) if len(shape_suffix) == 0 else (4096, shape_suffix[0])
+        return g.create_dataset(name, shape=shape, chunks=chunks, dtype=dtype, compressor=compressor)
 
-        chunks = (4096,)
-        if len(shape_suffix) > 0:
-            chunks = (4096, shape_suffix[0])
 
-        return g.create_dataset(
-            name,
-            shape=shape,
-            chunks=chunks,
-            dtype=dtype,
-            compressor=compressor,
-        )
-
-    #
     def append_events(
         self,
         event_id,
