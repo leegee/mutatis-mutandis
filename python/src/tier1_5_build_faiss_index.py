@@ -79,6 +79,16 @@ BATCH_SIZE = 8192
 SCALES = ("local", "medium", "broad")
 
 
+def build_year_manifest(self) -> dict[Path, np.ndarray]:
+    """One-time scan: store_dir -> full pub_year array, cached in memory
+    (int16, so even a huge corpus is a few MB total)."""
+    manifest = {}
+    for store_dir in store_dirs(self.root):
+        g = zarr.open_group(str(store_dir), mode="r")
+        manifest[store_dir] = np.asarray(g["events"]["pub_year"][:], dtype=np.int16)
+    return manifest
+
+
 def discover_years(masked: bool) -> list[int]:
     """
     Find which years already have on-disk indices, by globbing the 'medium'
@@ -103,6 +113,7 @@ def build_indices(
     indices: dict[int, dict[str, EeboFaissIndex]] | None = None,
     already_indexed: set[int] | None = None,
     year_filter: set[int] | None = None,
+    year_manifest: dict[Path, np.ndarray] | None = None,
 ) -> dict[int, dict[str, EeboFaissIndex]]:
     """
     Build/update per-year, per-scale FAISS indices from a single streamed
@@ -123,7 +134,7 @@ def build_indices(
     logger.info("[faiss-build] streaming Tier1 multi-scale embeddings by year")
 
     for emb_local, emb_medium, emb_broad, obs_ids, pub_years in stream.iter_multi_scale_embeddings(
-        batch_size=BATCH_SIZE, year_filter=year_filter
+        batch_size=BATCH_SIZE, year_filter=year_filter, year_manifest=year_manifest
     ):
         if len(obs_ids) == 0:
             continue
@@ -174,7 +185,6 @@ def build_indices(
     return indices
 
 
-
 def service(*, stream, masked: bool = False, clear: bool = False, year_chunk: int = 20):
     started = time.perf_counter()
     existing_years = set(discover_years(masked))
@@ -185,7 +195,12 @@ def service(*, stream, masked: bool = False, clear: bool = False, year_chunk: in
                 EeboFaissIndex.wipe_faiss_index(path)
         existing_years = set()
 
-    lo, hi = stream.year_bounds()
+    logger.info("[faiss-build] building year manifest (one-time pub_year scan)")
+    year_manifest = stream.build_year_manifest()
+
+    lo, hi = min(int(y.min()) for y in year_manifest.values() if y.size), \
+             max(int(y.max()) for y in year_manifest.values() if y.size)
+
     saved = {}
 
     for chunk_start in range(lo, hi + 1, year_chunk):
@@ -213,10 +228,11 @@ def service(*, stream, masked: bool = False, clear: bool = False, year_chunk: in
             indices=indices,
             already_indexed=already_indexed or None,
             year_filter=chunk_years,
+            year_manifest=year_manifest,
         )
 
         saved.update(persist_indices(indices, masked))
-        del indices   # <-- release this chunk's memory before the next pass
+        del indices
 
     elapsed = time.perf_counter() - started
     return {

@@ -43,18 +43,25 @@ class ZarrEventStream:
         self._doc_by_id = None
 
 
-    def iter_multi_scale_embeddings(self, batch_size: int = 8192, year_filter: set[int] | None = None):
+    def iter_multi_scale_embeddings(
+        self,
+        batch_size: int = 8192,
+        year_filter: set[int] | None = None,
+        year_manifest: dict[Path, np.ndarray] | None = None,
+    ):
         """
         Yields tuples of (emb_local, emb_medium, emb_broad, obs_ids, pub_years)
 
-        pub_years is int16, one per event, sourced from the 'pub_year' dataset
-        written alongside doc_id at ingestion time (tier 1).
-
         year_filter:
-            If given, stores whose pub_year range doesn't overlap the filter
-            at all are skipped before any embedding data is touched — pub_year
-            is int16 and cheap to read fully, so this is a fast pre-check
-            regardless of how stores are laid out on disk.
+            If given, stores/batches whose pub_year range doesn't overlap the
+            filter at all are skipped before embedding data is touched.
+
+        year_manifest:
+            Optional cache from build_year_manifest() — store_dir -> full
+            pub_year array. When provided, skips re-reading 'pub_year' from
+            disk for the overlap check and batch slicing; falls back to a
+            live read per store if a store isn't in the manifest (e.g. new
+            stores added after the manifest was built).
         """
         for store_dir in store_dirs(self.root):
             g = zarr.open_group(str(store_dir), mode="r")
@@ -67,20 +74,20 @@ class ZarrEventStream:
                     f"multi-scale streaming can proceed."
                 )
 
-            years = group["pub_year"]
-            n = years.shape[0]
+            years_dataset = group["pub_year"]
+            n = years_dataset.shape[0]
 
             if n == 0:
                 continue
 
+            cached_years = year_manifest.get(store_dir) if year_manifest is not None else None
+
             if year_filter is not None:
-                store_years = np.asarray(years[:], dtype=np.int16)
-                store_lo, store_hi = int(store_years.min()), int(store_years.max())
+                store_years_full = cached_years if cached_years is not None else np.asarray(years_dataset[:], dtype=np.int16)
+                store_lo, store_hi = int(store_years_full.min()), int(store_years_full.max())
                 filter_lo, filter_hi = min(year_filter), max(year_filter)
                 if store_hi < filter_lo or store_lo > filter_hi:
-                    continue  # no overlap at all — skip embeddings for this store entirely
-            else:
-                store_years = None
+                    continue
 
             eids = group["event_id"]
             emb_l = group["emb_local"]
@@ -90,11 +97,10 @@ class ZarrEventStream:
             for start in range(0, n, batch_size):
                 end = min(start + batch_size, n)
 
-                batch_years = (
-                    store_years[start:end]
-                    if store_years is not None
-                    else np.asarray(years[start:end], dtype=np.int16)
-                )
+                if cached_years is not None:
+                    batch_years = cached_years[start:end]
+                else:
+                    batch_years = np.asarray(years_dataset[start:end], dtype=np.int16)
 
                 if year_filter is not None:
                     keep = np.isin(batch_years, list(year_filter))

@@ -164,6 +164,8 @@ a new primary key to avoid collision on `doc_id`. I have tried adding a joint ke
 but it was horrendous. Might be easier to prepend a corpus ID to the doc_id and add a new field to maintain
 the actual doc ID. But then if this is to all be rewritten....
 
+Ingestion should be batched and sharded by year across tiers 0 - 1 (XML to Postgres, Postgres to Zarr FS, Zarr FS to FAISS)
+
 1. metrics
 1. update ZarrEventLookup to stream/yield
 1. expose tier 2's analytics
