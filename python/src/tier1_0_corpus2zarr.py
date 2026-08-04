@@ -805,9 +805,12 @@ class CorpusProcessor:
 
 
 def clear_output_dir(zarr_path):
-    if zarr_path.exists():
-        shutil.rmtree(zarr_path)
-    zarr_path.mkdir(parents=True, exist_ok=True)
+    zarr_path.mkdir(parents=True, exist_ok=True)   # ensure it exists, never remove the inode itself
+    for child in zarr_path.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
 
 
 def parse_args():
@@ -878,6 +881,12 @@ def main():
         num_shards   = args.num_shards
     )
     proc.process(doc_id=args.doc_id)
+
+    # A shard is mergeable only after the complete document stream has
+    # processed successfully. Presence of the Zarr directory alone is not
+    # sufficient because interrupted writes leave valid-looking stores.
+    if args.num_shards > 1:
+        (zarr_path / "_COMPLETE").touch()
 
     conn.close()
     logger.info(f"[Tier 1 done] mode={'masked' if args.mask else 'unmasked'}")

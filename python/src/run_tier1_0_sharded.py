@@ -18,14 +18,9 @@ from pathlib import Path
 
 from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, LOG_DIR
 from lib.eebo_logging import logger
+from tier1_0_corpus2zarr import clear_output_dir
 
 T1_PATH = "src/tier1_0_corpus2zarr.py"
-
-def clear_output_dir(zarr_path: Path):
-    if zarr_path.exists():
-        shutil.rmtree(zarr_path)
-    zarr_path.mkdir(parents=True, exist_ok=True)
-
 
 def main():
     p = argparse.ArgumentParser()
