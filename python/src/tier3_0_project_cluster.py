@@ -236,7 +236,7 @@ def cluster_concept(
     con.commit()
     return {
         "concept": concept,
-        "status": "complete","c"
+        "status": "complete",
         "events": len(event_ids),
         "clusters": len({
             int(c)
