@@ -166,7 +166,9 @@ the actual doc ID. But then if this is to all be rewritten....
 
 Ingestion should be batched and sharded by year across tiers 0 - 1 (XML to Postgres, Postgres to Zarr FS, Zarr FS to FAISS)
 
-1. migrate the projection SQLite to PG
+1. T2 - resolve once
+1. Stage materialisation in PG then dump to SQLite
+1. migrate the materialisation SQLite to PG
 1. metrics
 1. update ZarrEventLookup to stream/yield
 1. expose tier 2's analytics

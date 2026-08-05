@@ -41,10 +41,17 @@ from tier2.analysis import (
 )
 from tier2.persistence import (
     initialise_database,
+    create_indexes,
+    restore_reader_pragmas,
     start_concept,
     write_concept_batch,
     finish_concept,
     enrich_documents,
+    initialise_pg_stage,
+    start_concept_pg,
+    write_concept_batch_pg,
+    finish_concept_pg,
+    dump_pg_stage_to_sqlite,
 )
 from tier2.resources import LazyYearIndices
 
@@ -63,90 +70,111 @@ def service(
     emit=None,
     batch_size: int = BATCH_SIZE,
     commit_every_batch: bool = True,
+    stage_pg: bool = False,
 ):
     """
     Reusable entry point for long-lived processes (UI, FastAPI, etc.).
 
     Expects already-built lookup and FAISS indexes.
 
-    Year-major processing: outer loop is publication year, inner loop is
-    the concepts that touch that year. This guarantees at most one
-    year's FAISS indices (local/medium/broad) are ever resident,
-    regardless of how much concepts' year coverage overlaps.
+    Year-major processing with resolve-once. Write path:
 
-    Within each (year, concept) pair, seed positions are still streamed
-    in batches of `batch_size` so peak memory for neighbour payloads
-    stays proportional to `batch_size * top_n` even for high-frequency
-    concepts that match hundreds of thousands of events.
+      stage_pg=False (default) — stream into SQLite (tables only, bulk
+        PRAGMAs); create indexes at the end.
+      stage_pg=True — stream into Postgres UNLOGGED stage tables, then
+        dump to the SQLite artifact at db_path (same final schema).
     """
     started = time.perf_counter()
     concept_names = [name for name, _ in concepts_to_run]
     logger = setEmit(emit, "[tier2]", {"concepts": concept_names})
-    logger.info("[tier2.service] Enter")
+    logger.info("[tier2.service] Enter (stage_pg=%s)", stage_pg)
 
-    # Attach indexes so any lookup helpers that need them can see them
     if hasattr(lookup, "attach_index"):
         lookup.attach_index(indexes)
 
-    con = initialise_database(db_path, clear=clear)
+    pg = None
+    con = None
 
-    # Cheap FAISS-free pass: only year sets, no position payloads.
-    years_by_concept, concepts_by_year = build_year_schedule(
-        lookup=lookup,
-        concepts_to_run=concepts_to_run,
-        false_positives=false_positives,
-    )
+    if stage_pg:
+        pg = get_connection()
+        initialise_pg_stage(pg)
+        start_fn = lambda name: start_concept_pg(pg, name)
+        write_fn = lambda name, events, seed_ids: write_concept_batch_pg(
+            pg, name, lookup, events, seed_ids=seed_ids
+        )
+        finish_fn = lambda name, forms, n_events, aggregate: finish_concept_pg(
+            pg, name, forms, n_events, aggregate
+        )
+        commit_fn = (lambda: pg.commit()) if hasattr(pg, "commit") else (lambda: None)
+    else:
+        con = initialise_database(db_path, clear=clear)
+        start_fn = lambda name: start_concept(con, name)
+        write_fn = lambda name, events, seed_ids: write_concept_batch(
+            con, name, lookup, events, seed_ids=seed_ids
+        )
+        finish_fn = lambda name, forms, n_events, aggregate: finish_concept(
+            con, name, forms, n_events, aggregate
+        )
+        commit_fn = lambda: con.commit()
 
-    # Per-concept state that must survive across years (small: counters
-    # + metadata). Full position lists are never retained here.
     concept_state = {}
+    concepts_by_year = {}
+
     for concept_name, concept in concepts_to_run:
         if emit:
             emit("concept_start", {"concept": concept_name})
-        start_concept(con, concept_name)
+
+        resolved = resolve_concept_positions(
+            concept_name=concept_name,
+            concept=concept,
+            lookup=lookup,
+            false_positives=false_positives,
+        )
+
+        start_fn(concept_name)
+
         concept_state[concept_name] = {
             "concept": concept,
             "token_counts": Counter(),
             "doc_counts": Counter(),
             "window_counts": Counter(),
-            "forms": None,
-            "n_events": 0,
-            "seed_ids": None,
+            "forms": resolved["forms"],
+            "false_positives": resolved["false_positives"],
+            "n_events": (
+                len(resolved["event_ids"])
+                if resolved["event_ids"] is not None
+                else 0
+            ),
+            "seed_ids": resolved.get("event_ids_set") or set(),
+            "by_year": resolved["by_year"],
             "has_events": False,
-            "years_done": 0,
-            "years_total": len(years_by_concept.get(concept_name, ())),
         }
 
-    # Year-major: load → process every concept that needs this year →
-    # evict. At most one year resident at any time.
+        for year in resolved["by_year"]:
+            concepts_by_year.setdefault(year, []).append(concept_name)
+
+        del resolved
+
     for year in sorted(concepts_by_year):
-        for concept_name, concept in concepts_by_year[year]:
+        for concept_name in concepts_by_year[year]:
             state = concept_state[concept_name]
-
-            # Re-resolve on demand (lookup-only, cheap). Only the
-            # current year's position list is held while we chunk it.
-            resolved = resolve_concept_positions(
-                concept_name=concept_name,
-                concept=concept,
-                lookup=lookup,
-                false_positives=false_positives,
-            )
-
-            if state["forms"] is None:
-                state["forms"] = resolved["forms"]
-                state["n_events"] = len(resolved["event_ids"])
-                state["seed_ids"] = resolved.get("event_ids_set") or set()
+            resolved = {
+                "forms": state["forms"],
+                "false_positives": state["false_positives"],
+                "event_ids_set": state["seed_ids"],
+                "by_year": state["by_year"],
+            }
 
             for item in iter_year_concept_batches(
                 concept_name=concept_name,
-                concept=concept,
+                concept=state["concept"],
                 lookup=lookup,
                 indexes=indexes,
                 year=year,
                 top_n=top_n,
                 rrf_k=rrf_k,
                 oversample=oversample,
-                false_positives=false_positives,
+                false_positives=state["false_positives"],
                 resolved=resolved,
                 batch_size=batch_size,
                 token_counts=state["token_counts"],
@@ -154,24 +182,13 @@ def service(
                 window_counts=state["window_counts"],
             ):
                 state["has_events"] = True
-                write_concept_batch(
-                    con,
-                    concept_name,
-                    lookup,
-                    item["events"],
-                    seed_ids=item["seed_ids"],
-                )
+                write_fn(concept_name, item["events"], item["seed_ids"])
                 if commit_every_batch:
-                    con.commit()
+                    commit_fn()
 
-            state["years_done"] += 1
-            # resolved / year positions go out of scope here
-
-        # Finished every concept that needed this year → drop indices.
         if hasattr(indexes, "evict"):
             indexes.evict(year)
 
-    # Finalise each concept once all of its years are done.
     processed = 0
     written = 0
     empty_concepts = []
@@ -181,8 +198,7 @@ def service(
         processed += 1
 
         if state["has_events"]:
-            finish_concept(
-                con,
+            finish_fn(
                 concept_name,
                 state["forms"],
                 state["n_events"],
@@ -192,7 +208,7 @@ def service(
                     "top_windows": state["window_counts"].most_common(top_n),
                 },
             )
-            con.commit()
+            commit_fn()
             written += 1
         else:
             empty_concepts.append(concept_name)
@@ -200,22 +216,41 @@ def service(
         if emit:
             emit("concept_done", {"concept": concept_name})
 
-    logger.info("[tier2.service] Enriching documents")
-
-    # Enrich any newly-inserted document stubs
-    try:
-        pg = get_connection()
+    if stage_pg:
+        commit_fn()
+        dump_pg_stage_to_sqlite(pg, db_path, clear=clear)
+        logger.info("[tier2.service] Enriching documents")
         try:
-            enrich_documents(con, pg)
-        finally:
+            import sqlite3
+            sqlite_path = db_path if isinstance(db_path, (str, bytes)) else str(db_path)
+            sqlite_con = sqlite3.connect(sqlite_path)
+            try:
+                enrich_documents(sqlite_con, pg)
+                sqlite_con.commit()
+            finally:
+                sqlite_con.close()
+        except Exception as exc:
+            logger.warning(f"[tier2] document enrichment skipped: {exc}")
+        if hasattr(pg, "close"):
             pg.close()
-    except Exception as exc:
-        logger.warning(f"[tier2] document enrichment skipped: {exc}")
+    else:
+        logger.info("[tier2.service] Enriching documents")
+        try:
+            pg_src = get_connection()
+            try:
+                enrich_documents(con, pg_src)
+            finally:
+                pg_src.close()
+        except Exception as exc:
+            logger.warning(f"[tier2] document enrichment skipped: {exc}")
 
-    con.commit()
-    con.close()
+        con.commit()
+        create_indexes(con)
+        restore_reader_pragmas(con)
+        con.commit()
+        con.close()
+
     elapsed = time.perf_counter() - started
-
     logger.info("[tier2.service] Done")
     return {
         "generated": "tier2_concept_neighbours",
@@ -224,6 +259,7 @@ def service(
             "concepts_processed": processed,
             "concepts_written": written,
             "concepts_empty": empty_concepts,
+            "stage_pg": stage_pg,
         },
         "elapsed_seconds": round(elapsed, 3),
     }
@@ -239,6 +275,8 @@ def main():
     parser.add_argument("--oversample", type=int, default=OVERSAMPLE)
     parser.add_argument("-w", "--max-load-workers", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=5000)
+    parser.add_argument("--stage-pg", action="store_true",
+                        help="Write via Postgres UNLOGGED stage, then dump SQLite")
     parser.add_argument("-fp", "--false-positives", type=str, default=None)
     parser.add_argument("--json", default=None, help="Path at which to write JSON if required")
     args = parser.parse_args()
@@ -320,6 +358,7 @@ def main():
         oversample=args.oversample,
         false_positives=target_fps,
         emit=None,
+        stage_pg=args.stage_pg,
     )
 
 
