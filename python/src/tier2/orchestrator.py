@@ -28,13 +28,16 @@ from lib.eebo_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
 from lib.get_processed_concepts import get_processed_concepts
 
+from collections import Counter
+
 from tier2.analysis import (
     K,
     RRF_K,
     OVERSAMPLE,
     BATCH_SIZE,
-    build_eviction_schedule,
-    iter_concept_batches,
+    build_year_schedule,
+    resolve_concept_positions,
+    iter_year_concept_batches,
 )
 from tier2.persistence import (
     initialise_database,
@@ -66,14 +69,15 @@ def service(
 
     Expects already-built lookup and FAISS indexes.
 
-    Streams each concept's analysis in bounded-size chunks, writing and
-    committing each chunk to SQLite as it's produced (see
-    tier2.analysis.iter_concept_batches). Peak memory stays roughly
-    proportional to `batch_size * top_n`, regardless of how many events
-    an individual concept matches or how many concepts are in the batch
-    — this matters because common words (KING, LAW, PARLIAMENT...) can
-    match hundreds of thousands of events in a large corpus, and would
-    otherwise dominate memory on their own, independent of batch size.
+    Year-major processing: outer loop is publication year, inner loop is
+    the concepts that touch that year. This guarantees at most one
+    year's FAISS indices (local/medium/broad) are ever resident,
+    regardless of how much concepts' year coverage overlaps.
+
+    Within each (year, concept) pair, seed positions are still streamed
+    in batches of `batch_size` so peak memory for neighbour payloads
+    stays proportional to `batch_size * top_n` even for high-frequency
+    concepts that match hundreds of thousands of events.
     """
     started = time.perf_counter()
     concept_names = [name for name, _ in concepts_to_run]
@@ -86,62 +90,70 @@ def service(
 
     con = initialise_database(db_path, clear=clear)
 
-    # One cheap, FAISS-free pass over the whole batch: find out which
-    # publication years each concept touches, and the last concept in
-    # the run that needs each year. Deliberately lightweight — it does
-    # NOT retain each concept's positions/event_ids, only the small set
-    # of years each one touches (see build_eviction_schedule). This lets
-    # the loop below evict a year's FAISS indices the moment nothing
-    # left in the batch needs them, without holding every concept's
-    # full matched-event data in memory for the whole run.
-    years_by_concept, last_use = build_eviction_schedule(
+    # Cheap FAISS-free pass: only year sets, no position payloads.
+    years_by_concept, concepts_by_year = build_year_schedule(
         lookup=lookup,
         concepts_to_run=concepts_to_run,
         false_positives=false_positives,
     )
 
-    processed = 0
-    written = 0
-    empty_concepts = []
-
-    for i, (concept_name, concept) in enumerate(concepts_to_run):
+    # Per-concept state that must survive across years (small: counters
+    # + metadata). Full position lists are never retained here.
+    concept_state = {}
+    for concept_name, concept in concepts_to_run:
         if emit:
             emit("concept_start", {"concept": concept_name})
-
-        evict_after_years = {
-            year
-            for year in years_by_concept[concept_name]
-            if last_use.get(year) == i
+        start_concept(con, concept_name)
+        concept_state[concept_name] = {
+            "concept": concept,
+            "token_counts": Counter(),
+            "doc_counts": Counter(),
+            "window_counts": Counter(),
+            "forms": None,
+            "n_events": 0,
+            "seed_ids": None,
+            "has_events": False,
+            "years_done": 0,
+            "years_total": len(years_by_concept.get(concept_name, ())),
         }
 
-        start_concept(con, concept_name)
+    # Year-major: load → process every concept that needs this year →
+    # evict. At most one year resident at any time.
+    for year in sorted(concepts_by_year):
+        for concept_name, concept in concepts_by_year[year]:
+            state = concept_state[concept_name]
 
-        has_events = False
-        final_meta = None
+            # Re-resolve on demand (lookup-only, cheap). Only the
+            # current year's position list is held while we chunk it.
+            resolved = resolve_concept_positions(
+                concept_name=concept_name,
+                concept=concept,
+                lookup=lookup,
+                false_positives=false_positives,
+            )
 
-        # resolved=None (the default) — iter_concept_batches resolves
-        # this concept's positions/event_ids itself, on demand. It's a
-        # cheap, lookup-only recomputation (already done once, lightly,
-        # in build_eviction_schedule above), and keeping it scoped to
-        # a single concept at a time is the point: only one concept's
-        # matched-event data is ever alive in memory, not the whole
-        # batch's.
-        for item in iter_concept_batches(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            indexes=indexes,
-            top_n=top_n,
-            rrf_k=rrf_k,
-            oversample=oversample,
-            false_positives=false_positives,
-            batch_size=batch_size,
-            evict_after_years=evict_after_years,
-        ):
-            kind = item["type"]
+            if state["forms"] is None:
+                state["forms"] = resolved["forms"]
+                state["n_events"] = len(resolved["event_ids"])
+                state["seed_ids"] = resolved.get("event_ids_set") or set()
 
-            if kind == "batch":
-                has_events = True
+            for item in iter_year_concept_batches(
+                concept_name=concept_name,
+                concept=concept,
+                lookup=lookup,
+                indexes=indexes,
+                year=year,
+                top_n=top_n,
+                rrf_k=rrf_k,
+                oversample=oversample,
+                false_positives=false_positives,
+                resolved=resolved,
+                batch_size=batch_size,
+                token_counts=state["token_counts"],
+                doc_counts=state["doc_counts"],
+                window_counts=state["window_counts"],
+            ):
+                state["has_events"] = True
                 write_concept_batch(
                     con,
                     concept_name,
@@ -151,25 +163,34 @@ def service(
                 )
                 if commit_every_batch:
                     con.commit()
-                # item["events"] (and everything it references) goes
-                # out of scope here — nothing from this chunk persists
-                # past this iteration.
 
-            elif kind == "final":
-                final_meta = item
+            state["years_done"] += 1
+            # resolved / year positions go out of scope here
 
-            elif kind == "empty":
-                pass
+        # Finished every concept that needed this year → drop indices.
+        if hasattr(indexes, "evict"):
+            indexes.evict(year)
 
+    # Finalise each concept once all of its years are done.
+    processed = 0
+    written = 0
+    empty_concepts = []
+
+    for concept_name, _ in concepts_to_run:
+        state = concept_state[concept_name]
         processed += 1
 
-        if has_events and final_meta is not None:
+        if state["has_events"]:
             finish_concept(
                 con,
                 concept_name,
-                final_meta["forms"],
-                final_meta["n_events"],
-                final_meta["aggregate"],
+                state["forms"],
+                state["n_events"],
+                {
+                    "top_tokens": state["token_counts"].most_common(top_n),
+                    "top_docs": state["doc_counts"].most_common(top_n),
+                    "top_windows": state["window_counts"].most_common(top_n),
+                },
             )
             con.commit()
             written += 1

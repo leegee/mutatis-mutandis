@@ -109,44 +109,30 @@ def resolve_concept_positions(
     }
 
 
-def build_eviction_schedule(
+def build_year_schedule(
     *,
     lookup,
     concepts_to_run,
     false_positives=None,
 ):
     """
-    One cheap, FAISS-free pass over every concept in a batch, resolving
-    which publication years each touches — and nothing more.
+    One cheap, FAISS-free pass over every concept in a batch.
 
-    Deliberately does NOT retain each concept's positions/event_ids/
-    by_year data. Earlier versions of this function returned a
-    `resolved_by_concept` dict holding that full payload for every
-    concept, which meant every concept's matched-event data stayed
-    resident in memory for the entire batch — effectively processing
-    every concept "at once" from a memory standpoint, even though the
-    expensive FAISS work was still done one concept at a time. For
-    common words matching a large fraction of a big corpus, across a
-    batch of many such concepts, that was itself a major source of the
-    steady memory growth this module is meant to avoid.
-
-    Here, each concept's resolve_concept_positions() result is used
-    only to read off which years it touches, then immediately allowed
-    to go out of scope. The caller (tier2.orchestrator.service) is
-    expected to call resolve_concept_positions() again — cheap, since
-    it's lookup-only with no FAISS involved — right when that concept's
-    turn comes up in the main loop, so only one concept's match data is
-    ever alive at a time.
+    Returns only the small year sets needed to drive a year-major
+    processing loop (outer = year, inner = concepts that touch it).
+    Full position / event_id payloads are deliberately not retained;
+    the caller re-resolves a concept when it actually processes that
+    concept's slice of a year.
 
     Returns:
-        years_by_concept: {concept_name: {year, year, ...}}
-        last_use: {year: index into concepts_to_run of the last concept
-                   that needs that year's FAISS indices}
+        years_by_concept: {concept_name: {year, ...}}
+        concepts_by_year: {year: [(concept_name, concept), ...]}
+            (stable order matching concepts_to_run)
     """
     years_by_concept = {}
-    last_use = {}
+    concepts_by_year = {}
 
-    for i, (concept_name, concept) in enumerate(concepts_to_run):
+    for concept_name, concept in concepts_to_run:
         resolved = resolve_concept_positions(
             concept_name=concept_name,
             concept=concept,
@@ -158,13 +144,39 @@ def build_eviction_schedule(
         years_by_concept[concept_name] = years
 
         for year in years:
-            last_use[year] = i
+            concepts_by_year.setdefault(year, []).append(
+                (concept_name, concept)
+            )
 
-        # `resolved` — positions, event_ids, event_ids_set, and the
-        # per-year position lists — goes out of scope here. Only the
-        # small `years` set (a handful of ints) survives past this
-        # iteration.
+        # resolved goes out of scope; only the year set survives.
 
+    return years_by_concept, concepts_by_year
+
+
+# Backward-compatible alias used by older call sites / tests.
+def build_eviction_schedule(
+    *,
+    lookup,
+    concepts_to_run,
+    false_positives=None,
+):
+    """
+    Deprecated wrapper around build_year_schedule that also fabricates
+    a last_use map (concept-major eviction). Prefer build_year_schedule
+    + year-major processing so at most one year's indices are resident.
+    """
+    years_by_concept, concepts_by_year = build_year_schedule(
+        lookup=lookup,
+        concepts_to_run=concepts_to_run,
+        false_positives=false_positives,
+    )
+    # last concept index that needs each year (concept-major order)
+    name_to_idx = {
+        name: i for i, (name, _) in enumerate(concepts_to_run)
+    }
+    last_use = {}
+    for year, pairs in concepts_by_year.items():
+        last_use[year] = max(name_to_idx[name] for name, _ in pairs)
     return years_by_concept, last_use
 
 
@@ -412,6 +424,92 @@ def _build_batch_events(
     return batch_events
 
 
+def iter_year_concept_batches(
+    *,
+    concept_name,
+    concept,
+    lookup,
+    indexes,
+    year,
+    top_n=K,
+    rrf_k=RRF_K,
+    oversample=OVERSAMPLE,
+    false_positives=None,
+    resolved=None,
+    batch_size=BATCH_SIZE,
+    token_counts=None,
+    doc_counts=None,
+    window_counts=None,
+):
+    """
+    Yield bounded-size batches for *one concept, one publication year*.
+
+    Intended for the year-major service loop: the caller holds at most
+    one year's FAISS indices, walks every concept that touches that
+    year, then evicts. Aggregate counters may be passed in so they
+    accumulate across years for the same concept.
+
+    Yields:
+        {"type": "batch", "events": [...], "seed_ids": set(...)}
+    or nothing if the concept has no events in this year.
+    """
+    if resolved is None:
+        resolved = resolve_concept_positions(
+            concept_name=concept_name,
+            concept=concept,
+            lookup=lookup,
+            false_positives=false_positives,
+        )
+
+    false_positives = resolved["false_positives"]
+    event_ids_set = resolved.get("event_ids_set") or set()
+    year_positions = resolved["by_year"].get(year) or []
+
+    if not year_positions:
+        return
+
+    if token_counts is None:
+        token_counts = Counter()
+    if doc_counts is None:
+        doc_counts = Counter()
+    if window_counts is None:
+        window_counts = Counter()
+
+    for chunk_positions in _chunks(year_positions, batch_size):
+        chunk_arr = np.asarray(chunk_positions, dtype=np.int64)
+
+        result = multiscale_search(
+            indexes,
+            lookup,
+            chunk_arr,
+            top_n,
+            pub_year=year,
+            rrf_k=rrf_k,
+            oversample=oversample,
+        )
+
+        fused = {
+            int(lookup.event_id[pos]): neighbours
+            for pos, neighbours in zip(chunk_positions, result)
+        }
+
+        batch_events = _build_batch_events(
+            chunk_positions=chunk_positions,
+            fused=fused,
+            lookup=lookup,
+            false_positives=false_positives,
+            token_counts=token_counts,
+            doc_counts=doc_counts,
+            window_counts=window_counts,
+        )
+
+        yield {
+            "type": "batch",
+            "events": batch_events,
+            "seed_ids": event_ids_set,
+        }
+
+
 def iter_concept_batches(
     *,
     concept_name,
@@ -427,28 +525,11 @@ def iter_concept_batches(
     evict_after_years=None,
 ):
     """
-    Streaming counterpart to analyse_concept: yields bounded-size chunks
-    of a concept's seed events (with neighbours already resolved),
-    instead of building the whole concept's event/neighbour payload in
-    memory before returning anything.
+    Streaming counterpart to analyse_concept (concept-major).
 
-    For a concept matching a handful of events this makes no practical
-    difference. For a concept matching hundreds of thousands of events
-    (common function words in a large corpus), this is the difference
-    between peak memory scaling with BATCH_SIZE vs. scaling with the
-    concept's total match count.
-
-    Yields dicts of one of three shapes:
-        {"type": "empty", "concept": concept_name}
-        {"type": "batch", "events": [...], "seed_ids": set(...)}    (0+ times)
-        {"type": "final", "concept":, "forms":, "n_events":,
-         "aggregate": {...}}                                     (once, last)
-
-    `evict_after_years`, if given, is a set of publication years whose
-    FAISS indices should be evicted (via indexes.evict) as soon as this
-    concept finishes with them — intended to be populated from
-    build_eviction_schedule so a year is evicted exactly once, right
-    after the last concept in a batch that needs it.
+    Prefer the year-major path in orchestrator.service for multi-concept
+    batches so at most one year's FAISS indices are ever resident.
+    This generator remains for single-concept runs and tests.
     """
     if resolved is None:
         resolved = resolve_concept_positions(
@@ -475,47 +556,23 @@ def iter_concept_batches(
     window_counts = Counter()
 
     for year, year_positions in by_year.items():
-        for chunk_positions in _chunks(year_positions, batch_size):
-            chunk_arr = np.asarray(chunk_positions, dtype=np.int64)
-
-            result = multiscale_search(
-                indexes,
-                lookup,
-                chunk_arr,
-                top_n,
-                pub_year=year,
-                rrf_k=rrf_k,
-                oversample=oversample,
-            )
-
-            fused = {
-                int(lookup.event_id[pos]): neighbours
-                for pos, neighbours in zip(chunk_positions, result)
-            }
-
-            batch_events = _build_batch_events(
-                chunk_positions=chunk_positions,
-                fused=fused,
-                lookup=lookup,
-                false_positives=false_positives,
-                token_counts=token_counts,
-                doc_counts=doc_counts,
-                window_counts=window_counts,
-            )
-
-            # seed_ids is the same set object every time — a reference,
-            # not a copy — so including it per batch costs nothing extra
-            # and lets the caller write each batch correctly (see
-            # persistence.write_concept_batch) without needing to keep
-            # its own separately-retained copy of `resolved` alive for
-            # the whole concept.
-            yield {
-                "type": "batch",
-                "events": batch_events,
-                "seed_ids": event_ids_set,
-            }
-            # batch_events, fused, result, chunk_arr all go out of scope
-            # here — nothing from this chunk is retained past this point.
+        for item in iter_year_concept_batches(
+            concept_name=concept_name,
+            concept=concept,
+            lookup=lookup,
+            indexes=indexes,
+            year=year,
+            top_n=top_n,
+            rrf_k=rrf_k,
+            oversample=oversample,
+            false_positives=false_positives,
+            resolved=resolved,
+            batch_size=batch_size,
+            token_counts=token_counts,
+            doc_counts=doc_counts,
+            window_counts=window_counts,
+        ):
+            yield item
 
         if year in evict_after_years and hasattr(indexes, "evict"):
             indexes.evict(year)

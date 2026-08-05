@@ -17,6 +17,11 @@ from tier2.analysis import (
     OVERSAMPLE,
     analyse_concept,
     run_tier2_core,
+    build_year_schedule,
+    build_eviction_schedule,
+    resolve_concept_positions,
+    iter_concept_batches,
+    iter_year_concept_batches,
 )
 from tier2.persistence import (
     SCHEMA,
@@ -40,6 +45,11 @@ __all__ = [
     "OVERSAMPLE",
     "analyse_concept",
     "run_tier2_core",
+    "build_year_schedule",
+    "build_eviction_schedule",
+    "resolve_concept_positions",
+    "iter_concept_batches",
+    "iter_year_concept_batches",
     "SCHEMA",
     "sqlite_connection",
     "initialise_database",

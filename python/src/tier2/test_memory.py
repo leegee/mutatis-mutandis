@@ -303,11 +303,12 @@ def test_chunking_bounds_search_batch_size(env):
 
 
 # ----------------------------------------------------------------------
-# 2. Each year's FAISS indices load at most once and get evicted
-#    exactly once, right after the batch's last user of that year.
+# 2. Year-major processing: each year's FAISS indices load at most once
+#    and are evicted before the next year is loaded. At most one year is
+#    ever resident.
 # ----------------------------------------------------------------------
 
-def test_eviction_schedule_loads_and_evicts_each_year_once(env):
+def test_year_major_loads_and_evicts_each_year_once(env):
     concepts_to_run = [
         ("KING", {"forms": ["king"]}),
         ("SMALL", {"forms": ["small"]}),
@@ -333,6 +334,22 @@ def test_eviction_schedule_loads_and_evicts_each_year_once(env):
         "FAISS indices are still resident in memory after the batch "
         "finished — eviction did not fire for every loaded year"
     )
+
+    # Stronger year-major invariant: eviction of year Y must happen
+    # before any load of a later year. Because loads append paths like
+    # "1640-l" and evicts append the year int, we can interleave the
+    # two logs by reconstructing order from the fact that service
+    # processes years in sorted order and evicts at the end of each.
+    # After a full run the resident set is empty; during the run the
+    # LazyYearIndices should never have held more than one year.
+    # We approximate by checking that search calls for year Y only
+    # appear while that year could still be loaded (i.e. before its
+    # eviction). Since we only have post-hoc logs, verify the search
+    # years are a subset of YEARS and that every searched year was
+    # also evicted.
+    searched_years = {y for y, _ in _SEARCH_CALLS}
+    assert searched_years == set(YEARS)
+    assert set(_EVICT_LOG) == set(YEARS)
 
 
 # ----------------------------------------------------------------------
@@ -380,63 +397,51 @@ def test_seed_events_never_mislabeled_as_neighbours(env):
 
 
 # ----------------------------------------------------------------------
-# 4. build_eviction_schedule must not retain every concept's full
-#    positions/event_ids for the duration of the batch — only a small
-#    per-concept set of years touched. This is the "processing multiple
-#    concepts at once" memory bug: an earlier version returned a
-#    resolved_by_concept dict holding each concept's whole matched-event
-#    payload simultaneously, for concepts that could be huge.
+# 4. build_year_schedule must not retain every concept's full
+#    positions/event_ids — only small year sets + the inverted
+#    year→concepts map. Full payloads are re-resolved on demand inside
+#    the year-major loop.
 # ----------------------------------------------------------------------
 
-def test_eviction_schedule_does_not_retain_full_concept_data(env):
-    from tier2.analysis import build_eviction_schedule
+def test_year_schedule_does_not_retain_full_concept_data(env):
+    from tier2.analysis import build_year_schedule
 
     concepts_to_run = [
         ("KING", {"forms": ["king"]}),
         ("SMALL", {"forms": ["small"]}),
     ]
 
-    years_by_concept, last_use = build_eviction_schedule(
+    years_by_concept, concepts_by_year = build_year_schedule(
         lookup=env["lookup"],
         concepts_to_run=concepts_to_run,
         false_positives=None,
     )
 
-    # The schedule should carry only the years each concept touches —
-    # a handful of ints per concept — never the underlying positions,
-    # event_ids, or per-year position lists (which for a large concept
-    # like KING would be tens of thousands of entries).
     for name, years in years_by_concept.items():
         assert isinstance(years, set)
         assert all(isinstance(y, int) for y in years)
         assert len(years) <= len(YEARS)
-
-    assert years_by_concept["KING"] == set(YEARS)
-    assert last_use == {y: 1 for y in YEARS}, (
-        "SMALL (index 1) also touches every year and runs after KING, "
-        "so it should be the last user of every year in this fixture"
-    )
-
-    # Nothing resembling a full per-concept payload should be reachable
-    # off the returned objects.
-    for name, years in years_by_concept.items():
         assert not hasattr(years, "keys"), (
             f"years_by_concept['{name}'] looks like a dict/mapping, not "
             f"a plain set of years — the schedule pass may be retaining "
-            f"more than it should again"
+            f"more than it should"
         )
+
+    assert years_by_concept["KING"] == set(YEARS)
+    assert set(concepts_by_year) == set(YEARS)
+    for year, pairs in concepts_by_year.items():
+        assert len(pairs) == 2  # both KING and SMALL touch every year
+        names = [n for n, _ in pairs]
+        assert names == ["KING", "SMALL"]
 
 
 def test_batch_writes_do_not_depend_on_a_retained_resolved_dict(env):
     """
-    Regression test for the specific fix in this turn: service() must
-    not need to keep a concept's `resolved` dict alive across its own
-    iter_concept_batches() call — each yielded batch carries its own
-    `seed_ids` reference, and iter_concept_batches recomputes positions
-    internally (resolved=None) rather than the caller pre-computing and
-    holding them for every concept in the batch up front.
+    Each yielded batch carries its own seed_ids; callers do not need a
+    separately retained resolved dict. Works for both the concept-major
+    helper and the year-major helper used by service().
     """
-    from tier2.analysis import iter_concept_batches
+    from tier2.analysis import iter_concept_batches, iter_year_concept_batches
 
     kinds_seen = []
     for item in iter_concept_batches(
@@ -446,18 +451,31 @@ def test_batch_writes_do_not_depend_on_a_retained_resolved_dict(env):
         indexes=env["indexes"],
         false_positives=None,
         batch_size=2000,
-        # resolved intentionally omitted (defaults to None)
     ):
         kinds_seen.append(item["type"])
         if item["type"] == "batch":
-            assert "seed_ids" in item, (
-                "batch items must carry their own seed_ids so callers "
-                "don't need to keep a separate resolved dict alive"
-            )
+            assert "seed_ids" in item
             assert isinstance(item["seed_ids"], set)
 
     assert "batch" in kinds_seen
     assert kinds_seen[-1] == "final"
+
+    # Year-major helper also carries seed_ids per batch.
+    n_batches = 0
+    for item in iter_year_concept_batches(
+        concept_name="KING",
+        concept={"forms": ["king"]},
+        lookup=env["lookup"],
+        indexes=env["indexes"],
+        year=YEARS[0],
+        false_positives=None,
+        batch_size=2000,
+    ):
+        assert item["type"] == "batch"
+        assert "seed_ids" in item
+        assert isinstance(item["seed_ids"], set)
+        n_batches += 1
+    assert n_batches >= 1
 
 
 if __name__ == "__main__":
