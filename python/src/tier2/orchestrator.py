@@ -251,7 +251,7 @@ def service(
         con.close()
 
     elapsed = time.perf_counter() - started
-    logger.info("[tier2.service] Done")
+    logger.info(f"[tier2.service] Done in {round(elapsed, 3)}")
     return {
         "generated": "tier2_concept_neighbours",
         "summary": {
