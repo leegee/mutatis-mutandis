@@ -32,14 +32,18 @@ from tier2.analysis import (
     K,
     RRF_K,
     OVERSAMPLE,
-    run_tier2_core,
+    BATCH_SIZE,
+    build_eviction_schedule,
+    iter_concept_batches,
 )
 from tier2.persistence import (
     initialise_database,
-    write_concept,
+    start_concept,
+    write_concept_batch,
+    finish_concept,
     enrich_documents,
 )
-from tier2.resources import load_indices
+from tier2.resources import LazyYearIndices
 
 
 def service(
@@ -54,12 +58,22 @@ def service(
     oversample: int = OVERSAMPLE,
     false_positives=None,
     emit=None,
+    batch_size: int = BATCH_SIZE,
+    commit_every_batch: bool = True,
 ):
     """
     Reusable entry point for long-lived processes (UI, FastAPI, etc.).
 
     Expects already-built lookup and FAISS indexes.
-    Calls core, then writes results to SQLite.
+
+    Streams each concept's analysis in bounded-size chunks, writing and
+    committing each chunk to SQLite as it's produced (see
+    tier2.analysis.iter_concept_batches). Peak memory stays roughly
+    proportional to `batch_size * top_n`, regardless of how many events
+    an individual concept matches or how many concepts are in the batch
+    — this matters because common words (KING, LAW, PARLIAMENT...) can
+    match hundreds of thousands of events in a large corpus, and would
+    otherwise dominate memory on their own, independent of batch size.
     """
     started = time.perf_counter()
     concept_names = [name for name, _ in concepts_to_run]
@@ -72,24 +86,100 @@ def service(
 
     con = initialise_database(db_path, clear=clear)
 
-    output = run_tier2_core(
+    # One cheap, FAISS-free pass over the whole batch: find out which
+    # publication years each concept touches, and the last concept in
+    # the run that needs each year. Deliberately lightweight — it does
+    # NOT retain each concept's positions/event_ids, only the small set
+    # of years each one touches (see build_eviction_schedule). This lets
+    # the loop below evict a year's FAISS indices the moment nothing
+    # left in the batch needs them, without holding every concept's
+    # full matched-event data in memory for the whole run.
+    years_by_concept, last_use = build_eviction_schedule(
         lookup=lookup,
-        indexes=indexes,
         concepts_to_run=concepts_to_run,
-        top_n=top_n,
-        rrf_k=rrf_k,
-        oversample=oversample,
         false_positives=false_positives,
-        emit=emit,
     )
 
-    logger.info("[tier2.service] Writing results")
+    processed = 0
     written = 0
-    for concept_name, data in output.items():
-        if data.get("empty"):
-            continue
-        write_concept(con, data, lookup)
-        written += 1
+    empty_concepts = []
+
+    for i, (concept_name, concept) in enumerate(concepts_to_run):
+        if emit:
+            emit("concept_start", {"concept": concept_name})
+
+        evict_after_years = {
+            year
+            for year in years_by_concept[concept_name]
+            if last_use.get(year) == i
+        }
+
+        start_concept(con, concept_name)
+
+        has_events = False
+        final_meta = None
+
+        # resolved=None (the default) — iter_concept_batches resolves
+        # this concept's positions/event_ids itself, on demand. It's a
+        # cheap, lookup-only recomputation (already done once, lightly,
+        # in build_eviction_schedule above), and keeping it scoped to
+        # a single concept at a time is the point: only one concept's
+        # matched-event data is ever alive in memory, not the whole
+        # batch's.
+        for item in iter_concept_batches(
+            concept_name=concept_name,
+            concept=concept,
+            lookup=lookup,
+            indexes=indexes,
+            top_n=top_n,
+            rrf_k=rrf_k,
+            oversample=oversample,
+            false_positives=false_positives,
+            batch_size=batch_size,
+            evict_after_years=evict_after_years,
+        ):
+            kind = item["type"]
+
+            if kind == "batch":
+                has_events = True
+                write_concept_batch(
+                    con,
+                    concept_name,
+                    lookup,
+                    item["events"],
+                    seed_ids=item["seed_ids"],
+                )
+                if commit_every_batch:
+                    con.commit()
+                # item["events"] (and everything it references) goes
+                # out of scope here — nothing from this chunk persists
+                # past this iteration.
+
+            elif kind == "final":
+                final_meta = item
+
+            elif kind == "empty":
+                pass
+
+        processed += 1
+
+        if has_events and final_meta is not None:
+            finish_concept(
+                con,
+                concept_name,
+                final_meta["forms"],
+                final_meta["n_events"],
+                final_meta["aggregate"],
+            )
+            con.commit()
+            written += 1
+        else:
+            empty_concepts.append(concept_name)
+
+        if emit:
+            emit("concept_done", {"concept": concept_name})
+
+    logger.info("[tier2.service] Enriching documents")
 
     # Enrich any newly-inserted document stubs
     try:
@@ -105,16 +195,15 @@ def service(
     con.close()
     elapsed = time.perf_counter() - started
 
-
     logger.info("[tier2.service] Done")
     return {
         "generated": "tier2_concept_neighbours",
         "summary": {
             "concepts_requested": len(concepts_to_run),
-            "concepts_processed": len(output),
+            "concepts_processed": processed,
             "concepts_written": written,
+            "concepts_empty": empty_concepts,
         },
-        "results": output,
         "elapsed_seconds": round(elapsed, 3),
     }
 
@@ -127,7 +216,7 @@ def main():
     parser.add_argument("-k", "--k", type=int, default=K)
     parser.add_argument("--rrf-k", type=int, default=RRF_K)
     parser.add_argument("--oversample", type=int, default=OVERSAMPLE)
-    parser.add_argument("-w", "--max-load-workers", type=int, default=6)
+    parser.add_argument("-w", "--max-load-workers", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=5000)
     parser.add_argument("-fp", "--false-positives", type=str, default=None)
     parser.add_argument("--json", default=None, help="Path at which to write JSON if required")
@@ -141,7 +230,13 @@ def main():
         zarr_path = ZARR_PATH
         db_path = CORPUS_TIER2_DB_PATH
 
-    # Discover & load FAISS indexes (resource construction lives here)
+    # Discover FAISS index paths, but don't load them yet.
+    #
+    # Indices are loaded lazily, per publication year, the first time a
+    # concept's events actually touch that year (see LazyYearIndices in
+    # tier2.resources). A single-concept or small-batch run then only
+    # pays the memory/IO cost for the years it needs, instead of every
+    # year present in the corpus.
     years = discover_index_years(args.mask)
     if not years:
         raise RuntimeError("No FAISS indices found")
@@ -150,7 +245,7 @@ def main():
         year: faiss_index_paths(masked=args.mask, year=year)
         for year in years
     }
-    indexes = load_indices(index_paths, workers=args.max_load_workers)
+    indexes = LazyYearIndices(index_paths, workers=args.max_load_workers)
 
     # Build the Zarr event lookup
     # Restrict forms only when a single concept is requested (keeps memory proportional)
@@ -190,7 +285,9 @@ def main():
         logger.info("[tier2.main] nothing to write — all concepts already processed")
         return
 
-    # Hand live resources to the service
+    # Hand live resources to the service. Per-year FAISS index eviction
+    # is now handled automatically inside service(), scheduled against
+    # the whole batch, so no per-run flag is needed here.
     output = service(
         lookup=lookup,
         indexes=indexes,

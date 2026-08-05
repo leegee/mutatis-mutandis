@@ -28,7 +28,7 @@ from tier2.persistence import (
     write_concept,
     enrich_documents,
 )
-from tier2.resources import load_indices
+from tier2.resources import load_indices, LazyYearIndices
 from tier2.orchestrator import (
     service,
     main,
@@ -49,6 +49,7 @@ __all__ = [
     "write_concept",
     "enrich_documents",
     "load_indices",
+    "LazyYearIndices",
     "service",
     "main",
 ]

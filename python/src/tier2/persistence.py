@@ -380,6 +380,18 @@ def write_concept(con, data, lookup):
         )
 
         for neighbour in event["neighbours"]:
+            # A neighbour that is itself one of this concept's seed
+            # events must stay marked 'seed', not get demoted to
+            # 'neighbour'. concept_field_events is keyed on
+            # (concept, event_id) with INSERT OR REPLACE, so without
+            # this check the final role for such an event would depend
+            # on write order rather than on what it actually is —
+            # entirely plausible with real semantic neighbours, where
+            # two seed events can easily rank as each other's nearest
+            # neighbours.
+            if neighbour["event_id"] in event_ids:
+                continue
+
             field_rows.append(
                 (
                     concept,
@@ -494,6 +506,287 @@ def write_concept(con, data, lookup):
     )
 
     aggregate = data["aggregate"]
+
+    for rank, (value, count) in enumerate(
+        aggregate["top_tokens"]
+    ):
+        con.execute(
+            """
+            INSERT INTO concept_aggregate (
+                concept,
+                kind,
+                rank,
+                value,
+                count
+            )
+            VALUES (?,?,?,?,?)
+            """,
+            (
+                concept,
+                "token",
+                rank,
+                value,
+                count,
+            ),
+        )
+
+    for rank, (value, count) in enumerate(
+        aggregate["top_docs"]
+    ):
+        con.execute(
+            """
+            INSERT INTO concept_aggregate (
+                concept,
+                kind,
+                rank,
+                value,
+                count
+            )
+            VALUES (?,?,?,?,?)
+            """,
+            (
+                concept,
+                "doc",
+                rank,
+                value,
+                count,
+            ),
+        )
+
+    for rank, ((doc_id, window_id), count) in enumerate(
+        aggregate["top_windows"]
+    ):
+        con.execute(
+            """
+            INSERT INTO concept_aggregate (
+                concept,
+                kind,
+                rank,
+                window_doc_id,
+                window_id,
+                count
+            )
+            VALUES (?,?,?,?,?,?)
+            """,
+            (
+                concept,
+                "window",
+                rank,
+                doc_id,
+                window_id,
+                count,
+            ),
+        )
+
+
+# --------------------------------------------------------------------
+# Streaming write path
+#
+# Mirrors write_concept above, but split into three calls so a caller
+# can write one bounded-size chunk of a concept's seed events at a
+# time (see tier2.analysis.iter_concept_batches), instead of building
+# the concept's whole events/neighbours payload before writing
+# anything. For concepts matching a small number of events this is
+# equivalent to write_concept; for concepts matching hundreds of
+# thousands of events (common words in a large corpus), it's the
+# difference between bounded and unbounded peak memory.
+# --------------------------------------------------------------------
+
+def start_concept(con, concept):
+    """
+    Clear out any prior materialisation of `concept` before writing a
+    fresh streamed run. Call once, before the first write_concept_batch
+    call for this concept.
+    """
+    delete_concept(con, concept)
+
+
+def write_concept_batch(con, concept, lookup, seed_events_batch, seed_ids=None):
+    """
+    Write one chunk of a concept's seed events (each already carrying
+    its resolved "neighbours" list) to SQLite. Safe to call repeatedly
+    for the same concept, and safe to commit after each call — nothing
+    here depends on a later batch.
+
+    `seed_ids` should be the *full* set of this concept's seed event
+    IDs (not just this batch's) — e.g. resolved["event_ids_set"] from
+    tier2.analysis.resolve_concept_positions. It's used to avoid ever
+    writing a 'neighbour' row for an event that is itself one of this
+    concept's seeds; without it, whether such an event ends up correctly
+    marked 'seed' or wrongly demoted to 'neighbour' would depend on
+    which batch happens to write last, since concept_field_events is
+    keyed on (concept, event_id) with INSERT OR REPLACE. If seed_ids
+    isn't supplied, this batch falls back to checking only against
+    seed_events_batch itself, which is not sufficient across batches.
+
+    Does not touch the concepts / concept_forms / concept_aggregate
+    tables; call finish_concept once, after the last batch, for those.
+    """
+    if not seed_events_batch:
+        return
+
+    event_ids = {
+        event["event_id"]
+        for event in seed_events_batch
+    }
+
+    known_seed_ids = seed_ids if seed_ids is not None else event_ids
+
+    doc_ids = {
+        event["doc_id"]
+        for event in seed_events_batch
+    }
+
+    ensure_events(con, lookup, event_ids)
+
+    neighbour_event_ids = {
+        neighbour["event_id"]
+        for event in seed_events_batch
+        for neighbour in event["neighbours"]
+    }
+
+    if neighbour_event_ids:
+        ensure_events(con, lookup, neighbour_event_ids)
+
+    # Documents belong to materialised Tier 2 events only.
+    ensure_documents(con, doc_ids)
+
+    field_rows = []
+
+    for event in seed_events_batch:
+        field_rows.append(
+            (
+                concept,
+                event["event_id"],
+                "seed",
+            )
+        )
+
+        for neighbour in event["neighbours"]:
+            # See docstring: never mark a concept's own seed event as
+            # a 'neighbour', regardless of which batch writes it last.
+            if neighbour["event_id"] in known_seed_ids:
+                continue
+
+            field_rows.append(
+                (
+                    concept,
+                    neighbour["event_id"],
+                    "neighbour",
+                )
+            )
+
+    con.executemany(
+        """
+        UPDATE events
+        SET
+            concept = ?,
+            vector_id = ?,
+            token = ?,
+            doc_id = ?,
+            pub_year = ?,
+            token_idx = ?,
+            window_id = ?,
+            window_token_pos = ?
+        WHERE event_id = ?
+        """,
+        [
+            (
+                concept,
+                event["vector_id"],
+                event["token"],
+                event["doc_id"],
+                event["pub_year"],
+                event["token_idx"],
+                event["window_id"],
+                event["window_token_pos"],
+                event["event_id"],
+            )
+            for event in seed_events_batch
+        ],
+    )
+
+    neighbour_rows = []
+
+    for event in seed_events_batch:
+        for neighbour in event["neighbours"]:
+            neighbour_rows.append(
+                (
+                    event["event_id"],
+                    neighbour["event_id"],
+                    neighbour["depth"],
+                    neighbour["via_event_id"],
+                    neighbour["score"],
+                    neighbour["score_local"],
+                    neighbour["score_medium"],
+                    neighbour["score_broad"],
+                )
+            )
+
+    con.executemany(
+        """
+        INSERT OR REPLACE INTO neighbours (
+            event_id,
+            neighbour_event_id,
+            depth,
+            via_event_id,
+            score,
+            score_local,
+            score_medium,
+            score_broad
+        )
+        VALUES (?,?,?,?,?,?,?,?)
+        """,
+        neighbour_rows,
+    )
+
+    con.executemany(
+        """
+        INSERT OR REPLACE INTO concept_field_events (
+            concept,
+            event_id,
+            role
+        )
+        VALUES (?,?,?)
+        """,
+        field_rows,
+    )
+
+
+def finish_concept(con, concept, forms, n_events, aggregate):
+    """
+    Write the summary rows for a concept — concepts, concept_forms,
+    concept_aggregate — once all of its batches have been written via
+    write_concept_batch. Call exactly once per concept, last.
+    """
+    con.execute(
+        """
+        INSERT INTO concepts (
+            concept,
+            n_events
+        )
+        VALUES (?,?)
+        """,
+        (
+            concept,
+            n_events,
+        ),
+    )
+
+    for form in forms or []:
+        con.execute(
+            """
+            INSERT INTO concept_forms (
+                concept,
+                form
+            )
+            VALUES (?,?)
+            """,
+            (
+                concept,
+                form,
+            ),
+        )
 
     for rank, (value, count) in enumerate(
         aggregate["top_tokens"]
