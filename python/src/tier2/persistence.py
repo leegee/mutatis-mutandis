@@ -916,6 +916,7 @@ def finish_concept(con, concept, forms, n_events, aggregate):
 PG_STAGE_SCHEMA = """
 CREATE SCHEMA IF NOT EXISTS tier2_stage;
 
+DROP TABLE IF EXISTS tier2_stage.concept_cluster_info CASCADE;
 DROP TABLE IF EXISTS tier2_stage.concept_aggregate CASCADE;
 DROP TABLE IF EXISTS tier2_stage.concept_forms CASCADE;
 DROP TABLE IF EXISTS tier2_stage.concepts CASCADE;
@@ -995,6 +996,26 @@ CREATE UNLOGGED TABLE tier2_stage.concept_aggregate (
     window_doc_id TEXT,
     window_id INTEGER,
     count INTEGER NOT NULL
+);
+
+CREATE UNLOGGED TABLE tier2_stage.concept_cluster_info (
+    concept TEXT NOT NULL,
+    cluster_id INTEGER NOT NULL,
+    cluster_label TEXT,
+    centroid_nx DOUBLE PRECISION,
+    centroid_ny DOUBLE PRECISION,
+    centroid_gnx DOUBLE PRECISION,
+    centroid_gny DOUBLE PRECISION,
+    centroid_vector BYTEA,
+    point_count INTEGER,
+    description TEXT,
+    llm_model TEXT,
+    llm_prompt TEXT,
+    llm_timestamp TEXT,
+    llm_sample_size INTEGER,
+    llm_sample_event_ids TEXT,
+    llm_concentration DOUBLE PRECISION,
+    PRIMARY KEY (concept, cluster_id)
 );
 """
 
@@ -1361,8 +1382,153 @@ def dump_pg_stage_to_sqlite(pg, sqlite_path, clear=True):
         "VALUES (?,?,?,?,?,?,?)",
     )
 
+
+    copy_table(
+        "SELECT concept, cluster_id, cluster_label, "
+        "centroid_nx, centroid_ny, centroid_gnx, centroid_gny, "
+        "centroid_vector, point_count, description, "
+        "llm_model, llm_prompt, llm_timestamp, llm_sample_size, "
+        "llm_sample_event_ids, llm_concentration "
+        "FROM tier2_stage.concept_cluster_info",
+        "INSERT OR REPLACE INTO concept_cluster_info ("
+        "concept, cluster_id, cluster_label, "
+        "centroid_nx, centroid_ny, centroid_gnx, centroid_gny, "
+        "centroid_vector, point_count, description, "
+        "llm_model, llm_prompt, llm_timestamp, llm_sample_size, "
+        "llm_sample_event_ids, llm_concentration) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    )
+
     create_indexes(con)
     restore_reader_pragmas(con)
     con.commit()
     con.close()
     logger.info(f"[tier2] SQLite dump complete → {sqlite_path}")
+
+
+# --------------------------------------------------------------------
+# Tier 3 read/write against the live Postgres stage
+#
+# Intended flow:
+#   Tier 2  -> UNLOGGED tier2_stage.*  (keep alive)
+#   Tier 3  -> read field events, write geometry + cluster_info in stage
+#   publish -> dump_pg_stage_to_sqlite() when the UI needs a file
+# --------------------------------------------------------------------
+
+
+def load_event_rows_pg(pg, concept):
+    """
+    Load the empirical semantic field for a concept from the PG stage.
+    Same contract as lib.cluster.load_event_rows (sqlite).
+    """
+    cur = _pg_execute(
+        pg,
+        """
+        SELECT e.event_id, e.vector_id
+        FROM tier2_stage.concept_field_events f
+        JOIN tier2_stage.events e ON e.event_id = f.event_id
+        WHERE f.concept = %s
+        ORDER BY e.event_id
+        """,
+        (concept,),
+    )
+    if hasattr(cur, "fetchall"):
+        return cur.fetchall()
+    return list(cur)
+
+
+def list_stage_concepts_pg(pg):
+    cur = _pg_execute(
+        pg,
+        "SELECT concept FROM tier2_stage.concepts ORDER BY concept",
+    )
+    rows = cur.fetchall() if hasattr(cur, "fetchall") else list(cur)
+    return [r[0] for r in rows]
+
+
+def write_geometry_pg(
+    pg,
+    event_ids,
+    local_coords,
+    global_coords,
+    clusters,
+):
+    rows = []
+    for idx, event_id in enumerate(event_ids):
+        rows.append((
+            float(local_coords[idx][0]),
+            float(local_coords[idx][1]),
+            float(global_coords[idx][0]),
+            float(global_coords[idx][1]),
+            int(clusters[idx]),
+            ("noise" if int(clusters[idx]) == -1 else None),
+            int(event_id),
+        ))
+    _pg_executemany(
+        pg,
+        """
+        UPDATE tier2_stage.events SET
+            nx = %s,
+            ny = %s,
+            gnx = %s,
+            gny = %s,
+            cluster_id = %s,
+            cluster_label = %s
+        WHERE event_id = %s
+        """,
+        rows,
+    )
+
+
+def write_cluster_info_pg(
+    pg,
+    concept,
+    vectors,
+    local_coords,
+    global_coords,
+    clusters,
+    vector_to_blob,
+):
+    """
+    Replace concept_cluster_info rows for `concept` in the PG stage.
+    `vector_to_blob` is injected to avoid a hard dep on lib.sqlite_vector_blob
+    from this module.
+    """
+    _pg_execute(
+        pg,
+        "DELETE FROM tier2_stage.concept_cluster_info WHERE concept = %s",
+        (concept,),
+    )
+
+    data = []
+    for cluster_id in sorted(set(int(x) for x in clusters)):
+        mask = (clusters == cluster_id)
+        if not mask.any():
+            continue
+        centroid_vector = vectors[mask].mean(axis=0).astype("float32")
+        data.append((
+            concept,
+            int(cluster_id),
+            "noise" if cluster_id == -1 else None,
+            float(local_coords[mask, 0].mean()),
+            float(local_coords[mask, 1].mean()),
+            float(global_coords[mask, 0].mean()),
+            float(global_coords[mask, 1].mean()),
+            vector_to_blob(centroid_vector),
+            int(mask.sum()),
+            None,  # description
+        ))
+
+    _pg_executemany(
+        pg,
+        """
+        INSERT INTO tier2_stage.concept_cluster_info (
+            concept, cluster_id, cluster_label,
+            centroid_nx, centroid_ny,
+            centroid_gnx, centroid_gny,
+            centroid_vector, point_count, description
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        data,
+    )

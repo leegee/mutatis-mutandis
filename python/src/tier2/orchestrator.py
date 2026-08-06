@@ -71,6 +71,7 @@ def service(
     batch_size: int = BATCH_SIZE,
     commit_every_batch: bool = True,
     stage_pg: bool = False,
+    publish_sqlite: bool = True,
 ):
     """
     Reusable entry point for long-lived processes (UI, FastAPI, etc.).
@@ -81,8 +82,10 @@ def service(
 
       stage_pg=False (default) — stream into SQLite (tables only, bulk
         PRAGMAs); create indexes at the end.
-      stage_pg=True — stream into Postgres UNLOGGED stage tables, then
-        dump to the SQLite artifact at db_path (same final schema).
+      stage_pg=True — stream into Postgres UNLOGGED stage tables.
+        publish_sqlite=True (default) also dumps to db_path when done.
+        publish_sqlite=False leaves the stage tables alive for Tier 3
+        (call dump_pg_stage_to_sqlite later to publish).
     """
     started = time.perf_counter()
     concept_names = [name for name, _ in concepts_to_run]
@@ -218,21 +221,34 @@ def service(
 
     if stage_pg:
         commit_fn()
-        dump_pg_stage_to_sqlite(pg, db_path, clear=clear)
-        logger.info("[tier2.service] Enriching documents")
-        try:
-            import sqlite3
-            sqlite_path = db_path if isinstance(db_path, (str, bytes)) else str(db_path)
-            sqlite_con = sqlite3.connect(sqlite_path)
+        if publish_sqlite:
+            dump_pg_stage_to_sqlite(pg, db_path, clear=clear)
+            logger.info("[tier2.service] Enriching documents")
             try:
-                enrich_documents(sqlite_con, pg)
-                sqlite_con.commit()
-            finally:
-                sqlite_con.close()
-        except Exception as exc:
-            logger.warning(f"[tier2] document enrichment skipped: {exc}")
-        if hasattr(pg, "close"):
-            pg.close()
+                import sqlite3
+                sqlite_path = (
+                    db_path if isinstance(db_path, (str, bytes)) else str(db_path)
+                )
+                sqlite_con = sqlite3.connect(sqlite_path)
+                try:
+                    enrich_documents(sqlite_con, pg)
+                    sqlite_con.commit()
+                finally:
+                    sqlite_con.close()
+            except Exception as exc:
+                logger.warning(f"[tier2] document enrichment skipped: {exc}")
+            if hasattr(pg, "close"):
+                pg.close()
+        else:
+            logger.info(
+                "[tier2.service] publish_sqlite=False — "
+                "leaving tier2_stage.* alive for Tier 3"
+            )
+            # Do not close pg: caller / process may keep using the stage.
+            # Connection still closed if we own a short-lived CLI run with
+            # no further work; CLI passes publish_sqlite explicitly.
+            if hasattr(pg, "close"):
+                pg.close()
     else:
         logger.info("[tier2.service] Enriching documents")
         try:
@@ -251,7 +267,7 @@ def service(
         con.close()
 
     elapsed = time.perf_counter() - started
-    logger.info(f"[tier2.service] Done in {round(elapsed, 3)}")
+    logger.info(f"[tier2.service] Done in {elapsed}")
     return {
         "generated": "tier2_concept_neighbours",
         "summary": {
@@ -260,6 +276,7 @@ def service(
             "concepts_written": written,
             "concepts_empty": empty_concepts,
             "stage_pg": stage_pg,
+            "publish_sqlite": publish_sqlite if stage_pg else False,
         },
         "elapsed_seconds": round(elapsed, 3),
     }
@@ -276,7 +293,9 @@ def main():
     parser.add_argument("-w", "--max-load-workers", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=5000)
     parser.add_argument("--stage-pg", action="store_true",
-                        help="Write via Postgres UNLOGGED stage, then dump SQLite")
+                        help="Write via Postgres UNLOGGED stage")
+    parser.add_argument("--no-publish-sqlite", action="store_true",
+                        help="With --stage-pg, leave stage tables alive (skip SQLite dump)")
     parser.add_argument("-fp", "--false-positives", type=str, default=None)
     parser.add_argument("--json", default=None, help="Path at which to write JSON if required")
     args = parser.parse_args()
@@ -359,6 +378,7 @@ def main():
         false_positives=target_fps,
         emit=None,
         stage_pg=args.stage_pg,
+        publish_sqlite=not args.no_publish_sqlite,
     )
 
 
