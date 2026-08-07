@@ -41,9 +41,9 @@ So: instead of corpus-wide embedding, we recursively probe system where semantic
             |
     Postgres (text + meta)
             |
-    Zarr (event log: contextual embeddings)
+    Zarr (event log: contextual embeddings)         TODO: Parquet
             |
-    FAISS (approximate semantic geometry index)
+    FAISS (approximate semantic geometry index)     TODO: Milvus
             |
     Query layer (token/window/hybrid encoding)
             |
@@ -51,81 +51,11 @@ So: instead of corpus-wide embedding, we recursively probe system where semantic
             |
     GUI (Solid, d3, CosmosGL, DeckGL)
 
-Currently experimenting with ensemble embeddings. Ideally would process  clauses, sentances and paragraphs, but MacBERTh is somewhat restricted and EEBO somewhat noisy, so that is not trivial.
+Currently experimenting with ensemble embeddings. Ideally would process clauses, sentances and paragraphs, but MacBERTh is somewhat restricted and EEBO somewhat noisy, so that is not trivial to use or create a sentence transformer.
 
-- Zarr store extended
-- New columns (event_type, span_*) populated
-- Backward compatibile
+## Dependencies
 
-## Architecture
-
-```mermaid
-flowchart TB
-
-classDef dark fill:#0d1117,stroke:#ffffff,color:#ffffff,stroke-width:1px;
-classDef store fill:#161b22,stroke:#ffffff,color:#ffffff,stroke-width:1px;
-classDef output fill:#1f2937,stroke:#ffffff,color:#ffffff,stroke-width:1px;
-
-subgraph L0["Corpus Layer"]
-PG[(EEBO-TCP Postgres Token Store)]
-end
-
-subgraph L1["Tier 1: Event Construction"]
-TF[Token Filtering]
-
-CS[Clause Segmentation]
-SS[Sentence Segmentation]
-PS[Paragraph Segmentation]
-
-MB[MacBERTh Contextual Encoder]
-EB[Event Builder event_id / concept_id]
-ZS[(Zarr Event Store Atomic Semantic Events)]
-end
-
-subgraph L2["Event Space Index"]
-FI[FAISS Index Event Embedding Space]
-end
-
-subgraph L3["Tier 2: Neighbourhood Analysis"]
-KR[kNN Retrieval]
-EG[Event Graph Construction]
-SA[Statistical Analysis Clustering Drift Entropy]
-end
-
-subgraph L4["Outputs"]
-CP[[Concept Profiles]]
-TD[[Temporal Drift Signals]]
-VI[[Visualisation Interface]]
-end
-
-PG --> TF
-
-TF --> CS
-TF --> SS
-TF --> PS
-
-CS --> MB
-SS --> MB
-PS --> MB
-
-MB --> EB --> ZS --> FI
-
-FI --> KR --> EG --> SA
-
-SA --> CP
-SA --> TD
-SA --> VIfp
-
-class PG,ZS,FI dark;
-class TF,CS,SS,PS,MB,EB,KR,EG,SA store;
-class CP,TD,VI output;
-```
-
-## Deps list
-
-    conda list --export > requirements.txt
-
-Moving to UV
+Managed by UV (`uv sync`) and bun (`bun install`)
 
 ## Colab Notebooks
 
@@ -133,7 +63,7 @@ Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/por
 
 Don't forget to restart the Colab session when the IP changes.
 
-(Colab workbooks is well out of date)
+(Colab workbooks are well out of date)
 
 ## Bibliography
 
@@ -154,17 +84,16 @@ Every tier has the folllowing:
 
 ## In Progress
 
-1. phrases
 1. extending API to tiers 3+
+1. enlgarging the corpus (streaming)
 
 ## To Do
 
 This work was originally based on EEBO but needs to include other datasources including ECCO which will require
 a new primary key to avoid collision on `doc_id`. I have tried adding a joint key with a new field, `corpus`,
-but it was horrendous. Might be easier to prepend a corpus ID to the doc_id and add a new field to maintain
-the actual doc ID. But then if this is to all be rewritten....
+so will leave that for the next total itteration.
 
-Ingestion should be batched and sharded by year across tiers 0 - 1 (XML to Postgres, Postgres to Zarr FS, Zarr FS to FAISS)
+Ingestion is batched and sharded by year across tiers 0 - 1 (XML to Postgres, Postgres to Zarr FS, Zarr FS to FAISS)
 
 1. T2 - resolve once
 1. Stage materialisation in PG then dump to SQLite
@@ -176,11 +105,6 @@ Ingestion should be batched and sharded by year across tiers 0 - 1 (XML to Postg
 1. Finish remote job execution
 1. api result paging
 1. tier 1 should adopt fsspec
-
-### DB
-
-- Tidy MV `pamphlet_tokens` and use a join rather than cutting corners
-- Tidy schema and put it in its own file!
 
 ### EEBO-TCP Language Composition
 
