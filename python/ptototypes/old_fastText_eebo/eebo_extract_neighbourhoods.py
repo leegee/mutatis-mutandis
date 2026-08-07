@@ -3,7 +3,7 @@
 import sys
 import fasttext
 
-import eebo_config as config
+import corpus_config as config
 import corpus_db
 
 def load_wordlist(path):

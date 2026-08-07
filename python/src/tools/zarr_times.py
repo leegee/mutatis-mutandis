@@ -4,7 +4,7 @@
 from pathlib import Path
 from datetime import datetime
 
-from lib.eebo_config import ZARR_PATH
+from lib.corpus_config import ZARR_PATH
 
 
 def field_mtime(field_dir: Path):

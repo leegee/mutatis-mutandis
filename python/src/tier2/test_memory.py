@@ -107,15 +107,15 @@ def _install_lib_stubs(load_calls, evict_log, search_calls):
     db_mod.get_connection = get_connection
     sys.modules["lib.corpus_db"] = db_mod
 
-    # --- lib.eebo_config ---
-    cfg_mod = types.ModuleType("lib.eebo_config")
+    # --- lib.corpus_config ---
+    cfg_mod = types.ModuleType("lib.corpus_config")
     cfg_mod.CORPUS_TIER2_DB_PATH = None
     cfg_mod.CORPUS_TIER2_MASKED_DB_PATH = None
     cfg_mod.ZARR_PATH = None
     cfg_mod.MASKED_ZARR_PATH = None
     cfg_mod.faiss_index_paths = lambda **k: {}
     cfg_mod.discover_index_years = lambda *a, **k: []
-    sys.modules["lib.eebo_config"] = cfg_mod
+    sys.modules["lib.corpus_config"] = cfg_mod
 
     # --- lib.zarr_event_lookup ---
     zarr_mod = types.ModuleType("lib.zarr_event_lookup")

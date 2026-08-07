@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from lib.eebo_config import CORPUS_TIER2_DB_PATH
+from lib.corpus_config import CORPUS_TIER2_DB_PATH
 from lib.corpus_db import get_connection
 
 

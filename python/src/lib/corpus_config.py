@@ -1,4 +1,4 @@
-# lib/eebo_config.py
+# lib/corpus_config.py
 
 from pathlib import Path
 from typing import TypedDict, Set, Dict
@@ -26,7 +26,8 @@ MIN_TOKENS_IN_DOC = 200
 MAX_TOKENS_IN_DOC = 350000 # takes > 24 hours on my PC
 
 # Could use env var
-OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
+# OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
+OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else Path("j:/corpus-out")
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

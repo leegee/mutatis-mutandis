@@ -2,7 +2,7 @@
 """
 recreate_views.py
 
-Drop + recreate the materialized views (so new eebo_config values
+Drop + recreate the materialized views (so new corpus_config values
 are baked into the view definitions), then rebuild the associated
 indexes.  Underlying documents / tokens tables are never touched.
 """
@@ -17,7 +17,7 @@ from lib.corpus_logging import logger
 
 
 def main() -> None:
-    logger.info("Rebuilding materialized views with current eebo_config values")
+    logger.info("Rebuilding materialized views with current corpus_config values")
 
     with get_connection(application_name="eebo-rebuild-views") as conn:
         # Drops existing MVs (CASCADE) and recreates them with the

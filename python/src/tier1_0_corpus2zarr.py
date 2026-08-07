@@ -128,7 +128,7 @@ import xxhash
 
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
+from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS

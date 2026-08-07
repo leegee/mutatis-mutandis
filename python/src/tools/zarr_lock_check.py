@@ -2,7 +2,7 @@
 """check_locks.py — see if anything currently holds handles into the stale fields."""
 
 from pathlib import Path
-from lib.eebo_config import ZARR_PATH
+from lib.corpus_config import ZARR_PATH
 
 for name in ("corpus", "emb_raw"):
     d = Path(ZARR_PATH) / "events" / name

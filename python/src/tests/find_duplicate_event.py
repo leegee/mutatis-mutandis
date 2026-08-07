@@ -5,7 +5,7 @@ than once in the Tier1 Zarr store, and with what pub_year values."""
 import zarr
 import numpy as np
 
-from lib.eebo_config import ZARR_PATH
+from lib.corpus_config import ZARR_PATH
 from lib.zarr_store_dirs import store_dirs
 
 TARGET_EVENT_ID = 6172490477035448692

@@ -14,7 +14,7 @@ import numpy as np
 import zarr
 
 from lib.corpus_logging import logger
-from lib.eebo_config import ZARR_PATH
+from lib.corpus_config import ZARR_PATH
 
 PLACEHOLDER = "unknown"
 

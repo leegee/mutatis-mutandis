@@ -1,4 +1,4 @@
-from lib.eebo_config import ZARR_PATH, faiss_index_paths
+from lib.corpus_config import ZARR_PATH, faiss_index_paths
 from lib.zarr_event_stream import ZarrEventStream
 from lib.eebo_faiss import EeboFaissIndex
 import numpy as np

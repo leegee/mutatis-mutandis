@@ -1,6 +1,6 @@
 
 from lib.zarr_event_stream import ZarrEventStream
-from lib.eebo_config import ZARR_PATH
+from lib.corpus_config import ZARR_PATH
 import numpy as np
 
 stream = ZarrEventStream(str(ZARR_PATH))

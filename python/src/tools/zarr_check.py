@@ -2,7 +2,7 @@
 import argparse
 import zarr
 
-from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH
+from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH
 from lib.zarr_store_dirs import store_dirs
 
 
