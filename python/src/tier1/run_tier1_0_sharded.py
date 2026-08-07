@@ -20,7 +20,7 @@ from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, LOG_DIR
 from lib.corpus_logging import logger
 from tier1_0_corpus2zarr import clear_output_dir
 
-T1_PATH = "src/tier1_0_corpus2zarr.py"
+T1_PATH = "src/tier1/tier1_0_corpus2zarr.py"
 
 def main():
     p = argparse.ArgumentParser()
