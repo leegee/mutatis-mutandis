@@ -22,7 +22,7 @@ from typing import Counter as CounterType
 
 import psycopg
 
-import eebo_db
+import corpus_db
 import eebo_config as config
 
 
@@ -262,7 +262,7 @@ def summarise_absorption(rows) -> None:
 
 
 def main() -> None:
-    conn = eebo_db.dbh
+    conn = corpus_db.dbh
 
     populate_minimal_spelling_map(conn)
 

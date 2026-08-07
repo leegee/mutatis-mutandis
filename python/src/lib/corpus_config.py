@@ -1,4 +1,4 @@
-# lib/corpus_config.py
+# lib/eebo_config.py
 
 from pathlib import Path
 from typing import TypedDict, Set, Dict
@@ -22,8 +22,8 @@ except ModuleNotFoundError:
 # It would be good to have some large docs (A91273)
 # but complete Bibles maybe oveor-balance the index?
 MIN_TOKENS_IN_DOC = 200
-# MAX_TOKENS_IN_DOC = 350000 takes > 24 hours on my PC
-MAX_TOKENS_IN_DOC = 20000
+# MAX_TOKENS_IN_DOC = 20000 # safe
+MAX_TOKENS_IN_DOC = 350000 # takes > 24 hours on my PC
 
 # Could use env var
 OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
@@ -70,7 +70,7 @@ FAISS_TIER1_INDEX_MASKED = FAISS_INDEX_DIR / "tier1-masked.index"
 
 FAISS_SCALES = ("local", "medium", "broad")
 
-# TODO Move to lib
+# TODO Move
 def faiss_index_paths(masked: bool, year: int | None = None) -> dict[str, Path]:
     """
     e.g. faiss_index_paths(masked=True)         -> tier1_local_masked.faiss
@@ -86,8 +86,7 @@ def faiss_index_paths(masked: bool, year: int | None = None) -> dict[str, Path]:
         for scale in FAISS_SCALES
     }
 
-
-# TODO Move to lib
+# TODO Move
 def discover_index_years(masked: bool) -> list[int]:
     """
     Find which years already have on-disk FAISS indices, by globbing for
@@ -110,40 +109,13 @@ def discover_index_years(masked: bool) -> list[int]:
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
-EMBED_BATCH_SIZE = 512
+EMBED_BATCH_SIZE = 256
 
 TOP_K = 30
 
-CORPUS_MIN_YEAR = 1000
-CORPUS_MAX_YEAR = 1800
+CORPUS_MIN_YEAR = 1625 # 1600
+CORPUS_MAX_YEAR = 1689 # 1800
 
-# These are no longer used.
-OLD_SLICES = [
-    (1625, 1629),
-    (1630, 1634),
-    (1635, 1639),
-    (1640, 1640),
-    (1641, 1641),
-    (1642, 1642),
-    (1643, 1643),
-    (1644, 1644),
-    (1645, 1645),
-    (1646, 1646),
-    (1647, 1647),
-    (1648, 1648),
-    (1649, 1649),
-    (1650, 1650),
-    (1651, 1651),
-    (1652, 1654),
-    (1655, 1657),
-    (1658, 1660),
-    (1661, 1664),
-    (1665, 1669),
-    (1670, 1674),
-    (1675, 1679),
-    (1680, 1684),
-    (1685, 1689),
-]
 
 """
 Canonical normalisation configuration.
@@ -152,15 +124,18 @@ CONCEPT_SETS is now the SINGLE source of truth.
 
 - dict keys: canonical heads (theory-driven)
 - dict values:
-    - allowed_variants: forms that may be normalised *to* this head
+    - allowed_variants: forms that may be normalised to this head
     - false_positives: forms that must never be normalised to this head, even if
       they are close in spelling or embedding space.
 
-For FT, normalisation is restricted to orthographic- and boundary-level variation characteristic
+For FastText, normalisation is restricted to orthographic- and boundary-level variation characteristic
 of early modern print and OCR, including the collapse of whitespace between function words
 and lexical heads (eg `ofjustice`). These forms are treated as recoverable tokenisation
 artefacts rather than distinct lexical items. Semantic distinctions between canonical
 concepts are preserved through explicit constraints, positive and negative, on allowable mappings.
+
+Since dropping FastText, most of the forms are discoverable from the keys. Eventually this will be
+a mere seed table and new terms will come from interactive search.
 
 """
 class CanonicalRule(TypedDict):

@@ -34,7 +34,7 @@ from lib.concept_resolve import resolve_concepts
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.corpus_logging import logger
 from lib.sqlite_vector_blob import vector_to_blob
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.cluster import (
     LOCAL_UMAP_PARAMS,
     load_event_rows,

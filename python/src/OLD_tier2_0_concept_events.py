@@ -53,7 +53,7 @@ from lib.eebo_faiss import (
     multiscale_search,
 )
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.corpus_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts

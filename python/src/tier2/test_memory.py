@@ -98,14 +98,14 @@ def _install_lib_stubs(load_calls, evict_log, search_calls):
     log_mod.setEmit = setEmit
     sys.modules["lib.corpus_logging"] = log_mod
 
-    # --- lib.eebo_db (Postgres) ---
-    db_mod = types.ModuleType("lib.eebo_db")
+    # --- lib.corpus_db (Postgres) ---
+    db_mod = types.ModuleType("lib.corpus_db")
 
     def get_connection():
         raise RuntimeError("no postgres available in test")
 
     db_mod.get_connection = get_connection
-    sys.modules["lib.eebo_db"] = db_mod
+    sys.modules["lib.corpus_db"] = db_mod
 
     # --- lib.eebo_config ---
     cfg_mod = types.ModuleType("lib.eebo_config")

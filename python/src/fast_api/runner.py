@@ -4,7 +4,7 @@ from __future__ import annotations
 import traceback
 
 from lib.corpus_logging import setEmit, EmitFn
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
 from fast_api.jobs_dao import ( update_stage, mark_done, mark_error, )
 from fast_api.event_bus import job_streams

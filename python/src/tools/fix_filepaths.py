@@ -4,7 +4,7 @@ from pathlib import Path
 import xml.etree.ElementTree as etree
 
 import lib.eebo_config as config
-import lib.eebo_db as eebo_db
+import lib.corpus_db as corpus_db
 
 
 def extract_doc_id(xml_path: Path) -> str | None:
@@ -39,7 +39,7 @@ def main():
 
     print(f"Prepared {len(updates)} updates")
 
-    with eebo_db.get_connection() as conn:
+    with corpus_db.get_connection() as conn:
         cur = conn.cursor()
 
         for filepath, doc_id in updates:

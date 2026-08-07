@@ -57,7 +57,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.eebo_config import CORPUS_TIER2_DB_PATH
 

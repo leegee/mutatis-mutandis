@@ -15,11 +15,20 @@ from psycopg import sql, Connection
 import time
 
 from lib.corpus_logging import logger
-import lib.corpus_config as config
+import lib.eebo_config as config
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
-dbname = os.environ.get("PGDATABASE", "eebo")
+
+# dbname = os.environ.get("PGDATABASE", "eebo")
+dbname = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
+if not dbname:
+    raise RuntimeError("Database name must be set via CORPUS_PGDATABASE or PGDATABASE")
+
+host = os.environ.get("PGHOST", "localhost")
+user = os.environ.get("PGUSER", "postgres")
+password = os.environ.get("PGPASSWORD")
+port = os.environ.get("PGPORT", 5432)
 host = os.environ.get("PGHOST", "localhost")
 user = os.environ.get("PGUSER", "postgres")
 password = os.environ.get("PGPASSWORD")
@@ -133,7 +142,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
             if drop_existing:
                 logger.info("Dropping existing tables")
                 cur.execute("""
-                    DROP MATERIALIZED VIEW IF EXISTS document_search CASCADE;
+                    -- DROP MATERIALIZED VIEW IF EXISTS document_search CASCADE;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
 
@@ -144,12 +153,16 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 """)
 
             logger.info("Creating tables")
+            # Prototype assumption: doc_id is globally unique across loaded corpora (EEBO/ECCO).
+            # Introducing a joint corpus/doc_id PK introduced too much work for consumers so
+            # was rolled back and kept in git history.
+            # Revisit if additional corpora introduce collisions.
             cur.execute("""
                 /* Core document metadata */
                 CREATE TABLE documents (
                     corpus TEXT NOT NULL,
-                    doc_id TEXT,
-                    filepath TEXT,
+                    doc_id TEXT NOT NULL,
+                    filepath TEXT NOT NULL,
                     title TEXT,
                     author TEXT,
                     pub_year INTEGER,
@@ -158,7 +171,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     source_date_raw TEXT,
                     token_count INTEGER,
                     lang CHAR(3) NOT NULL DEFAULT 'eng',
-                    PRIMARY KEY (corpus, doc_id)
+                    PRIMARY KEY (doc_id)
                 );
 
                 CREATE SEQUENCE vector_id_seq;
@@ -170,8 +183,8 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     raw_token text,
                     canonical TEXT,
                     vector_id BIGINT UNIQUE DEFAULT nextval('vector_id_seq'),
-                    PRIMARY KEY (corpus, doc_id, token_idx),
-                    FOREIGN KEY (corpus, doc_id) REFERENCES documents(corpus, doc_id) ON DELETE CASCADE
+                    PRIMARY KEY ( doc_id, token_idx),
+                    FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
                 );
             """)
 
@@ -198,17 +211,16 @@ def create_token_indexes(conn: Connection) -> None:
     logger.info("Creating basic token indexes")
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc ON tokens(corpus, doc_id);")
-            cur.execute("CREATE INDEX idx_tokens_token_lower ON tokens (lower(token));")
-            cur.execute("CREATE INDEX idx_documents_lang ON documents(lang);")
-            cur.execute("CREATE INDEX idx_documents_filepath ON documents(filepath);")
-            # TODO Try this:
-            cur.execute("CREATE INDEX pamphlet_tokens_doc_shard_idx ON pamphlet_tokens ( abs(hashtext(corpus || ':' || doc_id)), corpus, doc_id, token_idx );")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token            ON tokens(token);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc              ON tokens(doc_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token_lower      ON tokens (lower(token));")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_lang          ON documents(lang);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filepath      ON documents(filepath);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical        ON tokens(canonical);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filter        ON documents(lang, pub_year, token_count);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_corpus_doc_idx   ON tokens(corpus, doc_id, token_idx);")
 
     logger.info("Basic token indexes created")
-
-
 
 
 def create_views(conn: Connection) -> None:
@@ -220,12 +232,12 @@ def create_views(conn: Connection) -> None:
     # Create non-concurrent indexes and materialized views inside a transaction
     with conn.transaction():
         with conn.cursor() as cur:
-            # Index for canonical tokens
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical ON tokens(canonical);")
-
             # Materialized view for pamphlet_corpus
             logger.info("Creating materialised view pamphlet_corpus")
+
+            # Just in case I previously messed-up - TODO check and tidy.
             cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;")
+
             cur.execute(f"""
                 CREATE MATERIALIZED VIEW pamphlet_corpus AS
                 SELECT *
@@ -233,20 +245,20 @@ def create_views(conn: Connection) -> None:
                 WHERE token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
                 AND pub_year >= {earliest}
                 AND pub_year <= {latest}
-                -- AND title !~* '(tragedy|comedy|farce|interlude|play)'
+                AND title !~* '(tragedy|comedy|farce|interlude|play)'
                 AND lang = 'eng';
             """)
 
             # Index for fast joins (non-concurrent)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(corpus, doc_id);")
 
-            # Materialized view for pamphlet_tokens -- we should replace hashtext with xxhash64 in the Python
+            # Materialized view for pamphlet_tokens
             logger.info("Creating materialised view pamphlet_tokens")
             cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;")
             cur.execute("""
                 CREATE MATERIALIZED VIEW pamphlet_tokens AS
                 SELECT
-                    hashtext(t.corpus || '_' || t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
+                    (t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
                     t.corpus,
                     t.doc_id,
                     t.token_idx,
@@ -255,62 +267,60 @@ def create_views(conn: Connection) -> None:
                     t.token,
                     t.canonical
                 FROM tokens t
-                JOIN pamphlet_corpus d ON t.corpus = d.corpus AND t.doc_id = d.doc_id;
+                JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
             """)
 
             # Materialized view for document_search
-            logger.info("Creating materialised view document_search")
-            cur.execute("""
-                CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
-                WITH numbered_tokens AS (
-                    SELECT
-                        t.corpus,
-                        t.doc_id,
-                        t.token,
-                        t.token_idx,
-                        (row_number() OVER (PARTITION BY t.corpus, t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
-                    FROM tokens t
-                    JOIN pamphlet_corpus pc ON t.corpus = pc.corpus AND pc.doc_id = t.doc_id
-                ),
-                block_text AS (
-                    SELECT
-                        corpus,
-                        doc_id,
-                        block_idx,
-                        string_agg(token, ' ') AS text
-                    FROM numbered_tokens
-                    GROUP BY corpus, doc_id, block_idx
-                )
-                SELECT
-                    d.corpus,
-                    d.doc_id,
-                    d.title,
-                    d.author,
-                    d.pub_year,
-                    d.pub_place,
-                    d.publisher,
-                    bt.block_idx,
-                    bt.text,
-                    to_tsvector('english', bt.text) AS tsv
-                FROM pamphlet_corpus d
-                JOIN block_text bt ON bt.corpus = d.corpus AND bt.doc_id = d.doc_id;
-            """)
+            # logger.info("Creating materialised view document_search")
+            # cur.execute("""
+            #     CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
+            #     WITH numbered_tokens AS (
+            #         SELECT
+            #             t.corpus,
+            #             t.doc_id,
+            #             t.token,
+            #             t.token_idx,
+            #             (row_number() OVER (PARTITION BY t.corpus, t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
+            #         FROM tokens t
+            #         JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
+            #     ),
+            #     block_text AS (
+            #         SELECT
+            #             corpus,
+            #             doc_id,
+            #             block_idx,
+            #             string_agg(token, ' ') AS text
+            #         FROM numbered_tokens
+            #         GROUP BY corpus, doc_id, block_idx
+            #     )
+            #     SELECT
+            #         d.corpus,
+            #         d.doc_id,
+            #         d.title,
+            #         d.author,
+            #         d.pub_year,
+            #         d.pub_place,
+            #         d.publisher,
+            #         bt.block_idx,
+            #         bt.text,
+            #         to_tsvector('english', bt.text) AS tsv
+            #     FROM pamphlet_corpus d
+            #     JOIN block_text bt ON bt.doc_id = d.doc_id;
+            # """)
 
 
 def create_tiered_token_indexes(conn: Connection) -> None:
-    logger.info("Creating tiered token indexes")
-
-    earliest = config.CORPUS_MIN_YEAR
-    latest   = config.CORPUS_MAX_YEAR
-
+    # logger.info("Creating tiered token indexes")
+    # earliest = config.CORPUS_MIN_YEAR
+    # latest   = config.CORPUS_MAX_YEAR
     # Create non-concurrent indexes and materialized views inside a transaction
-    with conn.transaction():
-        with conn.cursor() as cur:
-            # GIN index can stay in transaction
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
-
-    logger.info("create_tiered_token_indexes complete")
+    # with conn.transaction():
+    #     with conn.cursor() as cur:
+    #         # GIN index can stay in transaction
+    #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
+    #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
+    # logger.info("create_tiered_token_indexes complete")
+    logger.info("create_tiered_token_indexes = noop")
 
 
 def create_concurrent_indexes():
@@ -340,7 +350,10 @@ def refresh_views(conn: Connection) -> None:
 
     with conn.transaction():
         with conn.cursor() as cur:
-            for view in ["pamphlet_tokens", "pamphlet_corpus", "document_search"]:
+            for view in [
+                "pamphlet_tokens", "pamphlet_corpus",
+                # "document_search"
+            ]:
                 logger.info(f"Refreshing {view}")
                 cur.execute(
                     sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) )

@@ -22,7 +22,7 @@ from lib.eebo_config import (
     faiss_index_paths,
     discover_index_years,
 )
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.corpus_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts

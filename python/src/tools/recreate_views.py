@@ -7,7 +7,7 @@ are baked into the view definitions), then rebuild the associated
 indexes.  Underlying documents / tokens tables are never touched.
 """
 
-from lib.eebo_db import (
+from lib.corpus_db import (
     get_connection,
     create_views,
     create_tiered_token_indexes,

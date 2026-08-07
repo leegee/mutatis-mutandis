@@ -13,7 +13,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from lib.eebo_db import get_connection
+from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 
 # SQLite schema
