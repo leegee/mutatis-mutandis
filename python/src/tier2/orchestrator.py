@@ -24,7 +24,7 @@ from lib.eebo_config import (
 )
 from lib.eebo_db import get_connection
 from lib.zarr_event_lookup import ZarrEventLookup
-from lib.eebo_logging import logger, setEmit
+from lib.corpus_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
 from lib.get_processed_concepts import get_processed_concepts
 

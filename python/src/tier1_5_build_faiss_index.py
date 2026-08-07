@@ -71,7 +71,7 @@ import time
 import numpy as np
 
 from lib.eebo_config import ZARR_PATH, MASKED_ZARR_PATH, faiss_index_paths
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 from lib.zarr_event_stream import ZarrEventStream
 

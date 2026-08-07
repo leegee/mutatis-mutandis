@@ -1,4 +1,4 @@
-# eebo_logging.py
+# corpus_logging.py
 
 import json
 import logging

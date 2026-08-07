@@ -5,7 +5,7 @@ from typing import List, Optional
 from uuid import uuid4
 
 from fast_api.jobs_dao import create_job   # adjust import if needed
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 router = APIRouter(prefix="/topic", tags=["topics"])
 

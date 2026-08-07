@@ -13,7 +13,7 @@ from collections import Counter
 import numpy as np
 
 from lib.eebo_faiss import multiscale_search
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 K = 60
 RRF_K = 60

@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from lib.eebo_faiss import EeboFaissIndex
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 
 class LazyYearIndices(Mapping):

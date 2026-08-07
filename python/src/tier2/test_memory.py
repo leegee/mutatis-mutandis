@@ -79,8 +79,8 @@ def _install_lib_stubs(load_calls, evict_log, search_calls):
     faiss_mod.multiscale_search = fake_multiscale_search
     sys.modules["lib.eebo_faiss"] = faiss_mod
 
-    # --- lib.eebo_logging ---
-    log_mod = types.ModuleType("lib.eebo_logging")
+    # --- lib.corpus_logging ---
+    log_mod = types.ModuleType("lib.corpus_logging")
 
     class FakeLogger:
         def info(self, *a, **k):
@@ -96,7 +96,7 @@ def _install_lib_stubs(load_calls, evict_log, search_calls):
         return fake_logger
 
     log_mod.setEmit = setEmit
-    sys.modules["lib.eebo_logging"] = log_mod
+    sys.modules["lib.corpus_logging"] = log_mod
 
     # --- lib.eebo_db (Postgres) ---
     db_mod = types.ModuleType("lib.eebo_db")

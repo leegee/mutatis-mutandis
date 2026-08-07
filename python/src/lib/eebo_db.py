@@ -14,7 +14,7 @@ import psycopg
 from psycopg import sql, Connection
 import time
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 import lib.eebo_config as config
 
 _DB_RETRIES = 3
@@ -142,7 +142,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
             if drop_existing:
                 logger.info("Dropping existing tables")
                 cur.execute("""
-                    DROP MATERIALIZED VIEW IF EXISTS document_search CASCADE;
+                    -- DROP MATERIALIZED VIEW IF EXISTS document_search CASCADE;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
 
@@ -245,7 +245,7 @@ def create_views(conn: Connection) -> None:
                 WHERE token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
                 AND pub_year >= {earliest}
                 AND pub_year <= {latest}
-                -- AND title !~* '(tragedy|comedy|farce|interlude|play)'
+                AND title !~* '(tragedy|comedy|farce|interlude|play)'
                 AND lang = 'eng';
             """)
 
@@ -271,58 +271,56 @@ def create_views(conn: Connection) -> None:
             """)
 
             # Materialized view for document_search
-            logger.info("Creating materialised view document_search")
-            cur.execute("""
-                CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
-                WITH numbered_tokens AS (
-                    SELECT
-                        t.corpus,
-                        t.doc_id,
-                        t.token,
-                        t.token_idx,
-                        (row_number() OVER (PARTITION BY t.corpus, t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
-                    FROM tokens t
-                    JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
-                ),
-                block_text AS (
-                    SELECT
-                        corpus,
-                        doc_id,
-                        block_idx,
-                        string_agg(token, ' ') AS text
-                    FROM numbered_tokens
-                    GROUP BY corpus, doc_id, block_idx
-                )
-                SELECT
-                    d.corpus,
-                    d.doc_id,
-                    d.title,
-                    d.author,
-                    d.pub_year,
-                    d.pub_place,
-                    d.publisher,
-                    bt.block_idx,
-                    bt.text,
-                    to_tsvector('english', bt.text) AS tsv
-                FROM pamphlet_corpus d
-                JOIN block_text bt ON bt.doc_id = d.doc_id;
-            """)
+            # logger.info("Creating materialised view document_search")
+            # cur.execute("""
+            #     CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
+            #     WITH numbered_tokens AS (
+            #         SELECT
+            #             t.corpus,
+            #             t.doc_id,
+            #             t.token,
+            #             t.token_idx,
+            #             (row_number() OVER (PARTITION BY t.corpus, t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
+            #         FROM tokens t
+            #         JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
+            #     ),
+            #     block_text AS (
+            #         SELECT
+            #             corpus,
+            #             doc_id,
+            #             block_idx,
+            #             string_agg(token, ' ') AS text
+            #         FROM numbered_tokens
+            #         GROUP BY corpus, doc_id, block_idx
+            #     )
+            #     SELECT
+            #         d.corpus,
+            #         d.doc_id,
+            #         d.title,
+            #         d.author,
+            #         d.pub_year,
+            #         d.pub_place,
+            #         d.publisher,
+            #         bt.block_idx,
+            #         bt.text,
+            #         to_tsvector('english', bt.text) AS tsv
+            #     FROM pamphlet_corpus d
+            #     JOIN block_text bt ON bt.doc_id = d.doc_id;
+            # """)
 
 
 def create_tiered_token_indexes(conn: Connection) -> None:
-    logger.info("Creating tiered token indexes")
-
-    earliest = config.CORPUS_MIN_YEAR
-    latest   = config.CORPUS_MAX_YEAR
-
+    # logger.info("Creating tiered token indexes")
+    # earliest = config.CORPUS_MIN_YEAR
+    # latest   = config.CORPUS_MAX_YEAR
     # Create non-concurrent indexes and materialized views inside a transaction
-    with conn.transaction():
-        with conn.cursor() as cur:
-            # GIN index can stay in transaction
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
-
-    logger.info("create_tiered_token_indexes complete")
+    # with conn.transaction():
+    #     with conn.cursor() as cur:
+    #         # GIN index can stay in transaction
+    #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
+    #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
+    # logger.info("create_tiered_token_indexes complete")
+    logger.info("create_tiered_token_indexes = noop")
 
 
 def create_concurrent_indexes():
@@ -352,7 +350,10 @@ def refresh_views(conn: Connection) -> None:
 
     with conn.transaction():
         with conn.cursor() as cur:
-            for view in ["pamphlet_tokens", "pamphlet_corpus", "document_search"]:
+            for view in [
+                "pamphlet_tokens", "pamphlet_corpus",
+                # "document_search"
+            ]:
                 logger.info(f"Refreshing {view}")
                 cur.execute(
                     sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) )

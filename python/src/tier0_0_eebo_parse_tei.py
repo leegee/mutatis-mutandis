@@ -26,7 +26,7 @@ import langdetect
 import lib.eebo_config as config
 import lib.eebo_db as eebo_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 NUM_WORKERS = 4
 BATCH_DOCS = 100

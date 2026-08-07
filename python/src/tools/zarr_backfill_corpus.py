@@ -13,7 +13,7 @@ real rebuild or a proper vector_id-based join instead.
 import numpy as np
 import zarr
 
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.eebo_config import ZARR_PATH
 
 PLACEHOLDER = "unknown"

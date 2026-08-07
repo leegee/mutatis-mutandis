@@ -72,7 +72,7 @@ import networkx as nx
 
 from lib.eebo_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 from lib.get_processed_concepts import get_processed_concepts
 
 OUTPUT_DIR = GUI_PUBLIC_DIR / 'lineage'

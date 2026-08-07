@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 
 from lib.eebo_db import get_connection
-from lib.eebo_logging import logger
+from lib.corpus_logging import logger
 
 # SQLite schema
 #
