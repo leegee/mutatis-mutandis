@@ -194,7 +194,8 @@ class ZarrEventLookup:
 
     @property
     def shape(self):
-        return (len(self._lookup.event_id), self._dim)
+        self._require_index()
+        return (len(self.event_id), self.emb_local._dim)
 
 
     @property
@@ -208,7 +209,7 @@ class ZarrEventLookup:
 
 
     def __len__(self):
-        return len(self._lookup.event_id)
+        return len(self.event_id)
 
 
     def _build(self):
@@ -369,13 +370,6 @@ class ZarrEventLookup:
         """
         pos = self._pos[int(event_id)]
         return self._row_to_dict(pos)
-
-
-    def get_event(self, event_id: int) -> dict:
-        pos = self._pos[int(event_id)]
-        d = self._row_to_dict(pos)
-        d["embedding"] = self.get_ensemble_embedding(pos)
-        return d
 
 
     def get_event(self, event_id: int) -> dict:
