@@ -20,8 +20,8 @@ import lib.corpus_config as config
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
 
-# dbname = os.environ.get("PGDATABASE", "eebo")
-dbname = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
+dbname = os.environ.get("PGDATABASE", "eebo_parq")
+# dbname = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
 if not dbname:
     raise RuntimeError("Database name must be set via CORPUS_PGDATABASE or PGDATABASE")
 
