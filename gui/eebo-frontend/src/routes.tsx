@@ -67,13 +67,13 @@ export const routes = [
       </div>
     )
   },
-  {
-    path: "/fdg/:token_idx?",
-    icon: "orbit",
-    label: "FDG",
-    component: FDG,
-    help: () => <div>Force-directed graph exploration view.</div>
-  },
+  // {
+  //   path: "/fdg/:token_idx?",
+  //   icon: "orbit",
+  //   label: "FDG",
+  //   component: FDG,
+  //   help: () => <div>Force-directed graph exploration view.</div>
+  // },
   {
     path: "/table",
     icon: "tenancy",
@@ -95,12 +95,12 @@ export const routes = [
     component: Map,
     help: () => { },
   },
-  {
-    path: "/Jobs",
-    icon: "api",
-    label: "Job Admin",
-    component: JobsApiComponent,
-    help: () => <div>Temporal evolution of concepts.</div>
-  }
+  // {
+  //   path: "/Jobs",
+  //   icon: "api",
+  //   label: "Job Admin",
+  //   component: JobsApiComponent,
+  //   help: () => <div>Temporal evolution of concepts.</div>
+  // }
 
 ] as RouteType[];
