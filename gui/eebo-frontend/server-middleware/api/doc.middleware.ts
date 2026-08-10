@@ -12,12 +12,7 @@ export function createDocumentMiddleware(
     const docId = match[1];
 
     try {
-      const result = await pool.query(
-        `
-                SELECT *
-                FROM documents
-                WHERE doc_id = $1
-                `,
+      const result = await pool.query("SELECT * FROM documents WHERE doc_id = $1",
         [docId],
       );
 

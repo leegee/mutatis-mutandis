@@ -1,3 +1,5 @@
+/* NB TODO Remove hard-coded paths */
+
 import type { Connect } from "vite";
 import path from "path";
 import fs from "fs";
@@ -10,11 +12,12 @@ export function createStaticMiddleware(
     if (!req.url) return next();
 
     const match = req.url.match(/^\/(json|xml)\/(.+)$/);
+    console.log('[state.middleware]', req.url, match)
     if (!match) return next();
 
     const [, type, rawPath] = match;
 
-    const dir = type === "json" ? "out" : "eebo_all";
+    const dir = type === "json" ? "out" : "corpus/";
     const relativePath = decodeURIComponent(rawPath).replace(/^\/+/, "");
     const filePath = path.resolve(rootDir, dir, relativePath);
     const rootPath = path.resolve(rootDir);

@@ -11,7 +11,7 @@ CORPUS_INPUT_DIRS = {
     "ecco": XML_ROOT_DIR / "ecco_all",
 }
 
-ECCO_HEADER_DIR = Path( "s:/src/pamphlets/corpus/ecco_all/ecco/headers" )
+ECCO_HEADER_DIR = XML_ROOT_DIR / "/ecco_all/ecco/headers"
 
 try:
     import google.colab  # noqa: F401
