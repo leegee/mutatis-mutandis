@@ -2,7 +2,10 @@
 
 import json
 import logging
+from logging.handlers import TimedRotatingFileHandler
+
 from typing import Any, Callable
+from lib.corpus_config import LOG_DIR
 
 EmitFn = Callable[[str, str], None]
 
@@ -14,6 +17,16 @@ if logger.level == logging.NOTSET:
 
 if not logger.handlers:
     _h = logging.StreamHandler()
+    _h.setLevel(logging.DEBUG)
+    logger.addHandler(_h)
+
+    _h = TimedRotatingFileHandler(
+        LOG_DIR / "corpus.log",
+        when="midnight",
+        interval=1,
+        backupCount=30,
+        encoding="utf-8",
+    )
     _h.setLevel(logging.DEBUG)
     logger.addHandler(_h)
 
