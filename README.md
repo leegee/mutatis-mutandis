@@ -87,7 +87,7 @@ Every tier has the folllowing:
 1. extending API to tiers 3+
 1. enlgarging the corpus (streaming)
 
-## To Do
+## TODO
 
 This work was originally based on EEBO but needs to include other datasources including ECCO which will require
 a new primary key to avoid collision on `doc_id`. I have tried adding a joint key with a new field, `corpus`,
@@ -95,14 +95,16 @@ so will leave that for the next total itteration.
 
 Ingestion is batched and sharded by year across tiers 0 - 1 (XML to Postgres, Postgres to Zarr FS, Zarr FS to FAISS)
 
+1. Record which of the ensemble embeddings was used (and embedder)
+1. update ZarrEventLookup to stream/yield (partly done, superseded by Parquet)
+1. Replace Zarr with Parquet (partly done on branch)
 1. T2 - resolve once
-1. Stage materialisation in PG then dump to SQLite
-1. migrate the materialisation SQLite to PG
+1. Stage materialisation in PG then dump to SQLite (partly done)
+1. migrate the materialisation SQLite to PG (partly done)
 1. metrics
-1. update ZarrEventLookup to stream/yield
 1. expose tier 2's analytics
 1. run tier 1's 'masked' path in the Cloud
-1. Finish remote job execution
+1. finalise remote job execution (T3, T4)
 1. api result paging
 1. tier 1 should adopt fsspec
 
