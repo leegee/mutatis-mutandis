@@ -8,7 +8,6 @@
 import { For, Show, type Component } from "solid-js";
 
 interface DocEntry {
-  corpus: string;
   docId: string;
   year?: number;
   token_idx: number;
@@ -17,12 +16,8 @@ interface DocEntry {
 interface Props {
   docs: () => DocEntry[];
   focusToken: () => string | null;
-  // Was missing corpus -- doc_id alone can't identify a document
-  // (documents' PK is the composite (corpus, doc_id)), which meant
-  // isActive below could highlight the wrong row if two corpora happened
-  // to share a doc_id.
-  rightPanelEvent: () => { corpus: string; doc_id: string; token_idx: number } | null;
-  onSelectDoc: (corpus: string, docId: string, tokenIdx: number) => void;
+  rightPanelEvent: () => { doc_id: string; token_idx: number } | null;
+  onSelectDoc: (docId: string, tokenIdx: number) => void;
 }
 
 const DocumentPanel: Component<Props> = (props) => (
@@ -43,11 +38,8 @@ const DocumentPanel: Component<Props> = (props) => (
     >
       <div class="small-padding">
         <For each={props.docs()}>
-          {({ corpus, docId, year, token_idx }) => {
-            const isActive = () => {
-              const rp = props.rightPanelEvent();
-              return rp?.doc_id === docId && rp?.corpus === corpus;
-            };
+          {({ docId, year, token_idx }) => {
+            const isActive = () => props.rightPanelEvent()?.doc_id === docId;
 
             return (
               <button
@@ -58,7 +50,7 @@ const DocumentPanel: Component<Props> = (props) => (
                   width: "calc(100% - 0.5rem)",
                   cursor: "pointer",
                 }}
-                onClick={() => props.onSelectDoc(corpus, docId, token_idx)}
+                onClick={() => props.onSelectDoc(docId, token_idx)}
               >
                 <span style={{
                   "font-family": "'IBM Plex Mono', monospace",

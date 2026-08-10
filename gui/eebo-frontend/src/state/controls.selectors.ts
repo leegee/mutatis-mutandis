@@ -75,51 +75,21 @@ interface YearBucket {
 }
 
 export async function getYearBuckets(
-  concept?: string | string[],
+  concept?: string,
 ): Promise<YearBucket[]> {
-  const concepts = concept
-    ? Array.isArray(concept)
-      ? concept
-      : [concept]
-    : controls.conceptSelection;
+  const c = concept ?? controls.conceptSelection[0];
+  if (!c) return [];
 
-  if (concepts.length === 0) return [];
+  const [[minYear, maxYear], tally] = await Promise.all([
+    DYNAMIC_YEAR_BOUNDS ? getYearBounds(c) : [CORPUS_START_YEAR, CORPUS_END_YEAR],
+    queryYearCounts(c),
+  ]);
 
-  const results = await Promise.all(
-    concepts.map(async (c) => {
-      const [[minYear, maxYear], tally] = await Promise.all([
-        DYNAMIC_YEAR_BOUNDS
-          ? getYearBounds(c)
-          : [CORPUS_START_YEAR, CORPUS_END_YEAR],
-        queryYearCounts(c),
-      ]);
-
-      const buckets: YearBucket[] = [];
-      for (let year = minYear; year <= maxYear; year++) {
-        buckets.push({
-          year,
-          count: tally.get(year) ?? 0,
-        });
-      }
-
-      return buckets;
-    }),
-  );
-
-  const merged = new Map<number, number>();
-
-  for (const buckets of results) {
-    for (const bucket of buckets) {
-      merged.set(
-        bucket.year,
-        (merged.get(bucket.year) ?? 0) + bucket.count,
-      );
-    }
+  const buckets: YearBucket[] = [];
+  for (let year = minYear; year <= maxYear; year++) {
+    buckets.push({ year, count: tally.get(year) ?? 0 });
   }
-
-  return Array.from(merged.entries())
-    .map(([year, count]) => ({ year, count }))
-    .sort((a, b) => a.year - b.year);
+  return buckets;
 }
 
 

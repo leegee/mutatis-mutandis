@@ -1,5 +1,4 @@
 export interface SqliteNeighbour {
-  corpus: string;
   event_id: string;
   vector_id: string;
   token: string;
@@ -13,7 +12,6 @@ export interface SqliteNeighbour {
 
 export interface SqliteEvent {
   concept?: string;
-  corpus: string;
   doc_id: string;
   event_id: string; // The integers are too large for JS?
   pub_year: number;

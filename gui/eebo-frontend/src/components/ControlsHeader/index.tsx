@@ -24,7 +24,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
   return (
     <>
-      <nav class="toolbar no-round no-margin no-padding max">
+      <nav class="toolbar no-round no-margin no-padding">
         <div class="field suffix border middle-align">
           <Show when={conceptsList().length > 0}>
             <Show when={props.multiConcept} fallback={<SingleConceptSelect />}>
@@ -66,9 +66,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
 
         <Show when={!props.noYearTimeline}>
           <hr class="divider vertical max no-margin no-padding" />
-          <span style="flex:1">
-            <YearTimeline tooltipPosition="bottom" />
-          </span>
+          <YearTimeline tooltipPosition="bottom" />
         </Show>
 
 

@@ -1,7 +1,6 @@
 import { createResource } from "solid-js";
 
 export type WindowQueryOld = {
-  corpus: string;
   docId: string;
   tokenIdx: number;
 };
@@ -13,7 +12,6 @@ export type WindowQueryEventId = {
 export type WindowQuery = WindowQueryEventId | WindowQueryOld;
 
 export type TextWindowItem = {
-  corpus: string;
   docId: string;
   tokenIdx: number;
   content: string;
@@ -36,8 +34,7 @@ export async function fetchWindowBatch(
   queries: WindowQuery[]
 ) {
   const body = JSON.stringify({ queries });
-
-  // console.trace("[tokenWindowBatchApi]", body);
+  // console.debug("[tokenWindowBatchApi]", body);
 
   const res = await fetch(`/api/window/batch`, {
     method: "POST",

@@ -1,22 +1,8 @@
 .year-timeilne {
     gap: 0;
-    display: flex;
-    flex: 0 1 50vw;
-    max-width: 50vw;
-    min-width: 0;
-
-    .years {
-        display: flex;
-        flex: 1 1 auto;
-        min-width: 0;
-        height: 100%;
-        align-items: stretch;
-        justify-content: space-between;
-    }
 
     button.year {
-        flex: 1;
-        min-width: 0;
+        width: 12px;
         height: 100%;
         display: flex;
         align-items: flex-end;
@@ -27,12 +13,14 @@
         .year-data {
             width: 8px;
             border-radius: 0;
+
         }
 
         &:hover {
             background-color: var(--on-primary) !important;
         }
     }
+
 }
 
 #giant-year-range {

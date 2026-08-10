@@ -23,7 +23,7 @@ except ModuleNotFoundError:
 # but complete Bibles maybe oveor-balance the index?
 MIN_TOKENS_IN_DOC = 200
 # MAX_TOKENS_IN_DOC = 20000 # safe
-MAX_TOKENS_IN_DOC = 350000 # takes > 24 hours on my PC
+MAX_TOKENS_IN_DOC = 20000 # takes > 24 hours on my PC
 
 # Could use env var
 # OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"

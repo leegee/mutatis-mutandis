@@ -13,7 +13,7 @@ interface YearTimelineProps {
 
 export const YearTimeline: Component<YearTimelineProps> = (props) => {
   const [yearBucketsResource] = createResource(
-    () => controls.conceptSelection,
+    () => controls.conceptSelection[0],
     (concept) => getYearBuckets(concept),
   );
 
@@ -61,7 +61,6 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
         break;
 
       case "Enter":
-      case "a":
         e.preventDefault();
         A.setAllYears();
         break;
@@ -87,69 +86,72 @@ export const YearTimeline: Component<YearTimelineProps> = (props) => {
           </span>
         </button>
 
-        <div class="years">
-          <For each={yearBucketsResource()}>
-            {(bucket) => {
-              const selected = () => isSelected(bucket.year);
-              const height = () => Math.max(4, Math.round((bucket.count / maxCount()) * 100));
+        <For each={yearBucketsResource()}>
+          {(bucket) => {
+            const selected = () => isSelected(bucket.year);
 
-              return (
-                <button class={`year no-border no-padding transparent ${ selected() ? "tertiary-container" : ""
-                  }`}
-                  onClick={(e) => { // todo: move
-                    if (e.shiftKey) {
-                      if (selected()) {
-                        if (controls.yearMode === "single") {
-                          // no-op: can't shrink a single year
-                        } else if (bucket.year === controls.fromYear) {
-                          A.setSingleYear(controls.toYear);
-                        } else if (bucket.year === controls.toYear) {
-                          A.setSingleYear(controls.fromYear);
-                        } else {
-                          // Interior year: trim toward the nearer end
-                          const distFrom = bucket.year - controls.fromYear;
-                          const distTo = controls.toYear - bucket.year;
-                          if (distFrom <= distTo) {
-                            A.setRange(bucket.year + 1, controls.toYear);
-                          } else {
-                            A.setRange(controls.fromYear, bucket.year - 1);
-                          }
-                        }
+            const height = () =>
+              Math.max(
+                4,
+                Math.round((bucket.count / maxCount()) * 100)
+              );
+
+            return (
+              <button class={`year no-border no-padding transparent ${ selected() ? "tertiary-container" : ""
+                }`}
+                onClick={(e) => {
+                  if (e.shiftKey) {
+                    if (selected()) {
+                      if (controls.yearMode === "single") {
+                        // no-op — can't shrink a single year
+                      } else if (bucket.year === controls.fromYear) {
+                        A.setSingleYear(controls.toYear);
+                      } else if (bucket.year === controls.toYear) {
+                        A.setSingleYear(controls.fromYear);
                       } else {
-                        // Extend to include this year
-                        A.setRange(
-                          Math.min(controls.fromYear, bucket.year),
-                          Math.max(controls.toYear, bucket.year),
-                        );
+                        // Interior year: trim toward the nearer end
+                        const distFrom = bucket.year - controls.fromYear;
+                        const distTo = controls.toYear - bucket.year;
+                        if (distFrom <= distTo) {
+                          A.setRange(bucket.year + 1, controls.toYear);
+                        } else {
+                          A.setRange(controls.fromYear, bucket.year - 1);
+                        }
                       }
                     } else {
-                      A.setSingleYear(bucket.year);
+                      // Extend to include this year
+                      A.setRange(
+                        Math.min(controls.fromYear, bucket.year),
+                        Math.max(controls.toYear, bucket.year),
+                      );
                     }
-                  }}
-                >
-                  <div class="year-data" style={{
-                    height: `${ height() }%`,
-                    opacity: bucket.count === 0 ? 0.15 : 1,
-                    background:
-                      bucket.count === 0
-                        ? "var(--outline)"
-                        : selected()
-                          ? "var(--primary)"
-                          : "var(--secondary)",
-                  }}
-                  />
-                  <div class={`tooltip max ${ props.tooltipPosition || 'top' }`}>
-                    <span class="bold">{bucket.year} </span>
-                    {" "}&mdash;{" "}
-                    {bucket.count} events
-                    <br /><br />
-                    Hold <kbd>SHIFT</kbd> and click to select a range.
-                  </div>
-                </button>
-              );
-            }}
-          </For>
-        </div>
+                  } else {
+                    A.setSingleYear(bucket.year);
+                  }
+                }}
+              >
+                <div class="year-data" style={{
+                  height: `${ height() }%`,
+                  opacity: bucket.count === 0 ? 0.15 : 1,
+                  background:
+                    bucket.count === 0
+                      ? "var(--outline)"
+                      : selected()
+                        ? "var(--primary)"
+                        : "var(--secondary)",
+                }}
+                />
+                <div class={`tooltip max ${ props.tooltipPosition || 'top' }`}>
+                  <span class="bold">{bucket.year} </span>
+                  {" "}&mdash;{" "}
+                  {bucket.count} events
+                  <br /><br />
+                  Hold <kbd>SHIFT</kbd> and click to select a range.
+                </div>
+              </button>
+            );
+          }}
+        </For>
 
         <button class="circle chip tiny no-border" onClick={() => A.stepYear(1)} disabled={controls.fromYear !== controls.toYear}>
           <i>chevron_right</i>

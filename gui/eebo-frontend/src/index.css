@@ -112,10 +112,6 @@ mark {
   flex-direction: column;
 }
 
-td.number {
-  text-align: right;
-}
-
 .fade-in-1s {
   opacity: 0;
   animation: fadeIn 1s ease-in-out forwards;

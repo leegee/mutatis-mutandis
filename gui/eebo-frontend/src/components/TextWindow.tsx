@@ -9,7 +9,6 @@ type TextWindowProps =
         style?: string;
     }
     | {
-        corpus: string;
         doc_id: string;
         token_idx: number;
         style?: string;
@@ -32,7 +31,6 @@ export default function TextWindow(props: TextWindowProps) {
             const cached = cache[key];
             if (cached) return cached;
 
-            let corpus: string | null = null;
             let docId: string | null = null;
             let tokenIdx: number | null = null;
             let cacheKey = key;
@@ -44,19 +42,16 @@ export default function TextWindow(props: TextWindowProps) {
                     return null;
                 }
 
-                corpus = event.corpus;
                 docId = event.doc_id;
                 tokenIdx = event.token_idx;
                 cacheKey = event.event_id;
             } else {
-                corpus = props.corpus;
                 docId = props.doc_id;
                 tokenIdx = props.token_idx;
             }
 
             const res = await fetchWindowBatch([
                 {
-                    corpus,
                     docId,
                     tokenIdx,
                 },

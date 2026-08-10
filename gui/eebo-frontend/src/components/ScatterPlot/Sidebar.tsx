@@ -3,8 +3,8 @@ import { controls } from "../../state/controls.store";
 import { queryEventById } from "../../services/db";
 import { controlsActions } from "../../state/controls.actions";
 
-async function fetchWindow(corpus: string, docId: string, tokenIdx: number) {
-    const res = await fetch(`/api/window/${ corpus }/${ docId }/${ tokenIdx }`);
+async function fetchWindow(docId: string, tokenIdx: number) {
+    const res = await fetch(`/api/window/${ docId }/${ tokenIdx }`);
     if (!res.ok) throw new Error("Failed to load window");
     return res.text();
 }
@@ -19,7 +19,7 @@ export default function Sidebar() {
         event,
         (e) => {
             if (!e?.doc_id || e.token_idx == null) return null;
-            return fetchWindow(e.corpus, e.doc_id, e.token_idx);
+            return fetchWindow(e.doc_id, e.token_idx);
         }
     );
 

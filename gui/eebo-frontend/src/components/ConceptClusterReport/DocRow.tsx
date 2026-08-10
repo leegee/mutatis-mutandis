@@ -8,7 +8,6 @@ import './DocRow.css';
 
 interface Props {
     rank: number;
-    corpus: string;
     doc_id: string;
     title: string | null;
     author: string | null;
@@ -17,7 +16,6 @@ interface Props {
 
     exemplars: {
         event_id: string;
-        corpus: string;
         doc_id: string;
         token_idx: number;
     }[];
@@ -38,7 +36,6 @@ export default function DocRow(props: Props) {
                 const batch = toFetch.map(e => ({
                     eventId: e.event_id,
                     docId: e.doc_id,
-                    corpus: e.corpus,
                     tokenIdx: e.token_idx,
                 }));
 
@@ -73,7 +70,7 @@ export default function DocRow(props: Props) {
                 <td>{props.rank}</td>
                 <td>{props.count.toLocaleString()}</td>
                 <td>
-                    <a class="link" onClick={() => showDocument(props.corpus, props.doc_id)}>
+                    <a class="link" onClick={() => showDocument(props.doc_id)}>
                         {props.doc_id}
                     </a>
                 </td>

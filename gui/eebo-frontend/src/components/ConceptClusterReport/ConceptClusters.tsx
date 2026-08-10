@@ -1,7 +1,7 @@
 import { createSignal, createMemo, Show, For, createResource, createEffect } from "solid-js";
-
 import { controls } from "../../state/controls.store";
 import ControlsHeader from "../ControlsHeader";
+
 import { loadClusterReport } from "./loadClusterReport";
 import DocRow from "./DocRow";
 import ClusterExport from "./ClusterExport";
@@ -21,13 +21,6 @@ function clusterFetchParams() {
         toYear: controls.toYear,
         authorMatch: controls.authorMatch,
     };
-}
-
-// docMeta / docExemplars are keyed by `${corpus}:${doc_id}`, not doc_id
-// alone -- a cluster can be backed by events from more than one corpus, and
-// doc_id isn't unique on its own (documents' PK is (corpus, doc_id)).
-function docKey(doc_id: string, corpus: string) {
-    return `${ corpus }:${ doc_id }`;
 }
 
 export default function ConceptClusters() {
@@ -85,9 +78,8 @@ export default function ConceptClusters() {
         const map: Record<string, typeof rows> = {};
 
         for (const r of rows) {
-            const key = docKey(r.doc_id, r.corpus);
-            if (!map[key]) map[key] = [];
-            map[key].push(r);
+            if (!map[r.doc_id]) map[r.doc_id] = [];
+            map[r.doc_id].push(r);
         }
 
         return map;
@@ -215,17 +207,16 @@ export default function ConceptClusters() {
                                         </thead>
                                         <tbody>
                                             <For each={c().topDocs}>
-                                                {([doc_id, corpus], i) => (
+                                                {([doc_id], i) => (
                                                     <DocRow
                                                         rank={i() + 1}
                                                         doc_id={doc_id}
-                                                        corpus={corpus}
-                                                        count={clusterExemplarsByDoc()?.[docKey(doc_id, corpus)]?.length ?? 0}
-                                                        author={clusterReport()?.docMeta[docKey(doc_id, corpus)]?.author ?? null}
-                                                        pub_year={clusterReport()?.docMeta[docKey(doc_id, corpus)]?.pub_year ?? null}
-                                                        title={clusterReport()?.docMeta[docKey(doc_id, corpus)]?.title ?? null}
+                                                        count={clusterExemplarsByDoc()?.[doc_id].length}
+                                                        author={clusterReport()?.docMeta[doc_id]?.author ?? null}
+                                                        pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
+                                                        title={clusterReport()?.docMeta[doc_id]?.title ?? null}
                                                         exemplars={
-                                                            controls.showExemplars ? clusterExemplarsByDoc()?.[docKey(doc_id, corpus)] ?? [] : []
+                                                            controls.showExemplars ? clusterExemplarsByDoc()?.[doc_id] ?? [] : []
                                                         }
                                                     />
                                                 )}

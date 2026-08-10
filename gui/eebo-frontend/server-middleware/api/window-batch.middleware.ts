@@ -7,14 +7,16 @@
  *
  * {
  *  "queries": [
- *     { "corpus": "eebo", "docId": "a", "tokenIdx": 12 },
+ *     { "docId": "a", "tokenIdx": 12 },
+ *     { "docId": "a", "tokenIdx": 88 },
+ *     { "docId": "b", "tokenIdx": 5 }
  *   ]
  * }
  *
  * OUT:
  * {
  *  "results": [
- *    {"corpus": "eebo",  "docId": "A", "tokenIdx": 12, "content": "...", token: "T" },
+ *    { "docId": "A", "tokenIdx": 12, "content": "...", token: "T" },
  *  ]
  * }
  */
@@ -25,7 +27,6 @@ import { serverError, text } from "../lib/response";
 const TOKEN_WINDOW_HALF = 10;
 
 type QueryItem = {
-  corpus: string;
   docId: string;
   tokenIdx: number;
 };
@@ -39,7 +40,6 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
     if (req.method !== "POST") return next();
     if (!req.url || req.url !== "/api/window/batch") return next();
 
-
     try {
       const body = await new Promise<string>((resolve, reject) => {
         let data = "";
@@ -49,14 +49,12 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
       });
 
       const parsed = JSON.parse(body);
-      // console.log(req.url, body);
 
       if (!parsed || !Array.isArray(parsed.queries)) {
         throw new TypeError("queries must be an array");
       }
 
       const queries: QueryItem[] = parsed.queries.map((q: any) => ({
-        corpus: String(q.corpus),
         docId: String(q.docId),
         tokenIdx: Number(q.tokenIdx),
       }));
@@ -77,7 +75,6 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
 
       // per-doc batch query
       for (const [docId, items] of grouped.entries()) {
-        const corpus = items[0].corpus;
         const tokenIds = items.map(i => i.tokenIdx);
 
         const min = Math.min(...tokenIds) - TOKEN_WINDOW_HALF;
@@ -87,12 +84,11 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
           `
           SELECT token, token_idx
           FROM pamphlet_tokens
-          WHERE corpus = $1
-            AND doc_id = $2
-            AND token_idx BETWEEN $3 AND $4
+          WHERE doc_id = $1
+            AND token_idx BETWEEN $2 AND $3
           ORDER BY token_idx
           `,
-          [corpus, docId, min, max],
+          [docId, min, max],
         );
 
         // slice out each item's own window and mark only its own token
@@ -110,7 +106,6 @@ export function createWindowBatchMiddleware(pool: Pool): Connect.NextHandleFunct
             .join(" ");
 
           results.push({
-            corpus,
             docId,
             tokenIdx: item.tokenIdx,
             content: format(content),
