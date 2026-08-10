@@ -131,7 +131,7 @@ def leiden_cluster( vectors, resolution_parameter=0.8, n_neighbors=15 ):
     edges = build_knn_graph( vectors, n_neighbors=n_neighbors )
 
     graph = ig.Graph(
-        n=len(vectors),      # explicit vertex count, no longer inferred from edges
+        n=len(vectors),      # explicit vertex count, not inferred from possibly absent edges
         edges=edges,
         directed=False,
     )
