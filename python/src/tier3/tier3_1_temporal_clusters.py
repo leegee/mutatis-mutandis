@@ -807,14 +807,14 @@ def main():
 
     parser.add_argument( "-c", "--concept", default=None, )
     parser.add_argument("-t", "--similarity-threshold", type=float, default=0.85)
-    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help="Leiden resolution parameter (default: 0.8)", )
-    parser.add_argument( "-n", "--neighbors", type=int, default=15, help="kNN graph neighbours (default: 15)", )
+    parser.add_argument( "-r", "--resolution", type=float, default=0.4, help="Leiden resolution parameter (default: 0.4)", )
+    parser.add_argument( "-n", "--neighbors", type=int, default=50, help="kNN graph neighbours (default: 50)", )
     parser.add_argument( "--mask", action="store_true", )
     parser.add_argument( "--clear", action="store_true", help="Delete all temporal cluster output before processing.", )
     parser.add_argument( "--workers", type=int, default=1, help="Number of concepts to process in parallel", )
 
     args = parser.parse_args()
-    logger.info( "[tier3.1] options: %s", vars(args) )
+    logger.info( "[tier3.1] Running with options: %s", vars(args) )
 
     lookup = ZarrEventLookup( ZARR_PATH )
 
