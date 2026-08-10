@@ -9,6 +9,7 @@ STOPWORDS = {
     "they", "them", "their",
     "thy", "thine",
     "thou", "thee", "ye",
+    "you", "your",
 
     "who", "which", "that",
     "this", "these", "those",
@@ -19,6 +20,7 @@ STOPWORDS = {
     "of", "in", "to", "for", "with", "by",
     "at", "from", "as", "on", "into",
     "upon", "unto",
+    "too",
 
     "not", "no",
 
