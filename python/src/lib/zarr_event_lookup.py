@@ -93,7 +93,7 @@ class _LazyScaleEmbeddings:
             for scale in ("local", "medium", "broad"):
                 idx = year_indices[scale]
                 logger.info(
-                    "[lookup-check] year=%d scale=%s contains=%s ntotal=%d",
+                    "[zarr-event-lookup-check] year=%d scale=%s contains=%s ntotal=%d",
                     year_int,
                     scale,
                     int(sorted_eids[start]) in idx.ids(),
