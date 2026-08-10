@@ -1,9 +1,27 @@
 .component {
+    flex: 1 !important;
+    height: 100%;
     min-width: 100%;
     width: 100%;
-    height: 100%;
+    padding-right: 0;
+    padding-left: 0;
+    margin-right: 0;
+    margin-left: 0;
     overflow-x: auto;
     overflow-y: hidden;
+
+    /* required: tooltip/panel position against this */
+    position: relative;
+
+    --overlay-bg: rgba(20, 22, 26, 0.94);
+    --overlay-border: rgba(255, 255, 255, 0.10);
+    --overlay-text: #e8e6e1;
+    --overlay-text-dim: #9a9790;
+    --overlay-accent: #e8734a;
+    --overlay-danger: #d9714a;
+    --overlay-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+    --overlay-sans: "IBM Plex Sans", -apple-system, sans-serif;
+    --overlay-radius: 6px;
 
     svg {
         display: block;
@@ -29,20 +47,6 @@
         fill: var(--on-background);
         font-size: 12pt;
     }
-}
-
-.component {
-    position: relative;
-    /* required: tooltip/panel position against this */
-    --overlay-bg: rgba(20, 22, 26, 0.94);
-    --overlay-border: rgba(255, 255, 255, 0.10);
-    --overlay-text: #e8e6e1;
-    --overlay-text-dim: #9a9790;
-    --overlay-accent: #e8734a;
-    --overlay-danger: #d9714a;
-    --overlay-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
-    --overlay-sans: "IBM Plex Sans", -apple-system, sans-serif;
-    --overlay-radius: 6px;
 }
 
 /* ---------------------------------------------------------- */
@@ -250,8 +254,6 @@
 
 
 
-/* Append to your existing LineageGraph.module.css */
-
 .overview {
     /* Overrides .component's height:100% / overflow-x:auto. Because
        both classes have equal specificity (one class selector each),
@@ -259,15 +261,16 @@
        stylesheet -- keep this block below the .component rule, or
        bump specificity (e.g. ".component.overview") if your bundler
        reorders CSS module output. */
-    height: 3.5em;
-    min-height: 3.5em;
-    max-height: 3.5em;
+    height: 5em;
+    min-height: 5em;
+    max-height: 5em;
     overflow-x: hidden;
     cursor: pointer;
 }
 
 .viewportBand {
     fill: var(--overlay-accent, #e8734a);
-    opacity: 0.18;
+    opacity: 0.4;
     pointer-events: none;
+    border-radius: 0;
 }
