@@ -1,8 +1,7 @@
 .component {
-    flex: 1 !important;
+    flex: 1 1 auto !important;
     height: 100%;
-    min-width: 100%;
-    width: 100%;
+    min-width: 0;
     padding-right: 0;
     padding-left: 0;
     margin-right: 0;
