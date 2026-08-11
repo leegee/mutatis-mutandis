@@ -1,0 +1,8 @@
+python src/tier1/tier1_0_corpus2zarr.py \
+  --store-backend parquet \
+  --batch-size 8 \
+  --report-every 1 \
+  --num-shards 8 \
+  --shard 0 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728

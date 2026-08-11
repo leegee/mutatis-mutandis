@@ -71,7 +71,8 @@ See [Bibliography](./BIBLIOGRAPHY.md)
 
 ## CPU-Bound
 
-For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup so fastText over MacBERTh.
+For now the methodology is focuosed on my ancient CPU-only (Radeon...), 64 GB setup so fastText over MacBERTh. DirectML sometimes
+works, sometimes dies horribly.
 
 ## APIs
 
@@ -86,6 +87,21 @@ Every tier has the folllowing:
 
 1. extending API to tiers 3+
 1. enlgarging the corpus (streaming)
+1. parquet
+
+        export OMP_NUM_THREADS=1
+        export MKL_NUM_THREADS=1
+        export OPENBLAS_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1
+        export ORT_NUM_THREADS=1
+        export OMP_WAIT_POLICY=PASSIVE
+        python src/tier1/tier1_0_corpus2zarr.py \
+        --store-backend parquet \
+        --report-every 1
+        --batch-size 32 \
+        --store g:/corpus-out/parquet2/
+
+
 
 ## To Do
 
