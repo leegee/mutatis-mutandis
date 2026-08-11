@@ -3,15 +3,24 @@
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
+CORPUS_MIN_YEAR = 1625 # 1600
+CORPUS_MAX_YEAR = 1689 # 1800
+
+FILTER_DOCUMENT_SIZE = False
+MIN_TOKENS_IN_DOC = 200
+MAX_TOKENS_IN_DOC = 20000
+
+
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-XML_ROOT_DIR = PROJECT_ROOT / "corpus"
 
 CORPUS_INPUT_DIRS = {
     "eebo": XML_ROOT_DIR / "eebo_all",
-    "ecco": XML_ROOT_DIR / "ecco_all",
+    # "ecco": XML_ROOT_DIR / "ecco_all",
 }
 
 ECCO_HEADER_DIR = Path( "s:/src/pamphlets/corpus/ecco_all/ecco/headers" )
+XML_ROOT_DIR = PROJECT_ROOT / "corpus"
 
 try:
     import google.colab  # noqa: F401
@@ -19,16 +28,9 @@ try:
 except ModuleNotFoundError:
     COLAB_MODE = False
 
-# It would be good to have some large docs (A91273)
-# but complete Bibles maybe oveor-balance the index?
-MIN_TOKENS_IN_DOC = 200
-# MAX_TOKENS_IN_DOC = 20000 # safe
-MAX_TOKENS_IN_DOC = 20000 # takes > 24 hours on my PC
-
 # Could use env var
 # OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
-OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else Path("g:/corpus-out")
-
+OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else Path("g:/corpus-out-parq")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TMP_DIR = OUT_DIR / "tmp"
@@ -114,8 +116,6 @@ EMBED_BATCH_SIZE = 256
 
 TOP_K = 30
 
-CORPUS_MIN_YEAR = 1625 # 1600
-CORPUS_MAX_YEAR = 1689 # 1800
 
 
 """

@@ -238,13 +238,20 @@ def create_views(conn: Connection) -> None:
             # Just in case I previously messed-up - TODO check and tidy.
             cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;")
 
+            if config.FILTER_DOCUMENT_SIZE:
+                size_filter = f"""
+                    AND token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
+                """
+            else:
+                size_filter = ""
+
             cur.execute(f"""
                 CREATE MATERIALIZED VIEW pamphlet_corpus AS
                 SELECT *
                 FROM documents
-                WHERE token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
-                AND pub_year >= {earliest}
+                WHERE pub_year >= {earliest}
                 AND pub_year <= {latest}
+                {size_filter}
                 AND title !~* '(tragedy|comedy|farce|interlude|play)'
                 AND lang = 'eng';
             """)
