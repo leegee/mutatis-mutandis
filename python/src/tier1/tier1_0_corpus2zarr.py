@@ -637,6 +637,8 @@ class CorpusProcessor:
         report_every=100,
         shard=None,
         num_shards=1,
+        parquet_min_rows=None,
+        parquet_min_bytes=None,
     ):
         self.store_path = Path(store_path)
         self.store_backend = store_backend
@@ -645,6 +647,8 @@ class CorpusProcessor:
         self.report_every = report_every
         self.shard = shard
         self.num_shards = num_shards
+        self.parquet_min_rows = parquet_min_rows
+        self.parquet_min_bytes = parquet_min_bytes
 
         # Back-compat alias used by older callers / logging.
         self.zarr_path = self.store_path
@@ -656,10 +660,16 @@ class CorpusProcessor:
         return " AND abs(hashtext(corpus || ':' || doc_id)) %% %s = %s", [self.num_shards, self.shard]
 
     def process(self, doc_id=None):
+        writer_kwargs = {}
+        if getattr(self, "parquet_min_rows", None) is not None:
+            writer_kwargs["min_rows"] = self.parquet_min_rows
+        if getattr(self, "parquet_min_bytes", None) is not None:
+            writer_kwargs["min_bytes"] = self.parquet_min_bytes
         store = open_observation_writer(
             self.store_backend,
             self.store_path,
             dim=self.pipeline.hidden_size,
+            **writer_kwargs,
         )
 
         # already_processed = set(store.get_doc_ids())
@@ -750,6 +760,12 @@ class CorpusProcessor:
                 else 0
             )
             logger.info( "[tier1] Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct )
+
+        # Parquet (and any buffered writer) must flush the tail buffer.
+        if hasattr(store, "flush"):
+            store.flush()
+        if hasattr(store, "close"):
+            store.close()
 
     def _flush(self, buf, store):
         start = time.perf_counter()
@@ -893,6 +909,24 @@ def parse_args():
         default=None,
         help="Override observation store root path (default depends on --store-backend)",
     )
+    p.add_argument(
+        "--parquet-min-rows",
+        type=int,
+        default=None,
+        help="Parquet writer: flush a part after this many buffered rows (default 100000)",
+    )
+    p.add_argument(
+        "--parquet-min-bytes",
+        type=int,
+        default=None,
+        help="Parquet writer: flush after ~this many estimated uncompressed bytes (default 256MiB)",
+    )
+    p.add_argument(
+        "--onnx-provider",
+        choices=["cpu", "dml"],
+        default="cpu",
+        help="ONNX Runtime provider (default: cpu; dml = DirectML GPU)",
+    )
     return p.parse_args()
 
 
@@ -939,7 +973,12 @@ def main():
 
     if args.backend == "onnx":
         from lib.macberth import load_macberth_onnx
-        mac = load_macberth_onnx()
+        providers = (
+            ["DmlExecutionProvider", "CPUExecutionProvider"]
+            if args.onnx_provider == "dml"
+            else ["CPUExecutionProvider"]
+        )
+        mac = load_macberth_onnx(providers=providers)
     else:
         from lib.macberth import load_macberth
         mac = load_macberth(use_qint8=False)
@@ -960,6 +999,8 @@ def main():
         report_every=args.report_every,
         shard=args.shard,
         num_shards=args.num_shards,
+        parquet_min_rows=args.parquet_min_rows,
+        parquet_min_bytes=args.parquet_min_bytes,
     )
     proc.process(doc_id=args.doc_id)
 
