@@ -306,26 +306,44 @@ def load_macberth_onnx(
     Loads the fp32 ONNX MacBERTh model for inference. Exports it first
     if it doesn't already exist on disk.
 
-    Prefers DirectML, falls back to CPU if unavailable.
-    """
-    import onnxruntime as ort
+    Default provider is CPU-only (stable for long Tier 1 runs on Windows).
+    Pass `providers=["DmlExecutionProvider", "CPUExecutionProvider"]` or set
+    `MACBERTH_ONNX_PROVIDER=dml` to use DirectML.
 
+    """
+    import os
     export_dir = Path(export_dir)
 
     if not (export_dir / "model.onnx").exists():
         _export_macberth_onnx(export_dir)
 
     if providers is None:
-        providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
+        # Env override: MACBERTH_ONNX_PROVIDER=dml|cpu
+        pref = os.environ.get("MACBERTH_ONNX_PROVIDER", "cpu").strip().lower()
+        if pref in ("dml", "directml", "gpu"):
+            providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
+        else:
+            providers = ["CPUExecutionProvider"]
 
     usable = [p for p in providers if p in ort.get_available_providers()]
     if not usable:
         raise RuntimeError(f"None of the requested providers are available: {providers}")
 
-    provider_options = [{"device_id": 0} if p == "DmlExecutionProvider" else {} for p in usable]
+    provider_options = [
+        {"device_id": 0} if p == "DmlExecutionProvider" else {}
+        for p in usable
+    ]
 
     sess_options = ort.SessionOptions()
     sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    # Respect ORT_NUM_THREADS if set; helps long CPU runs stay predictable
+    try:
+        n = int(os.environ.get("ORT_NUM_THREADS", "0"))
+        if n > 0:
+            sess_options.intra_op_num_threads = n
+            sess_options.inter_op_num_threads = 1
+    except ValueError:
+        pass
 
     session = ort.InferenceSession(
         f"{export_dir}/model.onnx",
@@ -333,7 +351,7 @@ def load_macberth_onnx(
         providers=usable,
         provider_options=provider_options,
     )
-    logger.info(f"Loaded ONNX MacBERTh, providers: {session.get_providers()}")
+    logger.info("Loaded ONNX MacBERTh, providers: %s", session.get_providers())
 
     tokenizer = AutoTokenizer.from_pretrained(export_dir, local_files_only=True)
 
