@@ -31,6 +31,13 @@ from typing import Optional
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from tier1.observation_store_api import (
+    configure_store_backend,
+    resolve_store_path,
+)
+
+
+from lib.corpus_logging import logger
 
 def list_year_dirs(root: Path, year: Optional[int] = None) -> list[Path]:
     if year is not None:
@@ -54,7 +61,7 @@ def compact_year_dir(
     year_dir: Path,
     *,
     min_file_bytes: int = 64 * 1024 * 1024,
-    target_rows: int = 500_000,
+    target_rows: int = 250_000,
     dry_run: bool = False,
 ) -> dict:
     """
@@ -106,17 +113,20 @@ def compact_year_dir(
     written = 0
     merged = 0
     for group in groups:
-        if len(group) == 1 and group[0][0].stat().st_size >= min_file_bytes // 4:
-            # single leftover that is not worth rewriting alone
+        if len(group) < 2:
+            # A lone small part has nothing to compact with. Leaving it alone makes repeated compaction runs convergent.
             continue
+
         paths = [g[0] for g in group]
         merged += len(paths)
         if dry_run:
             written += 1
             continue
 
+        # Too much in memory? Go via ParquetWriter?
         tables = [pq.read_table(p) for p in paths]
         table = pa.concat_tables(tables) if len(tables) > 1 else tables[0]
+
         part_name = f"part-{uuid.uuid4().hex[:12]}.parquet"
         dest = year_dir / part_name
         tmp = year_dir / f".{part_name}.tmp"
@@ -148,7 +158,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(
         description="Compact small Parquet part files under a hive-partitioned observation store"
     )
-    p.add_argument("--store", required=True, help="Parquet store root (contains year=*/)")
+
+    p.add_argument("--store", type=str, default=None)
+    p.add_argument("--masked", action="store_true")
+    p.add_argument("--shard", type=int, default=None)
+    p.add_argument("--num-shards", type=int, default=1)
+
     p.add_argument("--year", type=int, default=None, help="Only compact this year")
     p.add_argument(
         "--min-file-bytes",
@@ -159,19 +174,31 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument(
         "--target-rows",
         type=int,
-        default=500_000,
+        default=250_000,
         help="Aim for about this many rows per merged part (default 500000)",
     )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
 
-    root = Path(args.store)
+    configure_store_backend(
+        "parquet",
+        num_shards=args.num_shards,
+    )
+
+    root = resolve_store_path(
+        store_backend="parquet",
+        masked=args.masked,
+        store=args.store,
+        shard=args.shard,
+        num_shards=args.num_shards,
+    )
+
     if not root.is_dir():
         raise SystemExit(f"store not found: {root}")
 
     years = list_year_dirs(root, args.year)
     if not years:
-        print("no year=* directories found")
+        logger.warning("no year=* directories found")
         return 0
 
     total_merged = 0
@@ -185,14 +212,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
         total_merged += int(stats.get("merged", 0))
         total_written += int(stats.get("written", 0))
-        print(
+        logger.info(
             f"{stats['year_dir']}: parts_in={stats.get('parts_in')} "
             f"small={stats.get('small', 0)} merged={stats.get('merged', 0)} "
             f"written={stats.get('written', 0)}"
             + (" [dry-run]" if args.dry_run else "")
         )
 
-    print(f"done: merged_files={total_merged} new_parts={total_written}")
+    logger.info(f"done: merged_files={total_merged} new_parts={total_written}")
     return 0
 
 

@@ -42,7 +42,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from observation_store_api import (
+from tier1.observation_store_api import (
     DEFAULT_ENSEMBLE_WEIGHTS,
     open_observation_lookup,
     open_observation_stream,

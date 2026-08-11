@@ -24,13 +24,13 @@ needed.
 
 Usage
 -----
-    from observation_store_api import (
+    from tier1.observation_store_api import (
         open_observation_writer,
         open_observation_stream,
         open_observation_lookup,
     )
     # import registers the backend
-    import parquet_observation_backend  # noqa: F401
+    import tier1.parquet_observation_backend  # noqa: F401
 
     writer = open_observation_writer("parquet", root, dim=768)
     stream = open_observation_stream("parquet", root)
@@ -49,7 +49,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from observation_store_api import (
+from tier1.observation_store_api import (
     DEFAULT_ENSEMBLE_WEIGHTS,
     NO_WINDOW_TOKEN_POS,
     register_backend,
@@ -532,7 +532,8 @@ class ParquetObservationStream:
         if year_filter is not None and len(year_filter) > 0:
             # DuckDB IN list
             placeholders = ",".join("?" for _ in year_filter)
-            where = f"WHERE pub_year IN ({placeholders})"
+            # where = f"WHERE pub_year IN ({placeholders})"
+            where = f"WHERE year IN ({placeholders})"
             params = list(year_filter)
 
         sql = f"""

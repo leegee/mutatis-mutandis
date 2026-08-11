@@ -53,6 +53,8 @@ from typing import (
     runtime_checkable,
 )
 
+from lib.corpus_config import MASKED_ZARR_PATH, ZARR_PATH
+
 import numpy as np
 
 # Canonical multi-scale names — order is significant for ensemble weights.
@@ -377,3 +379,52 @@ def _require(backend: str, role: str) -> type:
 
 def list_backends() -> list[str]:
     return sorted(_BACKENDS.keys())
+
+
+def default_store_path(store_backend: str, masked: bool) -> Path:
+    """
+    Resolve the observation-store root when --store is omitted.
+
+    Zarr → ZARR_PATH / MASKED_ZARR_PATH (historical)
+    Parquet → sibling directory tier1_parquet[_masked]
+    """
+    zarr_path = Path(MASKED_ZARR_PATH if masked else ZARR_PATH)
+
+    if store_backend == "zarr":
+        return zarr_path
+
+    suffix = "_masked" if masked else ""
+    return zarr_path.parent / f"tier1_parquet{suffix}"
+
+
+def resolve_store_path(
+    *,
+    store_backend: str,
+    masked: bool,
+    store: str | Path | None = None,
+    shard: int | None = None,
+    num_shards: int = 1,
+) -> Path:
+    if store is None:
+        path = default_store_path(store_backend, masked)
+    else:
+        path = Path(store)
+
+    if num_shards > 1:
+        path = path.parent / f"{path.name}_shard{shard}"
+
+    return path
+
+
+def configure_store_backend(store_backend: str, *, num_shards: int) -> None:
+    """
+    Apply backend-specific runtime configuration.
+
+    This affects the current process only and must be called before the
+    observation store is opened.
+    """
+    if store_backend == "zarr" and num_shards > 1:
+        from numcodecs import blosc
+        blosc.set_nthreads(1)
+
+

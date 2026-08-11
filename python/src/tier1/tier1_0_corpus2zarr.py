@@ -131,11 +131,16 @@ from pathlib import Path
 
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
+from lib.corpus_config import EMBED_BATCH_SIZE, CONCEPT_SETS
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS
 
-from observation_store_api import open_observation_writer
+from tier1.observation_store_api import (
+    configure_store_backend,
+    resolve_store_path,
+    open_observation_writer,
+    default_store_path
+)
 
 # Register observation-store backends (import side-effect).
 import lib.zarr_observation_backend  # noqa: F401
@@ -857,20 +862,6 @@ def clear_output_dir(store_path: Path):
             child.unlink()
 
 
-def default_store_path(store_backend: str, masked: bool) -> Path:
-    """
-    Resolve the observation-store root when --store is omitted.
-
-    Zarr  → ZARR_PATH / MASKED_ZARR_PATH (historical)
-    Parquet → sibling directory tier1_parquet[_masked]
-    """
-    zarr_path = Path(MASKED_ZARR_PATH if masked else ZARR_PATH)
-    if store_backend == "zarr":
-        return zarr_path
-    suffix = "_masked" if masked else ""
-    return zarr_path.parent / f"tier1_parquet{suffix}"
-
-
 def parse_args():
     p = argparse.ArgumentParser(
         description="Tier 1: multi-scale contextual embedding construction"
@@ -951,19 +942,19 @@ def main():
         )
 
     store_backend = args.store_backend
-    base_path = (
-        Path(args.store)
-        if args.store
-        else default_store_path(store_backend, masked=args.mask)
+
+    configure_store_backend(
+        store_backend,
+        num_shards=args.num_shards,
     )
 
-    if args.num_shards > 1:
-        if store_backend == "zarr":
-            from numcodecs import blosc  # Used by Zarr
-            blosc.set_nthreads(1)
-        store_path = base_path.parent / f"{base_path.name}_shard{args.shard}"
-    else:
-        store_path = base_path
+    store_path = resolve_store_path(
+        store_backend=store_backend,
+        masked=args.mask,
+        store=args.store,
+        shard=args.shard,
+        num_shards=args.num_shards,
+    )
 
     if args.clear:
         logger.info("[tier1] Clearing Tier 1 output at %s", store_path)

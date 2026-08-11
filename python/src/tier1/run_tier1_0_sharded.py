@@ -16,9 +16,10 @@ import sys
 import os
 from pathlib import Path
 
-from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, LOG_DIR
+from lib.corpus_config import LOG_DIR
 from lib.corpus_logging import logger
 from tier1_0_corpus2zarr import clear_output_dir
+from tier1.observation_store_api import resolve_store_path
 
 T1_PATH = "src/tier1/tier1_0_corpus2zarr.py"
 
@@ -33,7 +34,11 @@ def main():
     p.add_argument("--report-every", type=int, default=100)
     args = p.parse_args()
 
-    base_path = MASKED_ZARR_PATH if args.mask else ZARR_PATH
+    # base_path = MASKED_ZARR_PATH if args.mask else ZARR_PATH
+    base_path = resolve_store_path(
+        store_backend=args.store_backend,
+        masked=args.mask,
+    )
 
     if args.clear:
         logger.info("Clearing final merge target: %s", base_path)

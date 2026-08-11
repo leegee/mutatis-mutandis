@@ -99,7 +99,7 @@ Every tier has the folllowing:
         --store-backend parquet \
         --report-every 1
         --batch-size 32 \
-        --store g:/corpus-out/parquet2/
+        --store g:/corpus-out/parquet/
 
 
 

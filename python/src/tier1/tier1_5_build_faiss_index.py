@@ -63,13 +63,15 @@ from typing import Any, Mapping, Optional
 
 import numpy as np
 
-from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, faiss_index_paths
+from lib.corpus_config import faiss_index_paths
 from lib.corpus_logging import logger
 from lib.eebo_faiss import EeboFaissIndex
 
-from observation_store_api import (
+from tier1.observation_store_api import (
     ObservationStream,
     open_observation_stream,
+    default_store_path,
+    resolve_store_path
 )
 
 # Register backends (import side-effect).
@@ -353,22 +355,6 @@ def persist_indices(indices, masked):
     return saved
 
 
-def default_store_path(backend: str, masked: bool) -> Path:
-    """
-    Resolve the observation-store root for a backend when --store is omitted.
-
-    Zarr uses the historical ZARR_PATH / MASKED_ZARR_PATH.
-    Parquet defaults to a sibling directory named tier1_parquet[_masked].
-    """
-    if backend == "zarr":
-        return Path(MASKED_ZARR_PATH if masked else ZARR_PATH)
-
-    # parquet (and any future backend): derive from the zarr path's parent
-    zarr_path = Path(MASKED_ZARR_PATH if masked else ZARR_PATH)
-    suffix = "_masked" if masked else ""
-    return zarr_path.parent / f"tier1_parquet{suffix}"
-
-
 def parse_args():
     p = argparse.ArgumentParser(
         description="Build per-year multi-scale FAISS indices from the Tier 1 observation store."
@@ -401,14 +387,15 @@ def main():
     masked = args.mask
     backend = args.backend
 
-    store_path = Path(args.store) if args.store else default_store_path(backend, masked)
+    store_path = resolve_store_path(
+        store_backend=args.backend,
+        masked=args.mask,
+        store=args.store,
+    )
 
     logger.info(
         "[faiss-build] backend=%s store=%s masked=%s clear=%s",
-        backend,
-        store_path,
-        masked,
-        args.clear,
+        backend, store_path, masked, args.clear,
     )
 
     stream = open_observation_stream(backend, store_path)

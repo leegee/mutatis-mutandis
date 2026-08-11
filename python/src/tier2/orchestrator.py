@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import time
 from pathlib import Path
+from collections import Counter
 
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
@@ -32,9 +33,10 @@ from lib.corpus_logging import logger, setEmit
 from lib.concept_resolve import resolve_concepts
 from lib.get_processed_concepts import get_processed_concepts
 
-from collections import Counter
-
-from observation_store_api import open_observation_lookup
+from tier1.observation_store_api import (
+    open_observation_lookup,
+    default_store_path
+)
 
 # Register observation-store backends (import side-effect).
 import lib.zarr_observation_backend  # noqa: F401
@@ -50,21 +52,6 @@ from tier2.analysis import (
     iter_year_concept_batches,
 )
 
-DEFAULT_STORE_BACKEND = "zarr"
-
-
-def default_store_path(store_backend: str, masked: bool) -> Path:
-    """
-    Resolve the observation-store root when --store is omitted.
-
-    Zarr  → ZARR_PATH / MASKED_ZARR_PATH (historical)
-    Parquet → sibling directory tier1_parquet[_masked]
-    """
-    zarr_path = Path(MASKED_ZARR_PATH if masked else ZARR_PATH)
-    if store_backend == "zarr":
-        return zarr_path
-    suffix = "_masked" if masked else ""
-    return zarr_path.parent / f"tier1_parquet{suffix}"
 from tier2.persistence import (
     initialise_database,
     create_indexes,
@@ -79,7 +66,13 @@ from tier2.persistence import (
     finish_concept_pg,
     dump_pg_stage_to_sqlite,
 )
+
 from tier2.resources import LazyYearIndices
+
+
+
+DEFAULT_STORE_BACKEND = "zarr"
+
 
 
 def service(

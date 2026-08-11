@@ -1,8 +1,88 @@
 python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 0 \
   --store-backend parquet \
   --batch-size 8 \
   --report-every 1 \
   --num-shards 8 \
-  --shard 0 \
   --parquet-min-rows 50000 \
   --parquet-min-bytes 134217728
+
+python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 1 \
+  --store-backend parquet \
+  --batch-size 8 \
+  --report-every 1 \
+  --num-shards 8 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728
+
+# THIS DIED:
+# python src/tier1/tier1_0_corpus2zarr.py \
+#  --shard 2 \
+#  --store-backend parquet \
+#  --batch-size 8 \
+#  --report-every 1 \
+#  --num-shards 8 \
+#  --parquet-min-rows 50000 \
+#  --parquet-min-bytes 134217728
+
+
+# thread caps still set - this crashed until I turned of GPU
+python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 2 \
+  --store-backend parquet \
+  --batch-size 4 \
+  --report-every 1 \
+  --num-shards 8 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728
+
+python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 3 \
+  --store-backend parquet \
+  --batch-size 4 \
+  --report-every 1 \
+  --num-shards 8 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728
+
+python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 4 \
+  --store-backend parquet \
+  --batch-size 4 \
+  --report-every 1 \
+  --num-shards 8 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728
+
+python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 5 \
+  --store-backend parquet \
+  --batch-size 4 \
+  --report-every 1 \
+  --num-shards 8 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728
+
+python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 6 \
+  --store-backend parquet \
+  --batch-size 4 \
+  --report-every 1 \
+  --num-shards 8 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728
+
+python src/tier1/tier1_0_corpus2zarr.py \
+  --shard 7 \
+  --store-backend parquet \
+  --batch-size 4 \
+  --report-every 1 \
+  --num-shards 8 \
+  --parquet-min-rows 50000 \
+  --parquet-min-bytes 134217728
+
+
+python src/tier1/compact_parquet_parts.py \
+  --store g:/corpus-out-parq/zarr/tier1_parquet_shard7 \
+  --dry-run

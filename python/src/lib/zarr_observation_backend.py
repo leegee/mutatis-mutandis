@@ -8,7 +8,7 @@ the backend name "zarr".
 Call sites can continue to import the historical class names; new code
 should prefer the factory functions in observation_store_api:
 
-    from observation_store_api import (
+    from tier1.observation_store_api import (
         open_observation_writer,
         open_observation_stream,
         open_observation_lookup,
@@ -28,7 +28,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from observation_store_api import register_backend
+from tier1.observation_store_api import register_backend
 
 # Historical implementations (kept under their original names for
 # compatibility with existing imports in tier1 / tier1.5 / tier2 / tier3).
