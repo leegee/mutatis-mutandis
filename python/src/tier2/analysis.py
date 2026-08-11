@@ -28,6 +28,74 @@ _NO_WPOS = -1
 # payload can dwarf the whole rest of the run.
 BATCH_SIZE = 2000
 
+# Neighbour retrieval backend:
+#   "faiss" — per-year IndexFlatIP (historical default; RAM-bound)
+#   "exact" — out-of-core blocked scan over Parquet shards (exact_knn_search)
+DEFAULT_SEARCH_BACKEND = "faiss"
+
+
+def neighbour_search(
+    *,
+    lookup,
+    positions,
+    top_n: int,
+    indexes=None,
+    pub_year: int | None = None,
+    rrf_k: int = RRF_K,
+    oversample: int = OVERSAMPLE,
+    search_backend: str = DEFAULT_SEARCH_BACKEND,
+    exact_store=None,
+    exact_workers: int = 1,
+    exact_pool: str = "thread",
+    exact_shards=None,
+):
+    """
+    Dispatch multi-scale neighbourhood search to FAISS or exact Parquet scan.
+
+    Both backends return the same list[list[dict]] shape used by Tier 2
+    event builders (event_id, rrf_score, score_local/medium/broad).
+    """
+    backend = (search_backend or DEFAULT_SEARCH_BACKEND).lower()
+    positions = np.asarray(positions, dtype=np.int64)
+
+    if backend == "faiss":
+        if indexes is None:
+            raise ValueError("search_backend='faiss' requires indexes")
+        return multiscale_search(
+            indexes,
+            lookup,
+            positions,
+            top_n,
+            pub_year=pub_year,
+            rrf_k=rrf_k,
+            oversample=oversample,
+        )
+
+    if backend == "exact":
+        if exact_store is None:
+            raise ValueError(
+                "search_backend='exact' requires exact_store "
+                "(Parquet observation store root)"
+            )
+        from exact_knn_search import multiscale_exact_search
+
+        return multiscale_exact_search(
+            exact_store,
+            lookup,
+            positions,
+            top_n,
+            pub_year=pub_year,
+            rrf_k=rrf_k,
+            oversample=oversample,
+            workers=exact_workers,
+            pool=exact_pool,  # type: ignore[arg-type]
+            shards=exact_shards,
+        )
+
+    raise ValueError(
+        f"Unknown search_backend={search_backend!r}; expected 'faiss' or 'exact'"
+    )
+
 
 def _chunks(seq, size):
     for i in range(0, len(seq), size):
@@ -192,6 +260,11 @@ def analyse_concept(
     false_positives=None,
     evict_index_after_year=False,
     resolved=None,
+    search_backend: str = DEFAULT_SEARCH_BACKEND,
+    exact_store=None,
+    exact_workers: int = 1,
+    exact_pool: str = "thread",
+    exact_shards=None,
 ):
     if resolved is None:
         resolved = resolve_concept_positions(
@@ -215,17 +288,19 @@ def analyse_concept(
 
     fused = {}
     for year, year_positions in by_year.items():
-        result = multiscale_search(
-            indexes,
-            lookup,
-            np.asarray(
-                year_positions,
-                dtype=np.int64,
-            ),
-            top_n,
+        result = neighbour_search(
+            lookup=lookup,
+            positions=np.asarray(year_positions, dtype=np.int64),
+            top_n=top_n,
+            indexes=indexes,
             pub_year=year,
             rrf_k=rrf_k,
             oversample=oversample,
+            search_backend=search_backend,
+            exact_store=exact_store,
+            exact_workers=exact_workers,
+            exact_pool=exact_pool,
+            exact_shards=exact_shards,
         )
 
         for pos, neighbours in zip(
@@ -239,7 +314,7 @@ def analyse_concept(
         # run). Batch runs should instead use build_eviction_schedule +
         # explicit eviction in the caller's loop, since a given year is
         # commonly shared across many concepts.
-        if evict_index_after_year and hasattr(indexes, "evict"):
+        if evict_index_after_year and indexes is not None and hasattr(indexes, "evict"):
             indexes.evict(year)
 
     token_counts = Counter()
@@ -440,6 +515,11 @@ def iter_year_concept_batches(
     token_counts=None,
     doc_counts=None,
     window_counts=None,
+    search_backend: str = DEFAULT_SEARCH_BACKEND,
+    exact_store=None,
+    exact_workers: int = 1,
+    exact_pool: str = "thread",
+    exact_shards=None,
 ):
     """
     Yield bounded-size batches for *one concept, one publication year*.
@@ -448,6 +528,9 @@ def iter_year_concept_batches(
     one year's FAISS indices, walks every concept that touches that
     year, then evicts. Aggregate counters may be passed in so they
     accumulate across years for the same concept.
+
+    search_backend:
+        "faiss" (default) or "exact" (Parquet blocked scan).
 
     Yields:
         {"type": "batch", "events": [...], "seed_ids": set(...)}
@@ -478,14 +561,19 @@ def iter_year_concept_batches(
     for chunk_positions in _chunks(year_positions, batch_size):
         chunk_arr = np.asarray(chunk_positions, dtype=np.int64)
 
-        result = multiscale_search(
-            indexes,
-            lookup,
-            chunk_arr,
-            top_n,
+        result = neighbour_search(
+            lookup=lookup,
+            positions=chunk_arr,
+            top_n=top_n,
+            indexes=indexes,
             pub_year=year,
             rrf_k=rrf_k,
             oversample=oversample,
+            search_backend=search_backend,
+            exact_store=exact_store,
+            exact_workers=exact_workers,
+            exact_pool=exact_pool,
+            exact_shards=exact_shards,
         )
 
         fused = {
@@ -523,6 +611,11 @@ def iter_concept_batches(
     resolved=None,
     batch_size=BATCH_SIZE,
     evict_after_years=None,
+    search_backend: str = DEFAULT_SEARCH_BACKEND,
+    exact_store=None,
+    exact_workers: int = 1,
+    exact_pool: str = "thread",
+    exact_shards=None,
 ):
     """
     Streaming counterpart to analyse_concept (concept-major).
@@ -571,10 +664,19 @@ def iter_concept_batches(
             token_counts=token_counts,
             doc_counts=doc_counts,
             window_counts=window_counts,
+            search_backend=search_backend,
+            exact_store=exact_store,
+            exact_workers=exact_workers,
+            exact_pool=exact_pool,
+            exact_shards=exact_shards,
         ):
             yield item
 
-        if year in evict_after_years and hasattr(indexes, "evict"):
+        if (
+            year in evict_after_years
+            and indexes is not None
+            and hasattr(indexes, "evict")
+        ):
             indexes.evict(year)
 
     yield {
@@ -601,6 +703,11 @@ def run_tier2_core(
     false_positives=None,
     emit=None,
     evict_index_after_year=False,
+    search_backend: str = DEFAULT_SEARCH_BACKEND,
+    exact_store=None,
+    exact_workers: int = 1,
+    exact_pool: str = "thread",
+    exact_shards=None,
 ):
     """
     Heart of Tier 2: neighbourhood retrieval for every requested concept.
@@ -613,7 +720,9 @@ def run_tier2_core(
     tier2.orchestrator.service) should prefer analysing + writing one
     concept at a time instead of calling this over a large concept list.
     """
-    logger.info("[tier2.run_tier2_core] Enter")
+    logger.info(
+        "[tier2.run_tier2_core] Enter search_backend=%s", search_backend
+    )
     output = {}
 
     for concept_name, concept in concepts_to_run:
@@ -630,6 +739,11 @@ def run_tier2_core(
             oversample=oversample,
             false_positives=false_positives,
             evict_index_after_year=evict_index_after_year,
+            search_backend=search_backend,
+            exact_store=exact_store,
+            exact_workers=exact_workers,
+            exact_pool=exact_pool,
+            exact_shards=exact_shards,
         )
 
         if emit:

@@ -2,6 +2,10 @@ agents
 experiments
 fast_api
 lib
+scripts
 search-flask
 tests
+tier1
+tier2
+tier3
 tools

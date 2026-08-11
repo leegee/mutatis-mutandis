@@ -20,8 +20,9 @@ separate forward pass for each target occurrence, it is substantially
 more expensive and is intended for focused semantic analysis rather than
 routine rebuilding.
 
-The output is written to the Tier 1 Zarr observation store, where each
-row represents a single contextual observation and records:
+The output is written to the Tier 1 observation store (Zarr or Parquet,
+selected with ``--store-backend``), where each row represents a single
+contextual observation and records:
 
     * stable event and concept identifiers
     * document and corpus token identifiers
@@ -44,7 +45,7 @@ Input:
         to
     aligned observation construction
         to
-    Tier 1 Zarr observation store
+    Tier 1 observation store (Zarr | Parquet via ObservationWriter)
 
 The resulting store forms the canonical contextual observation layer
 used by downstream indexing, neighbourhood search, clustering and
@@ -126,12 +127,21 @@ import numpy as np
 import torch
 import xxhash
 
+from pathlib import Path
+
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
-from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS
+
+from observation_store_api import open_observation_writer
+
+# Register observation-store backends (import side-effect).
+import lib.zarr_observation_backend  # noqa: F401
+import lib.parquet_observation_backend  # noqa: F401
+
+DEFAULT_STORE_BACKEND = "zarr"
 
 WINDOW_CONFIGS = [
     {"name": "local",  "size": 256,  "stride": 128},
@@ -618,19 +628,26 @@ class EmbeddingPipeline:
 
 class CorpusProcessor:
     def __init__(
-        self, conn,
-        zarr_path,
+        self,
+        conn,
+        store_path,
         pipeline,
+        *,
+        store_backend: str = DEFAULT_STORE_BACKEND,
         report_every=100,
         shard=None,
-        num_shards=1
+        num_shards=1,
     ):
-        self.zarr_path = zarr_path
+        self.store_path = Path(store_path)
+        self.store_backend = store_backend
         self.conn = conn
         self.pipeline = pipeline
         self.report_every = report_every
         self.shard = shard
         self.num_shards = num_shards
+
+        # Back-compat alias used by older callers / logging.
+        self.zarr_path = self.store_path
 
     def _shard_clause(self):
         if self.shard is None or self.num_shards <= 1:
@@ -639,16 +656,22 @@ class CorpusProcessor:
         return " AND abs(hashtext(corpus || ':' || doc_id)) %% %s = %s", [self.num_shards, self.shard]
 
     def process(self, doc_id=None):
-        store = ZarrEmbeddingObservationStore(
-            path=str(self.zarr_path),
-            dim=self.pipeline.hidden_size
+        store = open_observation_writer(
+            self.store_backend,
+            self.store_path,
+            dim=self.pipeline.hidden_size,
         )
 
         # already_processed = set(store.get_doc_ids())
         already_processed = set(store.get_doc_keys())
         completed_docs = len(already_processed)
 
-        logger.info("[tier1] Already processed: %d", completed_docs)
+        logger.info(
+            "[tier1] store_backend=%s path=%s already_processed=%d",
+            self.store_backend,
+            self.store_path,
+            completed_docs,
+        )
 
         shard_sql, shard_params = self._shard_clause()
 
@@ -804,57 +827,113 @@ class CorpusProcessor:
         )
 
 
-def clear_output_dir(zarr_path):
-    zarr_path.mkdir(parents=True, exist_ok=True)   # ensure it exists, never remove the inode itself
-    for child in zarr_path.iterdir():
+def clear_output_dir(store_path: Path):
+    """
+    Wipe store contents in place without removing the directory inode.
+    Works for both Zarr groups and hive-partitioned Parquet trees.
+    """
+    store_path = Path(store_path)
+    store_path.mkdir(parents=True, exist_ok=True)
+    for child in store_path.iterdir():
         if child.is_dir():
             shutil.rmtree(child)
         else:
             child.unlink()
 
 
+def default_store_path(store_backend: str, masked: bool) -> Path:
+    """
+    Resolve the observation-store root when --store is omitted.
+
+    Zarr  → ZARR_PATH / MASKED_ZARR_PATH (historical)
+    Parquet → sibling directory tier1_parquet[_masked]
+    """
+    zarr_path = Path(MASKED_ZARR_PATH if masked else ZARR_PATH)
+    if store_backend == "zarr":
+        return zarr_path
+    suffix = "_masked" if masked else ""
+    return zarr_path.parent / f"tier1_parquet{suffix}"
+
+
 def parse_args():
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(
+        description="Tier 1: multi-scale contextual embedding construction"
+    )
     p.add_argument("--clear", action="store_true", help="Wipe the store, start from scratch")
     p.add_argument("--doc-id", type=str, default=None, help="doc_id of a document to process")
     p.add_argument("--report-every", type=int, default=100)
     p.add_argument("--mask", action="store_true", help="Use masking")
     p.add_argument("--pooling-scope", choices=["mask_only", "context"], default="mask_only")
     p.add_argument("--batch-size", type=int, default=EMBED_BATCH_SIZE)
-    p.add_argument("--mask-only-position", action="store_true", default=True, help="Mask only the target token (recommended for semantics)")
+    p.add_argument(
+        "--mask-only-position",
+        action="store_true",
+        default=True,
+        help="Mask only the target token (recommended for semantics)",
+    )
     p.add_argument("--shard", type=int, default=None, help="This process's shard index (0-based)")
     p.add_argument("--num-shards", type=int, default=1, help="Total number of shards")
-    p.add_argument("--backend", choices=["onnx", "pytorch"], default="onnx", help="Inference backend for embedding (default: onnx/DirectML)")
+    # Inference backend (ONNX vs PyTorch) — historical flag name.
+    p.add_argument(
+        "--backend",
+        choices=["onnx", "pytorch"],
+        default="onnx",
+        help="Inference backend for embedding (default: onnx/DirectML)",
+    )
+    # Observation store backend (Zarr vs Parquet) — distinct from --backend.
+    p.add_argument(
+        "--store-backend",
+        choices=["zarr", "parquet"],
+        default=DEFAULT_STORE_BACKEND,
+        help=f"Observation store backend (default: {DEFAULT_STORE_BACKEND})",
+    )
+    p.add_argument(
+        "--store",
+        type=str,
+        default=None,
+        help="Override observation store root path (default depends on --store-backend)",
+    )
     return p.parse_args()
 
 
 def main():
     args = parse_args()
 
-    torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))  # match OMP/MKL env vars — intra-op parallelism
-    torch.set_num_interop_threads(1)                                  # not running parallel independent ops, so keep this low
-    logger.info("[tier1] Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
+    torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))
+    torch.set_num_interop_threads(1)
+    logger.info(
+        "[tier1] Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d",
+        os.environ.get("OMP_NUM_THREADS"),
+        torch.get_num_threads(),
+    )
 
     if args.backend == "pytorch":
         torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 2)))
         torch.set_num_interop_threads(1)
-        logger.info("[tier1] Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d", os.environ.get("OMP_NUM_THREADS"), torch.get_num_threads())
+        logger.info(
+            "[tier1] Thread config: OMP_NUM_THREADS=%s, torch.get_num_threads()=%d",
+            os.environ.get("OMP_NUM_THREADS"),
+            torch.get_num_threads(),
+        )
 
-    if args.mask:
-        base_path = MASKED_ZARR_PATH
-    else:
-        base_path = ZARR_PATH
+    store_backend = args.store_backend
+    base_path = (
+        Path(args.store)
+        if args.store
+        else default_store_path(store_backend, masked=args.mask)
+    )
 
     if args.num_shards > 1:
-        from numcodecs import blosc # Used by Zarr
-        blosc.set_nthreads(1)
-        zarr_path = base_path.parent / f"{base_path.name}_shard{args.shard}"
+        if store_backend == "zarr":
+            from numcodecs import blosc  # Used by Zarr
+            blosc.set_nthreads(1)
+        store_path = base_path.parent / f"{base_path.name}_shard{args.shard}"
     else:
-        zarr_path = base_path
+        store_path = base_path
 
     if args.clear:
-        logger.info("[tier1] Clearing Tier 1 output")
-        clear_output_dir(zarr_path)
+        logger.info("[tier1] Clearing Tier 1 output at %s", store_path)
+        clear_output_dir(store_path)
 
     conn = get_connection()
 
@@ -865,31 +944,38 @@ def main():
         from lib.macberth import load_macberth
         mac = load_macberth(use_qint8=False)
 
-
     pipeline = EmbeddingPipeline(
         mac,
-        mask_targets        = args.mask,
-        mask_only_position  = args.mask_only_position,
-        pooling_scope       = args.pooling_scope,
-        batch_size          = args.batch_size
+        mask_targets=args.mask,
+        mask_only_position=args.mask_only_position,
+        pooling_scope=args.pooling_scope,
+        batch_size=args.batch_size,
     )
 
     proc = CorpusProcessor(
-        conn, zarr_path, pipeline,
-        report_every = args.report_every,
-        shard        = args.shard,
-        num_shards   = args.num_shards
+        conn,
+        store_path,
+        pipeline,
+        store_backend=store_backend,
+        report_every=args.report_every,
+        shard=args.shard,
+        num_shards=args.num_shards,
     )
     proc.process(doc_id=args.doc_id)
 
     # A shard is mergeable only after the complete document stream has
-    # processed successfully. Presence of the Zarr directory alone is not
+    # processed successfully. Presence of the store directory alone is not
     # sufficient because interrupted writes leave valid-looking stores.
     if args.num_shards > 1:
-        (zarr_path / "_COMPLETE").touch()
+        (store_path / "_COMPLETE").touch()
 
     conn.close()
-    logger.info(f"[Tier 1 done] mode={'masked' if args.mask else 'unmasked'}")
+    logger.info(
+        "[Tier 1 done] mode=%s store_backend=%s path=%s",
+        "masked" if args.mask else "unmasked",
+        store_backend,
+        store_path,
+    )
 
 
 if __name__ == "__main__":
