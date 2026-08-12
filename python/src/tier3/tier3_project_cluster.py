@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
-    ZARR_PATH,
+    EVENTSTORE_T1_PATH,
     faiss_index_paths,
     discover_index_years,
 )
@@ -272,7 +272,7 @@ def build_tier3_resources(*, use_pg: bool, db_path=None, masked=False):
     (or silently misbehave, depending on what it does with `vectors[mask]`
     on a dict) — please share that file and I'll patch it directly.
     """
-    lookup = ZarrEventLookup(ZARR_PATH)
+    lookup = ZarrEventLookup(EVENTSTORE_T1_PATH)
     indexes = _attach_lazy_indices(lookup, masked=masked)
 
     if use_pg:

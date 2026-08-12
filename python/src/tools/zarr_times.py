@@ -4,7 +4,7 @@
 from pathlib import Path
 from datetime import datetime
 
-from lib.corpus_config import ZARR_PATH
+from lib.corpus_config import EVENTSTORE_T1_PATH
 
 
 def field_mtime(field_dir: Path):
@@ -17,7 +17,7 @@ def field_mtime(field_dir: Path):
 
 
 def main():
-    events_dir = Path(ZARR_PATH) / "events"
+    events_dir = Path(EVENTSTORE_T1_PATH) / "events"
     if not events_dir.exists():
         print(f"No 'events' group at {events_dir}")
         return

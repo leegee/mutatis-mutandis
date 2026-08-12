@@ -1,5 +1,6 @@
 # corpus_logging.py
 
+import sys
 import json
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -16,7 +17,7 @@ if logger.level == logging.NOTSET:
     logger.setLevel(logging.DEBUG)
 
 if not logger.handlers:
-    _h = logging.StreamHandler()
+    _h = logging.StreamHandler(sys.stdout)
     _h.setLevel(logging.DEBUG)
     logger.addHandler(_h)
 

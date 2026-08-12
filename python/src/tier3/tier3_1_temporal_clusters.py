@@ -17,7 +17,7 @@ import hashlib
 
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
-    ZARR_PATH,
+    EVENTSTORE_T1_PATH,
     faiss_index_paths,
     TMP_DIR,
 )
@@ -666,7 +666,7 @@ def _pin_single_threaded_math_libs():
 
 def _init_worker(
     db_path,
-    zarr_path,
+    EVENTSTORE_T1_PATH,
     years,
     masked,
     cache_path,
@@ -682,7 +682,7 @@ def _init_worker(
     )
     _WORKER_CON.execute("PRAGMA busy_timeout=30000")
 
-    _WORKER_LOOKUP = ZarrEventLookup(zarr_path)
+    _WORKER_LOOKUP = ZarrEventLookup(EVENTSTORE_T1_PATH)
     _WORKER_LOOKUP.attach_index(
         load_indices(
             years,
@@ -757,7 +757,7 @@ def run_parallel( con, concepts, workers, db_path, years, masked, similarity_thr
     _WORKER_GLOBAL_COORDS = None
     _WORKER_CON = None
     _WORKER_DB_PATH = None
-    _WORKER_ZARR_PATH = None
+    _WORKER_EVENTSTORE_T1_PATH = None
     _WORKER_INDEX_YEARS = None
     _WORKER_MASKED = False
 
@@ -774,7 +774,7 @@ def run_parallel( con, concepts, workers, db_path, years, masked, similarity_thr
         initializer=_init_worker,
         initargs=(
             db_path,
-            ZARR_PATH,
+            EVENTSTORE_T1_PATH,
             years,
             masked,
             GLOBAL_PROJECTION_CACHE,
@@ -816,7 +816,7 @@ def main():
     args = parser.parse_args()
     logger.info( "[tier3.1] options: %s", vars(args) )
 
-    lookup = ZarrEventLookup( ZARR_PATH )
+    lookup = ZarrEventLookup( EVENTSTORE_T1_PATH )
 
     con = sqlite_connection( CORPUS_TIER2_DB_PATH )
     initialise_temporal_tables(con)

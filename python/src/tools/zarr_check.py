@@ -2,7 +2,7 @@
 import argparse
 import zarr
 
-from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH
+from lib.corpus_config import EVENTSTORE_T1_PATH, MASKED_EVENTSTORE_T1_PATH
 from lib.zarr_store_dirs import store_dirs
 
 
@@ -35,7 +35,7 @@ def check(root):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--mask", action="store_true", help="Check MASKED_ZARR_PATH instead of ZARR_PATH")
+    p.add_argument("--mask", action="store_true", help="Check MASKED_EVENTSTORE_T1_PATH instead of EVENTSTORE_T1_PATH")
     p.add_argument("--path", type=str, default=None, help="Override with an explicit path (e.g. a shard dir)")
     return p.parse_args()
 
@@ -46,7 +46,7 @@ def main():
     if args.path:
         root = args.path
     else:
-        root = MASKED_ZARR_PATH if args.mask else ZARR_PATH
+        root = MASKED_EVENTSTORE_T1_PATH if args.mask else EVENTSTORE_T1_PATH
 
     found_mismatch = check(root)
     raise SystemExit(1 if found_mismatch else 0)

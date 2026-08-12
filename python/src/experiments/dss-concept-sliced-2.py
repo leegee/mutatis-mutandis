@@ -23,7 +23,7 @@ import math
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     CORPUS_MAX_YEAR,
-    ZARR_PATH,
+    EVENTSTORE_T1_PATH,
     TMP_DIR
 )
 
@@ -318,7 +318,7 @@ def main():
     )
 
     lookup = ZarrEventLookup(
-        ZARR_PATH
+        EVENTSTORE_T1_PATH
     )
 
     lookup.attach_index(

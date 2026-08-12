@@ -53,7 +53,7 @@ from typing import (
     runtime_checkable,
 )
 
-from lib.corpus_config import MASKED_ZARR_PATH, ZARR_PATH
+from lib.corpus_config import MASKED_EVENTSTORE_T1_PATH, EVENTSTORE_T1_PATH
 
 import numpy as np
 
@@ -190,13 +190,6 @@ class ObservationStream(Protocol):
         """(min_pub_year, max_pub_year) across the whole store."""
         ...
 
-    def build_year_manifest(self) -> Mapping[Any, np.ndarray]:
-        """
-        Optional one-shot scan that returns a structure later passed as
-        year_manifest to iter_multi_scale_embeddings. Backends that have no
-        use for it may return an empty mapping.
-        """
-        ...
 
 
 # ---------------------------------------------------------------------------
@@ -382,19 +375,11 @@ def list_backends() -> list[str]:
 
 
 def default_store_path(store_backend: str, masked: bool) -> Path:
-    """
-    Resolve the observation-store root when --store is omitted.
-
-    Zarr → ZARR_PATH / MASKED_ZARR_PATH (historical)
-    Parquet → sibling directory tier1_parquet[_masked]
-    """
-    zarr_path = Path(MASKED_ZARR_PATH if masked else ZARR_PATH)
-
-    if store_backend == "zarr":
-        return zarr_path
-
-    suffix = "_masked" if masked else ""
-    return zarr_path.parent / f"tier1_parquet{suffix}"
+    return (
+        MASKED_EVENTSTORE_T1_PATH
+        if masked
+        else EVENTSTORE_T1_PATH
+    )
 
 
 def resolve_store_path(

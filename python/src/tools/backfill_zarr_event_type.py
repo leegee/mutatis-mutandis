@@ -9,11 +9,11 @@ from pathlib import Path
 
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 
-ZARR_PATH = Path("out/zarr/tier1")   # Adjust if your path is different
+EVENTSTORE_T1_PATH = Path("out/zarr/tier1")   # Adjust if your path is different
 
 def backfill():
     print("Opening Zarr store...")
-    store = ZarrEmbeddingObservationStore(str(ZARR_PATH), dim=768)
+    store = ZarrEmbeddingObservationStore(str(EVENTSTORE_T1_PATH), dim=768)
 
     g = store.root["events"]
     n = g["event_id"].shape[0]

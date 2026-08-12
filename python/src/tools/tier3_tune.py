@@ -39,7 +39,7 @@ import leidenalg
 
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
-    ZARR_PATH,
+    EVENTSTORE_T1_PATH,
     TMP_DIR,
     faiss_index_paths,
 )
@@ -84,7 +84,7 @@ def setup(mask: bool = False, with_index: bool = True):
     directly and never calling get_vectors()/get_global_coords() fresh.
     """
     con = sqlite_connection(CORPUS_TIER2_DB_PATH)
-    lookup = ZarrEventLookup(ZARR_PATH)
+    lookup = ZarrEventLookup(EVENTSTORE_T1_PATH)
 
     if with_index:
         years = sorted(

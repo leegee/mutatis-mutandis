@@ -3,14 +3,14 @@
 import zarr
 import numpy as np
 
-from lib.corpus_config import ZARR_PATH
+from lib.corpus_config import EVENTSTORE_T1_PATH
 from lib.zarr_store_dirs import store_dirs
 
 min_year = None
 max_year = None
 events = 0
 
-for store_dir in store_dirs(ZARR_PATH):
+for store_dir in store_dirs(EVENTSTORE_T1_PATH):
     g = zarr.open_group(str(store_dir), mode="r")
 
     if "events" not in g:

@@ -60,7 +60,7 @@ import argparse
 
 import numpy as np
 
-from lib.corpus_config import ZARR_PATH
+from lib.corpus_config import EVENTSTORE_T1_PATH
 from lib.corpus_faiss import CorpusFaissIndex
 from lib.corpus_logging import logger
 from lib.macberth import get_macberth_embedder
@@ -88,7 +88,7 @@ PROBE = [
 
 
 def load_lookup():
-    lookup = ZarrEventLookup(ZARR_PATH)
+    lookup = ZarrEventLookup(EVENTSTORE_T1_PATH)
     index = CorpusFaissIndex.load_all()
     lookup.attach_index(index)
     return lookup

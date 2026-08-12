@@ -22,6 +22,10 @@ Embeddings are stored as Arrow fixed-size lists of float32 so DuckDB can
 project them without decoding the entire row group when only metadata is
 needed.
 
+TODO
+----
+Enforce a clear separation of concerns.
+
 Usage
 -----
     from tier1.observation_store_api import (
@@ -67,15 +71,17 @@ def observation_schema(dim: int) -> pa.Schema:
     return pa.schema(
         [
             ("event_id", pa.int64()),
-            ("concept_id", pa.int64()),
-            ("vector_id", pa.int64()),
             ("corpus", pa.string()),
             ("doc_id", pa.string()),
             ("token", pa.string()),
             ("token_idx", pa.int64()),
-            ("window_id", pa.int64()),
-            ("window_token_pos", pa.int32()),
             ("pub_year", pa.int16()),
+            ("local_window_id", pa.int64()),
+            ("local_window_token_pos", pa.int32()),
+            ("medium_window_id", pa.int64()),
+            ("medium_window_token_pos", pa.int32()),
+            ("broad_window_id", pa.int64()),
+            ("broad_window_token_pos", pa.int32()),
             ("emb_local", _embedding_type(dim)),
             ("emb_medium", _embedding_type(dim)),
             ("emb_broad", _embedding_type(dim)),
@@ -160,24 +166,6 @@ def _has_parquet(root: Path) -> bool:
     return any(root.rglob("*.parquet"))
 
 
-def _list_to_matrix(series_or_list, dim: int) -> np.ndarray:
-    """Convert Arrow fixed-size list column / Python list-of-lists to (n, dim) float32."""
-    if isinstance(series_or_list, pa.ChunkedArray):
-        series_or_list = series_or_list.combine_chunks()
-    if isinstance(series_or_list, pa.Array):
-        # fixed_size_list -> Flatten then reshape is fastest
-        if pa.types.is_fixed_size_list(series_or_list.type):
-            flat = series_or_list.values.to_numpy(zero_copy_only=False)
-            n = len(series_or_list)
-            return np.asarray(flat, dtype=np.float32).reshape(n, dim)
-        # variable list fallback
-        return np.asarray(series_or_list.to_pylist(), dtype=np.float32)
-    arr = np.asarray(series_or_list, dtype=np.float32)
-    if arr.ndim == 1 and dim > 1:
-        # single vector
-        return arr.reshape(1, dim)
-    return arr
-
 
 # ---------------------------------------------------------------------------
 # Writer
@@ -193,14 +181,13 @@ class ParquetObservationWriter:
     """
     Append-only writer with per-year row buffers.
 
-    Tier 1 may call append_events once per document; this writer coalesces
-    rows until min_rows or min_bytes is reached (or flush()/close()), then
-    writes year={y}/part-{uuid}.parquet. That keeps hive layout while
-    avoiding hundreds of thousands of tiny files.
+    Each row is one contextual observation identified by event_id.
+    The three embeddings belong to that observation but may have
+    different source windows, so window provenance is stored per scale.
 
-    Concurrent writers against the same root are undefined (same as Zarr).
-    Always call flush() or close() at end of a run so the tail buffer is
-    written.
+    event_id is the only observation identity. There is deliberately no
+    concept_id or vector_id: an observation is not a concept and there is
+    no single vector identity for an ensemble of three vectors.
     """
 
     def __init__(
@@ -229,123 +216,147 @@ class ParquetObservationWriter:
         self.root.mkdir(parents=True, exist_ok=True)
         self._n_events: int | None = None
         self._con = _connect()
-        # year -> list[pa.Table] pending write
         self._buffers: dict[int, list[pa.Table]] = {}
         self._buffer_rows: dict[int, int] = {}
         self._buffer_bytes: dict[int, int] = {}
         self._closed = False
 
     def _estimate_bytes(self, n: int) -> int:
-        """Rough uncompressed payload: 3 embedding matrices + lean metadata."""
         emb = n * self.dim * 4 * 3
-        meta = n * 64  # ids, strings (order-of-magnitude)
+        meta = n * 96
         return emb + meta
 
     def append_events(
         self,
+        *,
         event_id,
-        concept_id,
+        corpus,
+        doc_id,
+        token,
+        token_idx,
+        pub_year,
+        local_window_id,
+        local_window_token_pos,
+        medium_window_id,
+        medium_window_token_pos,
+        broad_window_id,
+        broad_window_token_pos,
         emb_local,
         emb_medium,
         emb_broad,
-        vector_id,
-        corpus,
-        doc_id,
-        pub_year,
-        token_idx,
-        token,
-        window_id,
-        window_token_pos,
     ) -> None:
         if self._closed:
             raise RuntimeError("ParquetObservationWriter is closed")
 
         event_id = np.asarray(event_id, dtype=np.int64)
-        concept_id = np.asarray(concept_id, dtype=np.int64)
+        corpus = np.asarray(corpus).astype(str)
+        doc_id = np.asarray(doc_id).astype(str)
+        token = np.asarray(token).astype(str)
+        token_idx = np.asarray(token_idx, dtype=np.int64)
+        pub_year = np.asarray(pub_year, dtype=np.int16)
+
+        local_window_id = np.asarray(local_window_id, dtype=np.int64)
+        local_window_token_pos = np.asarray(
+            local_window_token_pos, dtype=np.int32
+        )
+        medium_window_id = np.asarray(medium_window_id, dtype=np.int64)
+        medium_window_token_pos = np.asarray(
+            medium_window_token_pos, dtype=np.int32
+        )
+        broad_window_id = np.asarray(broad_window_id, dtype=np.int64)
+        broad_window_token_pos = np.asarray(
+            broad_window_token_pos, dtype=np.int32
+        )
+
         emb_local = np.asarray(emb_local, dtype=np.float32)
         emb_medium = np.asarray(emb_medium, dtype=np.float32)
         emb_broad = np.asarray(emb_broad, dtype=np.float32)
-        vector_id = np.asarray(vector_id, dtype=np.int64)
-        token_idx = np.asarray(token_idx, dtype=np.int64)
-        token = np.asarray(token).astype(str)
-        doc_id = np.asarray(doc_id).astype(str)
-        corpus = np.asarray(corpus).astype(str)
-        pub_year = np.asarray(pub_year, dtype=np.int16)
-        window_id = np.asarray(window_id, dtype=np.int64)
-        window_token_pos = np.asarray(window_token_pos, dtype=np.int32)
 
         n = len(event_id)
+
         if n == 0:
             return
 
-        for name, arr in (
-            ("concept_id", concept_id),
-            ("vector_id", vector_id),
-            ("token_idx", token_idx),
-            ("token", token),
-            ("doc_id", doc_id),
+        metadata = (
             ("corpus", corpus),
+            ("doc_id", doc_id),
+            ("token", token),
+            ("token_idx", token_idx),
             ("pub_year", pub_year),
-            ("window_id", window_id),
-            ("window_token_pos", window_token_pos),
-        ):
-            if len(arr) != n:
-                raise ValueError(f"{name} length {len(arr)} != event_id length {n}")
+            ("local_window_id", local_window_id),
+            ("local_window_token_pos", local_window_token_pos),
+            ("medium_window_id", medium_window_id),
+            ("medium_window_token_pos", medium_window_token_pos),
+            ("broad_window_id", broad_window_id),
+            ("broad_window_token_pos", broad_window_token_pos),
+        )
 
-        if emb_local.shape != (n, self.dim):
-            raise ValueError(
-                f"emb_local shape {emb_local.shape} != ({n}, {self.dim})"
-            )
-        if emb_medium.shape != (n, self.dim):
-            raise ValueError(
-                f"emb_medium shape {emb_medium.shape} != ({n}, {self.dim})"
-            )
-        if emb_broad.shape != (n, self.dim):
-            raise ValueError(
-                f"emb_broad shape {emb_broad.shape} != ({n}, {self.dim})"
-            )
+        for name, arr in metadata:
+            if len(arr) != n:
+                raise ValueError(
+                    f"{name} length {len(arr)} != event_id length {n}"
+                )
+
+        for name, arr in (
+            ("emb_local", emb_local),
+            ("emb_medium", emb_medium),
+            ("emb_broad", emb_broad),
+        ):
+            if arr.shape != (n, self.dim):
+                raise ValueError(
+                    f"{name} shape {arr.shape} != ({n}, {self.dim})"
+                )
 
         years = np.unique(pub_year)
+
         with self._lock:
             for year in years:
                 mask = pub_year == year
+
                 table = self._build_table(
                     event_id[mask],
-                    concept_id[mask],
+                    corpus[mask],
+                    doc_id[mask],
+                    token[mask],
+                    token_idx[mask],
+                    pub_year[mask],
+                    local_window_id[mask],
+                    local_window_token_pos[mask],
+                    medium_window_id[mask],
+                    medium_window_token_pos[mask],
+                    broad_window_id[mask],
+                    broad_window_token_pos[mask],
                     emb_local[mask],
                     emb_medium[mask],
                     emb_broad[mask],
-                    vector_id[mask],
-                    corpus[mask],
-                    doc_id[mask],
-                    pub_year[mask],
-                    token_idx[mask],
-                    token[mask],
-                    window_id[mask],
-                    window_token_pos[mask],
                 )
+
                 y = int(year)
                 nrows = table.num_rows
+
                 self._buffers.setdefault(y, []).append(table)
-                self._buffer_rows[y] = self._buffer_rows.get(y, 0) + nrows
-                self._buffer_bytes[y] = self._buffer_bytes.get(y, 0) + self._estimate_bytes(
-                    nrows
+                self._buffer_rows[y] = (
+                    self._buffer_rows.get(y, 0) + nrows
                 )
+                self._buffer_bytes[y] = (
+                    self._buffer_bytes.get(y, 0)
+                    + self._estimate_bytes(nrows)
+                )
+
                 if (
                     self._buffer_rows[y] >= self.min_rows
                     or self._buffer_bytes[y] >= self.min_bytes
                 ):
                     self._flush_year_unlocked(y)
+
             self._n_events = None
 
     def flush(self) -> None:
-        """Write all buffered rows to part files."""
         with self._lock:
-            for year in list(self._buffers.keys()):
+            for year in list(self._buffers):
                 self._flush_year_unlocked(year)
 
     def close(self) -> None:
-        """Flush buffers and mark writer closed."""
         if self._closed:
             return
         self.flush()
@@ -361,44 +372,79 @@ class ParquetObservationWriter:
         tables = self._buffers.pop(year, None)
         self._buffer_rows.pop(year, None)
         self._buffer_bytes.pop(year, None)
+
         if not tables:
             return
-        table = pa.concat_tables(tables) if len(tables) > 1 else tables[0]
+
+        table = (
+            pa.concat_tables(tables)
+            if len(tables) > 1
+            else tables[0]
+        )
+
         self._write_part(year, table)
         self._n_events = None
 
     def _build_table(
         self,
         event_id,
-        concept_id,
+        corpus,
+        doc_id,
+        token,
+        token_idx,
+        pub_year,
+        local_window_id,
+        local_window_token_pos,
+        medium_window_id,
+        medium_window_token_pos,
+        broad_window_id,
+        broad_window_token_pos,
         emb_local,
         emb_medium,
         emb_broad,
-        vector_id,
-        corpus,
-        doc_id,
-        pub_year,
-        token_idx,
-        token,
-        window_id,
-        window_token_pos,
     ) -> pa.Table:
         def emb_col(mat: np.ndarray) -> pa.Array:
-            flat = pa.array(mat.reshape(-1), type=pa.float32())
-            return pa.FixedSizeListArray.from_arrays(flat, self.dim)
+            flat = pa.array(
+                mat.reshape(-1),
+                type=pa.float32(),
+            )
+            return pa.FixedSizeListArray.from_arrays(
+                flat,
+                self.dim,
+            )
 
         return pa.table(
             {
                 "event_id": pa.array(event_id, type=pa.int64()),
-                "concept_id": pa.array(concept_id, type=pa.int64()),
-                "vector_id": pa.array(vector_id, type=pa.int64()),
                 "corpus": pa.array(corpus, type=pa.string()),
                 "doc_id": pa.array(doc_id, type=pa.string()),
                 "token": pa.array(token, type=pa.string()),
                 "token_idx": pa.array(token_idx, type=pa.int64()),
-                "window_id": pa.array(window_id, type=pa.int64()),
-                "window_token_pos": pa.array(window_token_pos, type=pa.int32()),
                 "pub_year": pa.array(pub_year, type=pa.int16()),
+                "local_window_id": pa.array(
+                    local_window_id,
+                    type=pa.int64(),
+                ),
+                "local_window_token_pos": pa.array(
+                    local_window_token_pos,
+                    type=pa.int32(),
+                ),
+                "medium_window_id": pa.array(
+                    medium_window_id,
+                    type=pa.int64(),
+                ),
+                "medium_window_token_pos": pa.array(
+                    medium_window_token_pos,
+                    type=pa.int32(),
+                ),
+                "broad_window_id": pa.array(
+                    broad_window_id,
+                    type=pa.int64(),
+                ),
+                "broad_window_token_pos": pa.array(
+                    broad_window_token_pos,
+                    type=pa.int32(),
+                ),
                 "emb_local": emb_col(emb_local),
                 "emb_medium": emb_col(emb_medium),
                 "emb_broad": emb_col(emb_broad),
@@ -409,11 +455,14 @@ class ParquetObservationWriter:
     def _write_part(self, year: int, table: pa.Table) -> None:
         if table.num_rows == 0:
             return
+
         part_dir = self.root / f"year={year}"
         part_dir.mkdir(parents=True, exist_ok=True)
+
         part_name = f"part-{uuid.uuid4().hex[:12]}.parquet"
         dest = part_dir / part_name
         tmp = part_dir / f".{part_name}.tmp"
+
         write_observation_parquet(
             table,
             tmp,
@@ -422,48 +471,72 @@ class ParquetObservationWriter:
             row_group_size=self.row_group_size,
             data_page_size=self.data_page_size,
         )
+
         tmp.rename(dest)
 
     def _count(self) -> int:
-        # Include only on-disk rows; callers that need absolute counts
-        # after a run should flush() first.
         if not _has_parquet(self.root):
             return 0
+
         glob = _glob(self.root)
+
         row = self._con.execute(
-            f"SELECT count(*) FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)"
+            f"""
+            SELECT count(*)
+            FROM read_parquet(
+                '{glob}',
+                hive_partitioning=true,
+                union_by_name=true
+            )
+            """
         ).fetchone()
+
         return int(row[0]) if row else 0
 
     @property
     def n_events(self) -> int:
         if self._n_events is None:
             self._n_events = self._count()
+
         buffered = sum(self._buffer_rows.values())
         return self._n_events + buffered
 
     def get_doc_keys(self) -> set[tuple[str, str]]:
         if not _has_parquet(self.root):
             return set()
+
         glob = _glob(self.root)
+
         rows = self._con.execute(
             f"""
             SELECT DISTINCT corpus, doc_id
-            FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+            FROM read_parquet(
+                '{glob}',
+                hive_partitioning=true,
+                union_by_name=true
+            )
             """
         ).fetchall()
+
         return {(str(c), str(d)) for c, d in rows}
 
     def get_event_ids(self) -> set[int]:
         if not _has_parquet(self.root):
             return set()
+
         glob = _glob(self.root)
+
         rows = self._con.execute(
             f"""
             SELECT event_id
-            FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+            FROM read_parquet(
+                '{glob}',
+                hive_partitioning=true,
+                union_by_name=true
+            )
             """
         ).fetchall()
+
         return {int(r[0]) for r in rows}
 
     def embedding_dim(self) -> int:
@@ -471,6 +544,7 @@ class ParquetObservationWriter:
 
     def __len__(self) -> int:
         return self.n_events
+
 
 
 # ---------------------------------------------------------------------------
@@ -580,12 +654,7 @@ class ParquetObservationStream:
             raise RuntimeError("No pub_year data found in any parquet file")
         return int(row[0]), int(row[1])
 
-    def build_year_manifest(self) -> Mapping[Any, np.ndarray]:
-        """
-        Parquet does not need a year manifest — hive partitioning + WHERE
-        already skip unused years. Return empty mapping.
-        """
-        return {}
+
 
 
 # ---------------------------------------------------------------------------
@@ -622,14 +691,17 @@ class ParquetObservationLookup:
 
     _META_SQL_COLS = (
         "event_id",
-        "vector_id",
         "corpus",
         "doc_id",
         "token",
         "token_idx",
-        "window_id",
-        "window_token_pos",
         "pub_year",
+        "local_window_id",
+        "local_window_token_pos",
+        "medium_window_id",
+        "medium_window_token_pos",
+        "broad_window_id",
+        "broad_window_token_pos",
     )
 
     def __init__(
@@ -661,14 +733,26 @@ class ParquetObservationLookup:
     def _load_metadata(self) -> None:
         empty = {
             "event_id": np.empty(0, dtype=np.int64),
-            "vector_id": np.empty(0, dtype=np.int64),
             "corpus": np.empty(0, dtype=object),
             "doc_id": np.empty(0, dtype=object),
             "token": np.empty(0, dtype=object),
             "token_idx": np.empty(0, dtype=np.int64),
-            "window_id": np.empty(0, dtype=np.int64),
-            "window_token_pos": np.empty(0, dtype=np.int64),
             "pub_year": np.empty(0, dtype=np.int16),
+            "local_window_id": np.empty(0, dtype=np.int64),
+            "local_window_token_pos": np.empty(
+                0,
+                dtype=np.int32,
+            ),
+            "medium_window_id": np.empty(0, dtype=np.int64),
+            "medium_window_token_pos": np.empty(
+                0,
+                dtype=np.int32,
+            ),
+            "broad_window_id": np.empty(0, dtype=np.int64),
+            "broad_window_token_pos": np.empty(
+                0,
+                dtype=np.int32,
+            ),
         }
         for k, v in empty.items():
             setattr(self, k, v)
@@ -712,19 +796,59 @@ class ParquetObservationLookup:
         if n == 0:
             return
 
-        self.event_id = arrow.column("event_id").to_numpy().astype(np.int64, copy=False)
-        self.vector_id = arrow.column("vector_id").to_numpy().astype(np.int64, copy=False)
-        self.token_idx = arrow.column("token_idx").to_numpy().astype(np.int64, copy=False)
-        self.window_id = arrow.column("window_id").to_numpy().astype(np.int64, copy=False)
-        self.pub_year = arrow.column("pub_year").to_numpy().astype(np.int16, copy=False)
+        self.event_id = arrow.column("event_id").to_numpy().astype(
+            np.int64,
+            copy=False,
+        )
+        self.token_idx = arrow.column("token_idx").to_numpy().astype(
+            np.int64,
+            copy=False,
+        )
+        self.pub_year = arrow.column("pub_year").to_numpy().astype(
+            np.int16,
+            copy=False,
+        )
 
-        wpos = arrow.column("window_token_pos").to_numpy()
-        self.window_token_pos = wpos.astype(np.int64, copy=False)
+        for name in (
+            "local_window_id",
+            "medium_window_id",
+            "broad_window_id",
+        ):
+            setattr(
+                self,
+                name,
+                arrow.column(name).to_numpy().astype(
+                    np.int64,
+                    copy=False,
+                ),
+            )
 
-        # string columns → object arrays of Python str
-        self.corpus = np.asarray(arrow.column("corpus").to_pylist(), dtype=object)
-        self.doc_id = np.asarray(arrow.column("doc_id").to_pylist(), dtype=object)
-        self.token = np.asarray(arrow.column("token").to_pylist(), dtype=object)
+        for name in (
+            "local_window_token_pos",
+            "medium_window_token_pos",
+            "broad_window_token_pos",
+        ):
+            setattr(
+                self,
+                name,
+                arrow.column(name).to_numpy().astype(
+                    np.int32,
+                    copy=False,
+                ),
+            )
+
+        self.corpus = np.asarray(
+            arrow.column("corpus").to_pylist(),
+            dtype=object,
+        )
+        self.doc_id = np.asarray(
+            arrow.column("doc_id").to_pylist(),
+            dtype=object,
+        )
+        self.token = np.asarray(
+            arrow.column("token").to_pylist(),
+            dtype=object,
+        )
 
         self._pos = {int(eid): i for i, eid in enumerate(self.event_id.tolist())}
         self._build_position_index()
@@ -761,18 +885,34 @@ class ParquetObservationLookup:
         return self._pos[int(event_id)]
 
     def _row_to_dict(self, pos: int) -> dict:
-        wpos = int(self.window_token_pos[pos])
+        def window_pos(value: int) -> int | None:
+            return (
+                None
+                if value == NO_WINDOW_TOKEN_POS
+                else int(value)
+            )
+
         return {
             "event_id": int(self.event_id[pos]),
-            "vector_id": int(self.vector_id[pos]),
             "doc_id": str(self.doc_id[pos]),
             "corpus": str(self.corpus[pos]),
             "token": str(self.token[pos]),
             "token_idx": int(self.token_idx[pos]),
-            "window_id": int(self.window_id[pos]),
-            "window_token_pos": None if wpos == NO_WINDOW_TOKEN_POS else wpos,
             "pub_year": int(self.pub_year[pos]),
+            "local_window_id": int(self.local_window_id[pos]),
+            "local_window_token_pos": window_pos(
+                self.local_window_token_pos[pos]
+            ),
+            "medium_window_id": int(self.medium_window_id[pos]),
+            "medium_window_token_pos": window_pos(
+                self.medium_window_token_pos[pos]
+            ),
+            "broad_window_id": int(self.broad_window_id[pos]),
+            "broad_window_token_pos": window_pos(
+                self.broad_window_token_pos[pos]
+            ),
         }
+
 
     def get_event_metadata(self, event_id: int) -> dict:
         return self._row_to_dict(self.get_pos(event_id))

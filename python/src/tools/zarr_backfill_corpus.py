@@ -14,13 +14,13 @@ import numpy as np
 import zarr
 
 from lib.corpus_logging import logger
-from lib.corpus_config import ZARR_PATH
+from lib.corpus_config import EVENTSTORE_T1_PATH
 
 PLACEHOLDER = "unknown"
 
 
 def main():
-    g = zarr.open_group(str(ZARR_PATH), mode="a")["events"]
+    g = zarr.open_group(str(EVENTSTORE_T1_PATH), mode="a")["events"]
 
     n = g["event_id"].shape[0]
     corpus_ds = g["corpus"]

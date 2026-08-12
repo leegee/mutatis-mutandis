@@ -23,8 +23,8 @@ from collections import Counter
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     CORPUS_TIER2_MASKED_DB_PATH,
-    ZARR_PATH,
-    MASKED_ZARR_PATH,
+    EVENTSTORE_T1_PATH,
+    MASKED_EVENTSTORE_T1_PATH,
     faiss_index_paths,
     discover_index_years,
 )

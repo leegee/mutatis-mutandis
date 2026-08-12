@@ -111,8 +111,8 @@ def _install_lib_stubs(load_calls, evict_log, search_calls):
     cfg_mod = types.ModuleType("lib.corpus_config")
     cfg_mod.CORPUS_TIER2_DB_PATH = None
     cfg_mod.CORPUS_TIER2_MASKED_DB_PATH = None
-    cfg_mod.ZARR_PATH = None
-    cfg_mod.MASKED_ZARR_PATH = None
+    cfg_mod.EVENTSTORE_T1_PATH = None
+    cfg_mod.MASKED_EVENTSTORE_T1_PATH = None
     cfg_mod.faiss_index_paths = lambda **k: {}
     cfg_mod.discover_index_years = lambda *a, **k: []
     sys.modules["lib.corpus_config"] = cfg_mod

@@ -13,7 +13,7 @@ from sklearn.metrics.pairwise import cosine_distances
 from lib.corpus_logging import logger
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
-    ZARR_PATH,
+    EVENTSTORE_T1_PATH,
     faiss_index_paths,
 )
 

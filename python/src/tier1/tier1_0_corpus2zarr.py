@@ -656,7 +656,7 @@ class CorpusProcessor:
         self.parquet_min_bytes = parquet_min_bytes
 
         # Back-compat alias used by older callers / logging.
-        self.zarr_path = self.store_path
+        self.EVENTSTORE_T1_PATH = self.store_path
 
     def _shard_clause(self):
         if self.shard is None or self.num_shards <= 1:

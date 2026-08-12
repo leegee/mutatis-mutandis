@@ -51,14 +51,14 @@ JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
-ZARR_ROOT = OUT_DIR / "zarr"
-ZARR_ROOT.mkdir(parents=True, exist_ok=True)
+EVENTSTORE_ROOT = OUT_DIR / "events"
+EVENTSTORE_ROOT.mkdir(parents=True, exist_ok=True)
 
-ZARR_PATH = ZARR_ROOT / "tier1"
-ZARR_PATH.mkdir(parents=True, exist_ok=True)
+EVENTSTORE_T1_PATH = EVENTSTORE_ROOT / "tier1"
+EVENTSTORE_T1_PATH.mkdir(parents=True, exist_ok=True)
 
-MASKED_ZARR_PATH = ZARR_ROOT / "tier1-masked"
-MASKED_ZARR_PATH.mkdir(parents=True, exist_ok=True)
+MASKED_EVENTSTORE_T1_PATH = EVENTSTORE_ROOT / "tier1-masked"
+MASKED_EVENTSTORE_T1_PATH.mkdir(parents=True, exist_ok=True)
 
 MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)

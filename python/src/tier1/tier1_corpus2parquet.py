@@ -111,7 +111,6 @@ class Event:
     window_start_token_idx: int
     window_token_pos: int
     token: str
-    vector_id: int
     vec: np.ndarray
     config_name: str
 
@@ -128,7 +127,6 @@ class Event:
         window_start: int,
         window_token_pos: int,
         token: str,
-        vector_id: int,
         vec: np.ndarray,
         config_name: str = "medium",
     ) -> Event:
@@ -148,7 +146,6 @@ class Event:
             window_start_token_idx=window_start_token_idx,
             window_token_pos=window_token_pos,
             token=token,
-            vector_id=vector_id,
             vec=vec.astype(np.float32),
             config_name=config_name,
         )
@@ -494,7 +491,6 @@ class EmbeddingPipeline:
                     window_start=job.get("window_start", 0),
                     window_token_pos=job["target_encoded_pos"],
                     token=token,
-                    vector_id=buf.vector_ids[word_id],
                     vec=vec,
                     config_name=config_name,
                 )
@@ -720,7 +716,6 @@ class EmbeddingPipeline:
                     window_start=window_start,
                     window_token_pos=i,
                     token=buf.tokens[wid],
-                    vector_id=buf.vector_ids[wid],
                     vec=hidden[i],
                     config_name=config_name,
                 )
@@ -737,7 +732,6 @@ class CorpusProcessor:
         pipeline,
         *,
         store_backend: str = DEFAULT_STORE_BACKEND,
-        report_every=100,
         shard=None,
         num_shards=1,
         parquet_min_rows=None,
@@ -747,14 +741,13 @@ class CorpusProcessor:
         self.store_backend = store_backend
         self.conn = conn
         self.pipeline = pipeline
-        self.report_every = report_every
         self.shard = shard
         self.num_shards = num_shards
         self.parquet_min_rows = parquet_min_rows
         self.parquet_min_bytes = parquet_min_bytes
 
         # Back-compat alias used by older callers/logging.
-        self.zarr_path = self.store_path
+        self.EVENTSTORE_T1_PATH = self.store_path
 
     def _shard_clause(self):
         if self.shard is None or self.num_shards <= 1:
@@ -829,7 +822,7 @@ class CorpusProcessor:
         if doc_id:
             cur.execute(
                 f"""
-                SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
+                SELECT corpus, doc_id, token_idx, token, pub_year
                 FROM pamphlet_tokens
                 WHERE doc_id = %s{shard_sql}
                 ORDER BY token_idx
@@ -839,7 +832,7 @@ class CorpusProcessor:
         else:
             cur.execute(
                 f"""
-                SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
+                SELECT corpus, doc_id, token_idx, token, pub_year
                 FROM pamphlet_tokens
                 WHERE 1=1{shard_sql}
                 ORDER BY corpus, doc_id, token_idx
@@ -847,10 +840,7 @@ class CorpusProcessor:
                 shard_params,
             )
 
-        logger.info(
-            "[tier1] Query executed for doc_id=%s",
-            doc_id,
-        )
+        logger.info( "[tier1] Query executed for doc_id=%s", doc_id, )
 
         buf = None
 
@@ -858,7 +848,6 @@ class CorpusProcessor:
             row_corpus,
             row_doc_id,
             token_idx,
-            vid,
             token,
             pub_year,
         ) in cur:
@@ -872,19 +861,18 @@ class CorpusProcessor:
                     self._flush(buf, store)
                     completed_docs += 1
 
-                    if completed_docs % self.report_every == 0:
-                        pct = (
-                            completed_docs / total_docs * 100
-                            if total_docs
-                            else 0
-                        )
+                    pct = (
+                        completed_docs / total_docs * 100
+                        if total_docs
+                        else 0
+                    )
 
-                        logger.info(
-                            "[tier1] Processed %d/%d documents (%.1f%%)",
-                            completed_docs,
-                            total_docs,
-                            pct,
-                        )
+                    logger.info(
+                        "[tier1] Processed %d/%d documents (%.1f%%)",
+                        completed_docs,
+                        total_docs,
+                        pct,
+                    )
 
                 buf = DocBuffer(
                     corpus=row_corpus,
@@ -892,7 +880,7 @@ class CorpusProcessor:
                     pub_year=pub_year,
                 )
 
-            buf.append(token, vid, token_idx)
+            buf.append(token, token_idx)
 
         if buf and buf.key not in already_processed:
             self._flush(buf, store)
@@ -904,12 +892,7 @@ class CorpusProcessor:
                 else 0
             )
 
-            logger.info(
-                "[tier1] Processed %d/%d documents (%.1f%%)",
-                completed_docs,
-                total_docs,
-                pct,
-            )
+            logger.info( "[tier1] Processed %d/%d documents (%.1f%%)", completed_docs, total_docs, pct, )
 
         if hasattr(store, "flush"):
             store.flush()
@@ -956,7 +939,6 @@ class CorpusProcessor:
         emb_medium = []
         emb_broad = []
 
-        vector_ids = []
         doc_ids = []
         token_idxs = []
         tokens = []
@@ -991,7 +973,6 @@ class CorpusProcessor:
             emb_medium.append(medium.vec)
             emb_broad.append(broad.vec)
 
-            vector_ids.append(medium.vector_id)
             corpora.append(medium.corpus)
             doc_ids.append(medium.doc_id)
             token_idxs.append(medium.corpus_token_idx)
@@ -1024,10 +1005,6 @@ class CorpusProcessor:
             emb_local=np.stack(emb_local),
             emb_medium=np.stack(emb_medium),
             emb_broad=np.stack(emb_broad),
-            vector_id=np.asarray(
-                vector_ids,
-                dtype=np.int64,
-            ),
             doc_id=np.asarray(
                 doc_ids,
                 dtype="U64",
@@ -1101,104 +1078,33 @@ def parse_args():
         description="Tier 1: multi-scale contextual embedding construction"
     )
 
-    p.add_argument(
-        "--clear",
-        action="store_true",
-        help="Wipe the store, start from scratch",
-    )
+    p.add_argument( "--clear", action="store_true", help="Wipe the store, start from scratch", )
+    p.add_argument( "--doc-id", type=str, default=None, help="doc_id of a document to process", )
+    p.add_argument( "--batch-size", type=int, default=EMBED_BATCH_SIZE, )
 
-    p.add_argument(
-        "--doc-id",
-        type=str,
-        default=None,
-        help="doc_id of a document to process",
-    )
-
-    p.add_argument(
-        "--report-every",
-        type=int,
-        default=100,
-    )
-
-    p.add_argument(
-        "--mask",
-        action="store_true",
-        help="Use masking",
-    )
-
-    p.add_argument(
-        "--pooling-scope",
-        choices=["mask_only", "context"],
-        default="mask_only",
-    )
-
-    p.add_argument(
-        "--batch-size",
-        type=int,
-        default=EMBED_BATCH_SIZE,
-    )
-
-    p.add_argument(
-        "--mask-only-position",
-        action="store_true",
-        default=True,
+    p.add_argument( "--mask", action="store_true", help="Use masking", )
+    p.add_argument( "--pooling-scope", choices=["mask_only", "context"], default="mask_only", )
+    p.add_argument( "--mask-only-position", action="store_true", default=True,
         help="Mask only the target token (recommended for semantics)",
     )
 
-    p.add_argument(
-        "--shard",
-        type=int,
-        default=None,
-        help="This process's shard index (0-based)",
-    )
+    p.add_argument( "--shard", type=int, default=None, help="This process's shard index (0-based)", )
+    p.add_argument( "--num-shards", type=int, default=1, help="Total number of shards", )
 
-    p.add_argument(
-        "--num-shards",
-        type=int,
-        default=1,
-        help="Total number of shards",
-    )
-
-    p.add_argument(
-        "--backend",
-        choices=["onnx", "pytorch"],
-        default="onnx",
+    p.add_argument( "--backend", choices=["onnx", "pytorch"], default="onnx",
         help="Inference backend for embedding",
     )
+    p.add_argument( "--onnx-provider", choices=["cpu", "dml"], default="cpu", help="ONNX Runtime provider", )
 
-    p.add_argument(
-        "--store-backend",
-        choices=["zarr", "parquet"],
-        default=DEFAULT_STORE_BACKEND,
+    p.add_argument( "--store", type=str, default=None, help="Override observation store root path", )
+    p.add_argument( "--store-backend", choices=["zarr", "parquet"], default=DEFAULT_STORE_BACKEND,
         help=f"Observation store backend (default: {DEFAULT_STORE_BACKEND})",
     )
-
-    p.add_argument(
-        "--store",
-        type=str,
-        default=None,
-        help="Override observation store root path",
-    )
-
-    p.add_argument(
-        "--parquet-min-rows",
-        type=int,
-        default=None,
+    p.add_argument( "--parquet-min-rows", type=int, default=None,
         help="Parquet writer: flush after this many buffered rows",
     )
-
-    p.add_argument(
-        "--parquet-min-bytes",
-        type=int,
-        default=None,
+    p.add_argument( "--parquet-min-bytes", type=int, default=None,
         help="Parquet writer: flush after approximately this many bytes",
-    )
-
-    p.add_argument(
-        "--onnx-provider",
-        choices=["cpu", "dml"],
-        default="cpu",
-        help="ONNX Runtime provider",
     )
 
     return p.parse_args()
@@ -1248,32 +1154,23 @@ def main():
     )
 
     if args.clear:
-        logger.info(
-            "[tier1] Clearing Tier 1 output at %s",
-            store_path,
-        )
+        logger.info( "[tier1] Clearing Tier 1 output at %s", store_path )
         clear_output_dir(store_path)
 
     conn = get_connection()
 
     if args.backend == "onnx":
         from lib.macberth import load_macberth_onnx
-
         providers = (
             ["DmlExecutionProvider", "CPUExecutionProvider"]
             if args.onnx_provider == "dml"
             else ["CPUExecutionProvider"]
         )
+        mac = load_macberth_onnx( providers=providers, )
 
-        mac = load_macberth_onnx(
-            providers=providers,
-        )
     else:
         from lib.macberth import load_macberth
-
-        mac = load_macberth(
-            use_qint8=False,
-        )
+        mac = load_macberth( use_qint8=False, )
 
     pipeline = EmbeddingPipeline(
         mac,
@@ -1288,16 +1185,13 @@ def main():
         store_path,
         pipeline,
         store_backend=store_backend,
-        report_every=args.report_every,
         shard=args.shard,
         num_shards=args.num_shards,
         parquet_min_rows=args.parquet_min_rows,
         parquet_min_bytes=args.parquet_min_bytes,
     )
 
-    proc.process(
-        doc_id=args.doc_id,
-    )
+    proc.process( doc_id=args.doc_id )
 
     # A shard is mergeable only after the complete document stream has
     # processed successfully. Presence of the store directory alone is

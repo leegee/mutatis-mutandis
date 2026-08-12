@@ -77,7 +77,7 @@ import math
 
 from lib.corpus_config import (
     CORPUS_MAX_YEAR,
-    ZARR_PATH,
+    EVENTSTORE_T1_PATH,
     TMP_DIR
 )
 
@@ -249,7 +249,7 @@ def search_phrase(
             conn.close()
 
     if lookup is None:
-        lookup = ZarrEventLookup(ZARR_PATH)
+        lookup = ZarrEventLookup(EVENTSTORE_T1_PATH)
 
     resolved, missing = resolve_tier1_events(
         lookup,
@@ -1001,7 +1001,7 @@ def run(
 
     if owns_lookup:
         source_index = EeboFaissIndex.load_all( workers=8, )
-        lookup = ZarrEventLookup( ZARR_PATH )
+        lookup = ZarrEventLookup( EVENTSTORE_T1_PATH )
         lookup.attach_index( source_index )
 
     result = core(

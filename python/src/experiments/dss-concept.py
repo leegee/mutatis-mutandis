@@ -21,7 +21,7 @@ import sqlite3
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     CORPUS_MAX_YEAR,
-    ZARR_PATH,
+    EVENTSTORE_T1_PATH,
 )
 
 from lib.corpus_faiss import CorpusFaissIndex
@@ -187,7 +187,7 @@ def main():
     # Full index needed for source vector reconstruction
     source_index = CorpusFaissIndex.load_all( workers=8 )
 
-    lookup = ZarrEventLookup( ZARR_PATH )
+    lookup = ZarrEventLookup( EVENTSTORE_T1_PATH )
     lookup.attach_index( source_index )
 
     positions = [

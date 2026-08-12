@@ -50,7 +50,7 @@ from lib.macberth import get_macberth_embedder
 from lib.zarr_event_lookup import ZarrEventLookup
 from lib.corpus_faiss import CorpusFaissIndex
 from lib.corpus_logging import logger
-from lib.corpus_config import ZARR_PATH
+from lib.corpus_config import EVENTSTORE_T1_PATH
 
 
 TOP_WINDOWS = 5
@@ -71,7 +71,7 @@ PROBE = [
 
 
 def load_lookup():
-    lookup = ZarrEventLookup(ZARR_PATH)
+    lookup = ZarrEventLookup(EVENTSTORE_T1_PATH)
     index = CorpusFaissIndex.load_all()
     lookup.attach_index(index)
     return lookup

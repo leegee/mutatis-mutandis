@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import argparse
 
-from lib.corpus_config import ZARR_PATH
+from lib.corpus_config import EVENTSTORE_T1_PATH
 from lib.corpus_db import get_connection
 from lib.zarr_event_lookup import ZarrEventLookup
 
@@ -133,7 +133,7 @@ def search_phrase(
         conn.close()
 
     if lookup is None:
-        lookup = ZarrEventLookup(ZARR_PATH)
+        lookup = ZarrEventLookup(EVENTSTORE_T1_PATH)
 
     positions = [
         (corpus, doc_id, token_idx)
