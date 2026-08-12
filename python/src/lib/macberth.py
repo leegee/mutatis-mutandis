@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List, Union
-
+import onnxruntime as ort
 from types import SimpleNamespace
 import numpy as np
 import torch
