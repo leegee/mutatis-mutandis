@@ -53,6 +53,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
+from lib.corpus_logging import logger
+
 # ---------------------------------------------------------------------------
 # Schema
 # ---------------------------------------------------------------------------
@@ -571,14 +573,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 min_score=args.min_score,
                 max_depth=args.max_depth,
             )
-            print(f"{args.concept.upper()}: {n} delta edges")
+            logger.info(f"{args.concept.upper()}: {n} delta edges")
             if args.export_json:
                 payload = deltas_for_export(con, args.concept.upper())
                 Path(args.export_json).write_text(
                     json.dumps(payload, indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
-                print(f"wrote {args.export_json}")
+                logger.info(f"wrote {args.export_json}")
         elif args.all:
             counts = build_neighbour_deltas_for_all(
                 con,
@@ -587,8 +589,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 max_depth=args.max_depth,
             )
             for concept, n in counts.items():
-                print(f"{concept}: {n} delta edges")
-            print(f"total concepts={len(counts)} edges={sum(counts.values())}")
+                logger.info(f"{concept}: {n} delta edges")
+            logger.info(f"total concepts={len(counts)} edges={sum(counts.values())}")
         else:
             raise SystemExit("Specify --concept NAME or --all")
     finally:

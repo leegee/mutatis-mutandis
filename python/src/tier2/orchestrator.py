@@ -71,7 +71,7 @@ from tier2.resources import LazyYearIndices
 
 
 
-DEFAULT_STORE_BACKEND = "zarr"
+DEFAULT_STORE_BACKEND = "parquet"
 
 
 

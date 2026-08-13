@@ -20,7 +20,7 @@ from pathlib import Path
 from retrieval.parquet_observations import load_embeddings
 from retrieval.diskann_builder import build_diskann_index
 import lib.corpus_config as config
-
+from lib.corpus_logging import logger
 
 SCALES = ("local", "medium", "broad")
 DEFAULT_DIMENSIONS = 768
@@ -40,7 +40,7 @@ def build_one(
     num_threads: int,
     pq_disk_bytes: int,
 ) -> Path:
-    print(
+    logger.info(
         f"Loading Parquet observations: "
         f"year={year} scale={scale}"
     )
@@ -52,7 +52,7 @@ def build_one(
         dimensions=dimensions,
     )
 
-    print(
+    logger.info(
         f"Loaded {len(event_ids)} observations "
         f"with vectors of shape {vectors.shape}"
     )
@@ -63,7 +63,7 @@ def build_one(
         / scale
     )
 
-    print(
+    logger.info(
         f"Building DiskANN index: {output_directory}"
     )
 
@@ -81,10 +81,10 @@ def build_one(
         index_prefix=scale,
     )
 
-    print(
+    logger.info(
         f"DiskANN build complete: {output_directory}"
     )
-    print(
+    logger.info(
         f"Event-ID mapping: {event_ids_path}"
     )
 
