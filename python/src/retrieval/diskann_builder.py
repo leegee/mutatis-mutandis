@@ -1,14 +1,16 @@
+# retieval/diskann_builder.py
+
 from pathlib import Path
 
 import diskannpy
 import numpy as np
 
-from .models import Float32Array, Int64Array
+from .models import Float32Array, UInt64Array
 
 
 def build_diskann_index(
     vectors: Float32Array,
-    event_ids: Int64Array,
+    event_ids: UInt64Array,
     *,
     index_directory: str | Path,
     dimensions: int,
@@ -37,7 +39,7 @@ def build_diskann_index(
         remains the source of truth and the DiskANN artefacts are disposable.
     """
     vector_array = np.asarray(vectors, dtype=np.float32)
-    event_id_array = np.asarray(event_ids, dtype=np.int64)
+    event_id_array = np.asarray(event_ids, dtype=np.uint64)
 
     if vector_array.ndim != 2:
         raise ValueError("vectors must be two-dimensional")

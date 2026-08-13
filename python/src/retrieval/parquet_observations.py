@@ -6,7 +6,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.dataset as ds
 
-from .models import Float32Array, Int64Array
+from .models import Float32Array, UInt64Array
 
 
 def load_embeddings(
@@ -15,7 +15,7 @@ def load_embeddings(
     year: int,
     scale: str,
     dimensions: int,
-) -> tuple[Int64Array, Float32Array]:
+) -> tuple[UInt64Array, Float32Array]:
     """
     Load one year's observation embeddings from the Parquet corpus.
 
@@ -68,7 +68,7 @@ def load_embeddings(
 
     event_ids = np.asarray(
         table.column("event_id").to_numpy(),
-        dtype=np.int64,
+        dtype=np.uint64,
     )
 
     vectors = np.asarray(

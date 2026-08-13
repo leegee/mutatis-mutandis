@@ -5,7 +5,8 @@ from pathlib import Path
 import diskannpy
 import numpy as np
 
-from .models import Float32Array, SearchResult
+from .mapping import ObservationIdMapping
+from .models import Float32Array, SearchResult, UInt64Array
 from .observation_index import ObservationIndex
 
 
@@ -26,7 +27,7 @@ class DiskANNObservationIndex(ObservationIndex):
         index_prefix: str = "local",
     ) -> None:
         self._index_directory = Path(index_directory)
-        self._event_ids = np.load(event_ids_path, mmap_mode="r")
+        self._event_ids = ObservationIdMapping(event_ids_path)
 
         self._dimensions = dimensions
         self._num_threads = num_threads
@@ -51,9 +52,6 @@ class DiskANNObservationIndex(ObservationIndex):
 
         if num_nodes_to_cache < 0:
             raise ValueError("num_nodes_to_cache must be non-negative")
-
-        if self._event_ids.ndim != 1:
-            raise ValueError("event_ids mapping must be one-dimensional")
 
         self._index = diskannpy.StaticDiskIndex(
             index_directory=str(self._index_directory),
@@ -200,15 +198,5 @@ class DiskANNObservationIndex(ObservationIndex):
     def _map_local_ids(
         self,
         local_ids: np.ndarray,
-    ) -> np.ndarray:
-        if np.any(local_ids < 0) or np.any(
-            local_ids >= len(self._event_ids)
-        ):
-            raise IndexError(
-                "DiskANN returned an invalid local observation ID"
-            )
-
-        return np.asarray(
-            self._event_ids[local_ids],
-            dtype=np.uint64,
-        )
+    ) -> UInt64Array:
+        return self._event_ids.event_ids(local_ids)

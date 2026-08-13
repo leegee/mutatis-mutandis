@@ -5,13 +5,14 @@ from numpy.typing import NDArray
 
 Float32Array = NDArray[np.float32]
 Int64Array = NDArray[np.int64]
+UInt64Array = NDArray[np.uint64]
 
 
 @dataclass(slots=True)
 class SearchResult:
     """ANN results expressed in stable observation IDs."""
 
-    event_ids: Int64Array
+    event_ids: UInt64Array
     distances: Float32Array
 
     def __post_init__(self) -> None:
