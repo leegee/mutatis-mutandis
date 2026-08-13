@@ -41,7 +41,7 @@ from pathlib import Path
 
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.corpus_config import EMBED_BATCH_SIZE, CONCEPT_SETS
+import lib.corpus_config as config
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS
 
@@ -53,9 +53,6 @@ from tier1.observation_store_api import (
 
 import lib.zarr_observation_backend  # noqa: F401
 import lib.parquet_observation_backend  # noqa: F401
-
-
-DEFAULT_STORE_BACKEND = "parquet"
 
 WINDOW_CONFIGS = [
     {"name": "local", "size": 256, "stride": 128},
@@ -89,7 +86,7 @@ def is_mask_target(token: str) -> bool:
 
     return any(
         normalised in concept["forms"]
-        for concept in CONCEPT_SETS.values()
+        for concept in config.CONCEPT_SETS.values()
     )
 
 
@@ -158,7 +155,7 @@ class EmbeddingPipeline:
         mask_targets: bool = True,
         pooling_scope: str = "mask_only",
         mask_only_position: bool = True,
-        batch_size: int = EMBED_BATCH_SIZE,
+        batch_size: int = config.EMBED_BATCH_SIZE,
     ):
         self.macberth = mac
         self.tokenizer = mac.tokenizer
@@ -1080,7 +1077,7 @@ def parse_args():
 
     p.add_argument( "--clear", action="store_true", help="Wipe the store, start from scratch", )
     p.add_argument( "--doc-id", type=str, default=None, help="doc_id of a document to process", )
-    p.add_argument( "--batch-size", type=int, default=EMBED_BATCH_SIZE, )
+    p.add_argument( "--batch-size", type=int, default=config.EMBED_BATCH_SIZE, )
 
     p.add_argument( "--mask", action="store_true", help="Use masking", )
     p.add_argument( "--pooling-scope", choices=["mask_only", "context"], default="mask_only", )
@@ -1096,10 +1093,7 @@ def parse_args():
     )
     p.add_argument( "--onnx-provider", choices=["cpu", "dml"], default="cpu", help="ONNX Runtime provider", )
 
-    p.add_argument( "--store", type=str, default=None, help="Override observation store root path", )
-    p.add_argument( "--store-backend", choices=["zarr", "parquet"], default=DEFAULT_STORE_BACKEND,
-        help=f"Observation store backend (default: {DEFAULT_STORE_BACKEND})",
-    )
+    p.add_argument( "--store", type=Path, default=config.EVENTSTORE_T1_PATH, help="Override observation store root path", )
     p.add_argument( "--parquet-min-rows", type=int, default=None,
         help="Parquet writer: flush after this many buffered rows",
     )
@@ -1138,12 +1132,7 @@ def main():
             torch.get_num_threads(),
         )
 
-    store_backend = args.store_backend
-
-    configure_store_backend(
-        store_backend,
-        num_shards=args.num_shards,
-    )
+    configure_store_backend( "parquet", num_shards=args.num_shards, )
 
     store_path = resolve_store_path(
         store_backend=store_backend,

@@ -224,7 +224,7 @@ def build_indices(
                         exact=True,
                     )
 
-                indices[year][scale].add(year_emb, year_obs_ids)
+                indices[year][scale].add(year_obs_ids, year_emb, )
 
                 logger.debug(
                     "[faiss-build-debug] year=%d scale=%s ntotal=%d",
@@ -361,22 +361,13 @@ def parse_args():
     )
     p.add_argument("--clear", action="store_true", help="Wipe existing FAISS indices and rebuild")
     p.add_argument("--mask", action="store_true", help="Use masked corpus paths")
-    p.add_argument(
-        "--backend",
-        choices=["zarr", "parquet"],
-        default=DEFAULT_BACKEND,
+    p.add_argument( "--backend", choices=["zarr", "parquet"], default=DEFAULT_BACKEND,
         help=f"Observation store backend (default: {DEFAULT_BACKEND})",
     )
-    p.add_argument(
-        "--store",
-        type=str,
-        default=None,
+    p.add_argument( "--store", type=str, default=None,
         help="Override observation store root path (default depends on --backend)",
     )
-    p.add_argument(
-        "--year-chunk",
-        type=int,
-        default=20,
+    p.add_argument( "--year-chunk", type=int, default=20,
         help="Number of years to hold in memory per pass (default: 20)",
     )
     return p.parse_args()
