@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from .models import Float32Array, SearchSpace
+import numpy as np
+
+from .models import Float32Array, SearchResult, SearchSpace
 from .observation_index_store import ObservationIndexStore
 from .parquet_context import ObservationContext, ParquetContext
 from .retriever import ObservationRetriever
@@ -17,6 +19,7 @@ class IndexedObservationRetriever(ObservationRetriever):
         self._index_store = index_store
         self._context = context
 
+
     def search(
         self,
         query: Float32Array,
@@ -26,19 +29,45 @@ class IndexedObservationRetriever(ObservationRetriever):
     ) -> list[ObservationContext]:
         indexes = self._index_store.get(space)
 
-        if len(indexes) != 1:
-            raise NotImplementedError(
-                "multi-index search is not implemented"
-            )
+        if not indexes:
+            return []
 
-        result = indexes[0].search(
-            query,
-            k=k,
+        results = [
+            index.search(
+                query,
+                k=k,
+            )
+            for index in indexes
+        ]
+
+        event_ids = np.concatenate(
+            [result.event_ids for result in results],
+        )
+        distances = np.concatenate(
+            [result.distances for result in results],
+        )
+
+        if len(event_ids) > k:
+            selected = np.argpartition(
+                distances,
+                k - 1,
+            )[:k]
+
+            selected = selected[
+                np.argsort(distances[selected])
+            ]
+        else:
+            selected = np.argsort(distances)
+
+        merged = SearchResult(
+            event_ids=event_ids[selected],
+            distances=distances[selected],
         )
 
         return self._context.get_many(
-            result,
+            merged,
         )
+
 
     def batch_search(
         self,
@@ -49,19 +78,57 @@ class IndexedObservationRetriever(ObservationRetriever):
     ) -> list[list[ObservationContext]]:
         indexes = self._index_store.get(space)
 
-        if len(indexes) != 1:
-            raise NotImplementedError(
-                "multi-index search is not implemented"
+        if not indexes:
+            return [
+                []
+                for _ in range(len(queries))
+            ]
+
+        batch_results = [
+            index.batch_search(
+                queries,
+                k=k,
+            )
+            for index in indexes
+        ]
+
+        merged_results: list[SearchResult] = []
+
+        for query_idx in range(len(queries)):
+            event_ids = np.concatenate(
+                [
+                    results[query_idx].event_ids
+                    for results in batch_results
+                ],
             )
 
-        results = indexes[0].batch_search(
-            queries,
-            k=k,
-        )
+            distances = np.concatenate(
+                [
+                    results[query_idx].distances
+                    for results in batch_results
+                ],
+            )
+
+            if len(event_ids) > k:
+                selected = np.argpartition(
+                    distances,
+                    k - 1,
+                )[:k]
+
+                selected = selected[
+                    np.argsort(distances[selected])
+                ]
+            else:
+                selected = np.argsort(distances)
+
+            merged_results.append(
+                SearchResult(
+                    event_ids=event_ids[selected],
+                    distances=distances[selected],
+                )
+            )
 
         return [
-            self._context.get_many(
-                search_result,
-            )
-            for search_result in results
+            self._context.get_many(result)
+            for result in merged_results
         ]

@@ -92,7 +92,7 @@ class DiskANNObservationIndex(ObservationIndex):
         queries: Float32Array,
         *,
         k: int,
-    ) -> SearchResult:
+    ) -> BatchSearchResult:
         query_array = self._prepare_queries(queries)
 
         response = self._index.batch_search(
