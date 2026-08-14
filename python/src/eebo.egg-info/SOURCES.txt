@@ -54,8 +54,11 @@ src/retrieval/macberth_phrase_encoder.py
 src/retrieval/mapping.py
 src/retrieval/models.py
 src/retrieval/observation_index.py
+src/retrieval/parquet_embeddings.py
 src/retrieval/parquet_observations.py
 src/retrieval/phrase_encoder.py
+src/retrieval/test_ann_index_integrity.py
+src/retrieval/tests/test_parquet_observations.py
 src/retrieval/tests/integration/macberrth_phrase_encoder.int.py
 src/retrieval/tests/unit/macberth_mean_phrase_encoder.unit.py
 src/scripts/test_semantic_search_tool.py

@@ -38,3 +38,4 @@ Requires-Dist: xxhash>=3.8.1
 Requires-Dist: onnxruntime>=1.28.0
 Requires-Dist: diskannpy>=0.7.0
 Requires-Dist: pyarrow>=25.0.1
+Requires-Dist: pytest>=9.1.1
