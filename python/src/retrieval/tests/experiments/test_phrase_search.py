@@ -21,7 +21,7 @@ from retrieval.models import SearchSpace
 from retrieval.observation_retriever import IndexedObservationRetriever
 from retrieval.parquet_context import ParquetContext
 
-YEAR = 1625
+YEAR = None
 SCALE = "local"
 
 space = SearchSpace(

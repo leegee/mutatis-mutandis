@@ -13,7 +13,13 @@ from .models import SearchSpace
 
 
 class DiskANNObservationIndexStore(ObservationIndexStore):
-    """Resolve a single-year, single-scale SearchSpace to a DiskANN index."""
+    """Resolve a logical SearchSpace to its physical DiskANN indexes."""
+
+    _SCALE_ORDER = (
+        "local",
+        "medium",
+        "broad",
+    )
 
     def __init__(
         self,
@@ -25,27 +31,106 @@ class DiskANNObservationIndexStore(ObservationIndexStore):
         self,
         space: SearchSpace,
     ) -> list[ObservationIndex]:
-        index_directory = (
-            self._indexes_root
-            / f"year={space.years[0]}"
-            / space.scale[0]
-        )
+        """Return all physical indexes covered by the search space."""
 
-        scale = space.scale[0]
+        years = self._available_years()
+
+        if space.years is not None:
+            start, end = space.years
+            years = tuple(
+                year
+                for year in years
+                if start <= year <= end
+            )
+
+        if space.scale is None:
+            scales = self._SCALE_ORDER
+        else:
+            scales = tuple(
+                scale
+                for scale in self._SCALE_ORDER
+                if scale in space.scale
+            )
 
         return [
-            DiskANNObservationIndex(
-                index_directory=index_directory,
-                event_ids_path=(
-                    index_directory
-                    / f"{scale}_event_ids.npy"
-                ),
-                # TODO Expose
-                dimensions=768,
-                num_threads=0,
-                search_complexity=100,
-                beam_width=2,
-                num_nodes_to_cache=0,
-                index_prefix=scale,
+            self._build_index(
+                year=year,
+                scale=scale,
+            )
+            for year in years
+            for scale in scales
+            if self._index_exists(
+                year=year,
+                scale=scale,
             )
         ]
+
+    def _available_years(self) -> tuple[int, ...]:
+        """Discover years from the physical index directory layout."""
+
+        years: list[int] = []
+
+        if not self._indexes_root.exists():
+            return ()
+
+        for path in self._indexes_root.glob("year=*"):
+            if not path.is_dir():
+                continue
+
+            try:
+                year = int(path.name.removeprefix("year="))
+            except ValueError:
+                continue
+
+            years.append(year)
+
+        return tuple(sorted(set(years)))
+
+    def _index_exists(
+        self,
+        *,
+        year: int,
+        scale: str,
+    ) -> bool:
+        index_directory = (
+            self._indexes_root
+            / f"year={year}"
+            / scale
+        )
+
+        return (
+            index_directory.is_dir()
+            and (
+                index_directory
+                / f"{scale}_event_ids.npy"
+            ).is_file()
+        )
+
+    def _build_index(
+        self,
+        *,
+        year: int,
+        scale: str,
+    ) -> ObservationIndex:
+        index_directory = (
+            self._indexes_root
+            / f"year={year}"
+            / scale
+        )
+
+        return DiskANNObservationIndex(
+            index_directory=index_directory,
+            event_ids_path=(
+                index_directory
+                / f"{scale}_event_ids.npy"
+            ),
+            # These parameters describe the current on-disk index format.
+            # Expose them through configuration when index construction/loading
+            # needs to vary independently of the store.
+            dimensions=768,
+            num_threads=0,
+            search_complexity=100,
+            beam_width=2,
+            num_nodes_to_cache=0,
+            index_prefix=scale,
+        )
