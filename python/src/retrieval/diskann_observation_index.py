@@ -5,6 +5,7 @@ from pathlib import Path
 import diskannpy
 import numpy as np
 
+from lib.corpus_logging import logger
 from .mapping import ObservationIdMapping
 from .models import Float32Array, SearchResult, UInt64Array
 from .observation_index import ObservationIndex
@@ -27,6 +28,7 @@ class DiskANNObservationIndex(ObservationIndex):
         index_prefix: str = "local",
     ) -> None:
         self._index_directory = Path(index_directory)
+        logger.debug(f'[diskann obs idx] event_ids_path {event_ids_path}')
         self._event_ids = ObservationIdMapping(event_ids_path)
 
         self._dimensions = dimensions

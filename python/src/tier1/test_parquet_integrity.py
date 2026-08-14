@@ -258,7 +258,7 @@ def check_shard(
     num_shards: int,
     limit_docs: int | None,
 ):
-    logger.info()
+    logger.info("-" * 70)
     logger.info(f"Checking shard {shard}: {store_path}")
 
     observations, parquet_row_count = load_parquet_metadata(store_path)

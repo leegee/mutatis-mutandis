@@ -127,7 +127,7 @@ def main() -> None:
     years = discover_years(args.store)
 
     logger.info(f"Discovered {len(years)} publication years.")
-    logger.info()
+    logger.info("-" * 70)
 
     total = len(years) * len(SCALES)
     completed = 0
@@ -172,7 +172,6 @@ def main() -> None:
 
             completed += 1
 
-    logger.info()
     logger.info("=" * 70)
     logger.info("Tier 1.5 build complete.")
     logger.info(f"Built or verified {completed} index partitions.")

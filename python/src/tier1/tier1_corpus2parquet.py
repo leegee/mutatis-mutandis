@@ -1146,8 +1146,6 @@ def main():
         logger.info( "[tier1] Clearing Tier 1 output at %s", store_path )
         clear_output_dir(store_path)
 
-    conn = get_connection()
-
     if args.backend == "onnx":
         from lib.macberth import load_macberth_onnx
         providers = (
@@ -1168,6 +1166,8 @@ def main():
         pooling_scope=args.pooling_scope,
         batch_size=args.batch_size,
     )
+
+    conn = get_connection()
 
     proc = CorpusProcessor(
         conn,
