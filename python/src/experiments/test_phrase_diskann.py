@@ -19,7 +19,7 @@ import numpy as np
 
 import lib.corpus_config as config
 from retrieval.diskann_observation_index import DiskANNObservationIndex
-from retrieval.parquet_observations import load_embeddings
+from retrieval.parquet_embeddings import load_embeddings
 from retrieval.macberth_phrase_encoder import MacBertMeanPhraseEncoder
 
 

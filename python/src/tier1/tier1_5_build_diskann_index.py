@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from retrieval.parquet_observations import load_embeddings
+from retrieval.parquet_embeddings import load_embeddings
 from retrieval.diskann_builder import build_diskann_index
 import lib.corpus_config as config
 from lib.corpus_logging import logger
