@@ -1,5 +1,3 @@
-# retrieval/tests/experiments/test_phrase_search.py
-
 from __future__ import annotations
 
 """
@@ -12,23 +10,29 @@ Run with:
 
 from lib.corpus_logging import logger
 from lib.corpus_config import EVENTSTORE_T1_PATH
+from retrieval.diskann_observation_index_store import (
+    DiskANNObservationIndexStore,
+)
+from retrieval.macberth_phrase_encoder import (
+    DEFAULT_CARRIER,
+    MacBertMeanPhraseEncoder,
+)
 from retrieval.models import SearchSpace
-from retrieval.macberth_phrase_encoder import ( DEFAULT_CARRIER, MacBertMeanPhraseEncoder, )
 from retrieval.observation_retriever import IndexedObservationRetriever
 from retrieval.parquet_context import ParquetContext
-from retrieval.diskann_observation_index_store import ( DiskANNObservationIndexStore, )
 
 YEAR = 1625
 SCALE = "local"
 
 space = SearchSpace(
-    year=YEAR,
+    years=YEAR,
     scale=SCALE,
 )
 
 K = 20
 
 # PHRASE = "preachers and teachers"
+
 PHRASE = "hair white as snow"
 
 

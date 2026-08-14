@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .models import Float32Array, SearchSpace
-from .observation_index import ObservationIndex
 from .observation_index_store import ObservationIndexStore
 from .parquet_context import ObservationContext, ParquetContext
 from .retriever import ObservationRetriever
@@ -25,9 +24,14 @@ class IndexedObservationRetriever(ObservationRetriever):
         space: SearchSpace,
         k: int,
     ) -> list[ObservationContext]:
-        index = self._index_store.get(space)
+        indexes = self._index_store.get(space)
 
-        result = index.search(
+        if len(indexes) != 1:
+            raise NotImplementedError(
+                "multi-index search is not implemented"
+            )
+
+        result = indexes[0].search(
             query,
             k=k,
         )
@@ -43,9 +47,14 @@ class IndexedObservationRetriever(ObservationRetriever):
         space: SearchSpace,
         k: int,
     ) -> list[list[ObservationContext]]:
-        index = self._index_store.get(space)
+        indexes = self._index_store.get(space)
 
-        results = index.batch_search(
+        if len(indexes) != 1:
+            raise NotImplementedError(
+                "multi-index search is not implemented"
+            )
+
+        results = indexes[0].batch_search(
             queries,
             k=k,
         )
