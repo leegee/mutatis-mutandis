@@ -1,9 +1,3 @@
-# retrieval/unit/test_observation_context_unit.py
-
-"""
-pytest src/retrieval/tests/unit/test_observation_context_unit.py -v -s
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -16,7 +10,6 @@ from retrieval.parquet_context import (
 
 def test_observation_context_exposes_stable_core_fields() -> None:
     observation = {
-        "event_id": 123,
         "corpus": "eebo",
         "doc_id": "A03930",
         "token": "preachers",
@@ -35,17 +28,14 @@ def test_observation_context_exposes_stable_core_fields() -> None:
     assert context.event_id == 123
     assert context.distance == 0.25
     assert context.observation is observation
-
     assert context.before == (
         "one",
         "two",
     )
-
     assert context.after == (
         "four",
         "five",
     )
-
 
 
 def test_observation_context_text_places_observation_between_context() -> None:
@@ -53,47 +43,48 @@ def test_observation_context_text_places_observation_between_context() -> None:
         event_id=123,
         distance=0.25,
         observation={
-            "event_id": 123,
+            "corpus": "eebo",
             "doc_id": "A03930",
             "token": "preachers",
             "token_idx": 42,
         },
         before=(
             ContextToken(
-                event_id=121,
-                token="one",
+                corpus="eebo",
+                doc_id="A03930",
                 token_idx=40,
+                token="one",
             ),
             ContextToken(
-                event_id=122,
-                token="two",
+                corpus="eebo",
+                doc_id="A03930",
                 token_idx=41,
+                token="two",
             ),
         ),
         after=(
             ContextToken(
-                event_id=124,
-                token="four",
+                corpus="eebo",
+                doc_id="A03930",
                 token_idx=43,
+                token="four",
             ),
             ContextToken(
-                event_id=125,
-                token="five",
+                corpus="eebo",
+                doc_id="A03930",
                 token_idx=44,
+                token="five",
             ),
         ),
     )
 
-    assert context.before[0].event_id == 121
     assert context.before[0].token == "one"
     assert context.before[0].token_idx == 40
 
-    assert context.after[0].event_id == 124
     assert context.after[0].token == "four"
     assert context.after[0].token_idx == 43
 
     assert context.text == "one two preachers four five"
-
 
 
 def test_observation_context_text_handles_empty_context() -> None:
@@ -101,7 +92,7 @@ def test_observation_context_text_handles_empty_context() -> None:
         event_id=123,
         distance=0.25,
         observation={
-            "event_id": 123,
+            "corpus": "eebo",
             "doc_id": "A03930",
             "token": "preachers",
             "token_idx": 42,
@@ -118,7 +109,7 @@ def test_observation_context_is_immutable() -> None:
         event_id=123,
         distance=0.25,
         observation={
-            "event_id": 123,
+            "corpus": "eebo",
             "doc_id": "A03930",
             "token": "preachers",
             "token_idx": 42,
@@ -128,4 +119,4 @@ def test_observation_context_is_immutable() -> None:
     )
 
     with pytest.raises(AttributeError):
-        context.event_id = 456
+        context.distance = 0.5

@@ -14,6 +14,6 @@ class ObservationIndexStore(ABC):
     def get(
         self,
         space: SearchSpace,
-    ) -> ObservationIndex:
-        """Return the index corresponding to a search space."""
+    ) -> list[ObservationIndex]:
+        """Return the indexes required to search the requested space."""
         raise NotImplementedError

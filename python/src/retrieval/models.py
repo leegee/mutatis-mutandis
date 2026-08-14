@@ -10,9 +10,94 @@ UInt64Array = NDArray[np.uint64]
 
 @dataclass(frozen=True, slots=True)
 class SearchSpace:
-    year: int
-    scale: str
+    """
+    Logical constraints on an observation search.
 
+    years:
+        None for all years, or an inclusive ``(start, end)`` range.
+
+    scale:
+        None for all scales, or a tuple containing one or more scales.
+    """
+
+    years: tuple[int, int] | None
+    scale: tuple[str, ...] | None
+
+    _VALID_SCALES = frozenset({
+        "local",
+        "medium",
+        "broad",
+    })
+
+    def __post_init__(self) -> None:
+        if self.years is not None:
+            if isinstance(self.years, int):
+                object.__setattr__(
+                    self,
+                    "years",
+                    (self.years, self.years),
+                )
+            elif isinstance(self.years, tuple):
+                if len(self.years) != 2:
+                    raise ValueError(
+                        "year range must contain exactly two years"
+                    )
+
+                if not all(
+                    isinstance(year, int)
+                    for year in self.years
+                ):
+                    raise TypeError(
+                        "year range must contain integers"
+                    )
+
+                start, end = self.years
+
+                if start > end:
+                    raise ValueError(
+                        "year range must be in ascending order"
+                    )
+            else:
+                raise TypeError(
+                    "years must be an int or a two-year tuple"
+                )
+
+        if self.scale is not None:
+            if isinstance(self.scale, str):
+                if self.scale not in self._VALID_SCALES:
+                    raise ValueError(
+                        f"invalid scales: {[self.scale]}"
+                    )
+
+                object.__setattr__(
+                    self,
+                    "scale",
+                    (self.scale,),
+                )
+            elif isinstance(self.scale, tuple):
+                if not self.scale:
+                    raise ValueError(
+                        "scale selection must contain at least one scale"
+                    )
+
+                if not all(
+                    isinstance(scale, str)
+                    for scale in self.scale
+                ):
+                    raise TypeError(
+                        "scale selection must contain strings"
+                    )
+
+                invalid = set(self.scale) - self._VALID_SCALES
+
+                if invalid:
+                    raise ValueError(
+                        f"invalid scales: {sorted(invalid)}"
+                    )
+            else:
+                raise TypeError(
+                    "scale must be a string or tuple of strings"
+                )
 
 @dataclass(slots=True)
 class SearchResult:

@@ -1,21 +1,24 @@
-# retrieval/tests/unit/test_parquet_context_unit.py
-
 """
 pytest src/retrieval/tests/unit/test_parquet_context_unit.py -v -s
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from retrieval.models import SearchResult
-from retrieval.parquet_context import ParquetContext
+from retrieval.parquet_context import (
+    ContextToken,
+    ParquetContext,
+)
 
 
 def write_corpus(
-    root,
+    root: Path,
 ) -> None:
     table = pa.table(
         {
@@ -23,6 +26,15 @@ def write_corpus(
                 [101, 102, 103, 104, 105, 106, 107],
                 dtype=np.uint64,
             ),
+            "corpus": [
+                "eebo",
+                "eebo",
+                "eebo",
+                "eebo",
+                "eebo",
+                "eebo",
+                "eebo",
+            ],
             "doc_id": [
                 "DOC1",
                 "DOC1",
@@ -68,6 +80,78 @@ def write_corpus(
     )
 
 
+class FakeTokenStore:
+    def __init__(self) -> None:
+        self._tokens = {
+            0: ContextToken(
+                corpus="eebo",
+                doc_id="DOC1",
+                token_idx=0,
+                token="zero",
+            ),
+            1: ContextToken(
+                corpus="eebo",
+                doc_id="DOC1",
+                token_idx=1,
+                token="one",
+            ),
+            2: ContextToken(
+                corpus="eebo",
+                doc_id="DOC1",
+                token_idx=2,
+                token="two",
+            ),
+            3: ContextToken(
+                corpus="eebo",
+                doc_id="DOC1",
+                token_idx=3,
+                token="three",
+            ),
+            4: ContextToken(
+                corpus="eebo",
+                doc_id="DOC1",
+                token_idx=4,
+                token="four",
+            ),
+            5: ContextToken(
+                corpus="eebo",
+                doc_id="DOC1",
+                token_idx=5,
+                token="five",
+            ),
+            6: ContextToken(
+                corpus="eebo",
+                doc_id="DOC1",
+                token_idx=6,
+                token="six",
+            ),
+        }
+
+    def get_context(
+        self,
+        *,
+        corpus: str,
+        doc_id: str,
+        token_idx: int,
+        before: int,
+        after: int,
+    ) -> list[ContextToken]:
+        assert corpus == "eebo"
+        assert doc_id == "DOC1"
+
+        start = max(0, token_idx - before)
+        end = min(
+            max(self._tokens) + 1,
+            token_idx + after + 1,
+        )
+
+        return [
+            self._tokens[index]
+            for index in range(start, end)
+            if index != token_idx
+        ]
+
+
 def test_get_excludes_centre_and_orders_context(
     tmp_path,
 ) -> None:
@@ -77,11 +161,10 @@ def test_get_excludes_centre_and_orders_context(
         tmp_path,
         context_before=2,
         context_after=2,
+        tokens=FakeTokenStore(),
     )
 
-    result = context.get(
-        104,
-    )
+    result = context.get(104)
 
     assert result.event_id == 104
     assert result.distance == 0.0
@@ -105,14 +188,6 @@ def test_get_excludes_centre_and_orders_context(
         "five",
     ]
 
-    assert all(
-        token.event_id != result.event_id
-        for token in (
-            *result.before,
-            *result.after,
-        )
-    )
-
 
 def test_context_respects_document_boundaries(
     tmp_path,
@@ -123,11 +198,10 @@ def test_context_respects_document_boundaries(
         tmp_path,
         context_before=10,
         context_after=10,
+        tokens=FakeTokenStore(),
     )
 
-    result = context.get(
-        101,
-    )
+    result = context.get(101)
 
     assert [
         token.token
@@ -156,11 +230,10 @@ def test_zero_context_returns_only_centre(
         tmp_path,
         context_before=0,
         context_after=0,
+        tokens=FakeTokenStore(),
     )
 
-    result = context.get(
-        104,
-    )
+    result = context.get(104)
 
     assert result.before == ()
     assert result.after == ()
@@ -176,11 +249,10 @@ def test_text_reconstructs_context_window(
         tmp_path,
         context_before=2,
         context_after=2,
+        tokens=FakeTokenStore(),
     )
 
-    result = context.get(
-        104,
-    )
+    result = context.get(104)
 
     assert result.text == (
         "one two three four five"
@@ -196,6 +268,7 @@ def test_get_many_preserves_result_order_and_distances(
         tmp_path,
         context_before=1,
         context_after=1,
+        tokens=FakeTokenStore(),
     )
 
     search_result = SearchResult(
@@ -250,6 +323,7 @@ def test_get_missing_observation_raises_key_error(
 
     context = ParquetContext(
         tmp_path,
+        tokens=FakeTokenStore(),
     )
 
     try:

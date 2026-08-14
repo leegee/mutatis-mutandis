@@ -42,14 +42,13 @@ class ObservationContext:
 
 
 class ParquetContext:
-    """Resolve observations into human-readable token context."""
-
     def __init__(
         self,
         corpus_root: str | Path,
         *,
         context_before: int = 20,
         context_after: int = 20,
+        tokens: PostgresTokenStore | None = None,
     ) -> None:
         if context_before < 0:
             raise ValueError(
@@ -65,12 +64,15 @@ class ParquetContext:
             corpus_root,
         )
 
-        self._tokens = PostgresTokenStore(
-            get_connection(),
+        self._tokens = (
+            tokens
+            if tokens is not None
+            else PostgresTokenStore(get_connection())
         )
 
         self._context_before = context_before
         self._context_after = context_after
+
 
     def get(
         self,

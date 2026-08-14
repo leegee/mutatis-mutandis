@@ -27,7 +27,7 @@ def _context(event_id: int, distance: float) -> ObservationContext:
 
 
 def test_search_uses_index_for_requested_space() -> None:
-    space = SearchSpace(year=1625, scale="local")
+    space = SearchSpace(years=1625, scale="local")
 
     index = Mock()
     index.search.return_value = SearchResult(
@@ -73,10 +73,7 @@ def test_search_uses_index_for_requested_space() -> None:
 
 
 def test_batch_search_uses_index_for_requested_space() -> None:
-    space = SearchSpace(
-        year=1625,
-        scale="local",
-    )
+    space = SearchSpace( years=1625, scale="local", )
 
     index = Mock()
     index.batch_search.return_value = [
