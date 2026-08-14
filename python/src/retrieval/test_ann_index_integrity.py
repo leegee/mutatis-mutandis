@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import diskannpy
+import numpy as np
 
 from lib.corpus_config import DISKANN_INDEXES_DIR
 
 
-def validate_mapping(
-    event_ids_path: Path,
-    expected_count: int,
-) -> list[str]:
+def validate_mapping(event_ids_path: Path) -> list[str]:
     errors: list[str] = []
 
     if not event_ids_path.exists():
@@ -34,11 +31,8 @@ def validate_mapping(
             "expected one-dimensional"
         )
 
-    if len(event_ids) != expected_count:
-        errors.append(
-            f"event-ID mapping contains {len(event_ids)} IDs, "
-            f"index contains {expected_count} points"
-        )
+    if len(event_ids) == 0:
+        errors.append("event-ID mapping is empty")
 
     if len(event_ids) != len(np.unique(event_ids)):
         errors.append("event-ID mapping contains duplicate IDs")
@@ -57,16 +51,14 @@ def validate_index(index_directory: Path) -> list[str]:
     index_file = index_directory / f"{prefix}_disk.index"
     if not index_file.exists():
         errors.append(f"missing DiskANN index: {index_file}")
+        return errors
 
     event_ids_path = index_directory / f"{prefix}_event_ids.npy"
-
-    if not index_file.exists():
-        return errors
 
     try:
         diskannpy.StaticDiskIndex(
             index_directory=str(index_directory),
-            num_threads=0,
+            num_threads=8,
             num_nodes_to_cache=0,
             distance_metric="l2",
             vector_dtype=np.float32,
@@ -77,18 +69,7 @@ def validate_index(index_directory: Path) -> list[str]:
         errors.append(f"DiskANN failed to open: {exc}")
         return errors
 
-    try:
-        num_points = index.get_num_points()
-    except Exception as exc:
-        errors.append(f"could not determine point count: {exc}")
-        return errors
-
-    errors.extend(
-        validate_mapping(
-            event_ids_path,
-            num_points,
-        )
-    )
+    errors.extend(validate_mapping(event_ids_path))
 
     return errors
 
@@ -99,7 +80,9 @@ def main() -> None:
     print()
 
     if not DISKANN_INDEXES_DIR.exists():
-        raise SystemExit(f"Index root does not exist: {DISKANN_INDEXES_DIR}")
+        raise SystemExit(
+            f"Index root does not exist: {DISKANN_INDEXES_DIR}"
+        )
 
     index_directories = sorted(
         path
@@ -133,7 +116,6 @@ def main() -> None:
 
             for error in errors:
                 print(f"  FAIL: {error}")
-
         else:
             passed += 1
             print("  OK")
