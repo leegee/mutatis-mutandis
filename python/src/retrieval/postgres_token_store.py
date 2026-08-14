@@ -1,25 +1,20 @@
-# retrieval/postgres_token_store.py
-
 from __future__ import annotations
 
-from psycopg import Connection
+from typing import Any
 
-from retrieval.parquet_context import ContextToken
+import psycopg
+
+from .context_models import ContextToken
 
 
 class PostgresTokenStore:
-    """
-    Retrieves canonical corpus tokens from PostgreSQL.
-
-    This class knows nothing about observations, embeddings, ANN
-    indexes or Parquet. It simply exposes the corpus token stream.
-    """
+    """Retrieve corpus tokens from PostgreSQL."""
 
     def __init__(
         self,
-        conn: Connection,
+        connection: psycopg.Connection,
     ) -> None:
-        self._conn = conn
+        self._connection = connection
 
     def get_context(
         self,
@@ -30,12 +25,6 @@ class PostgresTokenStore:
         before: int,
         after: int,
     ) -> tuple[ContextToken, ...]:
-        """
-        Return the contiguous token sequence surrounding one corpus token.
-
-        The returned tuple includes the centre token.
-        """
-
         start_idx = max(
             0,
             token_idx - before,
@@ -43,7 +32,7 @@ class PostgresTokenStore:
 
         end_idx = token_idx + after
 
-        with self._conn.cursor() as cur:
+        with self._connection.cursor() as cur:
             cur.execute(
                 """
                 SELECT
@@ -69,8 +58,8 @@ class PostgresTokenStore:
 
         return tuple(
             ContextToken(
-                corpus=row[0],
-                doc_id=row[1],
+                corpus=str(row[0]),
+                doc_id=str(row[1]),
                 token_idx=int(row[2]),
                 token=str(row[3]),
             )

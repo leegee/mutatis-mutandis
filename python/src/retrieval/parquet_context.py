@@ -4,19 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import pyarrow.dataset as ds
 import numpy as np
 
+from lib.corpus_db import get_connection
+
+from .context_models import ContextToken
 from .models import SearchResult
 from .parquet_observations import ParquetObservationStore
-
-
-@dataclass(frozen=True)
-class ContextToken:
-    corpus: str
-    doc_id: str
-    token_idx: int
-    token: str
+from .postgres_token_store import PostgresTokenStore
 
 
 @dataclass(frozen=True)
@@ -30,9 +25,10 @@ class ObservationContext:
     @property
     def text(self) -> str:
         centre = ContextToken(
-            event_id=self.event_id,
-            token=str(self.observation["token"]),
+            corpus=str(self.observation["corpus"]),
+            doc_id=str(self.observation["doc_id"]),
             token_idx=int(self.observation["token_idx"]),
+            token=str(self.observation["token"]),
         )
 
         return " ".join(
@@ -69,10 +65,8 @@ class ParquetContext:
             corpus_root,
         )
 
-        self._dataset = ds.dataset(
-            str(corpus_root),
-            format="parquet",
-            partitioning="hive",
+        self._tokens = PostgresTokenStore(
+            get_connection(),
         )
 
         self._context_before = context_before
@@ -90,53 +84,25 @@ class ParquetContext:
             event_id,
         )
 
-        doc_id = observation["doc_id"]
+        corpus = str(observation["corpus"])
+        doc_id = str(observation["doc_id"])
         token_idx = int(observation["token_idx"])
 
-        start_idx = max(
-            0,
-            token_idx - self._context_before,
-        )
-
-        end_idx = (
-            token_idx
-            + self._context_after
-        )
-
-        table = self._dataset.to_table(
-            columns=[
-                "event_id",
-                "doc_id",
-                "token",
-                "token_idx",
-            ],
-            filter=(
-                (ds.field("doc_id") == doc_id)
-                & (ds.field("token_idx") >= start_idx)
-                & (ds.field("token_idx") <= end_idx)
-            ),
-        )
-
-        rows = sorted(
-            table.to_pylist(),
-            key=lambda row: int(row["token_idx"]),
+        rows = self._tokens.get_context(
+            corpus=corpus,
+            doc_id=doc_id,
+            token_idx=token_idx,
+            before=self._context_before,
+            after=self._context_after,
         )
 
         before: list[ContextToken] = []
         after: list[ContextToken] = []
 
-        for row in rows:
-            row_token_idx = int(row["token_idx"])
-
-            context_token = ContextToken(
-                event_id=int(row["event_id"]),
-                token=str(row["token"]),
-                token_idx=row_token_idx,
-            )
-
-            if row_token_idx < token_idx:
+        for context_token in rows:
+            if context_token.token_idx < token_idx:
                 before.append(context_token)
-            elif row_token_idx > token_idx:
+            elif context_token.token_idx > token_idx:
                 after.append(context_token)
 
         return ObservationContext(
@@ -204,4 +170,3 @@ class ParquetContext:
             )
 
         return contexts
-
