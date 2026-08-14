@@ -8,6 +8,12 @@ Int64Array = NDArray[np.int64]
 UInt64Array = NDArray[np.uint64]
 
 
+@dataclass(frozen=True, slots=True)
+class SearchSpace:
+    year: int
+    scale: str
+
+
 @dataclass(slots=True)
 class SearchResult:
     """ANN results expressed in stable observation IDs."""
