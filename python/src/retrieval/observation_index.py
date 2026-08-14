@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from .models import Float32Array, SearchResult
+from .models import Float32Array, SearchResult, BatchSearchResult
 
 
 class ObservationIndex(ABC):
@@ -18,12 +18,13 @@ class ObservationIndex(ABC):
         """Return the k nearest observations for one query."""
         raise NotImplementedError
 
+
     @abstractmethod
     def batch_search(
         self,
         queries: Float32Array,
         *,
         k: int,
-    ) -> SearchResult:
+    ) -> BatchSearchResult:
         """Return the k nearest observations for each query."""
         raise NotImplementedError

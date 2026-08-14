@@ -7,9 +7,13 @@ import numpy as np
 
 from lib.corpus_logging import logger
 from .mapping import ObservationIdMapping
-from .models import Float32Array, SearchResult, UInt64Array
 from .observation_index import ObservationIndex
-
+from .models import (
+    BatchSearchResult,
+    Float32Array,
+    SearchResult,
+    UInt64Array,
+)
 
 class DiskANNObservationIndex(ObservationIndex):
     """DiskANN-backed immutable index over observation embeddings."""
@@ -183,13 +187,13 @@ class DiskANNObservationIndex(ObservationIndex):
     def _convert_batch_response(
         self,
         response: diskannpy.QueryResponseBatch,
-    ) -> SearchResult:
+    ) -> BatchSearchResult:
         local_ids = np.asarray(
             response.identifiers,
             dtype=np.int64,
         )
 
-        return SearchResult(
+        return BatchSearchResult(
             event_ids=self._map_local_ids(local_ids),
             distances=np.asarray(
                 response.distances,
