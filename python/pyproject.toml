@@ -42,11 +42,11 @@ dependencies = [
     "grok>=6.2",
     "openai>=2.48.0",
     "xxhash>=3.8.1",
-    "onnxruntime>=1.28.0",
     "diskannpy>=0.7.0",
     "pyarrow>=25.0.1",
     #   "numpy>=2.4.5",
     "pytest>=9.1.1",
+    "duckdb>=1.5.5",
 ]
 
 [tool.setuptools]

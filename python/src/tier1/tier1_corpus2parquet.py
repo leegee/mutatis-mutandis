@@ -1084,7 +1084,7 @@ def parse_args():
     p.add_argument( "--num-shards", type=int, default=1, help="Total number of shards", )
 
     p.add_argument( "--backend", choices=["onnx", "pytorch"], default="onnx", help="Inference backend for embedding", )
-    p.add_argument( "--onnx-provider", choices=["cpu", "dml"], default="cpu", help="ONNX Runtime provider", )
+    p.add_argument( "--onnx-provider", choices=["cpu", "dml"], default="dml", help="ONNX Runtime provider", )
 
     p.add_argument( "--store", type=Path, default=config.EVENTSTORE_T1_PATH, help="Override observation store root path", )
     p.add_argument( "--parquet-min-rows", type=int, default=None,

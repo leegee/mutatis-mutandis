@@ -5,6 +5,7 @@ retrieval
 scripts
 search-flask
 tests
+tier0
 tier1
 tier2
 tier3
