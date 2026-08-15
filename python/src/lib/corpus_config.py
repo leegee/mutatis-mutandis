@@ -3,13 +3,12 @@
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
-CORPUS_MIN_YEAR = 1625 # 1600
-CORPUS_MAX_YEAR = 1689 # 1800
+CORPUS_MIN_YEAR = 1000
+CORPUS_MAX_YEAR = 2000
 
 FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
-MAX_TOKENS_IN_DOC = 20000
-
+MAX_TOKENS_IN_DOC = 2000000
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
