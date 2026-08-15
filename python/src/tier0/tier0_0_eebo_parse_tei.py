@@ -586,7 +586,9 @@ def main():
         corpus_db.drop_tokens_fk(conn)
         conn.commit()
 
-    if not args.justindex:
+    if args.justindex:
+        logger.info("[tier0] === Just indexing the DB, not parsing or ingesting files ===")
+    else:
         for corpus, xml_dir in config.CORPUS_INPUT_DIRS.items():
             logger.info(f"[tier0] Process {corpus} from {xml_dir}")
             if not xml_dir.is_dir():
