@@ -8,12 +8,9 @@ Each selected token occurrence is embedded under multiple contextual windows
 (local, medium and broad), producing three aligned contextual embeddings for
 downstream retrieval, clustering and semantic change analysis.
 
-The output is written to the Tier 1 observation store using the selected
-storage backend (Zarr or Parquet). Each row represents one token occurrence
+The output is written to the Tier 1 observation store using the Parquet
+storage backend. Each row represents one token occurrence
 with its aligned multi-scale embeddings and scale-specific window provenance.
-
-The embedding and observation model is unchanged from the original Zarr
-implementation. The storage backend is the only concern of this port.
 """
 
 from __future__ import annotations
@@ -51,8 +48,7 @@ from tier1.observation_store_api import (
     open_observation_writer,
 )
 
-import lib.zarr_observation_backend  # noqa: F401
-import lib.parquet_observation_backend  # noqa: F401
+import lib.parquet_observation_backend
 
 WINDOW_CONFIGS = [
     {"name": "local", "size": 256, "stride": 128},
@@ -728,14 +724,13 @@ class CorpusProcessor:
         store_path,
         pipeline,
         *,
-        store_backend: str = DEFAULT_STORE_BACKEND,
         shard=None,
         num_shards=1,
         parquet_min_rows=None,
         parquet_min_bytes=None,
     ):
         self.store_path = Path(store_path)
-        self.store_backend = store_backend
+        self.store_backend = 'parquet'
         self.conn = conn
         self.pipeline = pipeline
         self.shard = shard
@@ -1054,7 +1049,7 @@ def clear_output_dir(store_path: Path):
     """
     Wipe store contents in place without removing the directory inode.
 
-    Works for both Zarr groups and Hive-partitioned Parquet trees.
+    Works for Hive-partitioned Parquet trees.
     """
 
     store_path = Path(store_path)
@@ -1088,9 +1083,7 @@ def parse_args():
     p.add_argument( "--shard", type=int, default=None, help="This process's shard index (0-based)", )
     p.add_argument( "--num-shards", type=int, default=1, help="Total number of shards", )
 
-    p.add_argument( "--backend", choices=["onnx", "pytorch"], default="onnx",
-        help="Inference backend for embedding",
-    )
+    p.add_argument( "--backend", choices=["onnx", "pytorch"], default="onnx", help="Inference backend for embedding", )
     p.add_argument( "--onnx-provider", choices=["cpu", "dml"], default="cpu", help="ONNX Runtime provider", )
 
     p.add_argument( "--store", type=Path, default=config.EVENTSTORE_T1_PATH, help="Override observation store root path", )
@@ -1135,7 +1128,7 @@ def main():
     configure_store_backend( "parquet", num_shards=args.num_shards, )
 
     store_path = resolve_store_path(
-        store_backend=store_backend,
+        store_backend='parquet',
         masked=args.mask,
         store=args.store,
         shard=args.shard,
@@ -1173,7 +1166,6 @@ def main():
         conn,
         store_path,
         pipeline,
-        store_backend=store_backend,
         shard=args.shard,
         num_shards=args.num_shards,
         parquet_min_rows=args.parquet_min_rows,
@@ -1193,7 +1185,7 @@ def main():
     logger.info(
         "[Tier 1 done] mode=%s store_backend=%s path=%s",
         "masked" if args.mask else "unmasked",
-        store_backend,
+        'parquet',
         store_path,
     )
 
