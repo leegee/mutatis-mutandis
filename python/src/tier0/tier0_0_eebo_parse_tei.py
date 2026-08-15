@@ -564,9 +564,9 @@ def validate_corpus_years():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--create", action="store_true")
-    parser.add_argument("--justindex", action="store_true")
+    parser.add_argument("--limit", type=int, default=None, help="Maximum number of documents to parse/add.")
+    parser.add_argument("--create", action="store_true", help="Creates the database from scratch, deleting existing data. Requires manual confirmation.")
+    parser.add_argument("--justindex", action="store_true", help="Does not parse any files but recreates database view and indicies.")
     args = parser.parse_args()
 
     validate_corpus_years() # Eventually allow flags

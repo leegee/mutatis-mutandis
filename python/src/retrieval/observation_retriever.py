@@ -27,6 +27,9 @@ class IndexedObservationRetriever(ObservationRetriever):
         space: SearchSpace,
         k: int,
     ) -> list[ObservationContext]:
+        if k <= 0:
+            raise ValueError("k must be positive")
+
         indexes = self._index_store.get(space)
 
         if not indexes:
@@ -76,6 +79,9 @@ class IndexedObservationRetriever(ObservationRetriever):
         space: SearchSpace,
         k: int,
     ) -> list[list[ObservationContext]]:
+        if k <= 0:
+            raise ValueError("k must be positive")
+
         indexes = self._index_store.get(space)
 
         if not indexes:

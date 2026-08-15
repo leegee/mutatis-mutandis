@@ -55,6 +55,7 @@ Under what historical conditions do symbolic representations become attached to 
 - **Josh Davies** (KCL Sr Lecturer in Medieval Lit)
 
 ### Useful Adjacent Scholars
+
 - **John L. Hilton** — Author of “Albinism in the Ancient Mediterranean World.” Assembles classical and late-antique evidence and discusses the Book of Enoch description of Noah (body white as snow, hair white as wool, eyes shining like the sun), the closest ancient parallel to the Revelation “Son of Man” imagery.
 - **Martin White** (University of Winchester) — PhD research on *The Evil Albino Trope: The Depiction of Albinism in Modern and Contemporary Fiction*. Close to the later “villainous images” strand.
 - Broader disability history / history of the body / facial-difference scholars (e.g., work on physiognomy, marked or “monstrous” bodies, visual difference across early modern to modern periods). These frameworks can absorb the material without requiring the supervisor to be an albinism specialist.
