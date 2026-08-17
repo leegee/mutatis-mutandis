@@ -16,6 +16,8 @@ with its aligned multi-scale embeddings and scale-specific window provenance.
 from __future__ import annotations
 
 import os
+import psutil
+
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -55,6 +57,12 @@ WINDOW_CONFIGS = [
     {"name": "medium", "size": 512, "stride": 256},
     {"name": "broad", "size": 512, "stride": 384},
 ]
+
+_PROCESS = psutil.Process(os.getpid())
+
+
+def rss_gb():
+    return _PROCESS.memory_info().rss / (1024 ** 3)
 
 
 def stable_hash(key: str) -> np.int64:
@@ -915,13 +923,13 @@ class CorpusProcessor:
     def _flush(self, buf, store):
         start = time.perf_counter()
 
+        logger.debug( "[tier1] %s RSS before embed: %.2f GB", buf.doc_id, rss_gb(), )
+
         raw_events = self.pipeline.embed_doc(buf)
 
-        logger.info(
-            "[tier1] Embedding %s took %.2fs",
-            buf.doc_id,
-            time.perf_counter() - start,
-        )
+        logger.info( "[tier1] %s RSS after embed: %.2f GB; raw_events=%d", buf.doc_id, rss_gb(), len(raw_events), )
+
+        logger.debug( "[tier1] Embedding %s took %.2fs", buf.doc_id, time.perf_counter() - start, )
 
         if not raw_events:
             return
@@ -1004,10 +1012,11 @@ class CorpusProcessor:
 
         logger.info(
             "[tier1] Doc %s: %d tokens with multi-scale embeddings (%s)",
-            buf.doc_id,
-            len(event_ids),
+            buf.doc_id, len(event_ids),
             "masked" if self.pipeline.mask_targets else "unmasked",
         )
+
+        logger.debug( "[tier1] %s RSS before parquet append: %.2f GB; rows=%d", buf.doc_id, rss_gb(), len(event_ids), )
 
         store.append_events(
             event_id=np.asarray(
@@ -1063,6 +1072,7 @@ class CorpusProcessor:
                 dtype=np.int32,
             ),
         )
+        logger.debug( "[tier1] %s RSS after parquet append: %.2f GB", buf.doc_id, rss_gb(), )
 
 
 def clear_output_dir(store_path: Path):

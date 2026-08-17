@@ -47,6 +47,7 @@ dependencies = [
     #   "numpy>=2.4.5",
     "pytest>=9.1.1",
     "duckdb>=1.5.5",
+    "psutil>=7.2.2",
 ]
 
 [tool.setuptools]

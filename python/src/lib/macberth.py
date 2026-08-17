@@ -351,7 +351,7 @@ def load_macberth_onnx(
         providers=usable,
         provider_options=provider_options,
     )
-    logger.info("Loaded ONNX MacBERTh, providers: %s", session.get_providers())
+    logger.info("[macberth.load_macberth_onnx] Loaded ONNX MacBERTh, providers: %s", session.get_providers())
 
     tokenizer = AutoTokenizer.from_pretrained(export_dir, local_files_only=True)
 
