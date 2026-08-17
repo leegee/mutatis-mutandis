@@ -107,3 +107,139 @@ better at night than during the day" (Albania gigni quosdam glauca oculorum acie
 * Apollonius, Eudoxus of Rhodes also mentions a Celtic tribe who could see by night but were blind by day (Giannini 1965).
 * Stephanus of Byzantium states in his Ethnica (s.v. Germara) that Aristotle has recorded the existence of a Celtic tribe, the Germara, who are blind by day, in his work On Marvels43 (Billerbeck 2006:420-421).
 * Holland's 1601 translation of Pliny's Albania
+
+
+
+Karen Bek-Pedersen, "Nornir in Old Norse Mythology", PhD thesis, University of Edinburgh, 2007/2008.
+ https://era.ed.ac.uk/items/2cebff4e-d8e3-4b68-8b2d-84d480066144
+p91 "The continuous emphasis on her fairness brings out a clear contrast between her white colour and the black raven with blood on its claws and beak."
+
+In Bek-Pedersen's later St Michael and the sons of Þiðrandi: the black and white dísir, then notes another striking Norse opposition: light-elves who are "fairer than the sun" versus dark-elves "blacker than pitch."
+
+Jackson Crawford's 2014 dissertation, "The Historical Development of Basic Color Terms in Old Norse-Icelandic."
+https://asset.library.wisc.edu/1711.dl/QFDBDUD2FLYNG8U/R/file-29db0.pdf
+
+Hvítr isn't confined to literal snow-white objects. It is particularly important in descriptions of people, hair, supernatural beings and extraordinary phenomena.
+
+Crawford notes, for example, that young people can be described as hvítr á hár (“white-haired”), so the word does not necessarily mean old age. He specifically discusses Þorsteinn Egilsson, who is young, handsome, white-haired and bright-faced.
+
+LJÓSÁLFAR:
+
+Explicit white/black polarity. In Gylfaginning 17, Snorri says:
+
+  Ljósálfar eru hvítari en sól sýnum, en dǫkkálfar svartari en bik.
+
+  * bik = pitch
+
+The wording is preserved in the Uppsala manuscript tradition as well. https://vsnr.org/wp-content/uploads/2021/11/VSNR_Uppsala-Edda.pdf
+
+Scholars have long suspected that Snorri's elaborate ljósálfr/dökkálfr distinction is at least partly influenced by Christian angelology. Alaric Hall discusses this at length, noting that Anne Holtsmark argued that Snorri's description was influenced by the Elucidarius, a Christian theological text translated into Icelandic https://alarichall.org.uk/ahphd2.pdf
+
+At Urðarbrunnr, the well of the Norns, Snorri says that two birds live there:
+
+Fuglar tveir fæðast í Urðarbrunni er svanir heita
+
+“Two birds are nourished at Urðarbrunnr, which are called swans.”
+
+The same passage says that the water is so holy that things which come into contact with it become white like the membrane inside an eggshell. https://vsnr.org/wp-content/uploads/2021/11/VSNR_Uppsala-Edda.pdf
+
+Cleasby–Vigfusson notes that álpt “swan” may be etymologically connected with Latin albus, “white,” and records the proverbial opposition:
+
+þegar hrafninn verðr hvítr en álptin svört
+
+“when the raven becomes white and the swan black”
+
+https://www.germanic-lexicon-project.org/html/oi_cleasbyvigfusson/b0043.html
+
+
+VÖLUNDR
+
+In Vǫlundarkviða, Völundr's neck is described as hvítr.
+
+Alaric Hall discusses this specifically because it is unusual. He notes that whiteness and brightness in Eddic poetry are overwhelmingly associated with female beauty, and argues that Völundr's whiteness may associate him with the swan-maidens who have taken him into their protection. https://www.alarichall.org.uk/ahphd7.pdf
+Hall points out that Völundr is one of the very few adult male figures in the Poetic Edda described with hvítr, alongside Heimdallr.
+
+
+HEIMDALLR
+
+Heimdallr is described as hvítastr ása, conventionally:
+
+“whitest/fairest of the Æsir.”
+
+This is particularly fascinating because Heimdallr is himself a liminal figure:
+
+guardian of the boundary of the gods,
+associated with the rainbow bridge,
+exceptionally perceptive,
+born of nine mothers,
+associated with the sea,
+and ultimately the opponent of Loki at Ragnarök.
+
+So whiteness occurs again around a boundary/liminal supernatural being.
+
+And Crawford's corpus analysis confirms that hvítr is doing real semantic work in Old Norse rather than simply functioning as a modern “white” equivalent.
+
+eflectivity
+shininess
+attractiveness
+light-coloured hair
+women's beauty
+silver
+brightness
+
+BALDR is almost a semantic definition of this cluster
+
+Snorri's description of Baldr is extraordinary:
+
+  svá fagr álitum ok bjartr svá at lýsir af honum
+
+Then Snorri immediately gives us a plant whose whiteness provides the comparison:
+
+  þat er allra grasa hvítast
+
+And he says this lets us judge Baldr's beauty in both hair and body. Crawford specifically discusses this passage as an example of the Old Norse association between whiteness, reflectivity, attractiveness and radiance.
+
+NORDIC HYPOTHESIS
+
+Not that "Norse culture regarded extreme whiteness as the supernatural Other."
+
+It looks more like whiteness is a highly productive marker of exceptional status, and its valence depends on what is being described.
+
+
+OLD ENGLISH
+
+An older study of Old English poetry observes that hwīt is not simply a hue term. It can denote brightness and luminosity as well as whiteness. The examples include shining roofs, helmets, gems and silver, as well as literal white objects https://www.cambridge.org/core/journals/pmla/article/abs/color-in-old-english-poetry/5CD7F01399B4F359DAE4562842461CBD
+
+And the Old English teaching corpus makes the same methodological point: colour words have to be reconstructed from their actual contexts because their semantic ranges don't correspond neatly to modern English colour categories https://oldenglishteaching.arts.gla.ac.uk/Units/6_Colour.html
+
+The old PMLA study of colour in Old English poetry notes
+
+blāt: livid, pale, ghastly
+
+and gives examples from Andreas and Genesis, versus
+
+hwīt: bright, shining, white
+
+
+OLD IRISH
+
+BÁN means white, but its semantic field extends into:
+
+fair
+bright
+pure
+holy/blessed
+pale
+empty/blank.
+
+The historical Celtic vocabulary preserves this semantic range into later Gaelic.
+
+PANGUR BÁN
+
+The ninth-century poem Messe ocus Pangur Bán is about the scholar and his white cat. Not supernatural. Cambridge's Department of Anglo-Saxon, Norse and Celtic provides the Old Irish text and translation and dates it to the ninth century. https://www.asnc.cam.ac.uk/spokenword/i_pangur.php?d=inf
+
+https://www.scribd.com/document/818559122/These-1995-Les-Figures-Du-Surnaturel-Dans-La-Mythologie-Celtique
+
+The study explicitly states that white (bán) functions as an external sign that an animal belongs to the supernatural world. It also emphasises that this makes the animal ambivalent, not simply benevolent: white Otherworld animals can be beneficial or hostile.
+
+Also: Bébinn - white woman
