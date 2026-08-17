@@ -345,7 +345,7 @@ def drop_tokens_fk(conn: Connection) -> None:
     logger.info("Dropping tokens.doc_id foreign key")
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute("ALTER TABLE tokens DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;")
+            cur.execute("ALTER TABLE IF EXISTS tokens DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;")
     logger.info("tokens.doc_id foreign key dropped")
 
 

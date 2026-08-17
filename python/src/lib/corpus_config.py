@@ -6,9 +6,9 @@ from typing import TypedDict, Set, Dict
 CORPUS_MIN_YEAR = 1000
 CORPUS_MAX_YEAR = 2000
 
-FILTER_DOCUMENT_SIZE = True
+FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
-MAX_TOKENS_IN_DOC = 200_000
+MAX_TOKENS_IN_DOC = 400_000
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent

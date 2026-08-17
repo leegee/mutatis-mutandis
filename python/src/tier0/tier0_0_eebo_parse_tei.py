@@ -42,6 +42,8 @@ _ECCO_HEADER_INDEX = None
 MAX_DOCS: Optional[int] = None
 SKIP_EXISTING_DOCS  = True
 
+TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
+
 
 def normalize_early_modern(text: str) -> str:
     text = text.lower()
@@ -70,8 +72,10 @@ def render_text(node):
         parts.append(node.text)
 
     for child in node:
-        if child.tag.upper() == "GAP":
-            extent = child.attrib.get("EXTENT", "")
+        local_name = child.tag.rsplit("}", 1)[-1]
+
+        if local_name == "gap":
+            extent = child.attrib.get("extent", "")
             m = re.search(r"(\d+)", extent)
             n = int(m.group(1)) if m else 1
             parts.append("_" * n)
@@ -128,25 +132,37 @@ def to_doc_row(meta: dict) -> tuple:
 
 
 def extract_language(tree, raw_text):
-    lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
+    lang_elem = tree.find(
+        ".//tei:profileDesc//tei:language",
+        TEI_NS,
+    )
+
+    lang = None
+
+    if lang_elem is not None:
+        lang = (
+            lang_elem.attrib.get("ident")
+            or safe_text(lang_elem)
+        )
 
     if not lang:
-        text_node = tree.find(".//TEXT")
+        text_node = tree.find(".//tei:text", TEI_NS)
         if text_node is not None:
-            lang = text_node.attrib.get("LANG")
+            lang = (
+                text_node.attrib.get("{http://www.w3.org/XML/1998/namespace}lang")
+                or text_node.attrib.get("lang")
+            )
 
     if lang:
-        langs = re.findall(r"[a-z]{2,3}", lang.lower())
+        lang = lang.lower()
 
-        # Normalise English variants
-        if "eng" in langs or "en" in langs:
+        if lang in {"eng", "en"}:
             return "eng"
 
-        # Otherwise keep first recognised code
+        langs = re.findall(r"[a-z]{2,3}", lang)
         if langs:
             return langs[0][:3]
 
-    # Last resort: detect from text
     try:
         detected = langdetect.detect(raw_text[:5000])
         return detected[:3] if detected else None
@@ -248,8 +264,11 @@ def process_ecco_file(tree, xml_path):
     tokens = re.findall( r"\w+|[^\w\s]", normalized )
 
     if len(tokens) > config.MAX_TOKENS_IN_DOC:
-        logger.warning(f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}")
-        return None
+        logger.warning(
+            f"[tier0 worker {os.getpid()}"
+            f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}"
+        )
+        # return None
 
     lang = extract_language(tree, raw_text)
 
@@ -270,29 +289,50 @@ def process_ecco_file(tree, xml_path):
 
 
 def process_eebo_file(tree, xml_path):
-    doc_id_elem = tree.find(".//HEADER//IDNO[@TYPE='DLPS']")
+    doc_id_elem = tree.find(".//tei:idno[@type='DLPS']", TEI_NS)
+
     if doc_id_elem is None or not doc_id_elem.text:
-        logger.warning(f"[tier0] process_file bailing as doc_id_elem not found in {xml_path}")
+        logger.warning(
+            f"[tier0] process_eebo_file bailing as doc_id_elem not found in {xml_path}"
+        )
         return None
+
     doc_id = doc_id_elem.text.strip()
 
-    title_elem = tree.find(".//HEADER//TITLESTMT/TITLE")
-    author_elem = tree.find(".//HEADER//TITLESTMT/AUTHOR")
-    pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
-    place_elem = tree.find(".//HEADER//SOURCEDESC//PUBPLACE")
+    title_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:title", TEI_NS)
+    author_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:author", TEI_NS)
+    pub_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:publisher",
+        TEI_NS,
+    )
+    place_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:pubPlace",
+        TEI_NS,
+    )
+    date_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:date",
+        TEI_NS,
+    )
 
-    date_elem = tree.find(".//HEADER//SOURCEDESC//DATE")
     date_raw = safe_text(date_elem)
     pub_year = extract_year(date_raw)
+
     if pub_year is None:
-        logger.warning(f"[tier0] No pub_year in {doc_id}")
+        logger.warning(
+            f"[tier0 worker {os.getpid()}"
+            f"[tier0] No pub_year in {doc_id} at {xml_path}"
+        )
         return None
+
     if not year_in_corpus(pub_year):
         return None
 
-    body = tree.findall(".//EEBO//TEXT//BODY")
+    body = tree.findall(".//tei:text/tei:body", TEI_NS)
+
     if not body:
-        logger.warning(f"[tier0] process_file bailing as BODY not defined in {xml_path}")
+        logger.warning(
+            f"[tier0] process_file bailing as BODY not defined in {xml_path}"
+        )
         return None
 
     raw_text = " ".join(render_text(b) for b in body)
@@ -302,7 +342,10 @@ def process_eebo_file(tree, xml_path):
     )
 
     if len(normalized) < 100:
-        logger.warning(f"[tier0] process_file bailing as normalised text length < 100 in {xml_path}")
+        logger.warning(
+            f"[tier0] process_file bailing as normalised text length < 100 "
+            f"in {xml_path}"
+        )
         return None
 
     lang = extract_language(tree, raw_text)
@@ -310,9 +353,13 @@ def process_eebo_file(tree, xml_path):
     tokens = re.findall(r"\w+|[^\w\s]", normalized)
 
     if len(tokens) > config.MAX_TOKENS_IN_DOC:
-        logger.warning(f"EEBO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}")
-        return None
-
+        logger.warning(
+            f"[tier0 worker {os.getpid()}"
+            f"EEBO document {doc_id} has {len(tokens)} tokens, "
+            f"which exceeds MAX_TOKENS_IN_DOC "
+            f"{config.MAX_TOKENS_IN_DOC}"
+        )
+        # return None
 
     meta = {
         "doc_id": doc_id,
@@ -323,7 +370,9 @@ def process_eebo_file(tree, xml_path):
         "pub_year": pub_year,
         "source_date_raw": date_raw,
         "token_count": len(tokens),
-        "filepath": str( xml_path.relative_to(config.XML_ROOT_DIR).as_posix() ),
+        "filepath": str(
+            xml_path.relative_to(config.XML_ROOT_DIR).as_posix()
+        ),
         "lang": lang,
     }
 
