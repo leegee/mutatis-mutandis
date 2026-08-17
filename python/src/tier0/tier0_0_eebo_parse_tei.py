@@ -265,7 +265,7 @@ def process_ecco_file(tree, xml_path):
 
     if len(tokens) > config.MAX_TOKENS_IN_DOC:
         logger.warning(
-            f"[tier0 worker {os.getpid()}"
+            f"[tier0 worker {os.getpid()}] "
             f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}"
         )
         # return None
@@ -319,8 +319,7 @@ def process_eebo_file(tree, xml_path):
 
     if pub_year is None:
         logger.warning(
-            f"[tier0 worker {os.getpid()}"
-            f"[tier0] No pub_year in {doc_id} at {xml_path}"
+            f"[tier0 worker {os.getpid()}] No pub_year in {doc_id} at {xml_path}"
         )
         return None
 
@@ -331,7 +330,8 @@ def process_eebo_file(tree, xml_path):
 
     if not body:
         logger.warning(
-            f"[tier0] process_file bailing as BODY not defined in {xml_path}"
+            f"[tier0 worker {os.getpid()} ]"
+            f"process_eebo_file bailing as BODY not defined in {xml_path}"
         )
         return None
 
@@ -343,7 +343,8 @@ def process_eebo_file(tree, xml_path):
 
     if len(normalized) < 100:
         logger.warning(
-            f"[tier0] process_file bailing as normalised text length < 100 "
+            f"[tier0 worker {os.getpid()}] "
+            f"process_eebo_file bailing as normalised text length < 100 "
             f"in {xml_path}"
         )
         return None
@@ -354,7 +355,7 @@ def process_eebo_file(tree, xml_path):
 
     if len(tokens) > config.MAX_TOKENS_IN_DOC:
         logger.warning(
-            f"[tier0 worker {os.getpid()}"
+            f"[tier0 worker {os.getpid()}] "
             f"EEBO document {doc_id} has {len(tokens)} tokens, "
             f"which exceeds MAX_TOKENS_IN_DOC "
             f"{config.MAX_TOKENS_IN_DOC}"
