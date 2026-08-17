@@ -17,7 +17,7 @@ Requires-Dist: networkx==3.6.1
 Requires-Dist: nltk==3.9.4
 Requires-Dist: onnx==1.22.0
 Requires-Dist: onnx-ir==0.2.1
-Requires-Dist: onnxruntime-directml==1.24.4
+Requires-Dist: onnxruntime==1.24.4
 Requires-Dist: onnxscript==0.7.1
 Requires-Dist: optimum==2.1.0
 Requires-Dist: optimum-onnx==0.1.0

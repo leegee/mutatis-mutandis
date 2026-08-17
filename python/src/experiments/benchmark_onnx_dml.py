@@ -74,6 +74,65 @@ def bench_pytorch(mac, input_ids_np, attention_mask_np, n_batches):
 
 
 def export_to_onnx(export_dir):
+    print(f"Exporting FP32 (unquantized) version to {export_dir}...")
+
+    if os.path.exists(export_dir):
+        shutil.rmtree(export_dir)
+
+    mac_fp32 = load_macberth(use_qint8=False)
+    mac_fp32.model.eval()
+
+    os.makedirs(export_dir, exist_ok=True)
+
+    # MacBERTh is BertForMaskedLM. The embedding pipeline uses the BERT
+    # encoder output, not the 30,000-way masked-language-model logits.
+    model = mac_fp32.model.bert
+    model.eval()
+    model.to("cpu")
+
+    input_ids_np, attention_mask_np, token_type_ids_np = make_dummy_batch(
+        mac_fp32.tokenizer, BATCH_SIZE, SEQ_LEN
+    )
+
+    input_ids = torch.from_numpy(input_ids_np)
+    attention_mask = torch.from_numpy(attention_mask_np)
+    token_type_ids = torch.from_numpy(token_type_ids_np)
+
+    output_path = os.path.join(export_dir, "model.onnx")
+
+    with torch.inference_mode():
+        torch.onnx.export(
+            model,
+            args=(input_ids, attention_mask, token_type_ids),
+            f=output_path,
+            input_names=[
+                "input_ids",
+                "attention_mask",
+                "token_type_ids",
+            ],
+            output_names=[
+                "last_hidden_state",
+            ],
+            dynamic_axes={
+                "input_ids": {0: "batch", 1: "sequence"},
+                "attention_mask": {0: "batch", 1: "sequence"},
+                "token_type_ids": {0: "batch", 1: "sequence"},
+                "last_hidden_state": {0: "batch", 1: "sequence"},
+            },
+            opset_version=17,
+            do_constant_folding=True,
+            dynamo=False,
+        )
+
+    mac_fp32.tokenizer.save_pretrained(export_dir)
+
+    print("FP32 ONNX export completed.")
+    print(f"Model: {output_path}")
+
+    return mac_fp32
+
+
+def old_export_to_onnx(export_dir):
     from optimum.onnxruntime import ORTModelForFeatureExtraction
 
     print(f"Exporting FP32 (unquantized) version to {export_dir}...")

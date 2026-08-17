@@ -13,7 +13,7 @@ networkx==3.6.1
 nltk==3.9.4
 onnx==1.22.0
 onnx-ir==0.2.1
-onnxruntime-directml==1.24.4
+onnxruntime==1.24.4
 onnxscript==0.7.1
 optimum==2.1.0
 optimum-onnx==0.1.0

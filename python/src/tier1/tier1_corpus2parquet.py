@@ -174,7 +174,33 @@ class EmbeddingPipeline:
     def _embed_doc_unmasked(self, buf: DocBuffer) -> list[Event]:
         input_ids, attention_mask, word_ids = self._encode(buf.tokens)
 
-        window_specs = []
+        events_by_token = defaultdict(dict)
+        batch = []
+
+        def flush_batch():
+            if not batch:
+                return
+
+            hiddens = self._forward_window_batch(batch)
+
+            for item, hidden in zip(batch, hiddens):
+                for event in self._extract_events(
+                    buf,
+                    item,
+                    hidden,
+                    item["config_name"],
+                ):
+                    key = (
+                        event.corpus,
+                        event.doc_id,
+                        event.corpus_token_idx,
+                    )
+
+                    # Multiple overlapping windows produce the same
+                    # token/scale observation. Retain only the latest one.
+                    events_by_token[key][event.config_name] = event
+
+            batch.clear()
 
         for config in self.configs:
             for (
@@ -189,7 +215,7 @@ class EmbeddingPipeline:
                 config["size"],
                 config["stride"],
             ):
-                window_specs.append(
+                batch.append(
                     {
                         "window_start": window_start,
                         "input_ids": ids,
@@ -199,23 +225,17 @@ class EmbeddingPipeline:
                     }
                 )
 
-        all_events = []
+                if len(batch) >= self.batch_size:
+                    flush_batch()
 
-        for i in range(0, len(window_specs), self.batch_size):
-            chunk = window_specs[i : i + self.batch_size]
-            hiddens = self._forward_window_batch(chunk)
+        flush_batch()
 
-            for item, hidden in zip(chunk, hiddens):
-                all_events.extend(
-                    self._extract_events(
-                        buf,
-                        item,
-                        hidden,
-                        item["config_name"],
-                    )
-                )
+        return [
+            event
+            for config_dict in events_by_token.values()
+            for event in config_dict.values()
+        ]
 
-        return all_events
 
     def _forward_window_batch(self, chunk):
         max_len = max(len(c["input_ids"]) for c in chunk)
@@ -1084,7 +1104,7 @@ def parse_args():
     p.add_argument( "--num-shards", type=int, default=1, help="Total number of shards", )
 
     p.add_argument( "--backend", choices=["onnx", "pytorch"], default="onnx", help="Inference backend for embedding", )
-    p.add_argument( "--onnx-provider", choices=["cpu", "dml"], default="dml", help="ONNX Runtime provider", )
+    p.add_argument( "--onnx-provider", choices=["cpu", "dml"], default="cpu", help="ONNX Runtime provider", )
 
     p.add_argument( "--store", type=Path, default=config.EVENTSTORE_T1_PATH, help="Override observation store root path", )
     p.add_argument( "--parquet-min-rows", type=int, default=None,
