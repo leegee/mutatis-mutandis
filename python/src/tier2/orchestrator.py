@@ -39,8 +39,8 @@ from tier1.observation_store_api import (
 )
 
 # Register observation-store backends (import side-effect).
-import lib.zarr_observation_backend  # noqa: F401
-import lib.parquet_observation_backend  # noqa: F401
+import lib.zarr_observation_backend  #
+import lib.parquet_observation_backend  #
 
 from tier2.analysis import (
     K,

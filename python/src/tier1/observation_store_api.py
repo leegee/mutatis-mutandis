@@ -1,16 +1,17 @@
 """
 observation_store_api.py — Tier 1 observation store abstraction
 
-Stage 1 of the storage refactor: a backend-agnostic contract that the
-existing Zarr apparatus implements. Stage 2 will add a parallel Apache
-Parquet + DuckDB backend that satisfies the same protocols.
+A backend-agnostic contract for Tier 1 observation storage. Zarr was the
+original backend but did not scale to current Tier 1 observation volume;
+Apache Parquet + DuckDB is now the only backend and the one these protocols
+are written against.
 
 Why this exists
 ---------------
 Tier 1 observation volume has outgrown reliable full-corpus in-memory
 consumption. Call sites must depend on a streaming / selective-load API
-rather than concrete Zarr arrays. The protocols below encode exactly the
-capabilities the pipeline already uses:
+rather than concrete arrays. The protocols below encode exactly the
+capabilities the pipeline uses:
 
     ObservationWriter  — append-only multi-scale event materialisation
     ObservationStream  — batch streaming of embeddings for FAISS ingestion
@@ -28,16 +29,21 @@ Design rules
    reconstructable on demand (or streamed) so peak RSS stays bounded.
 7. Backends may partition by year, shard, or hive; the API does not expose
    partition layout except via optional year filters.
+8. Scales (local / medium / broad) are independently loadable. Streaming
+   and lookup methods take an optional `scales` argument; the backend must
+   read/reconstruct only the requested scale(s), never the others. This
+   lets a caller pull "local" for one pass and "medium" for a later pass
+   without ever holding more than one scale's embedding matrix at a time.
 
 Backend selection
 -----------------
 Use the factory helpers at the bottom of this module:
 
-    writer = open_observation_writer("zarr", path, dim=768)
-    stream = open_observation_stream("zarr", root)
-    lookup = open_observation_lookup("zarr", root)
+    writer = open_observation_writer("parquet", path, dim=768)
+    stream = open_observation_stream("parquet", root)
+    lookup = open_observation_lookup("parquet", root)
 
-Stage 2 will register "parquet" (DuckDB-backed) under the same names.
+"parquet" (DuckDB-backed) is the only registered backend.
 """
 
 from __future__ import annotations
@@ -98,25 +104,39 @@ class ObservationWriter(Protocol):
 
     def append_events(
         self,
+        *,
         event_id: np.ndarray,
-        concept_id: np.ndarray,
-        emb_local: np.ndarray,
-        emb_medium: np.ndarray,
-        emb_broad: np.ndarray,
-        vector_id: np.ndarray,
         corpus: np.ndarray,
         doc_id: np.ndarray,
-        pub_year: np.ndarray,
-        token_idx: np.ndarray,
         token: np.ndarray,
-        window_id: np.ndarray,
-        window_token_pos: np.ndarray,
+        token_idx: np.ndarray,
+        pub_year: np.ndarray,
+        local_window_id: Optional[np.ndarray] = None,
+        local_window_token_pos: Optional[np.ndarray] = None,
+        medium_window_id: Optional[np.ndarray] = None,
+        medium_window_token_pos: Optional[np.ndarray] = None,
+        broad_window_id: Optional[np.ndarray] = None,
+        broad_window_token_pos: Optional[np.ndarray] = None,
+        emb_local: Optional[np.ndarray] = None,
+        emb_medium: Optional[np.ndarray] = None,
+        emb_broad: Optional[np.ndarray] = None,
     ) -> None:
         """
         Append one batch of aligned observations.
 
-        All array arguments must have length n. Embedding arrays are
-        (n, dim) float32; identity / coordinate arrays are 1-D.
+        event_id/corpus/doc_id/token/token_idx/pub_year are always
+        required and must all have length n.
+
+        Each scale's (emb_<scale>, <scale>_window_id,
+        <scale>_window_token_pos) is an optional group: a caller that
+        only computed a subset of scales for this run omits the other
+        groups entirely rather than passing placeholder arrays. When
+        supplied, emb_<scale> is (n, dim) float32 and the two window
+        arrays are 1-D length n. At least one scale's group must be
+        supplied. Backends must write null for a scale's columns on rows
+        where that scale's group wasn't supplied, not zeros or a
+        sentinel — later calls may add a previously-omitted scale to the
+        same store.
         """
         ...
 
@@ -168,21 +188,40 @@ class ObservationStream(Protocol):
         batch_size: int = 8192,
         year_filter: Optional[set[int]] = None,
         year_manifest: Optional[Mapping[Any, np.ndarray]] = None,
+        scales: Sequence[str] = SCALES,
     ) -> Iterator[
-        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+        tuple[
+            Optional[np.ndarray],
+            Optional[np.ndarray],
+            Optional[np.ndarray],
+            np.ndarray,
+            np.ndarray,
+        ]
     ]:
         """
         Yield aligned batches:
 
             (emb_local, emb_medium, emb_broad, event_ids, pub_years)
 
-        All five arrays share the same leading dimension. Filtering by
-        year_filter (when supplied) is applied *before* yield so alignment
-        is preserved.
+        event_ids and pub_years are always populated. The embedding
+        position for any scale *not* in `scales` is None rather than an
+        (n, dim) array — backends must not read or reconstruct embedding
+        data for scales that weren't requested.
 
-        year_manifest is an optional backend-specific optimisation (Zarr
-        uses it to avoid re-reading pub_year arrays); other backends may
-        ignore it.
+        This is the selective-load path: to work through scales one at a
+        time (e.g. build a "local"-only FAISS index in one pass, then a
+        "medium"-only index in a later pass) call this once per scale
+        rather than requesting all three and discarding what isn't
+        needed. Only one scale's embedding matrix need ever be resident
+        at a time. The default, `scales=SCALES`, reproduces the original
+        all-three-scales behaviour.
+
+        Filtering by year_filter (when supplied) is applied *before* yield
+        so alignment is preserved.
+
+        year_manifest is an optional backend-specific optimisation to avoid
+        re-reading pub_year arrays; the Parquet backend may ignore it if
+        it isn't useful for its layout.
         """
         ...
 
@@ -203,9 +242,6 @@ class ObservationLookup(Protocol):
 
     Metadata may be held in compact columnar form. Embeddings must be
     obtainable without materialising the full (N, 3*dim) matrix.
-
-    The protocol deliberately mirrors the historical ZarrEventLookup surface
-    so existing Tier-2 / Tier-3 call sites need only type changes (or none).
     """
 
     # --- size / schema ---
@@ -270,31 +306,82 @@ class ObservationLookup(Protocol):
         ...
 
     # --- embedding access ---
+
+    # Selective single-scale primitives. Implementations must satisfy
+    # these by reading/reconstructing *only* the requested scale — never
+    # the other two. This is what makes "load 'local' now, load 'medium'
+    # later, never hold both" possible: callers loop over scales one at a
+    # time instead of calling the ensemble methods below (which touch
+    # every scale named in `scales`/`weights`).
+    def get_scale_embedding(self, pos: int, scale: str) -> np.ndarray:
+        """
+        Raw (unweighted) embedding for one row position, one scale.
+
+        Raises ValueError if `scale` is not one of SCALES.
+        """
+        ...
+
+    def get_scale_embeddings(
+        self,
+        event_ids: Sequence[int],
+        scale: str,
+    ) -> np.ndarray:
+        """
+        (n, dim) matrix for a single scale, aligned to event_ids.
+
+        To switch scales, just call again with a different `scale` —
+        the previous scale's data does not need to stay resident, and
+        the backend must not eagerly load scales beyond the one asked
+        for here.
+
+        Raises ValueError if `scale` is not one of SCALES.
+        """
+        ...
+
     def get_ensemble_embedding(
         self,
         pos: int,
         weights: Sequence[float] = DEFAULT_ENSEMBLE_WEIGHTS,
+        scales: Sequence[str] = SCALES,
     ) -> np.ndarray:
-        """Weighted combination of the three scales for one row position."""
+        """
+        Weighted combination of embeddings for one row position.
+
+        `scales` and `weights` are paired positionally (scales[i] gets
+        weights[i]) and must be the same length. The default reproduces
+        the original all-three-scale ensemble. Only the scales named in
+        `scales` are read — e.g. scales=("local",), weights=(1.0,) is
+        equivalent to get_scale_embedding(pos, "local") but expressed
+        through the ensemble interface.
+        """
         ...
 
     def get_embeddings(
         self,
         event_ids: Sequence[int],
         weights: Sequence[float] = DEFAULT_ENSEMBLE_WEIGHTS,
+        scales: Sequence[str] = SCALES,
     ) -> np.ndarray:
         """
         (n, dim) ensemble matrix aligned to event_ids.
+
+        `scales`/`weights` behave as in get_ensemble_embedding: only the
+        named scales are read. Prefer get_scale_embeddings when you want
+        one scale's raw vectors rather than a weighted combination.
         """
         ...
 
     def get_concatenated_embeddings(
         self,
         event_ids: Sequence[int],
+        scales: Sequence[str] = SCALES,
     ) -> np.ndarray:
         """
-        (n, 3*dim) matrix: per-scale L2-normalised vectors concatenated.
-        Used by clustering paths that want to keep scale structure.
+        (n, len(scales)*dim) matrix: per-scale L2-normalised vectors
+        concatenated in `scales` order. Used by clustering paths that
+        want to keep scale structure. Only the named scales are read;
+        pass a single scale (e.g. scales=("local",)) to get its raw
+        L2-normalised (n, dim) block without reading the others.
         """
         ...
 
@@ -406,10 +493,7 @@ def configure_store_backend(store_backend: str, *, num_shards: int) -> None:
     Apply backend-specific runtime configuration.
 
     This affects the current process only and must be called before the
-    observation store is opened.
+    observation store is opened. No configuration is currently needed for
+    the Parquet backend; kept as a hook for future backend-specific setup.
     """
-    if store_backend == "zarr" and num_shards > 1:
-        from numcodecs import blosc
-        blosc.set_nthreads(1)
-
-
+    return

@@ -1,9 +1,10 @@
 """
 parquet_observation_backend.py — Parquet + DuckDB backend for the observation API
 
-Stage 2 of the storage refactor. Implements ObservationWriter,
-ObservationStream and ObservationLookup against a hive-partitioned
-Parquet layout, with DuckDB for predicate pushdown and batched reads.
+Implements ObservationWriter, ObservationStream and ObservationLookup
+against a hive-partitioned Parquet layout, with DuckDB for predicate
+pushdown and batched reads. This is the only registered backend; Zarr
+did not scale to current Tier 1 observation volume.
 
 Layout
 ------
@@ -34,7 +35,7 @@ Usage
         open_observation_lookup,
     )
     # import registers the backend
-    import tier1.parquet_observation_backend  # noqa: F401
+    import tier1.parquet_observation_backend  #
 
     writer = open_observation_writer("parquet", root, dim=768)
     stream = open_observation_stream("parquet", root)
@@ -51,11 +52,13 @@ from typing import Any, Iterator, Mapping, Optional, Sequence
 import duckdb
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from tier1.observation_store_api import (
     DEFAULT_ENSEMBLE_WEIGHTS,
     NO_WINDOW_TOKEN_POS,
+    SCALES,
     register_backend,
 )
 
@@ -160,10 +163,55 @@ def _connect() -> duckdb.DuckDBPyConnection:
     return con
 
 
+def _probe_dim(con: duckdb.DuckDBPyConnection, glob: str) -> int:
+    """
+    Infer embedding dimensionality from whichever scale column has data.
+
+    A store may only ever have had a subset of scales written (e.g. a
+    run with --scales medium leaves emb_local/emb_broad null for every
+    row), so this can't assume any single column is populated. It scans
+    for the first row where at least one scale is non-null and reads
+    that column's length.
+    """
+    row = con.execute(
+        f"""
+        SELECT emb_local, emb_medium, emb_broad
+        FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+        WHERE emb_local IS NOT NULL
+           OR emb_medium IS NOT NULL
+           OR emb_broad IS NOT NULL
+        LIMIT 1
+        """
+    ).fetchone()
+    if row is None:
+        return 0
+    for v in row:
+        if v is not None:
+            return len(v)
+    return 0
+
+
+
 def _has_parquet(root: Path) -> bool:
     if not root.exists():
         return False
     return any(root.rglob("*.parquet"))
+
+
+def _validate_scales(scales: Sequence[str]) -> tuple[str, ...]:
+    """
+    Normalise a requested scale sequence: check membership in SCALES,
+    drop duplicates, preserve caller order. Raises ValueError on an
+    unknown scale name so a typo fails loudly instead of silently
+    reading nothing.
+    """
+    seen: list[str] = []
+    for s in scales:
+        if s not in SCALES:
+            raise ValueError(f"Unknown scale {s!r}; must be one of {SCALES}")
+        if s not in seen:
+            seen.append(s)
+    return tuple(seen)
 
 
 
@@ -188,6 +236,18 @@ class ParquetObservationWriter:
     event_id is the only observation identity. There is deliberately no
     concept_id or vector_id: an observation is not a concept and there is
     no single vector identity for an ensemble of three vectors.
+
+    Partial-scale writes
+    ---------------------
+    append_events accepts each scale's (emb_<scale>, <scale>_window_id,
+    <scale>_window_token_pos) as an optional group. A run whose --scales
+    only covers a subset (e.g. just "medium") omits the other groups; the
+    corresponding columns are written as null for that batch. A later run
+    that computes "local" for the same store just calls append_events
+    with local's group filled in — nothing needs to be rewritten. Readers
+    (ParquetObservationLookup / ParquetObservationStream) raise a clear
+    error if asked for a scale that turns out to be null for a given row,
+    rather than silently returning zeros.
     """
 
     def __init__(
@@ -221,8 +281,8 @@ class ParquetObservationWriter:
         self._buffer_bytes: dict[int, int] = {}
         self._closed = False
 
-    def _estimate_bytes(self, n: int) -> int:
-        emb = n * self.dim * 4 * 3
+    def _estimate_bytes(self, n: int, n_scales: int = 3) -> int:
+        emb = n * self.dim * 4 * n_scales
         meta = n * 96
         return emb + meta
 
@@ -235,15 +295,15 @@ class ParquetObservationWriter:
         token,
         token_idx,
         pub_year,
-        local_window_id,
-        local_window_token_pos,
-        medium_window_id,
-        medium_window_token_pos,
-        broad_window_id,
-        broad_window_token_pos,
-        emb_local,
-        emb_medium,
-        emb_broad,
+        local_window_id=None,
+        local_window_token_pos=None,
+        medium_window_id=None,
+        medium_window_token_pos=None,
+        broad_window_id=None,
+        broad_window_token_pos=None,
+        emb_local=None,
+        emb_medium=None,
+        emb_broad=None,
     ) -> None:
         if self._closed:
             raise RuntimeError("ParquetObservationWriter is closed")
@@ -255,57 +315,74 @@ class ParquetObservationWriter:
         token_idx = np.asarray(token_idx, dtype=np.int64)
         pub_year = np.asarray(pub_year, dtype=np.int16)
 
-        local_window_id = np.asarray(local_window_id, dtype=np.int64)
-        local_window_token_pos = np.asarray(
-            local_window_token_pos, dtype=np.int32
-        )
-        medium_window_id = np.asarray(medium_window_id, dtype=np.int64)
-        medium_window_token_pos = np.asarray(
-            medium_window_token_pos, dtype=np.int32
-        )
-        broad_window_id = np.asarray(broad_window_id, dtype=np.int64)
-        broad_window_token_pos = np.asarray(
-            broad_window_token_pos, dtype=np.int32
-        )
-
-        emb_local = np.asarray(emb_local, dtype=np.float32)
-        emb_medium = np.asarray(emb_medium, dtype=np.float32)
-        emb_broad = np.asarray(emb_broad, dtype=np.float32)
-
         n = len(event_id)
 
         if n == 0:
             return
 
-        metadata = (
+        for name, arr in (
             ("corpus", corpus),
             ("doc_id", doc_id),
             ("token", token),
             ("token_idx", token_idx),
             ("pub_year", pub_year),
-            ("local_window_id", local_window_id),
-            ("local_window_token_pos", local_window_token_pos),
-            ("medium_window_id", medium_window_id),
-            ("medium_window_token_pos", medium_window_token_pos),
-            ("broad_window_id", broad_window_id),
-            ("broad_window_token_pos", broad_window_token_pos),
-        )
-
-        for name, arr in metadata:
+        ):
             if len(arr) != n:
                 raise ValueError(
                     f"{name} length {len(arr)} != event_id length {n}"
                 )
 
-        for name, arr in (
-            ("emb_local", emb_local),
-            ("emb_medium", emb_medium),
-            ("emb_broad", emb_broad),
-        ):
-            if arr.shape != (n, self.dim):
+        # Each scale's (emb_<scale>, <scale>_window_id,
+        # <scale>_window_token_pos) is an all-or-nothing group. A run that
+        # only computed a subset of scales (e.g. --scales medium) omits
+        # the other scales' groups entirely; those columns are written as
+        # null for every row in this call rather than raising, so a
+        # single-scale run and a later run adding another scale can both
+        # append to the same store.
+        raw_scale_args = {
+            "local": (emb_local, local_window_id, local_window_token_pos),
+            "medium": (emb_medium, medium_window_id, medium_window_token_pos),
+            "broad": (emb_broad, broad_window_id, broad_window_token_pos),
+        }
+
+        present: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+        for scale, (emb, wid, wpos) in raw_scale_args.items():
+            supplied = (emb is not None, wid is not None, wpos is not None)
+            if not any(supplied):
+                continue
+            if not all(supplied):
                 raise ValueError(
-                    f"{name} shape {arr.shape} != ({n}, {self.dim})"
+                    f"scale {scale!r}: emb_{scale}, {scale}_window_id and "
+                    f"{scale}_window_token_pos must be supplied together "
+                    f"(or all omitted) — got emb={supplied[0]}, "
+                    f"window_id={supplied[1]}, window_token_pos={supplied[2]}"
                 )
+
+            emb = np.asarray(emb, dtype=np.float32)
+            wid = np.asarray(wid, dtype=np.int64)
+            wpos = np.asarray(wpos, dtype=np.int32)
+
+            if emb.shape != (n, self.dim):
+                raise ValueError(
+                    f"emb_{scale} shape {emb.shape} != ({n}, {self.dim})"
+                )
+            if len(wid) != n:
+                raise ValueError(
+                    f"{scale}_window_id length {len(wid)} != {n}"
+                )
+            if len(wpos) != n:
+                raise ValueError(
+                    f"{scale}_window_token_pos length {len(wpos)} != {n}"
+                )
+
+            present[scale] = (emb, wid, wpos)
+
+        if not present:
+            raise ValueError(
+                "append_events requires at least one scale's "
+                "(emb_<scale>, <scale>_window_id, <scale>_window_token_pos) "
+                "group; got none"
+            )
 
         years = np.unique(pub_year)
 
@@ -320,15 +397,10 @@ class ParquetObservationWriter:
                     token[mask],
                     token_idx[mask],
                     pub_year[mask],
-                    local_window_id[mask],
-                    local_window_token_pos[mask],
-                    medium_window_id[mask],
-                    medium_window_token_pos[mask],
-                    broad_window_id[mask],
-                    broad_window_token_pos[mask],
-                    emb_local[mask],
-                    emb_medium[mask],
-                    emb_broad[mask],
+                    {
+                        scale: (emb[mask], wid[mask], wpos[mask])
+                        for scale, (emb, wid, wpos) in present.items()
+                    },
                 )
 
                 y = int(year)
@@ -340,7 +412,7 @@ class ParquetObservationWriter:
                 )
                 self._buffer_bytes[y] = (
                     self._buffer_bytes.get(y, 0)
-                    + self._estimate_bytes(nrows)
+                    + self._estimate_bytes(nrows, len(present))
                 )
 
                 if (
@@ -393,16 +465,10 @@ class ParquetObservationWriter:
         token,
         token_idx,
         pub_year,
-        local_window_id,
-        local_window_token_pos,
-        medium_window_id,
-        medium_window_token_pos,
-        broad_window_id,
-        broad_window_token_pos,
-        emb_local,
-        emb_medium,
-        emb_broad,
+        scales: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
     ) -> pa.Table:
+        n = len(event_id)
+
         def emb_col(mat: np.ndarray) -> pa.Array:
             flat = pa.array(
                 mat.reshape(-1),
@@ -413,6 +479,30 @@ class ParquetObservationWriter:
                 self.dim,
             )
 
+        def scale_columns(name: str) -> tuple[pa.Array, pa.Array, pa.Array]:
+            triple = scales.get(name)
+            if triple is not None:
+                emb, wid, wpos = triple
+                return (
+                    emb_col(emb),
+                    pa.array(wid, type=pa.int64()),
+                    pa.array(wpos, type=pa.int32()),
+                )
+            # This scale wasn't computed for this batch: write null so the
+            # row still matches the fixed schema. Null is distinct from
+            # NO_WINDOW_TOKEN_POS (-1) — null means "this scale was never
+            # computed here", -1 means "computed, but the token fell
+            # outside this scale's window".
+            return (
+                pa.nulls(n, type=_embedding_type(self.dim)),
+                pa.nulls(n, type=pa.int64()),
+                pa.nulls(n, type=pa.int32()),
+            )
+
+        emb_local_col, local_wid_col, local_wpos_col = scale_columns("local")
+        emb_medium_col, medium_wid_col, medium_wpos_col = scale_columns("medium")
+        emb_broad_col, broad_wid_col, broad_wpos_col = scale_columns("broad")
+
         return pa.table(
             {
                 "event_id": pa.array(event_id, type=pa.int64()),
@@ -421,33 +511,15 @@ class ParquetObservationWriter:
                 "token": pa.array(token, type=pa.string()),
                 "token_idx": pa.array(token_idx, type=pa.int64()),
                 "pub_year": pa.array(pub_year, type=pa.int16()),
-                "local_window_id": pa.array(
-                    local_window_id,
-                    type=pa.int64(),
-                ),
-                "local_window_token_pos": pa.array(
-                    local_window_token_pos,
-                    type=pa.int32(),
-                ),
-                "medium_window_id": pa.array(
-                    medium_window_id,
-                    type=pa.int64(),
-                ),
-                "medium_window_token_pos": pa.array(
-                    medium_window_token_pos,
-                    type=pa.int32(),
-                ),
-                "broad_window_id": pa.array(
-                    broad_window_id,
-                    type=pa.int64(),
-                ),
-                "broad_window_token_pos": pa.array(
-                    broad_window_token_pos,
-                    type=pa.int32(),
-                ),
-                "emb_local": emb_col(emb_local),
-                "emb_medium": emb_col(emb_medium),
-                "emb_broad": emb_col(emb_broad),
+                "local_window_id": local_wid_col,
+                "local_window_token_pos": local_wpos_col,
+                "medium_window_id": medium_wid_col,
+                "medium_window_token_pos": medium_wpos_col,
+                "broad_window_id": broad_wid_col,
+                "broad_window_token_pos": broad_wpos_col,
+                "emb_local": emb_local_col,
+                "emb_medium": emb_medium_col,
+                "emb_broad": emb_broad_col,
             },
             schema=self._schema,
         )
@@ -571,19 +643,8 @@ class ParquetObservationStream:
         if not _has_parquet(self.root):
             self._dim = 0
             return 0
-        # Infer dim from first non-empty emb_medium
         glob = _glob(self.root)
-        row = self._con.execute(
-            f"""
-            SELECT emb_medium
-            FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
-            LIMIT 1
-            """
-        ).fetchone()
-        if row is None or row[0] is None:
-            self._dim = 0
-        else:
-            self._dim = len(row[0])
+        self._dim = _probe_dim(self._con, glob)
         return self._dim
 
     def iter_multi_scale_embeddings(
@@ -591,9 +652,18 @@ class ParquetObservationStream:
         batch_size: int = 8192,
         year_filter: Optional[set[int]] = None,
         year_manifest: Optional[Mapping[Any, np.ndarray]] = None,
+        scales: Sequence[str] = SCALES,
     ) -> Iterator[
-        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+        tuple[
+            Optional[np.ndarray],
+            Optional[np.ndarray],
+            Optional[np.ndarray],
+            np.ndarray,
+            np.ndarray,
+        ]
     ]:
+        scales = _validate_scales(scales)
+
         if not _has_parquet(self.root):
             return
             yield  # make this a generator  # noqa: unreachable
@@ -610,8 +680,12 @@ class ParquetObservationStream:
             where = f"WHERE year IN ({placeholders})"
             params = list(year_filter)
 
+        # Only the requested scales' embedding columns go into the SELECT
+        # list, so DuckDB never decodes the fixed-size-list columns for
+        # scales the caller didn't ask for.
+        emb_cols = ", ".join(f"emb_{s}" for s in scales)
         sql = f"""
-            SELECT emb_local, emb_medium, emb_broad, event_id, pub_year
+            SELECT {emb_cols}, event_id, pub_year
             FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
             {where}
         """
@@ -620,23 +694,36 @@ class ParquetObservationStream:
         con = _connect()
         try:
             con.execute(sql, params)
+            n_scale_cols = len(scales)
             while True:
                 rows = con.fetchmany(batch_size)
                 if not rows:
                     break
                 n = len(rows)
-                emb_l = np.empty((n, dim), dtype=np.float32)
-                emb_m = np.empty((n, dim), dtype=np.float32)
-                emb_b = np.empty((n, dim), dtype=np.float32)
+                mats = {s: np.empty((n, dim), dtype=np.float32) for s in scales}
                 eids = np.empty(n, dtype=np.int64)
                 years = np.empty(n, dtype=np.int16)
-                for i, (l, m, b, eid, y) in enumerate(rows):
-                    emb_l[i] = l
-                    emb_m[i] = m
-                    emb_b[i] = b
-                    eids[i] = eid
-                    years[i] = y
-                yield emb_l, emb_m, emb_b, eids, years
+                for i, row in enumerate(rows):
+                    for j, s in enumerate(scales):
+                        val = row[j]
+                        if val is None:
+                            raise ValueError(
+                                f"scale {s!r} is null for event_id={row[n_scale_cols]} "
+                                f"— this store has rows where {s!r} was never "
+                                f"computed (a run with --scales that excluded "
+                                f"it). Filter to a year/subset that has {s!r} "
+                                f"fully populated, or request a different scale."
+                            )
+                        mats[s][i] = val
+                    eids[i] = row[n_scale_cols]
+                    years[i] = row[n_scale_cols + 1]
+                yield (
+                    mats.get("local"),
+                    mats.get("medium"),
+                    mats.get("broad"),
+                    eids,
+                    years,
+                )
         finally:
             con.close()
 
@@ -668,9 +755,8 @@ class ParquetObservationLookup:
     Metadata strategy
     -----------------
     On construction, metadata columns (no embeddings) are loaded into
-    compact NumPy struct-of-arrays — the same memory trade-off as the
-    current Zarr lookup after embeddings moved to FAISS. Peak RSS is
-    dominated by metadata, not the ~16 GiB embedding matrices.
+    compact NumPy struct-of-arrays. Peak RSS is dominated by metadata,
+    not the ~16 GiB embedding matrices.
 
     Optional constructor kwargs:
         forms: iterable of tokens — only rows matching these tokens are
@@ -681,12 +767,14 @@ class ParquetObservationLookup:
     Embedding strategy
     ------------------
     1. If attach_index() was called, vectors are reconstructed from the
-       attached per-year FAISS indices (identical path to Zarr).
+       attached per-year FAISS indices.
     2. Otherwise vectors are fetched on demand from Parquet via DuckDB
-       keyed by event_id (batched).
-
-    This keeps the protocol surface identical while allowing a pure-Parquet
-    path that does not require FAISS for embedding access.
+       keyed by event_id (batched), one scale at a time. Selective
+       single-scale reads (get_scale_embedding / get_scale_embeddings)
+       and the multi-scale ensemble methods (get_ensemble_embedding /
+       get_embeddings / get_concatenated_embeddings, via their `scales`
+       argument) both route through the same per-scale fetch path, so
+       a scale that was never requested is never read from Parquet.
     """
 
     _META_SQL_COLS = (
@@ -717,7 +805,12 @@ class ParquetObservationLookup:
         self._con = _connect()
         self._index = None  # optional FAISS attach
         self._dim: int | None = None
-        self._emb_cache: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+        # Cache is keyed by scale, then event_id, so a caller that only
+        # ever touches "local" never pays for medium/broad cache entries,
+        # and clearing one scale's cache doesn't disturb the others.
+        self._emb_cache: dict[str, dict[int, np.ndarray]] = {
+            s: {} for s in SCALES
+        }
         self._emb_cache_max = 50_000
 
         self._forms = {f.lower() for f in forms} if forms else None
@@ -814,10 +907,15 @@ class ParquetObservationLookup:
             "medium_window_id",
             "broad_window_id",
         ):
+            # A scale that wasn't computed for this row is null here (see
+            # ParquetObservationWriter's partial-scale write contract).
+            # Fill with NO_WINDOW_TOKEN_POS rather than letting the null
+            # -> float -> int cast silently produce garbage values.
+            col = pc.fill_null(arrow.column(name), NO_WINDOW_TOKEN_POS)
             setattr(
                 self,
                 name,
-                arrow.column(name).to_numpy().astype(
+                col.to_numpy(zero_copy_only=False).astype(
                     np.int64,
                     copy=False,
                 ),
@@ -828,10 +926,11 @@ class ParquetObservationLookup:
             "medium_window_token_pos",
             "broad_window_token_pos",
         ):
+            col = pc.fill_null(arrow.column(name), NO_WINDOW_TOKEN_POS)
             setattr(
                 self,
                 name,
-                arrow.column(name).to_numpy().astype(
+                col.to_numpy(zero_copy_only=False).astype(
                     np.int32,
                     copy=False,
                 ),
@@ -886,6 +985,11 @@ class ParquetObservationLookup:
 
     def _row_to_dict(self, pos: int) -> dict:
         def window_pos(value: int) -> int | None:
+            # NO_WINDOW_TOKEN_POS (-1) means either "computed but the
+            # token fell outside this scale's window" (token_pos) or
+            # "this scale was never computed for this row, see
+            # ParquetObservationWriter's partial-scale write contract"
+            # (window_id). Either way, None reads more honestly than -1.
             return (
                 None
                 if value == NO_WINDOW_TOKEN_POS
@@ -899,15 +1003,15 @@ class ParquetObservationLookup:
             "token": str(self.token[pos]),
             "token_idx": int(self.token_idx[pos]),
             "pub_year": int(self.pub_year[pos]),
-            "local_window_id": int(self.local_window_id[pos]),
+            "local_window_id": window_pos(self.local_window_id[pos]),
             "local_window_token_pos": window_pos(
                 self.local_window_token_pos[pos]
             ),
-            "medium_window_id": int(self.medium_window_id[pos]),
+            "medium_window_id": window_pos(self.medium_window_id[pos]),
             "medium_window_token_pos": window_pos(
                 self.medium_window_token_pos[pos]
             ),
-            "broad_window_id": int(self.broad_window_id[pos]),
+            "broad_window_id": window_pos(self.broad_window_id[pos]),
             "broad_window_token_pos": window_pos(
                 self.broad_window_token_pos[pos]
             ),
@@ -975,7 +1079,6 @@ class ParquetObservationLookup:
             .reconstruct(event_id) -> (dim,) ndarray
             .reconstruct_many(event_ids) -> (n, dim) ndarray
             .dim attribute
-        Same contract as ZarrEventLookup.attach_index.
         """
         self._index = index
         if index:
@@ -989,73 +1092,72 @@ class ParquetObservationLookup:
             self._dim = 0
             return 0
         glob = _glob(self.root)
-        row = self._con.execute(
-            f"""
-            SELECT emb_medium
-            FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
-            LIMIT 1
-            """
-        ).fetchone()
-        self._dim = len(row[0]) if row and row[0] is not None else 0
+        self._dim = _probe_dim(self._con, glob)
         return self._dim
 
-    def _fetch_scales_from_parquet(
-        self, event_ids: Sequence[int]
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _fetch_scale_from_parquet(
+        self, event_ids: Sequence[int], scale: str
+    ) -> np.ndarray:
         """
-        Return (local, medium, broad) matrices aligned to event_ids order.
-        Uses an in-process cache keyed by event_id.
+        (n, dim) matrix for one scale, aligned to event_ids order.
+
+        Only the emb_{scale} column is named in the SELECT list — the
+        other two scales' embedding data is never read from Parquet by
+        this call. Uses an in-process cache keyed by (scale, event_id).
         """
         dim = self._ensure_dim()
         n = len(event_ids)
-        local = np.empty((n, dim), dtype=np.float32)
-        medium = np.empty((n, dim), dtype=np.float32)
-        broad = np.empty((n, dim), dtype=np.float32)
+        out = np.empty((n, dim), dtype=np.float32)
+        cache = self._emb_cache[scale]
 
         missing: list[int] = []
         missing_idx: list[int] = []
         for i, eid in enumerate(event_ids):
             eid = int(eid)
-            cached = self._emb_cache.get(eid)
+            cached = cache.get(eid)
             if cached is not None:
-                local[i], medium[i], broad[i] = cached
+                out[i] = cached
             else:
                 missing.append(eid)
                 missing_idx.append(i)
 
         if missing:
             glob = _glob(self.root)
-            # DuckDB list parameter
             placeholders = ",".join("?" for _ in missing)
+            col = f"emb_{scale}"
             sql = f"""
-                SELECT event_id, emb_local, emb_medium, emb_broad
+                SELECT event_id, {col}
                 FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
                 WHERE event_id IN ({placeholders})
             """
             rows = self._con.execute(sql, missing).fetchall()
-            by_id = {int(r[0]): (r[1], r[2], r[3]) for r in rows}
+            by_id = {int(r[0]): r[1] for r in rows}
 
-            # Evict cache if oversized (simple FIFO-ish clear)
-            if len(self._emb_cache) + len(by_id) > self._emb_cache_max:
-                self._emb_cache.clear()
+            # Evict this scale's cache if oversized (simple FIFO-ish clear).
+            # Other scales' caches are untouched.
+            if len(cache) + len(by_id) > self._emb_cache_max:
+                cache.clear()
 
             for i, eid in zip(missing_idx, missing):
-                trip = by_id.get(eid)
-                if trip is None:
+                if eid not in by_id:
                     raise KeyError(f"event_id={eid} not found in parquet store")
-                l, m, b = (
-                    np.asarray(trip[0], dtype=np.float32),
-                    np.asarray(trip[1], dtype=np.float32),
-                    np.asarray(trip[2], dtype=np.float32),
-                )
-                local[i], medium[i], broad[i] = l, m, b
-                self._emb_cache[eid] = (l, m, b)
+                vec = by_id[eid]
+                if vec is None:
+                    raise KeyError(
+                        f"scale {scale!r} was not computed for event_id={eid} "
+                        f"(embedding is null in the store — this event was "
+                        f"written by a run whose --scales didn't include "
+                        f"{scale!r})"
+                    )
+                arr = np.asarray(vec, dtype=np.float32)
+                out[i] = arr
+                cache[eid] = arr
 
-        return local, medium, broad
+        return out
 
-    def _fetch_scales_from_faiss(
-        self, event_ids: Sequence[int]
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _fetch_scale_from_faiss(
+        self, event_ids: Sequence[int], scale: str
+    ) -> np.ndarray:
         assert self._index is not None
         dim = self._ensure_dim()
         n = len(event_ids)
@@ -1063,9 +1165,7 @@ class ParquetObservationLookup:
         positions = [self.get_pos(int(eid)) for eid in event_ids]
         years = self.pub_year[positions]
 
-        local = np.empty((n, dim), dtype=np.float32)
-        medium = np.empty((n, dim), dtype=np.float32)
-        broad = np.empty((n, dim), dtype=np.float32)
+        out = np.empty((n, dim), dtype=np.float32)
 
         order = np.argsort(years, kind="stable")
         sorted_years = years[order]
@@ -1085,58 +1185,86 @@ class ParquetObservationLookup:
                     f"Available: {sorted(self._index.keys())}"
                 )
             batch_ids = sorted_eids[start:end]
-            local[order[start:end]] = year_indices["local"].reconstruct_many(batch_ids)
-            medium[order[start:end]] = year_indices["medium"].reconstruct_many(batch_ids)
-            broad[order[start:end]] = year_indices["broad"].reconstruct_many(batch_ids)
+            out[order[start:end]] = year_indices[scale].reconstruct_many(batch_ids)
             start = end
 
-        return local, medium, broad
+        return out
 
-    def _scales_for_ids(
-        self, event_ids: Sequence[int]
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _scale_for_ids(
+        self, event_ids: Sequence[int], scale: str
+    ) -> np.ndarray:
+        if scale not in SCALES:
+            raise ValueError(f"Unknown scale {scale!r}; must be one of {SCALES}")
         if self._index is not None:
-            return self._fetch_scales_from_faiss(event_ids)
-        return self._fetch_scales_from_parquet(event_ids)
+            return self._fetch_scale_from_faiss(event_ids, scale)
+        return self._fetch_scale_from_parquet(event_ids, scale)
+
+    # --- selective single-scale access --------------------------------
+
+    def get_scale_embedding(self, pos: int, scale: str) -> np.ndarray:
+        eid = int(self.event_id[pos])
+        return self._scale_for_ids([eid], scale)[0]
+
+    def get_scale_embeddings(
+        self,
+        event_ids: Sequence[int],
+        scale: str,
+    ) -> np.ndarray:
+        return self._scale_for_ids(event_ids, scale)
+
+    # --- ensemble access -------------------------------------------------
 
     def get_ensemble_embedding(
         self,
         pos: int,
         weights: Sequence[float] = DEFAULT_ENSEMBLE_WEIGHTS,
+        scales: Sequence[str] = SCALES,
     ) -> np.ndarray:
+        scales = _validate_scales(scales)
+        if len(weights) != len(scales):
+            raise ValueError(
+                f"weights length {len(weights)} != scales length {len(scales)}"
+            )
         eid = int(self.event_id[pos])
-        local, medium, broad = self._scales_for_ids([eid])
-        return (
-            weights[0] * local[0]
-            + weights[1] * medium[0]
-            + weights[2] * broad[0]
-        ).astype(np.float32)
+        out: Optional[np.ndarray] = None
+        for w, s in zip(weights, scales):
+            vec = self._scale_for_ids([eid], s)[0]
+            out = w * vec if out is None else out + w * vec
+        return out.astype(np.float32)
 
     def get_embeddings(
         self,
         event_ids: Sequence[int],
         weights: Sequence[float] = DEFAULT_ENSEMBLE_WEIGHTS,
+        scales: Sequence[str] = SCALES,
     ) -> np.ndarray:
-        local, medium, broad = self._scales_for_ids(event_ids)
-        return (
-            weights[0] * local + weights[1] * medium + weights[2] * broad
-        ).astype(np.float32)
+        scales = _validate_scales(scales)
+        if len(weights) != len(scales):
+            raise ValueError(
+                f"weights length {len(weights)} != scales length {len(scales)}"
+            )
+        out: Optional[np.ndarray] = None
+        for w, s in zip(weights, scales):
+            mat = self._scale_for_ids(event_ids, s)
+            out = w * mat if out is None else out + w * mat
+        if out is None:
+            return np.empty((len(event_ids), self._ensure_dim()), dtype=np.float32)
+        return out.astype(np.float32)
 
     def get_concatenated_embeddings(
         self,
         event_ids: Sequence[int],
+        scales: Sequence[str] = SCALES,
     ) -> np.ndarray:
-        local, medium, broad = self._scales_for_ids(event_ids)
+        scales = _validate_scales(scales)
 
         def _norm_rows(M: np.ndarray) -> np.ndarray:
             norms = np.linalg.norm(M, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
             return M / norms
 
-        return np.concatenate(
-            [_norm_rows(local), _norm_rows(medium), _norm_rows(broad)],
-            axis=1,
-        ).astype(np.float32)
+        blocks = [_norm_rows(self._scale_for_ids(event_ids, s)) for s in scales]
+        return np.concatenate(blocks, axis=1).astype(np.float32)
 
 
 # ---------------------------------------------------------------------------

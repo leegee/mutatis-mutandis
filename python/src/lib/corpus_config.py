@@ -6,9 +6,9 @@ from typing import TypedDict, Set, Dict
 CORPUS_MIN_YEAR = 1000
 CORPUS_MAX_YEAR = 2000
 
-FILTER_DOCUMENT_SIZE = False
+FILTER_DOCUMENT_SIZE = True
 MIN_TOKENS_IN_DOC = 200
-MAX_TOKENS_IN_DOC = 2000000
+MAX_TOKENS_IN_DOC = 200_000
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -22,14 +22,13 @@ CORPUS_INPUT_DIRS = {
 }
 
 try:
-    import google.colab  # noqa: F401
+    import google.colab  #
     COLAB_MODE = True
 except ModuleNotFoundError:
     COLAB_MODE = False
 
 # Could use env var
-# OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
-OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else Path("g:/corpus-out-parq")
+OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TMP_DIR = OUT_DIR / "tmp"
