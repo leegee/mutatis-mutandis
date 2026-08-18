@@ -5,13 +5,14 @@ import { Suspense, createSignal } from "solid-js";
 import "beercss/dist/cdn/beer.min.css";
 
 import "./app.css";
+import "./nav-menu.css";
 
 function Navigation() {
   const location = useLocation();
   const [minimized, setMinimized] = createSignal(false);
 
   return (
-    <nav class={`left surface-container ${ minimized() ? "minimized" : "" }`}>
+    <nav class={`left surface-container ${ minimized() ? "minimized" : "maximized" }`}>
       <header>
         <nav>
           <button

@@ -1,0 +1,68 @@
+nav.left {
+  box-sizing: border-box;
+}
+
+/* Menu items */
+nav.left>a {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+
+  padding: 0.5rem 0.75rem !important;
+  margin: 0 !important;
+
+  gap: 0.75rem !important;
+}
+
+/* Icons */
+nav.left>a>i {
+  position: static !important;
+  display: inline-flex !important;
+
+  flex: 0 0 1.5rem !important;
+  width: 1.5rem !important;
+  min-width: 1.5rem !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Labels */
+nav.left>a>span {
+  display: block !important;
+
+  position: static !important;
+
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Maximized */
+nav.left.maximized {
+  width: 12rem;
+}
+
+nav.left.minimized>a {
+  justify-content: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+nav.left.minimized span {
+  display: none !important;
+}

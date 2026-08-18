@@ -18,33 +18,5 @@ nav.footer {
   margin-top: 2em !important;
   padding-top: 1em !important;
   border-top: 1px dotted var(--on-surface);
-  justify-content: space-between
-}
-
-nav.left.minimized {
-  width: 5rem;
-}
-
-nav.left.minimized span {
-  display: none;
-}
-
-nav.left.minimized>a,
-nav.left.minimized header nav>a {
-  justify-content: center;
-}
-
-nav.left.minimized>a>i,
-nav.left.minimized header nav>a>i {
-  margin: 0;
-}
-
-nav.left.minimized header nav {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-nav.left.minimized header nav>button {
-  margin-bottom: 0.5rem;
+  justify-content: space-between;
 }
