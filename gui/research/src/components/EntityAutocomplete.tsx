@@ -31,17 +31,15 @@ export default function EntityAutocomplete(
       return [];
     }
 
-    return entities()
-      .filter((entity) => {
-        const label = entity.label.toLocaleLowerCase();
+    return entities().filter((entity) => {
+      const label = entity.label.toLocaleLowerCase();
 
-        return (
-          label.includes(query) ||
-          entity.tags.some((tag) =>
-            tag.toLocaleLowerCase().includes(query),
-          )
-        );
-      })
+      return (
+        label.includes(query) || entity.tags.some((tag) =>
+          tag.toLocaleLowerCase().includes(query),
+        )
+      );
+    })
       .slice(0, 8);
   });
 
