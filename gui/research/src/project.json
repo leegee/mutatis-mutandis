@@ -1,0 +1,639 @@
+{
+  "version": 1,
+
+  "metadata": {
+    "title": "Whiteness, Otherness and the Germanic Imagination",
+    "description": "A research map investigating the symbolic semantics of extreme bodily whiteness, colour opposition, animals, supernatural figures and related Germanic linguistic material.",
+    "createdAt": "2026-08-18T00:00:00Z",
+    "updatedAt": "2026-08-18T00:00:00Z"
+  },
+
+  "entities": [
+    {
+      "id": "lexeme-old-norse-hvitr",
+      "type": "lexeme",
+      "label": "hvítr",
+      "aliases": [
+        "hvitr"
+      ],
+      "description": "Old Norse adjective meaning white, bright or fair.",
+      "tags": [
+        "Old Norse",
+        "colour",
+        "white",
+        "brightness"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "lexeme-old-english-hwit",
+      "type": "lexeme",
+      "label": "hwīt",
+      "aliases": [
+        "hwit",
+        "hwīt"
+      ],
+      "description": "Old English adjective meaning white.",
+      "tags": [
+        "Old English",
+        "colour",
+        "white"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "lexeme-old-norse-svartr",
+      "type": "lexeme",
+      "label": "svartr",
+      "aliases": [
+        "swart"
+      ],
+      "description": "Old Norse adjective meaning black or dark.",
+      "tags": [
+        "Old Norse",
+        "colour",
+        "black",
+        "darkness"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "lexeme-old-norse-hrafn",
+      "type": "lexeme",
+      "label": "hrafn",
+      "aliases": [
+        "raven"
+      ],
+      "description": "Old Norse word for raven.",
+      "tags": [
+        "Old Norse",
+        "animal",
+        "bird",
+        "black"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "lexeme-old-norse-ulfr",
+      "type": "lexeme",
+      "label": "úlfr",
+      "aliases": [
+        "ulfr",
+        "wolf"
+      ],
+      "description": "Old Norse word for wolf.",
+      "tags": [
+        "Old Norse",
+        "animal",
+        "wolf"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "lexeme-old-english-feax",
+      "type": "lexeme",
+      "label": "feax",
+      "aliases": [
+        "fex",
+        "fax"
+      ],
+      "description": "Old English word for hair or head-hair, occurring in Beowulf and relevant to the description of hair colour.",
+      "tags": [
+        "Old English",
+        "Beowulf",
+        "hair",
+        "colour"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "animal-raven",
+      "type": "animal",
+      "label": "raven",
+      "aliases": [
+        "corvid"
+      ],
+      "description": "Raven as an animal and recurring Germanic/Norse symbolic figure.",
+      "tags": [
+        "animal",
+        "bird",
+        "black",
+        "death",
+        "war",
+        "Odin"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "animal-wolf",
+      "type": "animal",
+      "label": "wolf",
+      "aliases": [
+        "wulf",
+        "úlfr"
+      ],
+      "description": "Wolf as animal and recurring Germanic mythological figure.",
+      "tags": [
+        "animal",
+        "predator",
+        "wolf",
+        "Germanic"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "concept-whiteness",
+      "type": "concept",
+      "label": "whiteness",
+      "aliases": [
+        "white",
+        "extreme whiteness"
+      ],
+      "description": "The semantic and symbolic field associated with whiteness and extreme bodily pallor.",
+      "tags": [
+        "colour",
+        "white",
+        "body",
+        "symbolism"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "concept-blackness",
+      "type": "concept",
+      "label": "blackness",
+      "aliases": [
+        "black",
+        "darkness"
+      ],
+      "description": "The semantic and symbolic field associated with blackness and darkness.",
+      "tags": [
+        "colour",
+        "black",
+        "darkness"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "concept-redness",
+      "type": "concept",
+      "label": "redness",
+      "aliases": [
+        "red",
+        "blood"
+      ],
+      "description": "The semantic field associated with redness, blood and violent colouring.",
+      "tags": [
+        "colour",
+        "red",
+        "blood",
+        "violence"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "concept-radiance",
+      "type": "concept",
+      "label": "radiance",
+      "aliases": [
+        "brightness",
+        "luminosity"
+      ],
+      "description": "Brightness or luminosity as a semantic field potentially associated with whiteness.",
+      "tags": [
+        "light",
+        "brightness",
+        "white"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "motif-black-white-red",
+      "type": "motif",
+      "label": "black-white-red colour opposition",
+      "aliases": [],
+      "description": "A recurring colour configuration in which white/fair, black/dark and red/blood form a significant opposition or visual grouping.",
+      "tags": [
+        "colour",
+        "black",
+        "white",
+        "red",
+        "Germanic",
+        "Norse"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "motif-white-supernatural-woman",
+      "type": "motif",
+      "label": "fair or white supernatural woman",
+      "aliases": [
+        "white woman",
+        "fair supernatural woman"
+      ],
+      "description": "A supernatural or otherworldly female figure characterised by exceptional fairness or whiteness.",
+      "tags": [
+        "supernatural",
+        "woman",
+        "white",
+        "fair",
+        "Norse"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "motif-black-bloodied-raven",
+      "type": "motif",
+      "label": "black bloodied raven",
+      "aliases": [],
+      "description": "A striking visual configuration involving a black raven and blood or redness.",
+      "tags": [
+        "raven",
+        "black",
+        "blood",
+        "red",
+        "Norse"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "motif-white-animal",
+      "type": "motif",
+      "label": "white animal",
+      "aliases": [
+        "white beast"
+      ],
+      "description": "Animals distinguished by unusual whiteness in mythological or literary contexts.",
+      "tags": [
+        "animal",
+        "white",
+        "supernatural",
+        "myth"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "motif-white-other",
+      "type": "motif",
+      "label": "white other",
+      "aliases": [
+        "white outsider",
+        "extreme bodily whiteness"
+      ],
+      "description": "The proposed motif in which extreme whiteness marks a figure as extraordinary, supernatural, alien or otherwise other.",
+      "tags": [
+        "whiteness",
+        "otherness",
+        "body",
+        "interpretation"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "tradition-norse",
+      "type": "source",
+      "label": "Old Norse mythological tradition",
+      "aliases": [
+        "Norse mythology"
+      ],
+      "description": "The Old Norse literary and mythological tradition.",
+      "tags": [
+        "Old Norse",
+        "mythology",
+        "Germanic"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "source-nornir-tradition",
+      "type": "source",
+      "label": "Nornir tradition",
+      "aliases": [
+        "Norns"
+      ],
+      "description": "Material concerning the Norns and their representation in Old Norse literary tradition.",
+      "tags": [
+        "Norns",
+        "Old Norse",
+        "fate",
+        "supernatural"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "source-beowulf",
+      "type": "source",
+      "label": "Beowulf",
+      "aliases": [
+        "Beowulf manuscript"
+      ],
+      "description": "Old English heroic poem, relevant here to feax and descriptions of bodily appearance.",
+      "tags": [
+        "Old English",
+        "Anglo-Saxon",
+        "heroic",
+        "hair",
+        "colour"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "source-germanic-cognates",
+      "type": "source",
+      "label": "Germanic cognate set",
+      "aliases": [
+        "Germanic colour vocabulary"
+      ],
+      "description": "Comparative Germanic linguistic material relevant to white, bright, black and related colour vocabulary.",
+      "tags": [
+        "comparative",
+        "Germanic",
+        "linguistics",
+        "PIE"
+      ],
+      "createdAt": "2026-08-18T00:00:00Z",
+      "updatedAt": "2026-08-18T00:00:00Z"
+    }
+  ],
+
+  "relations": [
+    {
+      "id": "hvitr-cognate-hwit",
+      "sourceId": "lexeme-old-norse-hvitr",
+      "type": "cognate-of",
+      "targetId": "lexeme-old-english-hwit",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "hvitr-expresses-whiteness",
+      "sourceId": "lexeme-old-norse-hvitr",
+      "type": "expresses",
+      "targetId": "concept-whiteness",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "hvitr-associated-radiance",
+      "sourceId": "lexeme-old-norse-hvitr",
+      "type": "associated-with",
+      "targetId": "concept-radiance",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "hwit-expresses-whiteness",
+      "sourceId": "lexeme-old-english-hwit",
+      "type": "expresses",
+      "targetId": "concept-whiteness",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "svartr-contrasts-hvitr",
+      "sourceId": "lexeme-old-norse-svartr",
+      "type": "contrasts-with",
+      "targetId": "lexeme-old-norse-hvitr",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "hrafn-instantiates-raven",
+      "sourceId": "lexeme-old-norse-hrafn",
+      "type": "describes",
+      "targetId": "animal-raven",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "ulfr-instantiates-wolf",
+      "sourceId": "lexeme-old-norse-ulfr",
+      "type": "describes",
+      "targetId": "animal-wolf",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "raven-associated-blackness",
+      "sourceId": "animal-raven",
+      "type": "associated-with",
+      "targetId": "concept-blackness",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "white-other-expresses-whiteness",
+      "sourceId": "motif-white-other",
+      "type": "expresses",
+      "targetId": "concept-whiteness",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "white-woman-white-other",
+      "sourceId": "motif-white-supernatural-woman",
+      "type": "associated-with",
+      "targetId": "motif-white-other",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "black-raven-black-white-red",
+      "sourceId": "motif-black-bloodied-raven",
+      "type": "associated-with",
+      "targetId": "motif-black-white-red",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "white-woman-black-raven",
+      "sourceId": "motif-white-supernatural-woman",
+      "type": "contrasts-with",
+      "targetId": "motif-black-bloodied-raven",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "black-white-red-whiteness",
+      "sourceId": "motif-black-white-red",
+      "type": "associated-with",
+      "targetId": "concept-whiteness",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "black-white-red-blackness",
+      "sourceId": "motif-black-white-red",
+      "type": "associated-with",
+      "targetId": "concept-blackness",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "black-white-red-redness",
+      "sourceId": "motif-black-white-red",
+      "type": "associated-with",
+      "targetId": "concept-redness",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "raven-black-bloodied",
+      "sourceId": "animal-raven",
+      "type": "associated-with",
+      "targetId": "motif-black-bloodied-raven",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "nornir-white-woman",
+      "sourceId": "source-nornir-tradition",
+      "type": "attested-in",
+      "targetId": "motif-white-supernatural-woman",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "nornir-black-white-red",
+      "sourceId": "source-nornir-tradition",
+      "type": "attested-in",
+      "targetId": "motif-black-white-red",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "beowulf-feax",
+      "sourceId": "source-beowulf",
+      "type": "attested-in",
+      "targetId": "lexeme-old-english-feax",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "germanic-hvitr-hwit",
+      "sourceId": "source-germanic-cognates",
+      "type": "supports",
+      "targetId": "lexeme-old-norse-hvitr",
+      "createdAt": "2026-08-18T00:00:00Z"
+    }
+  ],
+
+  "evidence": [
+    {
+      "id": "evidence-hvitr",
+      "sourceId": "tradition-norse",
+      "entityIds": [
+        "lexeme-old-norse-hvitr",
+        "concept-whiteness"
+      ],
+      "relationIds": [
+        "hvitr-expresses-whiteness"
+      ],
+      "observation": "hvítr belongs to the Old Norse vocabulary of whiteness and fairness.",
+      "status": "primary",
+      "notes": "Lexical evidence; precise sense should be recorded against individual dictionary attestations later.",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "evidence-hwit",
+      "sourceId": "source-beowulf",
+      "entityIds": [
+        "lexeme-old-english-hwit"
+      ],
+      "relationIds": [],
+      "observation": "hwīt is the Old English adjective corresponding to the Germanic white vocabulary.",
+      "status": "primary",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "evidence-feax",
+      "sourceId": "source-beowulf",
+      "entityIds": [
+        "lexeme-old-english-feax"
+      ],
+      "relationIds": [
+        "beowulf-feax"
+      ],
+      "observation": "feax is relevant to the Old English vocabulary of hair and to the description of hair colour in Beowulf.",
+      "status": "primary",
+      "notes": "The etymological question should remain separate from the semantic interpretation.",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "evidence-black-white-red",
+      "sourceId": "source-nornir-tradition",
+      "entityIds": [
+        "motif-black-white-red",
+        "motif-white-supernatural-woman",
+        "motif-black-bloodied-raven"
+      ],
+      "relationIds": [
+        "white-woman-black-raven",
+        "nornir-black-white-red"
+      ],
+      "observation": "The material discussed includes a striking opposition between a fair or white supernatural woman and a black, blood-associated raven, forming part of a broader black/white/red colour configuration.",
+      "status": "secondary",
+      "notes": "This should be tied to the exact textual passage and scholarly source before being treated as a securely attested recurring motif.",
+      "createdAt": "2026-08-18T00:00:00Z"
+    },
+
+    {
+      "id": "evidence-white-other-hypothesis",
+      "sourceId": "tradition-norse",
+      "entityIds": [
+        "motif-white-other",
+        "concept-whiteness"
+      ],
+      "relationIds": [
+        "white-other-expresses-whiteness"
+      ],
+      "observation": "A working hypothesis is that extreme bodily whiteness may function as a marker of supernatural, exceptional or otherwise other status in some Germanic literary traditions.",
+      "status": "interpretive",
+      "notes": "This is a research hypothesis, not an established generalisation.",
+      "createdAt": "2026-08-18T00:00:00Z"
+    }
+  ]
+}
