@@ -20,8 +20,8 @@ const entityTypes: EntityType[] = [
 interface EntityFormProps {
     entity?: Entity;
 
-    onCreated?: () => void | Promise<void>;
-    onUpdated?: () => void | Promise<void>;
+    onCreated?: (entity: Entity) => void | Promise<void>;
+    onUpdated?: (entity: Entity) => void | Promise<void>;
     onCancel?: () => void;
 }
 
@@ -98,14 +98,17 @@ export default function EntityForm(props: EntityFormProps) {
 
         try {
             if (editing() && props.entity) {
-                await updateEntity(props.entity, {
-                    label: value,
-                    type: type(),
-                });
+                const updated = await updateEntity(
+                    props.entity,
+                    {
+                        label: value,
+                        type: type(),
+                    },
+                );
 
-                await props.onUpdated?.();
+                await props.onUpdated?.(updated);
             } else {
-                await createEntity(
+                const created = await createEntity(
                     value,
                     type(),
                 );
@@ -113,7 +116,7 @@ export default function EntityForm(props: EntityFormProps) {
                 setLabel("");
                 setSelected(undefined);
 
-                await props.onCreated?.();
+                await props.onCreated?.(created);
             }
         } finally {
             setSaving(false);

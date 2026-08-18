@@ -24,11 +24,8 @@ interface GraphWorkspaceProps {
 export default function GraphWorkspace(
     props: GraphWorkspaceProps,
 ) {
-    const [selectedEntity, setSelectedEntity] =
-        createSignal<Entity>();
-
-    const [selectedRelation, setSelectedRelation] =
-        createSignal<Relation>();
+    const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
+    const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
 
     async function handleAddEntity() {
         const label = window.prompt("Node label:");
@@ -37,10 +34,7 @@ export default function GraphWorkspace(
             return;
         }
 
-        const entity = await createEntity(
-            label.trim(),
-        );
-
+        const entity = await createEntity(label.trim());
         setSelectedEntity(entity);
         setSelectedRelation(undefined);
     }

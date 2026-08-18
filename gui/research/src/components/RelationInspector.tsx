@@ -3,18 +3,15 @@ import { createSignal, Show } from "solid-js";
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
 
-import {
-    deleteRelation,
-} from "~/db/repository";
+import { deleteRelation, } from "~/db/repository";
 
 import RelationForm from "./RelationForm";
 
 interface RelationInspectorProps {
     relation: Relation | undefined;
     entities: Entity[];
-
-    onChanged?: () => void | Promise<void>;
-    onClose?: () => void;
+    onChanged?: (relation: Relation) => void | Promise<void>;
+    onClose?: (relation: Relation) => void;
 }
 
 export default function RelationInspector(
@@ -47,8 +44,8 @@ export default function RelationInspector(
 
         await deleteRelation(relation.id);
 
-        await props.onChanged?.();
-        props.onClose?.();
+        await props.onChanged?.(relation);
+        props.onClose?.(relation);
     }
 
     return (
@@ -61,9 +58,9 @@ export default function RelationInspector(
                             <RelationForm
                                 relation={relation()}
                                 entities={props.entities}
-                                onUpdated={async () => {
+                                onUpdated={async (updated) => {
                                     setEditing(false);
-                                    await props.onChanged?.();
+                                    await props.onChanged?.(updated);
                                 }}
                                 onCancel={() => setEditing(false)}
                             />
@@ -76,7 +73,7 @@ export default function RelationInspector(
                                 <button
                                     class="circle transparent"
                                     type="button"
-                                    onClick={() => props.onClose?.()}
+                                    onClick={() => props.onClose?.(relation())}
                                 >
                                     <i>close</i>
                                 </button>

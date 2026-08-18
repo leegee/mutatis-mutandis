@@ -11,8 +11,8 @@ interface EntityInspectorProps {
     entities: Entity[];
     relations: Relation[];
 
-    onChanged?: () => void | Promise<void>;
-    onClose?: () => void;
+    onChanged?: (entity: Entity) => void | Promise<void>;
+    onClose?: (entity: Entity) => void;
 }
 
 export default function EntityInspector(
@@ -72,8 +72,8 @@ export default function EntityInspector(
 
         setEditing(false);
 
-        await props.onChanged?.();
-        props.onClose?.();
+        await props.onChanged?.(entity);
+        props.onClose?.(entity);
     }
 
     return (
@@ -85,9 +85,9 @@ export default function EntityInspector(
                         fallback={
                             <EntityForm
                                 entity={entity()}
-                                onUpdated={async () => {
+                                onUpdated={async (updated: Entity) => {
                                     setEditing(false);
-                                    await props.onChanged?.();
+                                    await props.onChanged?.(updated);
                                 }}
                                 onCancel={() =>
                                     setEditing(false)
@@ -109,7 +109,7 @@ export default function EntityInspector(
                                     class="circle transparent"
                                     type="button"
                                     title="Close"
-                                    onClick={() => props.onClose?.()}
+                                    onClick={() => props.onClose?.(entity())}
                                 >
                                     <i>close</i>
                                 </button>

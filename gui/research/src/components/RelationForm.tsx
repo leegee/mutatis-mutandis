@@ -23,10 +23,10 @@ const relationTypes: RelationType[] = [
 interface RelationFormProps {
     relation?: Relation;
 
-    entities?: Entity[];
+    entities: Entity[];
 
-    onCreated?: () => void | Promise<void>;
-    onUpdated?: () => void | Promise<void>;
+    onCreated?: (entity: Relation) => void | Promise<void>;
+    onUpdated?: (entity: Relation) => void | Promise<void>;
     onCancel?: () => void;
 }
 
@@ -60,35 +60,32 @@ export default function RelationForm(
     createEffect(() => {
         const relation = props.relation;
 
-        if (!relation || !props.entities) {
+        if (!relation) {
+            setSource(undefined);
+            setTarget(undefined);
+            setSourceValue("");
+            setTargetValue("");
+            setRelationType("related-to");
             return;
         }
 
-        const sourceEntity =
-            props.entities.find(
-                (entity) =>
-                    entity.id === relation.sourceId,
-            );
+        const sourceEntity = props.entities.find(
+            (entity) => entity.id === relation.sourceId,
+        );
 
-        const targetEntity =
-            props.entities.find(
-                (entity) =>
-                    entity.id === relation.targetId,
-            );
+        const targetEntity = props.entities.find(
+            (entity) => entity.id === relation.targetId,
+        );
 
         setSource(sourceEntity);
         setTarget(targetEntity);
 
-        setSourceValue(
-            sourceEntity?.label ?? "",
-        );
-
-        setTargetValue(
-            targetEntity?.label ?? "",
-        );
+        setSourceValue(sourceEntity?.label ?? "");
+        setTargetValue(targetEntity?.label ?? "");
 
         setRelationType(relation.type);
     });
+
 
     function selectSource(entity: Entity) {
         setSource(entity);
@@ -128,7 +125,7 @@ export default function RelationForm(
 
         try {
             if (props.relation) {
-                await updateRelation(
+                const relation = await updateRelation(
                     props.relation,
                     {
                         sourceId: sourceEntity.id,
@@ -137,9 +134,9 @@ export default function RelationForm(
                     },
                 );
 
-                await props.onUpdated?.();
+                await props.onUpdated?.(relation);
             } else {
-                await createRelation(
+                const relation = await createRelation(
                     sourceEntity.id,
                     relationType(),
                     targetEntity.id,
@@ -151,7 +148,7 @@ export default function RelationForm(
                 setSourceValue("");
                 setTargetValue("");
 
-                await props.onCreated?.();
+                await props.onCreated?.(relation);
             }
         } finally {
             setSaving(false);
@@ -161,7 +158,11 @@ export default function RelationForm(
     return (
         <form onSubmit={submit}>
             <div class="">
-                <h3>Edit Relationship</h3>
+                <h3>
+                    {editing()
+                        ? "Edit Relationship"
+                        : "Add Relationship"}
+                </h3>
                 <div class="field">
                     <EntityAutocomplete
                         value={sourceValue()}
