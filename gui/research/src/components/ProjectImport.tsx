@@ -46,7 +46,7 @@ export default function ProjectImport(
   }
 
   return (
-    <div>
+    <div class="field">
       <label>
         <button
           class="small secondary"

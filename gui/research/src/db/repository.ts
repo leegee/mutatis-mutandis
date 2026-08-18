@@ -119,6 +119,33 @@ export async function importProject(
   );
 }
 
+
+export async function exportProject(): Promise<ResearchProject> {
+  const db = getDatabase();
+
+  const [entities, relations] =
+    await Promise.all([
+      db.entities.toArray(),
+      db.relations.toArray(),
+    ]);
+
+  const timestamp = now();
+
+  return {
+    version: 1,
+    metadata: {
+      title: "Research Map",
+      description: "",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    entities,
+    relations,
+    evidence: [],
+  };
+}
+
+
 export async function updateRelation(
   relation: Relation,
   changes: Partial<Omit<Relation, "id" | "createdAt">>,
