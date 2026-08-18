@@ -176,11 +176,11 @@ export default function GraphView(props: GraphViewProps,) {
                 {
                     selector: "node:selected",
                     style: {
-                        "background-color": "#78909c",
+                        "background-color": "#10063f",
                         "border-width": 3,
-                        "border-color": "#ffffff25",
-
-                        "overlay-color": "#ffffff",
+                        "border-color": "#ffffff",
+                        "color": "#ffffff",
+                        "overlay-color": "#26084d77",
                         "overlay-opacity": 0.08,
                     },
                 },
@@ -216,9 +216,7 @@ export default function GraphView(props: GraphViewProps,) {
 
                         "line-color": "#ffffff",
                         "target-arrow-color": "#ffffff",
-
                         color: "#ffffff",
-
                         "text-background-color": "#37474f",
                     },
                 },
@@ -226,6 +224,7 @@ export default function GraphView(props: GraphViewProps,) {
 
             layout: LAYOUT_PARAMS,
         });
+
 
         instance.on("tap", "edge", (event) => {
             const relationId = event.target.id();
@@ -250,6 +249,44 @@ export default function GraphView(props: GraphViewProps,) {
             if (entity) {
                 props.onSelectEntity?.(entity);
             }
+        });
+
+        instance.on("mouseover", "node", (event) => {
+            const node = event.target;
+            node.style({
+                "font-size": 32,
+                "font-weight": 400,
+                "z-index": 9999,
+            });
+        });
+
+        instance.on("mouseout", "node", (event) => {
+            const node = event.target;
+            node.style({
+                "font-size": 12,
+                "font-weight": 500,
+                "z-index": 0,
+            });
+        });
+
+        instance.on("mouseover", "edge", (event) => {
+            const edge = event.target;
+            edge.style({
+                "font-size": 32,
+                "font-weight": 600,
+                "z-index": 999999,
+            });
+
+        });
+
+        instance.on("mouseout", "edge", (event) => {
+            const edge = event.target;
+            edge.style({
+                "font-size": 10,
+                "font-weight": 500,
+                "z-index": 0,
+            });
+
         });
 
         setCy(instance);
@@ -279,7 +316,7 @@ export default function GraphView(props: GraphViewProps,) {
             ref={container}
             style={{
                 width: "100%",
-                height: "70vh",
+                height: "80vh",
                 "min-height": "500px",
             }}
         />
