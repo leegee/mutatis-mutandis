@@ -1,103 +1,64 @@
-import {
-  createEffect,
-  createSignal,
-  For,
-  Show,
-} from "solid-js";
+import { For, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
-
-import {
-  listEntities,
-  listRelations,
-} from "~/db/repository";
-
+import { liveEntities, liveRelations, } from "~/db/live";
+import { useLiveQuery } from "~/db/useLiveQuery";
 import RelationForm from "~/components/RelationForm";
 
 export default function RelationsPage() {
-  const [entities, setEntities] =
-    createSignal<Entity[]>([]);
+  const entities = useLiveQuery(
+    liveEntities(),
+    [] as Entity[],
+  );
 
-  const [relations, setRelations] =
-    createSignal<Relation[]>([]);
-
-  const [loading, setLoading] =
-    createSignal(true);
-
-  async function refresh() {
-    setLoading(true);
-
-    try {
-      const [newEntities, newRelations] =
-        await Promise.all([
-          listEntities(),
-          listRelations(),
-        ]);
-
-      setEntities(newEntities);
-      setRelations(newRelations);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const relations = useLiveQuery(
+    liveRelations(),
+    [] as Relation[],
+  );
 
   function entityLabel(id: string) {
     return (
-      entities().find(
+      entities.value().find(
         (entity) => entity.id === id,
       )?.label ?? id
     );
   }
-
-  createEffect(() => {
-    if (typeof window !== "undefined") {
-      refresh();
-    }
-  });
 
   return (
     <main class="responsive">
       <section class="large-padding">
         <h2>Add relationship</h2>
 
-        <RelationForm
-          onCreated={refresh}
-        />
+        <RelationForm />
       </section>
 
       <section class="large-padding">
         <h2>Relationships</h2>
 
-        <Show
-          when={!loading()}
+        <Show when={!entities.loading() && !relations.loading()}
           fallback={<p>Loading...</p>}
         >
-          <Show
-            when={relations().length > 0}
+          <Show when={relations.value().length > 0}
             fallback={
-              <p>No relationships yet.</p>
+              <p>
+                No relationships yet.
+              </p>
             }
           >
             <ul>
-              <For each={relations()}>
+              <For each={relations.value()} >
                 {(relation) => (
                   <li>
-                    {entityLabel(
-                      relation.sourceId,
-                    )}
+                    {entityLabel(relation.sourceId,)}
 
                     {" — "}
 
-                    <strong>
-                      {relation.type}
-                    </strong>
+                    <strong> {relation.type} </strong>
 
                     {" → "}
 
-                    {entityLabel(
-                      relation.targetId,
-                    )}
+                    {entityLabel(relation.targetId,)}
                   </li>
                 )}
               </For>

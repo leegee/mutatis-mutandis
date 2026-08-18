@@ -10,17 +10,13 @@ import RelationInspector from "~/components/RelationInspector";
 interface GraphWorkspaceProps {
     entities: Entity[];
     relations: Relation[];
-    onChanged?: () => void | Promise<void>;
 }
 
 export default function GraphWorkspace(
     props: GraphWorkspaceProps,
 ) {
-    const [selectedEntity, setSelectedEntity] =
-        createSignal<Entity>();
-
-    const [selectedRelation, setSelectedRelation] =
-        createSignal<Relation>();
+    const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
+    const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
 
     return (
         <div
@@ -61,10 +57,7 @@ export default function GraphWorkspace(
                             <RelationInspector
                                 relation={selectedRelation()}
                                 entities={props.entities}
-                                onChanged={props.onChanged}
-                                onClose={() =>
-                                    setSelectedRelation(undefined)
-                                }
+                                onClose={() => setSelectedRelation(undefined)}
                             />
                         }
                     >
@@ -73,10 +66,7 @@ export default function GraphWorkspace(
                                 entity={entity()}
                                 entities={props.entities}
                                 relations={props.relations}
-                                onChanged={props.onChanged}
-                                onClose={() =>
-                                    setSelectedEntity(undefined)
-                                }
+                                onClose={() => setSelectedEntity(undefined)}
                             />
                         )}
                     </Show>

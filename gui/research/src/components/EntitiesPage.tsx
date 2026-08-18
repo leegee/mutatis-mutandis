@@ -1,68 +1,43 @@
-import {
-  createSignal,
-  onMount,
-  For,
-  Show,
-} from "solid-js";
+import { For, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
-
-import { listEntities } from "~/db/repository";
-
+import { liveEntities } from "~/db/live";
+import { useLiveQuery } from "~/db/useLiveQuery";
 import EntityForm from "~/components/EntityForm";
 
 export default function EntitiesPage() {
-  const [entities, setEntities] =
-    createSignal<Entity[]>([]);
-
-  const [loading, setLoading] =
-    createSignal(true);
-
-  async function refresh() {
-    setLoading(true);
-
-    try {
-      setEntities(await listEntities());
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  onMount(refresh);
+  const entities = useLiveQuery(
+    liveEntities(),
+    [] as Entity[],
+  );
 
   return (
     <main class="responsive">
       <section class="large-padding">
         <h2>Add entity</h2>
 
-        <EntityForm
-          onCreated={refresh}
-        />
+        <EntityForm />
       </section>
 
       <section class="large-padding">
         <h2>Entities</h2>
 
-        <Show
-          when={!loading()}
+        <Show when={!entities.loading()}
           fallback={<p>Loading...</p>}
         >
-          <Show
-            when={entities().length > 0}
+          <Show when={entities.value().length > 0}
             fallback={
               <p>No entities yet.</p>
             }
           >
             <ul>
-              <For each={entities()}>
+              <For each={entities.value()}>
                 {(entity) => (
                   <li>
                     <strong>
                       {entity.label}
                     </strong>
-
                     {" — "}
-
                     {entity.type}
                   </li>
                 )}
@@ -74,4 +49,3 @@ export default function EntitiesPage() {
     </main>
   );
 }
-

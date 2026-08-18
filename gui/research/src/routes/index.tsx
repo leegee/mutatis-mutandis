@@ -1,53 +1,36 @@
-import { createEffect, createSignal, Show, } from "solid-js";
+import { Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
-
-import {
-  listEntities,
-  listRelations,
-} from "~/db/repository";
-
+import { liveEntities, liveRelations, } from "~/db/live";
+import { useLiveQuery } from "~/db/useLiveQuery";
 import GraphWorkspace from "~/components/GraphWorkspace";
 
 export default function Home() {
-  const [entities, setEntities] = createSignal<Entity[]>([]);
-  const [relations, setRelations] = createSignal<Relation[]>([]);
-  const [loading, setLoading] = createSignal(true);
+  const entities =
+    useLiveQuery(
+      liveEntities(),
+      [] as Entity[],
+    );
 
-  async function refresh() {
-    setLoading(true);
-
-    try {
-      const [newEntities, newRelations] =
-        await Promise.all([
-          listEntities(),
-          listRelations(),
-        ]);
-
-      setEntities(newEntities);
-      setRelations(newRelations);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  createEffect(() => {
-    if (typeof window !== "undefined") {
-      refresh();
-    }
-  });
+  const relations =
+    useLiveQuery(
+      liveRelations(),
+      [] as Relation[],
+    );
 
   return (
     <section class="large-padding">
       <Show
-        when={!loading()}
+        when={
+          !entities.loading() &&
+          !relations.loading()
+        }
         fallback={<p>Loading...</p>}
       >
         <GraphWorkspace
-          entities={entities()}
-          relations={relations()}
-          onChanged={refresh}
+          entities={entities.value()}
+          relations={relations.value()}
         />
       </Show>
     </section>
