@@ -104,50 +104,52 @@ export default function EntityAutocomplete(
   }
 
   return (
-    <div class="field border autocomplete">
-      <input
-        value={props.value}
-        disabled={props.disabled}
-        autocomplete="off"
-        onInput={(event) =>
-          input(event.currentTarget.value)
-        }
-        onFocus={() => {
-          if (props.value.trim()) {
-            setOpen(true);
-          }
-        }}
-        onKeyDown={keydown}
-      />
+    <>
+      <div class="field border">
+        <input
+          value={props.value}
+          disabled={props.disabled}
+          autocomplete="off"
+          onInput={(event) => input(event.currentTarget.value)}
+          onFocus={() => {
+            if (props.value.trim()) {
+              setOpen(true);
+            }
+          }}
+          onKeyDown={keydown}
+        />
 
-      <label>{props.placeholder ?? 'Entity'}</label>
+        <label>{props.placeholder ?? 'Entity'}</label>
+      </div>
 
       <Show when={open() && suggestions().length > 0}>
-        <div class="autocomplete-menu surface-container">
-          <For each={suggestions()}>
-            {(entity, index) => (
-              <button
-                type="button"
-                classList={{
-                  active: index() === highlighted(),
-                }}
-                onMouseDown={(event) => {
-                  // Prevent the input from losing focus before
-                  // the selection is handled.
-                  event.preventDefault();
-                }}
-                onClick={() => select(entity)}
-              >
-                <strong>{entity.label}</strong>
+        <div class="field border">
+          <div class="field autocomplete-menu surface-container">
+            <For each={suggestions()}>
+              {(entity, index) => (
+                <button
+                  type="button"
+                  classList={{
+                    active: index() === highlighted(),
+                  }}
+                  onMouseDown={(event) => {
+                    // Prevent the input from losing focus before
+                    // the selection is handled.
+                    event.preventDefault();
+                  }}
+                  onClick={() => select(entity)}
+                >
+                  <strong>{entity.label}</strong>
 
-                <small>
-                  {entity.type}
-                </small>
-              </button>
-            )}
-          </For>
+                  <small>
+                    {entity.type}
+                  </small>
+                </button>
+              )}
+            </For>
+          </div>
         </div>
       </Show>
-    </div>
+    </>
   );
 }

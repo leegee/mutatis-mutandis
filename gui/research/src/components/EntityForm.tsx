@@ -122,7 +122,7 @@ export default function EntityForm(props: EntityFormProps) {
 
     return (
         <form onSubmit={submit}>
-            <div class="row">
+            <div class="">
                 <div class="field">
                     <Show
                         when={!editing()}
@@ -183,7 +183,7 @@ export default function EntityForm(props: EntityFormProps) {
                     <label>Type</label>
                 </div>
 
-                <div class="field">
+                <nav class="footer">
                     <button
                         type="submit"
                         disabled={
@@ -213,7 +213,7 @@ export default function EntityForm(props: EntityFormProps) {
                             Cancel
                         </button>
                     </Show>
-                </div>
+                </nav>
             </div>
         </form>
     );

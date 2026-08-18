@@ -201,19 +201,12 @@ export default function RelationForm(
                         onInput={inputTarget}
                         onSelect={selectTarget}
                         disabled={saving()}
-                        placeholder="Target entity"
+                        placeholder="Target Entity"
                     />
                 </div>
 
-                <div class="field">
-                    <button
-                        type="submit"
-                        disabled={
-                            saving() ||
-                            !source() ||
-                            !target()
-                        }
-                    >
+                <nav class="footer">
+                    <button type="submit" disabled={saving() || !source() || !target()} >
                         {saving()
                             ? editing()
                                 ? "Saving…"
@@ -228,15 +221,13 @@ export default function RelationForm(
                             type="button"
                             class="transparent"
                             disabled={saving()}
-                            onClick={() =>
-                                props.onCancel?.()
-                            }
+                            onClick={() => props.onCancel?.()}
                         >
                             Cancel
                         </button>
                     </Show>
-                </div>
-            </div>
-        </form>
+                </nav>
+            </div >
+        </form >
     );
 }

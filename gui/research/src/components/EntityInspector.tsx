@@ -79,7 +79,7 @@ export default function EntityInspector(
     return (
         <Show when={props.entity} fallback={<></>}>
             {(entity) => (
-                <aside>
+                <aside class="padding surface-container-high">
                     <Show
                         when={!editing()}
                         fallback={
@@ -99,10 +99,7 @@ export default function EntityInspector(
                         <header>
                             <nav>
                                 <div class="max">
-                                    <h3>
-                                        {entity().label}
-                                    </h3>
-
+                                    <h2> {entity().label} </h2>
                                     <small>
                                         {entity().type}
                                     </small>
