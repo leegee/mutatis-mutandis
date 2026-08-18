@@ -108,7 +108,7 @@ export default function GraphView(props: GraphViewProps,) {
                         "background-color": "#37474f",
                         color: "#ffffff",
                         "border-width": 2,
-                        "border-color": "#78909c56",
+                        "border-color": "#78909c",
                         "font-size": "12px",
                         "font-weight": 500,
                         "text-wrap": "wrap",
@@ -124,7 +124,7 @@ export default function GraphView(props: GraphViewProps,) {
                     selector: 'node[type = "concept"]',
                     style: {
                         "background-color": "#455a64",
-                        "border-color": "#90a4ae3a",
+                        "border-color": "#90a4ae",
                     },
                 },
 
@@ -133,7 +133,7 @@ export default function GraphView(props: GraphViewProps,) {
                     selector: 'node[type = "lexeme"]',
                     style: {
                         "background-color": "#4e5d6c",
-                        "border-color": "#9fa8b22f",
+                        "border-color": "#9fa8b2",
                     },
                 },
 
@@ -142,7 +142,7 @@ export default function GraphView(props: GraphViewProps,) {
                     selector: 'node[type = "motif"]',
                     style: {
                         "background-color": "#51445f",
-                        "border-color": "#b39ddb38",
+                        "border-color": "#b39ddb",
                     },
                 },
 
@@ -151,7 +151,7 @@ export default function GraphView(props: GraphViewProps,) {
                     selector: 'node[type = "animal"]',
                     style: {
                         "background-color": "#455a50",
-                        "border-color": "#81a9951c",
+                        "border-color": "#81a995",
                     },
                 },
 
@@ -160,7 +160,7 @@ export default function GraphView(props: GraphViewProps,) {
                     selector: 'node[type = "person"]',
                     style: {
                         "background-color": "#5a4b42",
-                        "border-color": "#bcaaa415",
+                        "border-color": "#bcaaa4",
                     },
                 },
 
@@ -169,7 +169,7 @@ export default function GraphView(props: GraphViewProps,) {
                     selector: 'node[type = "source"]',
                     style: {
                         "background-color": "#4a5060",
-                        "border-color": "#9fa8da34",
+                        "border-color": "#9fa8da",
                     },
                 },
 
@@ -180,7 +180,7 @@ export default function GraphView(props: GraphViewProps,) {
                         "border-width": 3,
                         "border-color": "#ffffff",
                         "color": "#ffffff",
-                        "overlay-color": "#26084d77",
+                        "overlay-color": "#26084d",
                         "overlay-opacity": 0.08,
                     },
                 },
