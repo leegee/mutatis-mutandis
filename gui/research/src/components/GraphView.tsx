@@ -316,7 +316,7 @@ export default function GraphView(props: GraphViewProps,) {
             ref={container}
             style={{
                 width: "100%",
-                height: "80vh",
+                height: "90vh",
                 "min-height": "500px",
             }}
         />

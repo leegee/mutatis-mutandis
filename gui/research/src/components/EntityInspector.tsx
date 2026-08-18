@@ -79,7 +79,7 @@ export default function EntityInspector(
     return (
         <Show when={props.entity} fallback={<></>}>
             {(entity) => (
-                <aside class="padding surface-container-high">
+                <aside class="padding">
                     <Show
                         when={!editing()}
                         fallback={
@@ -171,7 +171,7 @@ export default function EntityInspector(
                                         <For each={outgoing()} >
                                             {(relation) => (
                                                 <li>
-                                                    <strong> {relation.type} </strong>
+                                                    {relation.type}
                                                     {" → "}
                                                     {entityLabel(relation.targetId,)}
                                                 </li>
@@ -187,9 +187,9 @@ export default function EntityInspector(
                                         <For each={incoming()} >
                                             {(relation) => (
                                                 <li>
-                                                    {entityLabel(relation.sourceId,)}
+                                                    {relation.type}
                                                     {" → "}
-                                                    <strong> {relation.type} </strong>
+                                                    {entityLabel(relation.sourceId,)}
                                                 </li>
                                             )}
                                         </For>

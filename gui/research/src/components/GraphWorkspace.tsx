@@ -24,10 +24,10 @@ export default function GraphWorkspace(
                 display: "grid",
                 "grid-template-columns":
                     selectedEntity() || selectedRelation()
-                        ? "minmax(0, 1fr) 320px"
+                        ? "minmax(0, 1fr) 30vw"
                         : "minmax(0, 1fr)",
                 gap: "1rem",
-                height: "70vh",
+                height: "90vh",
                 "min-height": "500px",
             }}
         >

@@ -124,7 +124,7 @@ export default function EntityAutocomplete(
 
       <Show when={open() && suggestions().length > 0}>
         <div class="field border">
-          <div class="field autocomplete-menu surface-container">
+          <div class="field autocomplete-menu">
             <For each={suggestions()}>
               {(entity, index) => (
                 <button
