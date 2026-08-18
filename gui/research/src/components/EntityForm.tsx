@@ -146,11 +146,7 @@ export default function EntityForm(props: EntityFormProps) {
                 <select
                     value={type()}
                     disabled={saving()}
-                    onChange={(event) =>
-                        setType(
-                            event.currentTarget.value as EntityType,
-                        )
-                    }
+                    onChange={(event) => setType(event.currentTarget.value as EntityType,)}
                 >
                     <For each={entityTypes}>
                         {(entityType) => (

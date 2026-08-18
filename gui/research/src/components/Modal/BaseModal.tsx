@@ -27,35 +27,21 @@ export default function BaseModal(
             return;
         }
 
-        const previousOverflow =
-            document.body.style.overflow;
-
+        const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";
-
         onCleanup(() => {
-            document.body.style.overflow =
-                previousOverflow;
+            document.body.style.overflow = previousOverflow;
         });
     });
 
-    function handleBackdropClick(
-        event: MouseEvent,
-    ) {
-        if (
-            props.closeOnBackdrop !== false &&
-            event.target === event.currentTarget
-        ) {
+    function handleBackdropClick(event: MouseEvent) {
+        if (props.closeOnBackdrop !== false && event.target === event.currentTarget) {
             props.onClose?.();
         }
     }
 
-    function handleKeyDown(
-        event: KeyboardEvent,
-    ) {
-        if (
-            event.key === "Escape" &&
-            props.onClose
-        ) {
+    function handleKeyDown(event: KeyboardEvent) {
+        if (event.key === "Escape" && props.onClose) {
             props.onClose();
         }
     }

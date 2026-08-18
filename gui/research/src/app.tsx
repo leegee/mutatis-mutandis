@@ -6,6 +6,7 @@ import "beercss/dist/cdn/beer.min.css";
 
 import "./app.css";
 import "./nav-menu.css";
+import ModalHost from "./components/Modal/ModalHost";
 
 function SideNavigation() {
   const location = useLocation();
@@ -133,22 +134,26 @@ function Navigation() {
 
 export default function App() {
   return (
-    <Router
-      root={props => (
-        <MetaProvider>
-          <Title>Research</Title>
-          {/* <SideNavigation /> */}
+    <>
+      <Router
+        root={props => (
+          <MetaProvider>
+            <Title>Research</Title>
+            {/* <SideNavigation /> */}
 
-          <main class="responsive max no-padding background">
-            <Suspense>
-              <Navigation />
-              {props.children}
-            </Suspense>
-          </main>
-        </MetaProvider>
-      )}
-    >
-      <FileRoutes />
-    </Router>
+            <main class="responsive max no-padding background">
+              <Suspense>
+                <Navigation />
+                {props.children}
+              </Suspense>
+            </main>
+          </MetaProvider>
+        )}
+      >
+        <FileRoutes />
+      </Router>
+
+      <ModalHost />
+    </>
   );
 }

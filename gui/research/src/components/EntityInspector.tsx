@@ -3,9 +3,9 @@ import { createSignal, For, Show } from "solid-js";
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
 
-import { deleteEntity } from "~/db/repository";
 import EntityForm from "./EntityForm";
-import { useConfirm } from "./Modal";
+import { useConfirm, usePrompt } from "./Modal";
+import { addEntityTag, deleteEntity, removeEntityTag, } from "~/db/repository";
 
 interface EntityInspectorProps {
     entity: Entity | undefined;
@@ -20,8 +20,33 @@ export default function EntityInspector(
     props: EntityInspectorProps,
 ) {
     const [editing, setEditing] = createSignal(false);
-
     const confirm = useConfirm();
+    const prompt = usePrompt();
+
+    async function handleAddTag() {
+        const entity = props.entity;
+        if (!entity) {
+            return;
+        }
+
+        const tag = await prompt("Tag:");
+        if (!tag?.trim()) {
+            return;
+        }
+
+        const updated = await addEntityTag(entity, tag);
+        await props.onChanged?.(updated);
+    }
+
+    async function handleRemoveTag(tag: string) {
+        const entity = props.entity;
+        if (!entity) {
+            return;
+        }
+
+        const updated = await removeEntityTag(entity, tag);
+        await props.onChanged?.(updated);
+    }
 
     function entityLabel(id: string): string {
         return (props.entities.find((entity) => entity.id === id,)?.label ?? id);
@@ -120,20 +145,41 @@ export default function EntityInspector(
                                 </section>
                             </Show>
 
-                            <Show when={entity().tags.length > 0} >
-                                <section>
-                                    <h3>Tags</h3>
+                            <section>
+                                <nav>
+                                    <h3 class="max">Tags</h3>
+
+                                    <button type="button" class="small transparent border small circle" onClick={handleAddTag} >
+                                        <i class="small">add</i>
+                                    </button>
+                                </nav>
+
+                                <Show
+                                    when={entity().tags.length > 0}
+                                    fallback={
+                                        <p>No tags.</p>
+                                    }
+                                >
                                     <div class="row wrap">
-                                        <For each={entity().tags} >
+                                        <For each={entity().tags}>
                                             {(tag) => (
                                                 <span class="chip">
                                                     {tag}
+
+                                                    <button type="button"
+                                                        class="transparent small"
+                                                        title={`Remove ${ tag }`}
+                                                        aria-label={`Remove tag ${ tag }`}
+                                                        onClick={() => handleRemoveTag(tag)}
+                                                    >
+                                                        <i class="small">close</i>
+                                                    </button>
                                                 </span>
                                             )}
                                         </For>
                                     </div>
-                                </section>
-                            </Show>
+                                </Show>
+                            </section>
 
                             <section>
                                 <h3>Relationships</h3>

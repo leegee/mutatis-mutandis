@@ -22,11 +22,11 @@ export type ModalRequest =
         message: string;
         defaultValue?: string;
         resolve: (value: string | null) => void;
-    }
-    | {
-        kind: "custom";
-        content: JSX.Element;
-        resolve: () => void;
+        // }
+        // | {
+        //     kind: "custom";
+        //     content: JSX.Element;
+        //     resolve: () => void;
     };
 
 const [current, setCurrent] =
