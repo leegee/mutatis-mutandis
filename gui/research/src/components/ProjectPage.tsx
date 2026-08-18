@@ -14,9 +14,7 @@ export default function ProjectPage() {
       <section class="large-padding">
         <h2>Import project</h2>
 
-        <ProjectImport
-          onImported={handleImported}
-        />
+        <ProjectImport />
 
         {message() && (
           <p>{message()}</p>

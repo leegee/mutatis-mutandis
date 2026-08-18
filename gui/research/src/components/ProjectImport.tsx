@@ -4,7 +4,6 @@ import type { ResearchProject } from "~/domain/project";
 import { importProject } from "~/db/repository";
 
 interface ProjectImportProps {
-  onImported?: () => void | Promise<void>;
 }
 
 export default function ProjectImport(
@@ -33,8 +32,6 @@ export default function ProjectImport(
       validateProject(project);
 
       await importProject(project);
-
-      await props.onImported?.();
 
       input.value = "";
     } catch (error) {
