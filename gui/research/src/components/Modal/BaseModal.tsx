@@ -19,7 +19,7 @@ interface ModalProps {
     closeOnBackdrop?: boolean;
 }
 
-export default function Modal(
+export default function BaseModal(
     props: ModalProps,
 ) {
     createEffect(() => {
@@ -76,11 +76,9 @@ export default function Modal(
                         aria-label={props.title}
                     >
                         <Show when={props.title}>
-                            <header>
+                            <header class="fixed surface-container-high top-padding" style="top:0">
                                 <nav>
-                                    <h3 class="max">
-                                        {props.title}
-                                    </h3>
+                                    <h2 class="max"> {props.title} </h2>
 
                                     <Show when={props.onClose}>
                                         <button

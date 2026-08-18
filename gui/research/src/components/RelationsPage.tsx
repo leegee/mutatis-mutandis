@@ -45,7 +45,7 @@ export default function RelationsPage() {
               </p>
             }
           >
-            <ul>
+            <ul class="list no-space border">
               <For each={relations.value()} >
                 {(relation) => (
                   <li>

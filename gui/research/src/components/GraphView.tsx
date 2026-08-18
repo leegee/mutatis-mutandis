@@ -15,6 +15,7 @@ import cytoscape, {
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
+import { useConfirm } from "./Modal/index";
 
 type ContextMenu =
     | {
@@ -80,7 +81,7 @@ function nodeSize(incoming: number): number {
 
 export default function GraphView(props: GraphViewProps,) {
     let container!: HTMLDivElement;
-
+    const confirm = useConfirm();
     const [cy, setCy] = createSignal<Core>();
 
     function buildElements(): ElementDefinition[] {
@@ -606,16 +607,18 @@ export default function GraphView(props: GraphViewProps,) {
                                     <button
                                         type="button"
                                         class="danger"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             const item = menu();
-
                                             if (item.kind !== "edge") {
                                                 return;
                                             }
+                                            const ok = await confirm(`Delete this relation?`);
+                                            if (!ok) return;
 
                                             const relation = props.relations.find(
                                                 (relation) => relation.id === item.relationId
                                             );
+
 
                                             if (relation) {
                                                 props.onDeleteRelation?.(relation);

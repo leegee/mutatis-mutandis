@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 
 import { importProject } from "~/db/repository";
 import { validateProject } from "~/domain/validateProject";
-import Alert from "~/components/Modal/Alert";
+import { useAlert } from "~/components/Modal/";
 
 interface ProjectImportProps {
 }
@@ -10,11 +10,6 @@ interface ProjectImportProps {
 export default function ProjectImport(
   props: ProjectImportProps,
 ) {
-  const [alert, setAlert] =
-    createSignal<{
-      title: string;
-      message: string;
-    }>();
 
   const [importing, setImporting] =
     createSignal(false);
@@ -22,8 +17,7 @@ export default function ProjectImport(
   async function handleFile(
     event: Event,
   ) {
-    const input =
-      event.currentTarget as HTMLInputElement;
+    const input = event.currentTarget as HTMLInputElement;
 
     const file = input.files?.[0];
 
@@ -31,7 +25,6 @@ export default function ProjectImport(
       return;
     }
 
-    setAlert(undefined);
     setImporting(true);
 
     try {
@@ -56,25 +49,13 @@ export default function ProjectImport(
 
       input.value = "";
 
-      setAlert({
-        title: "Import complete",
-        message: `"${ file.name }" was imported successfully.`,
-      });
-    } catch (error) {
-      setAlert({
-        title: "Unable to import project",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to import project.",
-      });
+      await alert(`Import complete - "${ file.name }" was imported successfully.`);
+    }
+    catch (error) {
+      await alert(`Unable to import project - ${ error instanceof Error ? error.message : "Unable to import project." }`);
     } finally {
       setImporting(false);
     }
-  }
-
-  function closeAlert() {
-    setAlert(undefined);
   }
 
   return (
@@ -105,13 +86,6 @@ export default function ProjectImport(
           />
         </label>
       </div>
-
-      <Alert
-        open={!!alert()}
-        title={alert()?.title ?? ""}
-        message={alert()?.message ?? ""}
-        onClose={closeAlert}
-      />
     </>
   );
 }

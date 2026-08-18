@@ -5,7 +5,7 @@ import type { Relation } from "~/domain/relation";
 
 import { deleteEntity } from "~/db/repository";
 import EntityForm from "./EntityForm";
-import Confirm from "./Modal/Confirm";
+import { useConfirm } from "./Modal";
 
 interface EntityInspectorProps {
     entity: Entity | undefined;
@@ -20,7 +20,8 @@ export default function EntityInspector(
     props: EntityInspectorProps,
 ) {
     const [editing, setEditing] = createSignal(false);
-    const [confirmDelete, setConfirmDelete] = createSignal(false);
+
+    const confirm = useConfirm();
 
     function entityLabel(id: string): string {
         return (props.entities.find((entity) => entity.id === id,)?.label ?? id);
@@ -46,34 +47,19 @@ export default function EntityInspector(
         return props.relations.filter((relation) => relation.targetId === entity.id,);
     }
 
-    function handleDelete() {
+    async function handleDelete() {
         if (!props.entity) {
             return;
         }
+        const ok = await confirm(
+            `Delete "${ props.entity.label }"?`,
+        );
+        if (ok) await deleteEntity(props.entity.id);
+        await props.onChanged?.(props.entity);
+        props.onClose?.(props.entity);
 
-        setConfirmDelete(true);
     }
 
-    function handleCancelDelete() {
-        setConfirmDelete(false);
-    }
-
-    async function handleConfirmDelete() {
-        const entity = props.entity;
-
-        if (!entity) {
-            setConfirmDelete(false);
-            return;
-        }
-
-        await deleteEntity(entity.id);
-
-        setConfirmDelete(false);
-        setEditing(false);
-
-        await props.onChanged?.(entity);
-        props.onClose?.(entity);
-    }
 
     return (
         <>
@@ -82,29 +68,21 @@ export default function EntityInspector(
                     <aside class="padding">
                         <Show when={!editing()}
                             fallback={
-                                <EntityForm
-                                    entity={entity()}
+                                <EntityForm entity={entity()}
                                     onUpdated={async (updated: Entity) => {
                                         setEditing(false);
                                         await props.onChanged?.(updated);
                                     }}
-                                    onCancel={() =>
-                                        setEditing(false)
-                                    }
+                                    onCancel={() => setEditing(false)}
                                 />
                             }
                         >
                             {/* NORMAL INSPECTOR VIEW */}
-                            <header>
+                            <header class="fixed surface-container-high top-padding" style="top:0">
                                 <nav>
                                     <div class="max">
-                                        <h2>
-                                            {entity().label}
-                                        </h2>
-
-                                        <small>
-                                            {entity().type}
-                                        </small>
+                                        <h2> {entity().label} </h2>
+                                        <small> {entity().type} </small>
                                     </div>
 
                                     <button
@@ -128,7 +106,7 @@ export default function EntityInspector(
 
                             <Show when={entity().aliases.length > 0} >
                                 <section>
-                                    <h5>Aliases</h5>
+                                    <h3>Aliases</h3>
 
                                     <For
                                         each={entity().aliases}
@@ -144,7 +122,7 @@ export default function EntityInspector(
 
                             <Show when={entity().tags.length > 0} >
                                 <section>
-                                    <h5>Tags</h5>
+                                    <h3>Tags</h3>
 
                                     <div class="row wrap">
                                         <For
@@ -161,7 +139,7 @@ export default function EntityInspector(
                             </Show>
 
                             <section>
-                                <h5>Relationships</h5>
+                                <h3>Relationships</h3>
 
                                 <Show when={outgoing().length > 0 || incoming().length > 0}
                                     fallback={
@@ -173,7 +151,7 @@ export default function EntityInspector(
                                     <Show when={outgoing().length > 0} >
                                         <h6>Outgoing</h6>
 
-                                        <ul>
+                                        <ul class="list no-space border">
                                             <For
                                                 each={outgoing()}
                                             >
@@ -195,10 +173,8 @@ export default function EntityInspector(
                                     <Show when={incoming().length > 0} >
                                         <h6>Incoming</h6>
 
-                                        <ul>
-                                            <For
-                                                each={incoming()}
-                                            >
+                                        <ul class="list no-space border">
+                                            <For each={incoming()} >
                                                 {(relation) => (
                                                     <li>
                                                         {relation.type}
@@ -239,19 +215,6 @@ export default function EntityInspector(
                 )}
             </Show>
 
-            <Confirm
-                open={confirmDelete()}
-                title="Delete entity"
-                message={
-                    props.entity
-                        ? `Delete "${ props.entity.label }" ? Its relationships will also be removed.`
-                        : ""
-                }
-                confirmLabel="Delete"
-                cancelLabel="Cancel"
-                onConfirm={handleConfirmDelete}
-                onCancel={handleCancelDelete}
-            />
         </>
     );
 }

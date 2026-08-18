@@ -65,9 +65,9 @@ export default function RelationInspector(
                             />
                         }
                     >
-                        <header>
+                        <header class="fixed surface-container-high top-padding" style="top:0">
                             <nav>
-                                <h3 class="max">Relationship</h3>
+                                <h2 class="max">Relationship</h2>
 
                                 <button
                                     class="circle transparent"

@@ -3,14 +3,18 @@ import { createSignal, Show } from "solid-js";
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
 
-import { createEntity, deleteEntity, deleteRelation, } from "~/db/repository";
+import {
+    createEntity,
+    deleteEntity,
+    deleteRelation,
+} from "~/db/repository";
 
 import GraphView from "~/components/GraphView";
 import EntityInspector from "~/components/EntityInspector";
 import RelationInspector from "~/components/RelationInspector";
-import Prompt from "~/components/Modal/Prompt";
-import Modal from "~/components/Modal/Modal";
+import { Modal } from "~/components/Modal";
 import RelationForm from "~/components/RelationForm";
+import { usePrompt } from "./Modal";
 
 interface GraphWorkspaceProps {
     entities: Entity[];
@@ -22,30 +26,28 @@ export default function GraphWorkspace(
 ) {
     const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
     const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
-    const [addingEntity, setAddingEntity] = createSignal(false);
+    const [addingRelation, setAddingRelation] = createSignal<{
+        source: Entity;
+        target: Entity;
+    }>();
 
-    const [addingRelation, setAddingRelation] =
-        createSignal<{
-            source: Entity;
-            target: Entity;
-        }>();
+    const prompt = usePrompt();
 
-    function handleAddEntity() {
-        setAddingEntity(true);
-    }
+    async function handleAddEntity() {
+        const label = await prompt(
+            "Node label:",
+        );
 
-    async function handleConfirmAddEntity(
-        label: string,
-    ) {
-        const entity = await createEntity(label);
+        if (!label?.trim()) {
+            return;
+        }
 
-        setAddingEntity(false);
+        const entity = await createEntity(
+            label.trim(),
+        );
+
         setSelectedEntity(entity);
         setSelectedRelation(undefined);
-    }
-
-    function handleCancelAddEntity() {
-        setAddingEntity(false);
     }
 
     function handleEditEntity(
@@ -69,8 +71,13 @@ export default function GraphWorkspace(
         sourceId: string,
         targetId: string,
     ) {
-        const source = props.entities.find((entity) => entity.id === sourceId,);
-        const target = props.entities.find((entity) => entity.id === targetId,);
+        const source = props.entities.find(
+            (entity) => entity.id === sourceId,
+        );
+
+        const target = props.entities.find(
+            (entity) => entity.id === targetId,
+        );
 
         if (!source || !target) {
             return;
@@ -82,7 +89,9 @@ export default function GraphWorkspace(
         });
     }
 
-    async function handleCreatedRelation(relation: Relation,) {
+    function handleCreatedRelation(
+        relation: Relation,
+    ) {
         setAddingRelation(undefined);
         setSelectedRelation(relation);
         setSelectedEntity(undefined);
@@ -120,7 +129,11 @@ export default function GraphWorkspace(
                     "min-height": "500px",
                 }}
             >
-                <div style={{ "min-width": "0" }}>
+                <div
+                    style={{
+                        "min-width": "0",
+                    }}
+                >
                     <GraphView
                         entities={props.entities}
                         relations={props.relations}
@@ -145,13 +158,20 @@ export default function GraphWorkspace(
                     />
                 </div>
 
-                <Show when={selectedEntity() || selectedRelation()} >
-                    <div class="surface-container-high medium-elevation left-padding right-padding"
+                <Show
+                    when={
+                        selectedEntity() ||
+                        selectedRelation()
+                    }
+                >
+                    <div
+                        class="surface-container-high medium-elevation left-padding right-padding"
                         style={{
                             "overflow-y": "auto",
                         }}
                     >
-                        <Show when={selectedEntity()}
+                        <Show
+                            when={selectedEntity()}
                             fallback={
                                 <RelationInspector
                                     relation={selectedRelation()}
@@ -177,29 +197,25 @@ export default function GraphWorkspace(
                 </Show>
             </div>
 
-            <Prompt
-                open={addingEntity()}
-                title="Add node"
-                placeholder="Node label"
-                confirmLabel="Add"
-                cancelLabel="Cancel"
-                onConfirm={handleConfirmAddEntity}
-                onCancel={handleCancelAddEntity}
-            />
-
             <Show when={addingRelation()}>
                 {(pending) => (
                     <Modal
                         open={true}
                         title="Add relationship"
-                        onClose={handleCancelAddRelation}
+                        onClose={
+                            handleCancelAddRelation
+                        }
                     >
                         <RelationForm
                             entities={props.entities}
                             source={pending().source}
                             target={pending().target}
-                            onCreated={handleCreatedRelation}
-                            onCancel={handleCancelAddRelation}
+                            onCreated={
+                                handleCreatedRelation
+                            }
+                            onCancel={
+                                handleCancelAddRelation
+                            }
                         />
                     </Modal>
                 )}

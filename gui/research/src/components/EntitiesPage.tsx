@@ -29,7 +29,7 @@ export default function EntitiesPage() {
               <p>No entities yet.</p>
             }
           >
-            <ul>
+            <ul class="list no-space border">
               <For each={entities.value()}>
                 {(entity) => (
                   <li>

@@ -1,3 +1,17 @@
+body.dark {
+  --primary: rgb(14, 14, 112) !important;
+  --on-primary: rgb(207, 207, 221) !important;
+
+  --secondary: rgb(30, 112, 14) !important;
+  --on-secondary: rgb(189, 202, 187) !important;
+
+  --tertiary: rgb(90, 86, 97) !important;
+  --on-tertiary: rgb(197, 189, 212) !important;
+
+  --error: rgb(65, 4, 4) !important;
+  --on-error: rgb(221, 202, 202) !important;
+}
+
 h1 {
   font-size: 3em;
 }
@@ -14,9 +28,14 @@ h6 {
   font-weight: bold !important;
 }
 
+
 nav.footer {
   margin-top: 2em !important;
   padding-top: 1em !important;
   border-top: 1px dotted var(--on-surface);
   justify-content: space-between;
+}
+
+header {
+  padding: 0 !important;
 }
