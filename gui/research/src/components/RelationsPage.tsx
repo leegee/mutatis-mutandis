@@ -26,7 +26,7 @@ export default function RelationsPage() {
   }
 
   return (
-    <main class="responsive">
+    <article>
       <section class="large-padding">
         <h2>Add relationship</h2>
 
@@ -66,6 +66,6 @@ export default function RelationsPage() {
           </Show>
         </Show>
       </section>
-    </main>
+    </article>
   );
 }

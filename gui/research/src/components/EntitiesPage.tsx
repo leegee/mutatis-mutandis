@@ -12,7 +12,7 @@ export default function EntitiesPage() {
   );
 
   return (
-    <main class="responsive">
+    <article>
       <section class="large-padding">
         <h2>Add entity</h2>
 
@@ -46,6 +46,6 @@ export default function EntitiesPage() {
           </Show>
         </Show>
       </section>
-    </main>
+    </article>
   );
 }

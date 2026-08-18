@@ -10,7 +10,7 @@ export default function ProjectPage() {
   }
 
   return (
-    <main class="responsive">
+    <article>
       <section class="large-padding">
         <h2>Import project</h2>
 
@@ -35,6 +35,6 @@ export default function ProjectPage() {
           Export project
         </button>
       </section>
-    </main>
+    </article>
   );
 }
