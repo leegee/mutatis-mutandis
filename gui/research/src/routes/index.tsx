@@ -19,7 +19,9 @@ export default function Home() {
     setRelationsLoading(true);
 
     try {
+      alert(1)
       setRelations(await listRelations());
+      alert(2)
     } finally {
       setRelationsLoading(false);
     }
@@ -37,6 +39,10 @@ export default function Home() {
 
   async function refresh() {
     setLoading(true);
+
+    // SHould this call 
+    //     refreshEntities(),
+    // refreshRelations(),
 
     try {
       const [newEntities, newRelations] =
