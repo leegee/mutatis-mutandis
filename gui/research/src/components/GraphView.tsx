@@ -636,18 +636,16 @@ export default function GraphView(props: GraphViewProps,) {
 
             <Show when={linkingFrom()}>
                 <div
-                    class="graph-linking-indicator"
+                    class="graph-linking-indicator fill padding round"
                     style={{
                         position: "absolute",
-                        top: "12px",
+                        bottom: "2em",
                         left: "50%",
-                        transform:
-                            "translateX(-50%)",
+                        transform: "translateX(-50%)",
                         "z-index": 100000,
                     }}
                 >
-                    Click a node to create the relation.
-                    Press Escape to cancel.
+                    Click a node to create the relation. Press Escape to cancel.
                 </div>
             </Show>
         </div>

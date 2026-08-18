@@ -25,8 +25,11 @@ interface RelationFormProps {
 
     entities: Entity[];
 
-    onCreated?: (entity: Relation) => void | Promise<void>;
-    onUpdated?: (entity: Relation) => void | Promise<void>;
+    source?: Entity;
+    target?: Entity;
+
+    onCreated?: (relation: Relation) => void | Promise<void>;
+    onUpdated?: (relation: Relation) => void | Promise<void>;
     onCancel?: () => void;
 }
 
@@ -53,39 +56,37 @@ export default function RelationForm(
     const [saving, setSaving] =
         createSignal(false);
 
-    /*
-     * When editing, initialise the form from
-     * the existing relation.
-     */
+    // When editing, initialise the form from the existing relation.
     createEffect(() => {
         const relation = props.relation;
 
-        if (!relation) {
-            setSource(undefined);
-            setTarget(undefined);
-            setSourceValue("");
-            setTargetValue("");
-            setRelationType("related-to");
+        if (relation) {
+            const sourceEntity = props.entities.find(
+                (entity) => entity.id === relation.sourceId,
+            );
+
+            const targetEntity = props.entities.find(
+                (entity) => entity.id === relation.targetId,
+            );
+
+            setSource(sourceEntity);
+            setTarget(targetEntity);
+
+            setSourceValue(sourceEntity?.label ?? "");
+            setTargetValue(targetEntity?.label ?? "");
+
+            setRelationType(relation.type);
             return;
         }
 
-        const sourceEntity = props.entities.find(
-            (entity) => entity.id === relation.sourceId,
-        );
+        setSource(props.source);
+        setTarget(props.target);
 
-        const targetEntity = props.entities.find(
-            (entity) => entity.id === relation.targetId,
-        );
+        setSourceValue(props.source?.label ?? "");
+        setTargetValue(props.target?.label ?? "");
 
-        setSource(sourceEntity);
-        setTarget(targetEntity);
-
-        setSourceValue(sourceEntity?.label ?? "");
-        setTargetValue(targetEntity?.label ?? "");
-
-        setRelationType(relation.type);
+        setRelationType("related-to");
     });
-
 
     function selectSource(entity: Entity) {
         setSource(entity);
