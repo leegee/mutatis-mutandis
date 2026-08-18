@@ -120,7 +120,7 @@ export default function EntityAutocomplete(
         onKeyDown={keydown}
       />
 
-      <output>{props.placeholder ?? 'Entity'}</output>
+      <label>{props.placeholder ?? 'Entity'}</label>
 
       <Show when={open() && suggestions().length > 0}>
         <div class="autocomplete-menu surface-container">

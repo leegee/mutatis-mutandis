@@ -1,48 +1,30 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
-import { listEntities } from "~/db/repository";
+import type { Relation } from "~/domain/relation";
+
+import {
+  listEntities,
+  listRelations,
+} from "~/db/repository";
+
 import EntityForm from "~/components/EntityForm";
 import RelationForm from "~/components/RelationForm";
-import { listRelations } from "~/db/repository";
-import type { Relation } from "~/domain/relation";
 import ProjectImport from "~/components/ProjectImport";
 import GraphWorkspace from "~/components/GraphWorkspace";
 
 export default function Home() {
-  const [entities, setEntities] = createSignal<Entity[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [relations, setRelations] = createSignal<Relation[]>([]);
-  const [relationsLoading, setRelationsLoading] = createSignal(true);
+  const [entities, setEntities] =
+    createSignal<Entity[]>([]);
 
-  async function refreshRelations() {
-    setRelationsLoading(true);
+  const [relations, setRelations] =
+    createSignal<Relation[]>([]);
 
-    try {
-      alert(1)
-      setRelations(await listRelations());
-      alert(2)
-    } finally {
-      setRelationsLoading(false);
-    }
-  }
-
-  async function refreshEntities() {
-    setLoading(true);
-
-    try {
-      setEntities(await listEntities());
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [loading, setLoading] =
+    createSignal(true);
 
   async function refresh() {
     setLoading(true);
-
-    // SHould this call 
-    //     refreshEntities(),
-    // refreshRelations(),
 
     try {
       const [newEntities, newRelations] =
@@ -59,7 +41,11 @@ export default function Home() {
   }
 
   function entityLabel(id: string) {
-    return entities().find((entity) => entity.id === id)?.label ?? id;
+    return (
+      entities().find(
+        (entity) => entity.id === id,
+      )?.label ?? id
+    );
   }
 
   createEffect(() => {
@@ -72,45 +58,60 @@ export default function Home() {
     <>
       <nav>
         <h1 class="max">Research Map</h1>
+
         <ProjectImport
-          onImported={async () => {
-            await refreshEntities();
-            await refreshRelations();
-          }}
+          onImported={refresh}
         />
       </nav>
 
       <section>
         <h2>Add entity</h2>
-        <EntityForm onCreated={refreshEntities} />
+
+        <EntityForm
+          onCreated={refresh}
+        />
       </section>
 
       <section>
         <h2>Add relationship</h2>
 
-        <RelationForm onCreated={refreshRelations} />
+        <RelationForm
+          onCreated={refresh}
+        />
       </section>
 
       <section>
         <h2>Relationships</h2>
 
         <Show
-          when={!relationsLoading()}
+          when={!loading()}
           fallback={<p>Loading...</p>}
         >
           <Show
             when={relations().length > 0}
-            fallback={<p>No relationships yet.</p>}
+            fallback={
+              <p>No relationships yet.</p>
+            }
           >
             <ul>
               <For each={relations()}>
                 {(relation) => (
                   <li>
-                    {entityLabel(relation.sourceId)}
+                    {entityLabel(
+                      relation.sourceId,
+                    )}
+
                     {" — "}
-                    <strong>{relation.type}</strong>
+
+                    <strong>
+                      {relation.type}
+                    </strong>
+
                     {" → "}
-                    {entityLabel(relation.targetId)}
+
+                    {entityLabel(
+                      relation.targetId,
+                    )}
                   </li>
                 )}
               </For>
@@ -128,14 +129,20 @@ export default function Home() {
         >
           <Show
             when={entities().length > 0}
-            fallback={<p>No entities yet.</p>}
+            fallback={
+              <p>No entities yet.</p>
+            }
           >
             <ul>
               <For each={entities()}>
                 {(entity) => (
                   <li>
-                    <strong>{entity.label}</strong>
+                    <strong>
+                      {entity.label}
+                    </strong>
+
                     {" — "}
+
                     {entity.type}
                   </li>
                 )}
@@ -154,7 +161,6 @@ export default function Home() {
           onChanged={refresh}
         />
       </section>
-
     </>
   );
 }
