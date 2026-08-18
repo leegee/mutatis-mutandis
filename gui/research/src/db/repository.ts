@@ -2,6 +2,7 @@ import { getDatabase } from "./database";
 import type { Entity, EntityType } from "~/domain/entity";
 import type { Relation, RelationType } from "~/domain/relation";
 import type { Evidence, ProjectMetadata, ResearchProject } from "~/domain/project";
+import { validateProject, isValidProject, } from "~/domain/validateProject";
 
 function id(): string {
   return crypto.randomUUID();
@@ -92,15 +93,31 @@ export async function listRelations(): Promise<Relation[]> {
 
 
 export async function importProject(
-  project: ResearchProject,
+  value: unknown,
 ): Promise<void> {
-  const db = getDatabase();
+  const validation = validateProject(value);
 
-  if (project.version !== 1) {
+  if (!validation.valid) {
     throw new Error(
-      `Unsupported project version: ${ project.version }`,
+      validation.errors
+        .map(
+          (error) =>
+            `${ error.path }: ${ error.message }`,
+        )
+        .join("\n"),
     );
   }
+
+  if (!isValidProject(value)) {
+    // Should never happen because validateProject()
+    // has already succeeded.
+    throw new Error("Invalid research project.");
+  }
+
+  const project = value;
+
+  // project is now ResearchProject
+  const db = getDatabase();
 
   await db.transaction(
     "rw",
@@ -109,33 +126,7 @@ export async function importProject(
     db.evidence,
     db.projectMetadata,
     async () => {
-      await db.entities.clear();
-      await db.relations.clear();
-      await db.evidence.clear();
-      await db.projectMetadata.clear();
-
-      if (project.entities.length > 0) {
-        await db.entities.bulkAdd(
-          project.entities,
-        );
-      }
-
-      if (project.relations.length > 0) {
-        await db.relations.bulkAdd(
-          project.relations,
-        );
-      }
-
-      if (project.evidence.length > 0) {
-        await db.evidence.bulkAdd(
-          project.evidence,
-        );
-      }
-
-      await db.projectMetadata.put({
-        id: "project",
-        ...project.metadata,
-      });
+      // ...
     },
   );
 }

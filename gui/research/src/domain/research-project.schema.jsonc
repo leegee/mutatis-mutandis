@@ -1,0 +1,408 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mutatis-mutandis.local/schemas/research-project.schema.json",
+  "title": "Research Project",
+  "description": "Schema for a diachronic humanities research map containing entities, relations, and evidence.",
+  "type": "object",
+
+  "required": [
+    "version",
+    "metadata",
+    "entities",
+    "relations",
+    "evidence"
+  ],
+
+  "properties": {
+    // ------------------------------------------------------------------
+    // PROJECT VERSION
+    // ------------------------------------------------------------------
+
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Version of the research-project data format."
+    },
+
+    // ------------------------------------------------------------------
+    // PROJECT METADATA
+    // ------------------------------------------------------------------
+
+    "metadata": {
+      "$ref": "#/$defs/ProjectMetadata"
+    },
+
+    // ------------------------------------------------------------------
+    // ENTITIES
+    // ------------------------------------------------------------------
+
+    "entities": {
+      "type": "array",
+      "description": "The entities that make up the conceptual research map.",
+      "items": {
+        "$ref": "#/$defs/Entity"
+      }
+    },
+
+    // ------------------------------------------------------------------
+    // RELATIONS
+    // ------------------------------------------------------------------
+
+    "relations": {
+      "type": "array",
+      "description": "Directed relationships between entities.",
+      "items": {
+        "$ref": "#/$defs/Relation"
+      }
+    },
+
+    // ------------------------------------------------------------------
+    // EVIDENCE
+    // ------------------------------------------------------------------
+
+    "evidence": {
+      "type": "array",
+      "description": "Observations, quotations, interpretations and other evidence supporting entities and/or relations.",
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      }
+    }
+  },
+
+  "additionalProperties": false,
+
+  "$defs": {
+
+    // ==================================================================
+    // COMMON
+    // ==================================================================
+
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp."
+    },
+
+    "Id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier used to refer to an object from elsewhere in the project."
+    },
+
+    // ==================================================================
+    // PROJECT METADATA
+    // ==================================================================
+
+    "ProjectMetadata": {
+      "type": "object",
+
+      "required": [
+        "title",
+        "description",
+        "createdAt",
+        "updatedAt"
+      ],
+
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Human-readable title of the research project."
+        },
+
+        "description": {
+          "type": "string",
+          "description": "Short description of the project's research subject and scope."
+        },
+
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      },
+
+      "additionalProperties": false
+    },
+
+    // ==================================================================
+    // ENTITY
+    // ==================================================================
+
+    "Entity": {
+      "type": "object",
+
+      "required": [
+        "id",
+        "type",
+        "label",
+        "aliases",
+        "description",
+        "tags",
+        "createdAt",
+        "updatedAt"
+      ],
+
+      "properties": {
+
+        // Stable internal identifier.
+        //
+        // Examples:
+        //   lexeme-old-norse-hvitr
+        //   concept-whiteness
+        //   animal-raven
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+
+        // Semantic category used by the graph renderer and UI.
+        //
+        // Current examples:
+        //   lexeme
+        //   concept
+        //   motif
+        //   animal
+        //   person
+        //   source
+        //
+        // This is deliberately a string rather than an enum.
+        // We will almost certainly want additional entity types later,
+        // e.g. text, place, event, tradition, language, manuscript, etc.
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Semantic category of the entity."
+        },
+
+        // Human-readable name shown in the graph.
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary display label for the entity."
+        },
+
+        // Alternative names, spellings, transliterations or search terms.
+        //
+        // Examples:
+        //   hvítr -> hvitr
+        //   raven -> corvid
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Alternative labels, spellings, transliterations or search terms."
+        },
+
+        // Human-readable explanation of what the entity represents.
+        "description": {
+          "type": "string",
+          "description": "Description of the entity and its significance to the project."
+        },
+
+        // Free-form thematic or methodological classification.
+        //
+        // Examples:
+        //   Old Norse
+        //   colour
+        //   whiteness
+        //   supernatural
+        //   body
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Thematic, linguistic, historical or methodological tags."
+        },
+
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+
+        "updatedAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      },
+
+      "additionalProperties": false
+    },
+
+    // ==================================================================
+    // RELATION
+    // ==================================================================
+
+    "Relation": {
+      "type": "object",
+
+      "required": [
+        "id",
+        "sourceId",
+        "type",
+        "targetId",
+        "createdAt"
+      ],
+
+      "properties": {
+
+        // Stable identifier for the relation itself.
+        //
+        // Examples:
+        //   hvitr-expresses-whiteness
+        //   svartr-contrasts-hvitr
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+
+        // ID of the originating entity.
+        //
+        // Must refer to an entity in the project's entities array.
+        "sourceId": {
+          "$ref": "#/$defs/Id",
+          "description": "ID of the source/origin entity."
+        },
+
+        // Type of relationship.
+        //
+        // Current examples:
+        //   cognate-of
+        //   expresses
+        //   associated-with
+        //   contrasts-with
+        //   describes
+        //   attested-in
+        //   supports
+        //
+        // Like Entity.type, this remains open-ended because the ontology
+        // will evolve as the research develops.
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Semantic type of the relationship."
+        },
+
+        // ID of the destination entity.
+        "targetId": {
+          "$ref": "#/$defs/Id",
+          "description": "ID of the target/destination entity."
+        },
+
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      },
+
+      "additionalProperties": false
+    },
+
+    // ==================================================================
+    // EVIDENCE
+    // ==================================================================
+
+    "Evidence": {
+      "type": "object",
+
+      "required": [
+        "id",
+        "sourceId",
+        "entityIds",
+        "relationIds",
+        "observation",
+        "status",
+        "createdAt"
+      ],
+
+      "properties": {
+
+        // Stable identifier for the evidence record.
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+
+        // ID of the source from which the evidence originates.
+        //
+        // At present this points to an Entity with type "source".
+        //
+        // We may eventually want a more explicit Source model, especially
+        // once bibliographic information is added.
+        "sourceId": {
+          "$ref": "#/$defs/Id",
+          "description": "ID of the source entity associated with this evidence."
+        },
+
+        // Entities to which this evidence relates.
+        //
+        // An observation may concern several entities simultaneously.
+        "entityIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          },
+          "description": "IDs of entities supported, described or discussed by the evidence."
+        },
+
+        // Relations supported or discussed by this evidence.
+        "relationIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          },
+          "description": "IDs of relations supported, described or discussed by the evidence."
+        },
+
+        // Optional direct quotation from the source.
+        "quote": {
+          "type": "string",
+          "description": "Optional quotation from the source."
+        },
+
+        // The researcher's observation or claim.
+        //
+        // This is deliberately separate from quote:
+        //
+        // quote       = what the source says
+        // observation = what we observe/claim about it
+        "observation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Research observation, claim or interpretation derived from the evidence."
+        },
+
+        // Epistemic status of the evidence.
+        "status": {
+          "$ref": "#/$defs/EvidenceStatus"
+        },
+
+        // Optional additional research notes.
+        "notes": {
+          "type": "string",
+          "description": "Additional methodological, bibliographical or interpretive notes."
+        },
+
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      },
+
+      "additionalProperties": false
+    },
+
+    // ==================================================================
+    // EVIDENCE STATUS
+    // ==================================================================
+
+    "EvidenceStatus": {
+      "type": "string",
+
+      "enum": [
+        "primary",
+        "secondary",
+        "interpretive",
+        "speculative"
+      ],
+
+      "description": "Epistemic status of the evidence or observation."
+    }
+  }
+}

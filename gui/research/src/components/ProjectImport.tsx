@@ -1,7 +1,8 @@
 import { createSignal } from "solid-js";
 
-import type { ResearchProject } from "~/domain/project";
 import { importProject } from "~/db/repository";
+import { validateProject, } from "~/domain/validateProject";
+
 
 interface ProjectImportProps {
 }
@@ -11,11 +12,14 @@ export default function ProjectImport(
 ) {
   const [error, setError] = createSignal<string>();
   const [importing, setImporting] = createSignal(false);
+  const [errors, setErrors] = createSignal<string[]>([]);
 
   async function handleFile(
     event: Event,
   ) {
-    const input = event.currentTarget as HTMLInputElement;
+    const input =
+      event.currentTarget as HTMLInputElement;
+
     const file = input.files?.[0];
 
     if (!file) {
@@ -27,11 +31,23 @@ export default function ProjectImport(
 
     try {
       const text = await file.text();
-      const project = JSON.parse(text) as ResearchProject;
+      const value: unknown = JSON.parse(text);
 
-      validateProject(project);
+      const validation =
+        validateProject(value);
 
-      await importProject(project);
+      if (!validation.valid) {
+        throw new Error(
+          validation.errors
+            .map(
+              (error) =>
+                `${ error.path }: ${ error.message }`,
+            )
+            .join("\n"),
+        );
+      }
+
+      await importProject(value);
 
       input.value = "";
     } catch (error) {
@@ -44,6 +60,7 @@ export default function ProjectImport(
       setImporting(false);
     }
   }
+
 
   return (
     <div class="field">
@@ -72,55 +89,19 @@ export default function ProjectImport(
         />
       </label>
 
-      {error() && (
-        <p role="alert">
-          {error()}
-        </p>
+      {errors().length > 0 && (
+        <div role="alert">
+          <strong>Unable to import project:</strong>
+
+          <ul>
+            {errors().map((error) => (
+              <li>{error}</li>
+            ))}
+          </ul>
+        </div>
       )}
+
     </div>
   );
 }
 
-function validateProject(
-  project: ResearchProject,
-): void {
-  if (!project || typeof project !== "object") {
-    throw new Error("Invalid project file.");
-  }
-
-  if (project.version !== 1) {
-    throw new Error(
-      `Unsupported project version: ${ project.version }`,
-    );
-  }
-
-  if (!Array.isArray(project.entities)) {
-    throw new Error(
-      "Project entities must be an array.",
-    );
-  }
-
-  if (!Array.isArray(project.relations)) {
-    throw new Error(
-      "Project relations must be an array.",
-    );
-  }
-
-  const entityIds = new Set(
-    project.entities.map((entity) => entity.id),
-  );
-
-  for (const relation of project.relations) {
-    if (!entityIds.has(relation.sourceId)) {
-      throw new Error(
-        `Relation references missing entity: ${ relation.sourceId }`,
-      );
-    }
-
-    if (!entityIds.has(relation.targetId)) {
-      throw new Error(
-        `Relation references missing entity: ${ relation.targetId }`,
-      );
-    }
-  }
-}
