@@ -127,8 +127,7 @@ export default function EntityForm(props: EntityFormProps) {
         <form onSubmit={submit}>
             <div class="">
                 <div class="field">
-                    <Show
-                        when={!editing()}
+                    <Show when={!editing()}
                         fallback={
                             <div class="field label border">
                                 <input

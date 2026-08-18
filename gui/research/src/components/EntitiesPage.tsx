@@ -15,7 +15,6 @@ export default function EntitiesPage() {
     <article>
       <section class="large-padding">
         <h2>Add entity</h2>
-
         <EntityForm />
       </section>
 
@@ -23,7 +22,7 @@ export default function EntitiesPage() {
         <h2>Entities</h2>
 
         <Show when={!entities.loading()}
-          fallback={<p>Loading...</p>}
+          fallback={<progress />}
         >
           <Show when={entities.value().length > 0}
             fallback={

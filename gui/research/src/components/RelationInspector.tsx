@@ -52,8 +52,7 @@ export default function RelationInspector(
         <Show when={props.relation} >
             {(relation) => (
                 <aside>
-                    <Show
-                        when={!editing()}
+                    <Show when={!editing()}
                         fallback={
                             <RelationForm
                                 relation={relation()}

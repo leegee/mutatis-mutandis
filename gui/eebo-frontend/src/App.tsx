@@ -37,8 +37,7 @@ export default function App(props: any) {
       <AppNav />
 
       <main class="responsive max no-padding full">
-        <Show
-          when={dbReady()}
+        <Show when={dbReady()}
           fallback={
             <GlobalMessageDisplay
               title="Loading database"

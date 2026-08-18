@@ -29,7 +29,6 @@ export default function RelationsPage() {
     <article>
       <section class="large-padding">
         <h2>Add relationship</h2>
-
         <RelationForm />
       </section>
 
@@ -37,7 +36,7 @@ export default function RelationsPage() {
         <h2>Relationships</h2>
 
         <Show when={!entities.loading() && !relations.loading()}
-          fallback={<p>Loading...</p>}
+          fallback={<progress />}
         >
           <Show when={relations.value().length > 0}
             fallback={

@@ -23,7 +23,7 @@ const relationTypes: RelationType[] = [
 interface RelationFormProps {
     relation?: Relation;
 
-    entities: Entity[];
+    entities?: Entity[];
 
     source?: Entity;
     target?: Entity;
@@ -61,6 +61,7 @@ export default function RelationForm(
         const relation = props.relation;
 
         if (relation) {
+            if (!props.entities) return;
             const sourceEntity = props.entities.find(
                 (entity) => entity.id === relation.sourceId,
             );

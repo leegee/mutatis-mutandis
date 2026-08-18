@@ -92,11 +92,7 @@ export default function Prompt(
                         value={value()}
                         placeholder={props.placeholder}
                         disabled={saving()}
-                        onInput={(event) =>
-                            setValue(
-                                event.currentTarget.value,
-                            )
-                        }
+                        onInput={(event) => setValue(event.currentTarget.value,)}
                     />
 
                     <label>
@@ -104,30 +100,20 @@ export default function Prompt(
                     </label>
                 </div>
 
-                <nav class="footer">
-                    <button
-                        type="submit"
-                        disabled={
-                            saving() ||
-                            !value().trim()
-                        }
-                    >
+                <nav class="footer no-padding">
+                    <button type="submit" disabled={saving() || !value().trim()} >
                         {saving()
                             ? "Saving…"
                             : props.confirmLabel ??
                             "OK"}
                     </button>
 
-                    <button
-                        type="button"
+                    <button type="button"
                         class="transparent"
                         disabled={saving()}
-                        onClick={() =>
-                            props.onCancel()
-                        }
+                        onClick={() => props.onCancel()}
                     >
-                        {props.cancelLabel ??
-                            "Cancel"}
+                        {props.cancelLabel ?? "Cancel"}
                     </button>
                 </nav>
             </form>

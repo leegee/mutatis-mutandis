@@ -32,31 +32,19 @@ export default function Confirm(
                 <p>{props.message}</p>
             </Show>
 
-            <nav class="footer">
-                <button
-                    type="button"
-                    class={
-                        props.danger
-                            ? "error"
-                            : undefined
-                    }
-                    onClick={() =>
-                        props.onConfirm()
-                    }
+            <nav class="footer no-padding">
+                <button type="button"
+                    class={props.danger ? "error" : undefined}
+                    onClick={() => props.onConfirm()}
                 >
-                    {props.confirmLabel ??
-                        "Confirm"}
+                    {props.confirmLabel ?? "Confirm"}
                 </button>
 
-                <button
-                    type="button"
+                <button type="button"
                     class="transparent"
-                    onClick={() =>
-                        props.onCancel()
-                    }
+                    onClick={() => props.onCancel()}
                 >
-                    {props.cancelLabel ??
-                        "Cancel"}
+                    {props.cancelLabel ?? "Cancel"}
                 </button>
             </nav>
         </Modal>

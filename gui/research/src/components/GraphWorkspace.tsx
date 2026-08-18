@@ -151,8 +151,7 @@ export default function GraphWorkspace(
                             "overflow-y": "auto",
                         }}
                     >
-                        <Show
-                            when={selectedEntity()}
+                        <Show when={selectedEntity()}
                             fallback={
                                 <RelationInspector
                                     relation={selectedRelation()}

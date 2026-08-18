@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 
 import { importProject } from "~/db/repository";
-import { validateProject, } from "~/domain/validateProject";
-
+import { validateProject } from "~/domain/validateProject";
+import Alert from "~/components/Modal/Alert";
 
 interface ProjectImportProps {
 }
@@ -10,9 +10,14 @@ interface ProjectImportProps {
 export default function ProjectImport(
   props: ProjectImportProps,
 ) {
-  const [error, setError] = createSignal<string>();
-  const [importing, setImporting] = createSignal(false);
-  const [errors, setErrors] = createSignal<string[]>([]);
+  const [alert, setAlert] =
+    createSignal<{
+      title: string;
+      message: string;
+    }>();
+
+  const [importing, setImporting] =
+    createSignal(false);
 
   async function handleFile(
     event: Event,
@@ -26,7 +31,7 @@ export default function ProjectImport(
       return;
     }
 
-    setError(undefined);
+    setAlert(undefined);
     setImporting(true);
 
     try {
@@ -50,58 +55,63 @@ export default function ProjectImport(
       await importProject(value);
 
       input.value = "";
+
+      setAlert({
+        title: "Import complete",
+        message: `"${ file.name }" was imported successfully.`,
+      });
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Unable to import project.",
-      );
+      setAlert({
+        title: "Unable to import project",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to import project.",
+      });
     } finally {
       setImporting(false);
     }
   }
 
+  function closeAlert() {
+    setAlert(undefined);
+  }
 
   return (
-    <div class="field">
-      <label>
-        <button
-          class="small secondary"
-          type="button"
-          disabled={importing()}
-          onclick={() =>
-            document
-              .getElementById("project-import")
-              ?.click()
-          }
-        >
-          {importing()
-            ? "Importing…"
-            : "Import JSON"}
-        </button>
+    <>
+      <div class="field">
+        <label>
+          <button
+            class="small secondary"
+            type="button"
+            disabled={importing()}
+            onclick={() =>
+              document
+                .getElementById("project-import")
+                ?.click()
+            }
+          >
+            {importing()
+              ? "Importing…"
+              : "Import JSON"}
+          </button>
 
-        <input
-          id="project-import"
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={handleFile}
-        />
-      </label>
+          <input
+            id="project-import"
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={handleFile}
+          />
+        </label>
+      </div>
 
-      {errors().length > 0 && (
-        <div role="alert">
-          <strong>Unable to import project:</strong>
-
-          <ul>
-            {errors().map((error) => (
-              <li>{error}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-    </div>
+      <Alert
+        open={!!alert()}
+        title={alert()?.title ?? ""}
+        message={alert()?.message ?? ""}
+        onClose={closeAlert}
+      />
+    </>
   );
 }
-
