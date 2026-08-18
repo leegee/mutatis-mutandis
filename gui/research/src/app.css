@@ -20,11 +20,14 @@ h2 {
   font-size: 2em;
 }
 
-h3,
+h3 {
+  font-size: 1.4em;
+}
+
 h4,
 h5,
 h6 {
-  font-size: 1.2em;
+  font-size: 1em;
   font-weight: bold !important;
 }
 
@@ -36,6 +39,20 @@ nav.footer {
   justify-content: space-between;
 }
 
+/* Counter BeerCSS */
 header {
   padding: 0 !important;
+}
+
+.navigation-button-menu {
+  position: fixed;
+  top: 1em;
+  left: 1em;
+  z-index: 999;
+}
+
+/* Counter BeerCSS */
+section:first-of-type {
+  margin-block-start: 0 !important;
+  padding-top: 0 !important;
 }

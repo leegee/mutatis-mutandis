@@ -20,7 +20,7 @@ export default function Home() {
     );
 
   return (
-    <section class="large-padding">
+    <section class="padding">
       <Show when={!entities.loading() && !relations.loading()} fallback={<progress />} >
         <GraphWorkspace
           entities={entities.value()}

@@ -105,8 +105,8 @@ export default function EntityAutocomplete(
 
   return (
     <>
-      <div class="field border">
-        <input
+      <div class="field label border">
+        <input type="text"
           value={props.value}
           disabled={props.disabled}
           autocomplete="off"
@@ -118,7 +118,6 @@ export default function EntityAutocomplete(
           }}
           onKeyDown={keydown}
         />
-
         <label>{props.placeholder ?? 'Entity'}</label>
       </div>
 
@@ -127,16 +126,9 @@ export default function EntityAutocomplete(
           <div class="field autocomplete-menu">
             <For each={suggestions()}>
               {(entity, index) => (
-                <button
-                  type="button"
-                  classList={{
-                    active: index() === highlighted(),
-                  }}
-                  onMouseDown={(event) => {
-                    // Prevent the input from losing focus before
-                    // the selection is handled.
-                    event.preventDefault();
-                  }}
+                <button type="button"
+                  classList={{ active: index() === highlighted() }}
+                  onMouseDown={(event) => { event.preventDefault(); }}
                   onClick={() => select(entity)}
                 >
                   <strong>{entity.label}</strong>

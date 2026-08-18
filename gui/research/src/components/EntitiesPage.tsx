@@ -13,12 +13,12 @@ export default function EntitiesPage() {
 
   return (
     <article>
-      <section class="large-padding">
+      <section class="padding">
         <h2>Add entity</h2>
         <EntityForm />
       </section>
 
-      <section class="large-padding">
+      <section class="padding">
         <h2>Entities</h2>
 
         <Show when={!entities.loading()}

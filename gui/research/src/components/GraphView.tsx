@@ -466,7 +466,7 @@ export default function GraphView(props: GraphViewProps,) {
             style={{
                 position: "relative",
                 width: "100%",
-                height: "90vh",
+                height: "100%",
                 "min-height": "500px",
             }}
             onClick={() => setContextMenu(undefined)}

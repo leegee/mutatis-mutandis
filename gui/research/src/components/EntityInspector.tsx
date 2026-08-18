@@ -82,16 +82,13 @@ export default function EntityInspector(
                                 <nav>
                                     <div class="max">
                                         <h2> {entity().label} </h2>
-                                        <small> {entity().type} </small>
+                                        <span> {entity().type} </span>
                                     </div>
 
-                                    <button
-                                        class="circle transparent"
+                                    <button class="circle transparent"
                                         type="button"
                                         title="Close"
-                                        onClick={() =>
-                                            props.onClose?.(entity())
-                                        }
+                                        onClick={() => props.onClose?.(entity())}
                                     >
                                         <i>close</i>
                                     </button>
@@ -99,35 +96,31 @@ export default function EntityInspector(
                             </header>
 
                             <Show when={entity().description}>
-                                <p>
-                                    {entity().description}
-                                </p>
+                                <section>
+                                    <p> {entity().description} </p>
+                                </section>
                             </Show>
 
                             <Show when={entity().aliases.length > 0} >
                                 <section>
                                     <h3>Aliases</h3>
-
-                                    <For
-                                        each={entity().aliases}
-                                    >
-                                        {(alias) => (
-                                            <span class="chip">
-                                                {alias}
-                                            </span>
-                                        )}
-                                    </For>
+                                    <div class="row wrap">
+                                        <For each={entity().aliases} >
+                                            {(alias) => (
+                                                <span class="chip">
+                                                    {alias}
+                                                </span>
+                                            )}
+                                        </For>
+                                    </div>
                                 </section>
                             </Show>
 
                             <Show when={entity().tags.length > 0} >
                                 <section>
                                     <h3>Tags</h3>
-
                                     <div class="row wrap">
-                                        <For
-                                            each={entity().tags}
-                                        >
+                                        <For each={entity().tags} >
                                             {(tag) => (
                                                 <span class="chip">
                                                     {tag}
@@ -142,19 +135,13 @@ export default function EntityInspector(
                                 <h3>Relationships</h3>
 
                                 <Show when={outgoing().length > 0 || incoming().length > 0}
-                                    fallback={
-                                        <p>
-                                            No relationships yet.
-                                        </p>
-                                    }
+                                    fallback={<p> No relationships yet. </p>}
                                 >
                                     <Show when={outgoing().length > 0} >
-                                        <h6>Outgoing</h6>
+                                        <h4>Outgoing</h4>
 
                                         <ul class="list no-space border">
-                                            <For
-                                                each={outgoing()}
-                                            >
+                                            <For each={outgoing()} >
                                                 {(relation) => (
                                                     <li>
                                                         {relation.type}
@@ -171,7 +158,7 @@ export default function EntityInspector(
                                     </Show>
 
                                     <Show when={incoming().length > 0} >
-                                        <h6>Incoming</h6>
+                                        <h4>Incoming</h4>
 
                                         <ul class="list no-space border">
                                             <For each={incoming()} >
@@ -193,20 +180,11 @@ export default function EntityInspector(
                             </section>
 
                             <nav class="footer">
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        setEditing(true)
-                                    }
-                                >
+                                <button type="button" onClick={() => setEditing(true)} >
                                     Edit
                                 </button>
 
-                                <button
-                                    type="button"
-                                    class="error"
-                                    onClick={handleDelete}
-                                >
+                                <button type="button" class="error" onClick={handleDelete} >
                                     Delete
                                 </button>
                             </nav>

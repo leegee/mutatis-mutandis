@@ -27,20 +27,9 @@ interface EntityFormProps {
 
 export default function EntityForm(props: EntityFormProps) {
     const editing = () => !!props.entity;
-
-    const [label, setLabel] = createSignal(
-        props.entity?.label ?? "",
-    );
-
-    const [type, setType] = createSignal<EntityType>(
-        props.entity?.type ?? "concept",
-    );
-
-    const [selected, setSelected] =
-        createSignal<Entity | undefined>(
-            props.entity,
-        );
-
+    const [label, setLabel] = createSignal(props.entity?.label ?? "");
+    const [type, setType] = createSignal<EntityType>(props.entity?.type ?? "concept",);
+    const [selected, setSelected] = createSignal<Entity | undefined>(props.entity);
     const [saving, setSaving] = createSignal(false);
 
     createEffect(() => {
@@ -125,98 +114,84 @@ export default function EntityForm(props: EntityFormProps) {
 
     return (
         <form onSubmit={submit}>
-            <div class="">
-                <div class="field">
-                    <Show when={!editing()}
-                        fallback={
-                            <div class="field label border">
-                                <input
-                                    value={label()}
-                                    disabled={saving()}
-                                    onInput={(event) =>
-                                        setLabel(
-                                            event.currentTarget.value,
-                                        )
-                                    }
-                                />
-                                <label>Label</label>
-                            </div>
-                        }
-                    >
-                        <EntityAutocomplete
+            <Show when={!editing()}
+                fallback={
+                    <div class="field border">
+                        <input type="text"
                             value={label()}
-                            onInput={handleInput}
-                            onSelect={handleSelect}
                             disabled={saving()}
+                            onInput={(event) => setLabel(event.currentTarget.value,)}
                         />
-                    </Show>
+                        <output>Label</output>
+                    </div>
+                }
+            >
+                <EntityAutocomplete
+                    value={label()}
+                    onInput={handleInput}
+                    onSelect={handleSelect}
+                    disabled={saving()}
+                />
+            </Show>
 
-                    <Show when={!editing() && selected()}>
-                        {(entity) => (
-                            <small>
-                                Existing {entity().type}:{" "}
-                                <strong>
-                                    {entity().label}
-                                </strong>
-                            </small>
+            <Show when={!editing() && selected()}>
+                {(entity) => (
+                    <small>
+                        Existing {entity().type}:{" "}
+                        <strong>
+                            {entity().label}
+                        </strong>
+                    </small>
+                )}
+            </Show>
+
+            <div class="field border">
+                <select
+                    value={type()}
+                    disabled={saving()}
+                    onChange={(event) =>
+                        setType(
+                            event.currentTarget.value as EntityType,
+                        )
+                    }
+                >
+                    <For each={entityTypes}>
+                        {(entityType) => (
+                            <option value={entityType}>
+                                {entityType}
+                            </option>
                         )}
-                    </Show>
-                </div>
+                    </For>
+                </select>
 
-                <div class="field label border">
-                    <select
-                        value={type()}
-                        disabled={saving()}
-                        onChange={(event) =>
-                            setType(
-                                event.currentTarget.value as EntityType,
-                            )
-                        }
-                    >
-                        <For each={entityTypes}>
-                            {(entityType) => (
-                                <option value={entityType}>
-                                    {entityType}
-                                </option>
-                            )}
-                        </For>
-                    </select>
-
-                    <label>Type</label>
-                </div>
-
-                <nav class="footer">
-                    <button
-                        type="submit"
-                        disabled={
-                            !label().trim() ||
-                            saving() ||
-                            (!editing() && !!selected())
-                        }
-                    >
-                        {saving()
-                            ? editing()
-                                ? "Saving…"
-                                : "Adding…"
-                            : editing()
-                                ? "Save"
-                                : "Add"}
-                    </button>
-
-                    <Show when={editing()}>
-                        <button
-                            type="button"
-                            class="transparent"
-                            disabled={saving()}
-                            onClick={() =>
-                                props.onCancel?.()
-                            }
-                        >
-                            Cancel
-                        </button>
-                    </Show>
-                </nav>
+                <output>Type</output>
             </div>
+
+            <nav class="footer">
+                <button
+                    type="submit"
+                    disabled={
+                        !label().trim() ||
+                        saving() ||
+                        (!editing() && !!selected())
+                    }
+                >
+                    {saving()
+                        ? editing() ? "Saving…" : "Adding…"
+                        : editing() ? "Save" : "Add"}
+                </button>
+
+                <Show when={editing()}>
+                    <button
+                        type="button"
+                        class="transparent"
+                        disabled={saving()}
+                        onClick={() => props.onCancel?.()}
+                    >
+                        Cancel
+                    </button>
+                </Show>
+            </nav>
         </form>
     );
 }

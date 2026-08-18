@@ -27,12 +27,12 @@ export default function RelationsPage() {
 
   return (
     <article>
-      <section class="large-padding">
+      <section class="padding">
         <h2>Add relationship</h2>
         <RelationForm />
       </section>
 
-      <section class="large-padding">
+      <section class="padding">
         <h2>Relationships</h2>
 
         <Show when={!entities.loading() && !relations.loading()}

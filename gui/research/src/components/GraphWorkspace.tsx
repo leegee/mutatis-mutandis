@@ -105,7 +105,7 @@ export default function GraphWorkspace(props: GraphWorkspaceProps,) {
                         ? "minmax(0, 1fr) 30vw"
                         : "minmax(0, 1fr)",
                     gap: "1rem",
-                    height: "90vh",
+                    height: "100vh",
                     "min-height": "500px",
                 }}
             >

@@ -89,7 +89,7 @@ function Navigation() {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div>
+    <div class="navigation-button-menu">
       <button class="transparent  margin" onClick={toggleMenu}>
         <i>{menuOpen() ? "menu_open" : "menu"}</i>
         <span>Navigation</span>
