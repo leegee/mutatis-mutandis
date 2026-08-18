@@ -20,6 +20,17 @@ interface GraphViewProps {
     onSelectRelation?: (relation: Relation) => void;
 }
 
+const LAYOUT_PARAMS = {
+    name: "cose",
+    animate: false,
+    nodeRepulsion: 8000,
+    idealEdgeLength: 120,
+    edgeElasticity: 100,
+    nestingFactor: 1.2,
+    gravity: 0.25,
+};
+
+
 export default function GraphView(
     props: GraphViewProps,
 ) {
@@ -74,17 +85,74 @@ export default function GraphView(
                         "text-valign": "center",
                         "text-halign": "center",
 
-                        "background-color": "#455a64",
+                        "background-color": "#37474f",
                         color: "#ffffff",
 
                         "border-width": 2,
-                        "border-color": "#90a4ae",
+                        "border-color": "#78909c56",
 
                         "font-size": "12px",
                         "font-weight": 500,
 
-                        width: "44px",
-                        height: "44px",
+                        width: "46px",
+                        height: "46px",
+
+                        "text-wrap": "wrap",
+                        "text-max-width": "80px",
+                    },
+                },
+
+                // Concepts
+                {
+                    selector: 'node[type = "concept"]',
+                    style: {
+                        "background-color": "#455a64",
+                        "border-color": "#90a4ae3a",
+                    },
+                },
+
+                // Lexical forms
+                {
+                    selector: 'node[type = "lexeme"]',
+                    style: {
+                        "background-color": "#4e5d6c",
+                        "border-color": "#9fa8b22f",
+                    },
+                },
+
+                // Motifs
+                {
+                    selector: 'node[type = "motif"]',
+                    style: {
+                        "background-color": "#51445f",
+                        "border-color": "#b39ddb38",
+                    },
+                },
+
+                // Animals
+                {
+                    selector: 'node[type = "animal"]',
+                    style: {
+                        "background-color": "#455a50",
+                        "border-color": "#81a9951c",
+                    },
+                },
+
+                // People
+                {
+                    selector: 'node[type = "person"]',
+                    style: {
+                        "background-color": "#5a4b42",
+                        "border-color": "#bcaaa415",
+                    },
+                },
+
+                // Sources
+                {
+                    selector: 'node[type = "source"]',
+                    style: {
+                        "background-color": "#4a5060",
+                        "border-color": "#9fa8da34",
                     },
                 },
 
@@ -93,7 +161,10 @@ export default function GraphView(
                     style: {
                         "background-color": "#78909c",
                         "border-width": 3,
-                        "border-color": "#ffffff",
+                        "border-color": "#ffffff25",
+
+                        "overlay-color": "#ffffff",
+                        "overlay-opacity": 0.08,
                     },
                 },
 
@@ -125,17 +196,18 @@ export default function GraphView(
                     selector: "edge:selected",
                     style: {
                         width: 3,
+
                         "line-color": "#ffffff",
                         "target-arrow-color": "#ffffff",
+
                         color: "#ffffff",
+
+                        "text-background-color": "#37474f",
                     },
                 },
             ],
 
-            layout: {
-                name: "cose",
-                animate: false,
-            },
+            layout: LAYOUT_PARAMS,
         });
 
         instance.on("tap", "edge", (event) => {
@@ -177,10 +249,7 @@ export default function GraphView(
         instance.add(buildElements());
 
         instance
-            .layout({
-                name: "cose",
-                animate: false,
-            })
+            .layout(LAYOUT_PARAMS)
             .run();
     });
 
