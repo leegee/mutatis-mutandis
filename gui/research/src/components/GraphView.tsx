@@ -31,32 +31,52 @@ const LAYOUT_PARAMS = {
 };
 
 
-export default function GraphView(
-    props: GraphViewProps,
-) {
+function nodeSize(incoming: number): number {
+    return 46 + Math.sqrt(incoming) * 12;
+}
+
+export default function GraphView(props: GraphViewProps,) {
     let container!: HTMLDivElement;
 
     const [cy, setCy] = createSignal<Core>();
 
     function buildElements(): ElementDefinition[] {
+        const incomingCounts = new Map<string, number>();
+
+        for (const relation of props.relations) {
+            incomingCounts.set(
+                relation.targetId,
+                (incomingCounts.get(relation.targetId) ?? 0) + 1,
+            );
+        }
+
         const nodes: ElementDefinition[] =
-            props.entities.map((entity) => ({
-                data: {
-                    id: entity.id,
-                    label: entity.label,
-                    type: entity.type,
-                },
-            }));
+            props.entities.map((entity) => {
+                const incoming =
+                    incomingCounts.get(entity.id) ?? 0;
+
+                return {
+                    data: {
+                        id: entity.id,
+                        label: entity.label,
+                        type: entity.type,
+                        incoming,
+                        size: nodeSize(incoming),
+                    },
+                };
+            });
 
         const edges: ElementDefinition[] =
             props.relations
                 .filter(
                     (relation) =>
                         props.entities.some(
-                            (entity) => entity.id === relation.sourceId,
+                            (entity) =>
+                                entity.id === relation.sourceId,
                         ) &&
                         props.entities.some(
-                            (entity) => entity.id === relation.targetId,
+                            (entity) =>
+                                entity.id === relation.targetId,
                         ),
                 )
                 .map((relation) => ({
@@ -87,18 +107,15 @@ export default function GraphView(
 
                         "background-color": "#37474f",
                         color: "#ffffff",
-
                         "border-width": 2,
                         "border-color": "#78909c56",
-
                         "font-size": "12px",
                         "font-weight": 500,
-
-                        width: "46px",
-                        height: "46px",
-
                         "text-wrap": "wrap",
                         "text-max-width": "80px",
+
+                        width: "data(size)",
+                        height: "data(size)",
                     },
                 },
 
