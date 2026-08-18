@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from "solid-js";
+import { createEffect, createSignal, Show, } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
@@ -11,14 +11,9 @@ import {
 import GraphWorkspace from "~/components/GraphWorkspace";
 
 export default function Home() {
-  const [entities, setEntities] =
-    createSignal<Entity[]>([]);
-
-  const [relations, setRelations] =
-    createSignal<Relation[]>([]);
-
-  const [loading, setLoading] =
-    createSignal(true);
+  const [entities, setEntities] = createSignal<Entity[]>([]);
+  const [relations, setRelations] = createSignal<Relation[]>([]);
+  const [loading, setLoading] = createSignal(true);
 
   async function refresh() {
     setLoading(true);
@@ -45,17 +40,16 @@ export default function Home() {
 
   return (
     <section class="large-padding">
-      <h2>Research map</h2>
-
-      {loading() ? (
-        <p>Loading...</p>
-      ) : (
+      <Show
+        when={!loading()}
+        fallback={<p>Loading...</p>}
+      >
         <GraphWorkspace
           entities={entities()}
           relations={relations()}
           onChanged={refresh}
         />
-      )}
+      </Show>
     </section>
   );
 }

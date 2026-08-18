@@ -36,8 +36,7 @@ export default function EntityInspector(
         }
 
         return props.relations.filter(
-            (relation) =>
-                relation.sourceId === entity.id,
+            (relation) => relation.sourceId === entity.id,
         );
     }
 
@@ -49,8 +48,7 @@ export default function EntityInspector(
         }
 
         return props.relations.filter(
-            (relation) =>
-                relation.targetId === entity.id,
+            (relation) => relation.targetId === entity.id,
         );
     }
 
@@ -79,20 +77,9 @@ export default function EntityInspector(
     }
 
     return (
-        <aside class="padding">
-            <Show
-                when={props.entity}
-                fallback={
-                    <div>
-                        <h3>No entity selected</h3>
-                        <p>
-                            Select an entity in the graph
-                            to inspect it.
-                        </p>
-                    </div>
-                }
-            >
-                {(entity) => (
+        <Show when={props.entity} fallback={<></>}>
+            {(entity) => (
+                <aside>
                     <Show
                         when={!editing()}
                         fallback={
@@ -111,7 +98,7 @@ export default function EntityInspector(
                         {/* NORMAL INSPECTOR VIEW */}
                         <header>
                             <nav>
-                                <div>
+                                <div class="max">
                                     <h3>
                                         {entity().label}
                                     </h3>
@@ -125,48 +112,32 @@ export default function EntityInspector(
                                     class="circle transparent"
                                     type="button"
                                     title="Close"
-                                    onClick={() =>
-                                        props.onClose?.()
-                                    }
+                                    onClick={() => props.onClose?.()}
                                 >
-                                    ×
+                                    <i>close</i>
                                 </button>
                             </nav>
                         </header>
 
-                        <Show
-                            when={entity().description}
-                        >
+                        <Show when={entity().description} >
                             <p>
                                 {entity().description}
                             </p>
                         </Show>
 
-                        <Show
-                            when={
-                                entity().aliases.length > 0
-                            }
-                        >
+                        <Show when={entity().aliases.length > 0} >
                             <section>
                                 <h5>Aliases</h5>
 
-                                <For
-                                    each={entity().aliases}
-                                >
+                                <For each={entity().aliases} >
                                     {(alias) => (
-                                        <span class="chip">
-                                            {alias}
-                                        </span>
+                                        <span class="chip"> {alias} </span>
                                     )}
                                 </For>
                             </section>
                         </Show>
 
-                        <Show
-                            when={
-                                entity().tags.length > 0
-                            }
-                        >
+                        <Show when={entity().tags.length > 0} >
                             <section>
                                 <h5>Tags</h5>
 
@@ -175,9 +146,7 @@ export default function EntityInspector(
                                         each={entity().tags}
                                     >
                                         {(tag) => (
-                                            <span class="chip">
-                                                {tag}
-                                            </span>
+                                            <span class="chip"> {tag} </span>
                                         )}
                                     </For>
                                 </div>
@@ -198,60 +167,32 @@ export default function EntityInspector(
                                     </p>
                                 }
                             >
-                                <Show
-                                    when={
-                                        outgoing().length > 0
-                                    }
-                                >
+                                <Show when={outgoing().length > 0} >
                                     <h6>Outgoing</h6>
 
                                     <ul>
-                                        <For
-                                            each={outgoing()}
-                                        >
+                                        <For each={outgoing()} >
                                             {(relation) => (
                                                 <li>
-                                                    <strong>
-                                                        {
-                                                            relation.type
-                                                        }
-                                                    </strong>
+                                                    <strong> {relation.type} </strong>
                                                     {" → "}
-                                                    {
-                                                        entityLabel(
-                                                            relation.targetId,
-                                                        )
-                                                    }
+                                                    {entityLabel(relation.targetId,)}
                                                 </li>
                                             )}
                                         </For>
                                     </ul>
                                 </Show>
 
-                                <Show
-                                    when={
-                                        incoming().length > 0
-                                    }
-                                >
+                                <Show when={incoming().length > 0} >
                                     <h6>Incoming</h6>
 
                                     <ul>
-                                        <For
-                                            each={incoming()}
-                                        >
+                                        <For each={incoming()} >
                                             {(relation) => (
                                                 <li>
-                                                    {
-                                                        entityLabel(
-                                                            relation.sourceId,
-                                                        )
-                                                    }
+                                                    {entityLabel(relation.sourceId,)}
                                                     {" → "}
-                                                    <strong>
-                                                        {
-                                                            relation.type
-                                                        }
-                                                    </strong>
+                                                    <strong> {relation.type} </strong>
                                                 </li>
                                             )}
                                         </For>
@@ -260,27 +201,18 @@ export default function EntityInspector(
                             </Show>
                         </section>
 
-                        <div class="row">
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setEditing(true)
-                                }
-                            >
+                        <nav class="footer">
+                            <button type="button" onClick={() => setEditing(true)} >
                                 Edit
                             </button>
 
-                            <button
-                                type="button"
-                                class="error"
-                                onClick={handleDelete}
-                            >
+                            <button type="button" class="error" onClick={handleDelete} >
                                 Delete
                             </button>
-                        </div>
+                        </nav>
                     </Show>
-                )}
-            </Show>
-        </aside>
+                </aside>
+            )}
+        </Show>
     );
 }

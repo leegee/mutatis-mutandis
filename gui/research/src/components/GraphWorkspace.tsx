@@ -27,7 +27,9 @@ export default function GraphWorkspace(
             style={{
                 display: "grid",
                 "grid-template-columns":
-                    "minmax(0, 1fr) 320px",
+                    selectedEntity() || selectedRelation()
+                        ? "minmax(0, 1fr) 320px"
+                        : "minmax(0, 1fr)",
                 gap: "1rem",
                 height: "70vh",
                 "min-height": "500px",
@@ -48,42 +50,38 @@ export default function GraphWorkspace(
                 />
             </div>
 
-            <div
-                class="surface-container"
-                style={{
-                    "overflow-y": "auto",
-                }}
-            >
-                <Show
-                    when={selectedEntity()}
-                    fallback={
-                        <RelationInspector
-                            relation={selectedRelation()}
-                            entities={props.entities}
-                            onChanged={props.onChanged}
-                            onClose={() =>
-                                setSelectedRelation(
-                                    undefined,
-                                )
-                            }
-                        />
-                    }
+            <Show when={selectedEntity() || selectedRelation()}>
+                <div
+                    class="surface-container-high medium-elevation left-padding right-padding"
+                    style={{ "overflow-y": "auto" }}
                 >
-                    {(entity) => (
-                        <EntityInspector
-                            entity={entity()}
-                            entities={props.entities}
-                            relations={props.relations}
-                            onChanged={props.onChanged}
-                            onClose={() =>
-                                setSelectedEntity(
-                                    undefined,
-                                )
-                            }
-                        />
-                    )}
-                </Show>
-            </div>
+                    <Show
+                        when={selectedEntity()}
+                        fallback={
+                            <RelationInspector
+                                relation={selectedRelation()}
+                                entities={props.entities}
+                                onChanged={props.onChanged}
+                                onClose={() =>
+                                    setSelectedRelation(undefined)
+                                }
+                            />
+                        }
+                    >
+                        {(entity) => (
+                            <EntityInspector
+                                entity={entity()}
+                                entities={props.entities}
+                                relations={props.relations}
+                                onChanged={props.onChanged}
+                                onClose={() =>
+                                    setSelectedEntity(undefined)
+                                }
+                            />
+                        )}
+                    </Show>
+                </div>
+            </Show>
         </div>
     );
 }

@@ -52,20 +52,9 @@ export default function RelationInspector(
     }
 
     return (
-        <aside class="padding">
-            <Show
-                when={props.relation}
-                fallback={
-                    <div>
-                        <h3>No relationship selected</h3>
-                        <p>
-                            Select a relationship in the
-                            graph.
-                        </p>
-                    </div>
-                }
-            >
-                {(relation) => (
+        <Show when={props.relation} >
+            {(relation) => (
+                <aside>
                     <Show
                         when={!editing()}
                         fallback={
@@ -82,33 +71,25 @@ export default function RelationInspector(
                     >
                         <header>
                             <nav>
-                                <h3>Relationship</h3>
+                                <h3 class="max">Relationship</h3>
 
                                 <button
                                     class="circle transparent"
                                     type="button"
-                                    onClick={() =>
-                                        props.onClose?.()
-                                    }
+                                    onClick={() => props.onClose?.()}
                                 >
-                                    ×
+                                    <i>close</i>
                                 </button>
                             </nav>
                         </header>
 
                         <div class="padding">
                             <p>
-                                <strong>
-                                    {entityLabel(
-                                        relation().sourceId,
-                                    )}
-                                </strong>
+                                <strong> {entityLabel(relation().sourceId,)} </strong>
 
                                 {" → "}
 
-                                <strong>
-                                    {relation().type}
-                                </strong>
+                                <strong> {relation().type} </strong>
 
                                 {" → "}
 
@@ -119,7 +100,7 @@ export default function RelationInspector(
                                 </strong>
                             </p>
 
-                            <div class="row">
+                            <nav class="footer">
                                 <button type="button" onClick={() => setEditing(true)} >
                                     Edit
                                 </button>
@@ -127,11 +108,11 @@ export default function RelationInspector(
                                 <button type="button" class="error" onClick={handleDelete} >
                                     Delete
                                 </button>
-                            </div>
+                            </nav>
                         </div>
                     </Show>
-                )}
-            </Show>
-        </aside>
+                </aside>
+            )}
+        </Show>
     );
 }
