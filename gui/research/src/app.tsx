@@ -12,10 +12,14 @@ export default function App() {
       root={props => (
         <MetaProvider>
           <Title>Research</Title>
-          {/* <header>
-            <a href="/">Index</a>
-            <a href="/about">About</a>
-          </header> */}
+          <header>
+            <nav class="large-padding left-padding right-padding fill no-margin">
+              <a href="/">Home</a>
+              <a href="/entities">Entities</a>
+              <a href="/relations">Relations</a>
+              <a href="/project">Project</a>
+            </nav>
+          </header>
 
           <main class="responsive max large-padding">
             <Suspense>{props.children}</Suspense>
