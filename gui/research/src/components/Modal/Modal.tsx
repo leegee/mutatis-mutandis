@@ -1,0 +1,110 @@
+// src/components/Modal/index.tsx
+
+import {
+    type JSX,
+    Show,
+    createEffect,
+    onCleanup,
+} from "solid-js";
+
+import { Portal } from "solid-js/web";
+
+import './modal.css';
+
+interface ModalProps {
+    open: boolean;
+    title?: string;
+    children: JSX.Element;
+    onClose?: () => void;
+    closeOnBackdrop?: boolean;
+}
+
+export default function Modal(
+    props: ModalProps,
+) {
+    createEffect(() => {
+        if (!props.open) {
+            return;
+        }
+
+        const previousOverflow =
+            document.body.style.overflow;
+
+        document.body.style.overflow = "hidden";
+
+        onCleanup(() => {
+            document.body.style.overflow =
+                previousOverflow;
+        });
+    });
+
+    function handleBackdropClick(
+        event: MouseEvent,
+    ) {
+        if (
+            props.closeOnBackdrop !== false &&
+            event.target === event.currentTarget
+        ) {
+            props.onClose?.();
+        }
+    }
+
+    function handleKeyDown(
+        event: KeyboardEvent,
+    ) {
+        if (
+            event.key === "Escape" &&
+            props.onClose
+        ) {
+            props.onClose();
+        }
+    }
+
+    return (
+        <Show when={props.open}>
+            <Portal>
+                <div
+                    class="modal-backdrop"
+                    role="presentation"
+                    onClick={handleBackdropClick}
+                    onKeyDown={handleKeyDown}
+                >
+                    <div
+                        class="modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={props.title}
+                    >
+                        <Show when={props.title}>
+                            <header>
+                                <nav>
+                                    <h3 class="max">
+                                        {props.title}
+                                    </h3>
+
+                                    <Show when={props.onClose}>
+                                        <button
+                                            class="circle transparent"
+                                            type="button"
+                                            aria-label="Close"
+                                            onClick={() =>
+                                                props.onClose?.()
+                                            }
+                                        >
+                                            <i>close</i>
+                                        </button>
+                                    </Show>
+                                </nav>
+                            </header>
+                        </Show>
+
+                        <div class="modal-content">
+                            {props.children}
+                        </div>
+                    </div>
+                </div>
+            </Portal>
+        </Show>
+    );
+}
+
