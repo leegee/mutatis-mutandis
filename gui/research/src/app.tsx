@@ -7,7 +7,7 @@ import "beercss/dist/cdn/beer.min.css";
 import "./app.css";
 import "./nav-menu.css";
 
-function Navigation() {
+function SideNavigation() {
   const location = useLocation();
   const [minimized, setMinimized] = createSignal(false);
 
@@ -73,16 +73,77 @@ function Navigation() {
   );
 }
 
+
+function Navigation() {
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = createSignal(false);
+
+  const toggleMenu = () => {
+    setMenuOpen(open => !open);
+  };
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+  };
+
+  const isActive = (path: string) => location.pathname === path;
+
+  return (
+    <div>
+      <button class="transparent  margin" onClick={toggleMenu}>
+        <i>{menuOpen() ? "menu_open" : "menu"}</i>
+        <span>Navigation</span>
+        <i>{menuOpen() ? "arrow_drop_up" : "arrow_drop_down"}</i>
+      </button>
+
+      {menuOpen() && (
+        <menu class="margin">
+          <li classList={{ active: isActive("/") }}>
+            <a href="/" onClick={closeMenu}>
+              <i>graph_7</i>
+              <span>Map</span>
+            </a>
+          </li>
+
+          <li classList={{ active: isActive("/entities") }}>
+            <a href="/entities" onClick={closeMenu}>
+              <i>add_circle</i>
+              <span>Entities</span>
+            </a>
+          </li>
+
+          <li classList={{ active: isActive("/relations") }}>
+            <a href="/relations" onClick={closeMenu}>
+              <i>arrow_and_edge</i>
+              <span>Relations</span>
+            </a>
+          </li>
+
+          <li classList={{ active: isActive("/project") }}>
+            <a href="/project" onClick={closeMenu}>
+              <i>folder_open</i>
+              <span>Project</span>
+            </a>
+          </li>
+        </menu>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <Router
       root={props => (
         <MetaProvider>
           <Title>Research</Title>
-          <Navigation />
+          {/* <SideNavigation /> */}
 
-          <main class="responsive max no-padding">
-            <Suspense>{props.children}</Suspense>
+          <main class="responsive max no-padding background">
+            <Suspense>
+              <Navigation />
+              {props.children}
+            </Suspense>
           </main>
         </MetaProvider>
       )}

@@ -21,9 +21,7 @@ interface GraphWorkspaceProps {
     relations: Relation[];
 }
 
-export default function GraphWorkspace(
-    props: GraphWorkspaceProps,
-) {
+export default function GraphWorkspace(props: GraphWorkspaceProps,) {
     const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
     const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
     const [addingRelation, setAddingRelation] = createSignal<{
@@ -34,32 +32,24 @@ export default function GraphWorkspace(
     const prompt = usePrompt();
 
     async function handleAddEntity() {
-        const label = await prompt(
-            "Node label:",
-        );
+        const label = await prompt("Node label");
 
         if (!label?.trim()) {
             return;
         }
 
-        const entity = await createEntity(
-            label.trim(),
-        );
+        const entity = await createEntity(label.trim());
 
         setSelectedEntity(entity);
         setSelectedRelation(undefined);
     }
 
-    function handleEditEntity(
-        entity: Entity,
-    ) {
+    function handleEditEntity(entity: Entity) {
         setSelectedEntity(entity);
         setSelectedRelation(undefined);
     }
 
-    async function handleDeleteEntity(
-        entity: Entity,
-    ) {
+    async function handleDeleteEntity(entity: Entity) {
         await deleteEntity(entity.id);
 
         if (selectedEntity()?.id === entity.id) {
@@ -71,22 +61,14 @@ export default function GraphWorkspace(
         sourceId: string,
         targetId: string,
     ) {
-        const source = props.entities.find(
-            (entity) => entity.id === sourceId,
-        );
-
-        const target = props.entities.find(
-            (entity) => entity.id === targetId,
-        );
+        const source = props.entities.find((entity) => entity.id === sourceId,);
+        const target = props.entities.find((entity) => entity.id === targetId,);
 
         if (!source || !target) {
             return;
         }
 
-        setAddingRelation({
-            source,
-            target,
-        });
+        setAddingRelation({ source, target, });
     }
 
     function handleCreatedRelation(
@@ -116,23 +98,18 @@ export default function GraphWorkspace(
 
     return (
         <>
-            <div
+            <div class="background"
                 style={{
                     display: "grid",
-                    "grid-template-columns":
-                        selectedEntity() ||
-                            selectedRelation()
-                            ? "minmax(0, 1fr) 30vw"
-                            : "minmax(0, 1fr)",
+                    "grid-template-columns": selectedEntity() || selectedRelation()
+                        ? "minmax(0, 1fr) 30vw"
+                        : "minmax(0, 1fr)",
                     gap: "1rem",
                     height: "90vh",
                     "min-height": "500px",
                 }}
             >
-                <div
-                    style={{
-                        "min-width": "0",
-                    }}
+                <div style={{ "min-width": "0", }}
                 >
                     <GraphView
                         entities={props.entities}
@@ -158,27 +135,16 @@ export default function GraphWorkspace(
                     />
                 </div>
 
-                <Show
-                    when={
-                        selectedEntity() ||
-                        selectedRelation()
-                    }
-                >
-                    <div
-                        class="surface-container-high medium-elevation left-padding right-padding"
-                        style={{
-                            "overflow-y": "auto",
-                        }}
+                <Show when={selectedEntity() || selectedRelation()} >
+                    <div class="surface-container-high medium-elevation left-padding right-padding"
+                        style={{ "overflow-y": "auto", }}
                     >
-                        <Show
-                            when={selectedEntity()}
+                        <Show when={selectedEntity()}
                             fallback={
                                 <RelationInspector
                                     relation={selectedRelation()}
                                     entities={props.entities}
-                                    onClose={() =>
-                                        setSelectedRelation(undefined)
-                                    }
+                                    onClose={() => setSelectedRelation(undefined)}
                                 />
                             }
                         >
@@ -187,9 +153,7 @@ export default function GraphWorkspace(
                                     entity={entity()}
                                     entities={props.entities}
                                     relations={props.relations}
-                                    onClose={() =>
-                                        setSelectedEntity(undefined)
-                                    }
+                                    onClose={() => setSelectedEntity(undefined)}
                                 />
                             )}
                         </Show>
@@ -199,9 +163,8 @@ export default function GraphWorkspace(
 
             <Show when={addingRelation()}>
                 {(pending) => (
-                    <Modal
+                    <Modal title="Add relationship"
                         open={true}
-                        title="Add relationship"
                         onClose={
                             handleCancelAddRelation
                         }
@@ -210,12 +173,8 @@ export default function GraphWorkspace(
                             entities={props.entities}
                             source={pending().source}
                             target={pending().target}
-                            onCreated={
-                                handleCreatedRelation
-                            }
-                            onCancel={
-                                handleCancelAddRelation
-                            }
+                            onCreated={handleCreatedRelation}
+                            onCancel={handleCancelAddRelation}
                         />
                     </Modal>
                 )}
