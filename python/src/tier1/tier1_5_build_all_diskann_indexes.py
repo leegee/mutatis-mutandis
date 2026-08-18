@@ -134,27 +134,20 @@ def main() -> None:
 
     for year in years:
         for scale in SCALES:
-
-            output_directory = (
-                args.output
-                / f"year={year}"
-                / scale
-            )
+            output_directory = ( args.output / f"year={year}" / scale )
 
             if output_directory.exists() and not args.overwrite:
-                logger.info(
-                    f"[SKIP] year={year} scale={scale}"
-                )
-                completed += 1
-                continue
+                complete = output_directory / "_COMPLETE"
 
-            logger.info(
-                "=" * 70
-            )
-            logger.info(
-                f"[{completed + 1}/{total}] "
-                f"year={year} scale={scale}"
-            )
+                if complete.exists():
+                    logger.info( f"[SKIP] year={year} scale={scale}" )
+                    completed += 1
+                    continue
+
+                logger.warning( f"[REBUILD] incomplete index: {output_directory}" )
+
+            logger.info( "=" * 70 )
+            logger.info( f"[{completed + 1}/{total}] year={year} scale={scale}" )
 
             build_one(
                 store=args.store,
