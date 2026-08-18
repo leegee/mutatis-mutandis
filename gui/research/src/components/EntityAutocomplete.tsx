@@ -104,7 +104,7 @@ export default function EntityAutocomplete(
   }
 
   return (
-    <div class="field label border autocomplete">
+    <div class="field border autocomplete">
       <input
         value={props.value}
         disabled={props.disabled}
@@ -120,7 +120,7 @@ export default function EntityAutocomplete(
         onKeyDown={keydown}
       />
 
-      <label>{props.placeholder ?? 'Entity'}</label>
+      <output>{props.placeholder ?? 'Entity'}</output>
 
       <Show when={open() && suggestions().length > 0}>
         <div class="autocomplete-menu surface-container">

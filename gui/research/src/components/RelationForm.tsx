@@ -1,10 +1,14 @@
-import { createSignal, For } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
-import { createRelation, listEntities } from "~/db/repository";
+import type { Relation, RelationType } from "~/domain/relation";
+
+import {
+    createRelation,
+    updateRelation,
+} from "~/db/repository";
 
 import EntityAutocomplete from "~/components/EntityAutocomplete";
-import { RelationType } from "~/domain/relation";
 
 const relationTypes: RelationType[] = [
     "related-to",
@@ -17,20 +21,74 @@ const relationTypes: RelationType[] = [
 ];
 
 interface RelationFormProps {
+    relation?: Relation;
+
+    entities?: Entity[];
+
     onCreated?: () => void | Promise<void>;
+    onUpdated?: () => void | Promise<void>;
+    onCancel?: () => void;
 }
 
-export default function RelationForm(props: RelationFormProps) {
-    const [source, setSource] = createSignal<Entity>();
-    const [target, setTarget] = createSignal<Entity>();
+export default function RelationForm(
+    props: RelationFormProps,
+) {
+    const editing = () => !!props.relation;
+
+    const [source, setSource] =
+        createSignal<Entity>();
+
+    const [target, setTarget] =
+        createSignal<Entity>();
 
     const [relationType, setRelationType] =
         createSignal<RelationType>("related-to");
 
-    const [sourceValue, setSourceValue] = createSignal("");
-    const [targetValue, setTargetValue] = createSignal("");
+    const [sourceValue, setSourceValue] =
+        createSignal("");
 
-    const [saving, setSaving] = createSignal(false);
+    const [targetValue, setTargetValue] =
+        createSignal("");
+
+    const [saving, setSaving] =
+        createSignal(false);
+
+    /*
+     * When editing, initialise the form from
+     * the existing relation.
+     */
+    createEffect(() => {
+        const relation = props.relation;
+
+        if (!relation || !props.entities) {
+            return;
+        }
+
+        const sourceEntity =
+            props.entities.find(
+                (entity) =>
+                    entity.id === relation.sourceId,
+            );
+
+        const targetEntity =
+            props.entities.find(
+                (entity) =>
+                    entity.id === relation.targetId,
+            );
+
+        setSource(sourceEntity);
+        setTarget(targetEntity);
+
+        setSourceValue(
+            sourceEntity?.label ?? "",
+        );
+
+        setTargetValue(
+            targetEntity?.label ?? "",
+        );
+
+        setRelationType(relation.type);
+    });
 
     function selectSource(entity: Entity) {
         setSource(entity);
@@ -69,20 +127,32 @@ export default function RelationForm(props: RelationFormProps) {
         setSaving(true);
 
         try {
-            await createRelation(
-                sourceEntity.id,
-                relationType(),
-                targetEntity.id,
-            );
+            if (props.relation) {
+                await updateRelation(
+                    props.relation,
+                    {
+                        sourceId: sourceEntity.id,
+                        type: relationType(),
+                        targetId: targetEntity.id,
+                    },
+                );
 
-            setSource(undefined);
-            setTarget(undefined);
+                await props.onUpdated?.();
+            } else {
+                await createRelation(
+                    sourceEntity.id,
+                    relationType(),
+                    targetEntity.id,
+                );
 
-            setSourceValue("");
-            setTargetValue("");
+                setSource(undefined);
+                setTarget(undefined);
 
-            await props.onCreated?.();
+                setSourceValue("");
+                setTargetValue("");
 
+                await props.onCreated?.();
+            }
         } finally {
             setSaving(false);
         }
@@ -90,7 +160,8 @@ export default function RelationForm(props: RelationFormProps) {
 
     return (
         <form onSubmit={submit}>
-            <div class="row">
+            <div class="">
+                <h3>Edit Relationship</h3>
                 <div class="field">
                     <EntityAutocomplete
                         value={sourceValue()}
@@ -106,7 +177,8 @@ export default function RelationForm(props: RelationFormProps) {
                         value={relationType()}
                         onChange={(event) =>
                             setRelationType(
-                                event.currentTarget.value as RelationType,
+                                event.currentTarget
+                                    .value as RelationType,
                             )
                         }
                         disabled={saving()}
@@ -120,7 +192,7 @@ export default function RelationForm(props: RelationFormProps) {
                         </For>
                     </select>
 
-                    <label>Relationship</label>
+                    <label> Relationship </label>
                 </div>
 
                 <div class="field">
@@ -143,9 +215,26 @@ export default function RelationForm(props: RelationFormProps) {
                         }
                     >
                         {saving()
-                            ? "Adding…"
-                            : "Add relationship"}
+                            ? editing()
+                                ? "Saving…"
+                                : "Adding…"
+                            : editing()
+                                ? "Save relationship"
+                                : "Add relationship"}
                     </button>
+
+                    <Show when={editing()}>
+                        <button
+                            type="button"
+                            class="transparent"
+                            disabled={saving()}
+                            onClick={() =>
+                                props.onCancel?.()
+                            }
+                        >
+                            Cancel
+                        </button>
+                    </Show>
                 </div>
             </div>
         </form>

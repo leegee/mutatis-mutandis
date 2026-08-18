@@ -17,6 +17,7 @@ interface GraphViewProps {
     entities: Entity[];
     relations: Relation[];
     onSelectEntity?: (entity: Entity) => void;
+    onSelectRelation?: (relation: Relation) => void;
 }
 
 export default function GraphView(
@@ -135,6 +136,19 @@ export default function GraphView(
                 name: "cose",
                 animate: false,
             },
+        });
+
+        instance.on("tap", "edge", (event) => {
+            const relationId = event.target.id();
+
+            const relation = props.relations.find(
+                (relation) =>
+                    relation.id === relationId,
+            );
+
+            if (relation) {
+                props.onSelectRelation?.(relation);
+            }
         });
 
         instance.on("tap", "node", (event) => {

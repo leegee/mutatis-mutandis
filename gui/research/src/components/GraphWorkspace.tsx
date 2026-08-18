@@ -1,21 +1,26 @@
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
 
 import GraphView from "~/components/GraphView";
 import EntityInspector from "~/components/EntityInspector";
+import RelationInspector from "~/components/RelationInspector";
 
 interface GraphWorkspaceProps {
     entities: Entity[];
     relations: Relation[];
+    onChanged?: () => void | Promise<void>;
 }
 
 export default function GraphWorkspace(
     props: GraphWorkspaceProps,
 ) {
-    const [selected, setSelected] =
+    const [selectedEntity, setSelectedEntity] =
         createSignal<Entity>();
+
+    const [selectedRelation, setSelectedRelation] =
+        createSignal<Relation>();
 
     return (
         <div
@@ -32,7 +37,14 @@ export default function GraphWorkspace(
                 <GraphView
                     entities={props.entities}
                     relations={props.relations}
-                    onSelectEntity={setSelected}
+                    onSelectEntity={(entity) => {
+                        setSelectedEntity(entity);
+                        setSelectedRelation(undefined);
+                    }}
+                    onSelectRelation={(relation) => {
+                        setSelectedRelation(relation);
+                        setSelectedEntity(undefined);
+                    }}
                 />
             </div>
 
@@ -42,12 +54,35 @@ export default function GraphWorkspace(
                     "overflow-y": "auto",
                 }}
             >
-                <EntityInspector
-                    entity={selected()}
-                    entities={props.entities}
-                    relations={props.relations}
-                    onClose={() => setSelected(undefined)}
-                />
+                <Show
+                    when={selectedEntity()}
+                    fallback={
+                        <RelationInspector
+                            relation={selectedRelation()}
+                            entities={props.entities}
+                            onChanged={props.onChanged}
+                            onClose={() =>
+                                setSelectedRelation(
+                                    undefined,
+                                )
+                            }
+                        />
+                    }
+                >
+                    {(entity) => (
+                        <EntityInspector
+                            entity={entity()}
+                            entities={props.entities}
+                            relations={props.relations}
+                            onChanged={props.onChanged}
+                            onClose={() =>
+                                setSelectedEntity(
+                                    undefined,
+                                )
+                            }
+                        />
+                    )}
+                </Show>
             </div>
         </div>
     );

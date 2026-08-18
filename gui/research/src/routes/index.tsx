@@ -35,14 +35,30 @@ export default function Home() {
     }
   }
 
+  async function refresh() {
+    setLoading(true);
+
+    try {
+      const [newEntities, newRelations] =
+        await Promise.all([
+          listEntities(),
+          listRelations(),
+        ]);
+
+      setEntities(newEntities);
+      setRelations(newRelations);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function entityLabel(id: string) {
     return entities().find((entity) => entity.id === id)?.label ?? id;
   }
 
   createEffect(() => {
     if (typeof window !== "undefined") {
-      refreshEntities();
-      refreshRelations();
+      refresh();
     }
   });
 
@@ -129,6 +145,7 @@ export default function Home() {
         <GraphWorkspace
           entities={entities()}
           relations={relations()}
+          onChanged={refresh}
         />
       </section>
 
