@@ -47,17 +47,21 @@ export default function EntityInspector(
         return props.relations.filter((relation) => relation.targetId === entity.id,);
     }
 
+
     async function handleDelete() {
-        if (!props.entity) {
+        const entity = props.entity;
+        if (!entity) {
             return;
         }
-        const ok = await confirm(
-            `Delete "${ props.entity.label }"?`,
-        );
-        if (ok) await deleteEntity(props.entity.id);
-        await props.onChanged?.(props.entity);
-        props.onClose?.(props.entity);
 
+        const ok = await confirm(`Delete "${ entity.label }"?`,);
+        if (!ok) {
+            return;
+        }
+
+        await deleteEntity(entity.id);
+        await props.onChanged?.(entity);
+        props.onClose?.(entity);
     }
 
 
