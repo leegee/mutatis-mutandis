@@ -24,7 +24,7 @@ function Navigation() {
             <i>{minimized() ? "menu" : "menu_open"}</i>
           </button>
 
-          <span>Foo Map</span>
+          <span>The Foo Mapper</span>
         </nav>
       </header>
 
