@@ -108,7 +108,6 @@ export default function EntityAutocomplete(
       <input
         value={props.value}
         disabled={props.disabled}
-        placeholder={props.placeholder ?? "Search entities…"}
         autocomplete="off"
         onInput={(event) =>
           input(event.currentTarget.value)
@@ -121,7 +120,7 @@ export default function EntityAutocomplete(
         onKeyDown={keydown}
       />
 
-      <label>Entity</label>
+      <label>{props.placeholder ?? 'Entity'}</label>
 
       <Show when={open() && suggestions().length > 0}>
         <div class="autocomplete-menu surface-container">

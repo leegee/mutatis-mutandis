@@ -118,3 +118,23 @@ export async function importProject(
     },
   );
 }
+
+export async function updateRelation(
+  relation: Relation,
+  changes: Partial<Omit<Relation, "id" | "createdAt">>,
+): Promise<Relation> {
+  const updated: Relation = {
+    ...relation,
+    ...changes,
+  };
+
+  await getDatabase().relations.put(updated);
+  return updated;
+}
+
+export async function deleteRelation(
+  relationId: string,
+): Promise<void> {
+  await getDatabase().relations.delete(relationId);
+}
+

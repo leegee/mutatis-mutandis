@@ -1,36 +1,82 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
+
+import { deleteEntity } from "~/db/repository";
+import EntityForm from "./EntityForm";
 
 interface EntityInspectorProps {
     entity: Entity | undefined;
     entities: Entity[];
     relations: Relation[];
+
+    onChanged?: () => void | Promise<void>;
     onClose?: () => void;
 }
 
 export default function EntityInspector(
     props: EntityInspectorProps,
 ) {
-    function entityLabel(id: string) {
+    const [editing, setEditing] = createSignal(false);
+
+    function entityLabel(id: string): string {
         return (
-            props.entities.find((entity) => entity.id === id)?.label ??
-            id
+            props.entities.find(
+                (entity) => entity.id === id,
+            )?.label ?? id
         );
     }
 
-    const outgoing = () =>
-        props.relations.filter(
+    function outgoing(): Relation[] {
+        const entity = props.entity;
+
+        if (!entity) {
+            return [];
+        }
+
+        return props.relations.filter(
             (relation) =>
-                relation.sourceId === props.entity?.id,
+                relation.sourceId === entity.id,
+        );
+    }
+
+    function incoming(): Relation[] {
+        const entity = props.entity;
+
+        if (!entity) {
+            return [];
+        }
+
+        return props.relations.filter(
+            (relation) =>
+                relation.targetId === entity.id,
+        );
+    }
+
+    async function handleDelete() {
+        const entity = props.entity;
+
+        if (!entity) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Delete "${ entity.label }"? ` +
+            `Its relationships will also be removed.`,
         );
 
-    const incoming = () =>
-        props.relations.filter(
-            (relation) =>
-                relation.targetId === props.entity?.id,
-        );
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteEntity(entity.id);
+
+        setEditing(false);
+
+        await props.onChanged?.();
+        props.onClose?.();
+    }
 
     return (
         <aside class="padding">
@@ -40,40 +86,73 @@ export default function EntityInspector(
                     <div>
                         <h3>No entity selected</h3>
                         <p>
-                            Select an entity in the graph to inspect it.
+                            Select an entity in the graph
+                            to inspect it.
                         </p>
                     </div>
                 }
             >
                 {(entity) => (
-                    <>
+                    <Show
+                        when={!editing()}
+                        fallback={
+                            <EntityForm
+                                entity={entity()}
+                                onUpdated={async () => {
+                                    setEditing(false);
+                                    await props.onChanged?.();
+                                }}
+                                onCancel={() =>
+                                    setEditing(false)
+                                }
+                            />
+                        }
+                    >
+                        {/* NORMAL INSPECTOR VIEW */}
                         <header>
                             <nav>
                                 <div>
-                                    <h3>{entity().label}</h3>
-                                    <small>{entity().type}</small>
+                                    <h3>
+                                        {entity().label}
+                                    </h3>
+
+                                    <small>
+                                        {entity().type}
+                                    </small>
                                 </div>
 
                                 <button
                                     class="circle transparent"
                                     type="button"
                                     title="Close"
-                                    onClick={props.onClose}
+                                    onClick={() =>
+                                        props.onClose?.()
+                                    }
                                 >
                                     ×
                                 </button>
                             </nav>
                         </header>
 
-                        <Show when={entity().description}>
-                            <p>{entity().description}</p>
+                        <Show
+                            when={entity().description}
+                        >
+                            <p>
+                                {entity().description}
+                            </p>
                         </Show>
 
-                        <Show when={entity().aliases?.length}>
+                        <Show
+                            when={
+                                entity().aliases.length > 0
+                            }
+                        >
                             <section>
                                 <h5>Aliases</h5>
 
-                                <For each={entity().aliases}>
+                                <For
+                                    each={entity().aliases}
+                                >
                                     {(alias) => (
                                         <span class="chip">
                                             {alias}
@@ -83,12 +162,18 @@ export default function EntityInspector(
                             </section>
                         </Show>
 
-                        <Show when={entity().tags?.length}>
+                        <Show
+                            when={
+                                entity().tags.length > 0
+                            }
+                        >
                             <section>
                                 <h5>Tags</h5>
 
                                 <div class="row wrap">
-                                    <For each={entity().tags}>
+                                    <For
+                                        each={entity().tags}
+                                    >
                                         {(tag) => (
                                             <span class="chip">
                                                 {tag}
@@ -108,42 +193,64 @@ export default function EntityInspector(
                                     incoming().length > 0
                                 }
                                 fallback={
-                                    <p>No relationships yet.</p>
+                                    <p>
+                                        No relationships yet.
+                                    </p>
                                 }
                             >
-                                <Show when={outgoing().length > 0}>
+                                <Show
+                                    when={
+                                        outgoing().length > 0
+                                    }
+                                >
                                     <h6>Outgoing</h6>
 
                                     <ul>
-                                        <For each={outgoing()}>
+                                        <For
+                                            each={outgoing()}
+                                        >
                                             {(relation) => (
                                                 <li>
                                                     <strong>
-                                                        {relation.type}
+                                                        {
+                                                            relation.type
+                                                        }
                                                     </strong>
                                                     {" → "}
-                                                    {entityLabel(
-                                                        relation.targetId,
-                                                    )}
+                                                    {
+                                                        entityLabel(
+                                                            relation.targetId,
+                                                        )
+                                                    }
                                                 </li>
                                             )}
                                         </For>
                                     </ul>
                                 </Show>
 
-                                <Show when={incoming().length > 0}>
+                                <Show
+                                    when={
+                                        incoming().length > 0
+                                    }
+                                >
                                     <h6>Incoming</h6>
 
                                     <ul>
-                                        <For each={incoming()}>
+                                        <For
+                                            each={incoming()}
+                                        >
                                             {(relation) => (
                                                 <li>
-                                                    {entityLabel(
-                                                        relation.sourceId,
-                                                    )}
+                                                    {
+                                                        entityLabel(
+                                                            relation.sourceId,
+                                                        )
+                                                    }
                                                     {" → "}
                                                     <strong>
-                                                        {relation.type}
+                                                        {
+                                                            relation.type
+                                                        }
                                                     </strong>
                                                 </li>
                                             )}
@@ -152,7 +259,26 @@ export default function EntityInspector(
                                 </Show>
                             </Show>
                         </section>
-                    </>
+
+                        <div class="row">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setEditing(true)
+                                }
+                            >
+                                Edit
+                            </button>
+
+                            <button
+                                type="button"
+                                class="error"
+                                onClick={handleDelete}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </Show>
                 )}
             </Show>
         </aside>
