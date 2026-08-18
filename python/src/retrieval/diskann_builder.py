@@ -101,16 +101,16 @@ def build_diskann_index(
     np.save(event_ids_path, event_id_array)
 
     diskannpy.build_disk_index(
-        data=vector_array,
-        distance_metric="l2",
-        index_directory=str(output_directory),
-        complexity=complexity,
-        graph_degree=graph_degree,
-        search_memory_maximum=search_memory_gb,
-        build_memory_maximum=build_memory_gb,
-        num_threads=num_threads,
-        pq_disk_bytes=pq_disk_bytes,
-        index_prefix=index_prefix,
+        data                    = vector_array,
+        distance_metric         = "l2",
+        index_directory         = str(output_directory),
+        complexity              = complexity,
+        graph_degree            = graph_degree,
+        search_memory_maximum   = search_memory_gb,
+        build_memory_maximum    = build_memory_gb,
+        num_threads             = num_threads,
+        pq_disk_bytes           = pq_disk_bytes,
+        index_prefix            = index_prefix,
     )
 
     return event_ids_path

@@ -831,10 +831,7 @@ class CorpusProcessor:
         total_docs = count_cur.fetchone()[0]
         count_cur.close()
 
-        logger.info(
-            "[tier1] Documents in scope: %d",
-            total_docs,
-        )
+        logger.info( "[tier1] Documents in scope: %d", total_docs, )
 
         cur = self.conn.cursor(name="tier1_cursor")
         cur.itersize = 10000
@@ -879,6 +876,7 @@ class CorpusProcessor:
             if buf is None or doc_key != buf.key:
                 if buf:
                     self._flush(buf, store)
+                    already_processed.add(buf.key)
                     completed_docs += 1
 
                     pct = (
@@ -904,6 +902,7 @@ class CorpusProcessor:
 
         if buf and buf.key not in already_processed:
             self._flush(buf, store)
+            already_processed.add(buf.key)
             completed_docs += 1
 
             pct = (
@@ -924,11 +923,9 @@ class CorpusProcessor:
         start = time.perf_counter()
 
         logger.debug( "[tier1] %s RSS before embed: %.2f GB", buf.doc_id, rss_gb(), )
-
         raw_events = self.pipeline.embed_doc(buf)
 
         logger.info( "[tier1] %s RSS after embed: %.2f GB; raw_events=%d", buf.doc_id, rss_gb(), len(raw_events), )
-
         logger.debug( "[tier1] Embedding %s took %.2fs", buf.doc_id, time.perf_counter() - start, )
 
         if not raw_events:
@@ -948,30 +945,21 @@ class CorpusProcessor:
 
             events_by_token[key][e.config_name] = e
 
-        logger.info(
-            "[tier1] Aligned observations: %d",
-            len(events_by_token),
-        )
+        logger.info( "[tier1] Aligned observations: %d", len(events_by_token), )
 
         event_ids = []
-
         emb_local = []
         emb_medium = []
         emb_broad = []
-
         doc_ids = []
         token_idxs = []
         tokens = []
-
         local_window_ids = []
         local_window_token_poss = []
-
         medium_window_ids = []
         medium_window_token_poss = []
-
         broad_window_ids = []
         broad_window_token_poss = []
-
         corpora = []
 
         for key, config_dict in events_by_token.items():
@@ -988,22 +976,17 @@ class CorpusProcessor:
             # stored observation identity is stable across its three scales,
             # so use the medium event ID as the canonical observation ID.
             event_ids.append(medium.event_id)
-
             emb_local.append(local.vec)
             emb_medium.append(medium.vec)
             emb_broad.append(broad.vec)
-
             corpora.append(medium.corpus)
             doc_ids.append(medium.doc_id)
             token_idxs.append(medium.corpus_token_idx)
             tokens.append(medium.token)
-
             local_window_ids.append(local.window_start)
             local_window_token_poss.append(local.window_token_pos)
-
             medium_window_ids.append(medium.window_start)
             medium_window_token_poss.append(medium.window_token_pos)
-
             broad_window_ids.append(broad.window_start)
             broad_window_token_poss.append(broad.window_token_pos)
 

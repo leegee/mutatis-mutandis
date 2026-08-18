@@ -1,30 +1,27 @@
 """
 tier2.orchestrator
 
-Orchestrates Tier 2 resource construction, pure analysis, and persistence.
+Orchestrates Tier 2 resource construction, analysis, and persistence.
 
-Preserves the original service and CLI entry points:
+The Tier 1 observation store is always Parquet.
 
-- service: accepts already-built lookup + indexes (backend-agnostic)
-- main / CLI: opens an ObservationLookup via the observation-store factory
-  (--store-backend zarr|parquet, --store PATH), loads FAISS indexes, then
-  hands them to the service
+The service accepts an already-built ObservationLookup and optional FAISS
+resources, keeping the analysis layer independent of storage details.
 
-Analysis and persistence do not depend on Zarr; only resource loading does.
+The CLI opens the Parquet observation store, optionally prepares FAISS or
+exact Parquet search resources, and hands them to the service.
 """
 
 from __future__ import annotations
 
 import argparse
 import time
-from pathlib import Path
 from collections import Counter
+from pathlib import Path
 
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     CORPUS_TIER2_MASKED_DB_PATH,
-    EVENTSTORE_T1_PATH,
-    MASKED_EVENTSTORE_T1_PATH,
     faiss_index_paths,
     discover_index_years,
 )
@@ -35,19 +32,16 @@ from lib.get_processed_concepts import get_processed_concepts
 
 from tier1.observation_store_api import (
     open_observation_lookup,
-    default_store_path
+    default_store_path,
 )
 
-# Register observation-store backends (import side-effect).
-import lib.zarr_observation_backend  #
-import lib.parquet_observation_backend  #
+import lib.parquet_observation_backend
 
 from tier2.analysis import (
     K,
     RRF_K,
     OVERSAMPLE,
     BATCH_SIZE,
-    build_year_schedule,
     resolve_concept_positions,
     iter_year_concept_batches,
 )
@@ -68,11 +62,6 @@ from tier2.persistence import (
 )
 
 from tier2.resources import LazyYearIndices
-
-
-
-DEFAULT_STORE_BACKEND = "parquet"
-
 
 
 def service(
@@ -100,29 +89,39 @@ def service(
     """
     Reusable entry point for long-lived processes (UI, FastAPI, etc.).
 
-    Expects already-built lookup. FAISS indexes are required for
-    search_backend='faiss'; exact_store (Parquet root) is required for
+    Expects an already-built ObservationLookup. FAISS indexes are required
+    for search_backend='faiss'; exact_store is required for
     search_backend='exact'.
 
-    Year-major processing with resolve-once. Write path:
+    Processing is year-major with concept positions resolved once before
+    retrieval.
 
-      stage_pg=False (default) — stream into SQLite (tables only, bulk
-        PRAGMAs); create indexes at the end.
-      stage_pg=True — stream into Postgres UNLOGGED stage tables.
-        publish_sqlite=True (default) also dumps to db_path when done.
-        publish_sqlite=False leaves the stage tables alive for Tier 3
-        (call dump_pg_stage_to_sqlite later to publish).
+    Write path:
+
+      stage_pg=False (default)
+        Stream into SQLite, then create indexes at the end.
+
+      stage_pg=True
+        Stream into Postgres UNLOGGED stage tables.
+        publish_sqlite=True also publishes the result to db_path.
+        publish_sqlite=False leaves tier2_stage.* available for Tier 3.
     """
     started = time.perf_counter()
+
     concept_names = [name for name, _ in concepts_to_run]
-    logger = setEmit(emit, "[tier2]", {"concepts": concept_names})
-    logger.info(
+    emit_logger = setEmit(emit, "[tier2]", {"concepts": concept_names})
+
+    emit_logger.info(
         "[tier2.service] Enter (stage_pg=%s search_backend=%s)",
         stage_pg,
         search_backend,
     )
 
-    if search_backend == "faiss" and indexes is not None and hasattr(lookup, "attach_index"):
+    if (
+        search_backend == "faiss"
+        and indexes is not None
+        and hasattr(lookup, "attach_index")
+    ):
         lookup.attach_index(indexes)
 
     pg = None
@@ -131,24 +130,46 @@ def service(
     if stage_pg:
         pg = get_connection()
         initialise_pg_stage(pg)
+
         start_fn = lambda name: start_concept_pg(pg, name)
         write_fn = lambda name, events, seed_ids: write_concept_batch_pg(
-            pg, name, lookup, events, seed_ids=seed_ids
+            pg,
+            name,
+            lookup,
+            events,
+            seed_ids=seed_ids,
         )
         finish_fn = lambda name, forms, n_events, aggregate: finish_concept_pg(
-            pg, name, forms, n_events, aggregate
+            pg,
+            name,
+            forms,
+            n_events,
+            aggregate,
         )
-        commit_fn = (lambda: pg.commit()) if hasattr(pg, "commit") else (lambda: None)
+        commit_fn = (
+            lambda: pg.commit()
+            if hasattr(pg, "commit")
+            else None
+        )
     else:
         con = initialise_database(db_path, clear=clear)
+
         start_fn = lambda name: start_concept(con, name)
         write_fn = lambda name, events, seed_ids: write_concept_batch(
-            con, name, lookup, events, seed_ids=seed_ids
+            con,
+            name,
+            lookup,
+            events,
+            seed_ids=seed_ids,
         )
         finish_fn = lambda name, forms, n_events, aggregate: finish_concept(
-            con, name, forms, n_events, aggregate
+            con,
+            name,
+            forms,
+            n_events,
+            aggregate,
         )
-        commit_fn = lambda: con.commit()
+        commit_fn = con.commit
 
     concept_state = {}
     concepts_by_year = {}
@@ -191,6 +212,7 @@ def service(
     for year in sorted(concepts_by_year):
         for concept_name in concepts_by_year[year]:
             state = concept_state[concept_name]
+
             resolved = {
                 "forms": state["forms"],
                 "false_positives": state["false_positives"],
@@ -220,7 +242,13 @@ def service(
                 exact_shards=exact_shards,
             ):
                 state["has_events"] = True
-                write_fn(concept_name, item["events"], item["seed_ids"])
+
+                write_fn(
+                    concept_name,
+                    item["events"],
+                    item["seed_ids"],
+                )
+
                 if commit_every_batch:
                     commit_fn()
 
@@ -246,6 +274,7 @@ def service(
                     "top_windows": state["window_counts"].most_common(top_n),
                 },
             )
+
             commit_fn()
             written += 1
         else:
@@ -256,44 +285,63 @@ def service(
 
     if stage_pg:
         commit_fn()
+
         if publish_sqlite:
             dump_pg_stage_to_sqlite(pg, db_path, clear=clear)
-            logger.info("[tier2.service] Enriching documents")
+
+            emit_logger.info("[tier2.service] Enriching documents")
+
             try:
                 import sqlite3
+
                 sqlite_path = (
-                    db_path if isinstance(db_path, (str, bytes)) else str(db_path)
+                    db_path
+                    if isinstance(db_path, (str, bytes))
+                    else str(db_path)
                 )
+
                 sqlite_con = sqlite3.connect(sqlite_path)
+
                 try:
                     enrich_documents(sqlite_con, pg)
                     sqlite_con.commit()
                 finally:
                     sqlite_con.close()
+
             except Exception as exc:
-                logger.warning(f"[tier2] document enrichment skipped: {exc}")
+                emit_logger.warning(
+                    "[tier2] document enrichment skipped: %s",
+                    exc,
+                )
+
             if hasattr(pg, "close"):
                 pg.close()
+
         else:
-            logger.info(
+            emit_logger.info(
                 "[tier2.service] publish_sqlite=False — "
                 "leaving tier2_stage.* alive for Tier 3"
             )
-            # Do not close pg: caller / process may keep using the stage.
-            # Connection still closed if we own a short-lived CLI run with
-            # no further work; CLI passes publish_sqlite explicitly.
+
             if hasattr(pg, "close"):
                 pg.close()
+
     else:
-        logger.info("[tier2.service] Enriching documents")
+        emit_logger.info("[tier2.service] Enriching documents")
+
         try:
             pg_src = get_connection()
+
             try:
                 enrich_documents(con, pg_src)
             finally:
                 pg_src.close()
+
         except Exception as exc:
-            logger.warning(f"[tier2] document enrichment skipped: {exc}")
+            emit_logger.warning(
+                "[tier2] document enrichment skipped: %s",
+                exc,
+            )
 
         con.commit()
         create_indexes(con)
@@ -302,7 +350,12 @@ def service(
         con.close()
 
     elapsed = time.perf_counter() - started
-    logger.info(f"[tier2.service] Done in {elapsed}")
+
+    emit_logger.info(
+        "[tier2.service] Done in %.3fs",
+        elapsed,
+    )
+
     return {
         "generated": "tier2_concept_neighbours",
         "summary": {
@@ -319,8 +372,12 @@ def service(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Tier 2: concept neighbourhood analysis over the Tier 1 observation store"
+        description=(
+            "Tier 2: concept neighbourhood analysis over the "
+            "Tier 1 Parquet observation store"
+        )
     )
+
     parser.add_argument("-c", "--concept", default=None)
     parser.add_argument("-m", "--mask", action="store_true")
     parser.add_argument("--clear", action="store_true")
@@ -329,90 +386,109 @@ def main():
     parser.add_argument("--oversample", type=int, default=OVERSAMPLE)
     parser.add_argument("-w", "--max-load-workers", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=5000)
+
     parser.add_argument(
         "--stage-pg",
         action="store_true",
         help="Write via Postgres UNLOGGED stage",
     )
+
     parser.add_argument(
         "--no-publish-sqlite",
         action="store_true",
-        help="With --stage-pg, leave stage tables alive (skip SQLite dump)",
+        help=(
+            "With --stage-pg, leave stage tables alive "
+            "(skip SQLite dump)"
+        ),
     )
-    parser.add_argument("-fp", "--false-positives", type=str, default=None)
+
+    parser.add_argument(
+        "-fp",
+        "--false-positives",
+        type=str,
+        default=None,
+    )
+
     parser.add_argument(
         "--json",
         default=None,
         help="Path at which to write JSON if required",
     )
-    # Observation store backend (aligned with Tier 1 --store-backend).
-    parser.add_argument(
-        "--store-backend",
-        choices=["zarr", "parquet"],
-        default=DEFAULT_STORE_BACKEND,
-        help=f"Observation store backend (default: {DEFAULT_STORE_BACKEND})",
-    )
+
     parser.add_argument(
         "--store",
         type=str,
         default=None,
-        help="Override observation store root path (default depends on --store-backend)",
+        help="Override the Tier 1 Parquet observation-store root",
     )
-    # Neighbour search backend: FAISS (in-RAM) vs exact Parquet scan.
+
     parser.add_argument(
         "--search-backend",
         choices=["faiss", "exact"],
         default="faiss",
-        help="Neighbour retrieval: faiss (default) or exact out-of-core Parquet scan",
+        help=(
+            "Neighbour retrieval: faiss (default) or "
+            "exact out-of-core Parquet scan"
+        ),
     )
+
     parser.add_argument(
         "--exact-workers",
         type=int,
         default=4,
-        help="Parallel shard workers for search_backend=exact (default 4)",
+        help="Parallel shard workers for exact search (default 4)",
     )
+
     parser.add_argument(
         "--exact-pool",
         choices=["thread", "process"],
         default="thread",
-        help="Executor pool for exact shard scoring (default thread)",
+        help=(
+            "Executor pool for exact shard scoring "
+            "(default thread)"
+        ),
     )
+
     parser.add_argument(
         "--exact-store",
         type=str,
         default=None,
         help=(
-            "Parquet root for exact search (default: --store when "
-            "store-backend=parquet, else sibling tier1_parquet)"
+            "Separate Parquet root for exact search; "
+            "defaults to --store"
         ),
     )
+
     args = parser.parse_args()
 
-    store_backend = args.store_backend
     store_path = (
         Path(args.store)
         if args.store
-        else default_store_path(store_backend, masked=args.mask)
+        else default_store_path("parquet", masked=args.mask)
     )
+
     db_path = (
-        CORPUS_TIER2_MASKED_DB_PATH if args.mask else CORPUS_TIER2_DB_PATH
+        CORPUS_TIER2_MASKED_DB_PATH
+        if args.mask
+        else CORPUS_TIER2_DB_PATH
     )
+
     search_backend = args.search_backend
 
-    # Exact search needs a Parquet lake. Default to --store when already
-    # parquet; otherwise the conventional sibling tier1_parquet path.
     exact_store = None
     exact_shards = None
+
     if search_backend == "exact":
-        if args.exact_store:
-            exact_store = Path(args.exact_store)
-        elif store_backend == "parquet":
-            exact_store = store_path
-        else:
-            exact_store = default_store_path("parquet", masked=args.mask)
+        exact_store = (
+            Path(args.exact_store)
+            if args.exact_store
+            else store_path
+        )
+
         from exact_knn_search import discover_shards
 
         exact_shards = discover_shards(exact_store)
+
         logger.info(
             "[tier2] exact search store=%s shards=%d rows=%s",
             exact_store,
@@ -420,75 +496,85 @@ def main():
             f"{sum(s.n_rows for s in exact_shards):,}",
         )
 
-    # FAISS indices only required for search_backend=faiss.
     indexes = None
+
     if search_backend == "faiss":
         years = discover_index_years(args.mask)
+
         if not years:
             raise RuntimeError("No FAISS indices found")
+
         index_paths = {
-            year: faiss_index_paths(masked=args.mask, year=year)
+            year: faiss_index_paths(
+                masked=args.mask,
+                year=year,
+            )
             for year in years
         }
-        indexes = LazyYearIndices(index_paths, workers=args.max_load_workers)
 
-    # Restrict forms only when a single concept is requested so backends
-    # that support construct-time filtering (Parquet) keep memory proportional
-    # to the concept rather than the corpus. Zarr ignores these kwargs today.
+        indexes = LazyYearIndices(
+            index_paths,
+            workers=args.max_load_workers,
+        )
+
     target_forms = None
     target_fps = None
+
+    resolved_concepts = list(
+        resolve_concepts(
+            concept=args.concept,
+            false_positives=args.false_positives,
+        )
+    )
+
     if args.concept:
         concept_name = args.concept.upper()
-        resolved = dict(
-            resolve_concepts(
-                concept=concept_name,
-                false_positives=args.false_positives,
-            )
-        )
-        concept = resolved[concept_name]
+        concept_map = dict(resolved_concepts)
+        concept = concept_map[concept_name]
+
         target_forms = set(concept.get("forms", []))
         target_fps = set(concept.get("false_positives", []))
 
     logger.info(
-        "[tier2] store_backend=%s path=%s search_backend=%s forms=%s",
-        store_backend,
+        "[tier2] observation store=%s search_backend=%s forms=%s",
         store_path,
         search_backend,
         sorted(target_forms) if target_forms else "(all)",
     )
 
     lookup = open_observation_lookup(
-        store_backend,
         store_path,
         forms=target_forms,
         false_positives=target_fps,
     )
 
-    # Resolve which concepts still need work
-    concepts = list(
-        resolve_concepts(
-            concept=args.concept,
-            false_positives=args.false_positives,
-        )
-    )
+    concepts = resolved_concepts
+
     logger.info(
         "[tier2] resolved concepts: %d %s",
         len(concepts),
         [c[0] for c in concepts[:20]],
     )
 
-    processed = set() if args.clear else get_processed_concepts(db_path)
-    concepts_to_run = [c for c in concepts if c[0] not in processed]
+    processed = (
+        set()
+        if args.clear
+        else get_processed_concepts(db_path)
+    )
+
+    concepts_to_run = [
+        concept
+        for concept in concepts
+        if concept[0] not in processed
+    ]
 
     if not concepts_to_run:
         logger.info(
-            "[tier2.main] nothing to write — all concepts already processed"
+            "[tier2.main] nothing to write — "
+            "all concepts already processed"
         )
         return
 
-    # Hand live resources to the service. Per-year FAISS index eviction
-    # is now handled automatically inside service(), scheduled against
-    # the whole batch, so no per-run flag is needed here.
     output = service(
         lookup=lookup,
         indexes=indexes,
@@ -500,6 +586,7 @@ def main():
         oversample=args.oversample,
         false_positives=target_fps,
         emit=None,
+        batch_size=args.batch_size,
         stage_pg=args.stage_pg,
         publish_sqlite=not args.no_publish_sqlite,
         search_backend=search_backend,
@@ -513,11 +600,15 @@ def main():
         import json
 
         with open(args.json, "w", encoding="utf-8") as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
+            json.dump(
+                output,
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
 
     logger.info(
-        "[tier2.main] Complete store_backend=%s search_backend=%s path=%s → %s",
-        store_backend,
+        "[tier2.main] Complete search_backend=%s path=%s → %s",
         search_backend,
         store_path,
         db_path,
