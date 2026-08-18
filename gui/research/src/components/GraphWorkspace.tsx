@@ -96,6 +96,10 @@ export default function GraphWorkspace(props: GraphWorkspaceProps,) {
         }
     }
 
+    async function handleEntityChanged(entity: Entity) {
+        setSelectedEntity(entity);
+    }
+
     return (
         <>
             <div class="background"
@@ -153,6 +157,7 @@ export default function GraphWorkspace(props: GraphWorkspaceProps,) {
                                     entity={entity()}
                                     entities={props.entities}
                                     relations={props.relations}
+                                    onChanged={handleEntityChanged}
                                     onClose={() => setSelectedEntity(undefined)}
                                 />
                             )}

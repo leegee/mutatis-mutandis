@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
@@ -16,37 +16,37 @@ interface EntityInspectorProps {
     onClose?: (entity: Entity) => void;
 }
 
-export default function EntityInspector(
-    props: EntityInspectorProps,
-) {
+export default function EntityInspector(props: EntityInspectorProps) {
     const [editing, setEditing] = createSignal(false);
+    const [currentEntity, setCurrentEntity] = createSignal<Entity>(props.entity!);
     const confirm = useConfirm();
     const prompt = usePrompt();
 
-    async function handleAddTag() {
-        const entity = props.entity;
-        if (!entity) {
-            return;
+    createEffect(() => {
+        if (props.entity) {
+            setCurrentEntity(props.entity);
         }
+    });
 
+    async function handleAddTag() {
+        const entity = currentEntity();
         const tag = await prompt("Tag:");
         if (!tag?.trim()) {
             return;
         }
-
         const updated = await addEntityTag(entity, tag);
+        setCurrentEntity(updated);
         await props.onChanged?.(updated);
     }
+
 
     async function handleRemoveTag(tag: string) {
-        const entity = props.entity;
-        if (!entity) {
-            return;
-        }
-
+        const entity = currentEntity();
         const updated = await removeEntityTag(entity, tag);
+        setCurrentEntity(updated);
         await props.onChanged?.(updated);
     }
+
 
     function entityLabel(id: string): string {
         return (props.entities.find((entity) => entity.id === id,)?.label ?? id);
@@ -154,12 +154,7 @@ export default function EntityInspector(
                                     </button>
                                 </nav>
 
-                                <Show
-                                    when={entity().tags.length > 0}
-                                    fallback={
-                                        <p>No tags.</p>
-                                    }
-                                >
+                                <Show when={entity().tags.length > 0} fallback={<p>No tags.</p>} >
                                     <div class="row wrap">
                                         <For each={entity().tags}>
                                             {(tag) => (
