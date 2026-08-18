@@ -1,7 +1,7 @@
 import { getDatabase } from "./database";
 import type { Entity, EntityType } from "~/domain/entity";
 import type { Relation, RelationType } from "~/domain/relation";
-import type { ResearchProject } from "~/domain/project";
+import type { Evidence, ProjectMetadata, ResearchProject } from "~/domain/project";
 
 function id(): string {
   return crypto.randomUUID();
@@ -89,6 +89,8 @@ export async function listRelations(): Promise<Relation[]> {
   return getDatabase().relations.toArray();
 }
 
+
+
 export async function importProject(
   project: ResearchProject,
 ): Promise<void> {
@@ -104,44 +106,74 @@ export async function importProject(
     "rw",
     db.entities,
     db.relations,
+    db.evidence,
+    db.projectMetadata,
     async () => {
       await db.entities.clear();
       await db.relations.clear();
+      await db.evidence.clear();
+      await db.projectMetadata.clear();
 
       if (project.entities.length > 0) {
-        await db.entities.bulkAdd(project.entities);
+        await db.entities.bulkAdd(
+          project.entities,
+        );
       }
 
       if (project.relations.length > 0) {
-        await db.relations.bulkAdd(project.relations);
+        await db.relations.bulkAdd(
+          project.relations,
+        );
       }
+
+      if (project.evidence.length > 0) {
+        await db.evidence.bulkAdd(
+          project.evidence,
+        );
+      }
+
+      await db.projectMetadata.put({
+        id: "project",
+        ...project.metadata,
+      });
     },
   );
 }
 
 
+
 export async function exportProject(): Promise<ResearchProject> {
   const db = getDatabase();
 
-  const [entities, relations] =
-    await Promise.all([
-      db.entities.toArray(),
-      db.relations.toArray(),
-    ]);
+  const [
+    metadataRecord,
+    entities,
+    relations,
+    evidence,
+  ] = await Promise.all([
+    db.projectMetadata.get("project"),
+    db.entities.toArray(),
+    db.relations.toArray(),
+    db.evidence.toArray(),
+  ]);
 
-  const timestamp = now();
+  if (!metadataRecord) {
+    throw new Error(
+      "Project metadata has not been initialized.",
+    );
+  }
+
+  const {
+    id: _id,
+    ...metadata
+  } = metadataRecord;
 
   return {
     version: 1,
-    metadata: {
-      title: "Research Map",
-      description: "",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    },
+    metadata,
     entities,
     relations,
-    evidence: [],
+    evidence,
   };
 }
 
@@ -163,5 +195,54 @@ export async function deleteRelation(
   relationId: string,
 ): Promise<void> {
   await getDatabase().relations.delete(relationId);
+}
+
+
+export async function getProjectMetadata(): Promise<
+  ProjectMetadata | undefined
+> {
+  const record =
+    await getDatabase()
+      .projectMetadata
+      .get("project");
+
+  if (!record) {
+    return undefined;
+  }
+
+  const {
+    id: _id,
+    ...metadata
+  } = record;
+
+  return metadata;
+}
+
+export async function saveProjectMetadata(
+  metadata: ProjectMetadata,
+): Promise<void> {
+  await getDatabase()
+    .projectMetadata
+    .put({
+      id: "project",
+      ...metadata,
+    });
+}
+
+export async function listEvidence(): Promise<Evidence[]> {
+  return getDatabase()
+    .evidence
+    .orderBy("createdAt")
+    .toArray();
+}
+
+export async function createEvidence(
+  evidence: Evidence,
+): Promise<Evidence> {
+  await getDatabase()
+    .evidence
+    .add(evidence);
+
+  return evidence;
 }
 

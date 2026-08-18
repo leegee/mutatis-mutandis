@@ -1,10 +1,18 @@
 import Dexie, { type Table } from "dexie";
+
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
+import type { Evidence, ProjectMetadata, } from "~/domain/project";
+
+interface ProjectMetadataRecord extends ProjectMetadata {
+    id: "project";
+}
 
 class ResearchDatabase extends Dexie {
     entities!: Table<Entity, string>;
     relations!: Table<Relation, string>;
+    evidence!: Table<Evidence, string>;
+    projectMetadata!: Table<ProjectMetadataRecord, string>;
 
     constructor() {
         super("research-map");
@@ -13,14 +21,46 @@ class ResearchDatabase extends Dexie {
             entities: "id, type, label",
             relations: "id, sourceId, targetId, type",
         });
+
+        this.version(2)
+            .stores({
+                entities: "id, type, label",
+                relations: "id, sourceId, targetId, type",
+                evidence: "id, sourceId, *entityIds, *relationIds",
+                projectMetadata: "id",
+            })
+            .upgrade(async (tx) => {
+                const metadata =
+                    await tx
+                        .table("projectMetadata",)
+                        .get("project");
+
+                if (!metadata) {
+                    const timestamp =
+                        new Date().toISOString();
+
+                    await tx
+                        .table("projectMetadata",)
+                        .add({
+                            id: "project",
+                            title: "Research Map",
+                            description: "",
+                            createdAt: timestamp,
+                            updatedAt: timestamp,
+                        });
+                }
+            });
     }
 }
 
-let database: ResearchDatabase | undefined;
+let database:
+    ResearchDatabase | undefined;
 
 export function getDatabase(): ResearchDatabase {
     if (typeof window === "undefined") {
-        throw new Error("Research database is only available in the browser");
+        throw new Error(
+            "Research database is only available in the browser",
+        );
     }
 
     database ??= new ResearchDatabase();

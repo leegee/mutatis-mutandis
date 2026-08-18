@@ -9,35 +9,28 @@ export type EvidenceStatus =
 
 export interface Evidence {
   id: string;
-
   sourceId: string;
-
   entityIds: string[];
   relationIds: string[];
 
   quote?: string;
   observation: string;
-
   status: EvidenceStatus;
-
   notes?: string;
-
   createdAt: string;
+}
+
+export interface ProjectMetadata {
+  title: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ResearchProject {
   version: 1;
-
-  metadata: {
-    title: string;
-    description: string;
-    createdAt: string;
-    updatedAt: string;
-  };
-
+  metadata: ProjectMetadata;
   entities: Entity[];
-
   relations: Relation[];
-
   evidence: Evidence[];
 }
