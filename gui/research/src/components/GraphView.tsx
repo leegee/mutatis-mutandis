@@ -80,7 +80,7 @@ export default function GraphView(
                         "border-color": "#90a4ae",
 
                         "font-size": "12px",
-                        "font-weight": "500",
+                        "font-weight": 500,
 
                         width: "44px",
                         height: "44px",
@@ -116,7 +116,7 @@ export default function GraphView(
                         "text-background-padding": "3px",
 
                         "font-size": "10px",
-                        "font-weight": "500",
+                        "font-weight": 500,
                     },
                 },
 
