@@ -1,8 +1,11 @@
 import {
     createEffect,
     createSignal,
+    Match,
     onCleanup,
     onMount,
+    Show,
+    Switch,
 } from "solid-js";
 
 import cytoscape, {
@@ -13,11 +16,51 @@ import cytoscape, {
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
 
+type ContextMenu =
+    | {
+        kind: "canvas";
+        x: number;
+        y: number;
+    }
+    | {
+        kind: "node";
+        x: number;
+        y: number;
+        nodeId: string;
+    }
+    | {
+        kind: "edge";
+        x: number;
+        y: number;
+        relationId: string;
+    };
+
+const [contextMenu, setContextMenu] = createSignal<ContextMenu>();
+
+const [linkingFrom, setLinkingFrom] = createSignal<string>();
+
 interface GraphViewProps {
     entities: Entity[];
     relations: Relation[];
+
     onSelectEntity?: (entity: Entity) => void;
     onSelectRelation?: (relation: Relation) => void;
+
+    onAddEntity?: (position: {
+        x: number;
+        y: number;
+    }) => void;
+
+    onEditEntity?: (entity: Entity) => void;
+    onDeleteEntity?: (entity: Entity) => void;
+
+    onAddRelation?: (
+        sourceId: string,
+        targetId: string,
+    ) => void;
+
+    onEditRelation?: (relation: Relation) => void;
+    onDeleteRelation?: (relation: Relation) => void;
 }
 
 const LAYOUT_PARAMS = {
@@ -220,9 +263,66 @@ export default function GraphView(props: GraphViewProps,) {
                         "text-background-color": "#37474f",
                     },
                 },
+
+                {
+                    selector: "node.link-source",
+                    style: {
+                        "border-width": 4,
+                        "border-color": "#ffffff",
+                        "overlay-color": "#ffffff",
+                        "overlay-opacity": 0.15,
+                    },
+                },
+
+                {
+                    selector: "node.link-target",
+                    style: {
+                        "border-width": 3,
+                        "border-color": "#ffffff",
+                    },
+                },
             ],
 
             layout: LAYOUT_PARAMS,
+        });
+
+
+        instance.on("cxttap", (event) => {
+            event.originalEvent.preventDefault();
+
+            const rect = container.getBoundingClientRect();
+            const x = event.originalEvent.clientX - rect.left;
+            const y = event.originalEvent.clientY - rect.top;
+
+            if (event.target === instance) {
+                setContextMenu({
+                    kind: "canvas",
+                    x,
+                    y,
+                });
+
+                return;
+            }
+
+            if (event.target.isNode()) {
+                setContextMenu({
+                    kind: "node",
+                    x,
+                    y,
+                    nodeId: event.target.id(),
+                });
+
+                return;
+            }
+
+            if (event.target.isEdge()) {
+                setContextMenu({
+                    kind: "edge",
+                    x,
+                    y,
+                    relationId: event.target.id(),
+                });
+            }
         });
 
 
@@ -240,10 +340,39 @@ export default function GraphView(props: GraphViewProps,) {
         });
 
         instance.on("tap", "node", (event) => {
-            const id = event.target.id();
+            const targetId = event.target.id();
+            const sourceId = linkingFrom();
+
+            if (sourceId) {
+                if (sourceId !== targetId) {
+                    setLinkingFrom(undefined);
+
+                    instance
+                        .nodes()
+                        .removeClass("link-target");
+
+                    instance
+                        .getElementById(sourceId)
+                        .removeClass("link-source");
+
+                    const target = props.entities.find(
+                        (entity) =>
+                            entity.id === targetId,
+                    );
+
+                    if (target) {
+                        props.onAddRelation?.(
+                            sourceId,
+                            targetId,
+                        );
+                    }
+                }
+
+                return;
+            }
 
             const entity = props.entities.find(
-                (item) => item.id === id,
+                (item) => item.id === targetId,
             );
 
             if (entity) {
@@ -290,6 +419,25 @@ export default function GraphView(props: GraphViewProps,) {
         });
 
         setCy(instance);
+
+        const handleKeyDown = (event: KeyboardEvent,) => {
+            if (event.key !== "Escape") {
+                return;
+            }
+
+            setContextMenu(undefined);
+
+            const sourceId = linkingFrom();
+
+            if (sourceId) {
+                setLinkingFrom(undefined);
+                instance.getElementById(sourceId).removeClass("link-source");
+                instance.nodes().removeClass("link-target");
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown,);
+        onCleanup(() => { window.removeEventListener("keydown", handleKeyDown,); });
     });
 
     createEffect(() => {
@@ -315,10 +463,193 @@ export default function GraphView(props: GraphViewProps,) {
         <div
             ref={container}
             style={{
+                position: "relative",
                 width: "100%",
                 height: "90vh",
                 "min-height": "500px",
             }}
-        />
+            onClick={() => setContextMenu(undefined)}
+        >
+            <Show when={contextMenu()}>
+                {(menu) => (
+                    <div
+                        class="graph-context-menu"
+                        style={{
+                            position: "absolute",
+                            left: `${ menu().x }px`,
+                            top: `${ menu().y }px`,
+                            "z-index": 100000,
+                        }}
+                        onClick={(event) =>
+                            event.stopPropagation()
+                        }
+                    >
+                        <menu class="active group no-wrap small-space top">
+
+                            <Switch>
+                                <Match when={menu().kind === "canvas"} >
+                                    <button type="button" class="fill"
+                                        onClick={() => {
+                                            const item =
+                                                menu();
+
+                                            if (item.kind !== "canvas") {
+                                                return;
+                                            }
+
+                                            props.onAddEntity?.({
+                                                x: item.x,
+                                                y: item.y,
+                                            });
+
+                                            setContextMenu(undefined,);
+                                        }}
+                                    >
+                                        Add node
+                                    </button>
+                                </Match>
+
+                                <Match when={menu().kind === "node"} >
+                                    <button type="button" class="fill"
+                                        onClick={() => {
+                                            const item = menu();
+
+                                            if (item.kind !== "node") {
+                                                return;
+                                            }
+
+                                            const entity = props.entities.find(
+                                                (entity) => entity.id === item.nodeId
+                                            );
+
+                                            if (entity) {
+                                                props.onEditEntity?.(entity,);
+                                            }
+
+                                            setContextMenu(undefined,);
+                                        }}
+                                    >
+                                        Edit node
+                                    </button>
+
+                                    <button type="button" class="fill"
+                                        onClick={() => {
+                                            const item = menu();
+                                            if (item.kind !== "node") {
+                                                return;
+                                            }
+                                            setLinkingFrom(item.nodeId);
+                                            const instance = cy()!;
+
+                                            instance.getElementById(item.nodeId).addClass("link-source");
+                                            instance.nodes()
+                                                .not(
+                                                    `#${ CSS.escape(
+                                                        item.nodeId,
+                                                    ) }`,
+                                                )
+                                                .addClass("link-target",);
+
+                                            setContextMenu(undefined);
+                                        }}
+                                    >
+                                        Add relation →
+                                    </button>
+
+                                    <button type="button" class="error-container on-error"
+                                        onClick={() => {
+                                            const item =
+                                                menu();
+
+                                            if (item.kind !== "node") {
+                                                return;
+                                            }
+
+                                            const entity = props.entities.find(
+                                                (entity) => entity.id === item.nodeId
+                                            );
+
+                                            if (entity) {
+                                                props.onDeleteEntity?.(entity);
+                                            }
+
+                                            setContextMenu(undefined);
+                                        }}
+                                    >
+                                        Delete node
+                                    </button>
+                                </Match>
+
+                                <Match when={menu().kind === "edge"} >
+                                    <button type="button"
+                                        onClick={() => {
+                                            const item = menu();
+
+                                            if (item.kind !== "edge") {
+                                                return;
+                                            }
+
+                                            const relation = props.relations.find(
+                                                (relation) => relation.id === item.relationId
+                                            );
+
+                                            if (relation) {
+                                                props.onEditRelation?.(relation);
+                                            }
+
+                                            setContextMenu(undefined);
+                                        }}
+                                    >
+                                        Edit relation
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="danger"
+                                        onClick={() => {
+                                            const item = menu();
+
+                                            if (item.kind !== "edge") {
+                                                return;
+                                            }
+
+                                            const relation = props.relations.find(
+                                                (relation) => relation.id === item.relationId
+                                            );
+
+                                            if (relation) {
+                                                props.onDeleteRelation?.(relation);
+                                            }
+
+                                            setContextMenu(undefined);
+                                        }}
+                                    >
+                                        Delete relation
+                                    </button>
+                                </Match>
+                            </Switch>
+
+                        </menu>
+                    </div>
+                )}
+            </Show>
+
+            <Show when={linkingFrom()}>
+                <div
+                    class="graph-linking-indicator"
+                    style={{
+                        position: "absolute",
+                        top: "12px",
+                        left: "50%",
+                        transform:
+                            "translateX(-50%)",
+                        "z-index": 100000,
+                    }}
+                >
+                    Click a node to create the relation.
+                    Press Escape to cancel.
+                </div>
+            </Show>
+        </div>
     );
 }
