@@ -1,58 +1,59 @@
+/** biome-ignore-all lint/complexity/noImportantStyles: <BeerCSS overrides> */
+
 body.dark {
-  --primary: rgb(14, 14, 112) !important;
-  --on-primary: rgb(207, 207, 221) !important;
+	--primary: rgb(14, 14, 112) !important;
+	--on-primary: rgb(207, 207, 221) !important;
 
-  --secondary: rgb(30, 112, 14) !important;
-  --on-secondary: rgb(189, 202, 187) !important;
+	--secondary: rgb(30, 112, 14) !important;
+	--on-secondary: rgb(189, 202, 187) !important;
 
-  --tertiary: rgb(90, 86, 97) !important;
-  --on-tertiary: rgb(197, 189, 212) !important;
+	--tertiary: rgb(90, 86, 97) !important;
+	--on-tertiary: rgb(197, 189, 212) !important;
 
-  --error: rgb(65, 4, 4) !important;
-  --on-error: rgb(221, 202, 202) !important;
+	--error: rgb(65, 4, 4) !important;
+	--on-error: rgb(221, 202, 202) !important;
 }
 
 h1 {
-  font-size: 3em;
+	font-size: 3em;
 }
 
 h2 {
-  font-size: 2em;
+	font-size: 2em;
 }
 
 h3 {
-  font-size: 1.4em;
+	font-size: 1.4em;
 }
 
 h4,
 h5,
 h6 {
-  font-size: 1em;
-  font-weight: bold !important;
+	font-size: 1em;
+	font-weight: bold !important;
 }
 
-
 nav.footer {
-  margin-top: 2em !important;
-  padding-top: 1em !important;
-  border-top: 1px dotted var(--on-surface);
-  justify-content: space-between;
+	margin-top: 2em !important;
+	padding-top: 1em !important;
+	border-top: 1px dotted var(--on-surface);
+	justify-content: space-between;
 }
 
 /* Counter BeerCSS */
 header {
-  padding: 0 !important;
+	padding: 0 !important;
 }
 
 .navigation-button-menu {
-  position: fixed;
-  top: 1em;
-  left: 1em;
-  z-index: 999;
+	position: fixed;
+	top: 1em;
+	right: 1em;
+	z-index: 999;
 }
 
 /* Counter BeerCSS */
 section:first-of-type {
-  margin-block-start: 0 !important;
-  padding-top: 0 !important;
+	margin-block-start: 0 !important;
+	padding-top: 0 !important;
 }
