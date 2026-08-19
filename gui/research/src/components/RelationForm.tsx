@@ -1,24 +1,12 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
-
-import type { Entity } from "~/domain/entity";
-import type { Relation, RelationType } from "~/domain/relation";
-
-import {
-    createRelation,
-    updateRelation,
-} from "~/db/respository";
-
 import EntityAutocomplete from "~/components/EntityAutocomplete";
-
-const relationTypes: RelationType[] = [
-    "related-to",
-    "contrasts-with",
-    "describes",
-    "expresses",
-    "attested-in",
-    "supports",
-    "possibly-derived-from",
-];
+import { createRelation, updateRelation } from "~/db/respository";
+import type { Entity } from "~/domain/entity";
+import {
+    type Relation,
+    type RelationType,
+    relationTypes,
+} from "~/domain/relation";
 
 interface RelationFormProps {
     relation?: Relation;
@@ -33,28 +21,21 @@ interface RelationFormProps {
     onCancel?: () => void;
 }
 
-export default function RelationForm(
-    props: RelationFormProps,
-) {
+export default function RelationForm(props: RelationFormProps) {
     const editing = () => !!props.relation;
 
-    const [source, setSource] =
-        createSignal<Entity>();
+    const [source, setSource] = createSignal<Entity>();
 
-    const [target, setTarget] =
-        createSignal<Entity>();
+    const [target, setTarget] = createSignal<Entity>();
 
     const [relationType, setRelationType] =
         createSignal<RelationType>("related-to");
 
-    const [sourceValue, setSourceValue] =
-        createSignal("");
+    const [sourceValue, setSourceValue] = createSignal("");
 
-    const [targetValue, setTargetValue] =
-        createSignal("");
+    const [targetValue, setTargetValue] = createSignal("");
 
-    const [saving, setSaving] =
-        createSignal(false);
+    const [saving, setSaving] = createSignal(false);
 
     // When editing, initialise the form from the existing relation.
     createEffect(() => {
@@ -115,11 +96,7 @@ export default function RelationForm(
         const sourceEntity = source();
         const targetEntity = target();
 
-        if (
-            saving() ||
-            !sourceEntity ||
-            !targetEntity
-        ) {
+        if (saving() || !sourceEntity || !targetEntity) {
             return;
         }
 
@@ -127,14 +104,11 @@ export default function RelationForm(
 
         try {
             if (props.relation) {
-                const relation = await updateRelation(
-                    props.relation,
-                    {
-                        sourceId: sourceEntity.id,
-                        type: relationType(),
-                        targetId: targetEntity.id,
-                    },
-                );
+                const relation = await updateRelation(props.relation, {
+                    sourceId: sourceEntity.id,
+                    type: relationType(),
+                    targetId: targetEntity.id,
+                });
 
                 await props.onUpdated?.(relation);
             } else {
@@ -160,11 +134,7 @@ export default function RelationForm(
     return (
         <form onSubmit={submit}>
             <div class="">
-                <h3>
-                    {editing()
-                        ? "Edit Relationship"
-                        : "Add Relationship"}
-                </h3>
+                <h3>{editing() ? "Edit Relationship" : "Add Relationship"}</h3>
                 <div class="field">
                     <EntityAutocomplete
                         value={sourceValue()}
@@ -179,19 +149,12 @@ export default function RelationForm(
                     <select
                         value={relationType()}
                         onChange={(event) =>
-                            setRelationType(
-                                event.currentTarget
-                                    .value as RelationType,
-                            )
+                            setRelationType(event.currentTarget.value as RelationType)
                         }
                         disabled={saving()}
                     >
                         <For each={relationTypes}>
-                            {(type) => (
-                                <option value={type}>
-                                    {type}
-                                </option>
-                            )}
+                            {(type) => <option value={type}>{type}</option>}
                         </For>
                     </select>
 
@@ -209,7 +172,7 @@ export default function RelationForm(
                 </div>
 
                 <nav class="footer">
-                    <button type="submit" disabled={saving() || !source() || !target()} >
+                    <button type="submit" disabled={saving() || !source() || !target()}>
                         {saving()
                             ? editing()
                                 ? "Saving…"
@@ -230,7 +193,7 @@ export default function RelationForm(
                         </button>
                     </Show>
                 </nav>
-            </div >
-        </form >
+            </div>
+        </form>
     );
 }
