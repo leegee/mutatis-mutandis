@@ -255,7 +255,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 
                             <Show
                                 when={outgoing().length > 0 || incoming().length > 0}
-                                fallback={<p> No relationships yet. </p>}
+                                fallback={<p>Right-click a node to estabish a relationship </p>}
                             >
                                 <Show when={outgoing().length > 0}>
                                     <h4>Outgoing</h4>
