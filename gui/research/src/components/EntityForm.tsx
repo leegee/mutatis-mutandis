@@ -1,18 +1,8 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
-
-import type { Entity, EntityType } from "~/domain/entity";
-import { createEntity, updateEntity, } from "~/db/respository";
+import { createEntity, updateEntity } from "~/db/respository";
+import { type Entity, type EntityType, entityTypes } from "~/domain/entity";
 
 import EntityAutocomplete from "./EntityAutocomplete";
-
-const entityTypes: EntityType[] = [
-    "concept",
-    "lexeme",
-    "motif",
-    "animal",
-    "person",
-    "source",
-];
 
 interface EntityFormProps {
     entity?: Entity;
@@ -25,8 +15,12 @@ interface EntityFormProps {
 export default function EntityForm(props: EntityFormProps) {
     const editing = () => !!props.entity;
     const [label, setLabel] = createSignal(props.entity?.label ?? "");
-    const [type, setType] = createSignal<EntityType>(props.entity?.type ?? "concept",);
-    const [selected, setSelected] = createSignal<Entity | undefined>(props.entity);
+    const [type, setType] = createSignal<EntityType>(
+        props.entity?.type ?? "concept",
+    );
+    const [selected, setSelected] = createSignal<Entity | undefined>(
+        props.entity,
+    );
     const [saving, setSaving] = createSignal(false);
 
     createEffect(() => {
@@ -84,20 +78,14 @@ export default function EntityForm(props: EntityFormProps) {
 
         try {
             if (editing() && props.entity) {
-                const updated = await updateEntity(
-                    props.entity,
-                    {
-                        label: value,
-                        type: type(),
-                    },
-                );
+                const updated = await updateEntity(props.entity, {
+                    label: value,
+                    type: type(),
+                });
 
                 await props.onUpdated?.(updated);
             } else {
-                const created = await createEntity(
-                    value,
-                    type(),
-                );
+                const created = await createEntity(value, type());
 
                 setLabel("");
                 setSelected(undefined);
@@ -111,13 +99,15 @@ export default function EntityForm(props: EntityFormProps) {
 
     return (
         <form onSubmit={submit}>
-            <Show when={!editing()}
+            <Show
+                when={!editing()}
                 fallback={
                     <div class="field border">
-                        <input type="text"
+                        <input
+                            type="text"
                             value={label()}
                             disabled={saving()}
-                            onInput={(event) => setLabel(event.currentTarget.value,)}
+                            onInput={(event) => setLabel(event.currentTarget.value)}
                         />
                         <output>Label</output>
                     </div>
@@ -134,10 +124,7 @@ export default function EntityForm(props: EntityFormProps) {
             <Show when={!editing() && selected()}>
                 {(entity) => (
                     <small>
-                        Existing {entity().type}:{" "}
-                        <strong>
-                            {entity().label}
-                        </strong>
+                        Existing {entity().type}: <strong>{entity().label}</strong>
                     </small>
                 )}
             </Show>
@@ -146,14 +133,10 @@ export default function EntityForm(props: EntityFormProps) {
                 <select
                     value={type()}
                     disabled={saving()}
-                    onChange={(event) => setType(event.currentTarget.value as EntityType,)}
+                    onChange={(event) => setType(event.currentTarget.value as EntityType)}
                 >
                     <For each={entityTypes}>
-                        {(entityType) => (
-                            <option value={entityType}>
-                                {entityType}
-                            </option>
-                        )}
+                        {(entityType) => <option value={entityType}>{entityType}</option>}
                     </For>
                 </select>
 
@@ -163,15 +146,15 @@ export default function EntityForm(props: EntityFormProps) {
             <nav class="footer">
                 <button
                     type="submit"
-                    disabled={
-                        !label().trim() ||
-                        saving() ||
-                        (!editing() && !!selected())
-                    }
+                    disabled={!label().trim() || saving() || (!editing() && !!selected())}
                 >
                     {saving()
-                        ? editing() ? "Saving…" : "Adding…"
-                        : editing() ? "Save" : "Add"}
+                        ? editing()
+                            ? "Saving…"
+                            : "Adding…"
+                        : editing()
+                            ? "Save"
+                            : "Add"}
                 </button>
 
                 <Show when={editing()}>
