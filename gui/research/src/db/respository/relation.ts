@@ -37,5 +37,22 @@ export async function updateRelation(
 }
 
 export async function deleteRelation(relationId: string): Promise<void> {
-	await getDatabase().relations.delete(relationId);
+	const db = getDatabase();
+
+	await db.transaction("rw", db.relations, db.evidence, async () => {
+		const evidence = await db.evidence.toArray();
+
+		for (const item of evidence) {
+			if (!item.relationIds.includes(relationId)) {
+				continue;
+			}
+
+			await db.evidence.put({
+				...item,
+				relationIds: item.relationIds.filter((id) => id !== relationId),
+			});
+		}
+
+		await db.relations.delete(relationId);
+	});
 }
