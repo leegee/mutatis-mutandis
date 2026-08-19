@@ -12,8 +12,19 @@
 	"editor.renderFinalNewline": "on",
 	"files.trimTrailingWhitespace": true,
 
-	"biome.configurationPath": "./biome.json",
+	"biome.configurationPath": "./gui/research/biome.json",
 	"editor.defaultFormatter": "biomejs.biome",
+	"editor.formatOnSave": true,
+	"editor.codeActionsOnSave": {
+		"source.organizeImports.biome": "explicit",
+		"source.fixAll.biome": "explicit"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "vscode.typescript-language-features"
+	},
+	"[typescript]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
 
 	"python-envs.defaultEnvManager": "UV",
 	"python-envs.defaultPackageManager": "ms-python.python:conda",
