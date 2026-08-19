@@ -58,7 +58,7 @@ export default function BaseModal(props: ModalProps) {
                 <div
                     class="modal-backdrop"
                     role="presentation"
-                    onClick={handleBackdropClick}
+                    onPointerDown={handleBackdropClick}
                 >
                     <div
                         class="modal"
