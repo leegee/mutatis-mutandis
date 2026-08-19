@@ -1,5 +1,7 @@
 import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
 
+import "./AutoComplete.css";
+
 interface AutocompleteProps<T> {
     value: string;
     items: T[];
@@ -8,6 +10,7 @@ interface AutocompleteProps<T> {
     onInput: (value: string) => void;
     onSelect: (item: T) => void;
 
+    isTitle: boolean;
     disabled?: boolean;
     placeholder?: string;
     maxSuggestions?: number;
@@ -17,6 +20,8 @@ interface AutocompleteProps<T> {
 export default function Autocomplete<T>(props: AutocompleteProps<T>) {
     const [open, setOpen] = createSignal(false);
     const [highlighted, setHighlighted] = createSignal(0);
+
+    const isTitle = createMemo(() => props.isTitle);
 
     const suggestions = createMemo(() => {
         const query = props.value.trim().toLocaleLowerCase();
@@ -72,15 +77,12 @@ export default function Autocomplete<T>(props: AutocompleteProps<T>) {
 
     return (
         <>
-            <div class="field label border">
-                <input
-                    type="text"
+            <div class={`field label ${ isTitle() ? 'suffix title' : 'field border' }`}>
+                <input type="text"
                     value={props.value}
                     disabled={props.disabled}
                     autocomplete="off"
-                    onInput={(event) =>
-                        input(event.currentTarget.value)
-                    }
+                    onInput={(event) => input(event.currentTarget.value)}
                     onFocus={() => {
                         if (props.value.trim()) {
                             setOpen(true);
@@ -90,6 +92,9 @@ export default function Autocomplete<T>(props: AutocompleteProps<T>) {
                 />
 
                 <label> {props.placeholder ?? "Search"} </label>
+                <Show when={isTitle()}>
+                    <i>add</i>
+                </Show>
             </div>
 
             <Show when={open() && suggestions().length > 0} >

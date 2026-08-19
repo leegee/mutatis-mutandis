@@ -193,15 +193,15 @@ export default function EntityInspector(props: EntityInspectorProps) {
                                 when={currentEntity().aliases.length > 0}
                                 fallback={<p>No aliases.</p>}
                             >
-                                <div class="row wrap">
+                                <div class="row wrap tiny-space">
                                     <For each={currentEntity().aliases}>
                                         {(alias) => (
-                                            <span class="chip">
+                                            <span class="chip small left-padding">
                                                 {alias}
 
                                                 <button
                                                     type="button"
-                                                    class="transparent small"
+                                                    class="transparent small circle no-padding"
                                                     title={`Remove ${ alias }`}
                                                     aria-label={`Remove alias ${ alias }`}
                                                     onClick={() => handleRemoveAlias(alias)}
@@ -216,32 +216,28 @@ export default function EntityInspector(props: EntityInspectorProps) {
                         </section>
 
                         <section>
-                            <nav>
-                                <h3 class="max">Tags</h3>
-                            </nav>
-
                             <AutoComplete<string>
                                 value={tagInput()}
                                 items={tags()}
                                 getLabel={(tag) => tag}
                                 onInput={setTagInput}
                                 onSelect={handleAddTag}
-                                placeholder="Add tag"
+                                placeholder="Tags"
+                                isTitle
                             />
 
                             <Show
                                 when={currentEntity().tags.length > 0}
                                 fallback={<p>No tags.</p>}
                             >
-                                <div class="row wrap">
+                                <div class="row wrap tiny-space">
                                     <For each={currentEntity().tags}>
                                         {(tag) => (
-                                            <span class="chip">
+                                            <span class="small chip left-padding">
                                                 {tag}
 
-                                                <button
-                                                    type="button"
-                                                    class="transparent small"
+                                                <button type="button"
+                                                    class="transparent small circle no-padding"
                                                     title={`Remove ${ tag }`}
                                                     aria-label={`Remove tag ${ tag }`}
                                                     onClick={() => handleRemoveTag(tag)}

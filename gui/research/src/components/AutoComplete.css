@@ -1,0 +1,15 @@
+/** biome-ignore-all lint/complexity/noImportantStyles: <BeerCSS overrides> */
+
+/* Allow autocomplete to act as a title */
+
+.field.label.title {
+	input[type="text"] {
+		padding-left: 0 !important;
+	}
+	label {
+		margin-left: -1em !important;
+	}
+	i {
+		margin-right: -0.5em !important;
+	}
+}
