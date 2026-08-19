@@ -1,5 +1,5 @@
 import { clientOnly } from "@solidjs/start";
 
 export default clientOnly(
-    () => import("~/components/EntitiesPage"),
+    () => import("~/pages/EntitiesPage"),
 );
