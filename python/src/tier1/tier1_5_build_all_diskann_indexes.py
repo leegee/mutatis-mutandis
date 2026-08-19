@@ -14,6 +14,7 @@ remains in tier1_5_build_diskann_index.build_one().
 
 from __future__ import annotations
 
+import shutil
 import argparse
 from pathlib import Path
 
@@ -125,6 +126,7 @@ def main() -> None:
     args = parse_args()
 
     years = discover_years(args.store)
+    logger.info(f"Discovered years: {years}")
 
     logger.info(f"Discovered {len(years)} publication years.")
     logger.info("-" * 70)
@@ -136,15 +138,20 @@ def main() -> None:
         for scale in SCALES:
             output_directory = ( args.output / f"year={year}" / scale )
 
-            if output_directory.exists() and not args.overwrite:
+            if output_directory.exists():
                 complete = output_directory / "_COMPLETE"
 
-                if complete.exists():
+                if complete.exists() and not args.overwrite:
                     logger.info( f"[SKIP] year={year} scale={scale}" )
                     completed += 1
                     continue
 
-                logger.warning( f"[REBUILD] incomplete index: {output_directory}" )
+                if args.overwrite:
+                    logger.info( f"[OVERWRITE] removing existing index: {output_directory}" )
+                else:
+                    logger.warning( f"[REBUILD] removing incomplete index: {output_directory}" )
+
+                shutil.rmtree(output_directory)
 
             logger.info( "=" * 70 )
             logger.info( f"[{completed + 1}/{total}] year={year} scale={scale}" )
