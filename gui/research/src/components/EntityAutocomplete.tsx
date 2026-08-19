@@ -31,17 +31,18 @@ export default function EntityAutocomplete(
       return [];
     }
 
-    return entities().filter((entity) => {
-      const label = entity.label.toLocaleLowerCase();
-
-      return (
-        label.includes(query) || entity.tags.some((tag) =>
-          tag.toLocaleLowerCase().includes(query),
-        )
-      );
-    })
-      .slice(0, 8);
+    return entities().filter(
+      (entity) => {
+        const label = entity.label.toLocaleLowerCase();
+        return (
+          label.includes(query) || entity.tags.some(
+            (tag) => tag.toLocaleLowerCase().includes(query)
+          )
+        );
+      }
+    ).slice(0, 8);
   });
+
 
   function input(value: string) {
     props.onInput(value);
@@ -55,43 +56,30 @@ export default function EntityAutocomplete(
     setHighlighted(0);
   }
 
-  function keydown(event: KeyboardEvent) {
-    const items = suggestions();
 
-    if (!open() || items.length === 0) {
-      return;
-    }
+  function keydown(event: KeyboardEvent) {
+    if (!open()) return;
+
+    const items = suggestions();
+    if (items.length === 0) return;
 
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-
-        setHighlighted(
-          Math.min(
-            highlighted() + 1,
-            items.length - 1,
-          ),
-        );
-
+        setHighlighted(Math.min(highlighted() + 1, items.length - 1),);
         break;
 
       case "ArrowUp":
         event.preventDefault();
-
-        setHighlighted(
-          Math.max(highlighted() - 1, 0),
-        );
-
+        setHighlighted(Math.max(highlighted() - 1, 0));
         break;
 
       case "Enter": {
         const entity = items[highlighted()];
-
         if (entity) {
           event.preventDefault();
           select(entity);
         }
-
         break;
       }
 
@@ -130,10 +118,7 @@ export default function EntityAutocomplete(
                   onClick={() => select(entity)}
                 >
                   <strong>{entity.label}</strong>
-
-                  <small>
-                    {entity.type}
-                  </small>
+                  <small> {entity.type} </small>
                 </button>
               )}
             </For>
