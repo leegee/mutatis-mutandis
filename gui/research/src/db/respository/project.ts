@@ -1,5 +1,7 @@
 import type { ProjectMetadata, ResearchProject } from "~/domain/project";
+
 import { isValidProject, validateProject } from "~/domain/validateProject";
+
 import { getDatabase } from "../database";
 
 export async function importProject(value: unknown): Promise<void> {
@@ -14,13 +16,10 @@ export async function importProject(value: unknown): Promise<void> {
 	}
 
 	if (!isValidProject(value)) {
-		// Should never happen because validateProject()has already succeeded.
 		throw new Error("Invalid research project.");
 	}
 
-	const project = value;
-
-	// project is now ResearchProject
+	const project = value as ResearchProject;
 	const db = getDatabase();
 
 	await db.transaction(
@@ -30,7 +29,24 @@ export async function importProject(value: unknown): Promise<void> {
 		db.evidence,
 		db.projectMetadata,
 		async () => {
-			// ...
+			/*
+			 * Import replaces the current project.
+			 */
+			await db.entities.clear();
+			await db.relations.clear();
+			await db.evidence.clear();
+			await db.projectMetadata.clear();
+
+			await db.entities.bulkAdd(project.entities);
+
+			await db.relations.bulkAdd(project.relations);
+
+			await db.evidence.bulkAdd(project.evidence);
+
+			await db.projectMetadata.put({
+				id: "project",
+				...project.metadata,
+			});
 		},
 	);
 }
