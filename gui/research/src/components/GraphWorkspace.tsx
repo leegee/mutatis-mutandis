@@ -127,8 +127,7 @@ export default function GraphWorkspace(
 
     return (
         <>
-            <div
-                class="background"
+            <div class="background"
                 style={{
                     display: "grid",
                     "grid-template-columns":
@@ -138,6 +137,9 @@ export default function GraphWorkspace(
                             : "minmax(0, 1fr)",
                     gap: "1rem",
                     height: "100vh",
+                    overflow: "none",
+                    padding: 0,
+                    margin: 0,
                     "min-height": "500px",
                 }}
             >
