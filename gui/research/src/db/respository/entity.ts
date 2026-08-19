@@ -1,3 +1,5 @@
+// db/respository/entity
+
 import type { Entity, EntityType } from "~/domain/entity";
 import { getDatabase } from "../database";
 import { id, now } from "./utils";

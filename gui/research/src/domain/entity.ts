@@ -1,3 +1,5 @@
+// domain/entity.ts
+
 export const entityTypes = [
 	"concept",
 	"lexeme",
