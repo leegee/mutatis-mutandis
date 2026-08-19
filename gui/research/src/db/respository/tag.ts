@@ -3,44 +3,40 @@ import { getDatabase } from "../database";
 import { updateEntity } from "./entity";
 
 export async function addEntityTag(
-  entity: Entity,
-  tag: string,
+	entity: Entity,
+	tag: string,
 ): Promise<Entity> {
-  const value = tag.trim();
+	const value = tag.trim();
 
-  if (!value) {
-    return entity;
-  }
+	if (!value) {
+		return entity;
+	}
 
-  const exists = entity.tags.some(
-    (existing) => existing.toLocaleLowerCase() === value.toLocaleLowerCase()
-  );
+	const exists = entity.tags.some(
+		(existing) => existing.toLocaleLowerCase() === value.toLocaleLowerCase(),
+	);
 
-  if (exists) {
-    return entity;
-  }
+	if (exists) {
+		return entity;
+	}
 
-  return updateEntity(entity, {
-    tags: [
-      ...entity.tags,
-      value,
-    ],
-  });
+	return updateEntity(entity, {
+		tags: [...entity.tags, value],
+	});
 }
-
 
 export async function removeEntityTag(
-  entity: Entity,
-  tag: string,
+	entity: Entity,
+	tag: string,
 ): Promise<Entity> {
-  const value = tag.trim().toLocaleLowerCase();
+	const value = tag.trim().toLocaleLowerCase();
 
-  return updateEntity(entity, {
-    tags: entity.tags.filter(
-      (existing) => existing.toLocaleLowerCase() !== value),
-  });
+	return updateEntity(entity, {
+		tags: entity.tags.filter(
+			(existing) => existing.toLocaleLowerCase() !== value,
+		),
+	});
 }
-
 
 // async function setEntityTags(
 //   entity: Entity,
@@ -71,27 +67,26 @@ export async function removeEntityTag(
 //   });
 // }
 
-
 export async function listTags(): Promise<string[]> {
-  const entities = await getDatabase().entities.toArray();
+	const entities = await getDatabase().entities.toArray();
 
-  const tags = new Map<string, string>();
+	const tags = new Map<string, string>();
 
-  for (const entity of entities) {
-    for (const tag of entity.tags) {
-      const value = tag.trim();
+	for (const entity of entities) {
+		for (const tag of entity.tags) {
+			const value = tag.trim();
 
-      if (!value) {
-        continue;
-      }
+			if (!value) {
+				continue;
+			}
 
-      const key = value.toLocaleLowerCase();
+			const key = value.toLocaleLowerCase();
 
-      if (!tags.has(key)) {
-        tags.set(key, value);
-      }
-    }
-  }
+			if (!tags.has(key)) {
+				tags.set(key, value);
+			}
+		}
+	}
 
-  return [...tags.values()].sort((a, b) => a.localeCompare(b),);
+	return [...tags.values()].sort((a, b) => a.localeCompare(b));
 }
