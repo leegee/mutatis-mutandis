@@ -10,7 +10,7 @@ interface AutocompleteProps<T> {
     onInput: (value: string) => void;
     onSelect: (item: T) => void;
 
-    isTitle: boolean;
+    isTitle?: boolean;
     disabled?: boolean;
     placeholder?: string;
     maxSuggestions?: number;
