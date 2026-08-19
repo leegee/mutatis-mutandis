@@ -57,3 +57,9 @@ section:first-of-type {
 	margin-block-start: 0 !important;
 	padding-top: 0 !important;
 }
+
+/* Text pages that center */
+article.page.small {
+	max-width: clamp(40em, 80em, 90vw);
+	margin: auto;
+}

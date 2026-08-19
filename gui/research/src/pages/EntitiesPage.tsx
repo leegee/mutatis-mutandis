@@ -8,7 +8,7 @@ export default function EntitiesPage() {
   const entities = useLiveQuery(liveEntities(), [] as Entity[]);
 
   return (
-    <article>
+    <article class="small page active">
       <section class="padding">
         <h2>Add entity</h2>
         <EntityForm />
@@ -36,6 +36,6 @@ export default function EntitiesPage() {
           </Show>
         </Show>
       </section>
-    </article>
+    </article >
   );
 }
