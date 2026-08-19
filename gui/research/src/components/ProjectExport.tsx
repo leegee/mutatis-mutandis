@@ -29,7 +29,7 @@ export default function ProjectExport() {
     return (
         <div class="field">
             <label>
-                <button onClick={exportData}>
+                <button type="button" class="small transparent border" onClick={exportData}>
                     Export project
                 </button>
             </label>
