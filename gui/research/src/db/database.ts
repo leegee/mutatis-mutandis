@@ -1,7 +1,8 @@
 import Dexie, { type Table } from "dexie";
 
 import type { Entity } from "~/domain/entity";
-import type { Evidence, ProjectMetadata } from "~/domain/project";
+import type { Evidence } from "~/domain/evidence";
+import type { ProjectMetadata } from "~/domain/project";
 import type { Relation } from "~/domain/relation";
 
 interface ProjectMetadataRecord extends ProjectMetadata {

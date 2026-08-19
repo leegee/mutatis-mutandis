@@ -1,36 +1,18 @@
 import type { Entity } from "./entity";
+import type { Evidence } from "./evidence";
 import type { Relation } from "./relation";
 
-export type EvidenceStatus =
-  | "primary"
-  | "secondary"
-  | "interpretive"
-  | "speculative";
-
-export interface Evidence {
-  id: string;
-  sourceId: string;
-  entityIds: string[];
-  relationIds: string[];
-
-  quote?: string;
-  observation: string;
-  status: EvidenceStatus;
-  notes?: string;
-  createdAt: string;
-}
-
 export interface ProjectMetadata {
-  title: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
+	title: string;
+	description: string;
+	createdAt: string;
+	updatedAt: string;
 }
 
 export interface ResearchProject {
-  version: 1;
-  metadata: ProjectMetadata;
-  entities: Entity[];
-  relations: Relation[];
-  evidence: Evidence[];
+	version: 1;
+	metadata: ProjectMetadata;
+	entities: Entity[];
+	relations: Relation[];
+	evidence: Evidence[];
 }
