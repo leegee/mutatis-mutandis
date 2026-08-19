@@ -104,7 +104,10 @@ export default function Autocomplete<T>(props: AutocompleteProps<T>) {
                             {(item, index) => (
                                 <button
                                     type="button"
-                                    classList={{ active: index() === highlighted() }}
+                                    classList={{
+                                        "no-round": true,
+                                        active: index() === highlighted()
+                                    }}
                                     onMouseDown={(event) => event.preventDefault()}
                                     onClick={() => select(item)}
                                 >
