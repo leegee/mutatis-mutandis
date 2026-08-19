@@ -1,6 +1,7 @@
 import type { Entity } from "~/domain/entity";
 
 import { updateEntity, } from ".";
+import { getDatabase } from "../database";
 
 export async function addEntityAlias(
   entity: Entity,
@@ -44,4 +45,26 @@ export async function removeEntityAlias(
         existing.toLocaleLowerCase() !== value,
     ),
   });
+}
+
+
+export async function listAliases(): Promise<string[]> {
+  const entities = await getDatabase().entities.toArray();
+  const aliases = new Map<string, string>();
+
+  for (const entity of entities) {
+    for (const alias of entity.aliases) {
+      const value = alias.trim();
+      if (!value) {
+        continue;
+      }
+
+      const key = value.toLocaleLowerCase();
+      if (!aliases.has(key)) {
+        aliases.set(key, value);
+      }
+    }
+  }
+
+  return [...aliases.values()].sort((a, b) => a.localeCompare(b),);
 }
