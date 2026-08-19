@@ -50,7 +50,7 @@ header {
 .navigation-button-menu {
 	position: fixed;
 	top: 1em;
-	right: 1em;
+	left: 1em;
 	z-index: 999;
 }
 
