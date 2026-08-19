@@ -141,11 +141,7 @@ export default function GraphWorkspace(
                     "min-height": "500px",
                 }}
             >
-                <div
-                    style={{
-                        "min-width": "0",
-                    }}
-                >
+                <div style={{ "min-width": "0" }} >
                     <GraphView
                         entities={props.entities}
                         relations={props.relations}
@@ -159,46 +155,21 @@ export default function GraphWorkspace(
                         }}
                         onAddEntity={handleAddEntity}
                         onEditEntity={handleEditEntity}
-                        onDeleteEntity={
-                            handleDeleteEntity
-                        }
-                        onAddRelation={
-                            handleAddRelation
-                        }
-                        onEditRelation={
-                            handleEditRelation
-                        }
-                        onDeleteRelation={
-                            handleDeleteRelation
-                        }
+                        onDeleteEntity={handleDeleteEntity}
+                        onAddRelation={handleAddRelation}
+                        onEditRelation={handleEditRelation}
+                        onDeleteRelation={handleDeleteRelation}
                     />
                 </div>
 
-                <Show
-                    when={
-                        selectedEntity() ||
-                        selectedRelation()
-                    }
-                >
-                    <div
-                        class="surface-container-high medium-elevation left-padding right-padding"
-                        style={{
-                            "overflow-y": "auto",
-                        }}
-                    >
-                        <Show
-                            when={selectedEntity()}
+                <Show when={selectedEntity() || selectedRelation()} >
+                    <div class="transparent" style={{ "overflow-y": "auto" }} >
+                        <Show when={selectedEntity()}
                             fallback={
                                 <RelationInspector
                                     relation={selectedRelation()}
-                                    entities={
-                                        props.entities
-                                    }
-                                    onClose={() =>
-                                        setSelectedRelation(
-                                            undefined,
-                                        )
-                                    }
+                                    entities={props.entities}
+                                    onClose={() => setSelectedRelation(undefined)}
                                 />
                             }
                         >
@@ -218,33 +189,19 @@ export default function GraphWorkspace(
                 </Show>
             </div>
 
-            <Show
-                when={addingRelation()}
-            >
+            <Show when={addingRelation()} >
                 {(pending) => (
                     <Modal
                         title="Add relationship"
                         open={true}
-                        onClose={
-                            handleCancelAddRelation
-                        }
+                        onClose={handleCancelAddRelation}
                     >
                         <RelationForm
-                            entities={
-                                props.entities
-                            }
-                            source={
-                                pending().source
-                            }
-                            target={
-                                pending().target
-                            }
-                            onCreated={
-                                handleCreatedRelation
-                            }
-                            onCancel={
-                                handleCancelAddRelation
-                            }
+                            entities={props.entities}
+                            source={pending().source}
+                            target={pending().target}
+                            onCreated={handleCreatedRelation}
+                            onCancel={handleCancelAddRelation}
                         />
                     </Modal>
                 )}

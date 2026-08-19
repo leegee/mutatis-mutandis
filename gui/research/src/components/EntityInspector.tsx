@@ -143,7 +143,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
     return (
         <Show when={props.entity} fallback={""}>
             {(entity) => (
-                <aside class="padding">
+                <aside class="padding surface-container">
                     <Show
                         when={!editing()}
                         fallback={
@@ -158,10 +158,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
                         }
                     >
                         {/* NORMAL INSPECTOR VIEW */}
-                        <header
-                            class="fixed surface-container-high top-padding"
-                            style="top:0"
-                        >
+                        <header class="fixed surface top-padding" style="top:0" >
                             <nav>
                                 <div class="max">
                                     <h2> {entity().label} </h2>
@@ -180,12 +177,12 @@ export default function EntityInspector(props: EntityInspectorProps) {
                         </header>
 
                         <Show when={entity().description}>
-                            <section>
+                            <section class="surface">
                                 <p> {entity().description} </p>
                             </section>
                         </Show>
 
-                        <section>
+                        <section class="surface">
                             <AutoComplete<string>
                                 value={aliasInput()}
                                 items={aliases()}
@@ -222,7 +219,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
                             </Show>
                         </section>
 
-                        <section>
+                        <section class="surface">
                             <AutoComplete<string>
                                 value={tagInput()}
                                 items={tags()}
@@ -259,7 +256,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
                             </Show>
                         </section>
 
-                        <section>
+                        <section class="surface">
                             <header class="title border row">
                                 <h3 class="max">Evidence</h3>
 
@@ -290,7 +287,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
                             </Show>
                         </section>
 
-                        <section>
+                        <section class="surface">
                             <h3>Relationships</h3>
 
                             <Show

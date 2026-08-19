@@ -1,9 +1,7 @@
 import { createSignal, Show } from "solid-js";
-
+import { deleteRelation } from "~/db/respository";
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
-
-import { deleteRelation, } from "~/db/respository";
 
 import RelationForm from "./RelationForm";
 
@@ -14,17 +12,11 @@ interface RelationInspectorProps {
     onClose?: (relation: Relation) => void;
 }
 
-export default function RelationInspector(
-    props: RelationInspectorProps,
-) {
+export default function RelationInspector(props: RelationInspectorProps) {
     const [editing, setEditing] = createSignal(false);
 
     function entityLabel(id: string): string {
-        return (
-            props.entities.find(
-                (entity) => entity.id === id,
-            )?.label ?? id
-        );
+        return props.entities.find((entity) => entity.id === id)?.label ?? id;
     }
 
     async function handleDelete() {
@@ -34,9 +26,7 @@ export default function RelationInspector(
             return;
         }
 
-        const confirmed = window.confirm(
-            "Delete this relationship?",
-        );
+        const confirmed = window.confirm("Delete this relationship?");
 
         if (!confirmed) {
             return;
@@ -49,10 +39,11 @@ export default function RelationInspector(
     }
 
     return (
-        <Show when={props.relation} >
+        <Show when={props.relation}>
             {(relation) => (
-                <aside>
-                    <Show when={!editing()}
+                <aside class="padding surface-container">
+                    <Show
+                        when={!editing()}
                         fallback={
                             <RelationForm
                                 relation={relation()}
@@ -65,23 +56,19 @@ export default function RelationInspector(
                             />
                         }
                     >
-                        <header class="fixed surface-container-high top-padding" style="top:0">
+                        <header class="fixed surface top-padding" style="top:0">
                             <nav>
                                 <h2 class="max">Relationship</h2>
 
-                                <button
-                                    class="circle transparent"
-                                    type="button"
-                                    onClick={() => props.onClose?.(relation())}
-                                >
+                                <button class="circle transparent" type="button" onClick={() => props.onClose?.(relation())}>
                                     <i>close</i>
                                 </button>
                             </nav>
                         </header>
 
-                        <div class="padding">
+                        <section class="surface">
                             <p>
-                                <strong> {entityLabel(relation().sourceId,)} </strong>
+                                <strong> {entityLabel(relation().sourceId)} </strong>
 
                                 {" → "}
 
@@ -89,23 +76,19 @@ export default function RelationInspector(
 
                                 {" → "}
 
-                                <strong>
-                                    {entityLabel(
-                                        relation().targetId,
-                                    )}
-                                </strong>
+                                <strong>{entityLabel(relation().targetId)}</strong>
                             </p>
 
                             <nav class="footer">
-                                <button type="button" onClick={() => setEditing(true)} >
+                                <button type="button" onClick={() => setEditing(true)}>
                                     Edit
                                 </button>
 
-                                <button type="button" class="error" onClick={handleDelete} >
+                                <button type="button" class="error" onClick={handleDelete}>
                                     Delete
                                 </button>
                             </nav>
-                        </div>
+                        </section>
                     </Show>
                 </aside>
             )}
