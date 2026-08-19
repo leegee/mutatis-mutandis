@@ -1,26 +1,24 @@
 {
-    "python.defaultInterpreterPath": ".\\python\\macberth_env\\Scripts\\python.exe",
-    "python.pythonPath": ".\\python\\macberth_env\\Scripts\\python.exe",
-    "python.linting.enabled": true,
-    "python.linting.flake8Enabled": true,
-    "python.linting.flake8Args": [
-        "--config",
-        "${workspaceFolder}/python/.flake8"
-    ],
-    "editor.renderWhitespace": "all",
-    "editor.renderControlCharacters": true,
-    "editor.renderFinalNewline": "on",
-    "files.trimTrailingWhitespace": true,
-    "python-envs.defaultEnvManager": "UV",
-    "python-envs.defaultPackageManager": "ms-python.python:conda",
-    "cSpell.words": [
-        "Bpedia",
-        "ECCO",
-        "EEBO",
-        "FAISS",
-        "SBERT"
-    ],
-    // "workbench.colorCustomizations": {
-    // "editorWhitespace.foreground": "#FF00FF",
-    // }
+	"python.defaultInterpreterPath": ".\\python\\.venv\\Scripts\\python.exe",
+	"python.pythonPath": ".\\python\\.venv\\Scripts\\python.exe",
+	"python.linting.enabled": true,
+	"python.linting.flake8Enabled": true,
+	"python.linting.flake8Args": [
+		"--config",
+		"${workspaceFolder}/python/.flake8"
+	],
+	"editor.renderWhitespace": "all",
+	"editor.renderControlCharacters": true,
+	"editor.renderFinalNewline": "on",
+	"files.trimTrailingWhitespace": true,
+
+	"biome.configurationPath": "./biome.json",
+	"editor.defaultFormatter": "biomejs.biome",
+
+	"python-envs.defaultEnvManager": "UV",
+	"python-envs.defaultPackageManager": "ms-python.python:conda",
+	"cSpell.words": ["Bpedia", "ECCO", "EEBO", "FAISS", "SBERT"],
+	"json.schemaDownload.trustedDomains": {
+		"https://biomejs.dev": true
+	}
 }

@@ -14,7 +14,8 @@ import EntityInspector from "~/components/EntityInspector";
 import RelationInspector from "~/components/RelationInspector";
 import { Modal } from "~/components/Modal";
 import RelationForm from "~/components/RelationForm";
-import { usePrompt } from "./Modal";
+import { usePrompt, useModal } from "./Modal";
+import EntityForm from "./EntityForm";
 
 interface GraphWorkspaceProps {
     entities: Entity[];
@@ -30,13 +31,28 @@ export default function GraphWorkspace(props: GraphWorkspaceProps,) {
     }>();
 
     const prompt = usePrompt();
+    const modal = useModal();
 
     async function handleAddEntity() {
-        const label = await prompt("Node label");
-        if (!label?.trim()) return;
-        const entity = await createEntity(label.trim());
-        setSelectedEntity(entity);
-        setSelectedRelation(undefined);
+        // const label = await prompt("Node label");
+        // if (!label?.trim()) return;
+        // const entity = await createEntity(label.trim());
+        // setSelectedEntity(entity);
+        // setSelectedRelation(undefined);
+
+        await modal(
+            (close) => (
+                <EntityForm
+                    onCreated={(entity: Entity) => {
+                        setSelectedEntity(entity);
+                        setSelectedRelation(undefined);
+                        close();
+                    }}
+                    onCancel={close}
+                />
+            ),
+            "Add entity",
+        );
     }
 
     function handleEditEntity(entity: Entity) {

@@ -1,4 +1,4 @@
-import { showAlert, showConfirm, showPrompt } from "./modal";
+import { showAlert, showConfirm, showCustom, showPrompt } from "./modal";
 
 export { default as Modal } from "./BaseModal";
 
@@ -12,4 +12,8 @@ export function useConfirm() {
 
 export function usePrompt() {
     return showPrompt;
+}
+
+export function useModal() {
+    return showCustom;
 }
