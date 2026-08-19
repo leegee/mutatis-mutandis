@@ -9,6 +9,7 @@ import {
     removeEntityTag,
 } from "~/db/respository";
 import type { Entity } from "~/domain/entity";
+import type { Evidence } from "~/domain/evidence";
 import type { Relation } from "~/domain/relation";
 import AutoComplete from "./AutoComplete";
 import EntityForm from "./EntityForm";
@@ -18,7 +19,9 @@ interface EntityInspectorProps {
     entity: Entity | undefined;
     entities: Entity[];
     relations: Relation[];
+    evidence: Evidence[];
 
+    onAddEvidence?: () => void | Promise<void>;
     onChanged?: (entity: Entity) => void | Promise<void>;
     onClose?: (entity: Entity) => void;
 }
@@ -30,19 +33,24 @@ export default function EntityInspector(props: EntityInspectorProps) {
     const [tags, setTags] = createSignal<string[]>([]);
     const [aliases, setAliases] = createSignal<string[]>([]);
     const [aliasInput, setAliasInput] = createSignal("");
+    const confirm = useConfirm();
 
     createEffect(() => {
         listTags().then(setTags);
         listAliases().then(setAliases);
     });
 
-    const confirm = useConfirm();
-
     createEffect(() => {
         if (props.entity) {
             setCurrentEntity(props.entity);
         }
     });
+
+    function entityEvidence(): Evidence[] {
+        const entity = props.entity;
+        if (!entity) return [];
+        return props.evidence.filter((item) => item.entityIds.includes(entity.id));
+    }
 
     async function handleAddTag(tag: string) {
         const value = tag.trim();
@@ -235,7 +243,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
                                             <span class="small chip left-padding">
                                                 {tag}
 
-                                                <button type="button"
+                                                <button
+                                                    type="button"
                                                     class="transparent small circle no-padding"
                                                     title={`Remove ${ tag }`}
                                                     aria-label={`Remove tag ${ tag }`}
@@ -247,6 +256,37 @@ export default function EntityInspector(props: EntityInspectorProps) {
                                         )}
                                     </For>
                                 </div>
+                            </Show>
+                        </section>
+
+                        <section>
+                            <header class="title border row">
+                                <h3 class="max">Evidence</h3>
+
+                                <button type="button"
+                                    class="transparent circle"
+                                    title="Add evidence"
+                                    aria-label="Add evidence"
+                                    onClick={() => props.onAddEvidence?.()}
+                                >
+                                    <i>add</i>
+                                </button>
+                            </header>
+
+                            <Show when={entityEvidence().length > 0}
+                                fallback={<p>No evidence.</p>}
+                            >
+                                <ul class="list no-space border">
+                                    <For each={entityEvidence()}>
+                                        {(item) => (
+                                            <li>
+                                                <strong>{item.status}</strong>
+                                                {" — "}
+                                                {item.observation}
+                                            </li>
+                                        )}
+                                    </For>
+                                </ul>
                             </Show>
                         </section>
 

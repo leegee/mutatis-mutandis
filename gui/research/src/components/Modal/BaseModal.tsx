@@ -1,15 +1,10 @@
 // src/components/Modal/index.tsx
 
-import {
-    type JSX,
-    Show,
-    createEffect,
-    onCleanup,
-} from "solid-js";
+import { createEffect, type JSX, onCleanup, Show } from "solid-js";
 
 import { Portal } from "solid-js/web";
 
-import './modal.css';
+import "./modal.css";
 
 interface ModalProps {
     open: boolean;
@@ -19,9 +14,7 @@ interface ModalProps {
     closeOnBackdrop?: boolean;
 }
 
-export default function BaseModal(
-    props: ModalProps,
-) {
+export default function BaseModal(props: ModalProps) {
     createEffect(() => {
         if (!props.open) {
             return;
@@ -49,20 +42,10 @@ export default function BaseModal(
     return (
         <Show when={props.open}>
             <Portal>
-                <div
-                    class="modal-backdrop"
-                    role="presentation"
-                    onClick={handleBackdropClick}
-                    onKeyDown={handleKeyDown}
-                >
-                    <div
-                        class="modal"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label={props.title}
-                    >
+                <div class="modal-backdrop" role="presentation" onClick={handleBackdropClick} onKeyDown={handleKeyDown}>
+                    <div class="modal" role="dialog" aria-modal="true" aria-label={props.title}>
                         <Show when={props.title}>
-                            <header class="fixed surface-container-high top-padding" style="top:0">
+                            <header class="fixed surface-container-high padding" style="top:0">
                                 <nav>
                                     <h2 class="max"> {props.title} </h2>
 
@@ -71,9 +54,7 @@ export default function BaseModal(
                                             class="circle transparent"
                                             type="button"
                                             aria-label="Close"
-                                            onClick={() =>
-                                                props.onClose?.()
-                                            }
+                                            onClick={() => props.onClose?.()}
                                         >
                                             <i>close</i>
                                         </button>
@@ -82,13 +63,10 @@ export default function BaseModal(
                             </header>
                         </Show>
 
-                        <div class="modal-content">
-                            {props.children}
-                        </div>
+                        <div class="modal-content">{props.children}</div>
                     </div>
                 </div>
             </Portal>
         </Show>
     );
 }
-

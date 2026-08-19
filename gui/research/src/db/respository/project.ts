@@ -38,9 +38,7 @@ export async function importProject(value: unknown): Promise<void> {
 			await db.projectMetadata.clear();
 
 			await db.entities.bulkAdd(project.entities);
-
 			await db.relations.bulkAdd(project.relations);
-
 			await db.evidence.bulkAdd(project.evidence);
 
 			await db.projectMetadata.put({

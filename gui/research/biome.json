@@ -1,7 +1,8 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
 	"formatter": {
-		"enabled": true
+		"enabled": true,
+		"lineWidth": 120
 	},
 	"assist": {
 		"actions": {

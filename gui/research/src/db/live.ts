@@ -1,5 +1,4 @@
 import { liveQuery } from "dexie";
-
 import { getDatabase } from "./database";
 
 export function liveEntities() {
@@ -8,4 +7,8 @@ export function liveEntities() {
 
 export function liveRelations() {
 	return liveQuery(() => getDatabase().relations.toArray());
+}
+
+export function liveEvidence() {
+	return liveQuery(() => getDatabase().evidence.toArray());
 }

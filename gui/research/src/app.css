@@ -47,6 +47,24 @@ header {
 	padding: 0 !important;
 }
 
+header.title {
+	border-left: unset !important;
+	border-top: unset !important;
+	border-right: unset !important;
+	line-height: unset !important;
+	min-block-size: 3em !important;
+
+	h3 {
+		font-size: 1.3em;
+	}
+
+	h3,
+	button {
+		padding: 0 !important;
+		margin: 0 !important;
+	}
+}
+
 .navigation-button-menu {
 	position: fixed;
 	top: 1em;
