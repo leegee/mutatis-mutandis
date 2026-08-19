@@ -33,13 +33,8 @@ export default function GraphWorkspace(props: GraphWorkspaceProps,) {
 
     async function handleAddEntity() {
         const label = await prompt("Node label");
-
-        if (!label?.trim()) {
-            return;
-        }
-
+        if (!label?.trim()) return;
         const entity = await createEntity(label.trim());
-
         setSelectedEntity(entity);
         setSelectedRelation(undefined);
     }

@@ -1,6 +1,12 @@
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+} from "solid-js";
 
 import type { Entity } from "~/domain/entity";
+
+import Autocomplete from "./AutoComplete";
 import { listEntities } from "~/db/respository";
 
 interface EntityAutocompleteProps {
@@ -11,120 +17,44 @@ interface EntityAutocompleteProps {
   placeholder?: string;
 }
 
-export default function EntityAutocomplete(
-  props: EntityAutocompleteProps,
-) {
+export default function EntityAutocomplete(props: EntityAutocompleteProps) {
   const [entities, setEntities] = createSignal<Entity[]>([]);
-  const [open, setOpen] = createSignal(false);
-  const [highlighted, setHighlighted] = createSignal(0);
 
   createEffect(() => {
-    if (typeof window !== "undefined") {
-      listEntities().then(setEntities);
-    }
+    listEntities().then(setEntities);
   });
 
   const suggestions = createMemo(() => {
     const query = props.value.trim().toLocaleLowerCase();
+    if (!query) return [];
 
-    if (!query) {
-      return [];
-    }
-
-    return entities().filter(
-      (entity) => {
+    return entities()
+      .filter((entity) => {
         const label = entity.label.toLocaleLowerCase();
         return (
           label.includes(query) || entity.tags.some(
-            (tag) => tag.toLocaleLowerCase().includes(query)
+            (tag) =>
+              tag.toLocaleLowerCase().includes(query)
           )
         );
-      }
-    ).slice(0, 8);
+      }).slice(0, 8);
   });
 
-
-  function input(value: string) {
-    props.onInput(value);
-    setHighlighted(0);
-    setOpen(value.trim().length > 0);
-  }
-
-  function select(entity: Entity) {
-    props.onSelect(entity);
-    setOpen(false);
-    setHighlighted(0);
-  }
-
-
-  function keydown(event: KeyboardEvent) {
-    if (!open()) return;
-
-    const items = suggestions();
-    if (items.length === 0) return;
-
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        setHighlighted(Math.min(highlighted() + 1, items.length - 1),);
-        break;
-
-      case "ArrowUp":
-        event.preventDefault();
-        setHighlighted(Math.max(highlighted() - 1, 0));
-        break;
-
-      case "Enter": {
-        const entity = items[highlighted()];
-        if (entity) {
-          event.preventDefault();
-          select(entity);
-        }
-        break;
-      }
-
-      case "Escape":
-        setOpen(false);
-        break;
-    }
-  }
-
   return (
-    <>
-      <div class="field label border">
-        <input type="text"
-          value={props.value}
-          disabled={props.disabled}
-          autocomplete="off"
-          onInput={(event) => input(event.currentTarget.value)}
-          onFocus={() => {
-            if (props.value.trim()) {
-              setOpen(true);
-            }
-          }}
-          onKeyDown={keydown}
-        />
-        <label>{props.placeholder ?? 'Entity'}</label>
-      </div>
-
-      <Show when={open() && suggestions().length > 0}>
-        <div class="field border">
-          <div class="field autocomplete-menu">
-            <For each={suggestions()}>
-              {(entity, index) => (
-                <button type="button"
-                  classList={{ active: index() === highlighted() }}
-                  onMouseDown={(event) => { event.preventDefault(); }}
-                  onClick={() => select(entity)}
-                >
-                  <strong>{entity.label}</strong>
-                  <small> {entity.type} </small>
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
-      </Show>
-    </>
+    <Autocomplete
+      value={props.value}
+      items={suggestions()}
+      getLabel={(entity) => entity.label}
+      onInput={props.onInput}
+      onSelect={props.onSelect}
+      disabled={props.disabled}
+      placeholder={props.placeholder ?? "Entity"}
+      renderItem={(entity) => (
+        <>
+          <strong> {entity.label} </strong>
+          <small> {entity.type} </small>
+        </>
+      )}
+    />
   );
 }
