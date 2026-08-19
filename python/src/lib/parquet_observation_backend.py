@@ -37,9 +37,9 @@ Usage
     # import registers the backend
     import tier1.parquet_observation_backend  #
 
-    writer = open_observation_writer("parquet", root, dim=768)
-    stream = open_observation_stream("parquet", root)
-    lookup = open_observation_lookup("parquet", root)
+    writer = open_observation_writer(root, dim=768)
+    stream = open_observation_stream(root)
+    lookup = open_observation_lookup(root)
 """
 
 from __future__ import annotations
@@ -59,7 +59,6 @@ from tier1.observation_store_api import (
     DEFAULT_ENSEMBLE_WEIGHTS,
     NO_WINDOW_TOKEN_POS,
     SCALES,
-    register_backend,
 )
 
 # ---------------------------------------------------------------------------
@@ -1266,17 +1265,6 @@ class ParquetObservationLookup:
         blocks = [_norm_rows(self._scale_for_ids(event_ids, s)) for s in scales]
         return np.concatenate(blocks, axis=1).astype(np.float32)
 
-
-# ---------------------------------------------------------------------------
-# Registration
-# ---------------------------------------------------------------------------
-
-register_backend(
-    "parquet",
-    writer=ParquetObservationWriter,
-    stream=ParquetObservationStream,
-    lookup=ParquetObservationLookup,
-)
 
 __all__ = [
     "write_observation_parquet",

@@ -1,105 +1,27 @@
-"""
-tier2.analysis
-
-Pure analysis: neighbourhood retrieval around lexical seeds.
-
-No database writes, no index loading, no side effects beyond logging.
-"""
-
 from __future__ import annotations
 
 from collections import Counter
 
 import numpy as np
 
-from lib.eebo_faiss import multiscale_search
 from lib.corpus_logging import logger
+from tier1.observation_store_api import SCALES
+from retrieval.lazy_year_disk_ann import LazyYearDiskANN
 
 K = 60
 RRF_K = 60
 OVERSAMPLE = 5
-_NO_WPOS = -1
-
-# Seed events processed (and written) per chunk. Bounds peak memory to
-# roughly BATCH_SIZE * top_n neighbour dicts, regardless of how many
-# events a concept matches in total. Frequent words (KING, LAW,
-# PARLIAMENT, PEOPLE...) can match hundreds of thousands of events in
-# an 8.5M-event corpus; without chunking, a single concept's in-memory
-# payload can dwarf the whole rest of the run.
 BATCH_SIZE = 2000
 
-# Neighbour retrieval backend:
-#   "faiss" — per-year IndexFlatIP (historical default; RAM-bound)
-#   "exact" — out-of-core blocked scan over Parquet shards (exact_knn_search)
-DEFAULT_SEARCH_BACKEND = "faiss"
-
-
-def neighbour_search(
-    *,
-    lookup,
-    positions,
-    top_n: int,
-    indexes=None,
-    pub_year: int | None = None,
-    rrf_k: int = RRF_K,
-    oversample: int = OVERSAMPLE,
-    search_backend: str = DEFAULT_SEARCH_BACKEND,
-    exact_store=None,
-    exact_workers: int = 1,
-    exact_pool: str = "thread",
-    exact_shards=None,
-):
-    """
-    Dispatch multi-scale neighbourhood search to FAISS or exact Parquet scan.
-
-    Both backends return the same list[list[dict]] shape used by Tier 2
-    event builders (event_id, rrf_score, score_local/medium/broad).
-    """
-    backend = (search_backend or DEFAULT_SEARCH_BACKEND).lower()
-    positions = np.asarray(positions, dtype=np.int64)
-
-    if backend == "faiss":
-        if indexes is None:
-            raise ValueError("search_backend='faiss' requires indexes")
-        return multiscale_search(
-            indexes,
-            lookup,
-            positions,
-            top_n,
-            pub_year=pub_year,
-            rrf_k=rrf_k,
-            oversample=oversample,
-        )
-
-    if backend == "exact":
-        if exact_store is None:
-            raise ValueError(
-                "search_backend='exact' requires exact_store "
-                "(Parquet observation store root)"
-            )
-        from exact_knn_search import multiscale_exact_search
-
-        return multiscale_exact_search(
-            exact_store,
-            lookup,
-            positions,
-            top_n,
-            pub_year=pub_year,
-            rrf_k=rrf_k,
-            oversample=oversample,
-            workers=exact_workers,
-            pool=exact_pool,  # type: ignore[arg-type]
-            shards=exact_shards,
-        )
-
-    raise ValueError(
-        f"Unknown search_backend={search_backend!r}; expected 'faiss' or 'exact'"
-    )
+_NO_WPOS = -1
 
 
 def _chunks(seq, size):
-    for i in range(0, len(seq), size):
-        yield seq[i:i + size]
+    if size <= 0:
+        raise ValueError("chunk size must be positive")
+
+    for start in range(0, len(seq), size):
+        yield seq[start:start + size]
 
 
 def resolve_concept_positions(
@@ -110,307 +32,195 @@ def resolve_concept_positions(
     false_positives=None,
 ):
     """
-    The cheap, FAISS-free half of concept resolution: map a concept's
-    lexical forms to event positions, grouped by publication year.
+    Resolve lexical seed events and group their stable event IDs by year.
 
-    Deliberately separated from analyse_concept so callers (e.g. an
-    eviction scheduler) can find out which years a concept touches
-    without paying for any FAISS search.
+    Tier 2 uses event_id as its identity; physical vector positions are not
+    part of the retrieval contract.
+
+    Failure mode:
+        Metadata lookup is intentionally performed only for seed events.
+        The potentially very large observation corpus is never scanned into
+        Python merely to construct the year grouping.
     """
     forms = {
-        f.lower()
-        for f in concept.get("forms", [])
+        str(form).lower()
+        for form in concept.get("forms", [])
     }
 
     false_positives = {
-        x.lower()
-        for x in (false_positives or [])
+        str(value).lower()
+        for value in (false_positives or [])
     }
 
-    logger.info(f"[tier2] {concept_name} forms: {sorted(forms)[:50]}")
+    logger.info(
+        "[tier2] %s forms: %s",
+        concept_name,
+        sorted(forms)[:50],
+    )
 
     event_ids = lookup.find_matching_event_ids(
         forms,
         false_positives,
     )
 
-    logger.info(f"[tier2] {concept_name}: {len(event_ids)} events")
+    event_ids = [
+        int(event_id)
+        for event_id in event_ids
+    ]
 
-    if not event_ids:
-        return {
-            "forms": forms,
-            "false_positives": false_positives,
-            "event_ids": event_ids,
-            "positions": None,
-            "by_year": {},
-        }
-
-    positions = np.asarray(
-        [
-            lookup.get_pos(eid)
-            for eid in event_ids
-        ],
-        dtype=np.int64,
+    logger.info(
+        "[tier2] %s: %d seed events",
+        concept_name,
+        len(event_ids),
     )
 
-    # Group by publication year.
-    #
-    # This is deliberately based on Tier 1 Zarr metadata.
-    # Document metadata may be incomplete or normalised differently.
+    by_year: dict[int, list[int]] = {}
 
-    by_year = {}
-    for pos in positions:
-        year = int(lookup.pub_year[pos])
-
-        by_year.setdefault(
-            year,
-            []
-        ).append(pos)
+    for event_id in event_ids:
+        metadata = lookup.get_event_metadata(event_id)
+        year = int(metadata["pub_year"])
+        by_year.setdefault(year, []).append(event_id)
 
     return {
         "forms": forms,
         "false_positives": false_positives,
         "event_ids": event_ids,
-        "event_ids_set": set(int(e) for e in event_ids),
-        "positions": positions,
+        "event_ids_set": set(event_ids),
         "by_year": by_year,
     }
 
 
-def build_year_schedule(
+def multiscale_search(
     *,
-    lookup,
-    concepts_to_run,
-    false_positives=None,
-):
-    """
-    One cheap, FAISS-free pass over every concept in a batch.
-
-    Returns only the small year sets needed to drive a year-major
-    processing loop (outer = year, inner = concepts that touch it).
-    Full position / event_id payloads are deliberately not retained;
-    the caller re-resolves a concept when it actually processes that
-    concept's slice of a year.
-
-    Returns:
-        years_by_concept: {concept_name: {year, ...}}
-        concepts_by_year: {year: [(concept_name, concept), ...]}
-            (stable order matching concepts_to_run)
-    """
-    years_by_concept = {}
-    concepts_by_year = {}
-
-    for concept_name, concept in concepts_to_run:
-        resolved = resolve_concept_positions(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            false_positives=false_positives,
-        )
-
-        years = set(resolved["by_year"])
-        years_by_concept[concept_name] = years
-
-        for year in years:
-            concepts_by_year.setdefault(year, []).append(
-                (concept_name, concept)
-            )
-
-        # resolved goes out of scope; only the year set survives.
-
-    return years_by_concept, concepts_by_year
-
-
-# Backward-compatible alias used by older call sites / tests.
-def build_eviction_schedule(
-    *,
-    lookup,
-    concepts_to_run,
-    false_positives=None,
-):
-    """
-    Deprecated wrapper around build_year_schedule that also fabricates
-    a last_use map (concept-major eviction). Prefer build_year_schedule
-    + year-major processing so at most one year's indices are resident.
-    """
-    years_by_concept, concepts_by_year = build_year_schedule(
-        lookup=lookup,
-        concepts_to_run=concepts_to_run,
-        false_positives=false_positives,
-    )
-    # last concept index that needs each year (concept-major order)
-    name_to_idx = {
-        name: i for i, (name, _) in enumerate(concepts_to_run)
-    }
-    last_use = {}
-    for year, pairs in concepts_by_year.items():
-        last_use[year] = max(name_to_idx[name] for name, _ in pairs)
-    return years_by_concept, last_use
-
-
-def analyse_concept(
-    *,
-    concept_name,
-    concept,
-    lookup,
     indexes,
+    queries,
     top_n=K,
     rrf_k=RRF_K,
     oversample=OVERSAMPLE,
-    false_positives=None,
-    evict_index_after_year=False,
-    resolved=None,
-    search_backend: str = DEFAULT_SEARCH_BACKEND,
-    exact_store=None,
-    exact_workers: int = 1,
-    exact_pool: str = "thread",
-    exact_shards=None,
 ):
-    if resolved is None:
-        resolved = resolve_concept_positions(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            false_positives=false_positives,
-        )
+    """
+    Search all three scale-specific DiskANN indexes and fuse their rankings.
 
-    forms = resolved["forms"]
-    false_positives = resolved["false_positives"]
-    event_ids = resolved["event_ids"]
-    positions = resolved["positions"]
-    by_year = resolved["by_year"]
+    `indexes` is the three-index mapping returned by YearDiskANN.get(year).
 
-    if not event_ids:
-        return {
-            "concept": concept_name,
-            "empty": True,
-        }
+    DiskANN distances are retained under the existing Tier 2 score field
+    names for downstream compatibility. RRF uses rank rather than distance.
 
-    fused = {}
-    for year, year_positions in by_year.items():
-        result = neighbour_search(
-            lookup=lookup,
-            positions=np.asarray(year_positions, dtype=np.int64),
-            top_n=top_n,
-            indexes=indexes,
-            pub_year=year,
-            rrf_k=rrf_k,
-            oversample=oversample,
-            search_backend=search_backend,
-            exact_store=exact_store,
-            exact_workers=exact_workers,
-            exact_pool=exact_pool,
-            exact_shards=exact_shards,
-        )
+    Failure mode:
+        Each scale may return the same event. RRF therefore fuses by stable
+        event_id rather than by local DiskANN position.
+    """
+    queries = np.asarray(
+        queries,
+        dtype=np.float32,
+    )
 
-        for pos, neighbours in zip(
-            year_positions,
-            result,
-        ):
-            fused[int(lookup.event_id[pos])] = neighbours
+    if queries.ndim != 2:
+        raise ValueError("queries must be two-dimensional")
 
-        # Only useful when the caller can guarantee no other concept in
-        # the same run will need this year again (e.g. a single-concept
-        # run). Batch runs should instead use build_eviction_schedule +
-        # explicit eviction in the caller's loop, since a given year is
-        # commonly shared across many concepts.
-        if evict_index_after_year and indexes is not None and hasattr(indexes, "evict"):
-            indexes.evict(year)
+    if top_n <= 0:
+        raise ValueError("top_n must be positive")
 
-    token_counts = Counter()
-    doc_counts = Counter()
-    window_counts = Counter()
+    if rrf_k <= 0:
+        raise ValueError("rrf_k must be positive")
 
-    output_events = []
-    for pos in positions:
-        event_id = int(lookup.event_id[pos])
+    if oversample <= 0:
+        raise ValueError("oversample must be positive")
 
-        neighbours_out = []
-        for item in fused[event_id]:
-            neighbour_id = item["event_id"]
-            if neighbour_id == event_id:
-                continue
+    search_k = top_n * oversample
+    results_by_scale = {}
 
-            npos = lookup.get_pos(neighbour_id)
-            token = str(lookup.token[npos])
+    for scale in SCALES:
+        index = indexes.get(scale)
 
-            if token.lower() in false_positives:
-                continue
-
-            doc_id = str(lookup.doc_id[npos])
-            window_id = int(lookup.window_id[npos])
-            wpos = int(lookup.window_token_pos[npos])
-            token_counts[token] += 1
-            doc_counts[doc_id] += 1
-
-            window_counts[
-                (
-                    doc_id,
-                    window_id,
-                )
-            ] += 1
-
-            neighbours_out.append(
-                {
-                    "event_id": neighbour_id,
-                    "vector_id": int(lookup.vector_id[npos]),
-                    "token": token,
-                    "doc_id": doc_id,
-                    "pub_year": int(lookup.pub_year[npos]),
-                    "token_idx": int(lookup.token_idx[npos]),
-                    "window_id": window_id,
-                    "window_token_pos":
-                        None
-                        if wpos == _NO_WPOS
-                        else wpos,
-                    "score": item["rrf_score"],
-                    "score_local": item.get("score_local"),
-                    "score_medium": item.get("score_medium"),
-                    "score_broad": item.get("score_broad"),
-                    "depth": 1,
-                    "via_event_id": None,
-                }
+        if index is None:
+            raise RuntimeError(
+                f"Missing DiskANN index for scale={scale}"
             )
 
-        output_events.append(
-            {
-                "event_id": event_id,
-                "vector_id": int(lookup.vector_id[pos]),
-                "token": str(lookup.token[pos]),
-                "doc_id": str(lookup.doc_id[pos]),
-                "pub_year": int(lookup.pub_year[pos]),
-                "token_idx": int(lookup.token_idx[pos]),
-                "window_id": int(lookup.window_id[pos]),
-                "window_token_pos":
-                    None
-                    if int(
-                        lookup.window_token_pos[pos]
-                    ) == _NO_WPOS
-                    else int(
-                        lookup.window_token_pos[pos]
-                    ),
-                "neighbours": neighbours_out,
-            }
+        results_by_scale[scale] = index.batch_search(
+            queries,
+            k=search_k,
         )
 
-    return {
-        "concept": concept_name,
-        "forms": forms,
-        "n_events": len(event_ids),
-        "events": output_events,
-        "aggregate":
-            {
-                "top_tokens": token_counts.most_common(top_n),
-                "top_docs": doc_counts.most_common(top_n),
-                "top_windows": window_counts.most_common(top_n),
-            },
-    }
+    output = []
+
+    for query_idx in range(len(queries)):
+        fused = {}
+
+        for scale in SCALES:
+            result = results_by_scale[scale]
+
+            event_ids = result.event_ids[query_idx]
+            distances = result.distances[query_idx]
+
+            for rank, (event_id, distance) in enumerate(
+                zip(event_ids, distances),
+                start=1,
+            ):
+                event_id = int(event_id)
+
+                item = fused.setdefault(
+                    event_id,
+                    {
+                        "score": 0.0,
+                        "score_local": None,
+                        "score_medium": None,
+                        "score_broad": None,
+                    },
+                )
+
+                item["score"] += 1.0 / (rrf_k + rank)
+                item[f"score_{scale}"] = float(distance)
+
+        ranked = sorted(
+            fused.items(),
+            key=lambda item: item[1]["score"],
+            reverse=True,
+        )
+
+        output.append(
+            [
+                {
+                    "event_id": event_id,
+                    **payload,
+                }
+                for event_id, payload in ranked[:top_n]
+            ]
+        )
+
+    return output
+
+
+def _metadata_for_event(
+    lookup,
+    event_id,
+):
+    """Return public Tier 1 metadata for one stable observation ID."""
+    return lookup.get_event_metadata(int(event_id))
+
+
+def _window_token_pos(metadata):
+    value = metadata.get(
+        "window_token_pos",
+        _NO_WPOS,
+    )
+
+    if value is None:
+        return None
+
+    value = int(value)
+
+    if value == _NO_WPOS:
+        return None
+
+    return value
 
 
 def _build_batch_events(
     *,
-    chunk_positions,
-    fused,
+    seed_event_ids,
+    neighbours,
     lookup,
     false_positives,
     token_counts,
@@ -418,85 +228,114 @@ def _build_batch_events(
     window_counts,
 ):
     """
-    Turn one chunk's worth of seed positions + their already-fused
-    neighbours into output event dicts, updating the running aggregate
-    counters as it goes. Counters stay cheap (bounded by vocabulary /
-    document cardinality) even though events don't.
-    """
-    batch_events = []
+    Materialise one bounded batch in the existing Tier 2 output schema.
 
-    for pos in chunk_positions:
-        event_id = int(lookup.event_id[pos])
+    Only metadata for the seeds and their selected neighbours is requested.
+    Embeddings are not reconstructed here.
+    """
+    output = []
+
+    for seed_event_id, seed_neighbours in zip(
+        seed_event_ids,
+        neighbours,
+    ):
+        seed_event_id = int(seed_event_id)
+
+        seed_metadata = _metadata_for_event(
+            lookup,
+            seed_event_id,
+        )
 
         neighbours_out = []
-        for item in fused[event_id]:
-            neighbour_id = item["event_id"]
-            if neighbour_id == event_id:
+
+        for item in seed_neighbours:
+            neighbour_id = int(item["event_id"])
+
+            if neighbour_id == seed_event_id:
                 continue
 
-            npos = lookup.get_pos(neighbour_id)
-            token = str(lookup.token[npos])
+            metadata = _metadata_for_event(
+                lookup,
+                neighbour_id,
+            )
+
+            token = str(
+                metadata["token"]
+            )
 
             if token.lower() in false_positives:
                 continue
 
-            doc_id = str(lookup.doc_id[npos])
-            window_id = int(lookup.window_id[npos])
-            wpos = int(lookup.window_token_pos[npos])
+            doc_id = str(
+                metadata["doc_id"]
+            )
+
+            window_id = int(
+                metadata["window_id"]
+            )
+
+            window_token_pos = _window_token_pos(
+                metadata,
+            )
+
             token_counts[token] += 1
             doc_counts[doc_id] += 1
-
-            window_counts[
-                (
-                    doc_id,
-                    window_id,
-                )
-            ] += 1
+            window_counts[(doc_id, window_id)] += 1
 
             neighbours_out.append(
                 {
                     "event_id": neighbour_id,
-                    "vector_id": int(lookup.vector_id[npos]),
+                    "vector_id": int(
+                        metadata["vector_id"]
+                    ),
                     "token": token,
                     "doc_id": doc_id,
-                    "pub_year": int(lookup.pub_year[npos]),
-                    "token_idx": int(lookup.token_idx[npos]),
+                    "pub_year": int(
+                        metadata["pub_year"]
+                    ),
+                    "token_idx": int(
+                        metadata["token_idx"]
+                    ),
                     "window_id": window_id,
-                    "window_token_pos":
-                        None
-                        if wpos == _NO_WPOS
-                        else wpos,
-                    "score": item["rrf_score"],
-                    "score_local": item.get("score_local"),
-                    "score_medium": item.get("score_medium"),
-                    "score_broad": item.get("score_broad"),
+                    "window_token_pos": window_token_pos,
+                    "score": item["score"],
+                    "score_local": item["score_local"],
+                    "score_medium": item["score_medium"],
+                    "score_broad": item["score_broad"],
                     "depth": 1,
                     "via_event_id": None,
                 }
             )
 
-        batch_events.append(
+        output.append(
             {
-                "event_id": event_id,
-                "vector_id": int(lookup.vector_id[pos]),
-                "token": str(lookup.token[pos]),
-                "doc_id": str(lookup.doc_id[pos]),
-                "pub_year": int(lookup.pub_year[pos]),
-                "token_idx": int(lookup.token_idx[pos]),
-                "window_id": int(lookup.window_id[pos]),
-                "window_token_pos":
-                    None
-                    if int(
-                        lookup.window_token_pos[pos]
-                    ) == _NO_WPOS
-                    else int(
-                        lookup.window_token_pos[pos]
-                    ),
+                "event_id": seed_event_id,
+                "vector_id": int(
+                    seed_metadata["vector_id"]
+                ),
+                "token": str(
+                    seed_metadata["token"]
+                ),
+                "doc_id": str(
+                    seed_metadata["doc_id"]
+                ),
+                "pub_year": int(
+                    seed_metadata["pub_year"]
+                ),
+                "token_idx": int(
+                    seed_metadata["token_idx"]
+                ),
+                "window_id": int(
+                    seed_metadata["window_id"]
+                ),
+                "window_token_pos": _window_token_pos(
+                    seed_metadata,
+                ),
                 "neighbours": neighbours_out,
             }
         )
 
-    return batch_events
+    return output
 
 
 def iter_year_concept_batches(
@@ -504,7 +343,7 @@ def iter_year_concept_batches(
     concept_name,
     concept,
     lookup,
-    indexes,
+    indexes: LazyYearDiskANN,
     year,
     top_n=K,
     rrf_k=RRF_K,
@@ -515,27 +354,22 @@ def iter_year_concept_batches(
     token_counts=None,
     doc_counts=None,
     window_counts=None,
-    search_backend: str = DEFAULT_SEARCH_BACKEND,
-    exact_store=None,
-    exact_workers: int = 1,
-    exact_pool: str = "thread",
-    exact_shards=None,
 ):
     """
-    Yield bounded-size batches for *one concept, one publication year*.
+    Yield bounded Tier 2 event batches for one concept and one year.
 
-    Intended for the year-major service loop: the caller holds at most
-    one year's FAISS indices, walks every concept that touches that
-    year, then evicts. Aggregate counters may be passed in so they
-    accumulate across years for the same concept.
+    Only seed embeddings for the current batch are materialised. DiskANN
+    performs corpus-scale search against the three indexes for this year.
 
-    search_backend:
-        "faiss" (default) or "exact" (Parquet blocked scan).
+    The year resource is cached by LazyYearDiskANN, so repeated concept
+    searches do not repeatedly reopen the physical DiskANN indexes.
 
-    Yields:
-        {"type": "batch", "events": [...], "seed_ids": set(...)}
-    or nothing if the concept has no events in this year.
+    Failure mode:
+        A year with no seed events is a no-op and does not open its DiskANN
+        indexes.
     """
+    year = int(year)
+
     if resolved is None:
         resolved = resolve_concept_positions(
             concept_name=concept_name,
@@ -545,45 +379,46 @@ def iter_year_concept_batches(
         )
 
     false_positives = resolved["false_positives"]
-    event_ids_set = resolved.get("event_ids_set") or set()
-    year_positions = resolved["by_year"].get(year) or []
 
-    if not year_positions:
+    seed_ids = resolved["by_year"].get(
+        year,
+        [],
+    )
+
+    if not seed_ids:
         return
 
     if token_counts is None:
         token_counts = Counter()
+
     if doc_counts is None:
         doc_counts = Counter()
+
     if window_counts is None:
         window_counts = Counter()
 
-    for chunk_positions in _chunks(year_positions, batch_size):
-        chunk_arr = np.asarray(chunk_positions, dtype=np.int64)
+    year_indexes = indexes.get(year)
 
-        result = neighbour_search(
-            lookup=lookup,
-            positions=chunk_arr,
-            top_n=top_n,
-            indexes=indexes,
-            pub_year=year,
-            rrf_k=rrf_k,
-            oversample=oversample,
-            search_backend=search_backend,
-            exact_store=exact_store,
-            exact_workers=exact_workers,
-            exact_pool=exact_pool,
-            exact_shards=exact_shards,
+    for seed_batch in _chunks(
+        seed_ids,
+        batch_size,
+    ):
+        queries = lookup.get_embeddings(
+            seed_batch,
+            scales=SCALES,
         )
 
-        fused = {
-            int(lookup.event_id[pos]): neighbours
-            for pos, neighbours in zip(chunk_positions, result)
-        }
+        neighbours = multiscale_search(
+            indexes=year_indexes,
+            queries=queries,
+            top_n=top_n,
+            rrf_k=rrf_k,
+            oversample=oversample,
+        )
 
-        batch_events = _build_batch_events(
-            chunk_positions=chunk_positions,
-            fused=fused,
+        events = _build_batch_events(
+            seed_event_ids=seed_batch,
+            neighbours=neighbours,
             lookup=lookup,
             false_positives=false_positives,
             token_counts=token_counts,
@@ -593,161 +428,8 @@ def iter_year_concept_batches(
 
         yield {
             "type": "batch",
-            "events": batch_events,
-            "seed_ids": event_ids_set,
+            "events": events,
+            "seed_ids": set(
+                resolved["event_ids_set"]
+            ),
         }
-
-
-def iter_concept_batches(
-    *,
-    concept_name,
-    concept,
-    lookup,
-    indexes,
-    top_n=K,
-    rrf_k=RRF_K,
-    oversample=OVERSAMPLE,
-    false_positives=None,
-    resolved=None,
-    batch_size=BATCH_SIZE,
-    evict_after_years=None,
-    search_backend: str = DEFAULT_SEARCH_BACKEND,
-    exact_store=None,
-    exact_workers: int = 1,
-    exact_pool: str = "thread",
-    exact_shards=None,
-):
-    """
-    Streaming counterpart to analyse_concept (concept-major).
-
-    Prefer the year-major path in orchestrator.service for multi-concept
-    batches so at most one year's FAISS indices are ever resident.
-    This generator remains for single-concept runs and tests.
-    """
-    if resolved is None:
-        resolved = resolve_concept_positions(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            false_positives=false_positives,
-        )
-
-    forms = resolved["forms"]
-    false_positives = resolved["false_positives"]
-    event_ids = resolved["event_ids"]
-    event_ids_set = resolved["event_ids_set"]
-    by_year = resolved["by_year"]
-
-    if not event_ids:
-        yield {"type": "empty", "concept": concept_name}
-        return
-
-    evict_after_years = evict_after_years or set()
-
-    token_counts = Counter()
-    doc_counts = Counter()
-    window_counts = Counter()
-
-    for year, year_positions in by_year.items():
-        for item in iter_year_concept_batches(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            indexes=indexes,
-            year=year,
-            top_n=top_n,
-            rrf_k=rrf_k,
-            oversample=oversample,
-            false_positives=false_positives,
-            resolved=resolved,
-            batch_size=batch_size,
-            token_counts=token_counts,
-            doc_counts=doc_counts,
-            window_counts=window_counts,
-            search_backend=search_backend,
-            exact_store=exact_store,
-            exact_workers=exact_workers,
-            exact_pool=exact_pool,
-            exact_shards=exact_shards,
-        ):
-            yield item
-
-        if (
-            year in evict_after_years
-            and indexes is not None
-            and hasattr(indexes, "evict")
-        ):
-            indexes.evict(year)
-
-    yield {
-        "type": "final",
-        "concept": concept_name,
-        "forms": forms,
-        "n_events": len(event_ids),
-        "aggregate": {
-            "top_tokens": token_counts.most_common(top_n),
-            "top_docs": doc_counts.most_common(top_n),
-            "top_windows": window_counts.most_common(top_n),
-        },
-    }
-
-
-def run_tier2_core(
-    *,
-    lookup,
-    indexes,
-    concepts_to_run,
-    top_n: int = K,
-    rrf_k: int = RRF_K,
-    oversample: int = OVERSAMPLE,
-    false_positives=None,
-    emit=None,
-    evict_index_after_year=False,
-    search_backend: str = DEFAULT_SEARCH_BACKEND,
-    exact_store=None,
-    exact_workers: int = 1,
-    exact_pool: str = "thread",
-    exact_shards=None,
-):
-    """
-    Heart of Tier 2: neighbourhood retrieval for every requested concept.
-
-    Takes already-constructed resources and returns a pure result dict.
-    No database writes, no index loading, no side effects beyond logging.
-
-    Note: this still accumulates every concept's result in `output` before
-    returning, so callers processing many concepts in one batch (e.g.
-    tier2.orchestrator.service) should prefer analysing + writing one
-    concept at a time instead of calling this over a large concept list.
-    """
-    logger.info(
-        "[tier2.run_tier2_core] Enter search_backend=%s", search_backend
-    )
-    output = {}
-
-    for concept_name, concept in concepts_to_run:
-        if emit:
-            emit("concept_start", {"concept": concept_name})
-
-        output[concept_name] = analyse_concept(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            indexes=indexes,
-            top_n=top_n,
-            rrf_k=rrf_k,
-            oversample=oversample,
-            false_positives=false_positives,
-            evict_index_after_year=evict_index_after_year,
-            search_backend=search_backend,
-            exact_store=exact_store,
-            exact_workers=exact_workers,
-            exact_pool=exact_pool,
-            exact_shards=exact_shards,
-        )
-
-        if emit:
-            emit("concept_done", {"concept": concept_name})
-
-    logger.info("[tier2.run_tier2_core] Leave")
-    return output

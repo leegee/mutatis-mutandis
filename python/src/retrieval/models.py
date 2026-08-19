@@ -135,3 +135,9 @@ class BatchSearchResult:
             raise ValueError(
                 "batch event_ids and distances must have identical shapes"
             )
+
+    def row(self, index: int) -> SearchResult:
+        return SearchResult(
+            event_ids=self.event_ids[index],
+            distances=self.distances[index],
+        )

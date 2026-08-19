@@ -462,9 +462,9 @@ def main():
     args = parser.parse_args()
 
     store_path = (
-        Path(args.store)
-        if args.store
-        else default_store_path("parquet", masked=args.mask)
+    Path(args.store)
+    if args.store
+        else default_store_path(masked=args.mask)
     )
 
     db_path = (

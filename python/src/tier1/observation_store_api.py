@@ -63,15 +63,17 @@ DEFAULT_ENSEMBLE_WEIGHTS: tuple[float, float, float] = (
 # Embeddings have their own selective access path.
 METADATA_FIELDS: tuple[str, ...] = (
     "event_id",
-    "concept_id",
-    "vector_id",
     "corpus",
     "doc_id",
     "token",
     "token_idx",
-    "window_id",
-    "window_token_pos",
     "pub_year",
+    "local_window_id",
+    "local_window_token_pos",
+    "medium_window_id",
+    "medium_window_token_pos",
+    "broad_window_id",
+    "broad_window_token_pos",
 )
 
 # Sentinel for missing window_token_pos. Never a valid token position.
