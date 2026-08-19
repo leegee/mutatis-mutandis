@@ -12,6 +12,8 @@ body.dark {
 
 	--error: rgb(65, 4, 4) !important;
 	--on-error: rgb(221, 202, 202) !important;
+
+	--footer-border: rgba(197, 189, 212, 50%) !important;
 }
 
 h1 {
@@ -36,7 +38,7 @@ h6 {
 nav.footer {
 	margin-top: 2em !important;
 	padding-top: 1em !important;
-	border-top: 1px dotted var(--on-surface);
+	border-top: 1px dotted var(--footer-border);
 	justify-content: space-between;
 }
 
