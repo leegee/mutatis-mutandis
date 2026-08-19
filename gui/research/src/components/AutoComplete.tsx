@@ -72,7 +72,7 @@ export default function Autocomplete<T>(props: AutocompleteProps<T>) {
 
     return (
         <>
-            <div class="field label border red">
+            <div class="field label border">
                 <input
                     type="text"
                     value={props.value}
