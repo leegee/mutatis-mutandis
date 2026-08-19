@@ -1,7 +1,7 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 
 import type { Entity, EntityType } from "~/domain/entity";
-import { createEntity, updateEntity, } from "~/db/repository";
+import { createEntity, updateEntity, } from "~/db/respository";
 
 import EntityAutocomplete from "./EntityAutocomplete";
 

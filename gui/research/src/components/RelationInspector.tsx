@@ -3,7 +3,7 @@ import { createSignal, Show } from "solid-js";
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
 
-import { deleteRelation, } from "~/db/repository";
+import { deleteRelation, } from "~/db/respository";
 
 import RelationForm from "./RelationForm";
 

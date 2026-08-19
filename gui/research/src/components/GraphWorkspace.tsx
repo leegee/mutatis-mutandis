@@ -7,7 +7,7 @@ import {
     createEntity,
     deleteEntity,
     deleteRelation,
-} from "~/db/repository";
+} from "~/db/respository";
 
 import GraphView from "~/components/GraphView";
 import EntityInspector from "~/components/EntityInspector";

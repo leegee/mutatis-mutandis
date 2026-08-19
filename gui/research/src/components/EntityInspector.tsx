@@ -5,7 +5,7 @@ import type { Relation } from "~/domain/relation";
 
 import EntityForm from "./EntityForm";
 import { useConfirm, usePrompt } from "./Modal";
-import { addEntityTag, deleteEntity, removeEntityTag, } from "~/db/repository";
+import { addEntityAlias, addEntityTag, deleteEntity, removeEntityAlias, removeEntityTag, } from "~/db/respository";
 
 interface EntityInspectorProps {
     entity: Entity | undefined;
@@ -43,6 +43,26 @@ export default function EntityInspector(props: EntityInspectorProps) {
     async function handleRemoveTag(tag: string) {
         const entity = currentEntity();
         const updated = await removeEntityTag(entity, tag);
+        setCurrentEntity(updated);
+        await props.onChanged?.(updated);
+    }
+
+
+    async function handleAddAlias() {
+        const entity = currentEntity();
+        const alias = await prompt("Alias:");
+        if (!alias?.trim()) {
+            return;
+        }
+
+        const updated = await addEntityAlias(entity, alias,);
+        setCurrentEntity(updated);
+        await props.onChanged?.(updated);
+    }
+
+    async function handleRemoveAlias(alias: string) {
+        const entity = currentEntity();
+        const updated = await removeEntityAlias(entity, alias);
         setCurrentEntity(updated);
         await props.onChanged?.(updated);
     }
@@ -130,20 +150,46 @@ export default function EntityInspector(props: EntityInspectorProps) {
                                 </section>
                             </Show>
 
-                            <Show when={entity().aliases.length > 0} >
-                                <section>
-                                    <h3>Aliases</h3>
+                            <section>
+                                <nav>
+                                    <h3 class="max">Aliases</h3>
+
+                                    <button
+                                        type="button"
+                                        class="small transparent border small circle"
+                                        onClick={handleAddAlias}
+                                    >
+                                        <i class="small">add</i>
+                                    </button>
+                                </nav>
+
+                                <Show
+                                    when={currentEntity().aliases.length > 0}
+                                    fallback={<p>No aliases.</p>}
+                                >
                                     <div class="row wrap">
-                                        <For each={entity().aliases} >
+                                        <For each={currentEntity().aliases}>
                                             {(alias) => (
                                                 <span class="chip">
                                                     {alias}
+
+                                                    <button
+                                                        type="button"
+                                                        class="transparent small"
+                                                        title={`Remove ${ alias }`}
+                                                        aria-label={`Remove alias ${ alias }`}
+                                                        onClick={() =>
+                                                            handleRemoveAlias(alias)
+                                                        }
+                                                    >
+                                                        <i class="small">close</i>
+                                                    </button>
                                                 </span>
                                             )}
                                         </For>
                                     </div>
-                                </section>
-                            </Show>
+                                </Show>
+                            </section>
 
                             <section>
                                 <nav>

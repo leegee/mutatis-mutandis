@@ -6,7 +6,7 @@ import type { Relation, RelationType } from "~/domain/relation";
 import {
     createRelation,
     updateRelation,
-} from "~/db/repository";
+} from "~/db/respository";
 
 import EntityAutocomplete from "~/components/EntityAutocomplete";
 

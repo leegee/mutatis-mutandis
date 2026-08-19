@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 
-import { importProject } from "~/db/repository";
+import { importProject } from "~/db/respository";
 import { validateProject } from "~/domain/validateProject";
 import { useAlert } from "~/components/Modal/";
 

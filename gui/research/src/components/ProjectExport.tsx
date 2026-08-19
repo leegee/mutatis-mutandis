@@ -1,4 +1,4 @@
-import { exportProject } from "~/db/repository";
+import { exportProject } from "~/db/respository";
 
 export default function ProjectExport() {
     async function exportData() {

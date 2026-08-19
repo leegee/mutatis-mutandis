@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
-import { listEntities } from "~/db/repository";
+import { listEntities } from "~/db/respository";
 
 interface EntityAutocompleteProps {
   value: string;
