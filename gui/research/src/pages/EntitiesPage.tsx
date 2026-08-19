@@ -8,7 +8,7 @@ export default function EntitiesPage() {
   const entities = useLiveQuery(liveEntities(), [] as Entity[]);
 
   return (
-    <article class="small page active">
+    <article class="top-level-view">
       <section class="padding">
         <h2>Add entity</h2>
         <EntityForm />

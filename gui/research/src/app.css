@@ -59,7 +59,7 @@ section:first-of-type {
 }
 
 /* Text pages that center */
-article.page.small {
+.top-level-view {
 	max-width: clamp(40em, 80em, 90vw);
 	margin: auto;
 }

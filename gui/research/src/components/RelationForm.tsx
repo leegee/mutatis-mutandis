@@ -23,18 +23,11 @@ interface RelationFormProps {
 
 export default function RelationForm(props: RelationFormProps) {
     const editing = () => !!props.relation;
-
     const [source, setSource] = createSignal<Entity>();
-
     const [target, setTarget] = createSignal<Entity>();
-
-    const [relationType, setRelationType] =
-        createSignal<RelationType>("related-to");
-
+    const [relationType, setRelationType] = createSignal<RelationType>("related-to");
     const [sourceValue, setSourceValue] = createSignal("");
-
     const [targetValue, setTargetValue] = createSignal("");
-
     const [saving, setSaving] = createSignal(false);
 
     // When editing, initialise the form from the existing relation.
@@ -134,7 +127,7 @@ export default function RelationForm(props: RelationFormProps) {
     return (
         <form onSubmit={submit}>
             <div class="">
-                <h3>{editing() ? "Edit Relationship" : "Add Relationship"}</h3>
+                <h3>{editing() ? "Edit Relationship" : "Add a new relationship"}</h3>
                 <div class="field">
                     <EntityAutocomplete
                         value={sourceValue()}

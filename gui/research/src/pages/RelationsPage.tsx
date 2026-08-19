@@ -15,14 +15,17 @@ export default function RelationsPage() {
   }
 
   return (
-    <article class="small page active">
+    <article class="top-level-view">
+      <header class="padding">
+        <h2>Relationships</h2>
+      </header>
+
       <section class="padding">
-        <h2>Add relationship</h2>
         <RelationForm />
       </section>
 
       <section class="padding">
-        <h2>Relationships</h2>
+        <h3>All Relationships</h3>
 
         <Show
           when={!entities.loading() && !relations.loading()}
@@ -32,23 +35,32 @@ export default function RelationsPage() {
             when={relations.value().length > 0}
             fallback={<p>No relationships yet.</p>}
           >
-            <ul class="list no-space border">
+            <table class="small-height stripes surface scroll">
+              <thead class="fixed">
+                <tr>
+                  <th>Subject</th>
+                  <th>Relates to</th>
+                  <th>Object</th>
+                </tr>
+              </thead>
               <For each={relations.value()}>
                 {(relation) => (
-                  <li>
-                    {entityLabel(relation.sourceId)}
+                  <tr>
+                    <td>
+                      {entityLabel(relation.sourceId)}
+                    </td>
+                    <td>
 
-                    {" — "}
+                      <strong> {relation.type} </strong>
 
-                    <strong> {relation.type} </strong>
-
-                    {" → "}
-
-                    {entityLabel(relation.targetId)}
-                  </li>
+                    </td>
+                    <td>
+                      {entityLabel(relation.targetId)}
+                    </td>
+                  </tr>
                 )}
               </For>
-            </ul>
+            </table>
           </Show>
         </Show>
       </section>
