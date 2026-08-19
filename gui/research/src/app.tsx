@@ -12,15 +12,8 @@ import ModalHost from "./components/Modal/ModalHost";
 function Navigation() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = createSignal(false);
-
-  const toggleMenu = () => {
-    setMenuOpen((open) => !open);
-  };
-
-  const closeMenu = () => {
-    setMenuOpen(false);
-  };
-
+  const toggleMenu = () => setMenuOpen((open) => !open);
+  const closeMenu = () => setMenuOpen(false);
   const isActive = (path: string) => location.pathname === path;
 
   return (
