@@ -3,6 +3,7 @@ import {
     addEntityAlias,
     addEntityTag,
     deleteEntity,
+    listAliases,
     listTags,
     removeEntityAlias,
     removeEntityTag,
@@ -11,7 +12,7 @@ import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
 import AutoComplete from "./AutoComplete";
 import EntityForm from "./EntityForm";
-import { useConfirm, usePrompt } from "./Modal";
+import { useConfirm } from "./Modal";
 
 interface EntityInspectorProps {
     entity: Entity | undefined;
@@ -27,13 +28,15 @@ export default function EntityInspector(props: EntityInspectorProps) {
     const [currentEntity, setCurrentEntity] = createSignal<Entity>(props.entity!);
     const [tagInput, setTagInput] = createSignal("");
     const [tags, setTags] = createSignal<string[]>([]);
+    const [aliases, setAliases] = createSignal<string[]>([]);
+    const [aliasInput, setAliasInput] = createSignal("");
 
     createEffect(() => {
         listTags().then(setTags);
+        listAliases().then(setAliases);
     });
 
     const confirm = useConfirm();
-    const prompt = usePrompt();
 
     createEffect(() => {
         if (props.entity) {
@@ -68,15 +71,13 @@ export default function EntityInspector(props: EntityInspectorProps) {
         await props.onChanged?.(updated);
     }
 
-    async function handleAddAlias() {
+    async function handleAddAlias(alias: string) {
+        const value = alias.trim();
+        if (!value) return;
         const entity = currentEntity();
-        const alias = await prompt("Alias:");
-        if (!alias?.trim()) {
-            return;
-        }
-
-        const updated = await addEntityAlias(entity, alias);
+        const updated = await addEntityAlias(entity, value);
         setCurrentEntity(updated);
+        setAliasInput("");
         await props.onChanged?.(updated);
     }
 
@@ -177,17 +178,15 @@ export default function EntityInspector(props: EntityInspectorProps) {
                         </Show>
 
                         <section>
-                            <nav>
-                                <h3 class="max">Aliases</h3>
-
-                                <button
-                                    type="button"
-                                    class="small transparent border small circle"
-                                    onClick={handleAddAlias}
-                                >
-                                    <i class="small">add</i>
-                                </button>
-                            </nav>
+                            <AutoComplete<string>
+                                value={aliasInput()}
+                                items={aliases()}
+                                getLabel={(alias) => alias}
+                                onInput={setAliasInput}
+                                onSelect={handleAddAlias}
+                                placeholder="Aliases"
+                                isTitle
+                            />
 
                             <Show
                                 when={currentEntity().aliases.length > 0}
@@ -196,7 +195,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
                                 <div class="row wrap tiny-space">
                                     <For each={currentEntity().aliases}>
                                         {(alias) => (
-                                            <span class="chip small left-padding">
+                                            <span class="small chip left-padding">
                                                 {alias}
 
                                                 <button
