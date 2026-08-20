@@ -1,1451 +1,1786 @@
 {
 	"version": 1,
 	"metadata": {
-		"title": "Extreme Whiteness, Albinism and Luminous Phenotype in Mythological and Ethnographic Traditions",
-		"description": "A research map investigating representations of extreme bodily whiteness, white hair, anomalous pigmentation, luminous eyes, visual exceptionalism, and the semantic movement between whiteness, brightness, luminosity, identity and divinity across Jewish, Christian, Greek, Roman, Celtic and Norse traditions.",
-		"createdAt": "2026-08-19T09:30:00+02:00",
-		"updatedAt": "2026-08-19T09:30:00+02:00"
+		"title": "From Theophany to Pathology: The Symbolic Semantics of Extreme Bodily Whiteness in English Literary Culture",
+		"description": "Diachronic research map investigating the symbolic semantics of extreme bodily whiteness (white hair, chalk-white skin, fiery/luminous eyes) in English literary culture and its biblical/European inheritance, from early modern theophanic imagery through to the medicalisation of albinism.",
+		"createdAt": "2026-08-20T00:00:00Z",
+		"updatedAt": "2026-08-20T00:00:00Z"
 	},
 	"entities": [
+		{
+			"id": "concept-extreme-bodily-whiteness",
+			"type": "concept",
+			"label": "Extreme Bodily Whiteness",
+			"aliases": ["symbolic whiteness", "extreme pallor"],
+			"description": "The central symbolic/physiognomic complex under study: white or snow-white hair, extraordinarily pale or chalk-white skin, sometimes paired with fiery or luminous eyes.",
+			"tags": ["core-concept", "colour", "body"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "concept-theophanic-imagery",
+			"type": "concept",
+			"label": "Theophanic Imagery",
+			"aliases": [],
+			"description": "Divine self-manifestation imagery in Jewish and Christian apocalyptic literature, the project's starting point (Revelation 1's 'Son of Man').",
+			"tags": ["theology", "biblical reception"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "concept-albinism-medical-category",
+			"type": "concept",
+			"label": "Albinism as Medico-Scientific Category",
+			"aliases": [],
+			"description": "The historically emergent medical/racial classification of albinism, distinct from the older symbolic-physiognomic complex of extreme whiteness.",
+			"tags": ["medical", "disability", "race"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "concept-marked-body",
+			"type": "concept",
+			"label": "Marked / Visibly Different Body",
+			"aliases": [],
+			"description": "The project's central concern: how bodies marked by extreme whiteness acquire shifting symbolic functions (divinity, sanctity, monstrosity, pathology).",
+			"tags": ["disability history", "body"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "concept-liminality",
+			"type": "concept",
+			"label": "Liminality",
+			"aliases": [],
+			"description": "Structural theme: whiteness recurring around boundary-crossing or liminal supernatural figures (e.g. Heimdallr, dark/light elves).",
+			"tags": ["structural", "supernatural"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "concept-whiteness-as-identity-marker",
+			"type": "concept",
+			"label": "Whiteness as Personal / Ethnonymic Identity",
+			"aliases": [],
+			"description": "Cases where a whiteness-lexeme becomes a proper name or ethnonym rather than a descriptive term (Fionn, Gwyn, Leucaethiopes).",
+			"tags": ["onomastics", "identity"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-on-hvitr",
+			"type": "lexeme",
+			"label": "hvítr (Old Norse)",
+			"aliases": ["hvitr"],
+			"description": "Old Norse colour/brightness term, central to Crawford's dissertation; associated with reflectivity, shininess, attractiveness, light hair, women's beauty, silver, brightness.",
+			"tags": ["Old Norse", "colour"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-on-svartr",
+			"type": "lexeme",
+			"label": "svartr (Old Norse)",
+			"aliases": [],
+			"description": "Old Norse term for black/dark, forming a recurrent polarity with hvítr (e.g. ljósálfar/dökkálfar, raven/swan proverb).",
+			"tags": ["Old Norse", "colour"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-on-alpt",
+			"type": "lexeme",
+			"label": "álpt (Old Norse, 'swan')",
+			"aliases": [],
+			"description": "Old Norse word for swan; Cleasby-Vigfusson suggests a possible etymological connection to Latin albus ('white').",
+			"tags": ["Old Norse", "etymology", "animal"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-oe-hwit",
+			"type": "lexeme",
+			"label": "hwīt (Old English)",
+			"aliases": [],
+			"description": "Old English term denoting brightness and luminosity as well as literal whiteness (shining roofs, helmets, gems, silver).",
+			"tags": ["Old English", "colour"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-oe-blat",
+			"type": "lexeme",
+			"label": "blāt (Old English)",
+			"aliases": [],
+			"description": "Old English term meaning livid, pale, ghastly; contrasts with hwīt in Andreas and Genesis.",
+			"tags": ["Old English", "colour"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-oi-ban",
+			"type": "lexeme",
+			"label": "bán (Old Irish)",
+			"aliases": [],
+			"description": "Old Irish term whose semantic field extends from 'white' into fair, bright, pure, holy/blessed, pale, and empty/blank.",
+			"tags": ["Old Irish", "colour"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-irish-fionn",
+			"type": "lexeme",
+			"label": "fionn (Irish)",
+			"aliases": [],
+			"description": "Irish term meaning white/fair/bright, source of the personal name Fionn.",
+			"tags": ["Irish", "colour", "onomastics"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-welsh-gwyn",
+			"type": "lexeme",
+			"label": "gwyn (Welsh)",
+			"aliases": [],
+			"description": "Welsh term meaning white/fair/bright, source of the name Gwyn.",
+			"tags": ["Welsh", "colour", "onomastics"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "lexeme-proto-celtic-windos",
+			"type": "lexeme",
+			"label": "*windos (Proto-Celtic)",
+			"aliases": [],
+			"description": "Reconstructed Proto-Celtic root behind Irish fionn and Welsh gwyn, giving the comparative semantic field white -> fair -> bright.",
+			"tags": ["Proto-Celtic", "etymology"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-revelation-1",
+			"type": "source",
+			"label": "Book of Revelation, ch. 1",
+			"aliases": [],
+			"description": "New Testament apocalyptic text; theophany of the 'Son of Man', the project's initial anchor text.",
+			"tags": ["biblical", "apocalyptic"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-1-enoch",
+			"type": "source",
+			"label": "1 Enoch (106:2-3)",
+			"aliases": [],
+			"description": "Jewish apocalyptic text describing Noah's extraordinary whiteness at birth; closest ancient parallel to Revelation's Son of Man imagery per Hilton.",
+			"tags": ["biblical", "apocalyptic", "Enoch"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-daniel-7-10",
+			"type": "source",
+			"label": "Book of Daniel (ch. 7, 10)",
+			"aliases": [],
+			"description": "Hebrew Bible text containing the 'Ancient of Days' and 'man in linen' theophanies.",
+			"tags": ["biblical", "apocalyptic"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-thomas-white-thesis-2012",
+			"type": "source",
+			"label": "White, T. - 'Their Whiteness Is Not Like Ours' (PhD thesis, Manchester, 2012)",
+			"aliases": [],
+			"description": "Principal historiographical foundation for the social/medical/racial construction of albinism, 1650-1914.",
+			"tags": ["scholarship", "albinism"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-hilton-albinism-ancient-mediterranean",
+			"type": "source",
+			"label": "Hilton, J.L. - 'Albinism in the Ancient Mediterranean World'",
+			"aliases": [],
+			"description": "Assembles classical and late-antique evidence for albinism-like phenotypes across the Mediterranean world, including the Enoch/Noah description.",
+			"tags": ["scholarship", "classics", "albinism"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-schober-hairy-tale",
+			"type": "source",
+			"label": "Schober, S-M. - 'A Hairy Tale: Eighteenth-Century Strands of Albinism and Race'",
+			"aliases": [],
+			"description": "Examines Blumenbach's albino hair-sample collection and the shift from 'white Negroes' as racial curiosity to albinism as pathology.",
+			"tags": ["scholarship", "Enlightenment", "race", "albinism"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-bek-pedersen-nornir-thesis",
+			"type": "source",
+			"label": "Bek-Pedersen, K. - 'Nornir in Old Norse Mythology' (PhD thesis, Edinburgh, 2007/2008)",
+			"aliases": [],
+			"description": "Discusses colour symbolism around the Norns, including the white/black raven-swan contrast.",
+			"tags": ["scholarship", "Old Norse"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-bek-pedersen-st-michael",
+			"type": "source",
+			"label": "Bek-Pedersen, K. - 'St Michael and the sons of Þiðrandi: the black and white dísir'",
+			"aliases": [],
+			"description": "Discusses the light-elf/dark-elf opposition ('fairer than the sun' vs 'blacker than pitch').",
+			"tags": ["scholarship", "Old Norse"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-crawford-color-terms-dissertation",
+			"type": "source",
+			"label": "Crawford, J. - 'The Historical Development of Basic Color Terms in Old Norse-Icelandic' (2014)",
+			"aliases": [],
+			"description": "Corpus-based dissertation establishing the semantic range of hvítr and its associations.",
+			"tags": ["scholarship", "Old Norse", "historical semantics"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-hall-elves-thesis",
+			"type": "source",
+			"label": "Hall, A. - PhD thesis on elves in Anglo-Saxon and Old Norse tradition",
+			"aliases": [],
+			"description": "Discusses Snorri's ljósálfar/dökkálfar distinction as possibly influenced by Christian angelology, and Völundr's unusual hvítr description.",
+			"tags": ["scholarship", "Old Norse", "Old English"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-snorri-gylfaginning",
+			"type": "source",
+			"label": "Snorri Sturluson - Gylfaginning",
+			"aliases": [],
+			"description": "Prose Edda section describing the ljósálfar/dökkálfar polarity, the birds at Urðarbrunnr, and Baldr's beauty.",
+			"tags": ["Old Norse", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-thrymskvida",
+			"type": "source",
+			"label": "Þrymskviða (Poetic Edda)",
+			"aliases": [],
+			"description": "Eddic poem describing Heimdallr as 'hvítastr ása' (whitest of the Æsir).",
+			"tags": ["Old Norse", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-volundarkvida",
+			"type": "source",
+			"label": "Vǫlundarkviða (Poetic Edda)",
+			"aliases": [],
+			"description": "Eddic poem describing Völundr's neck as hvítr.",
+			"tags": ["Old Norse", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-cleasby-vigfusson-dictionary",
+			"type": "source",
+			"label": "Cleasby-Vigfusson, Icelandic-English Dictionary",
+			"aliases": [],
+			"description": "Records the proverb opposing raven and swan, and a possible álpt/albus etymology.",
+			"tags": ["reference", "Old Norse"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-old-english-pmla-color-study",
+			"type": "source",
+			"label": "PMLA study, 'Color in Old English Poetry'",
+			"aliases": [],
+			"description": "Establishes hwīt as denoting brightness/luminosity as well as hue, contrasted with blāt.",
+			"tags": ["scholarship", "Old English"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-old-english-teaching-corpus",
+			"type": "source",
+			"label": "Old English Teaching Corpus (University of Glasgow), Unit 6: Colour",
+			"aliases": [],
+			"description": "Pedagogical resource noting that Old English colour terms must be reconstructed from context rather than mapped onto modern categories.",
+			"tags": ["reference", "Old English"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-messe-ocus-pangur-ban",
+			"type": "source",
+			"label": "Messe ocus Pangur Bán (9th c. Old Irish poem)",
+			"aliases": [],
+			"description": "Poem about a scholar and his white cat; non-supernatural use of bán.",
+			"tags": ["Old Irish", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-these-1995-figures-surnaturel-celtique",
+			"type": "source",
+			"label": "Thèse, 1995 - 'Les Figures du Surnaturel dans la Mythologie Celtique'",
+			"aliases": [],
+			"description": "Argues that bán functions as an external sign of an animal's belonging to the supernatural world, and that such animals are ambivalent rather than simply benevolent.",
+			"tags": ["scholarship", "Celtic"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-pliny-natural-history",
+			"type": "source",
+			"label": "Pliny the Elder - Naturalis Historia, 7.12",
+			"aliases": [],
+			"description": "Reports Isigonus of Nicaea's account of the Albanians, and preserves Ctesias' account of anomalous coloration.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-aulus-gellius",
+			"type": "source",
+			"label": "Aulus Gellius (c. 200 CE)",
+			"aliases": [],
+			"description": "Independent transmission of the Albanian phenotype tradition.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-solinus",
+			"type": "source",
+			"label": "Julius Solinus (c. 300 CE)",
+			"aliases": [],
+			"description": "Independent transmission of the Albanian phenotype tradition.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-krappe-1944",
+			"type": "source",
+			"label": "Krappe (1944)",
+			"aliases": [],
+			"description": "Cited by Hilton for a parallel Iranian tradition of albinism-like accounts.",
+			"tags": ["scholarship"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-phlegon-mirabilia-hansen",
+			"type": "source",
+			"label": "Phlegon of Tralles, Mirabilia (via Hansen 1996)",
+			"aliases": [],
+			"description": "Marvel-tradition text describing people with extraordinary physical characteristics.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-pomponius-mela",
+			"type": "source",
+			"label": "Pomponius Mela, Geographia 1.23",
+			"aliases": [],
+			"description": "Names the 'Leucaethiopes' (White Ethiopians) near the Nile.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-agathemerus",
+			"type": "source",
+			"label": "Agathemerus, Geographia 2.5",
+			"aliases": [],
+			"description": "Locates the Leucaethiopes west of Egypt.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-ptolemy-geographia",
+			"type": "source",
+			"label": "Ptolemy, Geographia 4.6.17",
+			"aliases": [],
+			"description": "Situates the Leucaethiopes at the foot of Mt Ryssadius on the equatorial African coast.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-strabo",
+			"type": "source",
+			"label": "Strabo, Geographica 11.4.7",
+			"aliases": [],
+			"description": "Describes the Selene (moon) cult and human sacrifice among the Albanians.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-incredible-things-beyond-thule",
+			"type": "source",
+			"label": "Diogenes, Incredible Things Beyond Thule (via Photius, Bibliotheca 109b)",
+			"aliases": [],
+			"description": "Describes Derkyllis' people in Iberia, who could see at night but were blind by day.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-stephanus-byzantium-ethnica",
+			"type": "source",
+			"label": "Stephanus of Byzantium, Ethnica, s.v. Germara",
+			"aliases": [],
+			"description": "Cites Aristotle's (lost) On Marvels for the Germara, a Celtic tribe blind by day.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-homer-odyssey",
+			"type": "source",
+			"label": "Homer, Odyssey 12",
+			"aliases": [],
+			"description": "Describes Circe as a descendant of Helios with conspicuous radiance.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-apollonius-argonautica",
+			"type": "source",
+			"label": "Apollonius Rhodius, Argonautica 3-4",
+			"aliases": [],
+			"description": "Describes Medea's extraordinary eyes/radiance as a descendant of Helios.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-ovid-metamorphoses",
+			"type": "source",
+			"label": "Ovid, Metamorphoses 2",
+			"aliases": [],
+			"description": "Recounts Phaethon's solar/divine lineage as son of Helios.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-plutarch-sertorius",
+			"type": "source",
+			"label": "Plutarch, Sertorius 11.4",
+			"aliases": [],
+			"description": "Describes an entirely white doe regarded as sacred/wondrous.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-apollodorus-bibliotheca",
+			"type": "source",
+			"label": "Apollodorus, Bibliotheca 2.4.3",
+			"aliases": [],
+			"description": "Describes Andromeda, the Ethiopian princess represented as exceptionally white.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-philostratus-imagines",
+			"type": "source",
+			"label": "Philostratus, Imagines 1.29",
+			"aliases": [],
+			"description": "Describes Andromeda's whiteness within an Ethiopian/African context.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-heliodorus-aethiopica",
+			"type": "source",
+			"label": "Heliodorus, Aethiopica 4.8, 10.14",
+			"aliases": [],
+			"description": "Recounts Charicleia, a white child born to Ethiopian parents, requiring narrative explanation.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-oidheadh-chloinne-lir",
+			"type": "source",
+			"label": "Oidheadh Chloinne Lir",
+			"aliases": [],
+			"description": "Irish tale in which Fionnuala's name is glossed 'white shoulder'.",
+			"tags": ["Irish", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "source-porphyry-thule",
+			"type": "source",
+			"label": "Diogenes, Incredible Things Beyond Thule (via Porphyry)",
+			"aliases": [],
+			"description": "Describes Astraeus staring at the sun without blinking, with divine/star associations.",
+			"tags": ["classics", "primary text"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
 		{
 			"id": "person-noah",
 			"type": "person",
 			"label": "Noah",
 			"aliases": [],
-			"description": "Noah as described in the Jewish apocalyptic tradition preserved in 1 Enoch, including the extraordinary description of his bodily whiteness and luminous eyes.",
-			"tags": [
-				"Jewish",
-				"apocalyptic",
-				"whiteness",
-				"white-hair",
-				"luminous-eyes"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "White as snow, red as a rose; hair white as wool; eyes like rays of the sun.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "person-daniel",
+			"id": "person-daniel-figure",
 			"type": "person",
 			"label": "Daniel",
 			"aliases": [],
-			"description": "Daniel as the narrative and visionary locus for extraordinary white and luminous figures in Daniel 7 and Daniel 10.",
-			"tags": [
-				"Hebrew-Bible",
-				"apocalyptic",
-				"vision",
-				"whiteness",
-				"luminosity"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Not himself described as unusually white; functions as the narrative recipient/observer of extraordinary white figures.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "figure-ancient-of-days",
+			"id": "person-ancient-of-days",
 			"type": "person",
 			"label": "Ancient of Days",
 			"aliases": [],
-			"description": "The divine figure in Daniel 7 whose garment is white as snow and whose hair is like pure wool.",
-			"tags": [
-				"Hebrew-Bible",
-				"apocalyptic",
-				"divine",
-				"white-hair",
-				"white-clothing",
-				"luminosity"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Garment white as snow; hair like pure wool.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "figure-man-in-linen",
+			"id": "person-man-in-linen",
 			"type": "person",
-			"label": "Man in linen",
+			"label": "Man in Linen",
 			"aliases": [],
-			"description": "The extraordinary figure encountered by Daniel in Daniel 10, with a face like lightning, flaming eyes and limbs like burnished bronze.",
-			"tags": [
-				"Hebrew-Bible",
-				"apocalyptic",
-				"vision",
-				"luminous-eyes",
-				"luminosity"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Face like lightning; eyes like flaming torches; limbs like burnished bronze.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "figure-son-of-man",
+			"id": "person-son-of-man",
 			"type": "person",
 			"label": "Son of Man",
 			"aliases": [],
-			"description": "The apocalyptic figure in Revelation whose hair is white as wool or snow, whose eyes are like fire and whose face shines like the sun.",
-			"tags": [
-				"Christian",
-				"apocalyptic",
-				"divine",
-				"white-hair",
-				"fiery-eyes",
-				"solar-luminosity"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Hair white as wool/snow; eyes like fire; face like the sun in full strength.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-andromeda",
 			"type": "person",
 			"label": "Andromeda",
 			"aliases": [],
-			"description": "The Ethiopian princess whose exceptional whiteness is represented in Greek literary and artistic traditions.",
-			"tags": ["Greek", "Ethiopian", "whiteness", "anomaly"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Ethiopian princess represented as exceptionally white.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-charicleia",
 			"type": "person",
 			"label": "Charicleia",
 			"aliases": [],
-			"description": "The white child born to Ethiopian parents in Heliodorus' Aethiopica, whose anomalous appearance requires an etiological explanation.",
-			"tags": ["Greek", "Ethiopian", "whiteness", "anomaly", "albinism"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "group-albanians",
-			"type": "person",
-			"label": "Albanians",
-			"aliases": ["Albani"],
-			"description": "The population described in ancient ethnographic accounts as having grey or glaucous eyes and white or grey hair from childhood, with unusual visual abilities.",
-			"tags": [
-				"Greek",
-				"Roman",
-				"ethnography",
-				"white-hair",
-				"visual-anomaly",
-				"albinism"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "group-ctesias-people",
-			"type": "person",
-			"label": "Ctesias' people",
-			"aliases": [],
-			"description": "A group preserved in Pliny's account as part of ancient ethnographic traditions concerning unusual human coloration or appearance.",
-			"tags": ["Greek", "ethnography", "anomaly"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "group-leucaethiopes",
-			"type": "person",
-			"label": "Leucaethiopes",
-			"aliases": ["White Ethiopians"],
-			"description": "A population designated by an ethnonym meaning White Ethiopians in ancient geographical and ethnographic traditions.",
-			"tags": [
-				"Greek",
-				"Roman",
-				"Ethiopian",
-				"ethnography",
-				"ethnonym",
-				"whiteness"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "group-derkyllis-people",
-			"type": "person",
-			"label": "Derkyllis' people in Iberia",
-			"aliases": [],
-			"description": "A people reported as being able to see at night but blind during the day.",
-			"tags": ["Greek", "Iberia", "visual-anomaly", "nocturnal-vision"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "group-celtic-nocturnal",
-			"type": "person",
-			"label": "Unnamed Celtic tribe",
-			"aliases": [],
-			"description": "An unnamed Celtic population reported as having the ability to see at night while being blind during the day.",
-			"tags": ["Celtic", "visual-anomaly", "nocturnal-vision"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "group-germara",
-			"type": "person",
-			"label": "Germara",
-			"aliases": [],
-			"description": "A people described as blind by day in a tradition attributed to Aristotle.",
-			"tags": ["Celtic", "visual-anomaly", "day-blindness"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "White child born to Ethiopian parents.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-heimdallr",
 			"type": "person",
 			"label": "Heimdallr",
-			"aliases": ["Heimdall"],
-			"description": "The Norse god explicitly described as the whitest of the Æsir.",
-			"tags": ["Norse", "divine", "whiteness", "superlative"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"aliases": [],
+			"description": "Described as 'hvítastr ása' — whitest of the Æsir.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-baldr",
 			"type": "person",
 			"label": "Baldr",
-			"aliases": ["Balder"],
-			"description": "The Norse god associated with exceptional fairness, brightness and whiteness.",
-			"tags": ["Norse", "divine", "whiteness", "brightness"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"aliases": [],
+			"description": "Exceptionally fair and bright; Snorri compares his beauty to the whitest of all plants.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "person-fionn",
+			"id": "person-volundr",
+			"type": "person",
+			"label": "Völundr",
+			"aliases": [],
+			"description": "His neck is described as hvítr, unusual for an adult male figure in Eddic poetry.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "person-fionn-mac-cumhaill",
 			"type": "person",
 			"label": "Fionn mac Cumhaill",
-			"aliases": ["Fionn"],
-			"description": "Irish heroic figure whose name belongs to the semantic field of white, fair and bright.",
-			"tags": [
-				"Irish",
-				"Celtic",
-				"whiteness",
-				"brightness",
-				"personal-identity"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"aliases": [],
+			"description": "Name derives from fionn ('white/fair/bright').",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-gwyn-ap-nudd",
 			"type": "person",
 			"label": "Gwyn ap Nudd",
-			"aliases": ["Gwyn"],
-			"description": "Welsh supernatural figure whose name derives from the semantic field of white, fair and bright.",
-			"tags": [
-				"Welsh",
-				"Celtic",
-				"whiteness",
-				"brightness",
-				"personal-identity"
-			],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"aliases": [],
+			"description": "Name derives from gwyn ('white/fair/bright').",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-fionnuala",
 			"type": "person",
 			"label": "Fionnuala",
 			"aliases": [],
-			"description": "Irish figure whose name literally contains the semantic element of a white shoulder.",
-			"tags": ["Irish", "Celtic", "whiteness", "anatomy", "personal-identity"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Name glossed literally as 'white shoulder'.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-fintan",
 			"type": "person",
 			"label": "Fintan",
 			"aliases": [],
-			"description": "Irish figure whose name has been tentatively connected with the semantic field of fin/finn and white fire.",
-			"tags": ["Irish", "Celtic", "whiteness", "etymology", "tentative"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Possibly associated with finn/'white fire'.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-astraeus",
 			"type": "person",
 			"label": "Astraeus",
 			"aliases": [],
-			"description": "A Greek figure associated with extraordinary solar or astral visual behaviour, including staring at the sun without blinking.",
-			"tags": ["Greek", "solar", "astral", "visual-exceptionalism"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Associated with staring at the sun without blinking; divine/star associations.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-circe",
 			"type": "person",
 			"label": "Circe",
 			"aliases": [],
-			"description": "Greek divine or semi-divine figure descended from Helios and associated with conspicuous radiance.",
-			"tags": ["Greek", "solar", "radiance", "divine"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Descendant of Helios, with conspicuous radiance.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-medea",
 			"type": "person",
 			"label": "Medea",
 			"aliases": [],
-			"description": "Greek figure descended from Helios and associated with extraordinary eyes and solar radiance.",
-			"tags": ["Greek", "solar", "luminous-eyes", "divine"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Descendant of Helios, with extraordinary eyes/radiance.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "person-phaethon",
 			"type": "person",
 			"label": "Phaethon",
 			"aliases": [],
-			"description": "Son of Helios whose exceptional status is connected with solar and divine lineage.",
-			"tags": ["Greek", "Roman", "solar", "divine"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Son of Helios, of solar/divine lineage.",
+			"tags": ["figure"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-albanians",
+			"type": "group",
+			"label": "Albanians (ancient ethnographic tradition)",
+			"aliases": [],
+			"description": "A people reported by Pliny (via Isigonus), Aulus Gellius and Solinus as having grey eyes, white/grey hair from childhood, and better night than day vision.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-leucaethiopes",
+			"type": "group",
+			"label": "Leucaethiopes ('White Ethiopians')",
+			"aliases": [],
+			"description": "An ethnonym for a reportedly white-skinned African population, located variously near the Nile, west of Egypt, or on the equatorial African coast.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-ctesias-people",
+			"type": "group",
+			"label": "Ctesias' people",
+			"aliases": [],
+			"description": "An unusual human coloration/appearance described by Ctesias of Cnidus and preserved by Pliny.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-iranian-albinistic-people",
+			"type": "group",
+			"label": "Iranian albinistic people",
+			"aliases": [],
+			"description": "A possibly independent Iranian tradition concerning albinism-like phenotypes, paralleling the Albanian reports.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-phlegon-anomalous-people",
+			"type": "group",
+			"label": "Phlegon's anomalous people",
+			"aliases": [],
+			"description": "People with extraordinary physical characteristics described in the Mirabilia (marvel) tradition.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-derkyllis-people",
+			"type": "group",
+			"label": "Derkyllis' people (Iberia)",
+			"aliases": [],
+			"description": "People in [Thracian] Iberia who could see in the dark but were blind by day, per Diogenes/Photius.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-unnamed-celtic-tribe",
+			"type": "group",
+			"label": "Unnamed Celtic tribe (Apollonius/Eudoxus)",
+			"aliases": [],
+			"description": "A Celtic tribe reported to see by night but be blind by day.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "group-germara",
+			"type": "group",
+			"label": "Germara",
+			"aliases": [],
+			"description": "A Celtic tribe recorded by Stephanus of Byzantium (citing Aristotle) as blind by day.",
+			"tags": ["ethnographic tradition"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
 			"id": "animal-white-doe",
 			"type": "animal",
-			"label": "White doe",
+			"label": "White Doe (Sertorius)",
 			"aliases": [],
-			"description": "An entirely white doe treated as extraordinary, sacred and wondrous in Plutarch's account of Sertorius.",
-			"tags": ["Greek", "Roman", "animal", "white", "sacred", "anomaly"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "An entirely white doe regarded as extraordinary and sacred/wondrous.",
+			"tags": ["animal", "sacred"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "concept-extreme-whiteness",
-			"type": "concept",
-			"label": "Extreme whiteness",
-			"aliases": ["congenital whiteness"],
-			"description": "A semantic and phenotypic category covering extraordinary bodily whiteness represented as unusual, exceptional or supernatural.",
-			"tags": ["whiteness", "phenotype", "body", "anomaly"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-white-hair",
-			"type": "concept",
-			"label": "White hair",
-			"aliases": ["hair whiteness"],
-			"description": "White or exceptionally pale hair as a recurring bodily characteristic in mythological and ethnographic descriptions.",
-			"tags": ["whiteness", "phenotype", "hair", "body"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-luminous-eyes",
-			"type": "concept",
-			"label": "Luminous eyes",
-			"aliases": ["fiery eyes"],
-			"description": "Eyes represented as luminous, fiery, solar or otherwise extraordinarily bright.",
-			"tags": ["eyes", "luminosity", "phenotype", "vision"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-solar-luminosity",
-			"type": "concept",
-			"label": "Solar luminosity",
-			"aliases": ["solar radiance"],
-			"description": "The semantic association of exceptional bodies or figures with the brightness, radiance or visual power of the sun.",
-			"tags": ["solar", "luminosity", "brightness", "divinity"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-albinism",
-			"type": "concept",
-			"label": "Albinism",
-			"aliases": ["albinistic phenotype"],
-			"description": "The clinical phenotype used as a possible modern comparative framework for some ancient descriptions of extreme pigmentation and visual characteristics.",
-			"tags": ["phenotype", "clinical", "pigmentation", "vision"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-photophobia",
-			"type": "concept",
-			"label": "Photophobia",
-			"aliases": ["light sensitivity"],
-			"description": "Sensitivity to bright light considered as a possible explanatory framework for ancient descriptions of impaired daytime vision.",
-			"tags": ["vision", "clinical", "albinism", "interpretive"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-nocturnal-vision",
-			"type": "concept",
-			"label": "Nocturnal vision",
-			"aliases": ["night vision"],
-			"description": "Exceptional ability to see at night in ancient ethnographic and marvel traditions.",
-			"tags": ["vision", "night", "anomaly"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-bodily-anomaly",
-			"type": "concept",
-			"label": "Bodily anomaly",
-			"aliases": ["physical anomaly"],
-			"description": "A broad category for extraordinary physical characteristics presented as marvels, anomalies or objects requiring explanation.",
-			"tags": ["body", "anomaly", "marvel"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-ethnonymic-whiteness",
-			"type": "concept",
-			"label": "Ethnonymic whiteness",
-			"aliases": ["whiteness as ethnonym"],
-			"description": "The semantic phenomenon in which whiteness becomes part of the name or ethnonym of a population.",
-			"tags": ["whiteness", "ethnography", "ethnonym", "semantics"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-white-fair-bright",
-			"type": "concept",
-			"label": "White → fair → bright",
-			"aliases": ["white-fair-bright semantic field"],
-			"description": "The Celtic semantic field in which whiteness can extend metaphorically or semantically into fairness and brightness.",
-			"tags": ["Celtic", "etymology", "whiteness", "fairness", "brightness"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-personal-identity-whiteness",
-			"type": "concept",
-			"label": "Whiteness as personal identity",
+			"id": "animal-alpt-swan-urdarbrunnr",
+			"type": "animal",
+			"label": "Swans at Urðarbrunnr",
 			"aliases": [],
-			"description": "The semantic phenomenon in which whiteness, fairness or brightness becomes encoded in a person's name or identity.",
-			"tags": ["whiteness", "identity", "onomastics", "Celtic"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "Two swans nourished at the well of the Norns; the well's water is holy enough to turn things white.",
+			"tags": ["animal", "Old Norse", "sacred"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "concept-lunar-symbolism",
-			"type": "concept",
-			"label": "Lunar symbolism",
-			"aliases": ["moon symbolism"],
-			"description": "Association of unusual whiteness or anomalous populations with lunar worship and symbolism.",
-			"tags": ["lunar", "religion", "symbolism", "whiteness"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "concept-sacralised-whiteness",
-			"type": "concept",
-			"label": "Sacralised whiteness",
+			"id": "animal-pangur-ban-cat",
+			"type": "animal",
+			"label": "Pangur Bán",
 			"aliases": [],
-			"description": "Whiteness presented as extraordinary and consequently associated with sacred, divine or wondrous status.",
-			"tags": ["whiteness", "sacred", "divinity", "anomaly"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "The white cat of the 9th-century Old Irish poem Messe ocus Pangur Bán; a non-supernatural use of bán.",
+			"tags": ["animal", "Old Irish"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "source-1-enoch",
-			"type": "source",
-			"label": "1 Enoch",
-			"aliases": ["First Book of Enoch"],
-			"description": "Jewish apocalyptic text containing the extraordinary description of Noah in 1 Enoch 106.",
-			"tags": ["Jewish", "apocalyptic", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "source-daniel",
-			"type": "source",
-			"label": "Book of Daniel",
-			"aliases": ["Daniel"],
-			"description": "Hebrew Bible text containing the visions of Daniel 7 and Daniel 10.",
-			"tags": ["Hebrew-Bible", "apocalyptic", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "source-revelation",
-			"type": "source",
-			"label": "Book of Revelation",
-			"aliases": ["Revelation", "Apocalypse of John"],
-			"description": "Christian apocalyptic text containing the vision of the Son of Man in Revelation 1:13–16.",
-			"tags": ["Christian", "apocalyptic", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "source-bibliotheca",
-			"type": "source",
-			"label": "Bibliotheca",
-			"aliases": ["Pseudo-Apollodorus, Bibliotheca"],
-			"description": "Greek mythographical source containing an account of Andromeda.",
-			"tags": ["Greek", "mythography", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "source-aethiopica",
-			"type": "source",
-			"label": "Aethiopica",
-			"aliases": ["Heliodorus, Aethiopica"],
-			"description": "Greek novel containing the story of Charicleia, the white child born to Ethiopian parents.",
-			"tags": ["Greek", "novel", "Ethiopian", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "source-natural-history",
-			"type": "source",
-			"label": "Natural History",
-			"aliases": ["Pliny, Naturalis Historia", "Historia Naturalis"],
-			"description": "Roman encyclopaedic work preserving ancient ethnographic reports concerning unusual peoples and bodily characteristics.",
-			"tags": ["Roman", "ethnography", "encyclopaedic", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "source-thrymskvida",
-			"type": "source",
-			"label": "Þrymskviða",
+			"id": "animal-raven-nornir",
+			"type": "animal",
+			"label": "Black raven (Norns imagery)",
 			"aliases": [],
-			"description": "Old Norse poem containing the description of Heimdallr as the whitest of the Æsir.",
-			"tags": ["Norse", "Old-Norse", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"description": "A black raven with blood on its claws and beak, contrasted with a fair/white female figure in Bek-Pedersen's discussion of the Norns.",
+			"tags": ["animal", "Old Norse", "contrast"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "source-gylfaginning",
-			"type": "source",
-			"label": "Gylfaginning",
-			"aliases": ["Snorri, Gylfaginning"],
-			"description": "Part of Snorri Sturluson's Edda containing descriptions of Baldr and other Norse gods.",
-			"tags": ["Norse", "Old-Norse", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"id": "motif-hair-white-as-wool-snow",
+			"type": "motif",
+			"label": "Hair White as Wool/Snow",
+			"aliases": [],
+			"description": "Recurrent phrase-pattern describing hair as white as wool and/or snow, found from 1 Enoch and Daniel through Revelation.",
+			"tags": ["motif", "hair"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "source-sertorius",
-			"type": "source",
-			"label": "Sertorius",
-			"aliases": ["Plutarch, Life of Sertorius"],
-			"description": "Plutarch's biography containing the account of the entirely white doe associated with Sertorius.",
-			"tags": ["Greek", "Roman", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"id": "motif-fiery-luminous-eyes",
+			"type": "motif",
+			"label": "Fiery / Luminous Eyes",
+			"aliases": [],
+			"description": "Recurrent motif of eyes described as flame-like, fiery, or otherwise supernaturally luminous, paired with extreme whiteness.",
+			"tags": ["motif", "eyes"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "source-incredible-things",
-			"type": "source",
-			"label": "Incredible Things Beyond Thule",
-			"aliases": ["Diogenes' Incredible Things Beyond Thule"],
-			"description": "Marvel literature preserved through later transmission and associated with reports of extraordinary peoples and visual abilities.",
-			"tags": ["Greek", "marvel", "ethnography", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"id": "motif-blind-by-day-see-by-night",
+			"type": "motif",
+			"label": "Blind by Day, Sees by Night",
+			"aliases": [],
+			"description": "Recurrent ethnographic motif (Albanians, Derkyllis' people, unnamed Celtic tribe, Germara) of inverted or nocturnal vision, plausibly linked to photophobia in albinism.",
+			"tags": ["motif", "vision", "ethnography"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "source-ethnica",
-			"type": "source",
-			"label": "Ethnica",
-			"aliases": ["Stephanus of Byzantium, Ethnica"],
-			"description": "Byzantine ethnographic lexicon preserving traditions concerning named peoples including Germara.",
-			"tags": ["Greek", "ethnography", "lexicography", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"id": "motif-whiteness-liminal-supernatural",
+			"type": "motif",
+			"label": "Whiteness Marking Liminal/Supernatural Status",
+			"aliases": [],
+			"description": "Whiteness recurring around boundary-crossing or otherwise liminal supernatural figures (Heimdallr, Baldr, Völundr, light-elves).",
+			"tags": ["motif", "liminality"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "source-oidheadh-cloinne-lir",
-			"type": "source",
-			"label": "Oidheadh Chloinne Lir",
-			"aliases": ["The Fate of the Children of Lir"],
-			"description": "Irish narrative containing Fionnuala, whose name refers to a white shoulder.",
-			"tags": ["Irish", "Celtic", "primary-source"],
-			"createdAt": "2026-08-19T09:30:00+02:00",
-			"updatedAt": "2026-08-19T09:30:00+02:00"
+			"id": "motif-white-black-polarity",
+			"type": "motif",
+			"label": "White/Black Polarity",
+			"aliases": [],
+			"description": "Structural pairing of white and black terms to mark opposed categories (ljósálfar/dökkálfar, raven/swan proverb, raven/fair-woman imagery).",
+			"tags": ["motif", "polarity"],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		}
 	],
 	"relations": [
 		{
-			"id": "noah-attested-1enoch",
+			"id": "rel-001",
+			"sourceId": "concept-theophanic-imagery",
+			"type": "expresses",
+			"targetId": "concept-extreme-bodily-whiteness",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-002",
+			"sourceId": "concept-albinism-medical-category",
+			"type": "associated-with",
+			"targetId": "concept-extreme-bodily-whiteness",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-003",
+			"sourceId": "concept-marked-body",
+			"type": "describes",
+			"targetId": "concept-extreme-bodily-whiteness",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-004",
+			"sourceId": "concept-whiteness-as-identity-marker",
+			"type": "associated-with",
+			"targetId": "concept-extreme-bodily-whiteness",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-005",
+			"sourceId": "concept-liminality",
+			"type": "associated-with",
+			"targetId": "motif-whiteness-liminal-supernatural",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-006",
+			"sourceId": "person-son-of-man",
+			"type": "expresses",
+			"targetId": "concept-theophanic-imagery",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-007",
+			"sourceId": "person-son-of-man",
+			"type": "attested-in",
+			"targetId": "source-revelation-1",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-008",
+			"sourceId": "person-son-of-man",
+			"type": "exhibits",
+			"targetId": "motif-hair-white-as-wool-snow",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-009",
+			"sourceId": "person-son-of-man",
+			"type": "exhibits",
+			"targetId": "motif-fiery-luminous-eyes",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-010",
 			"sourceId": "person-noah",
 			"type": "attested-in",
 			"targetId": "source-1-enoch",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "daniel-attested-daniel",
-			"sourceId": "person-daniel",
+			"id": "rel-011",
+			"sourceId": "person-noah",
+			"type": "exhibits",
+			"targetId": "motif-hair-white-as-wool-snow",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-012",
+			"sourceId": "person-noah",
+			"type": "exhibits",
+			"targetId": "motif-fiery-luminous-eyes",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-013",
+			"sourceId": "person-noah",
+			"type": "parallels",
+			"targetId": "person-son-of-man",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-014",
+			"sourceId": "person-ancient-of-days",
 			"type": "attested-in",
-			"targetId": "source-daniel",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-daniel-7-10",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "ancient-days-attested-daniel",
-			"sourceId": "figure-ancient-of-days",
+			"id": "rel-015",
+			"sourceId": "person-ancient-of-days",
+			"type": "exhibits",
+			"targetId": "motif-hair-white-as-wool-snow",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-016",
+			"sourceId": "person-man-in-linen",
 			"type": "attested-in",
-			"targetId": "source-daniel",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-daniel-7-10",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "linen-attested-daniel",
-			"sourceId": "figure-man-in-linen",
+			"id": "rel-017",
+			"sourceId": "person-man-in-linen",
+			"type": "exhibits",
+			"targetId": "motif-fiery-luminous-eyes",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-018",
+			"sourceId": "person-daniel-figure",
 			"type": "attested-in",
-			"targetId": "source-daniel",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-daniel-7-10",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "son-man-attested-revelation",
-			"sourceId": "figure-son-of-man",
-			"type": "attested-in",
-			"targetId": "source-revelation",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"id": "rel-019",
+			"sourceId": "person-daniel-figure",
+			"type": "describes",
+			"targetId": "person-ancient-of-days",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "andromeda-attested-bibliotheca",
+			"id": "rel-020",
+			"sourceId": "person-daniel-figure",
+			"type": "describes",
+			"targetId": "person-man-in-linen",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-021",
 			"sourceId": "person-andromeda",
 			"type": "attested-in",
-			"targetId": "source-bibliotheca",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-apollodorus-bibliotheca",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "charicleia-attested-aethiopica",
+			"id": "rel-022",
+			"sourceId": "person-andromeda",
+			"type": "attested-in",
+			"targetId": "source-philostratus-imagines",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-023",
 			"sourceId": "person-charicleia",
 			"type": "attested-in",
-			"targetId": "source-aethiopica",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-heliodorus-aethiopica",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "albanians-attested-pliny",
+			"id": "rel-024",
+			"sourceId": "person-charicleia",
+			"type": "associated-with",
+			"targetId": "concept-albinism-medical-category",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-025",
 			"sourceId": "group-albanians",
 			"type": "attested-in",
-			"targetId": "source-natural-history",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-pliny-natural-history",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "leucaethiopes-attested-pliny",
+			"id": "rel-026",
+			"sourceId": "group-albanians",
+			"type": "attested-in",
+			"targetId": "source-aulus-gellius",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-027",
+			"sourceId": "group-albanians",
+			"type": "attested-in",
+			"targetId": "source-solinus",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-028",
+			"sourceId": "group-albanians",
+			"type": "exhibits",
+			"targetId": "motif-blind-by-day-see-by-night",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-029",
+			"sourceId": "group-albanians",
+			"type": "associated-with",
+			"targetId": "concept-albinism-medical-category",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-030",
+			"sourceId": "group-albanians",
+			"type": "associated-with",
+			"targetId": "source-strabo",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-031",
 			"sourceId": "group-leucaethiopes",
 			"type": "attested-in",
-			"targetId": "source-natural-history",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-pomponius-mela",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "derkyllis-attested-incredible",
+			"id": "rel-032",
+			"sourceId": "group-leucaethiopes",
+			"type": "attested-in",
+			"targetId": "source-agathemerus",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-033",
+			"sourceId": "group-leucaethiopes",
+			"type": "attested-in",
+			"targetId": "source-ptolemy-geographia",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-034",
+			"sourceId": "group-leucaethiopes",
+			"type": "expresses",
+			"targetId": "concept-whiteness-as-identity-marker",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-035",
+			"sourceId": "group-ctesias-people",
+			"type": "attested-in",
+			"targetId": "source-pliny-natural-history",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-036",
+			"sourceId": "group-iranian-albinistic-people",
+			"type": "attested-in",
+			"targetId": "source-krappe-1944",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-037",
+			"sourceId": "group-phlegon-anomalous-people",
+			"type": "attested-in",
+			"targetId": "source-phlegon-mirabilia-hansen",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-038",
 			"sourceId": "group-derkyllis-people",
 			"type": "attested-in",
-			"targetId": "source-incredible-things",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-incredible-things-beyond-thule",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "germara-attested-ethnica",
+			"id": "rel-039",
+			"sourceId": "group-derkyllis-people",
+			"type": "exhibits",
+			"targetId": "motif-blind-by-day-see-by-night",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-040",
+			"sourceId": "group-unnamed-celtic-tribe",
+			"type": "attested-in",
+			"targetId": "source-incredible-things-beyond-thule",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-041",
+			"sourceId": "group-unnamed-celtic-tribe",
+			"type": "exhibits",
+			"targetId": "motif-blind-by-day-see-by-night",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-042",
 			"sourceId": "group-germara",
 			"type": "attested-in",
-			"targetId": "source-ethnica",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "source-stephanus-byzantium-ethnica",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "heimdall-attested-thrymskvida",
+			"id": "rel-043",
+			"sourceId": "group-germara",
+			"type": "exhibits",
+			"targetId": "motif-blind-by-day-see-by-night",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-044",
 			"sourceId": "person-heimdallr",
 			"type": "attested-in",
 			"targetId": "source-thrymskvida",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "baldr-attested-gylfaginning",
-			"sourceId": "person-baldr",
-			"type": "attested-in",
-			"targetId": "source-gylfaginning",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "fionnuala-attested-lir",
-			"sourceId": "person-fionnuala",
-			"type": "attested-in",
-			"targetId": "source-oidheadh-cloinne-lir",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "white-doe-attested-sertorius",
-			"sourceId": "animal-white-doe",
-			"type": "attested-in",
-			"targetId": "source-sertorius",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "noah-extreme-whiteness",
-			"sourceId": "person-noah",
-			"type": "exhibits",
-			"targetId": "concept-extreme-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "noah-white-hair",
-			"sourceId": "person-noah",
-			"type": "exhibits",
-			"targetId": "concept-white-hair",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "noah-luminous-eyes",
-			"sourceId": "person-noah",
-			"type": "associated-with",
-			"targetId": "concept-luminous-eyes",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "ancient-days-white-hair",
-			"sourceId": "figure-ancient-of-days",
-			"type": "exhibits",
-			"targetId": "concept-white-hair",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "ancient-days-whiteness",
-			"sourceId": "figure-ancient-of-days",
-			"type": "exhibits",
-			"targetId": "concept-extreme-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "linen-luminous-eyes",
-			"sourceId": "figure-man-in-linen",
-			"type": "exhibits",
-			"targetId": "concept-luminous-eyes",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "linen-solar-luminosity",
-			"sourceId": "figure-man-in-linen",
-			"type": "associated-with",
-			"targetId": "concept-solar-luminosity",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "son-man-white-hair",
-			"sourceId": "figure-son-of-man",
-			"type": "exhibits",
-			"targetId": "concept-white-hair",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "son-man-luminous-eyes",
-			"sourceId": "figure-son-of-man",
-			"type": "exhibits",
-			"targetId": "concept-luminous-eyes",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "son-man-solar-luminosity",
-			"sourceId": "figure-son-of-man",
-			"type": "associated-with",
-			"targetId": "concept-solar-luminosity",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "andromeda-whiteness",
-			"sourceId": "person-andromeda",
-			"type": "exhibits",
-			"targetId": "concept-extreme-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "andromeda-anomaly",
-			"sourceId": "person-andromeda",
-			"type": "associated-with",
-			"targetId": "concept-bodily-anomaly",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "charicleia-whiteness",
-			"sourceId": "person-charicleia",
-			"type": "exhibits",
-			"targetId": "concept-extreme-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "charicleia-anomaly",
-			"sourceId": "person-charicleia",
-			"type": "associated-with",
-			"targetId": "concept-bodily-anomaly",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "albanians-white-hair",
-			"sourceId": "group-albanians",
-			"type": "exhibits",
-			"targetId": "concept-white-hair",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "albanians-albinism",
-			"sourceId": "group-albanians",
-			"type": "possibly-exhibits",
-			"targetId": "concept-albinism",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "albanians-lunar-symbolism",
-			"sourceId": "group-albanians",
-			"type": "associated-with",
-			"targetId": "concept-lunar-symbolism",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "leucaethiopes-ethnonymic-whiteness",
-			"sourceId": "group-leucaethiopes",
-			"type": "exemplifies",
-			"targetId": "concept-ethnonymic-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "leucaethiopes-whiteness",
-			"sourceId": "group-leucaethiopes",
-			"type": "associated-with",
-			"targetId": "concept-extreme-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "derkyllis-nocturnal",
-			"sourceId": "group-derkyllis-people",
-			"type": "exhibits",
-			"targetId": "concept-nocturnal-vision",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "derkyllis-photophobia",
-			"sourceId": "group-derkyllis-people",
-			"type": "possibly-associated-with",
-			"targetId": "concept-photophobia",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "celtic-nocturnal-vision",
-			"sourceId": "group-celtic-nocturnal",
-			"type": "exhibits",
-			"targetId": "concept-nocturnal-vision",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "germara-day-blindness",
-			"sourceId": "group-germara",
-			"type": "associated-with",
-			"targetId": "concept-photophobia",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "heimdall-white",
+			"id": "rel-045",
 			"sourceId": "person-heimdallr",
 			"type": "exhibits",
-			"targetId": "concept-extreme-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "motif-whiteness-liminal-supernatural",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "heimdall-sacralised-whiteness",
+			"id": "rel-046",
 			"sourceId": "person-heimdallr",
-			"type": "associated-with",
-			"targetId": "concept-sacralised-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"type": "expresses",
+			"targetId": "lexeme-on-hvitr",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "baldr-brightness",
+			"id": "rel-047",
 			"sourceId": "person-baldr",
-			"type": "associated-with",
-			"targetId": "concept-white-fair-bright",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"type": "attested-in",
+			"targetId": "source-snorri-gylfaginning",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "baldr-sacralised-whiteness",
+			"id": "rel-048",
 			"sourceId": "person-baldr",
-			"type": "associated-with",
-			"targetId": "concept-sacralised-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "fionn-identity-whiteness",
-			"sourceId": "person-fionn",
-			"type": "exemplifies",
-			"targetId": "concept-personal-identity-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "gwyn-identity-whiteness",
-			"sourceId": "person-gwyn-ap-nudd",
-			"type": "exemplifies",
-			"targetId": "concept-personal-identity-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "fionnuala-anatomical-whiteness",
-			"sourceId": "person-fionnuala",
 			"type": "exhibits",
-			"targetId": "concept-extreme-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "motif-whiteness-liminal-supernatural",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "fionnuala-identity-whiteness",
-			"sourceId": "person-fionnuala",
-			"type": "exemplifies",
-			"targetId": "concept-personal-identity-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"id": "rel-049",
+			"sourceId": "person-baldr",
+			"type": "expresses",
+			"targetId": "lexeme-on-hvitr",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "fionn-celtic-semantic-field",
-			"sourceId": "person-fionn",
-			"type": "belongs-to",
-			"targetId": "concept-white-fair-bright",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"id": "rel-050",
+			"sourceId": "person-volundr",
+			"type": "attested-in",
+			"targetId": "source-volundarkvida",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "gwyn-celtic-semantic-field",
-			"sourceId": "person-gwyn-ap-nudd",
-			"type": "belongs-to",
-			"targetId": "concept-white-fair-bright",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"id": "rel-051",
+			"sourceId": "person-volundr",
+			"type": "expresses",
+			"targetId": "lexeme-on-hvitr",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "fintan-celtic-semantic-field",
-			"sourceId": "person-fintan",
-			"type": "possibly-belongs-to",
-			"targetId": "concept-white-fair-bright",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "astraeus-solar",
-			"sourceId": "person-astraeus",
+			"id": "rel-052",
+			"sourceId": "person-volundr",
 			"type": "associated-with",
-			"targetId": "concept-solar-luminosity",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "motif-whiteness-liminal-supernatural",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "circe-solar",
-			"sourceId": "person-circe",
-			"type": "associated-with",
-			"targetId": "concept-solar-luminosity",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "medea-luminous-eyes",
-			"sourceId": "person-medea",
-			"type": "associated-with",
-			"targetId": "concept-luminous-eyes",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "medea-solar",
-			"sourceId": "person-medea",
-			"type": "associated-with",
-			"targetId": "concept-solar-luminosity",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "phaethon-solar",
-			"sourceId": "person-phaethon",
-			"type": "associated-with",
-			"targetId": "concept-solar-luminosity",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "white-doe-sacralised",
-			"sourceId": "animal-white-doe",
-			"type": "exemplifies",
-			"targetId": "concept-sacralised-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "white-doe-anomaly",
-			"sourceId": "animal-white-doe",
-			"type": "exemplifies",
-			"targetId": "concept-bodily-anomaly",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "white-whiteness-brightness",
-			"sourceId": "concept-extreme-whiteness",
-			"type": "associated-with",
-			"targetId": "concept-white-fair-bright",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "white-luminosity",
-			"sourceId": "concept-extreme-whiteness",
-			"type": "associated-with",
-			"targetId": "concept-solar-luminosity",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "albinism-photophobia",
-			"sourceId": "concept-albinism",
-			"type": "associated-with",
-			"targetId": "concept-photophobia",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "albinism-white-hair",
-			"sourceId": "concept-albinism",
-			"type": "associated-with",
-			"targetId": "concept-white-hair",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "nocturnal-photophobia",
-			"sourceId": "concept-nocturnal-vision",
+			"id": "rel-053",
+			"sourceId": "lexeme-on-hvitr",
 			"type": "contrasts-with",
-			"targetId": "concept-photophobia",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "lexeme-on-svartr",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "whiteness-sacralisation",
-			"sourceId": "concept-extreme-whiteness",
+			"id": "rel-054",
+			"sourceId": "lexeme-on-hvitr",
+			"type": "cognate-of",
+			"targetId": "lexeme-oe-hwit",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-055",
+			"sourceId": "lexeme-on-alpt",
+			"type": "cognate-of",
+			"targetId": "lexeme-on-hvitr",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-056",
+			"sourceId": "animal-alpt-swan-urdarbrunnr",
+			"type": "attested-in",
+			"targetId": "source-snorri-gylfaginning",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-057",
+			"sourceId": "animal-alpt-swan-urdarbrunnr",
+			"type": "expresses",
+			"targetId": "lexeme-on-alpt",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-058",
+			"sourceId": "animal-alpt-swan-urdarbrunnr",
+			"type": "contrasts-with",
+			"targetId": "animal-raven-nornir",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-059",
+			"sourceId": "animal-raven-nornir",
+			"type": "attested-in",
+			"targetId": "source-bek-pedersen-nornir-thesis",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-060",
+			"sourceId": "animal-raven-nornir",
+			"type": "attested-in",
+			"targetId": "source-cleasby-vigfusson-dictionary",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-061",
+			"sourceId": "animal-raven-nornir",
+			"type": "exhibits",
+			"targetId": "motif-white-black-polarity",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-062",
+			"sourceId": "motif-white-black-polarity",
+			"type": "attested-in",
+			"targetId": "source-snorri-gylfaginning",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-063",
+			"sourceId": "motif-white-black-polarity",
+			"type": "attested-in",
+			"targetId": "source-bek-pedersen-st-michael",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-064",
+			"sourceId": "lexeme-oe-hwit",
+			"type": "contrasts-with",
+			"targetId": "lexeme-oe-blat",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-065",
+			"sourceId": "lexeme-oe-hwit",
+			"type": "attested-in",
+			"targetId": "source-old-english-pmla-color-study",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-066",
+			"sourceId": "lexeme-oe-blat",
+			"type": "attested-in",
+			"targetId": "source-old-english-pmla-color-study",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-067",
+			"sourceId": "lexeme-oi-ban",
+			"type": "derived-from",
+			"targetId": "lexeme-proto-celtic-windos",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-068",
+			"sourceId": "lexeme-irish-fionn",
+			"type": "derived-from",
+			"targetId": "lexeme-proto-celtic-windos",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-069",
+			"sourceId": "lexeme-welsh-gwyn",
+			"type": "derived-from",
+			"targetId": "lexeme-proto-celtic-windos",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-070",
+			"sourceId": "lexeme-irish-fionn",
+			"type": "cognate-of",
+			"targetId": "lexeme-welsh-gwyn",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-071",
+			"sourceId": "person-fionn-mac-cumhaill",
+			"type": "expresses",
+			"targetId": "lexeme-irish-fionn",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-072",
+			"sourceId": "person-fionn-mac-cumhaill",
+			"type": "expresses",
+			"targetId": "concept-whiteness-as-identity-marker",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-073",
+			"sourceId": "person-gwyn-ap-nudd",
+			"type": "expresses",
+			"targetId": "lexeme-welsh-gwyn",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-074",
+			"sourceId": "person-gwyn-ap-nudd",
+			"type": "expresses",
+			"targetId": "concept-whiteness-as-identity-marker",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-075",
+			"sourceId": "person-fionnuala",
+			"type": "expresses",
+			"targetId": "lexeme-oi-ban",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-076",
+			"sourceId": "person-fionnuala",
+			"type": "attested-in",
+			"targetId": "source-oidheadh-chloinne-lir",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-077",
+			"sourceId": "person-fintan",
+			"type": "expresses",
+			"targetId": "lexeme-irish-fionn",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-078",
+			"sourceId": "animal-pangur-ban-cat",
+			"type": "attested-in",
+			"targetId": "source-messe-ocus-pangur-ban",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-079",
+			"sourceId": "animal-pangur-ban-cat",
+			"type": "expresses",
+			"targetId": "lexeme-oi-ban",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-080",
+			"sourceId": "lexeme-oi-ban",
 			"type": "associated-with",
-			"targetId": "concept-sacralised-whiteness",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"targetId": "motif-whiteness-liminal-supernatural",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-081",
+			"sourceId": "lexeme-oi-ban",
+			"type": "attested-in",
+			"targetId": "source-these-1995-figures-surnaturel-celtique",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-082",
+			"sourceId": "person-astraeus",
+			"type": "attested-in",
+			"targetId": "source-porphyry-thule",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-083",
+			"sourceId": "person-circe",
+			"type": "attested-in",
+			"targetId": "source-homer-odyssey",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-084",
+			"sourceId": "person-medea",
+			"type": "attested-in",
+			"targetId": "source-apollonius-argonautica",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-085",
+			"sourceId": "person-phaethon",
+			"type": "attested-in",
+			"targetId": "source-ovid-metamorphoses",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-086",
+			"sourceId": "person-circe",
+			"type": "parallels",
+			"targetId": "person-medea",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-087",
+			"sourceId": "person-medea",
+			"type": "parallels",
+			"targetId": "person-phaethon",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-088",
+			"sourceId": "animal-white-doe",
+			"type": "attested-in",
+			"targetId": "source-plutarch-sertorius",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-089",
+			"sourceId": "source-thomas-white-thesis-2012",
+			"type": "supports",
+			"targetId": "concept-albinism-medical-category",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-090",
+			"sourceId": "source-hilton-albinism-ancient-mediterranean",
+			"type": "supports",
+			"targetId": "concept-albinism-medical-category",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-091",
+			"sourceId": "source-hilton-albinism-ancient-mediterranean",
+			"type": "describes",
+			"targetId": "person-noah",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-092",
+			"sourceId": "source-hilton-albinism-ancient-mediterranean",
+			"type": "describes",
+			"targetId": "group-albanians",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-093",
+			"sourceId": "source-schober-hairy-tale",
+			"type": "supports",
+			"targetId": "concept-albinism-medical-category",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-094",
+			"sourceId": "source-hall-elves-thesis",
+			"type": "describes",
+			"targetId": "person-volundr",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-095",
+			"sourceId": "source-hall-elves-thesis",
+			"type": "describes",
+			"targetId": "motif-white-black-polarity",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-096",
+			"sourceId": "source-crawford-color-terms-dissertation",
+			"type": "describes",
+			"targetId": "lexeme-on-hvitr",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-097",
+			"sourceId": "source-bek-pedersen-nornir-thesis",
+			"type": "describes",
+			"targetId": "animal-raven-nornir",
+			"createdAt": "2026-08-20T00:00:00Z"
 		}
 	],
 	"evidence": [
 		{
-			"id": "evidence-noah-1enoch",
-			"sourceId": "source-1-enoch",
-			"entityIds": [
-				"person-noah",
-				"concept-extreme-whiteness",
-				"concept-white-hair",
-				"concept-luminous-eyes"
-			],
-			"relationIds": [
-				"noah-attested-1enoch",
-				"noah-extreme-whiteness",
-				"noah-white-hair",
-				"noah-luminous-eyes"
-			],
-			"quote": "White as snow; red as a rose; his hair white as wool; his eyes like rays of the sun.",
-			"observation": "1 Enoch 106:2–3 presents Noah with an extraordinary combination of extreme bodily whiteness, white hair and luminous eyes.",
-			"status": "primary",
-			"notes": "The description is unusually physiognomic and combines whiteness with solar luminosity.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-daniel-context",
-			"sourceId": "source-daniel",
-			"entityIds": [
-				"person-daniel",
-				"figure-ancient-of-days",
-				"figure-man-in-linen"
-			],
-			"relationIds": [
-				"daniel-attested-daniel",
-				"ancient-days-attested-daniel",
-				"linen-attested-daniel"
-			],
-			"observation": "Daniel functions as the narrative and visionary locus for extraordinary white and luminous figures in Daniel 7 and Daniel 10.",
-			"status": "primary",
-			"notes": "Daniel himself is not described as unusually white in these passages.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-ancient-days",
-			"sourceId": "source-daniel",
-			"entityIds": [
-				"figure-ancient-of-days",
-				"concept-extreme-whiteness",
-				"concept-white-hair",
-				"concept-solar-luminosity"
-			],
-			"relationIds": ["ancient-days-white-hair", "ancient-days-whiteness"],
-			"quote": "His clothing was white as snow, and the hair of his head like pure wool.",
-			"observation": "Daniel 7:9 associates the Ancient of Days with extreme whiteness through both clothing and hair.",
-			"status": "primary",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-man-in-linen",
-			"sourceId": "source-daniel",
-			"entityIds": [
-				"figure-man-in-linen",
-				"concept-luminous-eyes",
-				"concept-solar-luminosity"
-			],
-			"relationIds": ["linen-luminous-eyes", "linen-solar-luminosity"],
-			"observation": "Daniel 10:5–6 describes a supernatural figure whose face resembles lightning, whose eyes are like flaming torches and whose limbs resemble burnished bronze.",
-			"status": "primary",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-son-of-man",
-			"sourceId": "source-revelation",
-			"entityIds": [
-				"figure-son-of-man",
-				"concept-white-hair",
-				"concept-luminous-eyes",
-				"concept-solar-luminosity"
-			],
-			"relationIds": [
-				"son-man-attested-revelation",
-				"son-man-white-hair",
-				"son-man-luminous-eyes",
-				"son-man-solar-luminosity"
-			],
-			"observation": "Revelation 1:13–16 describes the Son of Man with hair white as wool or snow, eyes like fire and a face shining like the sun.",
-			"status": "primary",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-andromeda",
-			"sourceId": "source-bibliotheca",
-			"entityIds": [
-				"person-andromeda",
-				"concept-extreme-whiteness",
-				"concept-bodily-anomaly"
-			],
-			"relationIds": [
-				"andromeda-attested-bibliotheca",
-				"andromeda-whiteness",
-				"andromeda-anomaly"
-			],
-			"observation": "Andromeda is represented in Greek tradition as exceptionally white despite her Ethiopian identity, creating a striking contrast between ethnic designation and bodily appearance.",
-			"status": "primary",
-			"notes": "The broader Andromeda tradition includes literary, visual and artistic representations beyond Apollodorus alone.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-charicleia",
-			"sourceId": "source-aethiopica",
-			"entityIds": [
-				"person-charicleia",
-				"concept-extreme-whiteness",
-				"concept-bodily-anomaly"
-			],
-			"relationIds": [
-				"charicleia-attested-aethiopica",
-				"charicleia-whiteness",
-				"charicleia-anomaly"
-			],
-			"observation": "Charicleia is a white child born to Ethiopian parents, and her appearance requires explanation within the narrative.",
-			"status": "primary",
-			"notes": "Heliodorus, Aethiopica 4.8 and 10.14.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-charicleia-albinism",
-			"sourceId": "source-aethiopica",
-			"entityIds": [
-				"person-charicleia",
-				"concept-albinism",
-				"concept-bodily-anomaly"
-			],
+			"id": "ev-001",
+			"sourceId": "source-revelation-1",
+			"entityIds": ["person-son-of-man", "motif-hair-white-as-wool-snow", "motif-fiery-luminous-eyes"],
 			"relationIds": [],
-			"observation": "Charicleia's extreme whiteness may be compared with later clinical concepts of albinism, although the ancient narrative should not be treated as a clinical diagnosis.",
+			"observation": "One of the earliest and most influential articulations of extreme bodily whiteness in the Christian tradition; project's initial anchor text.",
+			"status": "primary",
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "white like wool, as white as snow"
+		},
+		{
+			"id": "ev-002",
+			"sourceId": "source-1-enoch",
+			"entityIds": ["person-noah", "motif-hair-white-as-wool-snow", "motif-fiery-luminous-eyes"],
+			"relationIds": [],
+			"observation": "Regarded by Hilton as the closest ancient parallel to the Revelation 'Son of Man' imagery.",
+			"status": "primary",
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "White as snow; red as a rose; hair white as wool; eyes like rays of the sun"
+		},
+		{
+			"id": "ev-003",
+			"sourceId": "source-daniel-7-10",
+			"entityIds": ["person-ancient-of-days"],
+			"relationIds": [],
+			"observation": "Establishes the divine white-hair/white-garment pairing prior to Revelation.",
+			"status": "primary",
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "garment white as snow; hair like pure wool"
+		},
+		{
+			"id": "ev-004",
+			"sourceId": "source-daniel-7-10",
+			"entityIds": ["person-man-in-linen"],
+			"relationIds": [],
+			"observation": "Pairs extreme luminosity with unusual eyes and supernatural physiognomy, distinct from the hair-whiteness motif.",
+			"status": "primary",
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "face like lightning; eyes like flaming torches; limbs like burnished bronze"
+		},
+		{
+			"id": "ev-005",
+			"sourceId": "source-pliny-natural-history",
+			"entityIds": ["group-albanians"],
+			"relationIds": [],
+			"observation": "A strong candidate for an early clinical description of albinism (grey/glaucous eyes, white hair from childhood, night vision) per Hilton.",
 			"status": "interpretive",
-			"notes": "The comparison is analytical rather than a claim that Heliodorus was describing albinism in modern clinical terms.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "Albania gigni quosdam glauca oculorum acie, e pueritia statim canos, qui noctu plusquam interdiu cernant.",
+			"notes": "Latin text and translation given in Rackham, Jones & Eichholz 1938:514-515; attributed by Pliny to Isigonus of Nicaea (HN 7.12)."
 		},
 		{
-			"id": "evidence-albanians",
-			"sourceId": "source-natural-history",
-			"entityIds": [
-				"group-albanians",
-				"concept-white-hair",
-				"concept-albinism"
-			],
-			"relationIds": [
-				"albanians-attested-pliny",
-				"albanians-white-hair",
-				"albanians-albinism"
-			],
-			"observation": "Pliny preserves an account, attributed to Isigonus, of Albanians with grey or glaucous eyes, white or grey hair from childhood, and unusual visual abilities.",
+			"id": "ev-006",
+			"sourceId": "source-bek-pedersen-nornir-thesis",
+			"entityIds": ["animal-raven-nornir"],
+			"relationIds": [],
+			"observation": "Bek-Pedersen reads the raven's blackness as a deliberate contrastive device setting off a female figure's whiteness/fairness.",
 			"status": "primary",
-			"notes": "The modern interpretation as a possible description of albinism remains an interpretive hypothesis.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "The continuous emphasis on her fairness brings out a clear contrast between her white colour and the black raven with blood on its claws and beak.",
+			"notes": "Bek-Pedersen 2007/2008, p.91."
 		},
 		{
-			"id": "evidence-albanians-lunar",
-			"sourceId": "source-natural-history",
-			"entityIds": ["group-albanians", "concept-lunar-symbolism"],
-			"relationIds": ["albanians-lunar-symbolism"],
-			"observation": "The Albanian region is associated in Strabo with lunar worship and annual human sacrifice, creating a potentially significant intersection between anomalous human appearance, lunar symbolism and ritual.",
+			"id": "ev-007",
+			"sourceId": "source-crawford-color-terms-dissertation",
+			"entityIds": ["lexeme-on-hvitr"],
+			"relationIds": [],
+			"observation": "Hvítr á hár ('white-haired') does not necessarily denote old age; Crawford discusses Þorsteinn Egilsson, described as young, handsome, white-haired and bright-faced.",
 			"status": "secondary",
-			"notes": "Strabo 11.4.7 C503; the connection should not be treated as proof of an albinism/lunar cult complex.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "evidence-leucaethiopes",
-			"sourceId": "source-natural-history",
-			"entityIds": [
-				"group-leucaethiopes",
-				"concept-ethnonymic-whiteness",
-				"concept-extreme-whiteness"
-			],
-			"relationIds": [
-				"leucaethiopes-attested-pliny",
-				"leucaethiopes-ethnonymic-whiteness",
-				"leucaethiopes-whiteness"
-			],
-			"observation": "Leucaethiopes means White Ethiopians, demonstrating a case in which whiteness becomes part of the ethnonym used to designate a population.",
+			"id": "ev-008",
+			"sourceId": "source-snorri-gylfaginning",
+			"entityIds": ["motif-white-black-polarity"],
+			"relationIds": [],
+			"observation": "Explicit white/black polarity between light-elves and dark-elves; scholars (Holtsmark, discussed by Hall) suspect influence from the Christian Elucidarius tradition.",
 			"status": "primary",
-			"notes": "Pomponius Mela 1.23; related geographical traditions occur in Agathemerus and Ptolemy.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "Ljósálfar eru hvítari en sól sýnum, en dǫkkálfar svartari en bik.",
+			"notes": "'bik' = pitch. Preserved also in the Uppsala manuscript tradition."
 		},
 		{
-			"id": "evidence-derkyllis",
-			"sourceId": "source-incredible-things",
-			"entityIds": [
-				"group-derkyllis-people",
-				"concept-nocturnal-vision",
-				"concept-photophobia"
-			],
-			"relationIds": [
-				"derkyllis-attested-incredible",
-				"derkyllis-nocturnal",
-				"derkyllis-photophobia"
-			],
-			"observation": "A people in Iberia are reported as being able to see at night but blind during the day.",
+			"id": "ev-009",
+			"sourceId": "source-snorri-gylfaginning",
+			"entityIds": ["animal-alpt-swan-urdarbrunnr"],
+			"relationIds": [],
+			"observation": "The water at Urðarbrunnr is described as so holy that things touching it turn white like the membrane inside an eggshell.",
 			"status": "primary",
-			"notes": "The possibility of an albinistic or photophobic phenotype is a modern interpretive comparison, not an established ancient diagnosis.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "Fuglar tveir fæðast í Urðarbrunni er svanir heita"
 		},
 		{
-			"id": "evidence-celtic-nocturnal",
-			"sourceId": "source-incredible-things",
-			"entityIds": ["group-celtic-nocturnal", "concept-nocturnal-vision"],
-			"relationIds": ["celtic-nocturnal-vision"],
-			"observation": "An unnamed Celtic population is reported as being able to see at night but blind during the day.",
+			"id": "ev-010",
+			"sourceId": "source-cleasby-vigfusson-dictionary",
+			"entityIds": ["animal-alpt-swan-urdarbrunnr", "lexeme-on-hvitr"],
+			"relationIds": [],
+			"observation": "Records a proverbial white/black reversal opposing raven and swan, and notes a possible etymological link between álpt and Latin albus.",
+			"status": "secondary",
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "þegar hrafninn verðr hvítr en álptin svört"
+		},
+		{
+			"id": "ev-011",
+			"sourceId": "source-hall-elves-thesis",
+			"entityIds": ["person-volundr"],
+			"relationIds": [],
+			"observation": "Whiteness/brightness in Eddic poetry is overwhelmingly associated with female beauty; Völundr's hvítr neck may associate him with the protective swan-maidens. He is one of very few adult male figures (with Heimdallr) so described.",
+			"status": "interpretive",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "ev-012",
+			"sourceId": "source-snorri-gylfaginning",
+			"entityIds": ["person-baldr"],
+			"relationIds": [],
+			"observation": "Snorri uses the whitest of all plants as the comparative standard for Baldr's beauty in both hair and body, tying whiteness to reflectivity, attractiveness and radiance (per Crawford's discussion of this passage).",
 			"status": "primary",
-			"notes": "Associated with traditions attributed to Apollonius or Eudoxus of Rhodes.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "svá fagr álitum ok bjartr svá at lýsir af honum; þat er allra grasa hvítast"
 		},
 		{
-			"id": "evidence-germara",
-			"sourceId": "source-ethnica",
-			"entityIds": ["group-germara", "concept-photophobia"],
-			"relationIds": ["germara-day-blindness"],
-			"observation": "Germara are described as blind by day in a tradition attributed to Aristotle.",
-			"status": "primary",
-			"notes": "Stephanus of Byzantium, Ethnica, s.v. Germara, citing On Marvels.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-heimdallr",
+			"id": "ev-013",
 			"sourceId": "source-thrymskvida",
-			"entityIds": [
-				"person-heimdallr",
-				"concept-extreme-whiteness",
-				"concept-sacralised-whiteness"
-			],
-			"relationIds": [
-				"heimdall-attested-thrymskvida",
-				"heimdall-white",
-				"heimdall-sacralised-whiteness"
-			],
-			"quote": "Hvítastr ása",
-			"observation": "Heimdallr is explicitly described as the whitest of the Æsir.",
+			"entityIds": ["person-heimdallr"],
+			"relationIds": [],
+			"observation": "Superlative whiteness attaches to a structurally liminal figure: boundary guardian, associated with the rainbow bridge, exceptionally perceptive, born of nine mothers, and Loki's opponent at Ragnarök.",
 			"status": "primary",
-			"notes": "Þrymskviða 15. The superlative makes this especially valuable for the study of explicit bodily whiteness.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z",
+			"quote": "hvítastr ása"
 		},
 		{
-			"id": "evidence-baldr",
-			"sourceId": "source-gylfaginning",
-			"entityIds": [
-				"person-baldr",
-				"concept-white-fair-bright",
-				"concept-sacralised-whiteness"
-			],
-			"relationIds": [
-				"baldr-attested-gylfaginning",
-				"baldr-brightness",
-				"baldr-sacralised-whiteness"
-			],
-			"observation": "Baldr is associated with exceptional fairness and brightness, with whiteness and brightness contributing to his divine and aesthetic character.",
-			"status": "primary",
-			"notes": "Snorri, Gylfaginning 22. The white plant and Baldr's brow contribute to the wider symbolic field.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-fionn-gwyn",
-			"sourceId": "source-gylfaginning",
-			"entityIds": [
-				"person-fionn",
-				"person-gwyn-ap-nudd",
-				"concept-white-fair-bright",
-				"concept-personal-identity-whiteness"
-			],
-			"relationIds": [
-				"fionn-identity-whiteness",
-				"gwyn-identity-whiteness",
-				"fionn-celtic-semantic-field",
-				"gwyn-celtic-semantic-field"
-			],
-			"observation": "The Irish Fionn and Welsh Gwyn traditions place the semantic field of white, fair and bright directly into personal names and identities.",
+			"id": "ev-014",
+			"sourceId": "source-old-english-pmla-color-study",
+			"entityIds": ["lexeme-oe-hwit", "lexeme-oe-blat"],
+			"relationIds": [],
+			"observation": "hwīt denotes brightness/luminosity (shining roofs, helmets, gems, silver) as well as literal whiteness, and is contrasted with blāt ('livid, pale, ghastly') in Andreas and Genesis.",
 			"status": "secondary",
-			"notes": "This evidence should eventually be attached to dedicated Celtic linguistic sources rather than the Norse source entity currently available.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "evidence-fionnuala",
-			"sourceId": "source-oidheadh-cloinne-lir",
-			"entityIds": [
-				"person-fionnuala",
-				"concept-extreme-whiteness",
-				"concept-personal-identity-whiteness"
-			],
-			"relationIds": [
-				"fionnuala-attested-lir",
-				"fionnuala-anatomical-whiteness",
-				"fionnuala-identity-whiteness"
-			],
-			"observation": "Fionnuala's name literally incorporates the semantic idea of a white shoulder, making whiteness an explicitly anatomical element of personal identity.",
-			"status": "primary",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-fintan",
-			"sourceId": "source-oidheadh-cloinne-lir",
-			"entityIds": ["person-fintan", "concept-white-fair-bright"],
-			"relationIds": ["fintan-celtic-semantic-field"],
-			"observation": "Fintan has been tentatively associated with the semantic field of finn/fin and white fire.",
-			"status": "speculative",
-			"notes": "The etymology is uncertain and should not presently be treated as established.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-astraeus",
-			"sourceId": "source-incredible-things",
-			"entityIds": ["person-astraeus", "concept-solar-luminosity"],
-			"relationIds": ["astraeus-solar"],
-			"observation": "Astraeus is associated with extraordinary visual behaviour involving staring at the sun without blinking and with divine or astral associations.",
-			"status": "primary",
-			"notes": "The visual characteristic is potentially relevant to the wider cluster of extraordinary visual phenotypes but does not itself establish albinism.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-circe",
-			"sourceId": "source-bibliotheca",
-			"entityIds": ["person-circe", "concept-solar-luminosity"],
-			"relationIds": ["circe-solar"],
-			"observation": "Circe's descent from Helios places her within a semantic field of solar ancestry and radiance.",
-			"status": "primary",
-			"notes": "Homer, Odyssey 12 and Apollonius provide relevant traditions.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-medea",
-			"sourceId": "source-bibliotheca",
-			"entityIds": [
-				"person-medea",
-				"concept-luminous-eyes",
-				"concept-solar-luminosity"
-			],
-			"relationIds": ["medea-luminous-eyes", "medea-solar"],
-			"observation": "Medea's descent from Helios and descriptions of extraordinary eyes place her within the wider Greek semantic field of solar physiognomy.",
-			"status": "primary",
-			"notes": "Apollonius, Argonautica 3–4.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-phaethon",
-			"sourceId": "source-bibliotheca",
-			"entityIds": ["person-phaethon", "concept-solar-luminosity"],
-			"relationIds": ["phaethon-solar"],
-			"observation": "Phaethon's identity as the son of Helios places him within a tradition of exceptional solar and divine lineage.",
-			"status": "primary",
-			"notes": "Ovid, Metamorphoses 2 and wider Greek tradition.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-white-doe",
-			"sourceId": "source-sertorius",
-			"entityIds": [
-				"animal-white-doe",
-				"concept-sacralised-whiteness",
-				"concept-bodily-anomaly"
-			],
-			"relationIds": [
-				"white-doe-attested-sertorius",
-				"white-doe-sacralised",
-				"white-doe-anomaly"
-			],
-			"observation": "Plutarch describes an entirely white doe treated as extraordinary, sacred and wondrous.",
-			"status": "primary",
-			"notes": "Plutarch, Sertorius 11.4. Possible animal albinism is an interpretive comparison rather than a demonstrated diagnosis.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
-		},
-		{
-			"id": "evidence-celtic-windos",
-			"sourceId": "source-oidheadh-cloinne-lir",
-			"entityIds": [
-				"person-fionn",
-				"person-gwyn-ap-nudd",
-				"concept-white-fair-bright"
-			],
-			"relationIds": [
-				"fionn-celtic-semantic-field",
-				"gwyn-celtic-semantic-field"
-			],
-			"observation": "Comparative Celtic etymology places Fionn and Gwyn within a semantic field deriving from Proto-Celtic windos, associated with white, fair and bright.",
+			"id": "ev-015",
+			"sourceId": "source-old-english-teaching-corpus",
+			"entityIds": ["lexeme-oe-hwit"],
+			"relationIds": [],
+			"observation": "Old English colour terms must be reconstructed from their actual contexts, since their semantic ranges do not map neatly onto modern colour categories.",
 			"status": "secondary",
-			"notes": "The etymological relationship should be supported by dedicated comparative linguistic sources in a later bibliographic expansion.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "evidence-whiteness-luminosity",
-			"sourceId": "source-revelation",
-			"entityIds": [
-				"concept-extreme-whiteness",
-				"concept-white-hair",
-				"concept-luminous-eyes",
-				"concept-solar-luminosity"
-			],
-			"relationIds": ["white-whiteness-brightness", "white-luminosity"],
-			"observation": "Across the Noah, Daniel and Revelation traditions, extreme whiteness frequently co-occurs with visual luminosity, suggesting a semantic movement from white toward bright and luminous.",
-			"status": "interpretive",
-			"notes": "This is a comparative research hypothesis rather than a claim about direct textual dependence.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"id": "ev-016",
+			"sourceId": "source-messe-ocus-pangur-ban",
+			"entityIds": ["animal-pangur-ban-cat", "lexeme-oi-ban"],
+			"relationIds": [],
+			"observation": "A non-supernatural, domestic use of bán (9th century), useful as a control case against the term's supernatural applications elsewhere.",
+			"status": "primary",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "evidence-albinism-comparison",
-			"sourceId": "source-natural-history",
-			"entityIds": [
-				"concept-albinism",
-				"concept-white-hair",
-				"concept-photophobia",
-				"concept-nocturnal-vision",
-				"concept-bodily-anomaly"
-			],
-			"relationIds": [
-				"albinism-photophobia",
-				"albinism-white-hair",
-				"nocturnal-photophobia"
-			],
-			"observation": "Several ancient ethnographic descriptions combine unusually pale or white hair, unusual eye appearance and impaired daytime vision. These features are potentially comparable with aspects of albinistic phenotype.",
+			"id": "ev-017",
+			"sourceId": "source-these-1995-figures-surnaturel-celtique",
+			"entityIds": ["lexeme-oi-ban"],
+			"relationIds": [],
+			"observation": "Bán functions as an external sign that an animal belongs to the supernatural world; such white Otherworld animals are ambivalent (beneficial or hostile), not simply benevolent.",
 			"status": "interpretive",
-			"notes": "This comparison must remain explicitly retrospective and probabilistic. Ancient authors did not possess the modern clinical category of albinism.",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "evidence-whiteness-identity",
-			"sourceId": "source-oidheadh-cloinne-lir",
-			"entityIds": [
-				"person-fionn",
-				"person-gwyn-ap-nudd",
-				"person-fionnuala",
-				"concept-personal-identity-whiteness",
-				"concept-white-fair-bright"
-			],
-			"relationIds": [
-				"fionn-identity-whiteness",
-				"gwyn-identity-whiteness",
-				"fionnuala-identity-whiteness"
-			],
-			"observation": "The Celtic material provides a distinct semantic pattern in which whiteness, fairness or brightness becomes embedded in personal names and therefore functions as an element of identity rather than merely as a physical description.",
-			"status": "interpretive",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"id": "ev-018",
+			"sourceId": "source-thomas-white-thesis-2012",
+			"entityIds": ["concept-albinism-medical-category"],
+			"relationIds": [],
+			"observation": "The principal historiographical foundation for the social, medical and racial construction of albinism (1650-1914), tracing its emergence as a medico-scientific category through travel writing, natural history, medical classification, heredity theory, and racial discourse.",
+			"status": "secondary",
+			"createdAt": "2026-08-20T00:00:00Z"
 		},
 		{
-			"id": "evidence-whiteness-sacralisation",
-			"sourceId": "source-sertorius",
-			"entityIds": [
-				"concept-extreme-whiteness",
-				"concept-sacralised-whiteness",
-				"animal-white-doe"
-			],
-			"relationIds": [
-				"white-whiteness-brightness",
-				"whiteness-sacralisation",
-				"white-doe-sacralised"
-			],
-			"observation": "Exceptional whiteness can function as a marker of sacred or wondrous status, as illustrated particularly clearly by the white doe and by divine figures marked by exceptional whiteness.",
-			"status": "interpretive",
-			"createdAt": "2026-08-19T09:30:00+02:00"
+			"id": "ev-019",
+			"sourceId": "source-hilton-albinism-ancient-mediterranean",
+			"entityIds": ["group-albanians", "person-noah"],
+			"relationIds": [],
+			"observation": "Assembles classical and late-antique evidence for albinism-like descriptions across the Mediterranean world, situating the Enoch/Noah passage as the closest ancient parallel to the Revelation imagery.",
+			"status": "secondary",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "ev-020",
+			"sourceId": "source-plutarch-sertorius",
+			"entityIds": ["animal-white-doe"],
+			"relationIds": [],
+			"observation": "An entirely white doe is treated as extraordinary and sacred/wondrous, a possible case of sacralised animal albinism.",
+			"status": "secondary",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "ev-021",
+			"sourceId": "source-oidheadh-chloinne-lir",
+			"entityIds": ["person-fionnuala"],
+			"relationIds": [],
+			"observation": "Fionnuala's name is glossed literally as 'white shoulder' — a case of named anatomical whiteness rather than a general epithet.",
+			"status": "secondary",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "ev-022",
+			"sourceId": "source-schober-hairy-tale",
+			"entityIds": ["concept-albinism-medical-category"],
+			"relationIds": [],
+			"observation": "Examines Blumenbach's collection of albino hair samples and the Enlightenment shift from 'white Negroes' as racial curiosity to albinism as pathology, directly relevant to the medicalisation/racialisation of extreme pallor.",
+			"status": "secondary",
+			"createdAt": "2026-08-20T00:00:00Z"
 		}
 	]
 }
