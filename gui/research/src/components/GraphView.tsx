@@ -123,32 +123,42 @@ export default function GraphView(props: GraphViewProps) {
 	}
 
 	function buildElements(): ElementDefinition[] {
-		const hidden = hiddenTypes();
-		const visibleEntities = props.entities.filter((entity) => !hidden.has(entity.type));
-		const visibleIds = new Set(visibleEntities.map((entity) => entity.id));
-
-		const visibleRelations = props.relations.filter(
-			(relation) => visibleIds.has(relation.sourceId) && visibleIds.has(relation.targetId),
-		);
-
 		const incomingCounts = new Map<string, number>();
-		for (const relation of [...visibleRelations].sort((a, b) => a.id.localeCompare(b.id))) {
+
+		for (const relation of [...props.relations].sort((a, b) => a.id.localeCompare(b.id))) {
 			incomingCounts.set(relation.targetId, (incomingCounts.get(relation.targetId) ?? 0) + 1);
 		}
 
-		const nodes: ElementDefinition[] = [...visibleEntities]
+		const nodes: ElementDefinition[] = [...props.entities]
 			.sort((a, b) => a.id.localeCompare(b.id))
 			.map((entity) => {
 				const incoming = incomingCounts.get(entity.id) ?? 0;
+
 				return {
-					data: { id: entity.id, label: entity.label, type: entity.type, incoming, size: nodeSize(incoming) },
+					data: {
+						id: entity.id,
+						label: entity.label,
+						type: entity.type,
+						incoming,
+						size: nodeSize(incoming),
+					},
 				};
 			});
 
-		const edges: ElementDefinition[] = [...visibleRelations]
+		const edges: ElementDefinition[] = [...props.relations]
 			.sort((a, b) => a.id.localeCompare(b.id))
+			.filter(
+				(relation) =>
+					props.entities.some((entity) => entity.id === relation.sourceId) &&
+					props.entities.some((entity) => entity.id === relation.targetId),
+			)
 			.map((relation) => ({
-				data: { id: relation.id, source: relation.sourceId, target: relation.targetId, label: relation.type },
+				data: {
+					id: relation.id,
+					source: relation.sourceId,
+					target: relation.targetId,
+					label: relation.type,
+				},
 			}));
 
 		return [...nodes, ...edges];
@@ -278,6 +288,13 @@ export default function GraphView(props: GraphViewProps) {
 				},
 
 				{
+					selector: "node.filtered-out, edge.filtered-out",
+					style: {
+						display: "none",
+					},
+				},
+
+				{
 					selector: "node.search-dim",
 					style: {
 						opacity: 0.25,
@@ -292,6 +309,7 @@ export default function GraphView(props: GraphViewProps) {
 						opacity: 1,
 					},
 				},
+
 			],
 
 			layout: LAYOUT_PARAMS,
@@ -450,6 +468,24 @@ export default function GraphView(props: GraphViewProps) {
 		syncElements(instance);
 	});
 
+	// User filters hide graph elements
+	createEffect(() => {
+		const hidden = hiddenTypes();
+		const instance = cy();
+		if (!instance) return;
+
+		instance.nodes().forEach((node) => {
+			node.toggleClass("filtered-out", hidden.has(node.data("type")));
+		});
+
+		instance.edges().forEach((edge) => {
+			const sourceHidden = edge.source().hasClass("filtered-out");
+			const targetHidden = edge.target().hasClass("filtered-out");
+
+			edge.toggleClass("filtered-out", sourceHidden || targetHidden);
+		});
+	});
+
 	createEffect(() => {
 		const instance = cy();
 		const term = searchTerm().trim().toLocaleLowerCase();
@@ -460,7 +496,6 @@ export default function GraphView(props: GraphViewProps) {
 
 		instance.nodes().forEach((node) => {
 			const label = String(node.data("label") ?? "").toLocaleLowerCase();
-
 			if (label.includes(term)) {
 				node.addClass("search-match");
 			} else {
@@ -472,228 +507,230 @@ export default function GraphView(props: GraphViewProps) {
 	onCleanup(() => cy()?.destroy());
 
 	return (
-		<div
-			ref={container}
-			style={{
-				position: "relative",
-				width: "100%",
-				height: "100%",
-				"min-height": "500px",
-			}}
-			onClick={() => setContextMenu(undefined)}
-		>
-			<Show when={contextMenu()}>
-				{(menu) => (
+		<>
+			<div
+				ref={container}
+				style={{
+					position: "relative",
+					width: "100%",
+					height: "100%",
+					"min-height": "500px",
+				}}
+				onClick={() => setContextMenu(undefined)}
+			>
+				<Show when={contextMenu()}>
+					{(menu) => (
+						<div
+							class="graph-context-menu"
+							style={{
+								position: "absolute",
+								left: `${ menu().x }px`,
+								top: `${ menu().y }px`,
+								"z-index": 100000,
+							}}
+							onClick={(event) => event.stopPropagation()}
+						>
+							<menu class="active group no-wrap small-space top">
+								<Switch>
+									<Match when={menu().kind === "canvas"}>
+										<button
+											type="button"
+											class="fill"
+											onClick={() => {
+												const item = menu();
+
+												if (item.kind !== "canvas") {
+													return;
+												}
+
+												props.onAddEntity?.({
+													x: item.x,
+													y: item.y,
+												});
+
+												setContextMenu(undefined);
+											}}
+										>
+											Add node
+										</button>
+									</Match>
+
+									<Match when={menu().kind === "node"}>
+										<button
+											type="button"
+											class="fill"
+											onClick={() => {
+												const item = menu();
+
+												if (item.kind !== "node") {
+													return;
+												}
+
+												const entity = props.entities.find((entity) => entity.id === item.nodeId);
+
+												if (entity) {
+													props.onEditEntity?.(entity);
+												}
+
+												setContextMenu(undefined);
+											}}
+										>
+											Edit node
+										</button>
+
+										<button
+											type="button"
+											class="fill"
+											onClick={() => {
+												const item = menu();
+												if (item.kind !== "node") {
+													return;
+												}
+												setLinkingFrom(item.nodeId);
+												const instance = cy()!;
+
+												instance.getElementById(item.nodeId).addClass("link-source");
+												instance
+													.nodes()
+													.not(`#${ CSS.escape(item.nodeId) }`)
+													.addClass("link-target");
+
+												setContextMenu(undefined);
+											}}
+										>
+											Add relation →
+										</button>
+
+										<button
+											type="button"
+											class="error-container on-error"
+											onClick={() => {
+												const item = menu();
+
+												if (item.kind !== "node") {
+													return;
+												}
+
+												const entity = props.entities.find((entity) => entity.id === item.nodeId);
+
+												if (entity) {
+													props.onDeleteEntity?.(entity);
+												}
+
+												setContextMenu(undefined);
+											}}
+										>
+											Delete node
+										</button>
+									</Match>
+
+									<Match when={menu().kind === "edge"}>
+										<button
+											type="button"
+											onClick={() => {
+												const item = menu();
+
+												if (item.kind !== "edge") {
+													return;
+												}
+
+												const relation = props.relations.find((relation) => relation.id === item.relationId);
+
+												if (relation) {
+													props.onEditRelation?.(relation);
+												}
+
+												setContextMenu(undefined);
+											}}
+										>
+											Edit relation
+										</button>
+
+										<button
+											type="button"
+											class="danger"
+											onClick={async () => {
+												const item = menu();
+												if (item.kind !== "edge") {
+													return;
+												}
+												const ok = await confirm(`Delete this relation?`);
+												if (!ok) return;
+
+												const relation = props.relations.find((relation) => relation.id === item.relationId);
+
+												if (relation) {
+													props.onDeleteRelation?.(relation);
+												}
+
+												setContextMenu(undefined);
+											}}
+										>
+											Delete relation
+										</button>
+									</Match>
+								</Switch>
+							</menu>
+						</div>
+					)}
+				</Show>
+
+				<Show when={searchOpen()}>
 					<div
-						class="graph-context-menu"
+						class="graph-search"
+						onClick={(event) => event.stopPropagation()}
 						style={{
 							position: "absolute",
-							left: `${ menu().x }px`,
-							top: `${ menu().y }px`,
+							top: "1em",
+							left: "50%",
+							transform: "translateX(-50%)",
 							"z-index": 100000,
 						}}
-						onClick={(event) => event.stopPropagation()}
 					>
-						<menu class="active group no-wrap small-space top">
-							<Switch>
-								<Match when={menu().kind === "canvas"}>
-									<button
-										type="button"
-										class="fill"
-										onClick={() => {
-											const item = menu();
-
-											if (item.kind !== "canvas") {
-												return;
-											}
-
-											props.onAddEntity?.({
-												x: item.x,
-												y: item.y,
-											});
-
-											setContextMenu(undefined);
-										}}
-									>
-										Add node
-									</button>
-								</Match>
-
-								<Match when={menu().kind === "node"}>
-									<button
-										type="button"
-										class="fill"
-										onClick={() => {
-											const item = menu();
-
-											if (item.kind !== "node") {
-												return;
-											}
-
-											const entity = props.entities.find((entity) => entity.id === item.nodeId);
-
-											if (entity) {
-												props.onEditEntity?.(entity);
-											}
-
-											setContextMenu(undefined);
-										}}
-									>
-										Edit node
-									</button>
-
-									<button
-										type="button"
-										class="fill"
-										onClick={() => {
-											const item = menu();
-											if (item.kind !== "node") {
-												return;
-											}
-											setLinkingFrom(item.nodeId);
-											const instance = cy()!;
-
-											instance.getElementById(item.nodeId).addClass("link-source");
-											instance
-												.nodes()
-												.not(`#${ CSS.escape(item.nodeId) }`)
-												.addClass("link-target");
-
-											setContextMenu(undefined);
-										}}
-									>
-										Add relation →
-									</button>
-
-									<button
-										type="button"
-										class="error-container on-error"
-										onClick={() => {
-											const item = menu();
-
-											if (item.kind !== "node") {
-												return;
-											}
-
-											const entity = props.entities.find((entity) => entity.id === item.nodeId);
-
-											if (entity) {
-												props.onDeleteEntity?.(entity);
-											}
-
-											setContextMenu(undefined);
-										}}
-									>
-										Delete node
-									</button>
-								</Match>
-
-								<Match when={menu().kind === "edge"}>
-									<button
-										type="button"
-										onClick={() => {
-											const item = menu();
-
-											if (item.kind !== "edge") {
-												return;
-											}
-
-											const relation = props.relations.find((relation) => relation.id === item.relationId);
-
-											if (relation) {
-												props.onEditRelation?.(relation);
-											}
-
-											setContextMenu(undefined);
-										}}
-									>
-										Edit relation
-									</button>
-
-									<button
-										type="button"
-										class="danger"
-										onClick={async () => {
-											const item = menu();
-											if (item.kind !== "edge") {
-												return;
-											}
-											const ok = await confirm(`Delete this relation?`);
-											if (!ok) return;
-
-											const relation = props.relations.find((relation) => relation.id === item.relationId);
-
-											if (relation) {
-												props.onDeleteRelation?.(relation);
-											}
-
-											setContextMenu(undefined);
-										}}
-									>
-										Delete relation
-									</button>
-								</Match>
-							</Switch>
-						</menu>
-					</div>
-				)}
-			</Show>
-
-			<Show when={searchOpen()}>
-				<div
-					class="graph-search"
-					onClick={(event) => event.stopPropagation()}
-					style={{
-						position: "absolute",
-						top: "1em",
-						left: "50%",
-						transform: "translateX(-50%)",
-						"z-index": 100000,
-					}}
-				>
-					<nav class="no-space">
-						<div class="max field border left-round">
-							<input
-								ref={searchInput}
-								type="text"
-								placeholder="Find a node…"
-								value={searchTerm()}
-								onInput={(event) => setSearchTerm(event.currentTarget.value)}
-								style={{ width: "20em" }}
-							/>
-						</div>
-						{/* <Show when={searchTerm().trim()}>
+						<nav class="no-space">
+							<div class="max field border left-round">
+								<input
+									ref={searchInput}
+									type="text"
+									placeholder="Find a node…"
+									value={searchTerm()}
+									onInput={(event) => setSearchTerm(event.currentTarget.value)}
+									style={{ width: "20em" }}
+								/>
+							</div>
+							{/* <Show when={searchTerm().trim()}>
 								<span>{cy()?.nodes(".search-match").length ?? 0}</span>
 							</Show> */}
-						<button
-							type="button"
-							class="large right-round"
-							onClick={() => {
-								setSearchOpen(false);
-								setSearchTerm("");
-							}}
-							title="Close search"
-						>
-							<i>close</i>
-						</button>
-					</nav>
-				</div>
-			</Show>
+							<button
+								type="button"
+								class="large right-round"
+								onClick={() => {
+									setSearchOpen(false);
+									setSearchTerm("");
+								}}
+								title="Close search"
+							>
+								<i>close</i>
+							</button>
+						</nav>
+					</div>
+				</Show>
 
-			<Show when={linkingFrom()}>
-				<div
-					class="graph-linking-indicator fill padding round"
-					style={{
-						position: "absolute",
-						bottom: "2em",
-						left: "50%",
-						transform: "translateX(-50%)",
-						"z-index": 100000,
-					}}
-				>
-					Click a node to create the relation. Press Escape to cancel.
-				</div>
-			</Show>
+				<Show when={linkingFrom()}>
+					<div
+						class="graph-linking-indicator fill padding round"
+						style={{
+							position: "absolute",
+							bottom: "2em",
+							left: "50%",
+							transform: "translateX(-50%)",
+							"z-index": 100000,
+						}}
+					>
+						Click a node to create the relation. Press Escape to cancel.
+					</div>
+				</Show>
+			</div>
 
 			<button
 				type="button"
@@ -705,13 +742,13 @@ export default function GraphView(props: GraphViewProps) {
 				<i>filter_alt</i>
 			</button>
 
-			<Show when={true || filterOpen()}>
+			<Show when={filterOpen()}>
 				<div
 					class="graph-filter-panel surface padding round"
 					onClick={(event) => event.stopPropagation()}
 					style={{
 						position: "absolute",
-						right: "1rem",
+						right: "0rem",
 						bottom: "4rem",
 						"z-index": 100000,
 						"min-width": "13rem",
@@ -743,6 +780,6 @@ export default function GraphView(props: GraphViewProps) {
 					</For>
 				</div>
 			</Show>
-		</div>
+		</>
 	);
 }
