@@ -2,13 +2,14 @@ import { MetaProvider, Title } from "@solidjs/meta";
 import { Router, useLocation } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
 import { createSignal, Suspense } from "solid-js";
-import "beercss/dist/cdn/beer.min.css";
 
+import ModalHost from "./components/Modal/ModalHost";
+import ProjectExport from "./components/ProjectExport";
+import ProjectImport from "./components/ProjectImport";
+
+import "beercss/dist/cdn/beer.min.css";
 import "./app.css";
 import "./nav-menu.css";
-import ModalHost from "./components/Modal/ModalHost";
-import ProjectImport from "./components/ProjectImport";
-import ProjectExport from "./components/ProjectExport";
 
 function Navigation() {
 	const location = useLocation();
