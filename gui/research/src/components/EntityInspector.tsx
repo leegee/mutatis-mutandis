@@ -1,12 +1,12 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 import {
-    addEntityAlias,
-    addEntityTag,
-    deleteEntity,
-    listAliases,
-    listTags,
-    removeEntityAlias,
-    removeEntityTag,
+	addEntityAlias,
+	addEntityTag,
+	deleteEntity,
+	listAliases,
+	listTags,
+	removeEntityAlias,
+	removeEntityTag,
 } from "~/db/respository";
 import type { Entity } from "~/domain/entity";
 import type { Evidence } from "~/domain/evidence";
@@ -16,330 +16,306 @@ import EntityForm from "./EntityForm";
 import { useConfirm } from "./Modal";
 
 interface EntityInspectorProps {
-    entity: Entity | undefined;
-    entities: Entity[];
-    relations: Relation[];
-    evidence: Evidence[];
+	entity: Entity | undefined;
+	entities: Entity[];
+	relations: Relation[];
+	evidence: Evidence[];
 
-    onAddEvidence?: () => void | Promise<void>;
-    onChanged?: (entity: Entity) => void | Promise<void>;
-    onClose?: (entity: Entity) => void;
+	onAddEvidence?: () => void | Promise<void>;
+	onChanged?: (entity: Entity) => void | Promise<void>;
+	onClose?: (entity: Entity) => void;
 }
 
 export default function EntityInspector(props: EntityInspectorProps) {
-    const [editing, setEditing] = createSignal(false);
-    const [currentEntity, setCurrentEntity] = createSignal<Entity>(props.entity!);
-    const [tagInput, setTagInput] = createSignal("");
-    const [tags, setTags] = createSignal<string[]>([]);
-    const [aliases, setAliases] = createSignal<string[]>([]);
-    const [aliasInput, setAliasInput] = createSignal("");
-    const confirm = useConfirm();
+	const [editing, setEditing] = createSignal(false);
+	const [currentEntity, setCurrentEntity] = createSignal<Entity>(props.entity!);
+	const [tagInput, setTagInput] = createSignal("");
+	const [tags, setTags] = createSignal<string[]>([]);
+	const [aliases, setAliases] = createSignal<string[]>([]);
+	const [aliasInput, setAliasInput] = createSignal("");
+	const confirm = useConfirm();
 
-    createEffect(() => {
-        listTags().then(setTags);
-        listAliases().then(setAliases);
-    });
+	createEffect(() => {
+		listTags().then(setTags);
+		listAliases().then(setAliases);
+	});
 
-    createEffect(() => {
-        if (props.entity) {
-            setCurrentEntity(props.entity);
-        }
-    });
+	createEffect(() => {
+		if (props.entity) {
+			setCurrentEntity(props.entity);
+		}
+	});
 
-    function entityEvidence(): Evidence[] {
-        const entity = props.entity;
-        if (!entity) return [];
-        return props.evidence.filter((item) => item.entityIds.includes(entity.id));
-    }
+	function entityEvidence(): Evidence[] {
+		const entity = props.entity;
+		if (!entity) return [];
+		return props.evidence.filter((item) => item.entityIds.includes(entity.id));
+	}
 
-    async function handleAddTag(tag: string) {
-        const value = tag.trim();
+	async function handleAddTag(tag: string) {
+		const value = tag.trim();
+		if (!value) return;
 
-        if (!value) {
-            return;
-        }
+		const entity = currentEntity();
+		const updated = await addEntityTag(entity, value);
 
-        const entity = currentEntity();
+		setCurrentEntity(updated);
+		setTagInput("");
 
-        const updated = await addEntityTag(entity, value);
+		// Refresh the global tag list in case this was a new tag.
+		setTags(await listTags());
 
-        setCurrentEntity(updated);
-        setTagInput("");
+		await props.onChanged?.(updated);
+	}
 
-        // Refresh the global tag list in case this was a new tag.
-        setTags(await listTags());
+	async function handleRemoveTag(tag: string) {
+		const entity = currentEntity();
+		const updated = await removeEntityTag(entity, tag);
+		setCurrentEntity(updated);
+		await props.onChanged?.(updated);
+	}
 
-        await props.onChanged?.(updated);
-    }
+	async function handleAddAlias(alias: string) {
+		const value = alias.trim();
+		if (!value) return;
+		const entity = currentEntity();
+		const updated = await addEntityAlias(entity, value);
+		setCurrentEntity(updated);
+		setAliasInput("");
+		await props.onChanged?.(updated);
+	}
 
-    async function handleRemoveTag(tag: string) {
-        const entity = currentEntity();
-        const updated = await removeEntityTag(entity, tag);
-        setCurrentEntity(updated);
-        await props.onChanged?.(updated);
-    }
+	async function handleRemoveAlias(alias: string) {
+		const entity = currentEntity();
+		const updated = await removeEntityAlias(entity, alias);
+		setCurrentEntity(updated);
+		await props.onChanged?.(updated);
+	}
 
-    async function handleAddAlias(alias: string) {
-        const value = alias.trim();
-        if (!value) return;
-        const entity = currentEntity();
-        const updated = await addEntityAlias(entity, value);
-        setCurrentEntity(updated);
-        setAliasInput("");
-        await props.onChanged?.(updated);
-    }
+	function entityLabel(id: string): string {
+		return props.entities.find((entity) => entity.id === id)?.label ?? id;
+	}
 
-    async function handleRemoveAlias(alias: string) {
-        const entity = currentEntity();
-        const updated = await removeEntityAlias(entity, alias);
-        setCurrentEntity(updated);
-        await props.onChanged?.(updated);
-    }
+	function outgoing(): Relation[] {
+		const entity = props.entity;
+		if (!entity) return [];
 
-    function entityLabel(id: string): string {
-        return props.entities.find((entity) => entity.id === id)?.label ?? id;
-    }
+		return props.relations.filter((relation) => relation.sourceId === entity.id);
+	}
 
-    function outgoing(): Relation[] {
-        const entity = props.entity;
+	function incoming(): Relation[] {
+		const entity = props.entity;
+		if (!entity) return [];
 
-        if (!entity) {
-            return [];
-        }
+		return props.relations.filter((relation) => relation.targetId === entity.id);
+	}
 
-        return props.relations.filter(
-            (relation) => relation.sourceId === entity.id,
-        );
-    }
+	async function handleDelete() {
+		const entity = props.entity;
+		if (!entity) return;
 
-    function incoming(): Relation[] {
-        const entity = props.entity;
+		const ok = await confirm(`Delete "${entity.label}"?`);
+		if (!ok) {
+			return;
+		}
 
-        if (!entity) {
-            return [];
-        }
+		await deleteEntity(entity.id);
+		await props.onChanged?.(entity);
+		props.onClose?.(entity);
+	}
 
-        return props.relations.filter(
-            (relation) => relation.targetId === entity.id,
-        );
-    }
+	return (
+		<Show when={props.entity} fallback={""}>
+			{(entity) => (
+				<aside class="padding surface-container">
+					<Show
+						when={!editing()}
+						fallback={
+							<EntityForm
+								entity={entity()}
+								onUpdated={async (updated: Entity) => {
+									setEditing(false);
+									await props.onChanged?.(updated);
+								}}
+								onCancel={() => setEditing(false)}
+							/>
+						}
+					>
+						{/* NORMAL INSPECTOR VIEW */}
+						<header class="fixed surface top-padding" style="top:0">
+							<nav>
+								<div class="max">
+									<h2> {entity().label} </h2>
+									<span> {entity().type} </span>
+								</div>
 
-    async function handleDelete() {
-        const entity = props.entity;
-        if (!entity) {
-            return;
-        }
+								<button
+									class="circle transparent"
+									type="button"
+									title="Close"
+									onClick={() => props.onClose?.(entity())}
+								>
+									<i>close</i>
+								</button>
+							</nav>
+						</header>
 
-        const ok = await confirm(`Delete "${ entity.label }"?`);
-        if (!ok) {
-            return;
-        }
+						<Show when={entity().description}>
+							<section class="surface">
+								<p> {entity().description} </p>
+							</section>
+						</Show>
 
-        await deleteEntity(entity.id);
-        await props.onChanged?.(entity);
-        props.onClose?.(entity);
-    }
+						<section class="surface">
+							<AutoComplete<string>
+								value={aliasInput()}
+								items={aliases()}
+								getLabel={(alias) => alias}
+								onInput={setAliasInput}
+								onSelect={handleAddAlias}
+								placeholder="Aliases"
+								isTitle
+							/>
 
-    return (
-        <Show when={props.entity} fallback={""}>
-            {(entity) => (
-                <aside class="padding surface-container">
-                    <Show
-                        when={!editing()}
-                        fallback={
-                            <EntityForm
-                                entity={entity()}
-                                onUpdated={async (updated: Entity) => {
-                                    setEditing(false);
-                                    await props.onChanged?.(updated);
-                                }}
-                                onCancel={() => setEditing(false)}
-                            />
-                        }
-                    >
-                        {/* NORMAL INSPECTOR VIEW */}
-                        <header class="fixed surface top-padding" style="top:0" >
-                            <nav>
-                                <div class="max">
-                                    <h2> {entity().label} </h2>
-                                    <span> {entity().type} </span>
-                                </div>
+							<Show when={currentEntity().aliases.length > 0} fallback={<p>No aliases.</p>}>
+								<div class="row wrap tiny-space">
+									<For each={currentEntity().aliases}>
+										{(alias) => (
+											<span class="small chip left-padding">
+												{alias}
 
-                                <button
-                                    class="circle transparent"
-                                    type="button"
-                                    title="Close"
-                                    onClick={() => props.onClose?.(entity())}
-                                >
-                                    <i>close</i>
-                                </button>
-                            </nav>
-                        </header>
+												<button
+													type="button"
+													class="transparent small circle no-padding"
+													title={`Remove ${alias}`}
+													aria-label={`Remove alias ${alias}`}
+													onClick={() => handleRemoveAlias(alias)}
+												>
+													<i class="small">close</i>
+												</button>
+											</span>
+										)}
+									</For>
+								</div>
+							</Show>
+						</section>
 
-                        <Show when={entity().description}>
-                            <section class="surface">
-                                <p> {entity().description} </p>
-                            </section>
-                        </Show>
+						<section class="surface">
+							<AutoComplete<string>
+								value={tagInput()}
+								items={tags()}
+								getLabel={(tag) => tag}
+								onInput={setTagInput}
+								onSelect={handleAddTag}
+								placeholder="Tags"
+								isTitle
+							/>
 
-                        <section class="surface">
-                            <AutoComplete<string>
-                                value={aliasInput()}
-                                items={aliases()}
-                                getLabel={(alias) => alias}
-                                onInput={setAliasInput}
-                                onSelect={handleAddAlias}
-                                placeholder="Aliases"
-                                isTitle
-                            />
+							<Show when={currentEntity().tags.length > 0} fallback={<p>No tags.</p>}>
+								<div class="row wrap tiny-space">
+									<For each={currentEntity().tags}>
+										{(tag) => (
+											<span class="small chip left-padding">
+												{tag}
 
-                            <Show
-                                when={currentEntity().aliases.length > 0}
-                                fallback={<p>No aliases.</p>}
-                            >
-                                <div class="row wrap tiny-space">
-                                    <For each={currentEntity().aliases}>
-                                        {(alias) => (
-                                            <span class="small chip left-padding">
-                                                {alias}
+												<button
+													type="button"
+													class="transparent small circle no-padding"
+													title={`Remove ${tag}`}
+													aria-label={`Remove tag ${tag}`}
+													onClick={() => handleRemoveTag(tag)}
+												>
+													<i class="small">close</i>
+												</button>
+											</span>
+										)}
+									</For>
+								</div>
+							</Show>
+						</section>
 
-                                                <button
-                                                    type="button"
-                                                    class="transparent small circle no-padding"
-                                                    title={`Remove ${ alias }`}
-                                                    aria-label={`Remove alias ${ alias }`}
-                                                    onClick={() => handleRemoveAlias(alias)}
-                                                >
-                                                    <i class="small">close</i>
-                                                </button>
-                                            </span>
-                                        )}
-                                    </For>
-                                </div>
-                            </Show>
-                        </section>
+						<section class="surface">
+							<header class="title border row">
+								<h3 class="max">Evidence</h3>
 
-                        <section class="surface">
-                            <AutoComplete<string>
-                                value={tagInput()}
-                                items={tags()}
-                                getLabel={(tag) => tag}
-                                onInput={setTagInput}
-                                onSelect={handleAddTag}
-                                placeholder="Tags"
-                                isTitle
-                            />
+								<button
+									type="button"
+									class="transparent circle"
+									title="Add evidence"
+									aria-label="Add evidence"
+									onClick={() => props.onAddEvidence?.()}
+								>
+									<i>add</i>
+								</button>
+							</header>
 
-                            <Show
-                                when={currentEntity().tags.length > 0}
-                                fallback={<p>No tags.</p>}
-                            >
-                                <div class="row wrap tiny-space">
-                                    <For each={currentEntity().tags}>
-                                        {(tag) => (
-                                            <span class="small chip left-padding">
-                                                {tag}
+							<Show when={entityEvidence().length > 0} fallback={<p>No evidence.</p>}>
+								<table class="small-height stripes surface scroll">
+									<For each={entityEvidence()}>
+										{(item) => (
+											<tr>
+												<th class="top-align small-text">{item.status}</th>
+												<td>{item.observation}</td>
+											</tr>
+										)}
+									</For>
+								</table>
+							</Show>
+						</section>
 
-                                                <button
-                                                    type="button"
-                                                    class="transparent small circle no-padding"
-                                                    title={`Remove ${ tag }`}
-                                                    aria-label={`Remove tag ${ tag }`}
-                                                    onClick={() => handleRemoveTag(tag)}
-                                                >
-                                                    <i class="small">close</i>
-                                                </button>
-                                            </span>
-                                        )}
-                                    </For>
-                                </div>
-                            </Show>
-                        </section>
+						<section class="surface">
+							<h3>Relationships</h3>
 
-                        <section class="surface">
-                            <header class="title border row">
-                                <h3 class="max">Evidence</h3>
+							<Show
+								when={outgoing().length > 0 || incoming().length > 0}
+								fallback={<p>Right-click a node to estabish a relationship </p>}
+							>
+								<Show when={outgoing().length > 0}>
+									<h4>Outgoing</h4>
 
-                                <button type="button"
-                                    class="transparent circle"
-                                    title="Add evidence"
-                                    aria-label="Add evidence"
-                                    onClick={() => props.onAddEvidence?.()}
-                                >
-                                    <i>add</i>
-                                </button>
-                            </header>
+									<ul class="list no-space border">
+										<For each={outgoing()}>
+											{(relation) => (
+												<li>
+													{relation.type}
+													{" → "}
+													{entityLabel(relation.targetId)}
+												</li>
+											)}
+										</For>
+									</ul>
+								</Show>
 
-                            <Show when={entityEvidence().length > 0}
-                                fallback={<p>No evidence.</p>}
-                            >
-                                <ul class="list no-space border">
-                                    <For each={entityEvidence()}>
-                                        {(item) => (
-                                            <li>
-                                                <strong>{item.status}</strong>
-                                                {" — "}
-                                                {item.observation}
-                                            </li>
-                                        )}
-                                    </For>
-                                </ul>
-                            </Show>
-                        </section>
+								<Show when={incoming().length > 0}>
+									<h4>Incoming</h4>
 
-                        <section class="surface">
-                            <h3>Relationships</h3>
+									<ul class="list no-space border">
+										<For each={incoming()}>
+											{(relation) => (
+												<li>
+													{relation.type}
+													{" → "}
+													{entityLabel(relation.sourceId)}
+												</li>
+											)}
+										</For>
+									</ul>
+								</Show>
+							</Show>
+						</section>
 
-                            <Show
-                                when={outgoing().length > 0 || incoming().length > 0}
-                                fallback={<p>Right-click a node to estabish a relationship </p>}
-                            >
-                                <Show when={outgoing().length > 0}>
-                                    <h4>Outgoing</h4>
+						<nav class="footer">
+							<button type="button" onClick={() => setEditing(true)}>
+								Edit
+							</button>
 
-                                    <ul class="list no-space border">
-                                        <For each={outgoing()}>
-                                            {(relation) => (
-                                                <li>
-                                                    {relation.type}
-                                                    {" → "}
-                                                    {entityLabel(relation.targetId)}
-                                                </li>
-                                            )}
-                                        </For>
-                                    </ul>
-                                </Show>
-
-                                <Show when={incoming().length > 0}>
-                                    <h4>Incoming</h4>
-
-                                    <ul class="list no-space border">
-                                        <For each={incoming()}>
-                                            {(relation) => (
-                                                <li>
-                                                    {relation.type}
-                                                    {" → "}
-                                                    {entityLabel(relation.sourceId)}
-                                                </li>
-                                            )}
-                                        </For>
-                                    </ul>
-                                </Show>
-                            </Show>
-                        </section>
-
-                        <nav class="footer">
-                            <button type="button" onClick={() => setEditing(true)}>
-                                Edit
-                            </button>
-
-                            <button type="button" class="error" onClick={handleDelete}>
-                                Delete
-                            </button>
-                        </nav>
-                    </Show>
-                </aside>
-            )}
-        </Show>
-    );
+							<button type="button" class="error" onClick={handleDelete}>
+								Delete
+							</button>
+						</nav>
+					</Show>
+				</aside>
+			)}
+		</Show>
+	);
 }
