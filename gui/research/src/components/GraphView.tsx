@@ -13,22 +13,22 @@ cytoscape.use(cytoscapeElk);
 
 type ContextMenu =
 	| {
-		kind: "canvas";
-		x: number;
-		y: number;
-	}
+			kind: "canvas";
+			x: number;
+			y: number;
+	  }
 	| {
-		kind: "node";
-		x: number;
-		y: number;
-		nodeId: string;
-	}
+			kind: "node";
+			x: number;
+			y: number;
+			nodeId: string;
+	  }
 	| {
-		kind: "edge";
-		x: number;
-		y: number;
-		relationId: string;
-	};
+			kind: "edge";
+			x: number;
+			y: number;
+			relationId: string;
+	  };
 
 const [contextMenu, setContextMenu] = createSignal<ContextMenu>();
 
@@ -70,7 +70,6 @@ interface GraphViewProps {
 	onDeleteRelation?: (relation: Relation) => void;
 }
 
-
 const LAYOUT_PARAMS = {
 	name: "elk",
 	animate: false,
@@ -98,7 +97,6 @@ const LAYOUT_PARAMS = {
 		"elk.layered.compaction.postCompaction.strategy": "EDGE_LENGTH",
 	},
 };
-
 
 function nodeSize(incoming: number): number {
 	return 46 + Math.sqrt(incoming) * 12;
@@ -164,7 +162,6 @@ export default function GraphView(props: GraphViewProps) {
 		return [...nodes, ...edges];
 	}
 
-
 	function syncElements(instance: Core) {
 		const elements = buildElements();
 
@@ -214,13 +211,15 @@ export default function GraphView(props: GraphViewProps) {
 					},
 				},
 
-				...Object.keys({ ...typeColors, ...Object.fromEntries(props.entities.map((e) => [e.type, true])) }).map((type) => ({
-					selector: `node[type = "${ type }"]`,
-					style: {
-						"background-color": `hsl(${ hueForType(type) }, 94%, 32%)`,
-						"border-color": `hsl(${ hueForType(type) }, 35%, 68%)`,
-					},
-				})),
+				...Object.keys({ ...typeColors, ...Object.fromEntries(props.entities.map((e) => [e.type, true])) }).map(
+					(type) => ({
+						selector: `node[type = "${type}"]`,
+						style: {
+							"background-color": `hsl(${hueForType(type)}, 94%, 32%)`,
+							"border-color": `hsl(${hueForType(type)}, 35%, 68%)`,
+						},
+					}),
+				),
 				{
 					selector: "node:selected",
 					style: {
@@ -280,6 +279,23 @@ export default function GraphView(props: GraphViewProps) {
 				},
 
 				{
+					selector: "edge.hover-connected",
+					style: {
+						width: 4,
+						"line-color": "#ffffff",
+						"target-arrow-color": "#ffffff",
+						color: "#ffffff",
+						"text-background-color": "#37474f",
+					},
+				},
+				{
+					selector: "edge.hover-unconnected",
+					style: {
+						opacity: 0.8,
+					},
+				},
+
+				{
 					selector: "node.link-target",
 					style: {
 						"border-width": 3,
@@ -309,7 +325,6 @@ export default function GraphView(props: GraphViewProps) {
 						opacity: 1,
 					},
 				},
-
 			],
 
 			layout: LAYOUT_PARAMS,
@@ -399,6 +414,15 @@ export default function GraphView(props: GraphViewProps) {
 				"font-weight": 400,
 				"z-index": 9999,
 			});
+
+			instance.edges().removeClass("hover-connected hover-unconnected");
+			instance.edges().forEach((edge) => {
+				if (edge.source().id() === node.id() || edge.target().id() === node.id()) {
+					edge.addClass("hover-connected");
+				} else {
+					edge.addClass("hover-unconnected");
+				}
+			});
 		});
 
 		instance.on("mouseout", "node", (event) => {
@@ -408,6 +432,8 @@ export default function GraphView(props: GraphViewProps) {
 				"font-weight": 500,
 				"z-index": 0,
 			});
+
+			instance.edges().removeClass("hover-connected hover-unconnected");
 		});
 
 		instance.on("mouseover", "edge", (event) => {
@@ -517,8 +543,7 @@ export default function GraphView(props: GraphViewProps) {
 					"min-height": "500px",
 				}}
 				onClick={() => setContextMenu(undefined)}
-			>
-			</div>
+			></div>
 
 			<Show when={contextMenu()}>
 				{(menu) => (
@@ -526,8 +551,8 @@ export default function GraphView(props: GraphViewProps) {
 						class="graph-context-menu"
 						style={{
 							position: "absolute",
-							left: `${ menu().x }px`,
-							top: `${ menu().y }px`,
+							left: `${menu().x}px`,
+							top: `${menu().y}px`,
 							"z-index": 100000,
 						}}
 						onClick={(event) => event.stopPropagation()}
@@ -594,7 +619,7 @@ export default function GraphView(props: GraphViewProps) {
 											instance.getElementById(item.nodeId).addClass("link-source");
 											instance
 												.nodes()
-												.not(`#${ CSS.escape(item.nodeId) }`)
+												.not(`#${CSS.escape(item.nodeId)}`)
 												.addClass("link-target");
 
 											setContextMenu(undefined);
@@ -759,22 +784,28 @@ export default function GraphView(props: GraphViewProps) {
 						{(type) => {
 							const count = () => props.entities.filter((e) => e.type === type).length;
 							return (
-								<label style={{ display: "flex", "flex-direction": "row-reverse", "align-items": "center", gap: "0.5em", padding: "0.25em 0" }}>
-									<input
-										type="checkbox"
-										checked={!hiddenTypes().has(type)}
-										onChange={() => toggleType(type)}
-									/>
+								<label
+									style={{
+										display: "flex",
+										"flex-direction": "row-reverse",
+										"align-items": "center",
+										gap: "0.5em",
+										padding: "0.25em 0",
+									}}
+								>
+									<input type="checkbox" checked={!hiddenTypes().has(type)} onChange={() => toggleType(type)} />
 									<span
 										style={{
 											display: "inline-block",
 											width: "10pt",
 											height: "10pt",
 											"border-radius": "50%",
-											"background-color": `hsl(${ hueForType(type) }, 94%, 32%)`,
+											"background-color": `hsl(${hueForType(type)}, 94%, 32%)`,
 										}}
 									/>
-									<span>{type} ({count()})</span>
+									<span>
+										{type} ({count()})
+									</span>
 								</label>
 							);
 						}}

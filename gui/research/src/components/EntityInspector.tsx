@@ -284,7 +284,6 @@ export default function EntityInspector(props: EntityInspectorProps) {
 							>
 								<Show when={outgoing().length > 0}>
 									<h4>Outgoing</h4>
-
 									<ul class="list no-space border">
 										<For each={outgoing()}>
 											{(relation) => (
@@ -300,7 +299,6 @@ export default function EntityInspector(props: EntityInspectorProps) {
 
 								<Show when={incoming().length > 0}>
 									<h4>Incoming</h4>
-
 									<ul class="list no-space border">
 										<For each={incoming()}>
 											{(relation) => (
