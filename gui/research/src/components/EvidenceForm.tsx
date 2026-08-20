@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 
-import { createEvidence, updateEvidence } from "~/db/respository";
+import { createEntity, createEvidence, updateEvidence } from "~/db/respository";
 
 import type { Entity } from "~/domain/entity";
 import type { Evidence, EvidenceStatus } from "~/domain/evidence";
@@ -28,7 +28,7 @@ export default function EvidenceForm(props: EvidenceFormProps) {
 	const editing = () => !!props.evidence;
 
 	const [entityIds, setEntityIds] = createSignal<string[]>(props.evidence?.entityIds ?? props.initialEntityIds ?? []);
-
+	const [createdEntities, setCreatedEntities] = createSignal<Entity[]>([]);
 	const [relationIds, setRelationIds] = createSignal<string[]>(
 		props.evidence?.relationIds ?? props.initialRelationIds ?? [],
 	);
@@ -47,13 +47,42 @@ export default function EvidenceForm(props: EvidenceFormProps) {
 		props.evidence ? (props.entities.find((entity) => entity.id === props.evidence?.sourceId)?.label ?? "") : "",
 	);
 
-	const availableEntities = () => props.entities.filter((entity) => !entityIds().includes(entity.id));
+	const availableEntities = () => allEntities().filter((entity) => !entityIds().includes(entity.id));
 
 	const availableRelations = () => props.relations.filter((relation) => !relationIds().includes(relation.id));
 
-	const selectedEntities = () => props.entities.filter((entity) => entityIds().includes(entity.id));
+	const selectedEntities = () => allEntities().filter((entity) => entityIds().includes(entity.id));
 
 	const selectedRelations = () => props.relations.filter((relation) => relationIds().includes(relation.id));
+
+	const allEntities = () => [
+		...props.entities,
+		...createdEntities().filter((created) => !props.entities.some((entity) => entity.id === created.id)),
+	];
+
+	async function createAndAddEntity(label: string) {
+		const value = label.trim();
+		if (!value) return;
+
+		const existing = allEntities().find(
+			(entity) =>
+				entity.label.localeCompare(value, undefined, {
+					sensitivity: "accent",
+				}) === 0,
+		);
+
+		if (existing) {
+			addEntity(existing);
+			setEntityInput("");
+			return;
+		}
+
+		const entity = await createEntity(value, "concept");
+
+		setCreatedEntities((previous) => [...previous, entity]);
+		addEntity(entity);
+		setEntityInput("");
+	}
 
 	function relationLabel(relation: Relation): string {
 		const source = props.entities.find((entity) => entity.id === relation.sourceId)?.label ?? relation.sourceId;
@@ -138,14 +167,9 @@ export default function EvidenceForm(props: EvidenceFormProps) {
 				value={sourceInput()}
 				items={sourceEntities()}
 				getLabel={(entity) => entity.label}
-				onInput={(value) => {
-					setSourceInput(value);
-					// Typing a new value means the previous selection is no longer necessarily valid.
-					if (sourceId() && value !== props.entities.find((entity) => entity.id === sourceId())?.label) {
-						setSourceId("");
-					}
-				}}
-				onSelect={selectSource}
+				onInput={setEntityInput}
+				onSelect={addEntity}
+				onCreate={createAndAddEntity}
 				placeholder="Source"
 				isTitle
 			/>

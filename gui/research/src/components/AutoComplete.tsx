@@ -17,6 +17,8 @@ interface AutocompleteProps<T> {
 	maxSuggestions?: number;
 	renderItem?: (item: T) => JSX.Element;
 
+	onCreate?: (value: string) => void | Promise<void>;
+
 	// Displays the input as a title with a + icon
 	isTitle?: boolean;
 
@@ -31,6 +33,13 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 	const [open, setOpen] = createSignal(false);
 	const [highlighted, setHighlighted] = createSignal(0);
 	const isTitle = createMemo(() => props.isTitle);
+
+	const createValue = () => props.value.trim();
+
+	const canCreate = () =>
+		!!props.onCreate &&
+		createValue().length > 0 &&
+		!props.items.some((item) => props.getLabel(item).toLocaleLowerCase() === createValue().toLocaleLowerCase());
 
 	const suggestions = createMemo(() => {
 		const query = props.value.trim().toLocaleLowerCase();
@@ -133,7 +142,7 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 				</Show>
 			</div>
 
-			<Show when={open() && suggestions().length > 0}>
+			<Show when={open() && (suggestions().length > 0 || canCreate())}>
 				<div class="field border">
 					<div class="field autocomplete-menu">
 						<For each={suggestions()}>
@@ -147,10 +156,27 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 									onMouseDown={(event) => event.preventDefault()}
 									onClick={() => select(item)}
 								>
-									{props.renderItem ? props.renderItem(item) : props.getLabel(item)}{" "}
+									{props.renderItem ? props.renderItem(item) : props.getLabel(item)}
 								</button>
 							)}
 						</For>
+
+						<Show when={canCreate()}>
+							<button
+								type="button"
+								class="no-round"
+								onMouseDown={(event) => event.preventDefault()}
+								onClick={() => {
+									const value = createValue();
+									if (value) {
+										void props.onCreate?.(value);
+									}
+								}}
+							>
+								<i>add</i>
+								Create "{createValue()}"
+							</button>
+						</Show>
 					</div>
 				</div>
 			</Show>
