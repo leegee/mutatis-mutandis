@@ -13,22 +13,22 @@ cytoscape.use(cytoscapeElk);
 
 type ContextMenu =
 	| {
-			kind: "canvas";
-			x: number;
-			y: number;
-	  }
+		kind: "canvas";
+		x: number;
+		y: number;
+	}
 	| {
-			kind: "node";
-			x: number;
-			y: number;
-			nodeId: string;
-	  }
+		kind: "node";
+		x: number;
+		y: number;
+		nodeId: string;
+	}
 	| {
-			kind: "edge";
-			x: number;
-			y: number;
-			relationId: string;
-	  };
+		kind: "edge";
+		x: number;
+		y: number;
+		relationId: string;
+	};
 
 const [contextMenu, setContextMenu] = createSignal<ContextMenu>();
 
@@ -40,6 +40,7 @@ const typeColors: Record<string, { hue: number }> = {
 	motif: { hue: 283 },
 	animal: { hue: 43 },
 	person: { hue: 23 },
+	evidence: { hue: 204 },
 	source: { hue: 244 },
 	quote: { hue: 220 },
 	group: { hue: 190 },
@@ -214,10 +215,10 @@ export default function GraphView(props: GraphViewProps) {
 
 				...Object.keys({ ...typeColors, ...Object.fromEntries(props.entities.map((e) => [e.type, true])) }).map(
 					(type) => ({
-						selector: `node[type = "${type}"]`,
+						selector: `node[type = "${ type }"]`,
 						style: {
-							"background-color": `hsl(${hueForType(type)}, 94%, 32%)`,
-							"border-color": `hsl(${hueForType(type)}, 35%, 68%)`,
+							"background-color": `hsl(${ hueForType(type) }, 94%, 32%)`,
+							"border-color": `hsl(${ hueForType(type) }, 35%, 68%)`,
 						},
 					}),
 				),
@@ -552,8 +553,8 @@ export default function GraphView(props: GraphViewProps) {
 						class="graph-context-menu"
 						style={{
 							position: "absolute",
-							left: `${menu().x}px`,
-							top: `${menu().y}px`,
+							left: `${ menu().x }px`,
+							top: `${ menu().y }px`,
 							"z-index": 100000,
 						}}
 						onClick={(event) => event.stopPropagation()}
@@ -566,10 +567,7 @@ export default function GraphView(props: GraphViewProps) {
 										class="fill"
 										onClick={() => {
 											const item = menu();
-
-											if (item.kind !== "canvas") {
-												return;
-											}
+											if (item.kind !== "canvas") return;
 
 											props.onAddEntity?.({
 												x: item.x,
@@ -590,9 +588,7 @@ export default function GraphView(props: GraphViewProps) {
 										onClick={() => {
 											const item = menu();
 
-											if (item.kind !== "node") {
-												return;
-											}
+											if (item.kind !== "node") return;
 
 											const entity = props.entities.find((entity) => entity.id === item.nodeId);
 
@@ -611,16 +607,14 @@ export default function GraphView(props: GraphViewProps) {
 										class="fill"
 										onClick={() => {
 											const item = menu();
-											if (item.kind !== "node") {
-												return;
-											}
+											if (item.kind !== "node") return;
 											setLinkingFrom(item.nodeId);
 											const instance = cy()!;
 
 											instance.getElementById(item.nodeId).addClass("link-source");
 											instance
 												.nodes()
-												.not(`#${CSS.escape(item.nodeId)}`)
+												.not(`#${ CSS.escape(item.nodeId) }`)
 												.addClass("link-target");
 
 											setContextMenu(undefined);
@@ -634,13 +628,9 @@ export default function GraphView(props: GraphViewProps) {
 										class="error-container on-error"
 										onClick={() => {
 											const item = menu();
-
-											if (item.kind !== "node") {
-												return;
-											}
+											if (item.kind !== "node") return;
 
 											const entity = props.entities.find((entity) => entity.id === item.nodeId);
-
 											if (entity) {
 												props.onDeleteEntity?.(entity);
 											}
@@ -657,13 +647,9 @@ export default function GraphView(props: GraphViewProps) {
 										type="button"
 										onClick={() => {
 											const item = menu();
-
-											if (item.kind !== "edge") {
-												return;
-											}
+											if (item.kind !== "edge") return;
 
 											const relation = props.relations.find((relation) => relation.id === item.relationId);
-
 											if (relation) {
 												props.onEditRelation?.(relation);
 											}
@@ -679,14 +665,12 @@ export default function GraphView(props: GraphViewProps) {
 										class="danger"
 										onClick={async () => {
 											const item = menu();
-											if (item.kind !== "edge") {
-												return;
-											}
+											if (item.kind !== "edge") return;
+
 											const ok = await confirm(`Delete this relation?`);
 											if (!ok) return;
 
 											const relation = props.relations.find((relation) => relation.id === item.relationId);
-
 											if (relation) {
 												props.onDeleteRelation?.(relation);
 											}
@@ -803,7 +787,7 @@ export default function GraphView(props: GraphViewProps) {
 											width: "1em",
 											height: "1em",
 											"border-radius": "50%",
-											"background-color": `hsl(${hueForType(type)}, 94%, 52%)`,
+											"background-color": `hsl(${ hueForType(type) }, 94%, 52%)`,
 										}}
 									/>
 									<span>

@@ -31,5 +31,8 @@
 	"cSpell.words": ["Bpedia", "ECCO", "EEBO", "FAISS", "SBERT"],
 	"json.schemaDownload.trustedDomains": {
 		"https://biomejs.dev": true
+	},
+	"[json]": {
+		"editor.defaultFormatter": "vscode.json-language-features"
 	}
 }

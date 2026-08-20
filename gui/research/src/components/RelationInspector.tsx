@@ -21,16 +21,10 @@ export default function RelationInspector(props: RelationInspectorProps) {
 
     async function handleDelete() {
         const relation = props.relation;
-
-        if (!relation) {
-            return;
-        }
+        if (!relation) return;
 
         const confirmed = window.confirm("Delete this relationship?");
-
-        if (!confirmed) {
-            return;
-        }
+        if (!confirmed) return;
 
         await deleteRelation(relation.id);
 

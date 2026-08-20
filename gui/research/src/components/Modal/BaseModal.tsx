@@ -15,13 +15,12 @@ interface ModalProps {
     children: JSX.Element;
     onClose?: () => void;
     closeOnBackdrop?: boolean;
+    style?: string;
 }
 
 export default function BaseModal(props: ModalProps) {
     createEffect(() => {
-        if (!props.open) {
-            return;
-        }
+        if (!props.open) return;
 
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";
@@ -44,10 +43,7 @@ export default function BaseModal(props: ModalProps) {
     });
 
     function handleBackdropClick(event: MouseEvent) {
-        if (
-            props.closeOnBackdrop !== false &&
-            event.target === event.currentTarget
-        ) {
+        if (props.closeOnBackdrop !== false && event.target === event.currentTarget) {
             props.onClose?.();
         }
     }
@@ -61,14 +57,15 @@ export default function BaseModal(props: ModalProps) {
                     onPointerDown={handleBackdropClick}
                 >
                     <div
-                        class="modal"
+                        class="modal padding large-elevate"
                         role="dialog"
                         aria-modal="true"
                         aria-label={props.title}
+                        style={props.style}
                     >
                         <Show when={props.title}>
                             <header
-                                class="fixed surface-container-high padding"
+                                class="fixed surface-container-high"
                                 style="top:0"
                             >
                                 <nav>

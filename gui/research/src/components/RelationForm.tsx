@@ -89,10 +89,7 @@ export default function RelationForm(props: RelationFormProps) {
         const sourceEntity = source();
         const targetEntity = target();
 
-        if (saving() || !sourceEntity || !targetEntity) {
-            return;
-        }
-
+        if (saving() || !sourceEntity || !targetEntity) return;
         setSaving(true);
 
         try {

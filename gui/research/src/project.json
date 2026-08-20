@@ -255,9 +255,9 @@
 		{
 			"id": "source-thomas-white-thesis-2012",
 			"type": "source",
-			"label": "White, T. - 'Their Whiteness Is Not Like Ours' (PhD thesis, Manchester, 2012)",
+			"label": "White (2012) – 'Their Whiteness Is Not Like Ours'",
 			"aliases": [],
-			"description": "Principal historiographical foundation for the social/medical/racial construction of albinism, 1650-1914.",
+			"description": "White, T. – 'Their Whiteness Is Not Like Ours' (PhD thesis, Manchester, 2012). Principal historiographical foundation for the social/medical/racial construction of albinism, 1650-1914.",
 			"tags": [
 				"scholarship",
 				"albinism"
@@ -268,9 +268,9 @@
 		{
 			"id": "source-hilton-albinism-ancient-mediterranean",
 			"type": "source",
-			"label": "Hilton, J.L. - 'Albinism in the Ancient Mediterranean World'",
+			"label": "Hilton – Albinism in the Ancient Mediterranean",
 			"aliases": [],
-			"description": "Assembles classical and late-antique evidence for albinism-like phenotypes across the Mediterranean world, including the Enoch/Noah description.",
+			"description": "Hilton, J.L. – 'Albinism in the Ancient Mediterranean World'. Assembles classical and late-antique evidence for albinism-like phenotypes across the Mediterranean world, including the Enoch/Noah description.",
 			"tags": [
 				"scholarship",
 				"classics",
@@ -282,9 +282,9 @@
 		{
 			"id": "source-schober-hairy-tale",
 			"type": "source",
-			"label": "Schober, S-M. - 'A Hairy Tale: Eighteenth-Century Strands of Albinism and Race'",
+			"label": "Schober – 'A Hairy Tale'",
 			"aliases": [],
-			"description": "Examines Blumenbach's albino hair-sample collection and the shift from 'white Negroes' as racial curiosity to albinism as pathology.",
+			"description": "Schober, S-M. – 'A Hairy Tale: Eighteenth-Century Strands of Albinism and Race'. Examines Blumenbach's albino hair-sample collection and the shift from 'white Negroes' as racial curiosity to albinism as pathology.",
 			"tags": [
 				"scholarship",
 				"Enlightenment",
@@ -297,9 +297,9 @@
 		{
 			"id": "source-bek-pedersen-nornir-thesis",
 			"type": "source",
-			"label": "Bek-Pedersen, K. - 'Nornir in Old Norse Mythology' (PhD thesis, Edinburgh, 2007/2008)",
+			"label": "Bek-Pedersen – Nornir thesis (2007/8)",
 			"aliases": [],
-			"description": "Discusses colour symbolism around the Norns, including the white/black raven-swan contrast.",
+			"description": "Bek-Pedersen, K. – 'Nornir in Old Norse Mythology' (PhD thesis, Edinburgh, 2007/2008). Discusses colour symbolism around the Norns, including the white/black raven-swan contrast.",
 			"tags": [
 				"scholarship",
 				"Old Norse"
@@ -310,9 +310,9 @@
 		{
 			"id": "source-bek-pedersen-st-michael",
 			"type": "source",
-			"label": "Bek-Pedersen, K. - 'St Michael and the sons of Þiðrandi: the black and white dísir'",
+			"label": "Bek-Pedersen – St Michael and the dísir",
 			"aliases": [],
-			"description": "Discusses the light-elf/dark-elf opposition ('fairer than the sun' vs 'blacker than pitch').",
+			"description": "Bek-Pedersen, K. – 'St Michael and the sons of Þiðrandi: the black and white dísir'. Discusses the light-elf/dark-elf opposition ('fairer than the sun' vs 'blacker than pitch').",
 			"tags": [
 				"scholarship",
 				"Old Norse"
@@ -323,9 +323,9 @@
 		{
 			"id": "source-crawford-color-terms-dissertation",
 			"type": "source",
-			"label": "Crawford, J. - 'The Historical Development of Basic Color Terms in Old Norse-Icelandic' (2014)",
+			"label": "Crawford – Colour Terms in Old Norse (2014)",
 			"aliases": [],
-			"description": "Corpus-based dissertation establishing the semantic range of hvítr and its associations.",
+			"description": "Crawford, J. – 'The Historical Development of Basic Color Terms in Old Norse-Icelandic' (2014). Corpus-based dissertation establishing the semantic range of hvítr and its associations.",
 			"tags": [
 				"scholarship",
 				"Old Norse",
@@ -337,9 +337,9 @@
 		{
 			"id": "source-hall-elves-thesis",
 			"type": "source",
-			"label": "Hall, A. - PhD thesis on elves in Anglo-Saxon and Old Norse tradition",
+			"label": "Hall – Elves thesis",
 			"aliases": [],
-			"description": "Discusses Snorri's ljósálfar/dökkálfar distinction as possibly influenced by Christian angelology, and Völundr's unusual hvítr description.",
+			"description": "Hall, A. – PhD thesis on elves in Anglo-Saxon and Old Norse tradition. Discusses Snorri's ljósálfar/dökkálfar distinction as possibly influenced by Christian angelology, and Völundr's unusual hvítr description.",
 			"tags": [
 				"scholarship",
 				"Old Norse",
@@ -416,9 +416,9 @@
 		{
 			"id": "source-old-english-teaching-corpus",
 			"type": "source",
-			"label": "Old English Teaching Corpus (University of Glasgow), Unit 6: Colour",
+			"label": "OE Teaching Corpus – Colour unit",
 			"aliases": [],
-			"description": "Pedagogical resource noting that Old English colour terms must be reconstructed from context rather than mapped onto modern categories.",
+			"description": "Old English Teaching Corpus (University of Glasgow), Unit 6: Colour. Pedagogical resource noting that Old English colour terms must be reconstructed from context rather than mapped onto modern categories.",
 			"tags": [
 				"reference",
 				"Old English"
@@ -442,9 +442,9 @@
 		{
 			"id": "source-these-1995-figures-surnaturel-celtique",
 			"type": "source",
-			"label": "Thèse, 1995 - 'Les Figures du Surnaturel dans la Mythologie Celtique'",
+			"label": "Thèse 1995 – Figures du Surnaturel Celtique",
 			"aliases": [],
-			"description": "Argues that bán functions as an external sign of an animal's belonging to the supernatural world, and that such animals are ambivalent rather than simply benevolent.",
+			"description": "Thèse, 1995 – 'Les Figures du Surnaturel dans la Mythologie Celtique'. Argues that bán functions as an external sign of an animal's belonging to the supernatural world, and that such animals are ambivalent rather than simply benevolent.",
 			"tags": [
 				"scholarship",
 				"Celtic"
@@ -571,9 +571,9 @@
 		{
 			"id": "source-incredible-things-beyond-thule",
 			"type": "source",
-			"label": "Diogenes, Incredible Things Beyond Thule (via Photius, Bibliotheca 109b)",
+			"label": "Diogenes – Incredible Things Beyond Thule",
 			"aliases": [],
-			"description": "Describes Derkyllis' people in Iberia, who could see at night but were blind by day.",
+			"description": "Diogenes, Incredible Things Beyond Thule (via Photius, Bibliotheca 109b). Describes Derkyllis' people in Iberia, who could see at night but were blind by day.",
 			"tags": [
 				"classics",
 				"primary text"
@@ -701,9 +701,9 @@
 		{
 			"id": "source-porphyry-thule",
 			"type": "source",
-			"label": "Diogenes, Incredible Things Beyond Thule (via Porphyry)",
+			"label": "Diogenes – Beyond Thule (via Porphyry)",
 			"aliases": [],
-			"description": "Describes Astraeus staring at the sun without blinking, with divine/star associations.",
+			"description": "Diogenes, Incredible Things Beyond Thule (via Porphyry). Describes Astraeus staring at the sun without blinking, with divine/star associations.",
 			"tags": [
 				"classics",
 				"primary text"
@@ -1146,7 +1146,7 @@
 		{
 			"id": "ev-001",
 			"type": "evidence",
-			"label": "Evidence from Book of Revelation, ch. 1",
+			"label": "Evidence: Revelation 1 (Son of Man)",
 			"aliases": [],
 			"description": "One of the earliest and most influential articulations of extreme bodily whiteness in the Christian tradition; project's initial anchor text. | Quote: \"white like wool, as white as snow\"",
 			"tags": [
@@ -1159,7 +1159,7 @@
 		{
 			"id": "ev-002",
 			"type": "evidence",
-			"label": "Evidence from 1 Enoch (106:2-3)",
+			"label": "Evidence: 1 Enoch 106 (Noah)",
 			"aliases": [],
 			"description": "Regarded by Hilton as the closest ancient parallel to the Revelation 'Son of Man' imagery. | Quote: \"White as snow; red as a rose; hair white as wool; eyes like rays of the sun\"",
 			"tags": [
@@ -1172,7 +1172,7 @@
 		{
 			"id": "ev-003",
 			"type": "evidence",
-			"label": "Evidence from Book of Daniel (ch. 7, 10)",
+			"label": "Evidence: Daniel 7 (Ancient of Days)",
 			"aliases": [],
 			"description": "Establishes the divine white-hair/white-garment pairing prior to Revelation. | Quote: \"garment white as snow; hair like pure wool\"",
 			"tags": [
@@ -1185,7 +1185,7 @@
 		{
 			"id": "ev-004",
 			"type": "evidence",
-			"label": "Evidence from Book of Daniel (ch. 7, 10)",
+			"label": "Evidence: Daniel 10 (Man in Linen)",
 			"aliases": [],
 			"description": "Pairs extreme luminosity with unusual eyes and supernatural physiognomy, distinct from the hair-whiteness motif. | Quote: \"face like lightning; eyes like flaming torches; limbs like burnished bronze\"",
 			"tags": [
@@ -1198,7 +1198,7 @@
 		{
 			"id": "ev-005",
 			"type": "evidence",
-			"label": "Evidence from Pliny the Elder - Naturalis Historia, 7.12",
+			"label": "Evidence: Pliny HN 7.12 (Albanians)",
 			"aliases": [],
 			"description": "A strong candidate for an early clinical description of albinism (grey/glaucous eyes, white hair from childhood, night vision) per Hilton. | Quote: \"Albania gigni quosdam glauca oculorum acie, e pueritia statim canos, qui noctu plusquam interdiu cernant.\" | Notes: Latin text and translation given in Rackham, Jones & Eichholz 1938:514-515; attributed by Pliny to Isigonus of Nicaea (HN 7.12).",
 			"tags": [
@@ -1211,7 +1211,7 @@
 		{
 			"id": "ev-006",
 			"type": "evidence",
-			"label": "Evidence ev-006",
+			"label": "Evidence: Bek-Pedersen on Norns (raven contrast)",
 			"aliases": [],
 			"description": "Bek-Pedersen reads the raven's blackness as a deliberate contrastive device setting off a female figure's whiteness/fairness. | Quote: \"The continuous emphasis on her fairness brings out a clear contrast between her white colour and the black raven with blood on its claws and beak.\" | Notes: Bek-Pedersen 2007/2008, p.91.",
 			"tags": [
@@ -1224,7 +1224,7 @@
 		{
 			"id": "ev-007",
 			"type": "evidence",
-			"label": "Evidence ev-007",
+			"label": "Evidence: Crawford on hvítr á hár",
 			"aliases": [],
 			"description": "Hvítr á hár ('white-haired') does not necessarily denote old age; Crawford discusses Þorsteinn Egilsson, described as young, handsome, white-haired and bright-faced.",
 			"tags": [
@@ -1237,7 +1237,7 @@
 		{
 			"id": "ev-008",
 			"type": "evidence",
-			"label": "Evidence from Snorri Sturluson - Gylfaginning",
+			"label": "Evidence: Gylfaginning (ljósálfar/dökkálfar)",
 			"aliases": [],
 			"description": "Explicit white/black polarity between light-elves and dark-elves; scholars (Holtsmark, discussed by Hall) suspect influence from the Christian Elucidarius tradition. | Quote: \"Ljósálfar eru hvítari en sól sýnum, en dǫkkálfar svartari en bik.\" | Notes: 'bik' = pitch. Preserved also in the Uppsala manuscript tradition.",
 			"tags": [
@@ -1250,7 +1250,7 @@
 		{
 			"id": "ev-009",
 			"type": "evidence",
-			"label": "Evidence from Snorri Sturluson - Gylfaginning",
+			"label": "Evidence: Gylfaginning (swans at Urðarbrunnr)",
 			"aliases": [],
 			"description": "The water at Urðarbrunnr is described as so holy that things touching it turn white like the membrane inside an eggshell. | Quote: \"Fuglar tveir fæðast í Urðarbrunni er svanir heita\"",
 			"tags": [
@@ -1263,7 +1263,7 @@
 		{
 			"id": "ev-010",
 			"type": "evidence",
-			"label": "Evidence from Cleasby-Vigfusson, Icelandic-English Dictionary",
+			"label": "Evidence: Cleasby-Vigfusson (raven/swan proverb)",
 			"aliases": [],
 			"description": "Records a proverbial white/black reversal opposing raven and swan, and notes a possible etymological link between álpt and Latin albus. | Quote: \"þegar hrafninn verðr hvítr en álptin svört\"",
 			"tags": [
@@ -1276,7 +1276,7 @@
 		{
 			"id": "ev-011",
 			"type": "evidence",
-			"label": "Evidence ev-011",
+			"label": "Evidence: Hall on Völundr’s hvítr neck",
 			"aliases": [],
 			"description": "Whiteness/brightness in Eddic poetry is overwhelmingly associated with female beauty; Völundr's hvítr neck may associate him with the protective swan-maidens. He is one of very few adult male figures (with Heimdallr) so described.",
 			"tags": [
@@ -1289,7 +1289,7 @@
 		{
 			"id": "ev-012",
 			"type": "evidence",
-			"label": "Evidence from Snorri Sturluson - Gylfaginning",
+			"label": "Evidence: Gylfaginning (Baldr’s beauty)",
 			"aliases": [],
 			"description": "Snorri uses the whitest of all plants as the comparative standard for Baldr's beauty in both hair and body, tying whiteness to reflectivity, attractiveness and radiance (per Crawford's discussion of this passage). | Quote: \"svá fagr álitum ok bjartr svá at lýsir af honum; þat er allra grasa hvítast\"",
 			"tags": [
@@ -1302,7 +1302,7 @@
 		{
 			"id": "ev-013",
 			"type": "evidence",
-			"label": "Evidence from Þrymskviða (Poetic Edda)",
+			"label": "Evidence: Þrymskviða (Heimdallr hvítastr)",
 			"aliases": [],
 			"description": "Superlative whiteness attaches to a structurally liminal figure: boundary guardian, associated with the rainbow bridge, exceptionally perceptive, born of nine mothers, and Loki's opponent at Ragnarök. | Quote: \"hvítastr ása\"",
 			"tags": [
@@ -1315,7 +1315,7 @@
 		{
 			"id": "ev-014",
 			"type": "evidence",
-			"label": "Evidence from PMLA study, 'Color in Old English Poetry'",
+			"label": "Evidence: PMLA Colour in OE Poetry",
 			"aliases": [],
 			"description": "hwīt denotes brightness/luminosity (shining roofs, helmets, gems, silver) as well as literal whiteness, and is contrasted with blāt ('livid, pale, ghastly') in Andreas and Genesis.",
 			"tags": [
@@ -1328,7 +1328,7 @@
 		{
 			"id": "ev-015",
 			"type": "evidence",
-			"label": "Evidence ev-015",
+			"label": "Evidence: OE Teaching Corpus (colour terms)",
 			"aliases": [],
 			"description": "Old English colour terms must be reconstructed from their actual contexts, since their semantic ranges do not map neatly onto modern colour categories.",
 			"tags": [
@@ -1341,7 +1341,7 @@
 		{
 			"id": "ev-016",
 			"type": "evidence",
-			"label": "Evidence from Messe ocus Pangur Bán (9th c. Old Irish poem)",
+			"label": "Evidence: Pangur Bán (non-supernatural bán)",
 			"aliases": [],
 			"description": "A non-supernatural, domestic use of bán (9th century), useful as a control case against the term's supernatural applications elsewhere.",
 			"tags": [
@@ -1354,7 +1354,7 @@
 		{
 			"id": "ev-017",
 			"type": "evidence",
-			"label": "Evidence ev-017",
+			"label": "Evidence: Thèse 1995 (bán as Otherworld sign)",
 			"aliases": [],
 			"description": "Bán functions as an external sign that an animal belongs to the supernatural world; such white Otherworld animals are ambivalent (beneficial or hostile), not simply benevolent.",
 			"tags": [
@@ -1367,7 +1367,7 @@
 		{
 			"id": "ev-018",
 			"type": "evidence",
-			"label": "Evidence ev-018",
+			"label": "Evidence: White thesis 2012 (medicalisation)",
 			"aliases": [],
 			"description": "The principal historiographical foundation for the social, medical and racial construction of albinism (1650-1914), tracing its emergence as a medico-scientific category through travel writing, natural history, medical classification, heredity theory, and racial discourse.",
 			"tags": [
@@ -1380,7 +1380,7 @@
 		{
 			"id": "ev-019",
 			"type": "evidence",
-			"label": "Evidence from Hilton, J.L. - 'Albinism in the Ancient Mediterranean World'",
+			"label": "Evidence: Hilton (ancient Mediterranean albinism)",
 			"aliases": [],
 			"description": "Assembles classical and late-antique evidence for albinism-like descriptions across the Mediterranean world, situating the Enoch/Noah passage as the closest ancient parallel to the Revelation imagery.",
 			"tags": [
@@ -1393,7 +1393,7 @@
 		{
 			"id": "ev-020",
 			"type": "evidence",
-			"label": "Evidence from Plutarch, Sertorius 11.4",
+			"label": "Evidence: Plutarch Sertorius (white doe)",
 			"aliases": [],
 			"description": "An entirely white doe is treated as extraordinary and sacred/wondrous, a possible case of sacralised animal albinism.",
 			"tags": [
@@ -1406,7 +1406,7 @@
 		{
 			"id": "ev-021",
 			"type": "evidence",
-			"label": "Evidence from Oidheadh Chloinne Lir",
+			"label": "Evidence: Oidheadh Chloinne Lir (Fionnuala)",
 			"aliases": [],
 			"description": "Fionnuala's name is glossed literally as 'white shoulder' — a case of named anatomical whiteness rather than a general epithet.",
 			"tags": [
@@ -1419,7 +1419,7 @@
 		{
 			"id": "ev-022",
 			"type": "evidence",
-			"label": "Evidence ev-022",
+			"label": "Evidence: Schober (Blumenbach hair samples)",
 			"aliases": [],
 			"description": "Examines Blumenbach's collection of albino hair samples and the Enlightenment shift from 'white Negroes' as racial curiosity to albinism as pathology, directly relevant to the medicalisation/racialisation of extreme pallor.",
 			"tags": [
@@ -1432,7 +1432,7 @@
 		{
 			"id": "quote-ev-001",
 			"type": "quote",
-			"label": "Quote from Book of Revelation, ch. 1",
+			"label": "Quote: Revelation 1 – white as wool/snow",
 			"aliases": [],
 			"description": "white like wool, as white as snow",
 			"tags": [
@@ -1445,7 +1445,7 @@
 		{
 			"id": "quote-ev-002",
 			"type": "quote",
-			"label": "Quote from 1 Enoch (106:2-3)",
+			"label": "Quote: 1 Enoch 106 – Noah’s appearance",
 			"aliases": [],
 			"description": "White as snow; red as a rose; hair white as wool; eyes like rays of the sun",
 			"tags": [
@@ -1458,7 +1458,7 @@
 		{
 			"id": "quote-ev-003",
 			"type": "quote",
-			"label": "Quote from Book of Daniel (ch. 7, 10)",
+			"label": "Quote: Daniel 7 – garment/hair white as snow/wool",
 			"aliases": [],
 			"description": "garment white as snow; hair like pure wool",
 			"tags": [
@@ -1471,7 +1471,7 @@
 		{
 			"id": "quote-ev-004",
 			"type": "quote",
-			"label": "Quote from Book of Daniel (ch. 7, 10)",
+			"label": "Quote: Daniel 10 – face like lightning, eyes like torches",
 			"aliases": [],
 			"description": "face like lightning; eyes like flaming torches; limbs like burnished bronze",
 			"tags": [
@@ -1484,7 +1484,7 @@
 		{
 			"id": "quote-ev-005",
 			"type": "quote",
-			"label": "Quote from Pliny the Elder - Naturalis Historia, 7.12",
+			"label": "Quote: Pliny HN 7.12 – Albanians (Latin)",
 			"aliases": [],
 			"description": "Albania gigni quosdam glauca oculorum acie, e pueritia statim canos, qui noctu plusquam interdiu cernant.",
 			"tags": [
@@ -1497,7 +1497,7 @@
 		{
 			"id": "quote-ev-006",
 			"type": "quote",
-			"label": "Quote from Bek-Pedersen, K. - 'Nornir in Old Norse Mythology' (PhD thesis, Edinburgh, 2007/2008)",
+			"label": "Quote: Bek-Pedersen – fairness vs black raven",
 			"aliases": [],
 			"description": "The continuous emphasis on her fairness brings out a clear contrast between her white colour and the black raven with blood on its claws and beak.",
 			"tags": [
@@ -1510,7 +1510,7 @@
 		{
 			"id": "quote-ev-008",
 			"type": "quote",
-			"label": "Quote from Snorri Sturluson - Gylfaginning",
+			"label": "Quote: Gylfaginning – ljósálfar / dökkálfar",
 			"aliases": [],
 			"description": "Ljósálfar eru hvítari en sól sýnum, en dǫkkálfar svartari en bik.",
 			"tags": [
@@ -1523,7 +1523,7 @@
 		{
 			"id": "quote-ev-009",
 			"type": "quote",
-			"label": "Quote from Snorri Sturluson - Gylfaginning",
+			"label": "Quote: Gylfaginning – swans at Urðarbrunnr",
 			"aliases": [],
 			"description": "Fuglar tveir fæðast í Urðarbrunni er svanir heita",
 			"tags": [
@@ -1536,7 +1536,7 @@
 		{
 			"id": "quote-ev-010",
 			"type": "quote",
-			"label": "Quote from Cleasby-Vigfusson, Icelandic-English Dictionary",
+			"label": "Quote: Cleasby-Vigfusson – raven/swan proverb",
 			"aliases": [],
 			"description": "þegar hrafninn verðr hvítr en álptin svört",
 			"tags": [
@@ -1549,7 +1549,7 @@
 		{
 			"id": "quote-ev-012",
 			"type": "quote",
-			"label": "Quote from Snorri Sturluson - Gylfaginning",
+			"label": "Quote: Gylfaginning – Baldr fair & bright",
 			"aliases": [],
 			"description": "svá fagr álitum ok bjartr svá at lýsir af honum; þat er allra grasa hvítast",
 			"tags": [
@@ -1562,7 +1562,7 @@
 		{
 			"id": "quote-ev-013",
 			"type": "quote",
-			"label": "Quote from Þrymskviða (Poetic Edda)",
+			"label": "Quote: Þrymskviða – hvítastr ása",
 			"aliases": [],
 			"description": "hvítastr ása",
 			"tags": [
@@ -1571,9 +1571,68 @@
 			],
 			"createdAt": "2026-08-20T00:00:00Z",
 			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "person-rosalie-duthe",
+			"type": "person",
+			"label": "Rosalie Duthé",
+			"aliases": [
+				"Rosalie Duthé"
+			],
+			"description": "Eighteenth-century French courtesan whose reputed pauses and slowness of speech became the subject of contemporary satire.",
+			"tags": [
+				"18th-century",
+				"France",
+				"blonde",
+				"courtesan",
+				"stereotype"
+			],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "concept-dumb-blonde",
+			"type": "concept",
+			"label": "\"Dumb Blone\"",
+			"aliases": [],
+			"description": "20th century pejorative stereotype",
+			"tags": [
+				"pejorative"
+			],
+			"createdAt": "2026-08-20T20:00:00Z",
+			"updatedAt": "2026-08-20T20:00:00Z"
+		},
+		{
+			"id": "evidence-duthe-blonde-stupidity",
+			"type": "evidence",
+			"label": "Rosalie Duthé and the early blonde-stupidity stereotype",
+			"aliases": [],
+			"description": "An eighteenth-century satirical representation associating a famous blonde woman with apparent intellectual deficiency or inability to respond promptly.",
+			"tags": [
+				"evidence",
+				"18th-century",
+				"blonde",
+				"stereotype"
+			],
+			"createdAt": "2026-08-20T00:00:00Z",
+			"updatedAt": "2026-08-20T00:00:00Z"
 		}
 	],
 	"relations": [
+		{
+			"id": "rel-duthe-001",
+			"sourceId": "evidence-duthe-blonde-stupidity",
+			"type": "related-to",
+			"targetId": "person-rosalie-duthe",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
+		{
+			"id": "rel-duthe-002",
+			"sourceId": "evidence-duthe-blonde-stupidity",
+			"type": "parallels",
+			"targetId": "concept-dumb-blonde",
+			"createdAt": "2026-08-20T00:00:00Z"
+		},
 		{
 			"id": "rel-001",
 			"sourceId": "concept-theophanic-imagery",

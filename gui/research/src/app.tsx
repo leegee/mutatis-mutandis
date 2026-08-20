@@ -6,6 +6,7 @@ import { createSignal, Suspense } from "solid-js";
 import ModalHost from "./components/Modal/ModalHost";
 import ProjectExport from "./components/ProjectExport";
 import ProjectImport from "./components/ProjectImport";
+import RelationshipImportButton from "./components/RelationshipImport";
 
 import "beercss/dist/cdn/beer.min.css";
 import "./app.css";
@@ -27,26 +28,31 @@ function Navigation() {
 			</button>
 
 			{menuOpen() && (
-				<menu class="margin">
+				<menu class="margin" onClick={closeMenu}>
 					<li classList={{ active: isActive("/") }}>
-						<a href="/" onClick={closeMenu}>
+						<a href="/">
 							<i>network_node</i>
 							<span>Map</span>
 						</a>
 					</li>
 
 					<li classList={{ active: isActive("/entities") }}>
-						<a href="/entities" onClick={closeMenu}>
+						<a href="/entities">
 							<i>circle</i>
 							<span>Entities</span>
 						</a>
 					</li>
 
 					<li classList={{ active: isActive("/relations") }}>
-						<a href="/relations" onClick={closeMenu}>
+						<a href="/relations">
 							<i>arrow_and_edge</i>
 							<span>Relations</span>
 						</a>
+					</li>
+
+					<li>
+						<i>content_paste</i>
+						<RelationshipImportButton />
 					</li>
 
 					{/* <li classList={{ active: isActive("/project") }}>
@@ -57,12 +63,12 @@ function Navigation() {
 					</li> */}
 
 					<li>
-						<i>folder_open</i>
+						<i>file_open</i>
 						<ProjectImport />
 					</li>
 
 					<li>
-						<i>folder_open</i>
+						<i>download</i>
 						<ProjectExport />
 					</li>
 				</menu>

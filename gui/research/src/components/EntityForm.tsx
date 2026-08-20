@@ -52,16 +52,10 @@ export default function EntityForm(props: EntityFormProps) {
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-
-		if (saving()) {
-			return;
-		}
+		if (saving()) return;
 
 		const value = label().trim();
-
-		if (!value) {
-			return;
-		}
+		if (!value) return;
 
 		/*
 		 * Add mode:
@@ -69,9 +63,7 @@ export default function EntityForm(props: EntityFormProps) {
 		 * If autocomplete selected an existing entity,
 		 * don't create a duplicate.
 		 */
-		if (!editing() && selected()) {
-			return;
-		}
+		if (!editing() && selected()) return;
 
 		setSaving(true);
 

@@ -117,10 +117,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 		const entity = props.entity;
 		if (!entity) return;
 
-		const ok = await confirm(`Delete "${entity.label}"?`);
-		if (!ok) {
-			return;
-		}
+		const ok = await confirm(`Delete "${ entity.label }"?`);
+		if (!ok) return;
 
 		await deleteEntity(entity.id);
 		await props.onChanged?.(entity);
@@ -191,8 +189,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 												<button
 													type="button"
 													class="transparent small circle no-padding"
-													title={`Remove ${alias}`}
-													aria-label={`Remove alias ${alias}`}
+													title={`Remove ${ alias }`}
+													aria-label={`Remove alias ${ alias }`}
 													onClick={() => handleRemoveAlias(alias)}
 												>
 													<i class="small">close</i>
@@ -226,8 +224,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 												<button
 													type="button"
 													class="transparent small circle no-padding"
-													title={`Remove ${tag}`}
-													aria-label={`Remove tag ${tag}`}
+													title={`Remove ${ tag }`}
+													aria-label={`Remove tag ${ tag }`}
 													onClick={() => handleRemoveTag(tag)}
 												>
 													<i class="small">close</i>

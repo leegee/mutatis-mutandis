@@ -10,6 +10,13 @@ DiskANN indices are disposable derived artefacts.
 
 This script is intentionally a thin orchestrator. All index-building logic
 remains in tier1_5_build_diskann_index.build_one().
+
+Last run started 2026-07-20T1200
+Last run finished 2026-08-20T2000
+
+    Tier 1.5 build complete.
+    Built or verified 480 index partitions.
+
 """
 
 from __future__ import annotations

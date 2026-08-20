@@ -44,14 +44,14 @@ export default function ModalHost() {
 	return (
 		<Show when={request()}>
 			{(current) => (
-				<BaseModal open={true} title={current().title} onClose={close}>
+				<BaseModal open={true} title={current().title} onClose={close} style={current().style ?? ""}>
 					{(() => {
 						const modal = current();
 
 						switch (modal.kind) {
 							case "alert":
 								return (
-									<div class="padding large-elevate">
+									<div>
 										<p>{modal.message}</p>
 
 										<nav class="footer">
@@ -64,7 +64,7 @@ export default function ModalHost() {
 
 							case "confirm":
 								return (
-									<div class="padding  large-elevate">
+									<div>
 										<p>{modal.message}</p>
 
 										<nav class="footer">
@@ -87,7 +87,7 @@ export default function ModalHost() {
 											modal.resolve(value());
 										}}
 									>
-										<div class="padding large-elevate">
+										<div>
 											<p>{modal.message}</p>
 
 											<div class="field label border">
