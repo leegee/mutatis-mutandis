@@ -128,15 +128,13 @@ export default function RelationForm(props: RelationFormProps) {
         <form onSubmit={submit}>
             <div class="">
                 <h3>{editing() ? "Edit Relationship" : "Add a new relationship"}</h3>
-                <div class="field">
-                    <EntityAutocomplete
-                        value={sourceValue()}
-                        onInput={inputSource}
-                        onSelect={selectSource}
-                        disabled={saving()}
-                        placeholder="Source entity"
-                    />
-                </div>
+                <EntityAutocomplete
+                    value={sourceValue()}
+                    onInput={inputSource}
+                    onSelect={selectSource}
+                    disabled={saving()}
+                    placeholder="Source entity"
+                />
 
                 <div class="field label border">
                     <select

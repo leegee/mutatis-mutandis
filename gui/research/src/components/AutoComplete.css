@@ -4,7 +4,9 @@
 
 .field.label.title {
 	input[type="text"] {
-		padding-left: 0 !important;
+		line-height: 0 !important;
+		padding: 0 !important;
+		margin: 0 !important;
 	}
 	label {
 		margin-left: -1em !important;

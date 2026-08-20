@@ -1,13 +1,7 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-} from "solid-js";
-
-import type { Entity } from "~/domain/entity";
-
-import Autocomplete from "./AutoComplete";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import { listEntities } from "~/db/respository";
+import type { Entity } from "~/domain/entity";
+import Autocomplete from "./AutoComplete";
 
 interface EntityAutocompleteProps {
   value: string;
@@ -31,13 +25,9 @@ export default function EntityAutocomplete(props: EntityAutocompleteProps) {
     return entities()
       .filter((entity) => {
         const label = entity.label.toLocaleLowerCase();
-        return (
-          label.includes(query) || entity.tags.some(
-            (tag) =>
-              tag.toLocaleLowerCase().includes(query)
-          )
-        );
-      }).slice(0, 8);
+        return label.includes(query) || entity.tags.some((tag) => tag.toLocaleLowerCase().includes(query));
+      })
+      .slice(0, 8);
   });
 
   return (

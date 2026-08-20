@@ -30,9 +30,7 @@ interface AutocompleteProps<T> {
     clearOnSelect?: boolean;
 }
 
-export default function AutoComplete<T>(
-    props: AutocompleteProps<T>,
-) {
+export default function AutoComplete<T>(props: AutocompleteProps<T>) {
     const [open, setOpen] = createSignal(false);
     const [highlighted, setHighlighted] = createSignal(0);
     const isTitle = createMemo(() => props.isTitle);
@@ -128,79 +126,46 @@ export default function AutoComplete<T>(
 
     return (
         <>
-            <div
-                class={`field label ${ isTitle()
-                    ? "suffix title"
-                    : "field border"
-                    }`}
-            >
-                <input
-                    type="text"
+            <div class={`field label ${ isTitle() ? "suffix title" : "border" }`}>
+                <input type="text"
                     value={props.value}
+                    placeholder={props.isTitle ? '' : props.placeholder}
                     disabled={props.disabled}
                     autocomplete="off"
-                    onInput={(event) =>
-                        input(event.currentTarget.value)
-                    }
+                    onInput={(event) => input(event.currentTarget.value)}
                     onFocus={() => {
-                        if (
-                            props.value.trim() ||
-                            props.openOnFocus
-                        ) {
+                        if (props.value.trim() || props.openOnFocus) {
                             setOpen(true);
                         }
                     }}
                     onKeyDown={keydown}
                     onBlur={() => {
-                        /*
-                         * Allow a suggestion click to complete
-                         * before closing the menu.
-                         */
-                        setTimeout(
-                            () => setOpen(false),
-                            100,
-                        );
+                        //llow a suggestion click to complete  before closing the menu.
+                        setTimeout(() => setOpen(false), 100);
                     }}
                 />
 
-                <label>
-                    {props.placeholder ?? "Search"}
-                </label>
+                <label> {props.placeholder ?? ""} </label>
 
                 <Show when={isTitle()}>
                     <i>add</i>
                 </Show>
             </div>
 
-            <Show
-                when={
-                    open() &&
-                    suggestions().length > 0
-                }
-            >
+            <Show when={open() && suggestions().length > 0}>
                 <div class="field border">
                     <div class="field autocomplete-menu">
                         <For each={suggestions()}>
                             {(item, index) => (
-                                <button
-                                    type="button"
+                                <button type="button"
                                     classList={{
                                         "no-round": true,
-                                        active:
-                                            index() ===
-                                            highlighted(),
+                                        active: index() === highlighted(),
                                     }}
-                                    onMouseDown={(event) =>
-                                        event.preventDefault()
-                                    }
-                                    onClick={() =>
-                                        select(item)
-                                    }
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => select(item)}
                                 >
-                                    {props.renderItem
-                                        ? props.renderItem(item)
-                                        : props.getLabel(item)}
-                                </button>
+                                    {props.renderItem ? props.renderItem(item) : props.getLabel(item)} </button>
                             )}
                         </For>
                     </div>
