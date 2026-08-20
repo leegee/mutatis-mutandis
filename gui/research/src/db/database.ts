@@ -1,7 +1,6 @@
 import Dexie, { type Table } from "dexie";
 
 import type { Entity } from "~/domain/entity";
-import type { Evidence } from "~/domain/evidence";
 import type { ProjectMetadata } from "~/domain/project";
 import type { Relation } from "~/domain/relation";
 
@@ -12,7 +11,6 @@ interface ProjectMetadataRecord extends ProjectMetadata {
 class ResearchDatabase extends Dexie {
 	entities!: Table<Entity, string>;
 	relations!: Table<Relation, string>;
-	evidence!: Table<Evidence, string>;
 	projectMetadata!: Table<ProjectMetadataRecord, string>;
 
 	constructor() {
@@ -27,7 +25,6 @@ class ResearchDatabase extends Dexie {
 			.stores({
 				entities: "id, type, label",
 				relations: "id, sourceId, targetId, type",
-				evidence: "id, sourceId, *entityIds, *relationIds",
 				projectMetadata: "id",
 			})
 			.upgrade(async (tx) => {

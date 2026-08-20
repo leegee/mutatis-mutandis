@@ -2,15 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mutatis-mutandis.local/schemas/research-project.schema.json",
   "title": "Research Project",
-  "description": "Schema for a diachronic humanities research map containing entities, relations, and evidence.",
+  "description": "Schema for a diachronic humanities research map containing entities and relations.",
   "type": "object",
 
   "required": [
     "version",
     "metadata",
     "entities",
-    "relations",
-    "evidence"
+    "relations"
   ],
 
   "properties": {
@@ -53,18 +52,6 @@
       "description": "Directed relationships between entities.",
       "items": {
         "$ref": "#/$defs/Relation"
-      }
-    },
-
-    // ------------------------------------------------------------------
-    // EVIDENCE
-    // ------------------------------------------------------------------
-
-    "evidence": {
-      "type": "array",
-      "description": "Observations, quotations, interpretations and other evidence supporting entities and/or relations.",
-      "items": {
-        "$ref": "#/$defs/Evidence"
       }
     }
   },
@@ -294,115 +281,7 @@
       },
 
       "additionalProperties": false
-    },
-
-    // ==================================================================
-    // EVIDENCE
-    // ==================================================================
-
-    "Evidence": {
-      "type": "object",
-
-      "required": [
-        "id",
-        "sourceId",
-        "entityIds",
-        "relationIds",
-        "observation",
-        "status",
-        "createdAt"
-      ],
-
-      "properties": {
-
-        // Stable identifier for the evidence record.
-        "id": {
-          "$ref": "#/$defs/Id"
-        },
-
-        // ID of the source from which the evidence originates.
-        //
-        // At present this points to an Entity with type "source".
-        //
-        // We may eventually want a more explicit Source model, especially
-        // once bibliographic information is added.
-        "sourceId": {
-          "$ref": "#/$defs/Id",
-          "description": "ID of the source entity associated with this evidence."
-        },
-
-        // Entities to which this evidence relates.
-        //
-        // An observation may concern several entities simultaneously.
-        "entityIds": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Id"
-          },
-          "description": "IDs of entities supported, described or discussed by the evidence."
-        },
-
-        // Relations supported or discussed by this evidence.
-        "relationIds": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Id"
-          },
-          "description": "IDs of relations supported, described or discussed by the evidence."
-        },
-
-        // Optional direct quotation from the source.
-        "quote": {
-          "type": "string",
-          "description": "Optional quotation from the source."
-        },
-
-        // The researcher's observation or claim.
-        //
-        // This is deliberately separate from quote:
-        //
-        // quote       = what the source says
-        // observation = what we observe/claim about it
-        "observation": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Research observation, claim or interpretation derived from the evidence."
-        },
-
-        // Epistemic status of the evidence.
-        "status": {
-          "$ref": "#/$defs/EvidenceStatus"
-        },
-
-        // Optional additional research notes.
-        "notes": {
-          "type": "string",
-          "description": "Additional methodological, bibliographical or interpretive notes."
-        },
-
-        "createdAt": {
-          "$ref": "#/$defs/Timestamp"
-        }
-      },
-
-      "additionalProperties": false
-    },
-
-    // ==================================================================
-    // EVIDENCE STATUS
-    // ==================================================================
-
-    "EvidenceStatus": {
-      "type": "string",
-
-      "enum": [
-        "primary",
-        "secondary",
-        "interpretive",
-        "speculative"
-      ],
-
-      "description": "Epistemic status of the evidence or observation."
     }
+
   }
 }

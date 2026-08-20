@@ -40,7 +40,8 @@ const typeColors: Record<string, { hue: number }> = {
 	motif: { hue: 283 },
 	animal: { hue: 43 },
 	person: { hue: 23 },
-	source: { hue: 234 },
+	source: { hue: 244 },
+	quote: { hue: 220 },
 	group: { hue: 190 },
 };
 
@@ -772,14 +773,14 @@ export default function GraphView(props: GraphViewProps) {
 
 			<Show when={filterOpen()}>
 				<div
-					class="graph-filter-panel surface padding round"
+					class="graph-filter-panel surface padding round elevate"
 					onClick={(event) => event.stopPropagation()}
 					style={{
 						position: "absolute",
 						right: "0rem",
 						bottom: "4rem",
 						"z-index": 10,
-						"min-width": "13rem",
+						"min-width": "10em",
 					}}
 				>
 					<For each={[...new Set(props.entities.map((e) => e.type))].sort()}>
@@ -799,10 +800,10 @@ export default function GraphView(props: GraphViewProps) {
 									<span
 										style={{
 											display: "inline-block",
-											width: "10pt",
-											height: "10pt",
+											width: "1em",
+											height: "1em",
 											"border-radius": "50%",
-											"background-color": `hsl(${hueForType(type)}, 94%, 32%)`,
+											"background-color": `hsl(${hueForType(type)}, 94%, 52%)`,
 										}}
 									/>
 									<span>

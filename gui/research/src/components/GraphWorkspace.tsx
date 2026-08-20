@@ -6,208 +6,166 @@ import { Modal } from "~/components/Modal";
 import RelationForm from "~/components/RelationForm";
 import RelationInspector from "~/components/RelationInspector";
 
-import {
-    deleteEntity,
-    deleteRelation,
-} from "~/db/respository";
+import { deleteEntity, deleteRelation } from "~/db/respository";
 
 import type { Entity } from "~/domain/entity";
-import type { Evidence } from "~/domain/evidence";
 import type { Relation } from "~/domain/relation";
 
 import EntityForm from "./EntityForm";
-import EvidenceForm from "./EvidenceForm";
 import { useModal } from "./Modal";
 
 interface GraphWorkspaceProps {
-    entities: Entity[];
-    relations: Relation[];
-    evidence: Evidence[];
+	entities: Entity[];
+	relations: Relation[];
 }
 
-export default function GraphWorkspace(
-    props: GraphWorkspaceProps,
-) {
-    const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
-    const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
-    const [addingRelation, setAddingRelation] = createSignal<{
-        source: Entity;
-        target: Entity;
-    }>();
+export default function GraphWorkspace(props: GraphWorkspaceProps) {
+	const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
+	const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
+	const [addingRelation, setAddingRelation] = createSignal<{
+		source: Entity;
+		target: Entity;
+	}>();
 
-    const modal = useModal();
+	const modal = useModal();
 
-    async function handleAddEntity() {
-        await modal(
-            (close) => (
-                <EntityForm
-                    onCreated={(entity: Entity) => {
-                        setSelectedEntity(entity);
-                        setSelectedRelation(undefined);
-                        close();
-                    }}
-                    onCancel={close}
-                />
-            ),
-            "Add entity",
-        );
-    }
+	async function handleAddEntity() {
+		await modal(
+			(close) => (
+				<EntityForm
+					onCreated={(entity: Entity) => {
+						setSelectedEntity(entity);
+						setSelectedRelation(undefined);
+						close();
+					}}
+					onCancel={close}
+				/>
+			),
+			"Add entity",
+		);
+	}
 
-    function handleEditEntity(entity: Entity) {
-        setSelectedEntity(entity);
-        setSelectedRelation(undefined);
-    }
+	function handleEditEntity(entity: Entity) {
+		setSelectedEntity(entity);
+		setSelectedRelation(undefined);
+	}
 
-    async function handleDeleteEntity(
-        entity: Entity,
-    ) {
-        await deleteEntity(entity.id);
+	async function handleDeleteEntity(entity: Entity) {
+		await deleteEntity(entity.id);
 
-        if (selectedEntity()?.id === entity.id) {
-            setSelectedEntity(undefined);
-        }
-    }
+		if (selectedEntity()?.id === entity.id) {
+			setSelectedEntity(undefined);
+		}
+	}
 
-    async function handleAddEvidence() {
-        const selectedEntityId = selectedEntity()?.id;
-        const selectedRelationId = selectedRelation()?.id;
+	function handleAddRelation(sourceId: string, targetId: string) {
+		const source = props.entities.find((entity) => entity.id === sourceId);
+		const target = props.entities.find((entity) => entity.id === targetId);
+		if (!source || !target) return;
+		setAddingRelation({ source, target });
+	}
 
-        await modal(
-            (close) => (
-                <EvidenceForm
-                    entities={props.entities}
-                    relations={props.relations}
-                    initialEntityIds={selectedEntityId ? [selectedEntityId] : []}
-                    initialRelationIds={selectedRelationId ? [selectedRelationId] : []}
-                    onCreated={() => close()}
-                    onCancel={close}
-                />
-            ),
-            "Add evidence",
-        );
-    }
+	function handleCreatedRelation(relation: Relation) {
+		setAddingRelation(undefined);
+		setSelectedRelation(relation);
+		setSelectedEntity(undefined);
+	}
 
-    function handleAddRelation(
-        sourceId: string,
-        targetId: string,
-    ) {
-        const source = props.entities.find((entity) => entity.id === sourceId);
-        const target = props.entities.find((entity) => entity.id === targetId);
-        if (!source || !target) return;
-        setAddingRelation({ source, target });
-    }
+	function handleCancelAddRelation() {
+		setAddingRelation(undefined);
+	}
 
-    function handleCreatedRelation(
-        relation: Relation,
-    ) {
-        setAddingRelation(undefined);
-        setSelectedRelation(relation);
-        setSelectedEntity(undefined);
-    }
+	function handleEditRelation(relation: Relation) {
+		setSelectedRelation(relation);
+		setSelectedEntity(undefined);
+	}
 
-    function handleCancelAddRelation() {
-        setAddingRelation(undefined);
-    }
+	async function handleDeleteRelation(relation: Relation) {
+		await deleteRelation(relation.id);
+		if (selectedRelation()?.id === relation.id) {
+			setSelectedRelation(undefined);
+		}
+	}
 
-    function handleEditRelation(relation: Relation) {
-        setSelectedRelation(relation);
-        setSelectedEntity(undefined);
-    }
+	async function handleEntityChanged(entity: Entity) {
+		setSelectedEntity(entity);
+	}
 
-    async function handleDeleteRelation(relation: Relation) {
-        await deleteRelation(relation.id);
-        if (selectedRelation()?.id === relation.id) {
-            setSelectedRelation(undefined);
-        }
-    }
+	return (
+		<>
+			<div
+				class="background"
+				style={{
+					display: "grid",
+					"grid-template-columns": selectedEntity() || selectedRelation() ? "minmax(0, 1fr) 30vw" : "minmax(0, 1fr)",
+					gap: "1rem",
+					height: "100vh",
+					overflow: "none",
+					padding: 0,
+					margin: 0,
+					"min-height": "500px",
+				}}
+			>
+				<div style={{ "min-width": "0" }}>
+					<GraphView
+						entities={props.entities}
+						relations={props.relations}
+						onSelectEntity={(entity) => {
+							setSelectedEntity(entity);
+							setSelectedRelation(undefined);
+						}}
+						onSelectRelation={(relation) => {
+							setSelectedRelation(relation);
+							setSelectedEntity(undefined);
+						}}
+						onAddEntity={handleAddEntity}
+						onEditEntity={handleEditEntity}
+						onDeleteEntity={handleDeleteEntity}
+						onAddRelation={handleAddRelation}
+						onEditRelation={handleEditRelation}
+						onDeleteRelation={handleDeleteRelation}
+					/>
+				</div>
 
-    async function handleEntityChanged(entity: Entity) {
-        setSelectedEntity(entity);
-    }
+				<Show when={selectedEntity() || selectedRelation()}>
+					<div class="transparent" style={{ "overflow-y": "auto" }}>
+						<Show
+							when={selectedEntity()}
+							fallback={
+								<RelationInspector
+									relation={selectedRelation()}
+									entities={props.entities}
+									onClose={() => setSelectedRelation(undefined)}
+								/>
+							}
+						>
+							{(entity) => (
+								<EntityInspector
+									entity={entity()}
+									entities={props.entities}
+									relations={props.relations}
+									onChanged={handleEntityChanged}
+									onClose={() => setSelectedEntity(undefined)}
+								/>
+							)}
+						</Show>
+					</div>
+				</Show>
+			</div>
 
-    return (
-        <>
-            <div class="background"
-                style={{
-                    display: "grid",
-                    "grid-template-columns":
-                        selectedEntity() ||
-                            selectedRelation()
-                            ? "minmax(0, 1fr) 30vw"
-                            : "minmax(0, 1fr)",
-                    gap: "1rem",
-                    height: "100vh",
-                    overflow: "none",
-                    padding: 0,
-                    margin: 0,
-                    "min-height": "500px",
-                }}
-            >
-                <div style={{ "min-width": "0" }} >
-                    <GraphView
-                        entities={props.entities}
-                        relations={props.relations}
-                        onSelectEntity={(entity) => {
-                            setSelectedEntity(entity);
-                            setSelectedRelation(undefined);
-                        }}
-                        onSelectRelation={(relation) => {
-                            setSelectedRelation(relation);
-                            setSelectedEntity(undefined);
-                        }}
-                        onAddEntity={handleAddEntity}
-                        onEditEntity={handleEditEntity}
-                        onDeleteEntity={handleDeleteEntity}
-                        onAddRelation={handleAddRelation}
-                        onEditRelation={handleEditRelation}
-                        onDeleteRelation={handleDeleteRelation}
-                    />
-                </div>
-
-                <Show when={selectedEntity() || selectedRelation()} >
-                    <div class="transparent" style={{ "overflow-y": "auto" }} >
-                        <Show when={selectedEntity()}
-                            fallback={
-                                <RelationInspector
-                                    relation={selectedRelation()}
-                                    entities={props.entities}
-                                    onClose={() => setSelectedRelation(undefined)}
-                                />
-                            }
-                        >
-                            {(entity) => (
-                                <EntityInspector
-                                    entity={entity()}
-                                    entities={props.entities}
-                                    relations={props.relations}
-                                    evidence={props.evidence}
-                                    onAddEvidence={handleAddEvidence}
-                                    onChanged={handleEntityChanged}
-                                    onClose={() => setSelectedEntity(undefined)}
-                                />
-                            )}
-                        </Show>
-                    </div>
-                </Show>
-            </div>
-
-            <Show when={addingRelation()} >
-                {(pending) => (
-                    <Modal
-                        title="Add relationship"
-                        open={true}
-                        onClose={handleCancelAddRelation}
-                    >
-                        <RelationForm
-                            entities={props.entities}
-                            source={pending().source}
-                            target={pending().target}
-                            onCreated={handleCreatedRelation}
-                            onCancel={handleCancelAddRelation}
-                        />
-                    </Modal>
-                )}
-            </Show>
-        </>
-    );
+			<Show when={addingRelation()}>
+				{(pending) => (
+					<Modal title="Add relationship" open={true} onClose={handleCancelAddRelation}>
+						<RelationForm
+							entities={props.entities}
+							source={pending().source}
+							target={pending().target}
+							onCreated={handleCreatedRelation}
+							onCancel={handleCancelAddRelation}
+						/>
+					</Modal>
+				)}
+			</Show>
+		</>
+	);
 }

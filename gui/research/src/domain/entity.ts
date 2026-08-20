@@ -1,11 +1,14 @@
 // domain/entity.ts
 
 export const entityTypes = [
+	"animal",
 	"concept",
+	"evidence",
+	"group",
 	"lexeme",
 	"motif",
-	"animal",
 	"person",
+	"quote",
 	"source",
 ] as const;
 

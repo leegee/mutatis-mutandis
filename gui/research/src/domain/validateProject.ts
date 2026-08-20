@@ -67,10 +67,7 @@ function formatError(
         case "additionalProperties":
             return {
                 path,
-                message:
-                    `unexpected property "${ String(
-                        error.params.additionalProperty,
-                    ) }"`,
+                message: `unexpected property "${ String( error.params.additionalProperty, ) }"`,
             };
 
         case "enum":
@@ -78,19 +75,14 @@ function formatError(
                 path,
                 message:
                     `${ error.message }: ${ (
-                        error.params as {
-                            allowedValues: unknown[];
-                        }
+                        error.params as { allowedValues: unknown[]; }
                     ).allowedValues.join(", ") }`,
             };
 
         case "const":
             return {
                 path,
-                message:
-                    `must equal ${ JSON.stringify(
-                        error.params.allowedValue,
-                    ) }`,
+                message: `must equal ${ JSON.stringify( error.params.allowedValue, ) }`,
             };
 
         default:
@@ -129,44 +121,15 @@ export function validateProject(
         if (!entityIds.has(relation.sourceId)) {
             errors.push({
                 path: `relations.${ relation.id }.sourceId`,
-                message:
-                    `references missing entity "${ relation.sourceId }"`,
+                message: `references missing entity "${ relation.sourceId }"`,
             });
         }
 
         if (!entityIds.has(relation.targetId)) {
             errors.push({
                 path: `relations.${ relation.id }.targetId`,
-                message:
-                    `references missing entity "${ relation.targetId }"`,
+                message: `references missing entity "${ relation.targetId }"`,
             });
-        }
-    }
-
-    const relationIds = new Set(
-        project.relations.map(
-            (relation) => relation.id,
-        ),
-    );
-
-    for (const evidence of project.evidence) {
-        for (const entityId of evidence.entityIds) {
-            if (!entityIds.has(entityId)) {
-                errors.push({
-                    path: `evidence.${ evidence.id }.entityIds`,
-                    message:
-                        `references missing entity "${ entityId }"`,
-                });
-            }
-        }
-
-        for (const relationId of evidence.relationIds) {
-            if (!relationIds.has(relationId)) {
-                errors.push({
-                    path: `evidence.${ evidence.id }.relationIds`,
-                    message: `references missing relation "${ relationId }"`,
-                });
-            }
         }
     }
 

@@ -1,38 +1,27 @@
 import { exportProject } from "~/db/respository";
 
 export default function ProjectExport() {
-    async function exportData() {
-        const project = await exportProject();
+	async function exportData() {
+		const project = await exportProject();
 
-        const json = JSON.stringify(
-            project,
-            null,
-            2,
-        );
+		const json = JSON.stringify(project, null, 2);
 
-        const blob = new Blob(
-            [json],
-            { type: "application/json" },
-        );
+		const blob = new Blob([json], { type: "application/json" });
 
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement("a");
 
-        anchor.href = url;
-        anchor.download = "research-map.json";
+		anchor.href = url;
+		anchor.download = "research-map.json";
 
-        anchor.click();
+		anchor.click();
 
-        URL.revokeObjectURL(url);
-    }
+		URL.revokeObjectURL(url);
+	}
 
-    return (
-        <div class="field">
-            <label>
-                <button type="button" class="small transparent border" onClick={exportData}>
-                    Export project
-                </button>
-            </label>
-        </div>
-    );
+	return (
+		<button type="button" class="small transparent no-padding" onClick={exportData}>
+			Export project
+		</button>
+	);
 }

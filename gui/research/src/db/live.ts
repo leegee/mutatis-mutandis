@@ -9,6 +9,3 @@ export function liveRelations() {
 	return liveQuery(() => getDatabase().relations.toArray());
 }
 
-export function liveEvidence() {
-	return liveQuery(() => getDatabase().evidence.toArray());
-}

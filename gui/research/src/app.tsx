@@ -7,6 +7,8 @@ import "beercss/dist/cdn/beer.min.css";
 import "./app.css";
 import "./nav-menu.css";
 import ModalHost from "./components/Modal/ModalHost";
+import ProjectImport from "./components/ProjectImport";
+import ProjectExport from "./components/ProjectExport";
 
 function Navigation() {
 	const location = useLocation();
@@ -46,11 +48,21 @@ function Navigation() {
 						</a>
 					</li>
 
-					<li classList={{ active: isActive("/project") }}>
+					{/* <li classList={{ active: isActive("/project") }}>
 						<a href="/project" onClick={closeMenu}>
 							<i>folder_open</i>
 							<span>Import/Export</span>
 						</a>
+					</li> */}
+
+					<li>
+						<i>folder_open</i>
+						<ProjectImport />
+					</li>
+
+					<li>
+						<i>folder_open</i>
+						<ProjectExport />
 					</li>
 				</menu>
 			)}

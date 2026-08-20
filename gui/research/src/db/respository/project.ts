@@ -26,7 +26,6 @@ export async function importProject(value: unknown): Promise<void> {
 		"rw",
 		db.entities,
 		db.relations,
-		db.evidence,
 		db.projectMetadata,
 		async () => {
 			/*
@@ -34,12 +33,10 @@ export async function importProject(value: unknown): Promise<void> {
 			 */
 			await db.entities.clear();
 			await db.relations.clear();
-			await db.evidence.clear();
 			await db.projectMetadata.clear();
 
 			await db.entities.bulkAdd(project.entities);
 			await db.relations.bulkAdd(project.relations);
-			await db.evidence.bulkAdd(project.evidence);
 
 			await db.projectMetadata.put({
 				id: "project",
@@ -52,11 +49,10 @@ export async function importProject(value: unknown): Promise<void> {
 export async function exportProject(): Promise<ResearchProject> {
 	const db = getDatabase();
 
-	const [metadataRecord, entities, relations, evidence] = await Promise.all([
+	const [metadataRecord, entities, relations,] = await Promise.all([
 		db.projectMetadata.get("project"),
 		db.entities.toArray(),
 		db.relations.toArray(),
-		db.evidence.toArray(),
 	]);
 
 	if (!metadataRecord) {
@@ -70,7 +66,6 @@ export async function exportProject(): Promise<ResearchProject> {
 		metadata,
 		entities,
 		relations,
-		evidence,
 	};
 }
 

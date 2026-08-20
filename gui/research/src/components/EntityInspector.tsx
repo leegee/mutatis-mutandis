@@ -9,7 +9,6 @@ import {
 	removeEntityTag,
 } from "~/db/respository";
 import type { Entity } from "~/domain/entity";
-import type { Evidence } from "~/domain/evidence";
 import type { Relation } from "~/domain/relation";
 import AutoComplete from "./AutoComplete";
 import EntityForm from "./EntityForm";
@@ -19,9 +18,7 @@ interface EntityInspectorProps {
 	entity: Entity | undefined;
 	entities: Entity[];
 	relations: Relation[];
-	evidence: Evidence[];
 
-	onAddEvidence?: () => void | Promise<void>;
 	onChanged?: (entity: Entity) => void | Promise<void>;
 	onClose?: (entity: Entity) => void;
 }
@@ -57,12 +54,6 @@ export default function EntityInspector(props: EntityInspectorProps) {
 		window.addEventListener("keydown", handleKeyDown);
 		onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
 	});
-
-	function entityEvidence(): Evidence[] {
-		const entity = props.entity;
-		if (!entity) return [];
-		return props.evidence.filter((item) => item.entityIds.includes(entity.id));
-	}
 
 	async function handleAddTag(tag: string) {
 		const value = tag.trim();
@@ -245,35 +236,6 @@ export default function EntityInspector(props: EntityInspectorProps) {
 										)}
 									</For>
 								</div>
-							</Show>
-						</section>
-
-						<section class="surface">
-							<header class="title border row">
-								<h3 class="max">Evidence</h3>
-
-								<button
-									type="button"
-									class="transparent circle"
-									title="Add evidence"
-									aria-label="Add evidence"
-									onClick={() => props.onAddEvidence?.()}
-								>
-									<i>add</i>
-								</button>
-							</header>
-
-							<Show when={entityEvidence().length > 0} fallback={<p>No evidence.</p>}>
-								<table class="small-height stripes surface scroll">
-									<For each={entityEvidence()}>
-										{(item) => (
-											<tr>
-												<th class="top-align small-text">{item.status}</th>
-												<td>{item.observation}</td>
-											</tr>
-										)}
-									</For>
-								</table>
 							</Show>
 						</section>
 
