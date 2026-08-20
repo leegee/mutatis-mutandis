@@ -251,78 +251,54 @@ export function RelationshipImport(props: RelationshipImportProps) {
 									<div class="row relationship-import-row">
 										{/* Source */}
 										<div class="s4">
-											<div class={`field label border ${ !row.sourceExists ? "new" : "" }`} >
+											<div class={`field label border ${!row.sourceExists ? "new" : ""}`}>
 												<input
 													type="text"
 													value={row.source}
 													placeholder="Subject Entity"
-													onInput={(event) =>
-														updateRow(
-															index(),
-															"source",
-															event.currentTarget.value,
-														)
-													}
+													onInput={(event) => updateRow(index(), "source", event.currentTarget.value)}
 												/>
 
 												<label>Subject Entity</label>
 
-												<output class={!row.sourceExists ? "new" : ""} >
-													{row.sourceExists
-														? "Existing entity"
-														: "Will create entity"}
+												<output class={!row.sourceExists ? "new" : ""}>
+													{row.sourceExists ? "Existing entity" : "Will create entity"}
 												</output>
 											</div>
 										</div>
 
 										{/* Relationship */}
 										<div class="s3">
-											<div class={`field label border ${ !row.relationTypeValid ? "invalid" : "" }`} >
+											<div class={`field label border ${!row.relationTypeValid ? "invalid" : ""}`}>
 												<input
 													type="text"
 													value={row.type}
 													placeholder="Relationship"
-													onInput={(event) =>
-														updateRow(
-															index(),
-															"type",
-															event.currentTarget.value,
-														)
-													}
+													onInput={(event) => updateRow(index(), "type", event.currentTarget.value)}
 												/>
 
 												<label>Relationship</label>
 
 												<Show when={!row.relationTypeValid}>
-													<output class="invalid">
-														Unknown relationship type
-													</output>
+													<output class="invalid">Unknown relationship type</output>
 												</Show>
 											</div>
 										</div>
 
 										{/* Target */}
 										<div class="s4">
-											<div class={`field label border ${ !row.targetExists ? "new" : "" }`} >
+											<div class={`field label border ${!row.targetExists ? "new" : ""}`}>
 												<input
 													type="text"
 													value={row.target}
 													placeholder="Object Entity"
-													onInput={(event) =>
-														updateRow(
-															index(),
-															"target",
-															event.currentTarget.value,
-														)
-													}
+													onInput={(event) => updateRow(index(), "target", event.currentTarget.value)}
 												/>
 
 												<label>Object Entity</label>
 
-												<output class={!row.targetExists ? "new" : ""} >
-													{row.targetExists
-														? "Existing entity"
-														: "Will create entity"}
+												<output class={!row.targetExists ? "new" : ""}>
+													{row.targetExists ? "Existing entity" : "Will create entity"}
 												</output>
 											</div>
 										</div>
@@ -334,20 +310,13 @@ export function RelationshipImport(props: RelationshipImportProps) {
 												fallback={
 													<Show when={rowIsValid(row)}>
 														<label class="checkbox">
-															<input
-																type="checkbox"
-																checked
-																disabled
-															/>
+															<input type="checkbox" checked disabled />
 															<span />
 														</label>
 													</Show>
 												}
 											>
-												<span
-													class="relationship-import-ok"
-													aria-label="Relationship already exists"
-												>
+												<span class="relationship-import-ok" aria-description="Relationship already exists">
 													✓
 												</span>
 											</Show>
@@ -377,7 +346,7 @@ export function RelationshipImport(props: RelationshipImportProps) {
 							</button>
 
 							<button type="button" onClick={submit} disabled={!canSubmit()}>
-								{saving() ? "Adding…" : `Add ${ rowsToCreate().length }`}
+								{saving() ? "Adding…" : `Add ${rowsToCreate().length}`}
 							</button>
 						</nav>
 					</>
@@ -430,9 +399,5 @@ export default function RelationshipImportButton() {
 
 async function handleImportRelationships() {
 	const modal = useModal();
-	await modal(
-		(close) => <RelationshipImport close={close} />,
-		"Add relationships",
-		"min-width: 60rem"
-	);
+	await modal((close) => <RelationshipImport close={close} />, "Add relationships", "min-width: 60rem");
 }
