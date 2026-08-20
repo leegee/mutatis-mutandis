@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import {
 	addEntityAlias,
 	addEntityTag,
@@ -44,6 +44,18 @@ export default function EntityInspector(props: EntityInspectorProps) {
 		if (props.entity) {
 			setCurrentEntity(props.entity);
 		}
+	});
+
+	onMount(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+			if (editing()) return;
+			const entity = props.entity;
+			if (entity) props.onClose?.(entity);
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
 	});
 
 	function entityEvidence(): Evidence[] {

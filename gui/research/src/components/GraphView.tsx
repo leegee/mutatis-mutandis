@@ -424,19 +424,14 @@ export default function GraphView(props: GraphViewProps) {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
 				event.preventDefault();
 				setSearchOpen(true);
-
 				requestAnimationFrame(() => {
 					searchInput?.focus();
 					searchInput?.select();
 				});
-
 				return;
 			}
 
-			if (event.key !== "Escape") {
-				return;
-			}
-
+			if (event.key !== "Escape") return;
 			setContextMenu(undefined);
 
 			if (searchOpen()) {
@@ -446,7 +441,6 @@ export default function GraphView(props: GraphViewProps) {
 			}
 
 			const sourceId = linkingFrom();
-
 			if (sourceId) {
 				setLinkingFrom(undefined);
 				instance.getElementById(sourceId).removeClass("link-source");
@@ -455,9 +449,7 @@ export default function GraphView(props: GraphViewProps) {
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
-		onCleanup(() => {
-			window.removeEventListener("keydown", handleKeyDown);
-		});
+		onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
 	});
 
 	createEffect(() => {
@@ -469,16 +461,10 @@ export default function GraphView(props: GraphViewProps) {
 	createEffect(() => {
 		const instance = cy();
 		const term = searchTerm().trim().toLocaleLowerCase();
-
-		if (!instance) {
-			return;
-		}
+		if (!instance) return;
 
 		instance.nodes().removeClass("search-match search-dim");
-
-		if (!term) {
-			return;
-		}
+		if (!term) return;
 
 		instance.nodes().forEach((node) => {
 			const label = String(node.data("label") ?? "").toLocaleLowerCase();
@@ -491,9 +477,7 @@ export default function GraphView(props: GraphViewProps) {
 		});
 	});
 
-	onCleanup(() => {
-		cy()?.destroy();
-	});
+	onCleanup(() => cy()?.destroy());
 
 	return (
 		<>
@@ -695,9 +679,9 @@ export default function GraphView(props: GraphViewProps) {
 									style={{ width: "20em" }}
 								/>
 							</div>
-							<Show when={searchTerm().trim()}>
+							{/* <Show when={searchTerm().trim()}>
 								<span>{cy()?.nodes(".search-match").length ?? 0}</span>
-							</Show>
+							</Show> */}
 							<button
 								type="button"
 								class="large right-round"
