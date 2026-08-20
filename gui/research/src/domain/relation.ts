@@ -1,9 +1,12 @@
 export const relationTypes = [
+     "derived-from",
+     "parallels", 
     "associated-with",
     "attested-in",
     "cognate-of",
     "contrasts-with",
     "describes",
+    "exhibits",
     "expresses",
     "possibly-derived-from",
     "related-to",
