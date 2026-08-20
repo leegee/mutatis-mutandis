@@ -714,8 +714,8 @@ export default function GraphView(props: GraphViewProps) {
 						"z-index": 100000,
 					}}
 				>
-					<nav class="no-space">
-						<div class="max field border left-round">
+					<nav class="no-space top-margin">
+						<div class="max field border round fill">
 							<input
 								ref={searchInput}
 								type="text"
@@ -730,7 +730,7 @@ export default function GraphView(props: GraphViewProps) {
 							</Show> */}
 						<button
 							type="button"
-							class="large right-round"
+							class="left-margin right-margin circle transparent border small"
 							onClick={() => {
 								setSearchOpen(false);
 								setSearchTerm("");
@@ -738,6 +738,7 @@ export default function GraphView(props: GraphViewProps) {
 							title="Close search"
 						>
 							<i>close</i>
+							<span class="tooltip right">Close the search</span>
 						</button>
 					</nav>
 				</div>
@@ -766,6 +767,7 @@ export default function GraphView(props: GraphViewProps) {
 				title="Filter node types"
 			>
 				<i>filter_alt</i>
+				<span class="tooltip left">{filterOpen() ? "Close" : "Open"} node filter</span>
 			</button>
 
 			<Show when={filterOpen()}>
