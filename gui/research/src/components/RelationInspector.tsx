@@ -69,13 +69,9 @@ export default function RelationInspector(props: RelationInspectorProps) {
                         <section class="surface">
                             <p>
                                 <strong> {entityLabel(relation().sourceId)} </strong>
-
                                 {" → "}
-
                                 <strong> {relation().type} </strong>
-
                                 {" → "}
-
                                 <strong>{entityLabel(relation().targetId)}</strong>
                             </p>
 

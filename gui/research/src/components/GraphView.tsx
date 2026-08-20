@@ -3,7 +3,7 @@
 
 import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
 import cytoscapeElk from "cytoscape-elk";
-import { createEffect, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
@@ -34,22 +34,23 @@ const [contextMenu, setContextMenu] = createSignal<ContextMenu>();
 
 const [linkingFrom, setLinkingFrom] = createSignal<string>();
 
-const typeColors = {
+const typeColors: Record<string, { hue: number }> = {
 	concept: { hue: 308 },
 	lexeme: { hue: 120 },
 	motif: { hue: 283 },
 	animal: { hue: 43 },
 	person: { hue: 23 },
 	source: { hue: 234 },
+	group: { hue: 190 },
 };
 
-// const backgroundColor = (hue: number) => `hsl(${ hue }, 94%, 42%)`;
-// const borderColor = (hue: number) => `hsl(${ hue }, 35%, 68%)`;
-
-// const typeStyle = (type) => ({
-// 	"background-color": backgroundColor(typeColors[type].hue),
-// 	"border-color": borderColor(typeColors[type].hue),
-// });
+function hueForType(type: string): number {
+	if (typeColors[type]) return typeColors[type].hue;
+	// stable fallback hue for any type not explicitly styled
+	let hash = 0;
+	for (let i = 0; i < type.length; i++) hash = (hash * 31 + type.charCodeAt(i)) % 360;
+	return hash;
+}
 
 interface GraphViewProps {
 	entities: Entity[];
@@ -110,48 +111,49 @@ export default function GraphView(props: GraphViewProps) {
 	const [cy, setCy] = createSignal<Core>();
 	const [searchOpen, setSearchOpen] = createSignal(false);
 	const [searchTerm, setSearchTerm] = createSignal("");
+	const [hiddenTypes, setHiddenTypes] = createSignal<Set<string>>(new Set());
+	const [filterOpen, setFilterOpen] = createSignal(false);
+
+	function toggleType(type: string) {
+		setHiddenTypes((prev) => {
+			const next = new Set(prev);
+			next.has(type) ? next.delete(type) : next.add(type);
+			return next;
+		});
+	}
 
 	function buildElements(): ElementDefinition[] {
-		const incomingCounts = new Map<string, number>();
+		const hidden = hiddenTypes();
+		const visibleEntities = props.entities.filter((entity) => !hidden.has(entity.type));
+		const visibleIds = new Set(visibleEntities.map((entity) => entity.id));
 
-		for (const relation of [...props.relations].sort((a, b) => a.id.localeCompare(b.id))) {
+		const visibleRelations = props.relations.filter(
+			(relation) => visibleIds.has(relation.sourceId) && visibleIds.has(relation.targetId),
+		);
+
+		const incomingCounts = new Map<string, number>();
+		for (const relation of [...visibleRelations].sort((a, b) => a.id.localeCompare(b.id))) {
 			incomingCounts.set(relation.targetId, (incomingCounts.get(relation.targetId) ?? 0) + 1);
 		}
 
-		const nodes: ElementDefinition[] = [...props.entities]
+		const nodes: ElementDefinition[] = [...visibleEntities]
 			.sort((a, b) => a.id.localeCompare(b.id))
 			.map((entity) => {
 				const incoming = incomingCounts.get(entity.id) ?? 0;
-
 				return {
-					data: {
-						id: entity.id,
-						label: entity.label,
-						type: entity.type,
-						incoming,
-						size: nodeSize(incoming),
-					},
+					data: { id: entity.id, label: entity.label, type: entity.type, incoming, size: nodeSize(incoming) },
 				};
 			});
 
-		const edges: ElementDefinition[] = [...props.relations]
+		const edges: ElementDefinition[] = [...visibleRelations]
 			.sort((a, b) => a.id.localeCompare(b.id))
-			.filter(
-				(relation) =>
-					props.entities.some((entity) => entity.id === relation.sourceId) &&
-					props.entities.some((entity) => entity.id === relation.targetId),
-			)
 			.map((relation) => ({
-				data: {
-					id: relation.id,
-					source: relation.sourceId,
-					target: relation.targetId,
-					label: relation.type,
-				},
+				data: { id: relation.id, source: relation.sourceId, target: relation.targetId, label: relation.type },
 			}));
 
 		return [...nodes, ...edges];
 	}
+
 
 	function syncElements(instance: Core) {
 		const elements = buildElements();
@@ -202,14 +204,13 @@ export default function GraphView(props: GraphViewProps) {
 					},
 				},
 
-				...Object.entries(typeColors).map(([type, { hue }]) => ({
+				...Object.keys({ ...typeColors, ...Object.fromEntries(props.entities.map((e) => [e.type, true])) }).map((type) => ({
 					selector: `node[type = "${ type }"]`,
 					style: {
-						"background-color": `hsl(${ hue }, 94%, 32%)`,
-						"border-color": `hsl(${ hue }, 35%, 68%)`,
+						"background-color": `hsl(${ hueForType(type) }, 94%, 32%)`,
+						"border-color": `hsl(${ hueForType(type) }, 35%, 68%)`,
 					},
 				})),
-
 				{
 					selector: "node:selected",
 					style: {
@@ -471,230 +472,277 @@ export default function GraphView(props: GraphViewProps) {
 	onCleanup(() => cy()?.destroy());
 
 	return (
-		<>
-			<div
-				ref={container}
-				style={{
-					position: "relative",
-					width: "100%",
-					height: "100%",
-					"min-height": "500px",
-				}}
-				onClick={() => setContextMenu(undefined)}
-			>
-				<Show when={contextMenu()}>
-					{(menu) => (
-						<div
-							class="graph-context-menu"
-							style={{
-								position: "absolute",
-								left: `${ menu().x }px`,
-								top: `${ menu().y }px`,
-								"z-index": 100000,
-							}}
-							onClick={(event) => event.stopPropagation()}
-						>
-							<menu class="active group no-wrap small-space top">
-								<Switch>
-									<Match when={menu().kind === "canvas"}>
-										<button
-											type="button"
-											class="fill"
-											onClick={() => {
-												const item = menu();
-
-												if (item.kind !== "canvas") {
-													return;
-												}
-
-												props.onAddEntity?.({
-													x: item.x,
-													y: item.y,
-												});
-
-												setContextMenu(undefined);
-											}}
-										>
-											Add node
-										</button>
-									</Match>
-
-									<Match when={menu().kind === "node"}>
-										<button
-											type="button"
-											class="fill"
-											onClick={() => {
-												const item = menu();
-
-												if (item.kind !== "node") {
-													return;
-												}
-
-												const entity = props.entities.find((entity) => entity.id === item.nodeId);
-
-												if (entity) {
-													props.onEditEntity?.(entity);
-												}
-
-												setContextMenu(undefined);
-											}}
-										>
-											Edit node
-										</button>
-
-										<button
-											type="button"
-											class="fill"
-											onClick={() => {
-												const item = menu();
-												if (item.kind !== "node") {
-													return;
-												}
-												setLinkingFrom(item.nodeId);
-												const instance = cy()!;
-
-												instance.getElementById(item.nodeId).addClass("link-source");
-												instance
-													.nodes()
-													.not(`#${ CSS.escape(item.nodeId) }`)
-													.addClass("link-target");
-
-												setContextMenu(undefined);
-											}}
-										>
-											Add relation →
-										</button>
-
-										<button
-											type="button"
-											class="error-container on-error"
-											onClick={() => {
-												const item = menu();
-
-												if (item.kind !== "node") {
-													return;
-												}
-
-												const entity = props.entities.find((entity) => entity.id === item.nodeId);
-
-												if (entity) {
-													props.onDeleteEntity?.(entity);
-												}
-
-												setContextMenu(undefined);
-											}}
-										>
-											Delete node
-										</button>
-									</Match>
-
-									<Match when={menu().kind === "edge"}>
-										<button
-											type="button"
-											onClick={() => {
-												const item = menu();
-
-												if (item.kind !== "edge") {
-													return;
-												}
-
-												const relation = props.relations.find((relation) => relation.id === item.relationId);
-
-												if (relation) {
-													props.onEditRelation?.(relation);
-												}
-
-												setContextMenu(undefined);
-											}}
-										>
-											Edit relation
-										</button>
-
-										<button
-											type="button"
-											class="danger"
-											onClick={async () => {
-												const item = menu();
-												if (item.kind !== "edge") {
-													return;
-												}
-												const ok = await confirm(`Delete this relation?`);
-												if (!ok) return;
-
-												const relation = props.relations.find((relation) => relation.id === item.relationId);
-
-												if (relation) {
-													props.onDeleteRelation?.(relation);
-												}
-
-												setContextMenu(undefined);
-											}}
-										>
-											Delete relation
-										</button>
-									</Match>
-								</Switch>
-							</menu>
-						</div>
-					)}
-				</Show>
-
-				<Show when={searchOpen()}>
+		<div
+			ref={container}
+			style={{
+				position: "relative",
+				width: "100%",
+				height: "100%",
+				"min-height": "500px",
+			}}
+			onClick={() => setContextMenu(undefined)}
+		>
+			<Show when={contextMenu()}>
+				{(menu) => (
 					<div
-						class="graph-search"
-						onClick={(event) => event.stopPropagation()}
+						class="graph-context-menu"
 						style={{
 							position: "absolute",
-							top: "1em",
-							left: "50%",
-							transform: "translateX(-50%)",
+							left: `${ menu().x }px`,
+							top: `${ menu().y }px`,
 							"z-index": 100000,
 						}}
+						onClick={(event) => event.stopPropagation()}
 					>
-						<nav class="no-space">
-							<div class="max field border left-round">
-								<input
-									ref={searchInput}
-									type="text"
-									placeholder="Find a node…"
-									value={searchTerm()}
-									onInput={(event) => setSearchTerm(event.currentTarget.value)}
-									style={{ width: "20em" }}
-								/>
-							</div>
-							{/* <Show when={searchTerm().trim()}>
+						<menu class="active group no-wrap small-space top">
+							<Switch>
+								<Match when={menu().kind === "canvas"}>
+									<button
+										type="button"
+										class="fill"
+										onClick={() => {
+											const item = menu();
+
+											if (item.kind !== "canvas") {
+												return;
+											}
+
+											props.onAddEntity?.({
+												x: item.x,
+												y: item.y,
+											});
+
+											setContextMenu(undefined);
+										}}
+									>
+										Add node
+									</button>
+								</Match>
+
+								<Match when={menu().kind === "node"}>
+									<button
+										type="button"
+										class="fill"
+										onClick={() => {
+											const item = menu();
+
+											if (item.kind !== "node") {
+												return;
+											}
+
+											const entity = props.entities.find((entity) => entity.id === item.nodeId);
+
+											if (entity) {
+												props.onEditEntity?.(entity);
+											}
+
+											setContextMenu(undefined);
+										}}
+									>
+										Edit node
+									</button>
+
+									<button
+										type="button"
+										class="fill"
+										onClick={() => {
+											const item = menu();
+											if (item.kind !== "node") {
+												return;
+											}
+											setLinkingFrom(item.nodeId);
+											const instance = cy()!;
+
+											instance.getElementById(item.nodeId).addClass("link-source");
+											instance
+												.nodes()
+												.not(`#${ CSS.escape(item.nodeId) }`)
+												.addClass("link-target");
+
+											setContextMenu(undefined);
+										}}
+									>
+										Add relation →
+									</button>
+
+									<button
+										type="button"
+										class="error-container on-error"
+										onClick={() => {
+											const item = menu();
+
+											if (item.kind !== "node") {
+												return;
+											}
+
+											const entity = props.entities.find((entity) => entity.id === item.nodeId);
+
+											if (entity) {
+												props.onDeleteEntity?.(entity);
+											}
+
+											setContextMenu(undefined);
+										}}
+									>
+										Delete node
+									</button>
+								</Match>
+
+								<Match when={menu().kind === "edge"}>
+									<button
+										type="button"
+										onClick={() => {
+											const item = menu();
+
+											if (item.kind !== "edge") {
+												return;
+											}
+
+											const relation = props.relations.find((relation) => relation.id === item.relationId);
+
+											if (relation) {
+												props.onEditRelation?.(relation);
+											}
+
+											setContextMenu(undefined);
+										}}
+									>
+										Edit relation
+									</button>
+
+									<button
+										type="button"
+										class="danger"
+										onClick={async () => {
+											const item = menu();
+											if (item.kind !== "edge") {
+												return;
+											}
+											const ok = await confirm(`Delete this relation?`);
+											if (!ok) return;
+
+											const relation = props.relations.find((relation) => relation.id === item.relationId);
+
+											if (relation) {
+												props.onDeleteRelation?.(relation);
+											}
+
+											setContextMenu(undefined);
+										}}
+									>
+										Delete relation
+									</button>
+								</Match>
+							</Switch>
+						</menu>
+					</div>
+				)}
+			</Show>
+
+			<Show when={searchOpen()}>
+				<div
+					class="graph-search"
+					onClick={(event) => event.stopPropagation()}
+					style={{
+						position: "absolute",
+						top: "1em",
+						left: "50%",
+						transform: "translateX(-50%)",
+						"z-index": 100000,
+					}}
+				>
+					<nav class="no-space">
+						<div class="max field border left-round">
+							<input
+								ref={searchInput}
+								type="text"
+								placeholder="Find a node…"
+								value={searchTerm()}
+								onInput={(event) => setSearchTerm(event.currentTarget.value)}
+								style={{ width: "20em" }}
+							/>
+						</div>
+						{/* <Show when={searchTerm().trim()}>
 								<span>{cy()?.nodes(".search-match").length ?? 0}</span>
 							</Show> */}
-							<button
-								type="button"
-								class="large right-round"
-								onClick={() => {
-									setSearchOpen(false);
-									setSearchTerm("");
-								}}
-								title="Close search"
-							>
-								<i>close</i>
-							</button>
-						</nav>
-					</div>
-				</Show>
+						<button
+							type="button"
+							class="large right-round"
+							onClick={() => {
+								setSearchOpen(false);
+								setSearchTerm("");
+							}}
+							title="Close search"
+						>
+							<i>close</i>
+						</button>
+					</nav>
+				</div>
+			</Show>
 
-				<Show when={linkingFrom()}>
-					<div
-						class="graph-linking-indicator fill padding round"
-						style={{
-							position: "absolute",
-							bottom: "2em",
-							left: "50%",
-							transform: "translateX(-50%)",
-							"z-index": 100000,
+			<Show when={linkingFrom()}>
+				<div
+					class="graph-linking-indicator fill padding round"
+					style={{
+						position: "absolute",
+						bottom: "2em",
+						left: "50%",
+						transform: "translateX(-50%)",
+						"z-index": 100000,
+					}}
+				>
+					Click a node to create the relation. Press Escape to cancel.
+				</div>
+			</Show>
+
+			<button
+				type="button"
+				onClick={() => setFilterOpen((v) => !v)}
+				class="circle tertiary"
+				style="position: absolute; bottom: 1rem; right: 1rem"
+				title="Filter node types"
+			>
+				<i>filter_alt</i>
+			</button>
+
+			<Show when={true || filterOpen()}>
+				<div
+					class="graph-filter-panel surface padding round"
+					onClick={(event) => event.stopPropagation()}
+					style={{
+						position: "absolute",
+						right: "1rem",
+						bottom: "4rem",
+						"z-index": 100000,
+						"min-width": "13rem",
+					}}
+				>
+					<For each={[...new Set(props.entities.map((e) => e.type))].sort()}>
+						{(type) => {
+							const count = () => props.entities.filter((e) => e.type === type).length;
+							return (
+								<label style={{ display: "flex", "flex-direction": "row-reverse", "align-items": "center", gap: "0.5em", padding: "0.25em 0" }}>
+									<input
+										type="checkbox"
+										checked={!hiddenTypes().has(type)}
+										onChange={() => toggleType(type)}
+									/>
+									<span
+										style={{
+											display: "inline-block",
+											width: "10pt",
+											height: "10pt",
+											"border-radius": "50%",
+											"background-color": `hsl(${ hueForType(type) }, 94%, 32%)`,
+										}}
+									/>
+									<span>{type} ({count()})</span>
+								</label>
+							);
 						}}
-					>
-						Click a node to create the relation. Press Escape to cancel.
-					</div>
-				</Show>
-			</div>
-		</>
+					</For>
+				</div>
+			</Show>
+		</div>
 	);
 }
