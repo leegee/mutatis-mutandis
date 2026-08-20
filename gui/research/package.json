@@ -15,6 +15,7 @@
     "ajv-formats": "^3.0.1",
     "beercss": "^5.0.3",
     "cytoscape": "^3.34.1",
+    "cytoscape-elk": "^2.3.0",
     "dexie": "^4.4.5",
     "fuse.js": "^7.5.0",
     "jsonc-parser": "^3.3.1",
