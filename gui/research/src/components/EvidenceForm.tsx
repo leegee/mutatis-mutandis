@@ -140,7 +140,6 @@ export default function EvidenceForm(props: EvidenceFormProps) {
 				getLabel={(entity) => entity.label}
 				onInput={(value) => {
 					setSourceInput(value);
-
 					// Typing a new value means the previous selection is no longer necessarily valid.
 					if (sourceId() && value !== props.entities.find((entity) => entity.id === sourceId())?.label) {
 						setSourceId("");

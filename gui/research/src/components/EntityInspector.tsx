@@ -126,7 +126,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 		const entity = props.entity;
 		if (!entity) return;
 
-		const ok = await confirm(`Delete "${ entity.label }"?`);
+		const ok = await confirm(`Delete "${entity.label}"?`);
 		if (!ok) {
 			return;
 		}
@@ -184,6 +184,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 								items={aliases()}
 								getLabel={(alias) => alias}
 								onInput={setAliasInput}
+								onEnter={() => handleAddAlias(aliasInput())}
 								onSelect={handleAddAlias}
 								placeholder="Aliases"
 								isTitle
@@ -199,8 +200,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 												<button
 													type="button"
 													class="transparent small circle no-padding"
-													title={`Remove ${ alias }`}
-													aria-label={`Remove alias ${ alias }`}
+													title={`Remove ${alias}`}
+													aria-label={`Remove alias ${alias}`}
 													onClick={() => handleRemoveAlias(alias)}
 												>
 													<i class="small">close</i>
@@ -219,6 +220,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 								getLabel={(tag) => tag}
 								onInput={setTagInput}
 								onSelect={handleAddTag}
+								onEnter={() => handleAddTag(tagInput())}
 								placeholder="Tags"
 								isTitle
 							/>
@@ -233,8 +235,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 												<button
 													type="button"
 													class="transparent small circle no-padding"
-													title={`Remove ${ tag }`}
-													aria-label={`Remove tag ${ tag }`}
+													title={`Remove ${tag}`}
+													aria-label={`Remove tag ${tag}`}
 													onClick={() => handleRemoveTag(tag)}
 												>
 													<i class="small">close</i>
