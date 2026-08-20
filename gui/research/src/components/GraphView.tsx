@@ -778,7 +778,7 @@ export default function GraphView(props: GraphViewProps) {
 						position: "absolute",
 						right: "0rem",
 						bottom: "4rem",
-						"z-index": 100000,
+						"z-index": 10,
 						"min-width": "13rem",
 					}}
 				>

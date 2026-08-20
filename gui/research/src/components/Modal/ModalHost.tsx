@@ -20,10 +20,7 @@ export default function ModalHost() {
 
 	function close() {
 		const current = request();
-
-		if (!current) {
-			return;
-		}
+		if (!current) return;
 
 		switch (current.kind) {
 			case "alert":
@@ -54,7 +51,7 @@ export default function ModalHost() {
 						switch (modal.kind) {
 							case "alert":
 								return (
-									<div class="padding">
+									<div class="padding large-elevate">
 										<p>{modal.message}</p>
 
 										<nav class="footer">
@@ -67,23 +64,15 @@ export default function ModalHost() {
 
 							case "confirm":
 								return (
-									<div class="padding">
+									<div class="padding  large-elevate">
 										<p>{modal.message}</p>
 
 										<nav class="footer">
-											<button
-												type="button"
-												class="error"
-												onClick={() => modal.resolve(true)}
-											>
+											<button type="button" class="error" onClick={() => modal.resolve(true)}>
 												Confirm
 											</button>
 
-											<button
-												type="button"
-												class="transparent"
-												onClick={() => modal.resolve(false)}
-											>
+											<button type="button" class="transparent" onClick={() => modal.resolve(false)}>
 												Cancel
 											</button>
 										</nav>
@@ -98,7 +87,7 @@ export default function ModalHost() {
 											modal.resolve(value());
 										}}
 									>
-										<div class="padding">
+										<div class="padding large-elevate">
 											<p>{modal.message}</p>
 
 											<div class="field label border">
@@ -106,9 +95,7 @@ export default function ModalHost() {
 													class="text"
 													autofocus
 													value={value()}
-													onInput={(event) =>
-														setValue(event.currentTarget.value)
-													}
+													onInput={(event) => setValue(event.currentTarget.value)}
 												/>
 
 												<label>{modal.message}</label>
@@ -117,11 +104,7 @@ export default function ModalHost() {
 											<nav class="footer">
 												<button type="submit">OK</button>
 
-												<button
-													type="button"
-													class="transparent"
-													onClick={() => modal.resolve(null)}
-												>
+												<button type="button" class="transparent" onClick={() => modal.resolve(null)}>
 													Cancel
 												</button>
 											</nav>
