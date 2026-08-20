@@ -5,169 +5,158 @@ import { type Entity, type EntityType, entityTypes } from "~/domain/entity";
 import EntityAutocomplete from "./EntityAutocomplete";
 
 interface EntityFormProps {
-    entity?: Entity;
+	entity?: Entity;
 
-    onCreated?: (entity: Entity) => void | Promise<void>;
-    onUpdated?: (entity: Entity) => void | Promise<void>;
-    onCancel?: () => void;
+	onCreated?: (entity: Entity) => void | Promise<void>;
+	onUpdated?: (entity: Entity) => void | Promise<void>;
+	onCancel?: () => void;
 }
 
 export default function EntityForm(props: EntityFormProps) {
-    const editing = () => !!props.entity;
-    const [label, setLabel] = createSignal(props.entity?.label ?? "");
-    const [type, setType] = createSignal<EntityType>(
-        props.entity?.type ?? "concept",
-    );
-    const [selected, setSelected] = createSignal<Entity | undefined>(
-        props.entity,
-    );
-    const [saving, setSaving] = createSignal(false);
+	const editing = () => !!props.entity;
+	const [saving, setSaving] = createSignal(false);
+	const [selected, setSelected] = createSignal<Entity | undefined>(props.entity);
+	const [type, setType] = createSignal<EntityType>(props.entity?.type ?? "concept");
+	const [label, setLabel] = createSignal(props.entity?.label ?? "");
+	const [description, setDescription] = createSignal(props.entity?.description ?? "");
 
-    createEffect(() => {
-        const entity = props.entity;
+	createEffect(() => {
+		const entity = props.entity;
 
-        if (entity) {
-            setLabel(entity.label);
-            setType(entity.type);
-            setSelected(entity);
-        } else {
-            setLabel("");
-            setType("concept");
-            setSelected(undefined);
-        }
-    });
+		if (entity) {
+			setLabel(entity.label);
+			setType(entity.type);
+			setSelected(entity);
+			setDescription(entity.description ?? "");
+		} else {
+			setLabel("");
+			setType("concept");
+			setSelected(undefined);
+			setDescription("");
+		}
+	});
 
-    function handleInput(value: string) {
-        setLabel(value);
+	function handleInput(value: string) {
+		setLabel(value);
 
-        if (!editing()) {
-            setSelected(undefined);
-        }
-    }
+		if (!editing()) {
+			setSelected(undefined);
+		}
+	}
 
-    function handleSelect(entity: Entity) {
-        setLabel(entity.label);
-        setType(entity.type);
-        setSelected(entity);
-    }
+	function handleSelect(entity: Entity) {
+		setLabel(entity.label);
+		setType(entity.type);
+		setSelected(entity);
+	}
 
-    async function submit(event: SubmitEvent) {
-        event.preventDefault();
+	async function submit(event: SubmitEvent) {
+		event.preventDefault();
 
-        if (saving()) {
-            return;
-        }
+		if (saving()) {
+			return;
+		}
 
-        const value = label().trim();
+		const value = label().trim();
 
-        if (!value) {
-            return;
-        }
+		if (!value) {
+			return;
+		}
 
-        /*
-         * Add mode:
-         *
-         * If autocomplete selected an existing entity,
-         * don't create a duplicate.
-         */
-        if (!editing() && selected()) {
-            return;
-        }
+		/*
+		 * Add mode:
+		 *
+		 * If autocomplete selected an existing entity,
+		 * don't create a duplicate.
+		 */
+		if (!editing() && selected()) {
+			return;
+		}
 
-        setSaving(true);
+		setSaving(true);
 
-        try {
-            if (editing() && props.entity) {
-                const updated = await updateEntity(props.entity, {
-                    label: value,
-                    type: type(),
-                });
+		try {
+			if (editing() && props.entity) {
+				const updated = await updateEntity(props.entity, {
+					label: value,
+					type: type(),
+					description: description().trim(),
+				});
 
-                await props.onUpdated?.(updated);
-            } else {
-                const created = await createEntity(value, type());
+				await props.onUpdated?.(updated);
+			} else {
+				const created = await createEntity(value, type());
 
-                setLabel("");
-                setSelected(undefined);
+				setLabel("");
+				setSelected(undefined);
 
-                await props.onCreated?.(created);
-            }
-        } finally {
-            setSaving(false);
-        }
-    }
+				await props.onCreated?.(created);
+			}
+		} finally {
+			setSaving(false);
+		}
+	}
 
-    return (
-        <form onSubmit={submit}>
-            <Show
-                when={!editing()}
-                fallback={
-                    <div class="field border">
-                        <input
-                            type="text"
-                            value={label()}
-                            disabled={saving()}
-                            onInput={(event) => setLabel(event.currentTarget.value)}
-                        />
-                        <output>Label</output>
-                    </div>
-                }
-            >
-                <EntityAutocomplete
-                    value={label()}
-                    onInput={handleInput}
-                    onSelect={handleSelect}
-                    disabled={saving()}
-                />
-            </Show>
+	return (
+		<form onSubmit={submit}>
+			<Show
+				when={!editing()}
+				fallback={
+					<div class="field border">
+						<input
+							type="text"
+							value={label()}
+							disabled={saving()}
+							onInput={(event) => setLabel(event.currentTarget.value)}
+						/>
+						<output>Label</output>
+					</div>
+				}
+			>
+				<EntityAutocomplete value={label()} onInput={handleInput} onSelect={handleSelect} disabled={saving()} />
+			</Show>
 
-            <Show when={!editing() && selected()}>
-                {(entity) => (
-                    <small>
-                        Existing {entity().type}: <strong>{entity().label}</strong>
-                    </small>
-                )}
-            </Show>
+			<Show when={!editing() && selected()}>
+				{(entity) => (
+					<small>
+						Existing {entity().type}: <strong>{entity().label}</strong>
+					</small>
+				)}
+			</Show>
 
-            <div class="field border">
-                <select
-                    value={type()}
-                    disabled={saving()}
-                    onChange={(event) => setType(event.currentTarget.value as EntityType)}
-                >
-                    <For each={entityTypes}>
-                        {(entityType) => <option value={entityType}>{entityType}</option>}
-                    </For>
-                </select>
+			<div class="field border">
+				<select
+					value={type()}
+					disabled={saving()}
+					onChange={(event) => setType(event.currentTarget.value as EntityType)}
+				>
+					<For each={entityTypes}>{(entityType) => <option value={entityType}>{entityType}</option>}</For>
+				</select>
 
-                <output>Type</output>
-            </div>
+				<output>Type</output>
+			</div>
 
-            <nav class="footer">
-                <button
-                    type="submit"
-                    disabled={!label().trim() || saving() || (!editing() && !!selected())}
-                >
-                    {saving()
-                        ? editing()
-                            ? "Saving…"
-                            : "Adding…"
-                        : editing()
-                            ? "Save"
-                            : "Add"}
-                </button>
+			<div class="field textarea border">
+				<textarea
+					value={description()}
+					disabled={saving()}
+					onInput={(event) => setDescription(event.currentTarget.value)}
+					rows={4}
+				/>
+				<output>Description</output>
+			</div>
 
-                <Show when={editing()}>
-                    <button
-                        type="button"
-                        class="transparent"
-                        disabled={saving()}
-                        onClick={() => props.onCancel?.()}
-                    >
-                        Cancel
-                    </button>
-                </Show>
-            </nav>
-        </form>
-    );
+			<nav class="footer">
+				<button type="submit" disabled={!label().trim() || saving() || (!editing() && !!selected())}>
+					{saving() ? (editing() ? "Saving…" : "Adding…") : editing() ? "Save" : "Add"}
+				</button>
+
+				<Show when={editing()}>
+					<button type="button" class="transparent" disabled={saving()} onClick={() => props.onCancel?.()}>
+						Cancel
+					</button>
+				</Show>
+			</nav>
+		</form>
+	);
 }
