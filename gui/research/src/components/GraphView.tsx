@@ -1,9 +1,9 @@
 /** biome-ignore-all lint/a11y/useKeyWithClickEvents: Time is limited now */
 /** biome-ignore-all lint/a11y/noStaticElementInteractions: Time is limited now */
-import { createEffect, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 
 import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
 import cytoscapeElk from "cytoscape-elk";
+import { createEffect, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
@@ -13,26 +13,43 @@ cytoscape.use(cytoscapeElk);
 
 type ContextMenu =
 	| {
-			kind: "canvas";
-			x: number;
-			y: number;
-	  }
+		kind: "canvas";
+		x: number;
+		y: number;
+	}
 	| {
-			kind: "node";
-			x: number;
-			y: number;
-			nodeId: string;
-	  }
+		kind: "node";
+		x: number;
+		y: number;
+		nodeId: string;
+	}
 	| {
-			kind: "edge";
-			x: number;
-			y: number;
-			relationId: string;
-	  };
+		kind: "edge";
+		x: number;
+		y: number;
+		relationId: string;
+	};
 
 const [contextMenu, setContextMenu] = createSignal<ContextMenu>();
 
 const [linkingFrom, setLinkingFrom] = createSignal<string>();
+
+const typeColors = {
+	concept: { hue: 308 },
+	lexeme: { hue: 120 },
+	motif: { hue: 283 },
+	animal: { hue: 43 },
+	person: { hue: 23 },
+	source: { hue: 234 },
+};
+
+// const backgroundColor = (hue: number) => `hsl(${ hue }, 94%, 42%)`;
+// const borderColor = (hue: number) => `hsl(${ hue }, 35%, 68%)`;
+
+// const typeStyle = (type) => ({
+// 	"background-color": backgroundColor(typeColors[type].hue),
+// 	"border-color": borderColor(typeColors[type].hue),
+// });
 
 interface GraphViewProps {
 	entities: Entity[];
@@ -52,15 +69,35 @@ interface GraphViewProps {
 	onDeleteRelation?: (relation: Relation) => void;
 }
 
+
 const LAYOUT_PARAMS = {
 	name: "elk",
 	animate: false,
 	fit: true,
+	padding: 40,
+	nodeDimensionsIncludeLabels: true,
 	elk: {
 		algorithm: "layered",
 		"elk.direction": "DOWN",
+
+		// Give ELK room to work with variable node sizes instead of
+		// the default (tight) spacing.
+		"elk.spacing.nodeNode": 45,
+		"elk.layered.spacing.nodeNodeBetweenLayers": 70,
+		"elk.spacing.edgeNode": 25,
+		"elk.layered.spacing.edgeNodeBetweenLayers": 25,
+		"elk.spacing.edgeEdge": 15,
+
+		// Straighter edges, fewer crossings, more stable ordering
+		// across re-layouts (helps when you add/remove nodes live).
+		"elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+		"elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+
+		// Trims empty whitespace left over after layering.
+		"elk.layered.compaction.postCompaction.strategy": "EDGE_LENGTH",
 	},
 };
+
 
 function nodeSize(incoming: number): number {
 	return 46 + Math.sqrt(incoming) * 12;
@@ -165,59 +202,13 @@ export default function GraphView(props: GraphViewProps) {
 					},
 				},
 
-				// Concepts
-				{
-					selector: 'node[type = "concept"]',
+				...Object.entries(typeColors).map(([type, { hue }]) => ({
+					selector: `node[type = "${ type }"]`,
 					style: {
-						"background-color": "#455a64",
-						"border-color": "#90a4ae",
+						"background-color": `hsl(${ hue }, 94%, 32%)`,
+						"border-color": `hsl(${ hue }, 35%, 68%)`,
 					},
-				},
-
-				// Lexical forms
-				{
-					selector: 'node[type = "lexeme"]',
-					style: {
-						"background-color": "#4e5d6c",
-						"border-color": "#9fa8b2",
-					},
-				},
-
-				// Motifs
-				{
-					selector: 'node[type = "motif"]',
-					style: {
-						"background-color": "#51445f",
-						"border-color": "#b39ddb",
-					},
-				},
-
-				// Animals
-				{
-					selector: 'node[type = "animal"]',
-					style: {
-						"background-color": "#455a50",
-						"border-color": "#81a995",
-					},
-				},
-
-				// People
-				{
-					selector: 'node[type = "person"]',
-					style: {
-						"background-color": "#5a4b42",
-						"border-color": "#bcaaa4",
-					},
-				},
-
-				// Sources
-				{
-					selector: 'node[type = "source"]',
-					style: {
-						"background-color": "#4a5060",
-						"border-color": "#9fa8da",
-					},
-				},
+				})),
 
 				{
 					selector: "node:selected",
@@ -505,8 +496,8 @@ export default function GraphView(props: GraphViewProps) {
 							class="graph-context-menu"
 							style={{
 								position: "absolute",
-								left: `${menu().x}px`,
-								top: `${menu().y}px`,
+								left: `${ menu().x }px`,
+								top: `${ menu().y }px`,
 								"z-index": 100000,
 							}}
 							onClick={(event) => event.stopPropagation()}
@@ -573,7 +564,7 @@ export default function GraphView(props: GraphViewProps) {
 												instance.getElementById(item.nodeId).addClass("link-source");
 												instance
 													.nodes()
-													.not(`#${CSS.escape(item.nodeId)}`)
+													.not(`#${ CSS.escape(item.nodeId) }`)
 													.addClass("link-target");
 
 												setContextMenu(undefined);
