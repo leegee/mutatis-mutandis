@@ -472,14 +472,6 @@ export default function GraphView(props: GraphViewProps) {
 
 	return (
 		<>
-			<button
-				type="button"
-				onClick={() => cy()?.layout(LAYOUT_PARAMS).run()}
-				class="circle tertiary"
-				style="position: absolute; top: 1em; right: 1em"
-			>
-				<i>refresh</i>
-			</button>
 			<div
 				ref={container}
 				style={{
