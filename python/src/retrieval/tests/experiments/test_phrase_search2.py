@@ -21,16 +21,16 @@ TOP_N = 20
 def main() -> None:
     started = time.perf_counter()
 
-    logger.debug("Starting test_phrase_search2")
+    logger.debug("[test] Starting test_phrase_search2")
 
     logger.debug(
-        "Opening observation lookup: %s",
+        "[test] Opening observation lookup: %s",
         EVENTSTORE_T1_PATH,
     )
     t = time.perf_counter()
     lookup = open_observation_lookup(EVENTSTORE_T1_PATH)
     logger.debug(
-        "Observation lookup opened in %.3fs; %d observations; years=%d..%d",
+        "[test] Observation lookup opened in %.3fs; %d observations; years=%d..%d",
         time.perf_counter() - t,
         len(lookup),
         int(lookup.available_years.min())
@@ -42,11 +42,11 @@ def main() -> None:
     )
 
     logger.debug(
-        "Available years: %s",
+        "[test] Available years: %s",
         lookup.available_years.tolist(),
     )
 
-    logger.debug("Finding seed events for forms=%s", CONCEPT["forms"])
+    logger.debug("[test] Finding seed events for forms=%s", CONCEPT["forms"])
     t = time.perf_counter()
 
     event_ids = lookup.find_matching_event_ids(
@@ -54,7 +54,7 @@ def main() -> None:
     )
 
     logger.debug(
-        "Found %d seed events in %.3fs",
+        "[test] Found %d seed events in %.3fs",
         len(event_ids),
         time.perf_counter() - t,
     )
@@ -65,7 +65,7 @@ def main() -> None:
     )
 
     logger.debug(
-        "Seed-event year distribution: %s",
+        "[test] Seed-event year distribution: %s",
         dict(sorted(year_counts.items())),
     )
 
@@ -76,7 +76,7 @@ def main() -> None:
     ]
 
     logger.debug(
-        "Seed events in year %d: %d",
+        "[test] Seed events in year %d: %d",
         YEAR,
         len(year_events),
     )
@@ -85,7 +85,7 @@ def main() -> None:
         first_eid = year_events[0]
 
         logger.debug(
-            "First %d event metadata: %s",
+            "[test] First %d event metadata: %s",
             first_eid,
             lookup.get_event_metadata(first_eid),
         )
@@ -97,7 +97,7 @@ def main() -> None:
         )
 
         logger.debug(
-            "First event ensemble embedding loaded in %.3fs: "
+            "[test] First event ensemble embedding loaded in %.3fs: "
             "shape=%s dtype=%s norm=%.6f",
             time.perf_counter() - t,
             embedding.shape,
@@ -106,7 +106,7 @@ def main() -> None:
         )
 
     logger.debug(
-        "Opening LazyYearDiskANN: %s",
+        "[test] Opening LazyYearDiskANN: %s",
         DISKANN_INDEXES_DIR,
     )
     t = time.perf_counter()
@@ -123,12 +123,12 @@ def main() -> None:
     )
 
     logger.debug(
-        "LazyYearDiskANN constructed in %.3fs",
+        "[test] LazyYearDiskANN constructed in %.3fs",
         time.perf_counter() - t,
     )
 
     logger.debug(
-        "Starting iter_year_concept_batches: "
+        "[test] Starting iter_year_concept_batches: "
         "concept=%r year=%d top_n=%d",
         "hair",
         YEAR,
@@ -153,7 +153,7 @@ def main() -> None:
         event_count += len(events)
 
         logger.debug(
-            "Received batch %d after %.3fs: %d events; keys=%s",
+            "[test] Received batch %d after %.3fs: %d events; keys=%s",
             batch_count,
             time.perf_counter() - iteration_started,
             len(events),
@@ -162,14 +162,14 @@ def main() -> None:
 
         for event in events:
             logger.debug(
-                "EVENT: %s",
+                "[test] EVENT: %s",
                 event,
             )
 
     iteration_elapsed = time.perf_counter() - iteration_started
 
     logger.debug(
-        "iter_year_concept_batches completed in %.3fs: "
+        "[test] iter_year_concept_batches completed in %.3fs: "
         "batches=%d events=%d",
         iteration_elapsed,
         batch_count,
@@ -177,7 +177,7 @@ def main() -> None:
     )
 
     logger.debug(
-        "TOTAL test_phrase_search2 runtime: %.3fs",
+        "[test] TOTAL test_phrase_search2 runtime: %.3fs",
         time.perf_counter() - started,
     )
 
