@@ -251,7 +251,7 @@ export function RelationshipImport(props: RelationshipImportProps) {
 									<div class="row relationship-import-row">
 										{/* Source */}
 										<div class="s4">
-											<div class={`field label border ${!row.sourceExists ? "new" : ""}`}>
+											<div class={`field label border ${ !row.sourceExists ? "new" : "" }`}>
 												<input
 													type="text"
 													value={row.source}
@@ -269,7 +269,7 @@ export function RelationshipImport(props: RelationshipImportProps) {
 
 										{/* Relationship */}
 										<div class="s3">
-											<div class={`field label border ${!row.relationTypeValid ? "invalid" : ""}`}>
+											<div class={`field label border ${ !row.relationTypeValid ? "invalid" : "" }`}>
 												<input
 													type="text"
 													value={row.type}
@@ -287,7 +287,7 @@ export function RelationshipImport(props: RelationshipImportProps) {
 
 										{/* Target */}
 										<div class="s4">
-											<div class={`field label border ${!row.targetExists ? "new" : ""}`}>
+											<div class={`field label border ${ !row.targetExists ? "new" : "" }`}>
 												<input
 													type="text"
 													value={row.target}
@@ -346,7 +346,7 @@ export function RelationshipImport(props: RelationshipImportProps) {
 							</button>
 
 							<button type="button" onClick={submit} disabled={!canSubmit()}>
-								{saving() ? "Adding…" : `Add ${rowsToCreate().length}`}
+								{saving() ? "Adding…" : `Add ${ rowsToCreate().length }`}
 							</button>
 						</nav>
 					</>
