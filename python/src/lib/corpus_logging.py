@@ -10,13 +10,15 @@ from lib.corpus_config import LOG_DIR
 
 EmitFn = Callable[[str, str], None]
 
-# Base logger used by the application
 logger = logging.getLogger("corpus")
 
 if logger.level == logging.NOTSET:
     logger.setLevel(logging.DEBUG)
 
 if not logger.handlers:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     _h = logging.StreamHandler(sys.stdout)
     _h.setLevel(logging.DEBUG)
     logger.addHandler(_h)
