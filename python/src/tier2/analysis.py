@@ -251,36 +251,18 @@ def _build_batch_events(
             if neighbour_id == seed_event_id:
                 continue
 
-            metadata = _metadata_for_event(
-                lookup,
-                neighbour_id,
-            )
+            metadata = _metadata_for_event( lookup, neighbour_id, )
 
-            token = str(
-                metadata["token"]
-            )
+            token = str( metadata["token"] )
 
             if token.lower() in false_positives:
                 continue
 
-            doc_id = str(
-                metadata["doc_id"]
-            )
+            doc_id = str( metadata["doc_id"] )
 
-            local_window_id, local_window_token_pos = _window_metadata(
-                metadata,
-                "local",
-            )
-
-            medium_window_id, medium_window_token_pos = _window_metadata(
-                metadata,
-                "medium",
-            )
-
-            broad_window_id, broad_window_token_pos = _window_metadata(
-                metadata,
-                "broad",
-            )
+            local_window_id,  local_window_token_pos  = _window_metadata( metadata, "local", )
+            medium_window_id, medium_window_token_pos = _window_metadata( metadata, "medium", )
+            broad_window_id,  broad_window_token_pos  = _window_metadata( metadata, "broad", )
 
             token_counts[token] += 1
             doc_counts[doc_id] += 1
@@ -309,24 +291,26 @@ def _build_batch_events(
                 }
             )
 
+        local_window_id,  local_window_token_pos  = _window_metadata( seed_metadata, "local", )
+        medium_window_id, medium_window_token_pos = _window_metadata( seed_metadata, "medium", )
+        broad_window_id,  broad_window_token_pos  = _window_metadata( seed_metadata, "broad", )
+
         output.append(
-        {
-            "event_id": seed_event_id,
-            "token": str(seed_metadata["token"]),
-            "doc_id": str(seed_metadata["doc_id"]),
-            "pub_year": int(seed_metadata["pub_year"]),
-            "token_idx": int(seed_metadata["token_idx"]),
-
-            "local_window_id": seed_metadata["local_window_id"],
-            "local_window_token_pos": _window_metadata( seed_metadata, "local", )[1],
-            "medium_window_id": seed_metadata["medium_window_id"],
-            "medium_window_token_pos": _window_metadata( seed_metadata, "medium", )[1],
-            "broad_window_id": seed_metadata["broad_window_id"],
-            "broad_window_token_pos": _window_metadata( seed_metadata, "broad", )[1],
-
-            "neighbours": neighbours_out,
-        }
-    )
+            {
+                "event_id": seed_event_id,
+                "token": str(seed_metadata["token"]),
+                "doc_id": str(seed_metadata["doc_id"]),
+                "pub_year": int(seed_metadata["pub_year"]),
+                "token_idx": int(seed_metadata["token_idx"]),
+                "local_window_id": local_window_id,
+                "local_window_token_pos": local_window_token_pos,
+                "medium_window_id": medium_window_id,
+                "medium_window_token_pos": medium_window_token_pos,
+                "broad_window_id": broad_window_id,
+                "broad_window_token_pos": broad_window_token_pos,
+                "neighbours": neighbours_out,
+            }
+        )
 
     return output
 
