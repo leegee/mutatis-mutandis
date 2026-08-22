@@ -70,12 +70,11 @@ export default function RelationInspector(props: RelationInspectorProps) {
                             </p>
 
                             <nav class="footer">
-                                <button type="button" onClick={() => setEditing(true)}>
-                                    Edit
-                                </button>
-
                                 <button type="button" class="error" onClick={handleDelete}>
                                     Delete
+                                </button>
+                                <button type="button" onClick={() => setEditing(true)}>
+                                    Edit
                                 </button>
                             </nav>
                         </section>

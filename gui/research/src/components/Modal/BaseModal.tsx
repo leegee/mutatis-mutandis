@@ -58,7 +58,6 @@ export default function BaseModal(props: ModalProps) {
                 >
                     <dialog
                         class="modal padding large-elevate active"
-                        role="dialog"
                         aria-modal="true"
                         aria-label={props.title}
                         style={props.style}

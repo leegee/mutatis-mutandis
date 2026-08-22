@@ -367,7 +367,7 @@ export function RelationshipImport(props: RelationshipImportProps) {
 				</Show>
 
 				<nav class="footer">
-					<button type="button" onClick={props.close}>
+					<button type="button" class="transparent" onClick={props.close}>
 						Cancel
 					</button>
 

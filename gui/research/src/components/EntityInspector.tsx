@@ -277,12 +277,13 @@ export default function EntityInspector(props: EntityInspectorProps) {
 						</section>
 
 						<nav class="footer">
-							<button type="button" onClick={() => setEditing(true)}>
-								Edit
-							</button>
 
 							<button type="button" class="error" onClick={handleDelete}>
 								Delete
+							</button>
+
+							<button type="button" onClick={() => setEditing(true)}>
+								Edit
 							</button>
 						</nav>
 					</Show>

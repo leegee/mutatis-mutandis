@@ -160,6 +160,12 @@ export default function RelationForm(props: RelationFormProps) {
                 </div>
 
                 <nav class="footer">
+                    <Show when={editing()}>
+                        <button type="button" class="transparent" disabled={saving()} onClick={() => props.onCancel?.()} >
+                            Cancel
+                        </button>
+                    </Show>
+
                     <button type="submit" disabled={saving() || !source() || !target()}>
                         {saving()
                             ? editing()
@@ -169,17 +175,6 @@ export default function RelationForm(props: RelationFormProps) {
                                 ? "Save relationship"
                                 : "Add relationship"}
                     </button>
-
-                    <Show when={editing()}>
-                        <button
-                            type="button"
-                            class="transparent"
-                            disabled={saving()}
-                            onClick={() => props.onCancel?.()}
-                        >
-                            Cancel
-                        </button>
-                    </Show>
                 </nav>
             </div>
         </form>

@@ -139,15 +139,15 @@ export default function EntityForm(props: EntityFormProps) {
 			</div>
 
 			<nav class="footer">
-				<button type="submit" disabled={!label().trim() || saving() || (!editing() && !!selected())}>
-					{saving() ? (editing() ? "Saving…" : "Adding…") : editing() ? "Save" : "Add"}
-				</button>
-
 				<Show when={editing()}>
 					<button type="button" class="transparent" disabled={saving()} onClick={() => props.onCancel?.()}>
 						Cancel
 					</button>
 				</Show>
+
+				<button type="submit" disabled={!label().trim() || saving() || (!editing() && !!selected())}>
+					{saving() ? (editing() ? "Saving…" : "Adding…") : editing() ? "Save" : "Add"}
+				</button>
 			</nav>
 		</form>
 	);
