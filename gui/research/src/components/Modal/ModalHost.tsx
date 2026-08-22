@@ -68,12 +68,11 @@ export default function ModalHost() {
 										<p>{modal.message}</p>
 
 										<nav class="footer">
-											<button type="button" class="error" onClick={() => modal.resolve(true)}>
-												Confirm
-											</button>
-
 											<button type="button" class="transparent" onClick={() => modal.resolve(false)}>
 												Cancel
+											</button>
+											<button type="button" class="error" onClick={() => modal.resolve(true)}>
+												Confirm
 											</button>
 										</nav>
 									</div>
@@ -102,11 +101,10 @@ export default function ModalHost() {
 											</div>
 
 											<nav class="footer">
-												<button type="submit">OK</button>
-
 												<button type="button" class="transparent" onClick={() => modal.resolve(null)}>
 													Cancel
 												</button>
+												<button type="submit">OK</button>
 											</nav>
 										</div>
 									</form>
