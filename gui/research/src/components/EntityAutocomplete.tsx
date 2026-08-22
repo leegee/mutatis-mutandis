@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal } from "solid-js";
 import { listEntities } from "~/db/respository";
 import type { Entity } from "~/domain/entity";
-import Autocomplete from "./AutoComplete";
+import AutocCmplete from "./AutoComplete";
 
 interface EntityAutocompleteProps {
 	value: string;
@@ -31,7 +31,7 @@ export default function EntityAutocomplete(props: EntityAutocompleteProps) {
 	});
 
 	return (
-		<Autocomplete
+		<AutocCmplete
 			value={props.value}
 			items={suggestions()}
 			getLabel={(entity) => entity.label}

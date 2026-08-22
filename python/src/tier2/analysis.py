@@ -96,11 +96,13 @@ def multiscale_search(
     top_n=K,
     rrf_k=RRF_K,
     oversample=OVERSAMPLE,
+    scales=SCALES,
 ):
     """
-    Search all three scale-specific DiskANN indexes and fuse their rankings.
+    Search the selected scale-specific DiskANN indexes and fuse their rankings.
 
-    `indexes` is the three-index mapping returned by YearDiskANN.get(year).
+    `indexes` is the scale-to-index mapping returned by
+    `LazyYearDiskANN.get(year)`.
 
     DiskANN distances are retained under the existing Tier 2 score field
     names for downstream compatibility. RRF uses rank rather than distance.
@@ -129,7 +131,7 @@ def multiscale_search(
     search_k = top_n * oversample
     results_by_scale = {}
 
-    for scale in SCALES:
+    for scale in scales:
         index = indexes.get(scale)
 
         if index is None:
@@ -147,7 +149,7 @@ def multiscale_search(
     for query_idx in range(len(queries)):
         fused = {}
 
-        for scale in SCALES:
+        for scale in scales:
             result = results_by_scale[scale]
 
             event_ids = result.event_ids[query_idx]
@@ -315,12 +317,14 @@ def _build_batch_events(
     return output
 
 
+
+
 def iter_year_concept_batches(
     *,
     concept_name,
     concept,
     lookup,
-    indexes: LazyYearDiskANN,
+    indexes,
     year,
     top_n=K,
     rrf_k=RRF_K,
@@ -330,19 +334,18 @@ def iter_year_concept_batches(
     batch_size=BATCH_SIZE,
     token_counts=None,
     doc_counts=None,
+    scales=SCALES,
 ):
     """
     Yield bounded Tier 2 event batches for one concept and one year.
 
     Only seed embeddings for the current batch are materialised. DiskANN
-    performs corpus-scale search against the three indexes for this year.
+    performs corpus-scale search against the selected indexes for this year.
 
-    The year resource is cached by LazyYearDiskANN, so repeated concept
-    searches do not repeatedly reopen the physical DiskANN indexes.
+    The caller owns the year-level LazyYearDiskANN lifecycle.
 
     Failure mode:
-        A year with no seed events is a no-op and does not open its DiskANN
-        indexes.
+        A year with no seed events is a no-op and does not perform a search.
     """
     year = int(year)
 
@@ -370,20 +373,19 @@ def iter_year_concept_batches(
     if doc_counts is None:
         doc_counts = Counter()
 
-    year_indexes = indexes.get(year)
-
     for seed_batch in _chunks(
         seed_ids,
         batch_size,
     ):
         queries = lookup.get_embeddings(
             seed_batch,
-            scales=SCALES,
+            scales=scales,
         )
 
         neighbours = multiscale_search(
-            indexes=year_indexes,
+            indexes=indexes,
             queries=queries,
+            scales=scales,
             top_n=top_n,
             rrf_k=rrf_k,
             oversample=oversample,

@@ -2,16 +2,32 @@
 
 /* Allow autocomplete to act as a title */
 
-.field.label.title {
-	input[type="text"] {
-		line-height: 0 !important;
-		padding: 0 !important;
-		margin: 0 !important;
+.autocomplete {
+	position: relative;
+	width: 100%;
+
+	.autocomplete-menu {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		z-index: 1000;
+
+		max-height: 20rem;
+		overflow-y: auto;
 	}
-	label {
-		margin-left: -1em !important;
-	}
-	i {
-		margin-right: -0.5em !important;
+
+	.field.label.title {
+		input[type="text"] {
+			line-height: 0 !important;
+			padding: 0 !important;
+			margin: 0 !important;
+		}
+		label {
+			margin-left: -1em !important;
+		}
+		i {
+			margin-right: -0.5em !important;
+		}
 	}
 }

@@ -234,7 +234,6 @@ def service(
                 batch_size=batch_size,
                 token_counts=state["token_counts"],
                 doc_counts=state["doc_counts"],
-                window_counts=state["window_counts"],
                 search_backend=search_backend,
                 exact_store=exact_store,
                 exact_workers=exact_workers,

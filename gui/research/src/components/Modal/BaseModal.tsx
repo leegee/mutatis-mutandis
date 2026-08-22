@@ -51,13 +51,13 @@ export default function BaseModal(props: ModalProps) {
     return (
         <Show when={props.open}>
             <Portal>
-                <div
+                <aside
                     class="modal-backdrop"
                     role="presentation"
                     onPointerDown={handleBackdropClick}
                 >
-                    <div
-                        class="modal padding large-elevate"
+                    <dialog
+                        class="modal padding large-elevate active"
                         role="dialog"
                         aria-modal="true"
                         aria-label={props.title}
@@ -92,8 +92,8 @@ export default function BaseModal(props: ModalProps) {
                         <div class="modal-content">
                             {props.children}
                         </div>
-                    </div>
-                </div>
+                    </dialog>
+                </aside>
             </Portal>
         </Show>
     );

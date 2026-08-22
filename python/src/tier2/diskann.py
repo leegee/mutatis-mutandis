@@ -1,3 +1,17 @@
+"""
+    search_space = SearchSpace( 
+        years=(1600, 1700), 
+        scale=("local", "medium"), 
+    ) 
+    
+    run_diskann_tier2( 
+        concept_name="hair", 
+        concept=concept, 
+        output_path=output_path, 
+        search_space=search_space, 
+    )
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,7 +21,8 @@ from pathlib import Path
 from lib.corpus_config import DISKANN_INDEXES_DIR, EVENTSTORE_T1_PATH
 from lib.corpus_logging import logger
 from retrieval.lazy_year_disk_ann import LazyYearDiskANN
-from retrieval.observation_store_api import open_observation_lookup
+from tier1.observation_store_api import open_observation_lookup
+from retrieval.models import SearchSpace
 
 from .analysis import (
     BATCH_SIZE,
@@ -20,15 +35,21 @@ from .analysis import (
 
 DISKANN_DIMENSIONS = 768
 
+_AVAILABLE_SCALES = (
+    "local",
+    "medium",
+    "broad",
+)
+
 
 def run_diskann_tier2(
     *,
     concept_name: str,
     concept: dict,
     output_path: str | Path,
+    search_space: SearchSpace | None = None,
     store_path: str | Path = EVENTSTORE_T1_PATH,
     indexes_root: str | Path = DISKANN_INDEXES_DIR,
-    years: tuple[int, int] | None = None,
     top_n: int = K,
     rrf_k: int = RRF_K,
     oversample: int = OVERSAMPLE,
@@ -36,24 +57,48 @@ def run_diskann_tier2(
     false_positives: list[str] | None = None,
 ) -> Path:
     """
-    Run Tier 2 semantic neighbourhood analysis using year-local DiskANN.
+    Run Tier 2 semantic neighbourhood analysis within a SearchSpace.
 
     Tier 1 Parquet remains the source of truth for observation identity and
     provenance. DiskANN supplies only approximate nearest-neighbour geometry.
+
+    SearchSpace expresses the logical query domain. Physical year and scale
+    availability are resolved here, at the backend boundary.
 
     DiskANN indexes are loaded lazily one publication year at a time. This
     keeps the number of open geometric indexes bounded independently of
     corpus size.
     """
     output_path = Path(output_path)
+    lookup = open_observation_lookup( store_path )
 
-    lookup = open_observation_lookup(
-        store_path,
-    )
+    if search_space.years is None:
+        candidate_years = lookup.available_years.tolist()
+    else:
+        start_year, end_year = search_space.years
+
+        candidate_years = [
+            int(year)
+            for year in lookup.available_years
+            if start_year <= int(year) <= end_year
+        ]
+        
+    years = search_space.years
+
+    if years is None:
+        candidate_years = lookup.available_years
+    else:
+        start_year, end_year = years
+        candidate_years = [
+            year
+            for year in lookup.available_years
+            if start_year <= int(year) <= end_year
+        ]
 
     year_indexes = LazyYearDiskANN(
-        indexes_root,
-        dimensions=DISKANN_DIMENSIONS,
+        DISKANN_INDEXES_DIR,
+        candidate_years,
+        dimensions=768,
         num_threads=0,
         search_complexity=100,
         beam_width=2,
@@ -68,36 +113,47 @@ def run_diskann_tier2(
         false_positives=false_positives,
     )
 
-    seed_years = set(
-        resolved["by_year"],
-    )
-
     available_years = {
         int(year)
         for year in lookup.available_years
     }
 
-    available_index_years = set(
-        year_indexes.available_years(),
-    )
+    available_index_years = {
+        int(year)
+        for year in year_indexes.available_years()
+    }
 
-    years_to_process = sorted(
-        seed_years
-        & available_years
+    searchable_years = (
+        available_years
         & available_index_years
     )
 
-    if years is not None:
-        start, end = years
+    candidate_years = search_space.resolve_years(
+        searchable_years,
+    )
 
-        years_to_process = [
-            year
-            for year in years_to_process
-            if start <= year <= end
-        ]
+    scales = search_space.resolve_scales(
+        set(_AVAILABLE_SCALES),
+    )
+
+    if not scales:
+        raise ValueError(
+            "SearchSpace resolves to no available scales"
+        )
+
+    if not candidate_years:
+        logger.warning(
+            "[tier2] SearchSpace resolves to no searchable years"
+        )
+
+    years_to_process = tuple(
+        year
+        for year in candidate_years
+        if year in resolved["by_year"]
+    )
 
     missing_index_years = sorted(
-        seed_years
+        set(resolved["by_year"])
         & available_years
         - available_index_years
     )
@@ -108,6 +164,17 @@ def run_diskann_tier2(
             "seed events will be skipped",
             year,
         )
+
+    logger.info(
+        "[tier2] SearchSpace years=%s scales=%s",
+        candidate_years,
+        scales,
+    )
+
+    logger.info(
+        "[tier2] query workset: %d years",
+        len(years_to_process),
+    )
 
     token_counts: Counter[str] = Counter()
     doc_counts: Counter[str] = Counter()
@@ -140,6 +207,7 @@ def run_diskann_tier2(
                     lookup=lookup,
                     indexes=indexes,
                     year=year,
+                    scales=scales,
                     top_n=top_n,
                     rrf_k=rrf_k,
                     oversample=oversample,
@@ -148,7 +216,6 @@ def run_diskann_tier2(
                     batch_size=batch_size,
                     token_counts=token_counts,
                     doc_counts=doc_counts,
-                    window_counts=window_counts,
                 ):
                     output_events.extend(
                         batch["events"],
@@ -166,6 +233,12 @@ def run_diskann_tier2(
 
     output = {
         "concept": concept_name,
+        "search_space": {
+            "years": search_space.years,
+            "scale": search_space.scale,
+        },
+        "resolved_years": list(candidate_years),
+        "resolved_scales": list(scales),
         "forms": sorted(
             resolved["forms"],
         ),

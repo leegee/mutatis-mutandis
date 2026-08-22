@@ -1,6 +1,7 @@
 import "./AutoComplete.css";
 import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
 
+
 interface AutocompleteProps<T> {
 	value: string;
 	items: T[];
@@ -16,6 +17,8 @@ interface AutocompleteProps<T> {
 	placeholder?: string;
 	maxSuggestions?: number;
 	renderItem?: (item: T) => JSX.Element;
+
+	outputField?: JSX.Element | string;
 
 	onCreate?: (value: string) => void | Promise<void>;
 
@@ -114,37 +117,35 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 	}
 
 	return (
-		<>
-			<div class={`field label ${isTitle() ? "suffix title" : "border"}`}>
+		<div class="autocomplete padding">
+			<div class={`field label ${ isTitle() ? "suffix title" : "border" }`}>
 				<input
 					type="text"
 					value={props.value}
 					placeholder={props.isTitle ? "" : props.placeholder}
 					disabled={props.disabled}
 					autocomplete="off"
+					onKeyDown={keydown}
+					onBlur={() => { setTimeout(() => setOpen(false), 100); }}
 					onInput={(event) => input(event.currentTarget.value)}
 					onFocus={() => {
 						if (props.value.trim() || props.openOnFocus) {
 							setOpen(true);
 						}
 					}}
-					onKeyDown={keydown}
-					onBlur={() => {
-						//llow a suggestion click to complete  before closing the menu.
-						setTimeout(() => setOpen(false), 100);
-					}}
 				/>
-
-				<label> {props.placeholder ?? ""} </label>
-
+				<label> {props.isTitle ? "" : props.placeholder ?? ""} </label>
+				<Show when={props.outputField}>
+					{props.outputField}
+				</Show>
 				<Show when={isTitle()}>
 					<i>add</i>
 				</Show>
 			</div>
 
 			<Show when={open() && (suggestions().length > 0 || canCreate())}>
-				<div class="field border">
-					<div class="field autocomplete-menu">
+				<div class="autocomplete-menu elevate">
+					<div class="field border">
 						<For each={suggestions()}>
 							{(item, index) => (
 								<button
@@ -156,7 +157,9 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 									onMouseDown={(event) => event.preventDefault()}
 									onClick={() => select(item)}
 								>
-									{props.renderItem ? props.renderItem(item) : props.getLabel(item)}
+									{props.renderItem
+										? props.renderItem(item)
+										: props.getLabel(item)}
 								</button>
 							)}
 						</For>
@@ -168,6 +171,7 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 								onMouseDown={(event) => event.preventDefault()}
 								onClick={() => {
 									const value = createValue();
+
 									if (value) {
 										void props.onCreate?.(value);
 									}
@@ -180,6 +184,6 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 					</div>
 				</div>
 			</Show>
-		</>
+		</div>
 	);
 }

@@ -10,7 +10,7 @@ body.dark {
 	--tertiary: rgb(90, 86, 97) !important;
 	--on-tertiary: rgb(197, 189, 212) !important;
 
-	--error: rgb(236, 62, 62) !important;
+	--error: rgb(245, 108, 108) !important;
 	--on-error: rgb(221, 202, 202) !important;
 
 	--footer-border: rgba(197, 189, 212, 50%) !important;
@@ -82,4 +82,8 @@ section:first-of-type {
 .top-level-view {
 	max-width: clamp(40em, 80em, 90vw);
 	margin: auto;
+}
+
+.invalid-input {
+	color: var(--error, red);
 }

@@ -18,6 +18,10 @@ class SearchSpace:
 
     scale:
         None for all scales, or a tuple containing one or more scales.
+
+    The space is deliberately independent of the physical search backend.
+    Resolution against available corpus data and indexes happens at
+    execution time.
     """
 
     years: tuple[int, int] | None
@@ -98,6 +102,60 @@ class SearchSpace:
                 raise TypeError(
                     "scale must be a string or tuple of strings"
                 )
+
+    def resolve_years(
+        self,
+        available_years: set[int] | frozenset[int],
+    ) -> tuple[int, ...]:
+        """
+        Resolve the logical year constraint against available data.
+
+        Failure mode:
+            Unavailable years are silently excluded because they cannot
+            contribute results to the search.
+        """
+        resolved = set(available_years)
+
+        if self.years is not None:
+            start, end = self.years
+            resolved = {
+                year
+                for year in resolved
+                if start <= year <= end
+            }
+
+        return tuple(sorted(resolved))
+
+    def resolve_scales(
+        self,
+        available_scales: set[str] | frozenset[str],
+    ) -> tuple[str, ...]:
+        """
+        Resolve the logical scale constraint against available indexes.
+
+        Failure mode:
+            Requested scales without a corresponding search index are
+            excluded rather than causing an unrelated scale to be used.
+        """
+        available = set(available_scales)
+
+        if self.scale is None:
+            return tuple(
+                scale
+                for scale in (
+                    "local",
+                    "medium",
+                    "broad",
+                )
+                if scale in available
+            )
+
+        return tuple(
+            scale
+            for scale in self.scale
+            if scale in available
+        )
+
 
 @dataclass(slots=True)
 class SearchResult:
