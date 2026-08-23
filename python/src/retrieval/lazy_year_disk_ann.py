@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from lib.corpus_logging import logger
@@ -33,7 +32,14 @@ class LazyYearDiskANN:
         num_nodes_to_cache: int = 0,
     ) -> None:
         self._root = Path(indexes_root)
-        self._years = tuple(sorted(set(int(year) for year in years)))
+        self._years = tuple(
+            sorted(
+                set(
+                    int(year)
+                    for year in years
+                )
+            )
+        )
 
         self._dimensions = dimensions
         self._num_threads = num_threads
@@ -56,13 +62,13 @@ class LazyYearDiskANN:
         """
         year = int(year)
 
-        if year not in self._years:
-            raise KeyError(
-                f"Year {year} was not included when the resource was opened"
-            )
-
         if year not in self._loaded:
+            logger.info( "[tier2] loading year=%s", year )
             self._loaded[year] = self._load_year(year)
+            logger.info(
+                "[tier2] loaded year=%s",
+                year,
+            )
 
         return self._loaded[year]
 
@@ -75,10 +81,7 @@ class LazyYearDiskANN:
             year,
         )
 
-        jobs: dict[
-            str,
-            tuple[Path, Path],
-        ] = {}
+        loaded: dict[str, DiskANNObservationIndex] = {}
 
         for scale in SCALES:
             directory = (
@@ -103,36 +106,29 @@ class LazyYearDiskANN:
                     f"{event_ids_path}"
                 )
 
-            jobs[scale] = (
-                directory,
-                event_ids_path,
+            logger.info(
+                "[tier2] opening DiskANN index: year=%s scale=%s",
+                year,
+                scale,
             )
 
-        loaded: dict[str, DiskANNObservationIndex] = {}
+            loaded[scale] = DiskANNObservationIndex(
+                index_directory=directory,
+                event_ids_path=event_ids_path,
+                dimensions=self._dimensions,
+                num_threads=self._num_threads,
+                search_complexity=self._search_complexity,
+                beam_width=self._beam_width,
+                batch_num_threads=self._batch_num_threads,
+                num_nodes_to_cache=self._num_nodes_to_cache,
+                index_prefix=scale,
+            )
 
-        with ThreadPoolExecutor(
-            max_workers=len(SCALES),
-        ) as pool:
-            futures = {
-                pool.submit(
-                    DiskANNObservationIndex,
-                    index_directory=directory,
-                    event_ids_path=event_ids_path,
-                    dimensions=self._dimensions,
-                    num_threads=self._num_threads,
-                    search_complexity=self._search_complexity,
-                    beam_width=self._beam_width,
-                    batch_num_threads=self._batch_num_threads,
-                    num_nodes_to_cache=self._num_nodes_to_cache,
-                    index_prefix=scale,
-                ): scale
-                for scale, (directory, event_ids_path)
-                in jobs.items()
-            }
-
-            for future in as_completed(futures):
-                scale = futures[future]
-                loaded[scale] = future.result()
+            logger.info(
+                "[tier2] opened DiskANN index: year=%s scale=%s",
+                year,
+                scale,
+            )
 
         return loaded
 
@@ -143,10 +139,13 @@ class LazyYearDiskANN:
         """
         Release the indexes associated with one year.
 
-        DiskANN owns the underlying index resources. Dropping the references
-        is the cache boundary used by the year-major Tier 2 loop.
+        Dropping the references is the cache boundary used by the
+        year-major Tier 2 loop.
         """
-        self._loaded.pop(int(year), None)
+        self._loaded.pop(
+            int(year),
+            None,
+        )
 
     def close(self) -> None:
         """Release all currently loaded years."""
@@ -154,29 +153,41 @@ class LazyYearDiskANN:
 
     def loaded_years(self) -> tuple[int, ...]:
         """Return the years currently resident in memory."""
-        return tuple(sorted(self._loaded))
+        return tuple(
+            sorted(self._loaded)
+        )
 
-    def available_years(self) -> tuple[int, ...]:
+    @staticmethod
+    def available_years(
+        indexes_root: str | Path,
+    ) -> tuple[int, ...]:
         """
         Return years that have physical DiskANN directories.
 
-        This is independent of the years selected when this resource was
-        constructed.
+        Discovery does not open any indexes.
         """
-        if not self._root.exists():
+        root = Path(indexes_root)
+
+        if not root.exists():
             return ()
 
         years: list[int] = []
 
-        for path in self._root.glob("year=*"):
+        for path in root.glob("year=*"):
             if not path.is_dir():
                 continue
 
             try:
                 years.append(
-                    int(path.name.removeprefix("year="))
+                    int(
+                        path.name.removeprefix("year=")
+                    )
                 )
             except ValueError:
                 continue
 
-        return tuple(sorted(set(years)))
+        return tuple(
+            sorted(
+                set(years)
+            )
+        )

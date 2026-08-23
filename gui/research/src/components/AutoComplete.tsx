@@ -134,7 +134,7 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 						}
 					}}
 				/>
-				<label> {props.isTitle ? "" : props.placeholder ?? ""} </label>
+				<label> {props.placeholder} </label>
 				<Show when={props.outputField}>
 					{props.outputField}
 				</Show>

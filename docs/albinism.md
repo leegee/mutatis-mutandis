@@ -4,6 +4,20 @@ Working title:
 
 ## From Theophany to Pathology: The Symbolic Semantics of Extreme Bodily Whiteness in English Literary Culture
 
+# Disclaimer
+
+This project is a study of the representation of albinism by one with albinism, so the author feels it prudent to
+state up-front that which he takes for granted, namely that at no point does the project attempt to ascribe any
+specific value to albinism, albinos, or the exceptionally pale in general. Rather the object of study is a corpus
+of text from which observations shall be drawn and analysed in their natural context both literary, linguistically
+and historically through whatever historical documents are avaialable. Such observations and clusters thereof
+will be assessed for semantic value, their evolution through time compared and contrasted, and labels will eventually
+be drawn from the above evidience (and ultimately compared to the output of various LLM alongisde the LLM's explanation).
+
+This project aims to be as clsoe to objective as it is possible to be whilst acknowledging in the text any awareness of
+whenever the author inevitably interprets subjectively rather than in refrence to an external source. Any such personal
+interjection will be consciously avoided as best as possible.
+
 # Project Concept
 
 This project investigates the **symbolic semantics of extreme bodily whiteness** in English literary culture from the early modern period to the nineteenth century, while situating that tradition within its biblical and broader European intellectual inheritance. Rather than taking albinism as its starting point, it examines the historical construction of a distinctive physiognomic and lexical complex: white or snow-white hair, extraordinarily pale or chalk-white skin, sometimes with eyes described as fiery, flame-like, or otherwise supernaturally luminous.

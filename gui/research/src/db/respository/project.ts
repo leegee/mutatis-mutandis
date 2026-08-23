@@ -1,18 +1,13 @@
 import type { ProjectMetadata, ResearchProject } from "~/domain/project";
-
 import { isValidProject, validateProject } from "~/domain/validateProject";
-
 import { getDatabase } from "../database";
+import { now } from "./utils";
 
 export async function importProject(value: unknown): Promise<void> {
 	const validation = validateProject(value);
 
 	if (!validation.valid) {
-		throw new Error(
-			validation.errors
-				.map((error) => `${error.path}: ${error.message}`)
-				.join("\n"),
-		);
+		throw new Error(validation.errors.map((error) => `${error.path}: ${error.message}`).join("\n"));
 	}
 
 	if (!isValidProject(value)) {
@@ -22,34 +17,28 @@ export async function importProject(value: unknown): Promise<void> {
 	const project = value as ResearchProject;
 	const db = getDatabase();
 
-	await db.transaction(
-		"rw",
-		db.entities,
-		db.relations,
-		db.projectMetadata,
-		async () => {
-			/*
-			 * Import replaces the current project.
-			 */
-			await db.entities.clear();
-			await db.relations.clear();
-			await db.projectMetadata.clear();
+	await db.transaction("rw", db.entities, db.relations, db.projectMetadata, async () => {
+		/*
+		 * Import replaces the current project.
+		 */
+		await db.entities.clear();
+		await db.relations.clear();
+		await db.projectMetadata.clear();
 
-			await db.entities.bulkAdd(project.entities);
-			await db.relations.bulkAdd(project.relations);
+		await db.entities.bulkAdd(project.entities);
+		await db.relations.bulkAdd(project.relations);
 
-			await db.projectMetadata.put({
-				id: "project",
-				...project.metadata,
-			});
-		},
-	);
+		await db.projectMetadata.put({
+			id: "project",
+			...project.metadata,
+		});
+	});
 }
 
 export async function exportProject(): Promise<ResearchProject> {
 	const db = getDatabase();
 
-	const [metadataRecord, entities, relations,] = await Promise.all([
+	const [metadataRecord, entities, relations] = await Promise.all([
 		db.projectMetadata.get("project"),
 		db.entities.toArray(),
 		db.relations.toArray(),
@@ -69,9 +58,7 @@ export async function exportProject(): Promise<ResearchProject> {
 	};
 }
 
-export async function getProjectMetadata(): Promise<
-	ProjectMetadata | undefined
-> {
+export async function getProjectMetadata(): Promise<ProjectMetadata | undefined> {
 	const record = await getDatabase().projectMetadata.get("project");
 
 	if (!record) {
@@ -83,11 +70,29 @@ export async function getProjectMetadata(): Promise<
 	return metadata;
 }
 
-export async function saveProjectMetadata(
-	metadata: ProjectMetadata,
-): Promise<void> {
+export async function saveProjectMetadata(metadata: ProjectMetadata): Promise<void> {
 	await getDatabase().projectMetadata.put({
 		id: "project",
 		...metadata,
+	});
+}
+
+export async function resetProject(): Promise<void> {
+	const db = getDatabase();
+
+	await db.transaction("rw", db.entities, db.relations, db.projectMetadata, async () => {
+		await db.entities.clear();
+		await db.relations.clear();
+
+		const metadata = await db.projectMetadata.get("project");
+
+		if (metadata) {
+			await db.projectMetadata.put({
+				...metadata,
+				title: "Research Map",
+				description: "",
+				updatedAt: now(),
+			});
+		}
 	});
 }

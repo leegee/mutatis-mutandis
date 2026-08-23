@@ -1,28 +1,15 @@
-"""
-    search_space = SearchSpace( 
-        years=(1600, 1700), 
-        scale=("local", "medium"), 
-    ) 
-    
-    run_diskann_tier2( 
-        concept_name="hair", 
-        concept=concept, 
-        output_path=output_path, 
-        search_space=search_space, 
-    )
-"""
-
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter
 from pathlib import Path
 
 from lib.corpus_config import DISKANN_INDEXES_DIR, EVENTSTORE_T1_PATH
 from lib.corpus_logging import logger
 from retrieval.lazy_year_disk_ann import LazyYearDiskANN
-from tier1.observation_store_api import open_observation_lookup
 from retrieval.models import SearchSpace
+from tier1.observation_store_api import SCALES, open_observation_lookup
 
 from .analysis import (
     BATCH_SIZE,
@@ -34,12 +21,6 @@ from .analysis import (
 )
 
 DISKANN_DIMENSIONS = 768
-
-_AVAILABLE_SCALES = (
-    "local",
-    "medium",
-    "broad",
-)
 
 
 def run_diskann_tier2(
@@ -59,52 +40,31 @@ def run_diskann_tier2(
     """
     Run Tier 2 semantic neighbourhood analysis within a SearchSpace.
 
-    Tier 1 Parquet remains the source of truth for observation identity and
-    provenance. DiskANN supplies only approximate nearest-neighbour geometry.
+    Tier 1 remains the source of truth for observation identity and
+    provenance. DiskANN supplies only approximate nearest-neighbour
+    geometry.
 
-    SearchSpace expresses the logical query domain. Physical year and scale
-    availability are resolved here, at the backend boundary.
-
-    DiskANN indexes are loaded lazily one publication year at a time. This
-    keeps the number of open geometric indexes bounded independently of
-    corpus size.
+    Processing is year-major: at most one year's geometric resources are
+    resident at a time, while each year's seed events are searched before
+    those resources are evicted.
     """
+    started = time.perf_counter()
+
     output_path = Path(output_path)
-    lookup = open_observation_lookup( store_path )
+    lookup = open_observation_lookup(store_path)
 
-    if search_space.years is None:
-        candidate_years = lookup.available_years.tolist()
-    else:
-        start_year, end_year = search_space.years
+    if search_space is None:
+        search_space = SearchSpace(
+            years=None,
+            scale=None,
+        )
 
-        candidate_years = [
-            int(year)
-            for year in lookup.available_years
-            if start_year <= int(year) <= end_year
-        ]
-        
-    years = search_space.years
-
-    if years is None:
-        candidate_years = lookup.available_years
-    else:
-        start_year, end_year = years
-        candidate_years = [
-            year
-            for year in lookup.available_years
-            if start_year <= int(year) <= end_year
-        ]
-
-    year_indexes = LazyYearDiskANN(
-        DISKANN_INDEXES_DIR,
-        candidate_years,
-        dimensions=768,
-        num_threads=0,
-        search_complexity=100,
-        beam_width=2,
-        batch_num_threads=0,
-        num_nodes_to_cache=0,
+    logger.info(
+        "[tier2] resolving concept=%s",
+        concept_name,
     )
+
+    resolve_started = time.perf_counter()
 
     resolved = resolve_concept_positions(
         concept_name=concept_name,
@@ -113,15 +73,22 @@ def run_diskann_tier2(
         false_positives=false_positives,
     )
 
+    logger.info(
+        "[tier2] resolved concept=%s in %.3fs",
+        concept_name,
+        time.perf_counter() - resolve_started,
+    )
+
     available_years = {
         int(year)
         for year in lookup.available_years
     }
 
-    available_index_years = {
-        int(year)
-        for year in year_indexes.available_years()
-    }
+    available_index_years = set(
+        LazyYearDiskANN.available_years(
+            indexes_root,
+        )
+    )
 
     searchable_years = (
         available_years
@@ -133,7 +100,7 @@ def run_diskann_tier2(
     )
 
     scales = search_space.resolve_scales(
-        set(_AVAILABLE_SCALES),
+        set(SCALES),
     )
 
     if not scales:
@@ -153,83 +120,128 @@ def run_diskann_tier2(
     )
 
     missing_index_years = sorted(
-        set(resolved["by_year"])
-        & available_years
+        (
+            set(resolved["by_year"])
+            & available_years
+        )
         - available_index_years
     )
 
     for year in missing_index_years:
-        logger.warning(
-            "[tier2] no DiskANN indexes for year=%s; "
-            "seed events will be skipped",
-            year,
-        )
+        logger.warning( "[tier2] no DiskANN indexes for year=%s; seed events will be skipped", year, )
+
+    logger.info( "[tier2] SearchSpace years=%s scales=%s", candidate_years, scales, )
 
     logger.info(
-        "[tier2] SearchSpace years=%s scales=%s",
-        candidate_years,
-        scales,
+        "[tier2] query workset: %d years, %d seed events",
+        len(years_to_process),
+        sum(
+            len(
+                resolved["by_year"].get(
+                    year,
+                    (),
+                )
+            )
+            for year in years_to_process
+        ),
     )
 
-    logger.info(
-        "[tier2] query workset: %d years",
-        len(years_to_process),
+    year_indexes = LazyYearDiskANN(
+        indexes_root,
+        candidate_years,
+        dimensions=DISKANN_DIMENSIONS,
+        num_threads=0,
+        search_complexity=100,
+        beam_width=2,
+        batch_num_threads=0,
+        num_nodes_to_cache=0,
     )
 
     token_counts: Counter[str] = Counter()
     doc_counts: Counter[str] = Counter()
-    window_counts: Counter[tuple[str, int]] = Counter()
 
     output_events = []
 
+    total_index_open_time = 0.0
+    total_search_time = 0.0
+
     try:
         for year in years_to_process:
-            seed_ids = resolved["by_year"].get(
-                year,
-                [],
-            )
+            year_started = time.perf_counter()
+
+            seed_ids = resolved["by_year"].get( year, (), )
 
             if not seed_ids:
                 continue
 
-            logger.info(
-                "[tier2] processing year=%s: %d seed events",
-                year,
-                len(seed_ids),
-            )
+            logger.info( "[tier2] processing year=%s: %d seed events", year, len(seed_ids), )
 
-            indexes = year_indexes.get(year)
+            indexes_started = time.perf_counter()
+
+            indexes = year_indexes.get( year, )
+
+            index_open_time = ( time.perf_counter() - indexes_started )
+
+            total_index_open_time += index_open_time
+
+            logger.info( "[tier2] indexes ready for year=%s in %.3fs", year, index_open_time, )
 
             try:
+                search_started = time.perf_counter()
+
+                year_event_count = 0
+                batch_count = 0
+
                 for batch in iter_year_concept_batches(
-                    concept_name=concept_name,
-                    concept=concept,
                     lookup=lookup,
                     indexes=indexes,
                     year=year,
+                    seed_event_ids=seed_ids,
                     scales=scales,
                     top_n=top_n,
                     rrf_k=rrf_k,
                     oversample=oversample,
                     false_positives=false_positives,
-                    resolved=resolved,
                     batch_size=batch_size,
                     token_counts=token_counts,
                     doc_counts=doc_counts,
                 ):
-                    output_events.extend(
-                        batch["events"],
-                    )
+                    events = batch["events"]
+
+                    output_events.extend( events, )
+
+                    year_event_count += len(events)
+                    batch_count += 1
+
+                search_time = ( time.perf_counter() - search_started )
+                total_search_time += search_time
+
+                logger.info( "[tier2] searched year=%s: %d seed events, %d batches, %d output events in %.3fs",
+                    year,
+                    len(seed_ids),
+                    batch_count,
+                    year_event_count,
+                    search_time,
+                )
+
             finally:
-                year_indexes.evict(year)
+                year_indexes.evict(
+                    year,
+                )
 
             logger.info(
-                "[tier2] completed year=%s",
+                "[tier2] completed year=%s in %.3fs",
                 year,
+                time.perf_counter()
+                - year_started,
             )
 
     finally:
         year_indexes.close()
+
+        logger.info(
+            "[tier2] year_indexes closed",
+        )
 
     output = {
         "concept": concept_name,
@@ -252,17 +264,14 @@ def run_diskann_tier2(
         "doc_counts": dict(
             doc_counts,
         ),
-        "window_counts": {
-            f"{doc_id}:{window_id}": count
-            for (doc_id, window_id), count
-            in window_counts.items()
-        },
     }
 
     output_path.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
+
+    write_started = time.perf_counter()
 
     with output_path.open(
         "w",
@@ -272,13 +281,33 @@ def run_diskann_tier2(
             output,
             handle,
             ensure_ascii=False,
-            indent=2,
+            separators=(",", ":"),
         )
 
+    write_time = (
+        time.perf_counter()
+        - write_started
+    )
+
+    total_time = (
+        time.perf_counter()
+        - started
+    )
+
     logger.info(
-        "[tier2] wrote %d events to %s",
+        "[tier2] wrote %d events to %s in %.3fs",
         len(output_events),
         output_path,
+        write_time,
+    )
+
+    logger.info(
+        "[tier2] timing summary: "
+        "index_open=%.3fs search=%.3fs write=%.3fs total=%.3fs",
+        total_index_open_time,
+        total_search_time,
+        write_time,
+        total_time,
     )
 
     return output_path

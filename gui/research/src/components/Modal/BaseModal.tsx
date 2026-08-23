@@ -64,8 +64,8 @@ export default function BaseModal(props: ModalProps) {
                     >
                         <Show when={props.title}>
                             <header
-                                class="fixed surface-container-high"
-                                style="top:0"
+                                class="fixed surface-container-high bottom-margin left-padding "
+                                style="top:-1.2em"
                             >
                                 <nav>
                                     <h2 class="max">
@@ -88,7 +88,7 @@ export default function BaseModal(props: ModalProps) {
                             </header>
                         </Show>
 
-                        <div class="modal-content">
+                        <div class="modal-content padding">
                             {props.children}
                         </div>
                     </dialog>

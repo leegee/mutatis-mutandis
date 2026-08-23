@@ -4,8 +4,8 @@ import { FileRoutes } from "@solidjs/start/router";
 import { createSignal, Suspense } from "solid-js";
 
 import ModalHost from "./components/Modal/ModalHost";
-import ProjectExport from "./components/ProjectExport";
-import ProjectImport from "./components/ProjectImport";
+import ProjectExport from "./components/Project/ProjectExport";
+import ProjectImport from "./components/Project/ProjectImport";
 import RelationshipImportButton from "./components/RelationshipImport";
 
 import "beercss/dist/cdn/beer.min.css";
@@ -28,6 +28,7 @@ function Navigation() {
 			</button>
 
 			{menuOpen() && (
+				// biome-ignore lint/a11y/useKeyWithClickEvents: <no need>
 				<menu class="margin" onClick={closeMenu}>
 					<li classList={{ active: isActive("/") }}>
 						<a href="/">
@@ -52,24 +53,16 @@ function Navigation() {
 
 					<li>
 						<i>content_paste</i>
-						<RelationshipImportButton />
+						<span class="max">
+							<RelationshipImportButton />
+						</span>
 					</li>
 
-					{/* <li classList={{ active: isActive("/project") }}>
+					<li classList={{ active: isActive("/project") }}>
 						<a href="/project" onClick={closeMenu}>
 							<i>folder_open</i>
-							<span>Import/Export</span>
+							<span>Project</span>
 						</a>
-					</li> */}
-
-					<li>
-						<i>file_open</i>
-						<ProjectImport />
-					</li>
-
-					<li>
-						<i>download</i>
-						<ProjectExport />
 					</li>
 				</menu>
 			)}

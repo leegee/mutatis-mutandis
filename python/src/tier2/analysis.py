@@ -6,7 +6,6 @@ import numpy as np
 
 from lib.corpus_logging import logger
 from tier1.observation_store_api import SCALES
-from retrieval.lazy_year_disk_ann import LazyYearDiskANN
 
 K = 60
 RRF_K = 60
@@ -34,7 +33,8 @@ def resolve_concept_positions(
     """
     Resolve lexical seed events and group their stable event IDs by year.
 
-    Tier 2 uses event_id as its identity; physical vector positions are not part of the retrieval contract.
+    Tier 2 uses event_id as its identity; physical vector positions are not
+    part of the retrieval contract.
 
     Failure mode:
         Metadata lookup is intentionally performed only for seed events.
@@ -99,7 +99,8 @@ def multiscale_search(
     scales=SCALES,
 ):
     """
-    Search the selected scale-specific DiskANN indexes and fuse their rankings.
+    Search the selected scale-specific DiskANN indexes and fuse their
+    rankings.
 
     `indexes` is the scale-to-index mapping returned by
     `LazyYearDiskANN.get(year)`.
@@ -201,9 +202,16 @@ def _metadata_for_event(
     return lookup.get_event_metadata(int(event_id))
 
 
-def _window_metadata(metadata, scale):
-    window_id = metadata.get( f"{scale}_window_id", )
-    token_pos = metadata.get( f"{scale}_window_token_pos", )
+def _window_metadata(
+    metadata,
+    scale,
+):
+    window_id = metadata.get(
+        f"{scale}_window_id",
+    )
+    token_pos = metadata.get(
+        f"{scale}_window_token_pos",
+    )
 
     if window_id is not None:
         window_id = int(window_id)
@@ -253,18 +261,45 @@ def _build_batch_events(
             if neighbour_id == seed_event_id:
                 continue
 
-            metadata = _metadata_for_event( lookup, neighbour_id, )
+            metadata = _metadata_for_event(
+                lookup,
+                neighbour_id,
+            )
 
-            token = str( metadata["token"] )
+            token = str(
+                metadata["token"],
+            )
 
             if token.lower() in false_positives:
                 continue
 
-            doc_id = str( metadata["doc_id"] )
+            doc_id = str(
+                metadata["doc_id"],
+            )
 
-            local_window_id,  local_window_token_pos  = _window_metadata( metadata, "local", )
-            medium_window_id, medium_window_token_pos = _window_metadata( metadata, "medium", )
-            broad_window_id,  broad_window_token_pos  = _window_metadata( metadata, "broad", )
+            (
+                local_window_id,
+                local_window_token_pos,
+            ) = _window_metadata(
+                metadata,
+                "local",
+            )
+
+            (
+                medium_window_id,
+                medium_window_token_pos,
+            ) = _window_metadata(
+                metadata,
+                "medium",
+            )
+
+            (
+                broad_window_id,
+                broad_window_token_pos,
+            ) = _window_metadata(
+                metadata,
+                "broad",
+            )
 
             token_counts[token] += 1
             doc_counts[doc_id] += 1
@@ -274,16 +309,18 @@ def _build_batch_events(
                     "event_id": neighbour_id,
                     "token": token,
                     "doc_id": doc_id,
-                    "pub_year": int(metadata["pub_year"]),
-                    "token_idx": int(metadata["token_idx"]),
-
+                    "pub_year": int(
+                        metadata["pub_year"],
+                    ),
+                    "token_idx": int(
+                        metadata["token_idx"],
+                    ),
                     "local_window_id": local_window_id,
                     "local_window_token_pos": local_window_token_pos,
                     "medium_window_id": medium_window_id,
                     "medium_window_token_pos": medium_window_token_pos,
                     "broad_window_id": broad_window_id,
                     "broad_window_token_pos": broad_window_token_pos,
-
                     "score": item["score"],
                     "score_local": item["score_local"],
                     "score_medium": item["score_medium"],
@@ -293,17 +330,45 @@ def _build_batch_events(
                 }
             )
 
-        local_window_id,  local_window_token_pos  = _window_metadata( seed_metadata, "local", )
-        medium_window_id, medium_window_token_pos = _window_metadata( seed_metadata, "medium", )
-        broad_window_id,  broad_window_token_pos  = _window_metadata( seed_metadata, "broad", )
+        (
+            local_window_id,
+            local_window_token_pos,
+        ) = _window_metadata(
+            seed_metadata,
+            "local",
+        )
+
+        (
+            medium_window_id,
+            medium_window_token_pos,
+        ) = _window_metadata(
+            seed_metadata,
+            "medium",
+        )
+
+        (
+            broad_window_id,
+            broad_window_token_pos,
+        ) = _window_metadata(
+            seed_metadata,
+            "broad",
+        )
 
         output.append(
             {
                 "event_id": seed_event_id,
-                "token": str(seed_metadata["token"]),
-                "doc_id": str(seed_metadata["doc_id"]),
-                "pub_year": int(seed_metadata["pub_year"]),
-                "token_idx": int(seed_metadata["token_idx"]),
+                "token": str(
+                    seed_metadata["token"],
+                ),
+                "doc_id": str(
+                    seed_metadata["doc_id"],
+                ),
+                "pub_year": int(
+                    seed_metadata["pub_year"],
+                ),
+                "token_idx": int(
+                    seed_metadata["token_idx"],
+                ),
                 "local_window_id": local_window_id,
                 "local_window_token_pos": local_window_token_pos,
                 "medium_window_id": medium_window_id,
@@ -317,55 +382,40 @@ def _build_batch_events(
     return output
 
 
-
-
 def iter_year_concept_batches(
     *,
-    concept_name,
-    concept,
     lookup,
     indexes,
-    year,
-    top_n=K,
-    rrf_k=RRF_K,
-    oversample=OVERSAMPLE,
-    false_positives=None,
-    resolved=None,
-    batch_size=BATCH_SIZE,
-    token_counts=None,
-    doc_counts=None,
-    scales=SCALES,
+    year: int,
+    seed_event_ids,
+    scales,
+    top_n: int,
+    rrf_k: int,
+    oversample: int,
+    false_positives,
+    batch_size: int,
+    token_counts,
+    doc_counts,
 ):
     """
-    Yield bounded Tier 2 event batches for one concept and one year.
+    Yield bounded Tier 2 event batches for one resolved concept and year.
 
-    Only seed embeddings for the current batch are materialised. DiskANN
-    performs corpus-scale search against the selected indexes for this year.
-
-    The caller owns the year-level LazyYearDiskANN lifecycle.
+    Concept resolution happens once in the Tier 2 orchestrator. This iterator
+    consumes the already-resolved year-local seed IDs and performs retrieval.
 
     Failure mode:
-        A year with no seed events is a no-op and does not perform a search.
+        Re-resolving the concept here would repeat the global seed lookup once
+        per year and defeat the lazy-year execution model.
     """
     year = int(year)
 
-    if resolved is None:
-        resolved = resolve_concept_positions(
-            concept_name=concept_name,
-            concept=concept,
-            lookup=lookup,
-            false_positives=false_positives,
-        )
-
-    false_positives = resolved["false_positives"]
-
-    seed_ids = resolved["by_year"].get(
-        year,
-        [],
-    )
-
-    if not seed_ids:
+    if not seed_event_ids:
         return
+
+    false_positives = {
+        str(value).lower()
+        for value in (false_positives or [])
+    }
 
     if token_counts is None:
         token_counts = Counter()
@@ -374,7 +424,7 @@ def iter_year_concept_batches(
         doc_counts = Counter()
 
     for seed_batch in _chunks(
-        seed_ids,
+        seed_event_ids,
         batch_size,
     ):
         queries = lookup.get_embeddings(
@@ -403,7 +453,4 @@ def iter_year_concept_batches(
         yield {
             "type": "batch",
             "events": events,
-            "seed_ids": set(
-                resolved["event_ids_set"]
-            ),
         }
