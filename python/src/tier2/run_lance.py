@@ -10,11 +10,15 @@ from pathlib import Path
 
 import lancedb
 
-from lib.corpus_config import EVENTSTORE_T1_PATH, CONCEPT_SETS, LANCE_INDEXES_DIR, CORPUS_TIER2_DB_URL
+from lib.corpus_config import (
+    CONCEPT_SETS,
+    CORPUS_TIER2_DB_URL,
+    EVENTSTORE_T1_PATH,
+    LANCE_INDEXES_DIR,
+)
 from lib.corpus_logging import logger
 from retrieval.models import SearchSpace
 from tier1.observation_store_api import SCALES, open_observation_lookup
-
 from tier2.analysis import (
     BATCH_SIZE,
     K,
@@ -25,6 +29,56 @@ from tier2.analysis import (
 )
 from tier2.sqlite import write_tier2_sqlite
 
+
+def _open_lance_indexes(
+    lance_root: str | Path,
+    scales: tuple[str, ...],
+) -> dict:
+    db = lancedb.connect(str(lance_root))
+    indexes = {}
+
+    for scale in scales:
+        try:
+            indexes[scale] = db.open_table(scale)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not open Lance table for scale={scale}: {lance_root}"
+            ) from exc
+
+    return indexes
+
+
+def _resolve_search_scope(
+    search_space: SearchSpace,
+    lookup,
+) -> tuple[tuple[int, ...], tuple[str, ...], int | None, int | None]:
+    available_years = {
+        int(year)
+        for year in lookup.available_years
+    }
+
+    candidate_years = tuple(
+        search_space.resolve_years(available_years)
+    )
+
+    scales = tuple(
+        search_space.resolve_scales(set(SCALES))
+    )
+
+    if not scales:
+        raise ValueError(
+            "SearchSpace resolves to no available scales"
+        )
+
+    if not candidate_years:
+        logger.warning(
+            "[tier2] SearchSpace resolves to no searchable years"
+        )
+
+    year_start = min(candidate_years) if candidate_years else None
+    year_end = max(candidate_years) if candidate_years else None
+
+    return candidate_years, scales, year_start, year_end
 
 
 def run_lance_tier2(
@@ -41,6 +95,12 @@ def run_lance_tier2(
     batch_size: int = BATCH_SIZE,
     false_positives: list[str] | None = None,
     clear: bool = False,
+    lookup=None,
+    indexes: dict | None = None,
+    candidate_years: tuple[int, ...] | None = None,
+    scales: tuple[str, ...] | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
 ) -> Path:
     """
     Run Tier 2 semantic neighbourhood analysis using LanceDB.
@@ -48,11 +108,13 @@ def run_lance_tier2(
     Tier 1 remains the source of truth for observation identity and
     provenance. Lance supplies approximate nearest-neighbour geometry.
 
-    The Lance database contains one table per embedding scale covering the
-    corpus. Temporal restriction is performed at query time.
+    The Lance database contains one table per embedding scale covering
+    the corpus. Temporal restriction is performed at query time.
 
-    Results are written to the established Tier 2 SQLite schema. No JSON
-    intermediate is produced.
+    Results are written to the established Tier 2 SQLite schema.
+
+    When called repeatedly by the CLI, the observation lookup and Lance
+    tables are shared between concepts rather than reopened for each one.
 
     Failure mode:
         The complete result set is accumulated in memory before the SQLite
@@ -68,9 +130,41 @@ def run_lance_tier2(
             scale=None,
         )
 
-    lookup = open_observation_lookup(store_path)
+    if lookup is None:
+        lookup = open_observation_lookup(store_path)
 
-    logger.info( "[tier2] resolving concept=%s", concept_name, )
+    if (
+        candidate_years is None
+        or scales is None
+        or year_start is None
+        or year_end is None
+    ):
+        (
+            candidate_years,
+            scales,
+            year_start,
+            year_end,
+        ) = _resolve_search_scope(
+            search_space,
+            lookup,
+        )
+
+    if indexes is None:
+        db_started = time.perf_counter()
+        indexes = _open_lance_indexes(
+            lance_root,
+            scales,
+        )
+        logger.info(
+            "[tier2] opened %d Lance scale tables in %.3fs",
+            len(indexes),
+            time.perf_counter() - db_started,
+        )
+
+    logger.info(
+        "[tier2] resolving concept=%s",
+        concept_name,
+    )
 
     resolve_started = time.perf_counter()
 
@@ -81,29 +175,11 @@ def run_lance_tier2(
         false_positives=false_positives,
     )
 
-    logger.info( "[tier2] resolved concept=%s in %.3fs", concept_name, time.perf_counter() - resolve_started, )
-
-    available_years = {
-        int(year)
-        for year in lookup.available_years
-    }
-
-    candidate_years = tuple(
-        search_space.resolve_years( available_years )
+    logger.info(
+        "[tier2] resolved concept=%s in %.3fs",
+        concept_name,
+        time.perf_counter() - resolve_started,
     )
-
-    scales = tuple(
-        search_space.resolve_scales( set(SCALES) )
-    )
-
-    if not scales:
-        raise ValueError( "SearchSpace resolves to no available scales" )
-
-    if not candidate_years:
-        logger.warning( "[tier2] SearchSpace resolves to no searchable years" )
-
-    year_start = min(candidate_years) if candidate_years else None
-    year_end = max(candidate_years) if candidate_years else None
 
     seed_ids = [
         event_id
@@ -111,22 +187,12 @@ def run_lance_tier2(
         for event_id in resolved["by_year"].get(year, ())
     ]
 
-    logger.info( "[tier2] SearchSpace years=%s scales=%s", candidate_years, scales, )
-    logger.info( "[tier2] query workset: %d seed events, search years=%s-%s", len(seed_ids), year_start, year_end, )
-
-    db_started = time.perf_counter()
-
-    db = lancedb.connect( str(lance_root) )
-
-    indexes = {}
-
-    for scale in scales:
-        try:
-            indexes[scale] = db.open_table(scale)
-        except Exception as exc:
-            raise RuntimeError( f"Could not open Lance table for scale={scale}: {lance_root}" ) from exc
-
-    logger.info( "[tier2] opened %d Lance scale tables in %.3fs", len(indexes), time.perf_counter() - db_started, )
+    logger.info(
+        "[tier2] query workset: %d seed events, search years=%s-%s",
+        len(seed_ids),
+        year_start,
+        year_end,
+    )
 
     output_events = []
 
@@ -146,12 +212,17 @@ def run_lance_tier2(
         false_positives=false_positives,
         batch_size=batch_size,
     ):
-        output_events.extend( batch["events"] )
+        output_events.extend(batch["events"])
         batch_count += 1
 
-    search_time = ( time.perf_counter() - search_started )
+    search_time = time.perf_counter() - search_started
 
-    logger.info( "[tier2] search complete: %d batches, %d seed events, %.3fs", batch_count, len(output_events), search_time, )
+    logger.info(
+        "[tier2] search complete: %d batches, %d seed events, %.3fs",
+        batch_count,
+        len(output_events),
+        search_time,
+    )
 
     write_started = time.perf_counter()
 
@@ -164,10 +235,17 @@ def run_lance_tier2(
         clear=clear,
     )
 
-    write_time = ( time.perf_counter() - write_started )
-    total_time = ( time.perf_counter() - started )
+    write_time = time.perf_counter() - write_started
+    total_time = time.perf_counter() - started
 
-    logger.info( "[tier2] concept=%s timing: search=%.3fs sqlite=%.3fs total=%.3fs", concept_name, search_time, write_time, total_time, )
+    logger.info(
+        "[tier2] concept=%s timing: search=%.3fs sqlite=%.3fs total=%.3fs",
+        concept_name,
+        search_time,
+        write_time,
+        total_time,
+    )
+
     return sqlite_path
 
 
@@ -230,42 +308,76 @@ def main() -> None:
 
     if args.concept is not None:
         if args.concept not in CONCEPT_SETS:
-            available = ", ".join(
-                sorted(CONCEPT_SETS)
-            )
+            available = ", ".join(sorted(CONCEPT_SETS))
             raise SystemExit(
                 f"Unknown concept {args.concept!r}.\n"
                 f"Available concepts: {available}"
             )
 
         concept_names = [args.concept]
-
     else:
         concept_names = list(CONCEPT_SETS)
 
-    if args.from_year is not None or args.to_year is not None:
-        search_space = SearchSpace(
-            years=(
-                args.from_year,
-                args.to_year,
-            ),
-            scale=None,
-        )
-    else:
-        search_space = SearchSpace(
-            years=None,
-            scale=None,
-        )
+    search_space = SearchSpace(
+        years=(
+            args.from_year,
+            args.to_year,
+        ) if args.from_year is not None or args.to_year is not None else None,
+        scale=None,
+    )
 
-    logger.info( "[tier2] processing %d concept(s)", len(concept_names) )
+    logger.info(
+        "[tier2] processing %d concept(s)",
+        len(concept_names),
+    )
+    logger.info(
+        "[tier2] SQLite output: %s",
+        args.sqlite,
+    )
 
-    logger.info( "[tier2] SQLite output: %s", args.sqlite )
+    # These are immutable for the lifetime of this run. Reusing them avoids
+    # reopening the observation store and three Lance tables for every concept.
+    lookup = open_observation_lookup(args.store)
+
+    (
+        candidate_years,
+        scales,
+        year_start,
+        year_end,
+    ) = _resolve_search_scope(
+        search_space,
+        lookup,
+    )
+
+    logger.info(
+        "[tier2] SearchSpace years=%s scales=%s",
+        candidate_years,
+        scales,
+    )
+
+    db_started = time.perf_counter()
+
+    indexes = _open_lance_indexes(
+        args.lance,
+        scales,
+    )
+
+    logger.info(
+        "[tier2] opened %d Lance scale tables in %.3fs",
+        len(indexes),
+        time.perf_counter() - db_started,
+    )
 
     for index, concept_name in enumerate(
         concept_names,
         start=1,
     ):
-        logger.info( "[tier2] ===== concept %d/%d: %s =====", index, len(concept_names), concept_name, )
+        logger.info(
+            "[tier2] ===== concept %d/%d: %s =====",
+            index,
+            len(concept_names),
+            concept_name,
+        )
 
         # --clear is deliberately consumed only by the first concept.
         # Otherwise every concept would erase the results of its predecessor.
@@ -279,9 +391,18 @@ def main() -> None:
             lance_root=args.lance,
             sqlite_path=args.sqlite,
             clear=clear,
+            lookup=lookup,
+            indexes=indexes,
+            candidate_years=candidate_years,
+            scales=scales,
+            year_start=year_start,
+            year_end=year_end,
         )
 
-    logger.info( "[tier2] completed %d concept(s)", len(concept_names), )
+    logger.info(
+        "[tier2] completed %d concept(s)",
+        len(concept_names),
+    )
 
 
 if __name__ == "__main__":
