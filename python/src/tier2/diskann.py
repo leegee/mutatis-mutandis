@@ -59,10 +59,7 @@ def run_diskann_tier2(
             scale=None,
         )
 
-    logger.info(
-        "[tier2] resolving concept=%s",
-        concept_name,
-    )
+    logger.info( "[tier2] resolving concept=%s", concept_name, )
 
     resolve_started = time.perf_counter()
 
@@ -73,11 +70,7 @@ def run_diskann_tier2(
         false_positives=false_positives,
     )
 
-    logger.info(
-        "[tier2] resolved concept=%s in %.3fs",
-        concept_name,
-        time.perf_counter() - resolve_started,
-    )
+    logger.info( "[tier2] resolved concept=%s in %.3fs", concept_name, time.perf_counter() - resolve_started, )
 
     available_years = {
         int(year)
@@ -104,14 +97,10 @@ def run_diskann_tier2(
     )
 
     if not scales:
-        raise ValueError(
-            "SearchSpace resolves to no available scales"
-        )
+        raise ValueError( "SearchSpace resolves to no available scales" )
 
     if not candidate_years:
-        logger.warning(
-            "[tier2] SearchSpace resolves to no searchable years"
-        )
+        logger.warning( "[tier2] SearchSpace resolves to no searchable years" )
 
     years_to_process = tuple(
         year
@@ -137,12 +126,8 @@ def run_diskann_tier2(
         len(years_to_process),
         sum(
             len(
-                resolved["by_year"].get(
-                    year,
-                    (),
-                )
-            )
-            for year in years_to_process
+                resolved["by_year"].get( year, () )
+            ) for year in years_to_process
         ),
     )
 
@@ -207,34 +192,18 @@ def run_diskann_tier2(
                     doc_counts=doc_counts,
                 ):
                     events = batch["events"]
-
-                    output_events.extend( events, )
-
+                    output_events.extend( events )
                     year_event_count += len(events)
                     batch_count += 1
 
                 search_time = ( time.perf_counter() - search_started )
                 total_search_time += search_time
-
-                logger.info( "[tier2] searched year=%s: %d seed events, %d batches, %d output events in %.3fs",
-                    year,
-                    len(seed_ids),
-                    batch_count,
-                    year_event_count,
-                    search_time,
-                )
+                logger.info( "[tier2] searched year=%s: %d seed events, %d batches, %d output events in %.3fs", year, len(seed_ids), batch_count, year_event_count, search_time, )
 
             finally:
-                year_indexes.evict(
-                    year,
-                )
+                year_indexes.evict( year )
 
-            logger.info(
-                "[tier2] completed year=%s in %.3fs",
-                year,
-                time.perf_counter()
-                - year_started,
-            )
+            logger.info( "[tier2] completed year=%s in %.3fs", year, time.perf_counter() - year_started, )
 
     finally:
         year_indexes.close()
@@ -284,22 +253,10 @@ def run_diskann_tier2(
             separators=(",", ":"),
         )
 
-    write_time = (
-        time.perf_counter()
-        - write_started
-    )
+    write_time = ( time.perf_counter() - write_started )
+    total_time = ( time.perf_counter() - started )
 
-    total_time = (
-        time.perf_counter()
-        - started
-    )
-
-    logger.info(
-        "[tier2] wrote %d events to %s in %.3fs",
-        len(output_events),
-        output_path,
-        write_time,
-    )
+    logger.info( "[tier2] wrote %d events to %s in %.3fs", len(output_events), output_path, write_time, )
 
     logger.info(
         "[tier2] timing summary: "

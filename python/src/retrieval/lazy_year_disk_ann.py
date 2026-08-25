@@ -8,6 +8,8 @@ from retrieval.diskann_observation_index import DiskANNObservationIndex
 SCALES = ("local", "medium", "broad")
 
 
+DIMENSIONS = 768
+
 class LazyYearDiskANN:
     """
     Lazily opens the three DiskANN indexes belonging to a publication year.
@@ -24,7 +26,7 @@ class LazyYearDiskANN:
         indexes_root: str | Path,
         years,
         *,
-        dimensions: int = 768,
+        dimensions: int = DIMENSIONS,
         num_threads: int = 0,
         search_complexity: int = 100,
         beam_width: int = 2,
@@ -53,6 +55,7 @@ class LazyYearDiskANN:
             dict[str, DiskANNObservationIndex],
         ] = {}
 
+
     def get(
         self,
         year: int,
@@ -65,10 +68,7 @@ class LazyYearDiskANN:
         if year not in self._loaded:
             logger.info( "[tier2] loading year=%s", year )
             self._loaded[year] = self._load_year(year)
-            logger.info(
-                "[tier2] loaded year=%s",
-                year,
-            )
+            logger.info( "[tier2] loaded year=%s", year, )
 
         return self._loaded[year]
 
@@ -76,41 +76,22 @@ class LazyYearDiskANN:
         self,
         year: int,
     ) -> dict[str, DiskANNObservationIndex]:
-        logger.info(
-            "[tier2] opening DiskANN indexes for year=%s",
-            year,
-        )
+        logger.info( "[tier2] opening DiskANN indexes for year=%s", year )
 
         loaded: dict[str, DiskANNObservationIndex] = {}
 
         for scale in SCALES:
-            directory = (
-                self._root
-                / f"year={year}"
-                / scale
-            )
+            directory = ( self._root / f"year={year}" / scale )
 
-            event_ids_path = (
-                directory
-                / f"{scale}_event_ids.npy"
-            )
+            event_ids_path = ( directory / f"{scale}_event_ids.npy" )
 
             if not directory.is_dir():
-                raise RuntimeError(
-                    f"Missing DiskANN directory: {directory}"
-                )
+                raise RuntimeError( f"Missing DiskANN directory: {directory}" )
 
             if not event_ids_path.is_file():
-                raise RuntimeError(
-                    f"Missing DiskANN event-ID mapping: "
-                    f"{event_ids_path}"
-                )
+                raise RuntimeError( f"Missing DiskANN event-ID mapping: {event_ids_path}" )
 
-            logger.info(
-                "[tier2] opening DiskANN index: year=%s scale=%s",
-                year,
-                scale,
-            )
+            logger.info( "[tier2] opening DiskANN index: year=%s scale=%s", year, scale, )
 
             loaded[scale] = DiskANNObservationIndex(
                 index_directory=directory,
@@ -124,13 +105,10 @@ class LazyYearDiskANN:
                 index_prefix=scale,
             )
 
-            logger.info(
-                "[tier2] opened DiskANN index: year=%s scale=%s",
-                year,
-                scale,
-            )
+            logger.info( "[tier2] opened DiskANN index: year=%s scale=%s", year, scale, )
 
         return loaded
+
 
     def evict(
         self,
@@ -142,10 +120,7 @@ class LazyYearDiskANN:
         Dropping the references is the cache boundary used by the
         year-major Tier 2 loop.
         """
-        self._loaded.pop(
-            int(year),
-            None,
-        )
+        self._loaded.pop( int(year), None )
 
     def close(self) -> None:
         """Release all currently loaded years."""
@@ -153,9 +128,8 @@ class LazyYearDiskANN:
 
     def loaded_years(self) -> tuple[int, ...]:
         """Return the years currently resident in memory."""
-        return tuple(
-            sorted(self._loaded)
-        )
+        return tuple( sorted(self._loaded) )
+
 
     @staticmethod
     def available_years(

@@ -1,5 +1,3 @@
-# retieval/diskann_builder.py
-
 from pathlib import Path
 
 import diskannpy
@@ -26,17 +24,16 @@ def build_diskann_index(
     Build a DiskANN index and persist its observation-ID mapping.
 
     Input embeddings are normalised to unit length before indexing.
-    DiskANN then uses L2 distance, which is monotonic with cosine
-    similarity for unit-normalised vectors.
+    DiskANN uses L2 distance, which is monotonic with cosine similarity
+    for unit-normalised vectors.
 
-    DiskANN is a disposable geometric index. Observation provenance remains
-    in the Parquet observation layer; the persisted event-ID array provides
-    only the positional mapping required to interpret search results.
+    The Parquet observation store remains authoritative. DiskANN and its
+    positional event-ID mapping are disposable derived artefacts.
 
     Failure mode:
-        DiskANN accepts a NumPy array and writes an intermediate vector file
-        itself. This is intentional here: the Parquet observation layer
-        remains the source of truth and the DiskANN artefacts are disposable.
+        DiskANN writes an intermediate vector representation while building.
+        That representation is not treated as corpus storage and can be
+        regenerated from Parquet.
     """
     vector_array = np.asarray(vectors, dtype=np.float32)
     event_id_array = np.asarray(event_ids, dtype=np.uint64)
@@ -101,16 +98,16 @@ def build_diskann_index(
     np.save(event_ids_path, event_id_array)
 
     diskannpy.build_disk_index(
-        data                    = vector_array,
-        distance_metric         = "l2",
-        index_directory         = str(output_directory),
-        complexity              = complexity,
-        graph_degree            = graph_degree,
-        search_memory_maximum   = search_memory_gb,
-        build_memory_maximum    = build_memory_gb,
-        num_threads             = num_threads,
-        pq_disk_bytes           = pq_disk_bytes,
-        index_prefix            = index_prefix,
+        data=vector_array,
+        distance_metric="l2",
+        index_directory=str(output_directory),
+        complexity=complexity,
+        graph_degree=graph_degree,
+        search_memory_maximum=search_memory_gb,
+        build_memory_maximum=build_memory_gb,
+        num_threads=num_threads,
+        pq_disk_bytes=pq_disk_bytes,
+        index_prefix=index_prefix,
     )
 
     return event_ids_path

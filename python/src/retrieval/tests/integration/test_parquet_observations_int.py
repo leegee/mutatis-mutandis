@@ -25,7 +25,8 @@ K = 20
 def test_diskann_results_resolve_to_parquet_observations() -> None:
     event_ids, vectors = load_embeddings(
         EVENTSTORE_T1_PATH,
-        year=YEAR,
+        year_start=YEAR,
+        year_start=YEAR+1,
         scale=SCALE,
         dimensions=DIMENSIONS,
     )
@@ -142,3 +143,4 @@ def test_diskann_results_resolve_to_parquet_observations() -> None:
     logger.info("-" * 70)
     logger.info(first_context.text)
     logger.info("=" * 70)
+

@@ -2,14 +2,19 @@
 """
 tier1_5_build_diskann_index.py
 
-Build one DiskANN index from a Parquet Tier 1 observation partition.
+Build a DiskANN index from a 50-year Parquet Tier 1 observation partition.
 
 The Parquet observation layer is the source of truth. DiskANN is a disposable
 derived geometric index and stores no semantic provenance.
 
-This first pass deliberately builds one (year, scale) index at a time. That
-keeps peak memory bounded and gives us a simple integration point to test
-before adding corpus-wide orchestration.
+Physical indexes are partitioned by year bucket and embedding scale:
+
+    year=1650-1699/local
+    year=1650-1699/medium
+    year=1650-1699/broad
+
+The bucket size is deliberately configurable so retrieval experiments can
+compare temporal partitioning strategies without changing Tier 1.
 """
 
 from __future__ import annotations
@@ -17,20 +22,38 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
+
 from retrieval.parquet_embeddings import load_embeddings
 from retrieval.diskann_builder import build_diskann_index
 import lib.corpus_config as config
 from lib.corpus_logging import logger
 
+
 SCALES = ("local", "medium", "broad")
 DEFAULT_DIMENSIONS = 768
+DEFAULT_YEAR_BUCKET_SIZE = 50
+
+
+def year_bucket(
+    year: int,
+    bucket_size: int,
+) -> tuple[int, int]:
+    if bucket_size <= 0:
+        raise ValueError("bucket_size must be positive")
+
+    start = (year // bucket_size) * bucket_size
+    end = start + bucket_size - 1
+
+    return start, end
 
 
 def build_one(
     *,
     store: Path,
     output_root: Path,
-    year: int,
+    bucket_start: int,
+    bucket_end: int,
     scale: str,
     dimensions: int,
     complexity: int,
@@ -41,30 +64,46 @@ def build_one(
     pq_disk_bytes: int,
 ) -> Path:
     logger.info(
-        f"Loading Parquet observations: "
-        f"year={year} scale={scale}"
+        "Loading Parquet observations: "
+        "years=%d-%d scale=%s",
+        bucket_start,
+        bucket_end,
+        scale,
     )
 
     event_ids, vectors = load_embeddings(
         store,
-        year=year,
-        scale=scale,
-        dimensions=dimensions,
+        year_start = bucket_start,
+        year_end   = bucket_end,
+        scale      = scale,
+        dimensions = dimensions,
     )
 
     logger.info(
-        f"Loaded {len(event_ids)} observations "
-        f"with vectors of shape {vectors.shape}"
+        "Loaded %d observations with vectors of shape %s",
+        len(event_ids),
+        vectors.shape,
     )
+
+    if len(event_ids) == 0:
+        logger.warning(
+            "No observations for years=%d-%d scale=%s; "
+            "skipping index",
+            bucket_start,
+            bucket_end,
+            scale,
+        )
+        return None
 
     output_directory = (
         output_root
-        / f"year={year}"
+        / f"year={bucket_start}-{bucket_end}"
         / scale
     )
 
     logger.info(
-        f"Building DiskANN index: {output_directory}"
+        "Building DiskANN index: %s",
+        output_directory,
     )
 
     event_ids_path = build_diskann_index(
@@ -82,10 +121,13 @@ def build_one(
     )
 
     logger.info(
-        f"DiskANN build complete: {output_directory}"
+        "DiskANN build complete: %s",
+        output_directory,
     )
+
     logger.info(
-        f"Event-ID mapping: {event_ids_path}"
+        "Event-ID mapping: %s",
+        event_ids_path,
     )
 
     return output_directory
@@ -94,8 +136,8 @@ def build_one(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build one DiskANN index from a Parquet Tier 1 "
-            "observation partition."
+            "Build a temporal-bucketed DiskANN index from "
+            "the Parquet observation store."
         )
     )
 
@@ -117,7 +159,20 @@ def parse_args() -> argparse.Namespace:
         "--year",
         type=int,
         required=True,
-        help="Publication year to index.",
+        help=(
+            "Year identifying the bucket to build. "
+            "The bucket containing this year is indexed."
+        ),
+    )
+
+    parser.add_argument(
+        "--bucket-size",
+        type=int,
+        default=DEFAULT_YEAR_BUCKET_SIZE,
+        help=(
+            f"Temporal bucket size in years "
+            f"(default: {DEFAULT_YEAR_BUCKET_SIZE})."
+        ),
     )
 
     parser.add_argument(
@@ -131,10 +186,7 @@ def parse_args() -> argparse.Namespace:
         "--dimensions",
         type=int,
         default=DEFAULT_DIMENSIONS,
-        help=(
-            f"Embedding dimensionality "
-            f"(default: {DEFAULT_DIMENSIONS})."
-        ),
+        help=f"Embedding dimensionality (default: {DEFAULT_DIMENSIONS}).",
     )
 
     parser.add_argument(
@@ -155,40 +207,28 @@ def parse_args() -> argparse.Namespace:
         "--search-memory-gb",
         type=float,
         default=4.0,
-        help=(
-            "DiskANN search-memory budget in GB "
-            "(default: 4)."
-        ),
+        help="DiskANN search-memory budget in GB (default: 4).",
     )
 
     parser.add_argument(
         "--build-memory-gb",
         type=float,
         default=8.0,
-        help=(
-            "DiskANN build-memory budget in GB "
-            "(default: 8)."
-        ),
+        help="DiskANN build-memory budget in GB (default: 8).",
     )
 
     parser.add_argument(
         "--num-threads",
         type=int,
         default=0,
-        help=(
-            "DiskANN build threads; "
-            "0 means all available threads."
-        ),
+        help="DiskANN build threads; 0 means all available threads.",
     )
 
     parser.add_argument(
         "--pq-disk-bytes",
         type=int,
         default=0,
-        help=(
-            "PQ bytes per vector; "
-            "0 disables PQ compression."
-        ),
+        help="PQ bytes per vector; 0 disables PQ compression.",
     )
 
     return parser.parse_args()
@@ -197,10 +237,22 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    bucket_start, bucket_end = year_bucket(
+        args.year,
+        args.bucket_size,
+    )
+
+    logger.info(
+        "Building temporal bucket %d-%d",
+        bucket_start,
+        bucket_end,
+    )
+
     build_one(
         store=args.store,
         output_root=args.output,
-        year=args.year,
+        bucket_start=bucket_start,
+        bucket_end=bucket_end,
         scale=args.scale,
         dimensions=args.dimensions,
         complexity=args.complexity,

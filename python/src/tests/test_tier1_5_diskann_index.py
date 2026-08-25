@@ -36,7 +36,8 @@ QUERY_LOCAL_IDS = (0, 100, 1000, 5000, 10000)
 def load_observations() -> tuple[np.ndarray, np.ndarray]:
     event_ids, vectors = load_embeddings(
         config.EVENTSTORE_T1_PATH,
-        year=YEAR,
+        year_start=YEAR,
+        year_end=YEAR+1,
         scale=SCALE,
         dimensions=DIMENSIONS,
     )

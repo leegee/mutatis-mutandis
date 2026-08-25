@@ -7,7 +7,7 @@ import numpy as np
 from lib.corpus_logging import logger
 from tier1.observation_store_api import SCALES
 
-K = 60
+K = 200
 RRF_K = 60
 OVERSAMPLE = 5
 BATCH_SIZE = 2000

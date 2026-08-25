@@ -229,10 +229,7 @@ def arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "concept",
         metavar="CONCEPT",
-        help=(
-            "Concept-set key from CONCEPT_SETS, "
-            "for example LAW or PREROGATIVE."
-        ),
+        help=( "Concept-set key from CONCEPT_SETS, for example LAW or PREROGATIVE." ),
     )
 
     parser.add_argument(
@@ -240,10 +237,7 @@ def arg_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="FORM[,FORM...]",
-        help=(
-            "Additional/override concept form(s). May be supplied "
-            "multiple times or comma-separated."
-        ),
+        help=( "Additional/override concept form(s). May be supplied multiple times or comma-separated." ),
     )
 
     parser.add_argument(
@@ -258,10 +252,7 @@ def arg_parser() -> argparse.ArgumentParser:
         type=_parse_years,
         default=None,
         metavar="YEAR[,YEAR...]",
-        help=(
-            "Restrict the search to years. Supports ranges, e.g. "
-            "1580-1600, or combinations such as 1580-1590,1600,1605."
-        ),
+        help=( "Restrict the search to years. Supports ranges, e.g. 1580-1600, or combinations such as 1580-1590,1600,1605." ),
     )
 
     parser.add_argument(
@@ -269,10 +260,7 @@ def arg_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="SCALE",
-        help=(
-            "Scale(s) to search: local, medium, broad. "
-            "May be repeated or comma-separated. Default: all scales."
-        ),
+        help=( "Scale(s) to search: local, medium, broad. May be repeated or comma-separated. Default: all scales." ),
     )
 
     parser.add_argument(
@@ -312,16 +300,13 @@ def arg_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="FORM",
-        help=(
-            "Additional form to exclude as a false positive. "
-            "May be supplied multiple times."
-        ),
+        help=( "Additional form to exclude as a false positive. May be supplied multiple times." ),
     )
 
     parser.add_argument(
         "--table-limit",
         type=int,
-        default=100,
+        default=10000,
         metavar="N",
         help="Maximum neighbour rows printed to the log (default: 100).",
     )
@@ -410,18 +395,9 @@ def main() -> None:
 
     events = result["events"]
 
-    logger.debug(
-        "[test] Search result: %d seed events",
-        len(events),
-    )
-    logger.debug(
-        "[test] Resolved years: %s",
-        result.get("resolved_years"),
-    )
-    logger.debug(
-        "[test] Resolved scales: %s",
-        result.get("resolved_scales"),
-    )
+    logger.debug( "[test] Search result: %d seed events", len(events), )
+    logger.debug( "[test] Resolved years: %s", result.get("resolved_years"), )
+    logger.debug( "[test] Resolved scales: %s", result.get("resolved_scales"), )
 
     if not args.no_table:
         _print_neighbour_table(
@@ -429,10 +405,7 @@ def main() -> None:
             limit=args.table_limit,
         )
 
-    logger.debug(
-        "[test] TOTAL test_phrase_search2 runtime: %.3fs",
-        time.perf_counter() - started,
-    )
+    logger.debug( "[test] TOTAL test_phrase_search2 runtime: %.3fs", time.perf_counter() - started, )
 
 
 if __name__ == "__main__":

@@ -1,5 +1,3 @@
-# diskann_observation_index_store.py
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +11,7 @@ from .models import SearchSpace
 
 
 class DiskANNObservationIndexStore(ObservationIndexStore):
-    """Resolve a logical SearchSpace to its physical DiskANN indexes."""
+    """Resolve logical search spaces to temporal DiskANN indexes."""
 
     _SCALE_ORDER = (
         "local",
@@ -31,16 +29,17 @@ class DiskANNObservationIndexStore(ObservationIndexStore):
         self,
         space: SearchSpace,
     ) -> list[ObservationIndex]:
-        """Return all physical indexes covered by the search space."""
+        """Return physical indexes intersecting the requested year range."""
 
-        years = self._available_years()
+        buckets = self._available_buckets()
 
         if space.years is not None:
             start, end = space.years
-            years = tuple(
-                year
-                for year in years
-                if start <= year <= end
+
+            buckets = tuple(
+                bucket
+                for bucket in buckets
+                if bucket[1] >= start and bucket[0] <= end
             )
 
         if space.scale is None:
@@ -54,21 +53,25 @@ class DiskANNObservationIndexStore(ObservationIndexStore):
 
         return [
             self._build_index(
-                year=year,
+                bucket_start=bucket_start,
+                bucket_end=bucket_end,
                 scale=scale,
             )
-            for year in years
+            for bucket_start, bucket_end in buckets
             for scale in scales
             if self._index_exists(
-                year=year,
+                bucket_start=bucket_start,
+                bucket_end=bucket_end,
                 scale=scale,
             )
         ]
 
-    def _available_years(self) -> tuple[int, ...]:
-        """Discover years from the physical index directory layout."""
+    def _available_buckets(
+        self,
+    ) -> tuple[tuple[int, int], ...]:
+        """Discover temporal buckets from the physical index layout."""
 
-        years: list[int] = []
+        buckets: set[tuple[int, int]] = set()
 
         if not self._indexes_root.exists():
             return ()
@@ -77,24 +80,32 @@ class DiskANNObservationIndexStore(ObservationIndexStore):
             if not path.is_dir():
                 continue
 
+            value = path.name.removeprefix("year=")
+
             try:
-                year = int(path.name.removeprefix("year="))
+                start_text, end_text = value.split("-", 1)
+                start = int(start_text)
+                end = int(end_text)
             except ValueError:
                 continue
 
-            years.append(year)
+            if start > end:
+                continue
 
-        return tuple(sorted(set(years)))
+            buckets.add((start, end))
+
+        return tuple(sorted(buckets))
 
     def _index_exists(
         self,
         *,
-        year: int,
+        bucket_start: int,
+        bucket_end: int,
         scale: str,
     ) -> bool:
         index_directory = (
             self._indexes_root
-            / f"year={year}"
+            / f"year={bucket_start}-{bucket_end}"
             / scale
         )
 
@@ -109,12 +120,13 @@ class DiskANNObservationIndexStore(ObservationIndexStore):
     def _build_index(
         self,
         *,
-        year: int,
+        bucket_start: int,
+        bucket_end: int,
         scale: str,
     ) -> ObservationIndex:
         index_directory = (
             self._indexes_root
-            / f"year={year}"
+            / f"year={bucket_start}-{bucket_end}"
             / scale
         )
 
@@ -124,9 +136,6 @@ class DiskANNObservationIndexStore(ObservationIndexStore):
                 index_directory
                 / f"{scale}_event_ids.npy"
             ),
-            # These parameters describe the current on-disk index format.
-            # Expose them through configuration when index construction/loading
-            # needs to vary independently of the store.
             dimensions=768,
             num_threads=0,
             search_complexity=100,
