@@ -1,5 +1,6 @@
 # corpus_logging.py
 
+import os
 import sys
 import json
 import logging
@@ -13,7 +14,10 @@ EmitFn = Callable[[str, str], None]
 logger = logging.getLogger("corpus")
 
 if logger.level == logging.NOTSET:
-    logger.setLevel(logging.DEBUG)
+    level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
+
+logger.setLevel(getattr(logging, level_name, logging.INFO))
+
 
 if not logger.handlers:
     if hasattr(sys.stdout, "reconfigure"):
