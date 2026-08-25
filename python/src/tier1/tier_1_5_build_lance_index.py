@@ -267,7 +267,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(config.DISKANN_INDEXES_DIR).parent / "lance",
+        default=Path(config.LANCE_INDEXES_DIR),
         help="Root directory for the Lance database (one table per scale).",
     )
     parser.add_argument("--dimensions", type=int, default=DEFAULT_DIMENSIONS)

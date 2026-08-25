@@ -13,7 +13,7 @@ MAX_TOKENS_IN_DOC = 400_000
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-ECCO_HEADER_DIR = Path( "s:/src/pamphlets/corpus/ecco_all/ecco/headers" )
+ECCO_HEADER_DIR = Path( "d:/src/mutatis-mutandis/corpus/ecco_all/ecco/headers" )
 XML_ROOT_DIR = PROJECT_ROOT / "corpus"
 
 CORPUS_INPUT_DIRS = {
@@ -51,6 +51,9 @@ INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
 DISKANN_INDEXES_DIR = INDEXES_DIR / "diskann"
 DISKANN_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
+
+LANCE_INDEXES_DIR = INDEXES_DIR / "lance"
+LANCE_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
 EVENTSTORE_ROOT = OUT_DIR / "events"
 EVENTSTORE_ROOT.mkdir(parents=True, exist_ok=True)

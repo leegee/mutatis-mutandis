@@ -3,6 +3,9 @@
     git@github.com:leegee/mutatis-mutandis.git
     https://github.com/leegee/mutatis-mutandis.git
 
+        We all declare for liberty but in using the same word we do not all mean the same thing
+        -- Abraham Lincoln, Address at the Sanitary Fair in Baltimore, Maryland, on April 18, 186
+
 ## Code Synopsis
 
     cd $PROJECT_ROOT/python

@@ -15,16 +15,16 @@ logger = logging.getLogger("corpus")
 
 if logger.level == logging.NOTSET:
     level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
-
-logger.setLevel(getattr(logging, level_name, logging.INFO))
+logging_level = getattr(logging, level_name, logging.INFO)
+logger.setLevel(logging_level)
 
 
 if not logger.handlers:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
 
-    _h = logging.StreamHandler(sys.stdout)
-    _h.setLevel(logging.DEBUG)
+    _h = logging.StreamHandler(sys.stderr)
+    _h.setLevel(logging_level)
     logger.addHandler(_h)
 
     _h = TimedRotatingFileHandler(

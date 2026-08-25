@@ -27,10 +27,7 @@ def _normalise_embedding_column(
 
     if pa.types.is_fixed_size_list(arr.type):
         if arr.type.list_size != dim:
-            raise ValueError(
-                f"{column} has fixed list size {arr.type.list_size}, "
-                f"expected {dim}"
-            )
+            raise ValueError( f"{column} has fixed list size {arr.type.list_size}, expected {dim}" )
 
     elif pa.types.is_list(arr.type):
         lengths = pc.list_value_length(arr)
@@ -46,9 +43,7 @@ def _normalise_embedding_column(
         arr = pa.FixedSizeListArray.from_arrays(values, dim)
 
     else:
-        raise TypeError(
-            f"Unsupported embedding type for {column}: {arr.type}"
-        )
+        raise TypeError( f"Unsupported embedding type for {column}: {arr.type}" )
 
     return table.set_column(
         table.schema.get_field_index(column),
@@ -82,10 +77,7 @@ def _fixed_size_list_to_numpy(
             )
 
         if chunk.type.list_size != dimensions:
-            raise ValueError(
-                f"Expected vector dimension {dimensions}, "
-                f"got {chunk.type.list_size}"
-            )
+            raise ValueError( f"Expected vector dimension {dimensions}, got {chunk.type.list_size}" )
 
         values = chunk.values.to_numpy(zero_copy_only=False)
 
@@ -226,24 +218,15 @@ def load_embeddings(
         )
 
     if vectors.shape[1] != dimensions:
-        raise ValueError(
-            f"Expected {dimensions} dimensions, "
-            f"got {vectors.shape[1]}"
-        )
+        raise ValueError( f"Expected {dimensions} dimensions, got {vectors.shape[1]}" )
 
     if len(event_ids) != len(vectors):
-        raise ValueError(
-            "event_ids and vectors have different lengths"
-        )
+        raise ValueError( "event_ids and vectors have different lengths" )
 
     if len(np.unique(event_ids)) != len(event_ids):
-        raise ValueError(
-            "Duplicate event_ids detected"
-        )
+        raise ValueError( "Duplicate event_ids detected" )
 
     if not np.isfinite(vectors).all():
-        raise ValueError(
-            "Vectors contain non-finite values"
-        )
+        raise ValueError( "Vectors contain non-finite values" )
 
     return event_ids, vectors

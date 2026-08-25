@@ -1,3 +1,7 @@
+"""
+tier2/analysis.py
+"""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -62,10 +66,7 @@ def resolve_concept_positions(
         false_positives,
     )
 
-    event_ids = [
-        int(event_id)
-        for event_id in event_ids
-    ]
+    event_ids = [int(event_id) for event_id in event_ids]
 
     logger.info(
         "[tier2] %s: %d seed events",
@@ -89,28 +90,101 @@ def resolve_concept_positions(
     }
 
 
+def _lance_where(
+    *,
+    year_start: int | None,
+    year_end: int | None,
+    model: str | None = None,
+) -> str | None:
+    clauses = []
+
+    if year_start is not None:
+        clauses.append(f"year >= {int(year_start)}")
+
+    if year_end is not None:
+        clauses.append(f"year <= {int(year_end)}")
+
+    if model is not None:
+        escaped = model.replace("'", "''")
+        clauses.append(f"embedding_model = '{escaped}'")
+
+    return " AND ".join(clauses) if clauses else None
+
+
+def _search_lance_table(
+    *,
+    table,
+    queries,
+    year_start,
+    year_end,
+    k,
+    nprobes,
+):
+    """
+    Search a Lance scale table for a batch of query vectors.
+
+    Lance performs the temporal restriction at query time. The physical
+    vector index therefore remains corpus-wide.
+
+    Failure mode:
+        Lance's Python API is query-oriented rather than DiskANN's batched
+        native API, so results are collected one query at a time here.
+        Keep this implementation simple until retrieval profiling identifies
+        this as a bottleneck.
+    """
+    queries = np.asarray(
+        queries,
+        dtype=np.float32,
+    )
+
+    if queries.ndim != 2:
+        raise ValueError("queries must be two-dimensional")
+
+    results = []
+
+    where = _lance_where(
+        year_start=year_start,
+        year_end=year_end,
+    )
+
+    for query in queries:
+        search = (
+            table
+            .search(query)
+            .nprobes(nprobes)
+        )
+
+        if where:
+            search = search.where(where)
+
+        rows = search.limit(k).to_list()
+
+        results.append(rows)
+
+    return results
+
+
 def multiscale_search(
     *,
     indexes,
     queries,
+    year_start: int | None,
+    year_end: int | None,
     top_n=K,
     rrf_k=RRF_K,
     oversample=OVERSAMPLE,
     scales=SCALES,
+    nprobes=20,
 ):
     """
-    Search the selected scale-specific DiskANN indexes and fuse their
-    rankings.
+    Search the selected Lance scale tables and fuse their rankings.
 
-    `indexes` is the scale-to-index mapping returned by
-    `LazyYearDiskANN.get(year)`.
-
-    DiskANN distances are retained under the existing Tier 2 score field
-    names for downstream compatibility. RRF uses rank rather than distance.
+    The year range applies to every scale search. RRF is performed by stable
+    event_id rather than by Lance's physical row identity.
 
     Failure mode:
-        Each scale may return the same event. RRF therefore fuses by stable
-        event_id rather than by local DiskANN position.
+        A neighbour may occur in multiple scale-specific result sets.
+        RRF therefore deliberately merges those occurrences by event_id.
     """
     queries = np.asarray(
         queries,
@@ -130,19 +204,24 @@ def multiscale_search(
         raise ValueError("oversample must be positive")
 
     search_k = top_n * oversample
+
     results_by_scale = {}
 
     for scale in scales:
-        index = indexes.get(scale)
+        table = indexes.get(scale)
 
-        if index is None:
+        if table is None:
             raise RuntimeError(
-                f"Missing DiskANN index for scale={scale}"
+                f"Missing Lance table for scale={scale}"
             )
 
-        results_by_scale[scale] = index.batch_search(
-            queries,
+        results_by_scale[scale] = _search_lance_table(
+            table=table,
+            queries=queries,
+            year_start=year_start,
+            year_end=year_end,
             k=search_k,
+            nprobes=nprobes,
         )
 
     output = []
@@ -151,16 +230,15 @@ def multiscale_search(
         fused = {}
 
         for scale in scales:
-            result = results_by_scale[scale]
+            result = results_by_scale[scale][query_idx]
 
-            event_ids = result.event_ids[query_idx]
-            distances = result.distances[query_idx]
+            for rank, row in enumerate(result, start=1):
+                if "event_id" not in row:
+                    raise RuntimeError(
+                        f"Lance result for scale={scale} has no event_id"
+                    )
 
-            for rank, (event_id, distance) in enumerate(
-                zip(event_ids, distances),
-                start=1,
-            ):
-                event_id = int(event_id)
+                event_id = int(row["event_id"])
 
                 item = fused.setdefault(
                     event_id,
@@ -173,7 +251,14 @@ def multiscale_search(
                 )
 
                 item["score"] += 1.0 / (rrf_k + rank)
-                item[f"score_{scale}"] = float(distance)
+
+                distance = row.get("_distance")
+
+                if distance is None:
+                    distance = row.get("distance")
+
+                if distance is not None:
+                    item[f"score_{scale}"] = float(distance)
 
         ranked = sorted(
             fused.items(),
@@ -209,6 +294,7 @@ def _window_metadata(
     window_id = metadata.get(
         f"{scale}_window_id",
     )
+
     token_pos = metadata.get(
         f"{scale}_window_token_pos",
     )
@@ -231,11 +317,9 @@ def _build_batch_events(
     neighbours,
     lookup,
     false_positives,
-    token_counts,
-    doc_counts,
 ):
     """
-    Materialise one bounded batch in the existing Tier 2 output schema.
+    Materialise one bounded batch in the existing Tier 2 event schema.
 
     Only metadata for the seeds and their selected neighbours is requested.
     Embeddings are not reconstructed here.
@@ -266,16 +350,12 @@ def _build_batch_events(
                 neighbour_id,
             )
 
-            token = str(
-                metadata["token"],
-            )
+            token = str(metadata["token"])
 
             if token.lower() in false_positives:
                 continue
 
-            doc_id = str(
-                metadata["doc_id"],
-            )
+            doc_id = str(metadata["doc_id"])
 
             (
                 local_window_id,
@@ -301,20 +381,13 @@ def _build_batch_events(
                 "broad",
             )
 
-            token_counts[token] += 1
-            doc_counts[doc_id] += 1
-
             neighbours_out.append(
                 {
                     "event_id": neighbour_id,
                     "token": token,
                     "doc_id": doc_id,
-                    "pub_year": int(
-                        metadata["pub_year"],
-                    ),
-                    "token_idx": int(
-                        metadata["token_idx"],
-                    ),
+                    "pub_year": int(metadata["pub_year"]),
+                    "token_idx": int(metadata["token_idx"]),
                     "local_window_id": local_window_id,
                     "local_window_token_pos": local_window_token_pos,
                     "medium_window_id": medium_window_id,
@@ -357,18 +430,10 @@ def _build_batch_events(
         output.append(
             {
                 "event_id": seed_event_id,
-                "token": str(
-                    seed_metadata["token"],
-                ),
-                "doc_id": str(
-                    seed_metadata["doc_id"],
-                ),
-                "pub_year": int(
-                    seed_metadata["pub_year"],
-                ),
-                "token_idx": int(
-                    seed_metadata["token_idx"],
-                ),
+                "token": str(seed_metadata["token"]),
+                "doc_id": str(seed_metadata["doc_id"]),
+                "pub_year": int(seed_metadata["pub_year"]),
+                "token_idx": int(seed_metadata["token_idx"]),
                 "local_window_id": local_window_id,
                 "local_window_token_pos": local_window_token_pos,
                 "medium_window_id": medium_window_id,
@@ -382,33 +447,26 @@ def _build_batch_events(
     return output
 
 
-def iter_year_concept_batches(
+def iter_concept_batches(
     *,
     lookup,
     indexes,
-    year: int,
     seed_event_ids,
     scales,
-    top_n: int,
-    rrf_k: int,
-    oversample: int,
+    year_start,
+    year_end,
+    top_n,
+    rrf_k,
+    oversample,
     false_positives,
-    batch_size: int,
-    token_counts,
-    doc_counts,
+    batch_size,
 ):
     """
-    Yield bounded Tier 2 event batches for one resolved concept and year.
+    Yield bounded Tier 2 batches for seeds searched across one SearchSpace.
 
-    Concept resolution happens once in the Tier 2 orchestrator. This iterator
-    consumes the already-resolved year-local seed IDs and performs retrieval.
-
-    Failure mode:
-        Re-resolving the concept here would repeat the global seed lookup once
-        per year and defeat the lazy-year execution model.
+    Seeds remain grouped by their publication year for bookkeeping, but Lance
+    searches each seed against the complete requested temporal window.
     """
-    year = int(year)
-
     if not seed_event_ids:
         return
 
@@ -416,12 +474,6 @@ def iter_year_concept_batches(
         str(value).lower()
         for value in (false_positives or [])
     }
-
-    if token_counts is None:
-        token_counts = Counter()
-
-    if doc_counts is None:
-        doc_counts = Counter()
 
     for seed_batch in _chunks(
         seed_event_ids,
@@ -435,6 +487,8 @@ def iter_year_concept_batches(
         neighbours = multiscale_search(
             indexes=indexes,
             queries=queries,
+            year_start=year_start,
+            year_end=year_end,
             scales=scales,
             top_n=top_n,
             rrf_k=rrf_k,
@@ -446,8 +500,6 @@ def iter_year_concept_batches(
             neighbours=neighbours,
             lookup=lookup,
             false_positives=false_positives,
-            token_counts=token_counts,
-            doc_counts=doc_counts,
         )
 
         yield {
