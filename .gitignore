@@ -84,3 +84,4 @@ gui/eebo-frontend/public/lineage/
 gui/dss-explorer/*
 corpus/
 python/dss_semantic_trajectory.json
+python/data/
