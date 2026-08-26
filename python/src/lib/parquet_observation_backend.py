@@ -186,7 +186,7 @@ def _connect() -> duckdb.DuckDBPyConnection:
     return con
 
 
-def _probe_dim(con: duckdb.DuckDBPyConnection, glob: str) -> int:
+def _probe_dim(con: duckdb.DuckDBPyConnection, files_sql: str) -> int:
     """
     Infer embedding dimensionality from whichever scale column has data.
 
@@ -195,11 +195,16 @@ def _probe_dim(con: duckdb.DuckDBPyConnection, glob: str) -> int:
     row), so this can't assume any single column is populated. It scans
     for the first row where at least one scale is non-null and reads
     that column's length.
+
+    `files_sql` is a pre-built DuckDB list literal, for example
+    "['a.parquet','b.parquet']" (see _files_sql_literal), not a bare
+    glob pattern — it must be interpolated as-is, with no surrounding
+    quotes, or DuckDB parses the whole bracketed literal as one string.
     """
     row = con.execute(
         f"""
         SELECT emb_local, emb_medium, emb_broad
-        FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+        FROM read_parquet({files_sql}, hive_partitioning=true, union_by_name=true)
         WHERE emb_local IS NOT NULL
            OR emb_medium IS NOT NULL
            OR emb_broad IS NOT NULL
@@ -353,9 +358,7 @@ class ParquetObservationWriter:
             ("pub_year", pub_year),
         ):
             if len(arr) != n:
-                raise ValueError(
-                    f"{name} length {len(arr)} != event_id length {n}"
-                )
+                raise ValueError( f"{name} length {len(arr)} != event_id length {n}" )
 
         # Each scale's (emb_<scale>, <scale>_window_id,
         # <scale>_window_token_pos) is an all-or-nothing group. A run that
@@ -388,25 +391,21 @@ class ParquetObservationWriter:
             wpos = np.asarray(wpos, dtype=np.int32)
 
             if emb.shape != (n, self.dim):
-                raise ValueError(
-                    f"emb_{scale} shape {emb.shape} != ({n}, {self.dim})"
-                )
+                raise ValueError( f"emb_{scale} shape {emb.shape} != ({n}, {self.dim})" )
+
             if len(wid) != n:
-                raise ValueError(
-                    f"{scale}_window_id length {len(wid)} != {n}"
-                )
+                raise ValueError( f"{scale}_window_id length {len(wid)} != {n}" )
+
             if len(wpos) != n:
-                raise ValueError(
-                    f"{scale}_window_token_pos length {len(wpos)} != {n}"
-                )
+                raise ValueError( f"{scale}_window_token_pos length {len(wpos)} != {n}" )
 
             present[scale] = (emb, wid, wpos)
 
         if not present:
             raise ValueError(
                 "append_events requires at least one scale's "
-                "(emb_<scale>, <scale>_window_id, <scale>_window_token_pos) "
-                "group; got none"
+                "(emb_<scale>, <scale>_window_id, <scale>_window_token_pos) group; "
+                "got none"
             )
 
         years = np.unique(pub_year)
@@ -495,10 +494,7 @@ class ParquetObservationWriter:
         n = len(event_id)
 
         def emb_col(mat: np.ndarray) -> pa.Array:
-            flat = pa.array(
-                mat.reshape(-1),
-                type=pa.float32(),
-            )
+            flat = pa.array( mat.reshape(-1), type=pa.float32() )
             return pa.FixedSizeListArray.from_arrays(
                 flat,
                 self.dim,

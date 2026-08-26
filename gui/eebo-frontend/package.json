@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:meta": "bun build ./src/index.ts --outdir ./dist --metafile-md=./dist/meta.md",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+tier3/tier3_0_project_cluster.py
+"""
 
 from __future__ import annotations
 
@@ -21,27 +24,16 @@ from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     EVENTSTORE_T1_PATH,
 )
-from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.sqlite_vector_blob import vector_to_blob
-from lib.zarr_event_lookup import ZarrEventLookup
-
-from tier2.persistence import (
-    dump_pg_stage_to_sqlite,
-    list_stage_concepts_pg,
-    load_event_rows_pg,
-    write_cluster_info_pg,
-    write_geometry_pg,
-)
+from tier1.observation_store_api import open_observation_lookup
 
 YEAR_BUCKET = 10
 
 
 def sqlite_connection(path: Path):
     con = sqlite3.connect(path)
-    con.execute(
-        "PRAGMA busy_timeout=5000"
-    )
+    con.execute("PRAGMA busy_timeout=5000")
     return con
 
 
@@ -116,17 +108,13 @@ def write_cluster_info_sqlite(
             for x in clusters
         )
     ):
-        mask = (
-            clusters == cluster_id
-        )
+        mask = clusters == cluster_id
 
         if not np.any(mask):
             continue
 
-        centroid_vector = (
-            cluster_centroid_vectors.get(
-                cluster_id
-            )
+        centroid_vector = cluster_centroid_vectors.get(
+            cluster_id
         )
 
         if centroid_vector is None:
@@ -141,33 +129,11 @@ def write_cluster_info_sqlite(
                     if cluster_id == -1
                     else None
                 ),
-                float(
-                    local_coords[
-                        mask,
-                        0,
-                    ].mean()
-                ),
-                float(
-                    local_coords[
-                        mask,
-                        1,
-                    ].mean()
-                ),
-                float(
-                    global_coords[
-                        mask,
-                        0,
-                    ].mean()
-                ),
-                float(
-                    global_coords[
-                        mask,
-                        1,
-                    ].mean()
-                ),
-                vector_to_blob(
-                    centroid_vector
-                ),
+                float( local_coords[ mask, 0, ].mean() ),
+                float( local_coords[ mask, 1, ].mean() ),
+                float( global_coords[ mask, 0, ].mean() ),
+                float( global_coords[ mask, 1, ].mean() ),
+                vector_to_blob( centroid_vector ),
                 int(mask.sum()),
                 None,
             )
@@ -199,7 +165,7 @@ def cluster_concept(
     write_geometry,
     write_cluster_info,
     commit,
-    lookup: ZarrEventLookup,
+    lookup,
     concept: str,
     global_coords: dict[
         int,
@@ -208,19 +174,11 @@ def cluster_concept(
     resolution_parameter: float,
     n_neighbors: int,
 ) -> dict[str, object]:
-    logger.info(
-        f"[tier3] processing {concept}"
-    )
+    logger.info( f"[tier3] processing {concept}" )
 
-    rows = load_rows(
-        concept
-    )
-
+    rows = load_rows( concept )
     if not rows:
-        logger.warning(
-            f"[tier3] {concept}: no events"
-        )
-
+        logger.warning( f"[tier3] {concept}: no events" )
         return {
             "concept": concept,
             "status": "no-op",
@@ -239,9 +197,7 @@ def cluster_concept(
             and row[2] is not None
             else int(
                 lookup.pub_year[
-                    lookup.get_pos(
-                        int(row[0])
-                    )
+                    lookup.get_pos( int(row[0]) )
                 ]
             ) // YEAR_BUCKET
         )
@@ -255,10 +211,7 @@ def cluster_concept(
             "reason": "No events",
         }
 
-    logger.info(
-        f"[tier3] {concept}: "
-        f"field events={len(event_ids):,}"
-    )
+    logger.info( f"[tier3] {concept}: field events={len(event_ids):,}" )
 
     result = local_project_and_cluster(
         lookup,
@@ -278,13 +231,7 @@ def cluster_concept(
     fit_info = result["fit_info"]
 
     if fit_info["sampled"]:
-        logger.info(
-            f"[tier3] {concept}: sampled fit "
-            f"({fit_info['fit_n']:,}/"
-            f"{fit_info['n']:,} events, "
-            f"{fit_info['outlier_n']:,} "
-            f"guaranteed outliers)"
-        )
+        logger.info( f"[tier3] {concept}: sampled fit ({fit_info['fit_n']:,}/ {fit_info['n']:,} events, {fit_info['outlier_n']:,} guaranteed outliers)" )
 
     global_xy = np.asarray(
         [
@@ -294,20 +241,8 @@ def cluster_concept(
         dtype=np.float32,
     )
 
-    write_geometry(
-        event_ids,
-        local_coords,
-        global_xy,
-        clusters,
-    )
-
-    write_cluster_info(
-        concept,
-        cluster_centroid_vectors,
-        local_coords,
-        global_xy,
-        clusters,
-    )
+    write_geometry( event_ids, local_coords, global_xy, clusters, )
+    write_cluster_info( concept, cluster_centroid_vectors, local_coords, global_xy, clusters, )
 
     commit()
 
@@ -335,152 +270,26 @@ def cluster_concept(
 
 def build_tier3_resources(
     *,
-    use_pg: bool,
+    store_path=None,
     db_path=None,
 ):
     """
     Build shared Tier 3 resources.
 
-    Tier 3 obtains semantic vectors exclusively through the Tier 1
-    observation lookup.
+    Tier 1 Parquet is the source of truth for observation identity,
+    provenance, publication year, and embeddings.
 
-    The physical vector backend is intentionally hidden behind that
-    lookup. Tier 3 must not depend on FAISS, DiskANN, or any ANN index.
+    Tier 3 does not depend on Zarr, FAISS, DiskANN, or Postgres for
+    observation access.
+
+    SQLite remains the disposable Tier 3 result store because the
+    downstream schema and consumers still expect the existing events
+    and concept_cluster_info tables.
     """
-    lookup = ZarrEventLookup(
-        EVENTSTORE_T1_PATH
-    )
-
-    if use_pg:
-        pg = get_connection()
-
-        concepts = list_stage_concepts_pg(
-            pg
-        )
-
-        load_rows = (
-            lambda concept:
-            load_event_rows_pg(
-                pg,
-                concept,
-            )
-        )
-
-        all_field_event_ids = []
-        strata = []
-
-        for concept in concepts:
-            rows = load_event_rows_pg(
-                pg,
-                concept,
-            )
-
-            for row in rows:
-                event_id = int(
-                    row[0]
-                )
-
-                if (
-                    len(row) > 2
-                    and row[2] is not None
-                ):
-                    year = int(row[2])
-                else:
-                    year = int(
-                        lookup.pub_year[
-                            lookup.get_pos(
-                                event_id
-                            )
-                        ]
-                    )
-
-                all_field_event_ids.append(
-                    event_id
-                )
-
-                strata.append(
-                    (
-                        concept,
-                        year // YEAR_BUCKET,
-                    )
-                )
-
-        seen = {}
-
-        for event_id, stratum in zip(
-            all_field_event_ids,
-            strata,
-        ):
-            if event_id not in seen:
-                seen[event_id] = stratum
-
-        uniq_ids = list(
-            seen.keys()
-        )
-
-        uniq_strata = [
-            seen[event_id]
-            for event_id in uniq_ids
-        ]
-
-        global_coords = build_global_projection(
-            lookup,
-            uniq_ids,
-            strata=uniq_strata,
-        )
-
-        def write_geom(
-            event_ids,
-            local_coords,
-            global_coords,
-            clusters,
-        ):
-            write_geometry_pg(
-                pg,
-                event_ids,
-                local_coords,
-                global_coords,
-                clusters,
-            )
-
-        def write_cinfo(
-            concept,
-            cluster_centroid_vectors,
-            local_coords,
-            global_coords,
-            clusters,
-        ):
-            write_cluster_info_pg(
-                pg,
-                concept,
-                cluster_centroid_vectors,
-                local_coords,
-                global_coords,
-                clusters,
-                vector_to_blob,
-            )
-
-        return {
-            "backend": "pg",
-            "pg": pg,
-            "con": None,
-            "lookup": lookup,
-            "global_coords": global_coords,
-            "concepts": concepts,
-            "load_rows": load_rows,
-            "write_geometry": write_geom,
-            "write_cluster_info": write_cinfo,
-            "commit": pg.commit,
-        }
-
-    path = (
-        db_path
-        or CORPUS_TIER2_DB_PATH
-    )
-
-    con = sqlite_connection(
-        path
-    )
+    store_path = Path( store_path or EVENTSTORE_T1_PATH )
+    db_path    = Path( db_path or CORPUS_TIER2_DB_PATH )
+    lookup     = open_observation_lookup( store_path )
+    con        = sqlite_connection( db_path )
 
     concepts = [
         concept
@@ -492,9 +301,7 @@ def build_tier3_resources(
 
     present = {
         row[0]
-        for row in con.execute(
-            "SELECT concept FROM concepts"
-        )
+        for row in con.execute( "SELECT concept FROM concepts" )
     }
 
     concepts = [
@@ -503,37 +310,31 @@ def build_tier3_resources(
         if concept in present
     ] or sorted(present)
 
-    all_field_event_ids = []
-    strata = []
-
-    for concept in concepts:
-        rows = load_event_rows(
+    def load_rows_for_concept(
+        concept,
+    ):
+        return load_event_rows(
             con,
             concept,
         )
 
-        for row in rows:
-            event_id = int(
-                row[0]
-            )
+    all_field_event_ids = []
+    strata = []
 
-            if (
-                len(row) > 2
-                and row[2] is not None
-            ):
+    for concept in concepts:
+        rows = load_rows_for_concept( concept )
+
+        for row in rows:
+            event_id = int( row[0] )
+
+            if ( len(row) > 2 and row[2] is not None ):
                 year = int(row[2])
             else:
-                year = int(
-                    lookup.pub_year[
-                        lookup.get_pos(
-                            event_id
-                        )
-                    ]
-                )
+                year = int( lookup.pub_year[
+                    lookup.get_pos( event_id )
+                ] )
 
-            all_field_event_ids.append(
-                event_id
-            )
+            all_field_event_ids.append( event_id )
 
             strata.append(
                 (
@@ -560,26 +361,19 @@ def build_tier3_resources(
         for event_id in uniq_ids
     ]
 
-    global_coords = build_global_projection(
-        lookup,
-        uniq_ids,
-        strata=uniq_strata,
-    )
+    if not uniq_ids:
+        global_coords = {}
+
+    else:
+        global_coords = build_global_projection( lookup, uniq_ids, strata=uniq_strata, )
 
     return {
-        "backend": "sqlite",
-        "pg": None,
-        "con": con,
+        "backend": "parquet+lance",
         "lookup": lookup,
+        "con": con,
         "global_coords": global_coords,
         "concepts": concepts,
-        "load_rows": (
-            lambda concept:
-            load_event_rows(
-                con,
-                concept,
-            )
-        ),
+        "load_rows": load_rows_for_concept,
         "write_geometry": (
             lambda event_ids,
             local_coords,
@@ -621,35 +415,23 @@ def service(
 ) -> dict[str, object]:
     started = time.perf_counter()
 
-    logger.info(
-        f"[tier3-service] processing {concept}"
-    )
+    logger.info( f"[tier3-service] processing {concept}" )
 
     report = cluster_concept(
         load_rows=resources["load_rows"],
         write_geometry=resources["write_geometry"],
-        write_cluster_info=resources[
-            "write_cluster_info"
-        ],
+        write_cluster_info=resources[ "write_cluster_info" ],
         commit=resources["commit"],
         lookup=resources["lookup"],
         concept=concept,
-        global_coords=resources[
-            "global_coords"
-        ],
+        global_coords=resources[ "global_coords" ],
         resolution_parameter=resolution_parameter,
         n_neighbors=n_neighbors,
     )
 
-    elapsed = (
-        time.perf_counter()
-        - started
-    )
+    elapsed = ( time.perf_counter() - started )
 
-    logger.info(
-        f"[tier3-service] completed "
-        f"{concept} in {elapsed:.2f}s"
-    )
+    logger.info( f"[tier3-service] completed " f"{concept} in {elapsed:.2f}s" )
 
     return {
         **report,
@@ -673,20 +455,20 @@ def main():
     )
 
     parser.add_argument(
-        "--pg",
-        action="store_true",
+        "--store",
+        type=Path,
+        default=EVENTSTORE_T1_PATH,
         help=(
-            "Read/write Postgres tier2_stage "
-            "(leave stage alive from Tier 2)"
+            "Tier 1 Parquet observation-store root"
         ),
     )
 
     parser.add_argument(
-        "--publish-sqlite",
-        default=None,
+        "--db",
+        type=Path,
+        default=CORPUS_TIER2_DB_PATH,
         help=(
-            "After clustering, dump stage "
-            "to this SQLite path (PG mode only)"
+            "Tier 2 SQLite result database"
         ),
     )
 
@@ -715,7 +497,8 @@ def main():
     args = parser.parse_args()
 
     resources = build_tier3_resources(
-        use_pg=args.pg
+        store_path=args.store,
+        db_path=args.db,
     )
 
     try:
@@ -756,34 +539,22 @@ def main():
                 f"{result.get('concept')}"
             )
 
-        if (
-            args.pg
-            and args.publish_sqlite
-        ):
-            resources["commit"]()
-
-            dump_pg_stage_to_sqlite(
-                resources["pg"],
-                args.publish_sqlite,
-                clear=True,
-            )
-
-            logger.info(
-                "[tier3-main] published "
-                f"SQLite → {args.publish_sqlite}"
-            )
-
     finally:
-        if resources.get("con") is not None:
-            resources["con"].close()
+        con = resources.get("con")
 
-        pg = resources.get("pg")
+        if con is not None:
+            con.close()
 
-        if (
-            pg is not None
-            and hasattr(pg, "close")
-        ):
-            pg.close()
+        lookup = resources.get("lookup")
+
+        lookup_con = getattr(
+            lookup,
+            "_con",
+            None,
+        )
+
+        if lookup_con is not None:
+            lookup_con.close()
 
     logger.info(
         "[tier3-main] Done."
@@ -792,4 +563,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

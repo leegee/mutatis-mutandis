@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "build:meta": "bun build ./src/index.ts --outdir ./dist --metafile-md=./dist/meta.md",
     "start": "node .output/server/index.mjs",
     "preview": "vite preview"
   },

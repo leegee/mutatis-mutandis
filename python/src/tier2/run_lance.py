@@ -12,7 +12,7 @@ import lancedb
 
 from lib.corpus_config import (
     CONCEPT_SETS,
-    CORPUS_TIER2_DB_URL,
+    CORPUS_TIER2_DB_PATH,
     EVENTSTORE_T1_PATH,
     LANCE_INDEXES_DIR,
 )
@@ -83,7 +83,7 @@ def run_lance_tier2(
     search_space: SearchSpace | None = None,
     store_path: str | Path = EVENTSTORE_T1_PATH,
     lance_root: str | Path = LANCE_INDEXES_DIR,
-    sqlite_path: str | Path = CORPUS_TIER2_DB_URL,
+    sqlite_path: str | Path = CORPUS_TIER2_DB_PATH,
     top_n: int = K,
     rrf_k: int = RRF_K,
     oversample: int = OVERSAMPLE,
@@ -271,8 +271,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sqlite",
         type=Path,
-        default=CORPUS_TIER2_DB_URL,
-        help=f"Tier 2 SQLite database (default: {CORPUS_TIER2_DB_URL}).",
+        default=CORPUS_TIER2_DB_PATH,
+        help=f"Tier 2 SQLite database (default: {CORPUS_TIER2_DB_PATH}).",
     )
 
     parser.add_argument(
