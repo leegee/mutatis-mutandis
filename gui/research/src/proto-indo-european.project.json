@@ -1,0 +1,904 @@
+{
+  "version": 1,
+  "metadata": {
+    "title": "Research Map",
+    "description": "",
+    "createdAt": "2026-08-20T00:00:00Z",
+    "updatedAt": "2026-08-22T11:29:56.561Z"
+  },
+  "entities": [
+    {
+      "id": "01ebfa21-8671-4f41-8653-b3e634bfa167",
+      "label": "hwīt (Old Frisian)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.392Z",
+      "updatedAt": "2026-08-22T11:36:52.392Z"
+    },
+    {
+      "id": "0475ebce-c6ab-4115-b091-68227ba97b71",
+      "label": "bán (Manx)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.421Z",
+      "updatedAt": "2026-08-22T11:36:52.421Z"
+    },
+    {
+      "id": "118b655c-9e4a-4699-a46b-595d77cba664",
+      "label": "hwīt (Old English)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.389Z",
+      "updatedAt": "2026-08-22T11:36:52.389Z"
+    },
+    {
+      "id": "1279d65d-5cb0-4577-9005-991379d2974b",
+      "label": "hvit (Old Danish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.410Z",
+      "updatedAt": "2026-08-22T11:36:52.410Z"
+    },
+    {
+      "id": "13c671dd-7c15-4030-bac7-93ea7e47dbe5",
+      "label": "fionn (Irish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:38:40.449Z",
+      "updatedAt": "2026-08-22T11:38:40.449Z"
+    },
+    {
+      "id": "161b9351-1dfc-4ef7-b573-81094b19816d",
+      "label": "*ḱweytós / *ḱweyt- (PIE)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.411Z",
+      "updatedAt": "2026-08-22T11:36:52.411Z"
+    },
+    {
+      "id": "16520363-4710-4de8-b202-f0075b620cea",
+      "label": "white (English)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.390Z",
+      "updatedAt": "2026-08-22T11:36:52.390Z"
+    },
+    {
+      "id": "1adc3363-c978-4273-af7e-5bf1044b7cb4",
+      "label": "*bān (Old Irish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.420Z",
+      "updatedAt": "2026-08-22T11:36:52.420Z"
+    },
+    {
+      "id": "1b41d28c-aa16-4076-8434-2fbcd7abefb9",
+      "label": "wäiss (Luxembourgish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.403Z",
+      "updatedAt": "2026-08-22T11:36:52.403Z"
+    },
+    {
+      "id": "2096c2c2-31ad-40cc-9637-3d75f0ea8202",
+      "label": "wit (Middle Dutch)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.395Z",
+      "updatedAt": "2026-08-22T11:36:52.395Z"
+    },
+    {
+      "id": "263d7fb4-4543-44cb-aa97-a744e8806c74",
+      "label": "hvítur (Faroese)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.407Z",
+      "updatedAt": "2026-08-22T11:36:52.407Z"
+    },
+    {
+      "id": "2667b245-4039-4ff9-a354-513d896b91b3",
+      "label": "spaēta- (Avestan)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.413Z",
+      "updatedAt": "2026-08-22T11:36:52.413Z"
+    },
+    {
+      "id": "27dfb793-a4e9-44e4-8063-e7839d03336f",
+      "label": "*ćwaytás (Proto-Indo-Iranian)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.412Z",
+      "updatedAt": "2026-08-22T11:36:52.412Z"
+    },
+    {
+      "id": "2a266d65-6e26-4457-9f06-e2031fcc19e7",
+      "label": "wit (Flemish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.396Z",
+      "updatedAt": "2026-08-22T11:36:52.396Z"
+    },
+    {
+      "id": "2efd5e36-d024-4d0e-8468-0f489f5da913",
+      "label": "wyt (West Frisian)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.393Z",
+      "updatedAt": "2026-08-22T11:36:52.393Z"
+    },
+    {
+      "id": "2f2df6a2-52fc-4845-9e7d-d3e96f3e05a0",
+      "label": "*bandos / *wando- (Proto-Celtic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.422Z",
+      "updatedAt": "2026-08-22T11:36:52.422Z"
+    },
+    {
+      "id": "3115204f-be14-4561-aa65-59cb056db445",
+      "label": "*banos (Proto-Celtic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:38:40.452Z",
+      "updatedAt": "2026-08-22T11:38:40.452Z"
+    },
+    {
+      "id": "3160b362-ce0f-47e1-9415-70ca396a06da",
+      "label": "wīz (Middle High German)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.398Z",
+      "updatedAt": "2026-08-26T13:42:21.428Z"
+    },
+    {
+      "id": "33a027d6-7f32-4c89-8a4b-08dac2da105d",
+      "label": "bán (Irish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.420Z",
+      "updatedAt": "2026-08-22T11:36:52.420Z"
+    },
+    {
+      "id": "3e82ba25-8866-41ea-9cc2-b118b2700f2e",
+      "label": "hvit (Norwegian Bokmål)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.408Z",
+      "updatedAt": "2026-08-22T11:36:52.408Z"
+    },
+    {
+      "id": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "label": "*hwītaz (Proto-Germanic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.388Z",
+      "updatedAt": "2026-08-22T11:36:52.388Z"
+    },
+    {
+      "id": "4231c655-4214-4155-a2a4-abec21d3c09d",
+      "label": "*weyd- (PIE see)",
+      "aliases": [],
+      "type": "concept",
+      "description": "# Semantic Evolution\n\nThe connection between *weyd- and the Proto-Celtic *windos (\"white\") relies on a specific semantic shift:\n\nOriginal Meaning: \"To see\" or \"to perceive.\"\nDerived Meaning: \"To be seen\" or \"visible.\"\nFinal Shift: \"Bright,\" \"shining,\" or \"white\" (that which is clearly seen). \nLinguists reconstruct *windos as potentially deriving from a nasal-infix form of this root (*windo-), suggesting a conceptual link where \"white\" is defined as \"that which is most visible\" or \"bright.\" \n\n-- https://en.wiktionary.org/wiki/Reconstruction:Proto-Celtic/windos\n\n-- https://en.wiktionary.org/wiki/Reconstruction:Proto-Indo-European/weyd-\n\nSynonym: dark? https://en.wiktionary.org/wiki/Reconstruction:Proto-Indo-European/der%E1%B8%B1-",
+      "tags": [],
+      "createdAt": "2026-08-26T11:49:45.957Z",
+      "updatedAt": "2026-08-26T11:54:51.174Z"
+    },
+    {
+      "id": "4541f23c-0781-445a-80c8-9d86aaf85d38",
+      "label": "whit/white (Middle English)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.391Z",
+      "updatedAt": "2026-08-22T11:36:52.391Z"
+    },
+    {
+      "id": "4ad33cde-f759-413e-8d23-e7b47623d724",
+      "label": "gwyn (Welsh)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.416Z",
+      "updatedAt": "2026-08-22T11:36:52.416Z"
+    },
+    {
+      "id": "4f66f239-1ea2-4665-8685-93c0d75fa2b1",
+      "label": "kvit (Norwegian Nynorsk)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.408Z",
+      "updatedAt": "2026-08-22T11:36:52.408Z"
+    },
+    {
+      "id": "61ae1e85-39ee-48c9-a859-0a29bb07d110",
+      "label": "šviesti (Lithuanian)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.414Z",
+      "updatedAt": "2026-08-22T11:36:52.414Z"
+    },
+    {
+      "id": "61d4f8ad-1057-4a3d-b3e2-3e23ca9ad32d",
+      "label": "hvid (Danish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.411Z",
+      "updatedAt": "2026-08-22T11:36:52.411Z"
+    },
+    {
+      "id": "64ea56d8-2ce6-4514-97d9-5b769c62f6e8",
+      "label": "find (Old Irish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:38:40.449Z",
+      "updatedAt": "2026-08-22T11:38:40.449Z"
+    },
+    {
+      "id": "6f75493f-1669-4029-b74c-9a2d79bae31a",
+      "label": "bàn (Scottish Gaelic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.421Z",
+      "updatedAt": "2026-08-22T11:36:52.421Z"
+    },
+    {
+      "id": "76fbfb0a-31b7-4ffa-ba0a-f831d4a5e039",
+      "label": "ƕeits (Gothic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.387Z",
+      "updatedAt": "2026-08-22T11:36:52.387Z"
+    },
+    {
+      "id": "8354c850-e7f9-4d92-b141-f95187cf6106",
+      "label": "hwīt (Old Saxon)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.394Z",
+      "updatedAt": "2026-08-22T11:36:52.394Z"
+    },
+    {
+      "id": "83eed147-4dd2-4eff-a423-e4d7d79c4f64",
+      "label": "śvetá- (Sanskrit)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.412Z",
+      "updatedAt": "2026-08-22T11:36:52.412Z"
+    },
+    {
+      "id": "8a1d9ab1-03d2-455e-92bc-6f3403a41a47",
+      "label": "bane (Manx)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:38:40.451Z",
+      "updatedAt": "2026-08-22T11:38:40.451Z"
+    },
+    {
+      "id": "92109791-5952-4e8d-bad4-6c369d087124",
+      "label": "wīt (Old Dutch)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.394Z",
+      "updatedAt": "2026-08-22T11:36:52.394Z"
+    },
+    {
+      "id": "ab646ec1-ddf1-49ba-aebc-57a9924d2854",
+      "label": "*gwɨnn (Proto-Brittonic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:38:40.446Z",
+      "updatedAt": "2026-08-22T11:38:40.446Z"
+    },
+    {
+      "id": "adf4214f-ddd4-45ad-b920-f0ff08ec96ac",
+      "label": "*windos (Proto-Celtic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:38:40.448Z",
+      "updatedAt": "2026-08-22T11:38:40.448Z"
+    },
+    {
+      "id": "ae4c7b46-76d3-49d1-806d-f38a15f7f2f3",
+      "label": "světъ (Old Church Slavonic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.415Z",
+      "updatedAt": "2026-08-22T11:36:52.415Z"
+    },
+    {
+      "id": "aeaab47d-0eae-44ac-9109-02d177db2220",
+      "label": "vit (Swedish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.410Z",
+      "updatedAt": "2026-08-22T11:36:52.410Z"
+    },
+    {
+      "id": "b23e2d31-7c11-45d3-ab2d-685f61dec22e",
+      "label": "*śweit- (Proto-Balto-Slavic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.414Z",
+      "updatedAt": "2026-08-22T11:36:52.414Z"
+    },
+    {
+      "id": "b2db0db1-0c21-484e-b1cf-0ed4acafecb5",
+      "label": "*derḱ-",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-26T11:55:46.664Z",
+      "updatedAt": "2026-08-26T11:55:46.664Z"
+    },
+    {
+      "id": "b459d994-d5af-4de2-9033-500aee334035",
+      "label": "hvítur (Icelandic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.406Z",
+      "updatedAt": "2026-08-22T11:36:52.406Z"
+    },
+    {
+      "id": "baa729e3-0e12-4900-9b61-b4d4ee9bfb67",
+      "label": "weiß (German)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.399Z",
+      "updatedAt": "2026-08-22T11:36:52.399Z"
+    },
+    {
+      "id": "c475e19a-f72f-4e06-ba44-f9d93de4ed96",
+      "label": "wit (Afrikaans)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.397Z",
+      "updatedAt": "2026-08-22T11:36:52.397Z"
+    },
+    {
+      "id": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "label": "hvítr (Old Norse)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.405Z",
+      "updatedAt": "2026-08-22T11:36:52.405Z"
+    },
+    {
+      "id": "ca657c53-6db2-4b62-ad92-be417bbb7cdf",
+      "label": "ווײַס / vaýs (Yiddish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.404Z",
+      "updatedAt": "2026-08-22T11:36:52.404Z"
+    },
+    {
+      "id": "cac60826-a6f8-4112-a90d-6e71e6b7595b",
+      "label": "bán (Old Irish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:38:40.450Z",
+      "updatedAt": "2026-08-22T11:38:40.450Z"
+    },
+    {
+      "id": "d7292586-b367-424a-8c0b-dddb003401fd",
+      "label": "*windos (Proto-Brittonic)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.416Z",
+      "updatedAt": "2026-08-22T11:36:52.416Z"
+    },
+    {
+      "id": "e88fe6c9-fe50-462f-9a6c-ac2676300a8f",
+      "label": "hvit (Old Swedish)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.409Z",
+      "updatedAt": "2026-08-22T11:36:52.409Z"
+    },
+    {
+      "id": "e9a91e54-1653-4959-a467-d3eb78380a87",
+      "label": "wiss (Swiss German)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.402Z",
+      "updatedAt": "2026-08-22T11:36:52.402Z"
+    },
+    {
+      "id": "ef686461-6a09-44e4-996b-51428c285588",
+      "label": "wit (Dutch)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.395Z",
+      "updatedAt": "2026-08-22T11:36:52.395Z"
+    },
+    {
+      "id": "f02fb451-21b1-46cd-8e05-35064f7adb33",
+      "label": "hwīz (Old High German)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.398Z",
+      "updatedAt": "2026-08-22T11:36:52.398Z"
+    },
+    {
+      "id": "fd56a710-75ad-47a6-9b54-d9f52031354d",
+      "label": "white (Scots)",
+      "aliases": [],
+      "type": "concept",
+      "description": "",
+      "tags": [],
+      "createdAt": "2026-08-22T11:36:52.391Z",
+      "updatedAt": "2026-08-22T11:36:52.391Z"
+    }
+  ],
+  "relations": [
+    {
+      "id": "01900f9c-cae9-4317-9746-9fbac9de95fc",
+      "sourceId": "4541f23c-0781-445a-80c8-9d86aaf85d38",
+      "type": "derived-from",
+      "targetId": "118b655c-9e4a-4699-a46b-595d77cba664",
+      "createdAt": "2026-08-22T11:36:52.391Z"
+    },
+    {
+      "id": "03f3fac8-7c93-442a-96c5-4fae86e06309",
+      "sourceId": "33a027d6-7f32-4c89-8a4b-08dac2da105d",
+      "type": "derived-from",
+      "targetId": "cac60826-a6f8-4112-a90d-6e71e6b7595b",
+      "createdAt": "2026-08-22T11:38:40.451Z"
+    },
+    {
+      "id": "04c3a3f8-d42f-4b72-808e-3fd696f9cc7c",
+      "sourceId": "61d4f8ad-1057-4a3d-b3e2-3e23ca9ad32d",
+      "type": "derived-from",
+      "targetId": "1279d65d-5cb0-4577-9005-991379d2974b",
+      "createdAt": "2026-08-22T11:36:52.411Z"
+    },
+    {
+      "id": "0598be64-ef14-4f4b-8126-c0932a68703a",
+      "sourceId": "ef686461-6a09-44e4-996b-51428c285588",
+      "type": "derived-from",
+      "targetId": "2096c2c2-31ad-40cc-9637-3d75f0ea8202",
+      "createdAt": "2026-08-22T11:36:52.396Z"
+    },
+    {
+      "id": "05d888aa-203e-4a88-98c4-27db85d4a498",
+      "sourceId": "4f66f239-1ea2-4665-8685-93c0d75fa2b1",
+      "type": "derived-from",
+      "targetId": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "createdAt": "2026-08-22T11:36:52.409Z"
+    },
+    {
+      "id": "07241ddc-0e02-45e9-802d-6aba9d3bfb42",
+      "sourceId": "b459d994-d5af-4de2-9033-500aee334035",
+      "type": "derived-from",
+      "targetId": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "createdAt": "2026-08-22T11:36:52.406Z"
+    },
+    {
+      "id": "082d2d73-5af5-4d1f-befb-cac7758d5dbe",
+      "sourceId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "type": "derived-from",
+      "targetId": "161b9351-1dfc-4ef7-b573-81094b19816d",
+      "createdAt": "2026-08-22T11:36:52.412Z"
+    },
+    {
+      "id": "0e34a393-4932-4236-a033-abbf1e00fb14",
+      "sourceId": "33a027d6-7f32-4c89-8a4b-08dac2da105d",
+      "type": "derived-from",
+      "targetId": "1adc3363-c978-4273-af7e-5bf1044b7cb4",
+      "createdAt": "2026-08-22T11:36:52.420Z"
+    },
+    {
+      "id": "0ee0c65f-a812-4d36-af91-7a9a9e0577fa",
+      "sourceId": "b2db0db1-0c21-484e-b1cf-0ed4acafecb5",
+      "type": "contrasts-with",
+      "targetId": "4231c655-4214-4155-a2a4-abec21d3c09d",
+      "createdAt": "2026-08-26T11:56:00.178Z"
+    },
+    {
+      "id": "148b1815-fcdd-4245-ac30-7f77ab1a7aab",
+      "sourceId": "3160b362-ce0f-47e1-9415-70ca396a06da",
+      "type": "derived-from",
+      "targetId": "f02fb451-21b1-46cd-8e05-35064f7adb33",
+      "createdAt": "2026-08-22T11:36:52.398Z"
+    },
+    {
+      "id": "1c4fa5b3-4df7-4740-a472-2a14c9d5929b",
+      "sourceId": "61ae1e85-39ee-48c9-a859-0a29bb07d110",
+      "type": "derived-from",
+      "targetId": "b23e2d31-7c11-45d3-ab2d-685f61dec22e",
+      "createdAt": "2026-08-22T11:36:52.415Z"
+    },
+    {
+      "id": "1ec99bfc-1395-479b-940e-63484468f544",
+      "sourceId": "e9a91e54-1653-4959-a467-d3eb78380a87",
+      "type": "derived-from",
+      "targetId": "3160b362-ce0f-47e1-9415-70ca396a06da",
+      "createdAt": "2026-08-22T11:36:52.403Z"
+    },
+    {
+      "id": "1eda68d3-7074-496f-97d0-8f279959ea90",
+      "sourceId": "f02fb451-21b1-46cd-8e05-35064f7adb33",
+      "type": "derived-from",
+      "targetId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "createdAt": "2026-08-22T11:36:52.398Z"
+    },
+    {
+      "id": "20d8d0f4-917d-4000-9394-6cbc056c568a",
+      "sourceId": "2096c2c2-31ad-40cc-9637-3d75f0ea8202",
+      "type": "derived-from",
+      "targetId": "92109791-5952-4e8d-bad4-6c369d087124",
+      "createdAt": "2026-08-22T11:36:52.395Z"
+    },
+    {
+      "id": "29de2482-e04c-4b7c-a1ec-e4bcc94ab617",
+      "sourceId": "92109791-5952-4e8d-bad4-6c369d087124",
+      "type": "derived-from",
+      "targetId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "createdAt": "2026-08-22T11:36:52.394Z"
+    },
+    {
+      "id": "364786b9-0b41-4538-b131-3951d2e3afb1",
+      "sourceId": "aeaab47d-0eae-44ac-9109-02d177db2220",
+      "type": "derived-from",
+      "targetId": "e88fe6c9-fe50-462f-9a6c-ac2676300a8f",
+      "createdAt": "2026-08-22T11:36:52.410Z"
+    },
+    {
+      "id": "36f0f2cd-0c6d-4927-abe6-e0777c7d3cd2",
+      "sourceId": "fd56a710-75ad-47a6-9b54-d9f52031354d",
+      "type": "derived-from",
+      "targetId": "4541f23c-0781-445a-80c8-9d86aaf85d38",
+      "createdAt": "2026-08-22T11:36:52.392Z"
+    },
+    {
+      "id": "3af94dcf-709e-4042-ba18-3d9e104e1b09",
+      "sourceId": "cac60826-a6f8-4112-a90d-6e71e6b7595b",
+      "type": "derived-from",
+      "targetId": "3115204f-be14-4561-aa65-59cb056db445",
+      "createdAt": "2026-08-22T11:38:40.453Z"
+    },
+    {
+      "id": "459d5afe-2c8b-49fa-a877-5ea0a8dbd55f",
+      "sourceId": "2efd5e36-d024-4d0e-8468-0f489f5da913",
+      "type": "derived-from",
+      "targetId": "01ebfa21-8671-4f41-8653-b3e634bfa167",
+      "createdAt": "2026-08-22T11:36:52.393Z"
+    },
+    {
+      "id": "49d6127a-caad-4c9d-8191-b2e791565c76",
+      "sourceId": "adf4214f-ddd4-45ad-b920-f0ff08ec96ac",
+      "type": "related-to",
+      "targetId": "4231c655-4214-4155-a2a4-abec21d3c09d",
+      "createdAt": "2026-08-26T11:50:05.114Z"
+    },
+    {
+      "id": "4f248b8f-6d19-4079-b126-b781fab6f34b",
+      "sourceId": "4ad33cde-f759-413e-8d23-e7b47623d724",
+      "type": "derived-from",
+      "targetId": "d7292586-b367-424a-8c0b-dddb003401fd",
+      "createdAt": "2026-08-22T11:36:52.418Z"
+    },
+    {
+      "id": "51ad8704-3d00-4819-93f1-21b55b2703fa",
+      "sourceId": "6f75493f-1669-4029-b74c-9a2d79bae31a",
+      "type": "derived-from",
+      "targetId": "cac60826-a6f8-4112-a90d-6e71e6b7595b",
+      "createdAt": "2026-08-22T11:38:40.451Z"
+    },
+    {
+      "id": "526e9812-f0c7-401f-a3ba-55a722423181",
+      "sourceId": "1279d65d-5cb0-4577-9005-991379d2974b",
+      "type": "derived-from",
+      "targetId": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "createdAt": "2026-08-22T11:36:52.410Z"
+    },
+    {
+      "id": "571325bc-2def-4f88-8960-d6aa7ed496ca",
+      "sourceId": "3e82ba25-8866-41ea-9cc2-b118b2700f2e",
+      "type": "derived-from",
+      "targetId": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "createdAt": "2026-08-22T11:36:52.408Z"
+    },
+    {
+      "id": "63555da1-00ca-40f7-be4c-f534d85b19bb",
+      "sourceId": "ca657c53-6db2-4b62-ad92-be417bbb7cdf",
+      "type": "derived-from",
+      "targetId": "3160b362-ce0f-47e1-9415-70ca396a06da",
+      "createdAt": "2026-08-22T11:36:52.405Z"
+    },
+    {
+      "id": "64296196-e22c-4a3d-9501-c124cc3cbb85",
+      "sourceId": "8354c850-e7f9-4d92-b141-f95187cf6106",
+      "type": "derived-from",
+      "targetId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "createdAt": "2026-08-22T11:36:52.394Z"
+    },
+    {
+      "id": "680c9ac9-740a-44d5-9119-f9360f2d7418",
+      "sourceId": "e88fe6c9-fe50-462f-9a6c-ac2676300a8f",
+      "type": "derived-from",
+      "targetId": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "createdAt": "2026-08-22T11:36:52.409Z"
+    },
+    {
+      "id": "6cbf899c-4890-4628-a562-99fd1e3b1e51",
+      "sourceId": "ab646ec1-ddf1-49ba-aebc-57a9924d2854",
+      "type": "derived-from",
+      "targetId": "adf4214f-ddd4-45ad-b920-f0ff08ec96ac",
+      "createdAt": "2026-08-22T11:38:40.448Z"
+    },
+    {
+      "id": "6fa6b2a4-bf5c-4d21-bf30-b12754fbce14",
+      "sourceId": "8a1d9ab1-03d2-455e-92bc-6f3403a41a47",
+      "type": "derived-from",
+      "targetId": "cac60826-a6f8-4112-a90d-6e71e6b7595b",
+      "createdAt": "2026-08-22T11:38:40.452Z"
+    },
+    {
+      "id": "756b42fd-8702-4f92-b73e-6acd364221dc",
+      "sourceId": "1b41d28c-aa16-4076-8434-2fbcd7abefb9",
+      "type": "derived-from",
+      "targetId": "3160b362-ce0f-47e1-9415-70ca396a06da",
+      "createdAt": "2026-08-22T11:36:52.404Z"
+    },
+    {
+      "id": "7b9f7c54-0c05-471a-ad51-47d8bbfff3e7",
+      "sourceId": "64ea56d8-2ce6-4514-97d9-5b769c62f6e8",
+      "type": "derived-from",
+      "targetId": "adf4214f-ddd4-45ad-b920-f0ff08ec96ac",
+      "createdAt": "2026-08-22T11:38:40.450Z"
+    },
+    {
+      "id": "847f0eff-bad0-4607-bceb-b557f8959311",
+      "sourceId": "16520363-4710-4de8-b202-f0075b620cea",
+      "type": "derived-from",
+      "targetId": "118b655c-9e4a-4699-a46b-595d77cba664",
+      "createdAt": "2026-08-22T11:36:52.390Z"
+    },
+    {
+      "id": "84a64c4a-8ef4-4412-acc1-8401349bf5c2",
+      "sourceId": "263d7fb4-4543-44cb-aa97-a744e8806c74",
+      "type": "derived-from",
+      "targetId": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "createdAt": "2026-08-22T11:36:52.407Z"
+    },
+    {
+      "id": "84b3b460-0734-4da9-a13d-da132d228161",
+      "sourceId": "0475ebce-c6ab-4115-b091-68227ba97b71",
+      "type": "derived-from",
+      "targetId": "1adc3363-c978-4273-af7e-5bf1044b7cb4",
+      "createdAt": "2026-08-22T11:36:52.421Z"
+    },
+    {
+      "id": "87f24181-6327-4ee5-bac6-b4108d662280",
+      "sourceId": "b23e2d31-7c11-45d3-ab2d-685f61dec22e",
+      "type": "derived-from",
+      "targetId": "161b9351-1dfc-4ef7-b573-81094b19816d",
+      "createdAt": "2026-08-22T11:36:52.415Z"
+    },
+    {
+      "id": "904fad47-13f0-4cff-b691-61da64a2b7c0",
+      "sourceId": "ae4c7b46-76d3-49d1-806d-f38a15f7f2f3",
+      "type": "derived-from",
+      "targetId": "b23e2d31-7c11-45d3-ab2d-685f61dec22e",
+      "createdAt": "2026-08-22T11:36:52.415Z"
+    },
+    {
+      "id": "9c268da3-d3d6-4e31-9a21-4e73ff6d2f6f",
+      "sourceId": "3115204f-be14-4561-aa65-59cb056db445",
+      "type": "related-to",
+      "targetId": "adf4214f-ddd4-45ad-b920-f0ff08ec96ac",
+      "createdAt": "2026-08-26T11:51:39.932Z"
+    },
+    {
+      "id": "9eb83eb0-8583-4a24-81ec-02657be153cd",
+      "sourceId": "1adc3363-c978-4273-af7e-5bf1044b7cb4",
+      "type": "derived-from",
+      "targetId": "2f2df6a2-52fc-4845-9e7d-d3e96f3e05a0",
+      "createdAt": "2026-08-22T11:36:52.422Z"
+    },
+    {
+      "id": "a9df1bb8-c8c1-4c84-bdf1-2a691da4041b",
+      "sourceId": "6f75493f-1669-4029-b74c-9a2d79bae31a",
+      "type": "derived-from",
+      "targetId": "1adc3363-c978-4273-af7e-5bf1044b7cb4",
+      "createdAt": "2026-08-22T11:36:52.422Z"
+    },
+    {
+      "id": "acf6ac86-e2e3-4d16-87d4-54f155349c9d",
+      "sourceId": "76fbfb0a-31b7-4ffa-ba0a-f831d4a5e039",
+      "type": "derived-from",
+      "targetId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "createdAt": "2026-08-22T11:36:52.388Z"
+    },
+    {
+      "id": "b1f2c385-af66-4e68-b757-a52ff95be15a",
+      "sourceId": "c8c1c6d6-5dff-4c03-bf56-044160edf87f",
+      "type": "derived-from",
+      "targetId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "createdAt": "2026-08-22T11:36:52.405Z"
+    },
+    {
+      "id": "b759b736-e89e-4ad8-8e71-fc8862d33263",
+      "sourceId": "2f2df6a2-52fc-4845-9e7d-d3e96f3e05a0",
+      "type": "related-to",
+      "targetId": "adf4214f-ddd4-45ad-b920-f0ff08ec96ac",
+      "createdAt": "2026-08-26T11:51:35.141Z"
+    },
+    {
+      "id": "ba27cc7a-1897-41f9-94c0-9e5858363c32",
+      "sourceId": "13c671dd-7c15-4030-bac7-93ea7e47dbe5",
+      "type": "derived-from",
+      "targetId": "64ea56d8-2ce6-4514-97d9-5b769c62f6e8",
+      "createdAt": "2026-08-22T11:38:40.450Z"
+    },
+    {
+      "id": "be04ef49-d5bb-4941-8940-4309ca736a9f",
+      "sourceId": "2667b245-4039-4ff9-a354-513d896b91b3",
+      "type": "derived-from",
+      "targetId": "27dfb793-a4e9-44e4-8063-e7839d03336f",
+      "createdAt": "2026-08-22T11:36:52.413Z"
+    },
+    {
+      "id": "d24313db-126a-43e0-a204-2a4b82689f1f",
+      "sourceId": "27dfb793-a4e9-44e4-8063-e7839d03336f",
+      "type": "derived-from",
+      "targetId": "161b9351-1dfc-4ef7-b573-81094b19816d",
+      "createdAt": "2026-08-22T11:36:52.414Z"
+    },
+    {
+      "id": "da721ca5-a5aa-4008-8ee0-d6ccb9432091",
+      "sourceId": "2a266d65-6e26-4457-9f06-e2031fcc19e7",
+      "type": "derived-from",
+      "targetId": "2096c2c2-31ad-40cc-9637-3d75f0ea8202",
+      "createdAt": "2026-08-22T11:36:52.397Z"
+    },
+    {
+      "id": "dafe37ce-fe58-436d-ae01-079d4937774f",
+      "sourceId": "baa729e3-0e12-4900-9b61-b4d4ee9bfb67",
+      "type": "derived-from",
+      "targetId": "3160b362-ce0f-47e1-9415-70ca396a06da",
+      "createdAt": "2026-08-22T11:36:52.402Z"
+    },
+    {
+      "id": "e20f9161-e885-4075-9a39-bbb9a2a46a85",
+      "sourceId": "d7292586-b367-424a-8c0b-dddb003401fd",
+      "type": "related-to",
+      "targetId": "adf4214f-ddd4-45ad-b920-f0ff08ec96ac",
+      "createdAt": "2026-08-26T11:31:50.286Z"
+    },
+    {
+      "id": "ed2d16a2-d4ca-4878-9651-fa51a0f27902",
+      "sourceId": "4ad33cde-f759-413e-8d23-e7b47623d724",
+      "type": "derived-from",
+      "targetId": "ab646ec1-ddf1-49ba-aebc-57a9924d2854",
+      "createdAt": "2026-08-22T11:38:40.447Z"
+    },
+    {
+      "id": "f492aa56-c347-4d7e-b63b-1e35f5454c1a",
+      "sourceId": "118b655c-9e4a-4699-a46b-595d77cba664",
+      "type": "derived-from",
+      "targetId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "createdAt": "2026-08-22T11:36:52.389Z"
+    },
+    {
+      "id": "f5b1c510-b8e6-4fa7-8660-552351c99e47",
+      "sourceId": "83eed147-4dd2-4eff-a423-e4d7d79c4f64",
+      "type": "derived-from",
+      "targetId": "27dfb793-a4e9-44e4-8063-e7839d03336f",
+      "createdAt": "2026-08-22T11:36:52.413Z"
+    },
+    {
+      "id": "f5d31846-5897-41d9-9ead-1c45a9d0dd5c",
+      "sourceId": "01ebfa21-8671-4f41-8653-b3e634bfa167",
+      "type": "derived-from",
+      "targetId": "415c8f70-7e66-4982-af45-33f6f27ebcf7",
+      "createdAt": "2026-08-22T11:36:52.392Z"
+    },
+    {
+      "id": "fa32a860-cd96-410c-be60-f41f04dbe121",
+      "sourceId": "c475e19a-f72f-4e06-ba44-f9d93de4ed96",
+      "type": "derived-from",
+      "targetId": "ef686461-6a09-44e4-996b-51428c285588",
+      "createdAt": "2026-08-22T11:36:52.397Z"
+    }
+  ]
+}

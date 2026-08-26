@@ -594,9 +594,15 @@ export default function GraphView(props: GraphViewProps) {
 				style="position: absolute; bottom: 1rem; right: 1rem"
 				title="Filter node types"
 			>
-				<i>filter_alt</i>
-				<span class="tooltip left">{filterOpen() ? "Close" : "Open"} node filter</span>
-			</button>
+				<Show when={filterOpen()}>
+					<i> arrow_drop_down</i>
+					<span class="tooltip left">Close visible node filter</span>
+				</Show>
+				<Show when={!filterOpen()}>
+					<i> filter_alt</i>
+					<span class="tooltip left">Open visible node filter</span>
+				</Show>
+			</button >
 
 			<Show when={filterOpen()}>
 				<div
@@ -610,17 +616,6 @@ export default function GraphView(props: GraphViewProps) {
 						"min-width": "10em",
 					}}
 				>
-					<nav class="right-align responsive no-padding bottom-margin">
-						<button type="button" class="round chip surface"
-							onclick={() => setFilterOpen(false)}
-						>
-							<span>
-								<span class="small-text medium-opacity small-margin right-margin">CLOSE</span>
-								<i class="border round no-margin">close</i></span>
-
-						</button>
-					</nav>
-
 					<For each={[...new Set(props.entities.map((e) => e.type))].sort()}>
 						{(type) => {
 							const count = () => props.entities.filter((e) => e.type === type).length;

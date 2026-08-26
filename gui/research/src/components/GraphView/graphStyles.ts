@@ -15,7 +15,7 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 				color: "#ffffff",
 				"border-width": 2,
 				"border-color": "#78909c",
-				"font-size": "12px",
+				"font-size": "14px",
 				"font-weight": 500,
 				"text-wrap": "wrap",
 				"text-max-width": "80px",
@@ -73,7 +73,7 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 				"text-background-opacity": 1,
 				"text-background-padding": "3px",
 
-				"font-size": "10px",
+				"font-size": "15px",
 				"font-weight": 500,
 			},
 		},
