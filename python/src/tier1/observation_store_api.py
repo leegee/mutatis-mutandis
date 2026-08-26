@@ -214,6 +214,14 @@ class ObservationLookup(Protocol):
         """Sorted unique publication years present in the lookup."""
         ...
 
+
+    def get_scale_embeddings(
+        self,
+        event_ids: Sequence[int],
+        scale: str,
+    ) -> np.ndarray:
+        ...
+
     def get_pos(self, event_id: int) -> int:
         """
         Map event_id to dense row position in loaded metadata.

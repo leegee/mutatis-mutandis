@@ -966,6 +966,15 @@ class ParquetObservationLookup:
             else:
                 bucket.append(eid)
 
+
+    def get_scale_embeddings(
+        self,
+        event_ids: Sequence[int],
+        scale: str,
+    ) -> np.ndarray:
+        return self._scale_for_ids( event_ids, scale, )
+
+
     # --- size / schema -----------------------------------------------------
 
     def __len__(self) -> int:
@@ -1231,6 +1240,7 @@ class ParquetObservationLookup:
             out = w * vec if out is None else out + w * vec
         return out.astype(np.float32)
 
+
     def get_embeddings(
         self,
         event_ids: Sequence[int],
@@ -1238,17 +1248,20 @@ class ParquetObservationLookup:
         scales: Sequence[str] = SCALES,
     ) -> np.ndarray:
         scales = _validate_scales(scales)
+
         if len(weights) != len(scales):
-            raise ValueError(
-                f"weights length {len(weights)} != scales length {len(scales)}"
-            )
+            raise ValueError( f"weights length {len(weights)} != scales length {len(scales)}" )
+
         out: Optional[np.ndarray] = None
+
         for w, s in zip(weights, scales):
             mat = self._scale_for_ids(event_ids, s)
             out = w * mat if out is None else out + w * mat
+
         if out is None:
             return np.empty((len(event_ids), self._ensure_dim()), dtype=np.float32)
         return out.astype(np.float32)
+
 
     def get_concatenated_embeddings(
         self,
