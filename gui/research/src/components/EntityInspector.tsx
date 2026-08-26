@@ -145,19 +145,19 @@ export default function EntityInspector(props: EntityInspectorProps) {
 						{/* NORMAL INSPECTOR VIEW */}
 						<header class="fixed surface top-padding" style="top:0">
 							<nav>
-								<div class="max">
-									<h2> {entity().label} </h2>
-									<span> {entity().type} </span>
-								</div>
-
 								<button
-									class="circle transparent"
+									class="circle transparent top-align"
 									type="button"
 									title="Close"
 									onClick={() => props.onClose?.(entity())}
 								>
-									<i>close</i>
+									<i>arrow_back</i>
 								</button>
+
+								<div class="max">
+									<h2> {entity().label} </h2>
+									<span> {entity().type} </span>
+								</div>
 							</nav>
 						</header>
 

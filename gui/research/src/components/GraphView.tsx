@@ -7,6 +7,7 @@ import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switc
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
+
 import { hueForType } from "./GraphView/clrs";
 import { graphStyles } from "./GraphView/graphStyles";
 import { useConfirm } from "./Modal/index";
@@ -608,7 +609,7 @@ export default function GraphView(props: GraphViewProps) {
 
 			<Show when={filterOpen()}>
 				<div
-					class="graph-filter-panel surface padding round elevate"
+					class="graph-filter-panel surface padding round elevate border small-round right-align"
 					onClick={(event) => event.stopPropagation()}
 					style={{
 						position: "absolute",
@@ -618,28 +619,37 @@ export default function GraphView(props: GraphViewProps) {
 						"min-width": "10em",
 					}}
 				>
+					<nav class="right-align responsive no-padding bottom-margin">
+						<button type="button" class="round chip surface"
+							onclick={() => setFilterOpen(false)}
+						>
+							<span>
+								<span class="small-text medium-opacity small-margin right-margin">CLOSE</span>
+								<i class="border round no-margin">close</i></span>
+
+						</button>
+					</nav>
+
 					<For each={[...new Set(props.entities.map((e) => e.type))].sort()}>
 						{(type) => {
 							const count = () => props.entities.filter((e) => e.type === type).length;
 							return (
-								<label
-									style={{
-										display: "flex",
-										"flex-direction": "row-reverse",
-										"align-items": "center",
-										gap: "0.5em",
-										padding: "0.25em 0",
-									}}
+								<label style={{
+									display: "flex",
+									"flex-direction": "row-reverse",
+									"align-items": "center",
+									gap: "0.5em",
+									padding: "0.25em 0",
+								}}
 								>
 									<input type="checkbox" checked={!hiddenTypes().has(type)} onChange={() => toggleType(type)} />
-									<span
-										style={{
-											display: "inline-block",
-											width: "1em",
-											height: "1em",
-											"border-radius": "50%",
-											"background-color": `hsl(${ hueForType(type) }, 94%, 52%)`,
-										}}
+									<span style={{
+										display: "inline-block",
+										width: "1em",
+										height: "1em",
+										"border-radius": "50%",
+										"background-color": `hsl(${ hueForType(type) }, 94%, 52%)`,
+									}}
 									/>
 									<span>
 										{type} ({count()})
