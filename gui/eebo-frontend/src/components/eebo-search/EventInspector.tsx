@@ -39,7 +39,7 @@ export default function EventInspector(props: Props) {
       if (!map.has(token)) {
         map.set(token, {
           maxSim: sim,
-          buckets: new Map()
+          buckets: new Map(),
         });
       }
 
@@ -56,7 +56,7 @@ export default function EventInspector(props: Props) {
       if (!b) {
         entry.buckets.set(bucketKey, {
           count: 1,
-          maxSim: sim
+          maxSim: sim,
         });
       } else {
         b.count += 1;
@@ -66,23 +66,25 @@ export default function EventInspector(props: Props) {
       }
     }
 
-    return Array.from(map.entries())
-      .map(([token, v]) => ({
-        token,
-        maxSimilarity: v.maxSim,
+    return (
+      Array.from(map.entries())
+        .map(([token, v]) => ({
+          token,
+          maxSimilarity: v.maxSim,
 
-        // 🔽 SORT BUCKETS by strongest similarity first
-        buckets: Array.from(v.buckets.entries())
-          .map(([range, b]) => ({
-            range,
-            count: b.count,
-            maxSim: b.maxSim
-          }))
-          .sort((a, b) => b.maxSim - a.maxSim)
-      }))
+          // 🔽 SORT BUCKETS by strongest similarity first
+          buckets: Array.from(v.buckets.entries())
+            .map(([range, b]) => ({
+              range,
+              count: b.count,
+              maxSim: b.maxSim,
+            }))
+            .sort((a, b) => b.maxSim - a.maxSim),
+        }))
 
-      // 🔽 SORT TOKENS by strongest similarity first
-      .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
+        // 🔽 SORT TOKENS by strongest similarity first
+        .sort((a, b) => b.maxSimilarity - a.maxSimilarity)
+    );
   };
 
   const event = () => props.event;
@@ -97,19 +99,24 @@ export default function EventInspector(props: Props) {
 
           <p>Concept set: {event()!.concept}</p>
           <p>Vector ID: {event()!.vector_id}</p>
-          <p>Document: <a target="_blank" href={`/xml/${ event()!.filepath }`}>{event()!.doc_id}</a></p>
+          <p>
+            Document:{" "}
+            <a target="_blank" href={`/xml/${ event()!.filepath }`} rel="noopener">
+              {event()!.doc_id}
+            </a>
+          </p>
 
           <h5>Neighbours</h5>
 
           <ul class="list no-space border">
-            {groupedNeighbours().map(group => (
+            {groupedNeighbours().map((group) => (
               <li>
                 <strong>
                   {group.token} ({group.maxSimilarity.toFixed(3)})
                 </strong>
 
                 <ul class="list no-space no-margin">
-                  {group.buckets.map(b => (
+                  {group.buckets.map((b) => (
                     <li>
                       {b.count} × {b.range}
                     </li>
