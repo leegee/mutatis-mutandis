@@ -53,7 +53,7 @@ export default function EntityAliases(props: EntityAliasesProps) {
 				onInput={setAliasInput}
 				onEnter={() => handleAddAlias(aliasInput())}
 				onSelect={handleAddAlias}
-				placeholder="Aliases"
+				placeholder="Aliases "
 				isTitle
 			/>
 

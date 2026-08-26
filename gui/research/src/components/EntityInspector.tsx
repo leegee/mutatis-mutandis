@@ -2,7 +2,6 @@ import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid
 import { deleteEntity } from "~/db/respository";
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
-import AutoComplete from "./AutoComplete";
 import EntityAliases from "./EntityAliases";
 import EntityForm from "./EntityForm";
 import EntityTags from "./EntityTags";
