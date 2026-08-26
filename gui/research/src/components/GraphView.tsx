@@ -7,6 +7,8 @@ import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switc
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
+import { hueForType } from "./GraphView/clrs";
+import { graphStyles } from "./GraphView/graphStyles";
 import { useConfirm } from "./Modal/index";
 
 cytoscape.use(cytoscapeElk);
@@ -33,26 +35,6 @@ type ContextMenu =
 const [contextMenu, setContextMenu] = createSignal<ContextMenu>();
 
 const [linkingFrom, setLinkingFrom] = createSignal<string>();
-
-const typeColors: Record<string, { hue: number }> = {
-	concept: { hue: 308 },
-	lexeme: { hue: 120 },
-	motif: { hue: 283 },
-	animal: { hue: 43 },
-	person: { hue: 23 },
-	evidence: { hue: 204 },
-	source: { hue: 244 },
-	quote: { hue: 220 },
-	group: { hue: 190 },
-};
-
-function hueForType(type: string): number {
-	if (typeColors[type]) return typeColors[type].hue;
-	// stable fallback hue for any type not explicitly styled
-	let hash = 0;
-	for (let i = 0; i < type.length; i++) hash = (hash * 31 + type.charCodeAt(i)) % 360;
-	return hash;
-}
 
 interface GraphViewProps {
 	entities: Entity[];
@@ -191,164 +173,7 @@ export default function GraphView(props: GraphViewProps) {
 		const instance = cytoscape({
 			container,
 			elements: buildElements(),
-			style: [
-				{
-					selector: "node",
-					style: {
-						label: "data(label)",
-						"text-valign": "center",
-						"text-halign": "center",
-						"background-color": "#37474f",
-						color: "#ffffff",
-						"border-width": 2,
-						"border-color": "#78909c",
-						"font-size": "12px",
-						"font-weight": 500,
-						"text-wrap": "wrap",
-						"text-max-width": "80px",
-						width: "data(size)",
-						height: "data(size)",
-					},
-				},
-
-				...Object.keys({ ...typeColors, ...Object.fromEntries(props.entities.map((e) => [e.type, true])) }).map(
-					(type) => ({
-						selector: `node[type = "${ type }"]`,
-						style: {
-							"background-color": `hsl(${ hueForType(type) }, 94%, 32%)`,
-							"border-color": `hsl(${ hueForType(type) }, 35%, 68%)`,
-						},
-					}),
-				),
-				{
-					selector: "node:selected",
-					style: {
-						"font-size": "48px",
-						"background-color": "#10063f",
-						"text-background-color": "#37474f",
-						"border-width": 3,
-						"border-color": "#ffffff33",
-						color: "#ffffffEE",
-						"text-max-width": "30em",
-						"overlay-color": "#26084d",
-						"overlay-opacity": 0.08,
-					},
-				},
-				{
-					selector: "node.hovered",
-					style: {
-						"font-size": 32,
-						"font-weight": 600,
-						"z-index": 999999,
-
-					},
-				},
-
-				{
-					selector: "edge",
-					style: {
-						width: 2,
-
-						"line-color": "#90a4ae",
-
-						"target-arrow-color": "#90a4ae",
-						"target-arrow-shape": "triangle",
-
-						"curve-style": "bezier",
-
-						label: "data(label)",
-
-						color: "#eeeeee",
-						"text-background-color": "#263238",
-						"text-background-opacity": 1,
-						"text-background-padding": "3px",
-
-						"font-size": "10px",
-						"font-weight": 500,
-					},
-				},
-
-				{
-					selector: "edge.selected-connected",
-					style: {
-						width: 4,
-						"line-color": "#ffffff",
-						"target-arrow-color": "#ffffff",
-						color: "#ffffff",
-						"text-background-color": "#37474f",
-					},
-				},
-
-				{
-					selector: "edge:selected",
-					style: {
-						width: 3,
-
-						"line-color": "#ffffff",
-						"target-arrow-color": "#ffffff",
-						color: "#ffffff",
-						"text-background-color": "#37474f",
-					},
-				},
-
-				{
-					selector: "node.link-source",
-					style: {
-						"border-width": 4,
-						"border-color": "#ffffff",
-						"overlay-color": "#ffffff",
-						"overlay-opacity": 0.15,
-					},
-				},
-
-				{
-					selector: "edge.hover-connected",
-					style: {
-						width: 4,
-						"line-color": "#ffffff",
-						"target-arrow-color": "#ffffff",
-						color: "#ffffff",
-						"text-background-color": "#37474f",
-					},
-				},
-				{
-					selector: "edge.hover-unconnected",
-					style: {
-						opacity: 0.8,
-					},
-				},
-
-				{
-					selector: "node.link-target",
-					style: {
-						"border-width": 3,
-						"border-color": "#ffffff",
-					},
-				},
-
-				{
-					selector: "node.filtered-out, edge.filtered-out",
-					style: {
-						display: "none",
-					},
-				},
-
-				{
-					selector: "node.search-dim",
-					style: {
-						opacity: 0.25,
-					},
-				},
-				{
-					selector: "node.search-match",
-					style: {
-						"border-width": 5,
-						"border-color": "#ffffff",
-						"background-color": "#10063f",
-						opacity: 1,
-					},
-				},
-			],
+			style: graphStyles(props.entities),
 
 			layout: LAYOUT_PARAMS,
 		});
@@ -461,7 +286,6 @@ export default function GraphView(props: GraphViewProps) {
 			instance.edges().removeClass("hover-connected hover-unconnected");
 		});
 
-
 		instance.on("mouseover", "edge", (event) => {
 			const edge = event.target;
 			edge.addClass("hovered");
@@ -537,14 +361,24 @@ export default function GraphView(props: GraphViewProps) {
 		if (!instance) return;
 
 		instance.nodes().removeClass("search-match search-dim");
+		instance.edges().removeClass("search-dim");
+
 		if (!term) return;
 
-		instance.nodes().forEach((node) => {
+		const matchingNodes = instance.nodes().filter((node) => {
 			const label = String(node.data("label") ?? "").toLocaleLowerCase();
-			if (label.includes(term)) {
-				node.addClass("search-match");
-			} else {
-				node.addClass("search-dim");
+			return label.includes(term);
+		});
+
+		matchingNodes.addClass("search-match");
+		instance.nodes().not(matchingNodes).addClass("search-dim");
+
+		instance.edges().forEach((edge) => {
+			const sourceMatches = matchingNodes.contains(edge.source());
+			const targetMatches = matchingNodes.contains(edge.target());
+
+			if (!sourceMatches && !targetMatches) {
+				edge.addClass("search-dim");
 			}
 		});
 	});
