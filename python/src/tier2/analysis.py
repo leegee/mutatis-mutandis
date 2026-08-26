@@ -19,27 +19,6 @@ _NO_WPOS = -1
 
 
 
-def search_one(query):
-    search = (
-        table
-        .search(query)
-        .nprobes(nprobes)
-    )
-
-    if where:
-        search = search.where(where)
-
-    return (
-        search
-        .limit(k)
-        .select([
-            "event_id",
-            "_distance",
-        ])
-        .to_list()
-    )
-
-
 def _chunks(seq, size):
     if size <= 0:
         raise ValueError("chunk size must be positive")
@@ -131,11 +110,17 @@ def _search_lance_table(
     year_end,
     k,
     nprobes,
+    executor,
 ):
     """
     Search one Lance scale table.
 
     Only event identity and distance cross the Lance/Python boundary.
+
+    `executor` is supplied by the caller (multiscale_search) and shared
+    across all scales/batches rather than recreated per call, since
+    spinning up a fresh ThreadPoolExecutor for every few-row batch adds
+    real overhead at BATCH_SIZE-sized granularity.
     """
     queries = np.asarray(
         queries,
@@ -152,14 +137,27 @@ def _search_lance_table(
         year_end=year_end,
     )
 
-    results = []
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(
-            executor.map(search_one, queries)
+    def search_one(query):
+        search = (
+            table
+            .search(query)
+            .nprobes(nprobes)
         )
 
-    return results
+        if where:
+            search = search.where(where)
+
+        return (
+            search
+            .limit(k)
+            .select([
+                "event_id",
+                "_distance",
+            ])
+            .to_list()
+        )
+
+    return list(executor.map(search_one, queries))
 
 
 def multiscale_search(
@@ -173,11 +171,18 @@ def multiscale_search(
     oversample=OVERSAMPLE,
     scales=SCALES,
     nprobes=20,
+    executor=None,
 ):
     """
     Search each scale using its corresponding scale-specific embeddings.
 
     RRF merges scale rankings by stable event_id.
+
+    `executor` lets a caller that runs multiscale_search many times (e.g.
+    once per batch in iter_concept_batches) supply one long-lived
+    ThreadPoolExecutor instead of paying setup/teardown cost per call. If
+    omitted, a temporary executor is created and shut down before return,
+    preserving the previous standalone behaviour.
     """
     if top_n <= 0:
         raise ValueError("top_n must be positive")
@@ -191,28 +196,37 @@ def multiscale_search(
     search_k = top_n * oversample
     results_by_scale = {}
 
-    for scale in scales:
-        table = indexes.get(scale)
+    owns_executor = executor is None
+    if owns_executor:
+        executor = ThreadPoolExecutor(max_workers=2)
 
-        if table is None:
-            raise RuntimeError( f"Missing Lance table for scale={scale}" )
+    try:
+        for scale in scales:
+            table = indexes.get(scale)
 
-        queries = np.asarray(
-            queries_by_scale[scale],
-            dtype=np.float32,
-        )
+            if table is None:
+                raise RuntimeError( f"Missing Lance table for scale={scale}" )
 
-        if queries.ndim != 2:
-            raise ValueError( f"queries for scale={scale} must be two-dimensional" )
+            queries = np.asarray(
+                queries_by_scale[scale],
+                dtype=np.float32,
+            )
 
-        results_by_scale[scale] = _search_lance_table(
-            table=table,
-            queries=queries,
-            year_start=year_start,
-            year_end=year_end,
-            k=search_k,
-            nprobes=nprobes,
-        )
+            if queries.ndim != 2:
+                raise ValueError( f"queries for scale={scale} must be two-dimensional" )
+
+            results_by_scale[scale] = _search_lance_table(
+                table=table,
+                queries=queries,
+                year_start=year_start,
+                year_end=year_end,
+                k=search_k,
+                nprobes=nprobes,
+                executor=executor,
+            )
+    finally:
+        if owns_executor:
+            executor.shutdown(wait=True)
 
     first_scale = scales[0]
     query_count = len(
@@ -444,38 +458,51 @@ def iter_concept_batches(
         for value in (false_positives or [])
     }
 
-    for seed_batch in _chunks(
-        seed_event_ids,
-        batch_size,
-    ):
-        queries_by_scale = {
-            scale: lookup.get_scale_embeddings(
-                seed_batch,
-                scale,
+    # Fetch every scale's embeddings for the whole seed set up front, one
+    # batched query per scale, instead of once per BATCH_SIZE-sized chunk
+    # (BATCH_SIZE defaults to 5). ParquetObservationLookup answers this
+    # with a single `event_id IN (...)` query per scale, so this turns
+    # len(seed_event_ids) / batch_size tiny fetches into 3 large ones.
+    embeddings_by_scale = {
+        scale: lookup.get_scale_embeddings(
+            seed_event_ids,
+            scale,
+        )
+        for scale in scales
+    }
+
+    # One executor shared across every batch/scale search below, instead
+    # of a fresh ThreadPoolExecutor per scale per batch.
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        for start in range(0, len(seed_event_ids), batch_size):
+            seed_batch = seed_event_ids[start:start + batch_size]
+            end = start + len(seed_batch)
+
+            queries_by_scale = {
+                scale: embeddings_by_scale[scale][start:end]
+                for scale in scales
+            }
+
+            neighbours = multiscale_search(
+                indexes=indexes,
+                queries_by_scale=queries_by_scale,
+                year_start=year_start,
+                year_end=year_end,
+                scales=scales,
+                top_n=top_n,
+                rrf_k=rrf_k,
+                oversample=oversample,
+                executor=executor,
             )
-            for scale in scales
-        }
 
-        neighbours = multiscale_search(
-            indexes=indexes,
-            queries_by_scale=queries_by_scale,
-            year_start=year_start,
-            year_end=year_end,
-            scales=scales,
-            top_n=top_n,
-            rrf_k=rrf_k,
-            oversample=oversample,
-        )
+            events = _build_batch_events(
+                seed_event_ids=seed_batch,
+                neighbours=neighbours,
+                lookup=lookup,
+                false_positives=false_positives,
+            )
 
-        events = _build_batch_events(
-            seed_event_ids=seed_batch,
-            neighbours=neighbours,
-            lookup=lookup,
-            false_positives=false_positives,
-        )
-
-        yield {
-            "type": "batch",
-            "events": events,
-        }
-
+            yield {
+                "type": "batch",
+                "events": events,
+            }
