@@ -198,7 +198,6 @@ export default function GraphView(props: GraphViewProps) {
 						label: "data(label)",
 						"text-valign": "center",
 						"text-halign": "center",
-
 						"background-color": "#37474f",
 						color: "#ffffff",
 						"border-width": 2,
@@ -207,7 +206,6 @@ export default function GraphView(props: GraphViewProps) {
 						"font-weight": 500,
 						"text-wrap": "wrap",
 						"text-max-width": "80px",
-
 						width: "data(size)",
 						height: "data(size)",
 					},
@@ -225,12 +223,24 @@ export default function GraphView(props: GraphViewProps) {
 				{
 					selector: "node:selected",
 					style: {
+						"font-size": "48px",
 						"background-color": "#10063f",
+						"text-background-color": "#37474f",
 						"border-width": 3,
-						"border-color": "#ffffff",
-						color: "#ffffff",
+						"border-color": "#ffffff33",
+						color: "#ffffffEE",
+						"text-max-width": "30em",
 						"overlay-color": "#26084d",
 						"overlay-opacity": 0.08,
+					},
+				},
+				{
+					selector: "node.hovered",
+					style: {
+						"font-size": 32,
+						"font-weight": 600,
+						"z-index": 999999,
+
 					},
 				},
 
@@ -255,6 +265,17 @@ export default function GraphView(props: GraphViewProps) {
 
 						"font-size": "10px",
 						"font-weight": 500,
+					},
+				},
+
+				{
+					selector: "edge.selected-connected",
+					style: {
+						width: 4,
+						"line-color": "#ffffff",
+						"target-arrow-color": "#ffffff",
+						color: "#ffffff",
+						"text-background-color": "#37474f",
 					},
 				},
 
@@ -370,6 +391,17 @@ export default function GraphView(props: GraphViewProps) {
 			}
 		});
 
+		instance.on("select", "node", (event) => {
+			const node = event.target;
+
+			instance.edges().removeClass("selected-connected");
+			node.connectedEdges().addClass("selected-connected");
+		});
+
+		instance.on("unselect", "node", () => {
+			instance.edges().removeClass("selected-connected");
+		});
+
 		instance.on("tap", "edge", (event) => {
 			const relationId = event.target.id();
 
@@ -411,13 +443,10 @@ export default function GraphView(props: GraphViewProps) {
 
 		instance.on("mouseover", "node", (event) => {
 			const node = event.target;
-			node.style({
-				"font-size": 32,
-				"font-weight": 400,
-				"z-index": 9999,
-			});
+			node.addClass("hovered");
 
 			instance.edges().removeClass("hover-connected hover-unconnected");
+
 			instance.edges().forEach((edge) => {
 				if (edge.source().id() === node.id() || edge.target().id() === node.id()) {
 					edge.addClass("hover-connected");
@@ -428,32 +457,20 @@ export default function GraphView(props: GraphViewProps) {
 		});
 
 		instance.on("mouseout", "node", (event) => {
-			const node = event.target;
-			node.style({
-				"font-size": 12,
-				"font-weight": 500,
-				"z-index": 0,
-			});
-
+			event.target.removeClass("hovered");
 			instance.edges().removeClass("hover-connected hover-unconnected");
 		});
 
+
 		instance.on("mouseover", "edge", (event) => {
 			const edge = event.target;
-			edge.style({
-				"font-size": 32,
-				"font-weight": 600,
-				"z-index": 999999,
-			});
+			edge.addClass("hovered");
+
+			instance.edges().not(edge).removeClass("hovered");
 		});
 
 		instance.on("mouseout", "edge", (event) => {
-			const edge = event.target;
-			edge.style({
-				"font-size": 10,
-				"font-weight": 500,
-				"z-index": 0,
-			});
+			event.target.removeClass("hovered");
 		});
 
 		setCy(instance);
