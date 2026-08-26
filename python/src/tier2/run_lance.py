@@ -41,9 +41,7 @@ def _open_lance_indexes(
         try:
             indexes[scale] = db.open_table(scale)
         except Exception as exc:
-            raise RuntimeError(
-                f"Could not open Lance table for scale={scale}: {lance_root}"
-            ) from exc
+            raise RuntimeError( f"Could not open Lance table for scale={scale}: {lance_root}" ) from exc
 
     return indexes
 
@@ -51,6 +49,7 @@ def _open_lance_indexes(
 def _resolve_search_scope(
     search_space: SearchSpace,
     lookup,
+    scales=SCALES,
 ) -> tuple[tuple[int, ...], tuple[str, ...], int | None, int | None]:
     available_years = {
         int(year)
@@ -62,18 +61,14 @@ def _resolve_search_scope(
     )
 
     scales = tuple(
-        search_space.resolve_scales(set(SCALES))
+        search_space.resolve_scales(set(scales))
     )
 
     if not scales:
-        raise ValueError(
-            "SearchSpace resolves to no available scales"
-        )
+        raise ValueError( "SearchSpace resolves to no available scales" )
 
     if not candidate_years:
-        logger.warning(
-            "[tier2] SearchSpace resolves to no searchable years"
-        )
+        logger.warning( "[tier2] SearchSpace resolves to no searchable years" )
 
     year_start = min(candidate_years) if candidate_years else None
     year_end = max(candidate_years) if candidate_years else None
@@ -147,6 +142,7 @@ def run_lance_tier2(
         ) = _resolve_search_scope(
             search_space,
             lookup,
+            scales
         )
 
     if indexes is None:
@@ -255,14 +251,21 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear the Tier 2 SQLite database before processing.",
+    )
+
+    parser.add_argument(
         "--concept",
         help="Run only this concept. Default: all CONCEPT_SETS entries.",
     )
 
     parser.add_argument(
-        "--clear",
-        action="store_true",
-        help="Clear the Tier 2 SQLite database before processing.",
+        "--scale",
+        choices=SCALES,
+        action="append",
+        help="Scale to build. May be supplied multiple times. Defaults to all scales.",
     )
 
     parser.add_argument(
@@ -318,6 +321,8 @@ def main() -> None:
     else:
         concept_names = list(CONCEPT_SETS)
 
+    scales = tuple(args.scale) if args.scale else SCALES
+
     search_space = SearchSpace(
         years=(
             args.from_year,
@@ -326,28 +331,12 @@ def main() -> None:
         scale=None,
     )
 
-    logger.info(
-        "[tier2] processing %d concept(s)",
-        len(concept_names),
-    )
-    logger.info(
-        "[tier2] SQLite output: %s",
-        args.sqlite,
-    )
+    logger.info( "[tier2] processing %d concept(s)", len(concept_names), )
+    logger.info( "[tier2] SQLite output: %s", args.sqlite, )
 
-    # These are immutable for the lifetime of this run. Reusing them avoids
-    # reopening the observation store and three Lance tables for every concept.
+    # These are immutable
     lookup = open_observation_lookup(args.store)
-
-    (
-        candidate_years,
-        scales,
-        year_start,
-        year_end,
-    ) = _resolve_search_scope(
-        search_space,
-        lookup,
-    )
+    ( candidate_years, scales, year_start, year_end ) = _resolve_search_scope( search_space, lookup, scales )
 
     logger.info(
         "[tier2] SearchSpace years=%s scales=%s",
