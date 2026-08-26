@@ -97,6 +97,30 @@ def _glob(root: Path) -> str:
     return str(root / "**" / "*.parquet")
 
 
+def _list_parquet_files(root: Path) -> list[str]:
+    """Walk the tree once and return a sorted list of part file paths."""
+    return sorted(str(p) for p in root.rglob("*.parquet"))
+
+
+def _files_sql_literal(files: Sequence[str]) -> str:
+    """
+    Render a pre-enumerated file list as a DuckDB array literal, e.g.
+    ['a.parquet','b.parquet'], so read_parquet() can be called against a
+    fixed list instead of re-walking the directory tree (a glob pattern
+    string) on every single query.
+    """
+    escaped = ",".join(
+        "'" + f.replace("'", "''") + "'" for f in files
+    )
+    return f"[{escaped}]"
+
+
+def _has_parquet(root: Path) -> bool:
+    if not root.exists():
+        return False
+    return any(root.rglob("*.parquet"))
+
+
 # ---------------------------------------------------------------------------
 # Parquet write tuning (Tier 1 is write-once, read-many)
 # ---------------------------------------------------------------------------
@@ -190,13 +214,6 @@ def _probe_dim(con: duckdb.DuckDBPyConnection, glob: str) -> int:
     return 0
 
 
-
-def _has_parquet(root: Path) -> bool:
-    if not root.exists():
-        return False
-    return any(root.rglob("*.parquet"))
-
-
 def _validate_scales(scales: Sequence[str]) -> tuple[str, ...]:
     """
     Normalise a requested scale sequence: check membership in SCALES,
@@ -247,6 +264,15 @@ class ParquetObservationWriter:
     (ParquetObservationLookup / ParquetObservationStream) raise a clear
     error if asked for a scale that turns out to be null for a given row,
     rather than silently returning zeros.
+
+    Note on file listing
+    ---------------------
+    Unlike the read-only Lookup/Stream classes, this writer's file list
+    is deliberately *not* cached: n_events/get_doc_keys/get_event_ids
+    must see part files written earlier in the same process (and by
+    other writers), so each call re-walks the directory. This is fine
+    since these are low-frequency, whole-store administrative queries,
+    not the per-batch embedding fetch path.
     """
 
     def __init__(
@@ -629,21 +655,26 @@ class ParquetObservationStream:
     Does not materialise the full corpus. year_filter is pushed into the
     SQL WHERE clause so unused year partitions are skipped when hive
     partitioning is present.
+
+    The part-file list is enumerated once at construction (see
+    ParquetObservationLookup for why) rather than re-globbed on every
+    query.
     """
 
     def __init__(self, root: str | Path, **_kwargs: Any):
         self.root = Path(root)
         self._con = _connect()
         self._dim: int | None = None
+        self._files = _list_parquet_files(self.root)
+        self._files_sql = _files_sql_literal(self._files) if self._files else None
 
     def _ensure_dim(self) -> int:
         if self._dim is not None:
             return self._dim
-        if not _has_parquet(self.root):
+        if not self._files_sql:
             self._dim = 0
             return 0
-        glob = _glob(self.root)
-        self._dim = _probe_dim(self._con, glob)
+        self._dim = _probe_dim(self._con, self._files_sql)
         return self._dim
 
     def iter_multi_scale_embeddings(
@@ -663,12 +694,11 @@ class ParquetObservationStream:
     ]:
         scales = _validate_scales(scales)
 
-        if not _has_parquet(self.root):
+        if not self._files_sql:
             return
             yield  # make this a generator  # noqa: unreachable
 
         dim = self._ensure_dim()
-        glob = _glob(self.root)
 
         where = ""
         params: list[Any] = []
@@ -685,7 +715,7 @@ class ParquetObservationStream:
         emb_cols = ", ".join(f"emb_{s}" for s in scales)
         sql = f"""
             SELECT {emb_cols}, event_id, pub_year
-            FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+            FROM read_parquet({self._files_sql}, hive_partitioning=true, union_by_name=true)
             {where}
         """
         # Use a fresh connection for the streaming cursor so concurrent
@@ -727,13 +757,12 @@ class ParquetObservationStream:
             con.close()
 
     def year_bounds(self) -> tuple[int, int]:
-        if not _has_parquet(self.root):
+        if not self._files_sql:
             raise RuntimeError("No parquet data found in store")
-        glob = _glob(self.root)
         row = self._con.execute(
             f"""
             SELECT min(pub_year), max(pub_year)
-            FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+            FROM read_parquet({self._files_sql}, hive_partitioning=true, union_by_name=true)
             """
         ).fetchone()
         if row is None or row[0] is None:
@@ -774,6 +803,19 @@ class ParquetObservationLookup:
        get_embeddings / get_concatenated_embeddings, via their `scales`
        argument) both route through the same per-scale fetch path, so
        a scale that was never requested is never read from Parquet.
+
+    File listing
+    ------------
+    A ParquetObservationLookup is opened once per run and is read-only
+    from the caller's point of view (Tier 1 writers are a separate
+    process). The part-file list is therefore enumerated exactly once,
+    at construction, and reused as a DuckDB array literal for every
+    query. Previously each embedding fetch re-passed a glob pattern
+    ('root/**/*.parquet') to read_parquet(), which forced DuckDB to
+    re-walk the whole hive-partitioned directory tree on every call —
+    including calls fetching only a handful of rows. That per-call
+    directory walk, multiplied across many small batches, dominated
+    Tier 2 runtime far more than the actual Parquet decode cost.
     """
 
     _META_SQL_COLS = (
@@ -804,6 +846,11 @@ class ParquetObservationLookup:
         self._con = _connect()
         self._index = None  # optional FAISS attach
         self._dim: int | None = None
+
+        # Enumerated once; see class docstring "File listing".
+        self._files = _list_parquet_files(self.root)
+        self._files_sql = _files_sql_literal(self._files) if self._files else None
+
         # Cache is keyed by scale, then event_id, so a caller that only
         # ever touches "local" never pays for medium/broad cache entries,
         # and clearing one scale's cache doesn't disturb the others.
@@ -849,10 +896,9 @@ class ParquetObservationLookup:
         for k, v in empty.items():
             setattr(self, k, v)
 
-        if not _has_parquet(self.root):
+        if not self._files_sql:
             return
 
-        glob = _glob(self.root)
         clauses: list[str] = []
         params: list[Any] = []
 
@@ -873,7 +919,7 @@ class ParquetObservationLookup:
         cols = ", ".join(self._META_SQL_COLS)
         sql = f"""
             SELECT {cols}
-            FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+            FROM read_parquet({self._files_sql}, hive_partitioning=true, union_by_name=true)
             {where}
         """
         rel = self._con.execute(sql, params)
@@ -965,15 +1011,6 @@ class ParquetObservationLookup:
                 self._pos_by_occurrence[key] = [eid]
             else:
                 bucket.append(eid)
-
-
-    def get_scale_embeddings(
-        self,
-        event_ids: Sequence[int],
-        scale: str,
-    ) -> np.ndarray:
-        return self._scale_for_ids( event_ids, scale, )
-
 
     # --- size / schema -----------------------------------------------------
 
@@ -1096,11 +1133,10 @@ class ParquetObservationLookup:
     def _ensure_dim(self) -> int:
         if self._dim is not None:
             return self._dim
-        if not _has_parquet(self.root):
+        if not self._files_sql:
             self._dim = 0
             return 0
-        glob = _glob(self.root)
-        self._dim = _probe_dim(self._con, glob)
+        self._dim = _probe_dim(self._con, self._files_sql)
         return self._dim
 
     def _fetch_scale_from_parquet(
@@ -1112,6 +1148,9 @@ class ParquetObservationLookup:
         Only the emb_{scale} column is named in the SELECT list — the
         other two scales' embedding data is never read from Parquet by
         this call. Uses an in-process cache keyed by (scale, event_id).
+
+        Reuses self._files_sql (enumerated once at construction) instead
+        of re-globbing the store on every call — see class docstring.
         """
         dim = self._ensure_dim()
         n = len(event_ids)
@@ -1130,12 +1169,11 @@ class ParquetObservationLookup:
                 missing_idx.append(i)
 
         if missing:
-            glob = _glob(self.root)
             placeholders = ",".join("?" for _ in missing)
             col = f"emb_{scale}"
             sql = f"""
                 SELECT event_id, {col}
-                FROM read_parquet('{glob}', hive_partitioning=true, union_by_name=true)
+                FROM read_parquet({self._files_sql}, hive_partitioning=true, union_by_name=true)
                 WHERE event_id IN ({placeholders})
             """
             rows = self._con.execute(sql, missing).fetchall()
