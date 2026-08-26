@@ -14,6 +14,9 @@ import AutoComplete from "./AutoComplete";
 import EntityForm from "./EntityForm";
 import { useConfirm } from "./Modal";
 
+
+const no_data_fallback_class = "bottom-padding no-margin center-align";
+
 interface EntityInspectorProps {
 	entity: Entity | undefined;
 	entities: Entity[];
@@ -179,7 +182,9 @@ export default function EntityInspector(props: EntityInspectorProps) {
 								isTitle
 							/>
 
-							<Show when={currentEntity().aliases.length > 0} fallback={<p>No aliases.</p>}>
+							<Show when={currentEntity().aliases.length > 0} fallback={
+								<p class={no_data_fallback_class}>No aliases.</p>
+							}>
 								<div class="row wrap tiny-space">
 									<For each={currentEntity().aliases}>
 										{(alias) => (
@@ -214,7 +219,9 @@ export default function EntityInspector(props: EntityInspectorProps) {
 								isTitle
 							/>
 
-							<Show when={currentEntity().tags.length > 0} fallback={<p>No tags.</p>}>
+							<Show when={currentEntity().tags.length > 0} fallback={
+								<p class={no_data_fallback_class}>No tags.</p>
+							}>
 								<div class="row wrap tiny-space">
 									<For each={currentEntity().tags}>
 										{(tag) => (
@@ -242,7 +249,9 @@ export default function EntityInspector(props: EntityInspectorProps) {
 
 							<Show
 								when={outgoing().length > 0 || incoming().length > 0}
-								fallback={<p>Right-click a node to estabish a relationship </p>}
+								fallback={
+									<p class={no_data_fallback_class}>Right-click a node to estabish a relationship </p>
+								}
 							>
 								<Show when={outgoing().length > 0}>
 									<h4>Outgoing</h4>
@@ -277,7 +286,6 @@ export default function EntityInspector(props: EntityInspectorProps) {
 						</section>
 
 						<nav class="footer">
-
 							<button type="button" class="error" onClick={handleDelete}>
 								Delete
 							</button>
