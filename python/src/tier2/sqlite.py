@@ -27,6 +27,14 @@ CREATE TABLE IF NOT EXISTS events (
     token_idx        INTEGER,
     window_id        INTEGER,
     window_token_pos INTEGER,
+
+    nx               REAL,
+    ny               REAL,
+    gnx              REAL,
+    gny              REAL,
+    cluster_id       INTEGER,
+    cluster_label    TEXT,
+
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
@@ -37,11 +45,21 @@ CREATE TABLE IF NOT EXISTS neighbours (
     token                TEXT,
     doc_id               TEXT,
     pub_year             INTEGER,
-    token_idx            INTEGER,
-    window_id            INTEGER,
+    token_idx             INTEGER,
+    window_id             INTEGER,
     window_token_pos     INTEGER,
     score                REAL,
+
     PRIMARY KEY (event_id, neighbour_event_id),
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+);
+
+CREATE TABLE IF NOT EXISTS concept_field_events (
+    concept  TEXT    NOT NULL,
+    event_id INTEGER NOT NULL,
+
+    PRIMARY KEY (concept, event_id),
+    FOREIGN KEY (concept) REFERENCES concepts(concept),
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
 
@@ -54,6 +72,23 @@ CREATE TABLE IF NOT EXISTS concept_aggregate (
     window_doc_id TEXT,
     window_id     INTEGER,
     count         INTEGER NOT NULL,
+
+    FOREIGN KEY (concept) REFERENCES concepts(concept)
+);
+
+CREATE TABLE IF NOT EXISTS concept_cluster_info (
+    concept          TEXT    NOT NULL,
+    cluster_id       INTEGER NOT NULL,
+    cluster_label    TEXT,
+    centroid_nx      REAL,
+    centroid_ny      REAL,
+    centroid_gnx     REAL,
+    centroid_gny     REAL,
+    centroid_vector  BLOB,
+    point_count      INTEGER NOT NULL,
+    description      TEXT,
+
+    PRIMARY KEY (concept, cluster_id),
     FOREIGN KEY (concept) REFERENCES concepts(concept)
 );
 
@@ -78,13 +113,20 @@ CREATE INDEX IF NOT EXISTS idx_neighbours_event_id
 CREATE INDEX IF NOT EXISTS idx_neighbours_token
     ON neighbours(token);
 
+CREATE INDEX IF NOT EXISTS idx_field_events_concept
+    ON concept_field_events(concept);
+
+CREATE INDEX IF NOT EXISTS idx_field_events_event
+    ON concept_field_events(event_id);
+
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept
     ON concept_aggregate(concept, kind);
 """
 
-
 _SCHEMA_CLEAR = """
+DROP TABLE IF EXISTS concept_cluster_info;
 DROP TABLE IF EXISTS concept_aggregate;
+DROP TABLE IF EXISTS concept_field_events;
 DROP TABLE IF EXISTS neighbours;
 DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS concepts;

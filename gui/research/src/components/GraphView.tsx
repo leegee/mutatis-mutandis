@@ -55,6 +55,8 @@ interface GraphViewProps {
 	onDeleteRelation?: (relation: Relation) => void;
 }
 
+const NODE_SCALE_FACTOR = () => 50;
+
 const LAYOUT_PARAMS = {
 	name: "elk",
 	animate: false,
@@ -84,7 +86,7 @@ const LAYOUT_PARAMS = {
 };
 
 function nodeSize(incoming: number): number {
-	return 46 + Math.sqrt(incoming) * 12;
+	return 46 + Math.sqrt(incoming) * NODE_SCALE_FACTOR();
 }
 
 export default function GraphView(props: GraphViewProps) {
@@ -175,7 +177,6 @@ export default function GraphView(props: GraphViewProps) {
 			container,
 			elements: buildElements(),
 			style: graphStyles(props.entities),
-
 			layout: LAYOUT_PARAMS,
 		});
 
@@ -219,7 +220,6 @@ export default function GraphView(props: GraphViewProps) {
 
 		instance.on("select", "node", (event) => {
 			const node = event.target;
-
 			instance.edges().removeClass("selected-connected");
 			node.connectedEdges().addClass("selected-connected");
 		});
@@ -230,9 +230,7 @@ export default function GraphView(props: GraphViewProps) {
 
 		instance.on("tap", "edge", (event) => {
 			const relationId = event.target.id();
-
 			const relation = props.relations.find((relation) => relation.id === relationId);
-
 			if (relation) {
 				props.onSelectRelation?.(relation);
 			}
@@ -245,23 +243,17 @@ export default function GraphView(props: GraphViewProps) {
 			if (sourceId) {
 				if (sourceId !== targetId) {
 					setLinkingFrom(undefined);
-
 					instance.nodes().removeClass("link-target");
-
 					instance.getElementById(sourceId).removeClass("link-source");
-
 					const target = props.entities.find((entity) => entity.id === targetId);
-
 					if (target) {
 						props.onAddRelation?.(sourceId, targetId);
 					}
 				}
-
 				return;
 			}
 
 			const entity = props.entities.find((item) => item.id === targetId);
-
 			if (entity) {
 				props.onSelectEntity?.(entity);
 			}
@@ -290,7 +282,6 @@ export default function GraphView(props: GraphViewProps) {
 		instance.on("mouseover", "edge", (event) => {
 			const edge = event.target;
 			edge.addClass("hovered");
-
 			instance.edges().not(edge).removeClass("hovered");
 		});
 

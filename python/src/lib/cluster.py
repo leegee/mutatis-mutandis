@@ -41,27 +41,45 @@ def load_event_rows(con, concept):
     """
     Load the empirical semantic field for a concept.
 
-    concept_field_events is the authoritative relation:
-        concept -> observed corpus events
+    The field is the union of:
 
-    Seed events anchor the field.
-    Neighbour events provide semantic context.
+      * seed events belonging directly to the concept;
+      * distinct semantic neighbours retrieved from those seeds.
 
-    An event may belong to multiple fields.
+    Tier 2 stores neighbour metadata directly because a neighbour is an
+    occurrence-level observation that may be reached from multiple seeds.
 
-    Returns rows of (event_id, vector_id, pub_year).
+    Returns rows of:
+
+        (event_id, vector_id, pub_year)
     """
     return con.execute(
         """
-        SELECT e.event_id, e.vector_id, e.pub_year
-        FROM concept_field_events f
-        JOIN events e ON e.event_id = f.event_id
-        WHERE f.concept = ?
-        ORDER BY e.event_id
-        """,
-        (concept,),
-    ).fetchall()
+        SELECT
+            event_id,
+            vector_id,
+            pub_year
+        FROM events
+        WHERE concept = ?
 
+        UNION
+
+        SELECT
+            n.neighbour_event_id AS event_id,
+            n.vector_id,
+            n.pub_year
+        FROM neighbours AS n
+        JOIN events AS e
+            ON e.event_id = n.event_id
+        WHERE e.concept = ?
+
+        ORDER BY event_id
+        """,
+        (
+            concept,
+            concept,
+        ),
+    ).fetchall()
 
 def load_vectors(lookup, event_rows):
     event_ids = [
@@ -1265,4 +1283,3 @@ def local_project_and_cluster(
             "sampled": True,
         },
     }
-    

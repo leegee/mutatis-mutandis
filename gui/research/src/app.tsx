@@ -4,8 +4,6 @@ import { FileRoutes } from "@solidjs/start/router";
 import { createSignal, Suspense } from "solid-js";
 
 import ModalHost from "./components/Modal/ModalHost";
-import ProjectExport from "./components/Project/ProjectExport";
-import ProjectImport from "./components/Project/ProjectImport";
 import RelationshipImportButton from "./components/RelationshipImport";
 
 import "beercss/dist/cdn/beer.min.css";

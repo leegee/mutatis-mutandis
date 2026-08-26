@@ -14,6 +14,13 @@ body.dark {
 	--on-error: rgb(221, 202, 202) !important;
 
 	--footer-border: rgba(197, 189, 212, 50%) !important;
+
+	--surface-container-lowest: hsl(271, 36%, 2%);
+	--surface-container-low: hsl(271, 56%, 4%);
+	--surface: hsl(271, 76%, 6%);
+	--surface-container: hsl(271, 76%, 6%);
+	--surface-container-high: hsl(271, 86%, 10%);
+	--surface-container-highest: hsl(271, 96%, 16%);
 }
 
 h1 {
