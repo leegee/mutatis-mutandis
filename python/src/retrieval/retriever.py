@@ -29,6 +29,7 @@ class ObservationRetriever(ABC):
         *,
         space: SearchSpace,
         k: int,
+        oversample: int,
     ) -> list[list[ObservationContext]]:
         """Search multiple queries and resolve each result set."""
         raise NotImplementedError

@@ -16,12 +16,11 @@ class LanceObservationIndexStore(ObservationIndexStore):
     """
     ObservationIndexStore backed by one LanceDB table per embedding scale.
 
-    Tier 1 supplies the authoritative searchable year domain. Lance supplies
-    the ANN geometry and query-time filtering.
+    The physical tables cover the whole corpus. SearchSpace restrictions are
+    therefore represented by the returned indexes rather than by selecting
+    physical index directories.
 
-    The physical Lance tables cover the whole corpus, so SearchSpace does not
-    select physical index directories; it determines the filters attached to
-    the returned ObservationIndex instances.
+    Tier 1 remains authoritative for the available year domain.
     """
 
     def __init__(
@@ -35,24 +34,16 @@ class LanceObservationIndexStore(ObservationIndexStore):
         model: str | None = None,
     ) -> None:
         self._lance_root = Path(lance_root)
-        self._available_years_set = {
+        self._available_years = {
             int(year)
             for year in available_years
         }
-        self._available_scales = tuple(available_scales)
+        self._available_scales = tuple(
+            available_scales
+        )
         self._dimensions = dimensions
         self._nprobes = nprobes
         self._model = model
-
-        if not self._available_scales:
-            raise ValueError(
-                "available_scales must not be empty"
-            )
-
-        if not self._available_years_set:
-            raise ValueError(
-                "available_years must not be empty"
-            )
 
         self._db = lancedb.connect(
             str(self._lance_root)
@@ -62,7 +53,9 @@ class LanceObservationIndexStore(ObservationIndexStore):
 
         for scale in self._available_scales:
             try:
-                self._tables[scale] = self._db.open_table(scale)
+                self._tables[scale] = (
+                    self._db.open_table(scale)
+                )
             except Exception as exc:
                 raise RuntimeError(
                     f"Could not open Lance table for scale={scale}: "
@@ -77,7 +70,7 @@ class LanceObservationIndexStore(ObservationIndexStore):
     def get(
         self,
         space: SearchSpace,
-    ) -> list[ObservationIndex]:
+    ) -> dict[str, ObservationIndex]:
         scales = tuple(
             space.resolve_scales(
                 set(self._available_scales)
@@ -91,15 +84,23 @@ class LanceObservationIndexStore(ObservationIndexStore):
 
         years = tuple(
             space.resolve_years(
-                self._available_years_set
+                self._available_years
             )
         )
 
-        year_start = min(years) if years else None
-        year_end = max(years) if years else None
+        year_start = (
+            min(years)
+            if years
+            else None
+        )
+        year_end = (
+            max(years)
+            if years
+            else None
+        )
 
-        return [
-            LanceObservationIndex(
+        return {
+            scale: LanceObservationIndex(
                 self._tables[scale],
                 dimensions=self._dimensions,
                 year_start=year_start,
@@ -108,4 +109,4 @@ class LanceObservationIndexStore(ObservationIndexStore):
                 nprobes=self._nprobes,
             )
             for scale in scales
-        ]
+        }

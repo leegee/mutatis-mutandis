@@ -78,6 +78,7 @@ class IndexedObservationRetriever(ObservationRetriever):
         *,
         space: SearchSpace,
         k: int,
+        oversample: int,
     ) -> list[list[ObservationContext]]:
         if k <= 0:
             raise ValueError("k must be positive")
@@ -94,6 +95,7 @@ class IndexedObservationRetriever(ObservationRetriever):
             index.batch_search(
                 queries,
                 k=k,
+                oversample=oversample,
             )
             for index in indexes
         ]

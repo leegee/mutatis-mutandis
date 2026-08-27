@@ -4,7 +4,6 @@ tier2/analysis.py
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from lib.corpus_logging import logger
@@ -13,18 +12,9 @@ from tier1.observation_store_api import SCALES
 K = 60
 RRF_K = 60
 OVERSAMPLE = 5
-BATCH_SIZE = 5
+BATCH_SIZE = 128
 
 _NO_WPOS = -1
-
-
-
-def _chunks(seq, size):
-    if size <= 0:
-        raise ValueError("chunk size must be positive")
-
-    for start in range(0, len(seq), size):
-        yield seq[start:start + size]
 
 
 def resolve_concept_positions(
@@ -55,7 +45,10 @@ def resolve_concept_positions(
         false_positives,
     )
 
-    event_ids = [int(event_id) for event_id in event_ids]
+    event_ids = [
+        int(event_id)
+        for event_id in event_ids
+    ]
 
     logger.info(
         "[tier2] %s: %d seed events",
@@ -66,9 +59,14 @@ def resolve_concept_positions(
     by_year = {}
 
     for event_id in event_ids:
-        metadata = lookup.get_event_metadata(event_id)
+        metadata = lookup.get_event_metadata(
+            event_id
+        )
         year = int(metadata["pub_year"])
-        by_year.setdefault(year, []).append(event_id)
+        by_year.setdefault(
+            year,
+            [],
+        ).append(event_id)
 
     return {
         "forms": forms,
@@ -79,156 +77,65 @@ def resolve_concept_positions(
     }
 
 
-def _lance_where(
-    *,
-    year_start,
-    year_end,
-    model=None,
-):
-    clauses = []
-
-    if year_start is not None:
-        clauses.append(f"year >= {int(year_start)}")
-
-    if year_end is not None:
-        clauses.append(f"year <= {int(year_end)}")
-
-    if model is not None:
-        escaped = model.replace("'", "''")
-        clauses.append(
-            f"embedding_model = '{escaped}'"
-        )
-
-    return " AND ".join(clauses) if clauses else None
-
-
-def _search_lance_table(
-    *,
-    table,
-    queries,
-    year_start,
-    year_end,
-    k,
-    nprobes,
-    executor,
-):
-    """
-    Search one Lance scale table.
-
-    Only event identity and distance cross the Lance/Python boundary.
-
-    `executor` is supplied by the caller (multiscale_search) and shared
-    across all scales/batches rather than recreated per call, since
-    spinning up a fresh ThreadPoolExecutor for every few-row batch adds
-    real overhead at BATCH_SIZE-sized granularity.
-    """
-    queries = np.asarray(
-        queries,
-        dtype=np.float32,
-    )
-
-    if queries.ndim != 2:
-        raise ValueError(
-            "queries must be two-dimensional"
-        )
-
-    where = _lance_where(
-        year_start=year_start,
-        year_end=year_end,
-    )
-
-    def search_one(query):
-        search = (
-            table
-            .search(query)
-            .nprobes(nprobes)
-        )
-
-        if where:
-            search = search.where(where)
-
-        return (
-            search
-            .limit(k)
-            .select([
-                "event_id",
-                "_distance",
-            ])
-            .to_list()
-        )
-
-    return list(executor.map(search_one, queries))
-
-
 def multiscale_search(
     *,
     indexes,
     queries_by_scale,
-    year_start,
-    year_end,
     top_n=K,
     rrf_k=RRF_K,
     oversample=OVERSAMPLE,
     scales=SCALES,
-    nprobes=20,
-    executor=None,
 ):
     """
-    Search each scale using its corresponding scale-specific embeddings.
+    Search each scale using its corresponding Tier 1 embedding.
+
+    Each value in `indexes` implements ObservationIndex. Backend-specific
+    filtering and nearest-neighbour behaviour therefore remain outside the
+    analysis layer.
 
     RRF merges scale rankings by stable event_id.
-
-    `executor` lets a caller that runs multiscale_search many times (e.g.
-    once per batch in iter_concept_batches) supply one long-lived
-    ThreadPoolExecutor instead of paying setup/teardown cost per call. If
-    omitted, a temporary executor is created and shut down before return,
-    preserving the previous standalone behaviour.
     """
     if top_n <= 0:
-        raise ValueError("top_n must be positive")
+        raise ValueError( "top_n must be positive" )
 
     if rrf_k <= 0:
-        raise ValueError("rrf_k must be positive")
+        raise ValueError( "rrf_k must be positive" )
 
     if oversample <= 0:
-        raise ValueError("oversample must be positive")
+        raise ValueError( "oversample must be positive" )
+
+    scales = tuple(scales)
+
+    if not scales:
+        raise ValueError( "at least one scale is required" )
 
     search_k = top_n * oversample
     results_by_scale = {}
 
-    owns_executor = executor is None
-    if owns_executor:
-        executor = ThreadPoolExecutor(max_workers=2)
+    for scale in scales:
+        index = indexes.get(scale)
 
-    try:
-        for scale in scales:
-            table = indexes.get(scale)
+        if index is None:
+            raise RuntimeError( f"Missing observation index for scale={scale}" )
 
-            if table is None:
-                raise RuntimeError( f"Missing Lance table for scale={scale}" )
+        queries = np.asarray(
+            queries_by_scale[scale],
+            dtype=np.float32,
+        )
 
-            queries = np.asarray(
-                queries_by_scale[scale],
-                dtype=np.float32,
-            )
+        if queries.ndim != 2:
+            raise ValueError( f"queries for scale={scale} must be two-dimensional" )
 
-            if queries.ndim != 2:
-                raise ValueError( f"queries for scale={scale} must be two-dimensional" )
-
-            results_by_scale[scale] = _search_lance_table(
-                table=table,
-                queries=queries,
-                year_start=year_start,
-                year_end=year_end,
+        results_by_scale[scale] = (
+            index.batch_search(
+                queries,
                 k=search_k,
-                nprobes=nprobes,
-                executor=executor,
+                oversample=oversample
             )
-    finally:
-        if owns_executor:
-            executor.shutdown(wait=True)
+        )
 
     first_scale = scales[0]
+
     query_count = len(
         queries_by_scale[first_scale]
     )
@@ -243,13 +150,26 @@ def multiscale_search(
         fused = {}
 
         for scale in scales:
-            result = results_by_scale[scale][query_idx]
+            result = results_by_scale[scale]
 
-            for rank, row in enumerate(
-                result,
+            event_ids = result.event_ids[
+                query_idx
+            ]
+            distances = result.distances[
+                query_idx
+            ]
+
+            for rank, (
+                event_id,
+                distance,
+            ) in enumerate(
+                zip(
+                    event_ids,
+                    distances,
+                ),
                 start=1,
             ):
-                event_id = int(row["event_id"])
+                event_id = int(event_id)
 
                 item = fused.setdefault(
                     event_id,
@@ -262,18 +182,13 @@ def multiscale_search(
                 )
 
                 item["score"] += (
-                    1.0 / (rrf_k + rank)
+                    1.0
+                    / (rrf_k + rank)
                 )
 
-                distance = row.get("_distance")
-
-                if distance is None:
-                    distance = row.get("distance")
-
-                if distance is not None:
-                    item[f"score_{scale}"] = (
-                        float(distance)
-                    )
+                item[
+                    f"score_{scale}"
+                ] = float(distance)
 
         ranked = sorted(
             fused.items(),
@@ -281,13 +196,15 @@ def multiscale_search(
             reverse=True,
         )
 
-        output.append([
-            {
-                "event_id": event_id,
-                **payload,
-            }
-            for event_id, payload in ranked[:top_n]
-        ])
+        output.append(
+            [
+                {
+                    "event_id": event_id,
+                    **payload,
+                }
+                for event_id, payload in ranked[:top_n]
+            ]
+        )
 
     return output
 
@@ -343,7 +260,9 @@ def _build_batch_events(
         neighbours_out = []
 
         for item in seed_neighbours:
-            neighbour_id = int(item["event_id"])
+            neighbour_id = int(
+                item["event_id"]
+            )
 
             if neighbour_id == seed_event_id:
                 continue
@@ -353,7 +272,9 @@ def _build_batch_events(
                 neighbour_id,
             )
 
-            token = str(metadata["token"])
+            token = str(
+                metadata["token"]
+            )
 
             if token.lower() in false_positives:
                 continue
@@ -361,35 +282,68 @@ def _build_batch_events(
             (
                 local_window_id,
                 local_window_token_pos,
-            ) = _window_metadata( metadata, "local", )
+            ) = _window_metadata(
+                metadata,
+                "local",
+            )
 
             (
                 medium_window_id,
                 medium_window_token_pos,
-            ) = _window_metadata( metadata, "medium", )
+            ) = _window_metadata(
+                metadata,
+                "medium",
+            )
 
             (
                 broad_window_id,
                 broad_window_token_pos,
-            ) = _window_metadata( metadata, "broad", )
+            ) = _window_metadata(
+                metadata,
+                "broad",
+            )
 
             neighbours_out.append(
                 {
                     "event_id": neighbour_id,
                     "token": token,
-                    "doc_id": str( metadata["doc_id"] ),
-                    "pub_year": int( metadata["pub_year"] ),
-                    "token_idx": int( metadata["token_idx"] ),
-                    "local_window_id": ( local_window_id ),
-                    "local_window_token_pos": ( local_window_token_pos ),
-                    "medium_window_id": ( medium_window_id ),
-                    "medium_window_token_pos": ( medium_window_token_pos ),
-                    "broad_window_id": ( broad_window_id ),
-                    "broad_window_token_pos": ( broad_window_token_pos ),
+                    "doc_id": str(
+                        metadata["doc_id"]
+                    ),
+                    "pub_year": int(
+                        metadata["pub_year"]
+                    ),
+                    "token_idx": int(
+                        metadata["token_idx"]
+                    ),
+                    "local_window_id": (
+                        local_window_id
+                    ),
+                    "local_window_token_pos": (
+                        local_window_token_pos
+                    ),
+                    "medium_window_id": (
+                        medium_window_id
+                    ),
+                    "medium_window_token_pos": (
+                        medium_window_token_pos
+                    ),
+                    "broad_window_id": (
+                        broad_window_id
+                    ),
+                    "broad_window_token_pos": (
+                        broad_window_token_pos
+                    ),
                     "score": item["score"],
-                    "score_local": ( item["score_local"] ),
-                    "score_medium": ( item["score_medium"] ),
-                    "score_broad": ( item["score_broad"] ),
+                    "score_local": (
+                        item["score_local"]
+                    ),
+                    "score_medium": (
+                        item["score_medium"]
+                    ),
+                    "score_broad": (
+                        item["score_broad"]
+                    ),
                     "depth": 1,
                     "via_event_id": None,
                 }
@@ -398,31 +352,60 @@ def _build_batch_events(
         (
             local_window_id,
             local_window_token_pos,
-        ) = _window_metadata( seed_metadata, "local", )
+        ) = _window_metadata(
+            seed_metadata,
+            "local",
+        )
 
         (
             medium_window_id,
             medium_window_token_pos,
-        ) = _window_metadata( seed_metadata, "medium", )
+        ) = _window_metadata(
+            seed_metadata,
+            "medium",
+        )
 
         (
             broad_window_id,
             broad_window_token_pos,
-        ) = _window_metadata( seed_metadata, "broad", )
+        ) = _window_metadata(
+            seed_metadata,
+            "broad",
+        )
 
         output.append(
             {
                 "event_id": seed_event_id,
-                "token": str( seed_metadata["token"] ),
-                "doc_id": str( seed_metadata["doc_id"] ),
-                "pub_year": int( seed_metadata["pub_year"] ),
-                "token_idx": int( seed_metadata["token_idx"] ),
-                "local_window_id": ( local_window_id ),
-                "local_window_token_pos": ( local_window_token_pos ),
-                "medium_window_id": ( medium_window_id ),
-                "medium_window_token_pos": ( medium_window_token_pos ),
-                 "broad_window_id": ( broad_window_id ),
-                "broad_window_token_pos": ( broad_window_token_pos ),
+                "token": str(
+                    seed_metadata["token"]
+                ),
+                "doc_id": str(
+                    seed_metadata["doc_id"]
+                ),
+                "pub_year": int(
+                    seed_metadata["pub_year"]
+                ),
+                "token_idx": int(
+                    seed_metadata["token_idx"]
+                ),
+                "local_window_id": (
+                    local_window_id
+                ),
+                "local_window_token_pos": (
+                    local_window_token_pos
+                ),
+                "medium_window_id": (
+                    medium_window_id
+                ),
+                "medium_window_token_pos": (
+                    medium_window_token_pos
+                ),
+                "broad_window_id": (
+                    broad_window_id
+                ),
+                "broad_window_token_pos": (
+                    broad_window_token_pos
+                ),
                 "neighbours": neighbours_out,
             }
         )
@@ -436,8 +419,6 @@ def iter_concept_batches(
     indexes,
     seed_event_ids,
     scales,
-    year_start,
-    year_end,
     top_n,
     rrf_k,
     oversample,
@@ -459,10 +440,8 @@ def iter_concept_batches(
     }
 
     # Fetch every scale's embeddings for the whole seed set up front, one
-    # batched query per scale, instead of once per BATCH_SIZE-sized chunk
-    # (BATCH_SIZE defaults to 5). ParquetObservationLookup answers this
-    # with a single `event_id IN (...)` query per scale, so this turns
-    # len(seed_event_ids) / batch_size tiny fetches into 3 large ones.
+    # batched query per scale. This avoids repeatedly querying the Parquet
+    # store for the same seed embeddings at BATCH_SIZE granularity.
     embeddings_by_scale = {
         scale: lookup.get_scale_embeddings(
             seed_event_ids,
@@ -471,38 +450,40 @@ def iter_concept_batches(
         for scale in scales
     }
 
-    # One executor shared across every batch/scale search below, instead
-    # of a fresh ThreadPoolExecutor per scale per batch.
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        for start in range(0, len(seed_event_ids), batch_size):
-            seed_batch = seed_event_ids[start:start + batch_size]
-            end = start + len(seed_batch)
+    for start in range(
+        0,
+        len(seed_event_ids),
+        batch_size,
+    ):
+        seed_batch = seed_event_ids[
+            start:start + batch_size
+        ]
+        end = start + len(seed_batch)
 
-            queries_by_scale = {
-                scale: embeddings_by_scale[scale][start:end]
-                for scale in scales
-            }
+        queries_by_scale = {
+            scale: embeddings_by_scale[scale][
+                start:end
+            ]
+            for scale in scales
+        }
 
-            neighbours = multiscale_search(
-                indexes=indexes,
-                queries_by_scale=queries_by_scale,
-                year_start=year_start,
-                year_end=year_end,
-                scales=scales,
-                top_n=top_n,
-                rrf_k=rrf_k,
-                oversample=oversample,
-                executor=executor,
-            )
+        neighbours = multiscale_search(
+            indexes=indexes,
+            queries_by_scale=queries_by_scale,
+            scales=scales,
+            top_n=top_n,
+            rrf_k=rrf_k,
+            oversample=oversample,
+        )
 
-            events = _build_batch_events(
-                seed_event_ids=seed_batch,
-                neighbours=neighbours,
-                lookup=lookup,
-                false_positives=false_positives,
-            )
+        events = _build_batch_events(
+            seed_event_ids=seed_batch,
+            neighbours=neighbours,
+            lookup=lookup,
+            false_positives=false_positives,
+        )
 
-            yield {
-                "type": "batch",
-                "events": events,
-            }
+        yield {
+            "type": "batch",
+            "events": events,
+        }

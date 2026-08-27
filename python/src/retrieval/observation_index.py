@@ -25,6 +25,7 @@ class ObservationIndex(ABC):
         queries: Float32Array,
         *,
         k: int,
+        oversample: int,
     ) -> BatchSearchResult:
         """Return the k nearest observations for each query."""
         raise NotImplementedError

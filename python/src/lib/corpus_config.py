@@ -128,16 +128,16 @@ CanonicalRules = Dict[str, CanonicalRule]
 # power
 # right
 # property
-TEST_CONCEPT_SETS: CanonicalRules = {
-    "PREROGATIVE": {
+CONCEPT_SETS: CanonicalRules = {
+    "WHITE": {
         "forms": {
-            "prerogative",
+            "white",
         },
         "false_positives": set(),
     },
 }
 
-CONCEPT_SETS: CanonicalRules = {
+CIVIL_WAR_CONCEPT_SETS: CanonicalRules = {
     "PREROGATIVE": {
         "forms": {
             "prerogative", # "prerogatiue", "prerogatives", "prerogatiues",

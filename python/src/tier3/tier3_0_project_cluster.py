@@ -349,13 +349,8 @@ def build_tier3_resources(
         if concept in present
     ] or sorted(present)
 
-    def load_rows_for_concept(
-        concept,
-    ):
-        return load_event_rows(
-            con,
-            concept,
-        )
+    def load_rows_for_concept( concept ):
+        return load_event_rows( con, concept )
 
     all_field_event_ids = []
     strata = []
@@ -489,96 +484,36 @@ def service(
 
 def main():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--concept",
-        default=None,
-    )
-
-    parser.add_argument(
-        "--store",
-        type=Path,
-        default=EVENTSTORE_T1_PATH,
-        help=(
-            "Tier 1 Parquet observation-store root"
-        ),
-    )
-
-    parser.add_argument(
-        "--db",
-        type=Path,
-        default=CORPUS_TIER2_DB_PATH,
-        help=(
-            "Tier 2 SQLite result database"
-        ),
-    )
-
-    parser.add_argument(
-        "-r",
-        "--resolution",
-        type=float,
-        default=0.8,
-        help=(
-            "Leiden resolution parameter "
-            "(default: 0.8)"
-        ),
-    )
-
-    parser.add_argument(
-        "-n",
-        "--neighbors",
-        type=int,
-        default=15,
-        help=(
-            "kNN graph neighbours "
-            "(default: 15)"
-        ),
-    )
-
+    parser.add_argument( "--concept", default=None, )
+    parser.add_argument( "--store", type=Path, default=EVENTSTORE_T1_PATH, help=( "Tier 1 Parquet observation-store root" ), )
+    parser.add_argument( "--db", type=Path, default=CORPUS_TIER2_DB_PATH, help=( "Tier 2 SQLite result database" ), )
+    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help=( "Leiden resolution parameter (default: 0.8)" ), )
+    parser.add_argument( "-n", "--neighbors", type=int, default=15, help=( "kNN graph neighbours (default: 15)" ), )
     args = parser.parse_args()
 
-    resources = build_tier3_resources(
-        store_path=args.store,
-        db_path=args.db,
-    )
+    resources = build_tier3_resources( store_path=args.store, db_path=args.db )
 
     try:
         if args.concept:
-            concepts = [
-                args.concept.upper()
-            ]
+            concepts = [ args.concept.upper() ]
         else:
-            concepts = resources[
-                "concepts"
-            ]
+            concepts = resources[ "concepts" ]
 
         if not concepts:
-            logger.warning(
-                "[tier3-main] "
-                "no concepts resolved"
-            )
+            logger.warning( "[tier3-main] no concepts resolved" )
             return
 
-        logger.info(
-            f"[tier3-main] "
-            f"backend={resources['backend']} "
-            f"concepts={len(concepts)}"
-        )
+        logger.info( f"[tier3-main] backend={resources['backend']} concepts={len(concepts)}" )
 
         for concept in concepts:
             result = service(
                 resources=resources,
                 concept=concept,
-                resolution_parameter=(
-                    args.resolution
-                ),
+                resolution_parameter=( args.resolution ),
                 n_neighbors=args.neighbors,
             )
 
-            logger.info(
-                "[tier3-main] completed "
-                f"{result.get('concept')}"
-            )
+            logger.info( "[tier3-main] completed {result.get('concept')}" )
 
     finally:
         con = resources.get("con")
@@ -588,18 +523,12 @@ def main():
 
         lookup = resources.get("lookup")
 
-        lookup_con = getattr(
-            lookup,
-            "_con",
-            None,
-        )
+        lookup_con = getattr( lookup, "_con", None )
 
         if lookup_con is not None:
             lookup_con.close()
 
-    logger.info(
-        "[tier3-main] Done."
-    )
+    logger.info( "[tier3-main] Done." )
 
 
 if __name__ == "__main__":

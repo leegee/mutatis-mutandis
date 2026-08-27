@@ -1407,20 +1407,20 @@ def main():
     # Uncomment when we want genuine corpus-wide/global coordinates again.
     # -------------------------------------------------------------------
 
-    all_rows = con.execute(
-        """
-        SELECT event_id
-        FROM concept_field_events
-        """
-    )
-
-    all_event_ids = sorted(
-        {
-            int(row[0])
-            for row in all_rows
-        }
-    )
-
+    # all_rows = con.execute(
+    #     """
+    #     SELECT event_id
+    #     FROM concept_field_events
+    #     """
+    # )
+    #
+    # all_event_ids = sorted(
+    #     {
+    #         int(row[0])
+    #         for row in all_rows
+    #     }
+    # )
+    #
     # global_coords = load_or_build_global_projection(
     #     lookup,
     #     all_event_ids,
