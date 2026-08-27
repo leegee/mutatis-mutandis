@@ -226,37 +226,37 @@ def build_scale_table(
     )
 
 
-def query_window(
-    *,
-    db_path: Path,
-    scale: str,
-    query_vector,
-    year_start: int,
-    year_end: int,
-    k: int = 10,
-    nprobes: int = 20,
-    model: str | None = None,
-) -> list[dict]:
-    """
-    Example of the thing this whole migration is for: a 50-year (or any)
-    search window as a query-time filter against a single scale-wide
-    table, replacing "find and merge results across N physical bucket
-    indices."
-    """
-    db = lancedb.connect(str(db_path))
-    tbl = db.open_table(scale)
+# def query_window(
+#     *,
+#     db_path: Path,
+#     scale: str,
+#     query_vector,
+#     year_start: int,
+#     year_end: int,
+#     k: int = 10,
+#     nprobes: int = 20,
+#     model: str | None = None,
+# ) -> list[dict]:
+#     """
+#     Example of the thing this whole migration is for: a 50-year (or any)
+#     search window as a query-time filter against a single scale-wide
+#     table, replacing "find and merge results across N physical bucket
+#     indices."
+#     """
+#     db = lancedb.connect(str(db_path))
+#     tbl = db.open_table(scale)
 
-    where = f"year >= {year_start} AND year <= {year_end}"
-    if model is not None:
-        where += f" AND embedding_model = '{model}'"
+#     where = f"year >= {year_start} AND year <= {year_end}"
+#     if model is not None:
+#         where += f" AND embedding_model = '{model}'"
 
-    return (
-        tbl.search(query_vector)
-        .where(where)
-        .nprobes(nprobes)
-        .limit(k)
-        .to_list()
-    )
+#     return (
+#         tbl.search(query_vector)
+#         .where(where)
+#         .nprobes(nprobes)
+#         .limit(k)
+#         .to_list()
+#     )
 
 
 def parse_args() -> argparse.Namespace:

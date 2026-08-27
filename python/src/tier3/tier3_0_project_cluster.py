@@ -47,12 +47,23 @@ def write_geometry_sqlite(
     rows = []
 
     for idx, event_id in enumerate(event_ids):
+        gx = global_coords[idx][0]
+        gy = global_coords[idx][1]
+
         rows.append(
             (
                 float(local_coords[idx][0]),
                 float(local_coords[idx][1]),
-                float(global_coords[idx][0]),
-                float(global_coords[idx][1]),
+                (
+                    float(gx)
+                    if np.isfinite(gx)
+                    else None
+                ),
+                (
+                    float(gy)
+                    if np.isfinite(gy)
+                    else None
+                ),
                 int(clusters[idx]),
                 (
                     "noise"
@@ -120,6 +131,19 @@ def write_cluster_info_sqlite(
         if centroid_vector is None:
             continue
 
+        gnx = None
+        gny = None
+
+        if global_coords is not None:
+            gx = global_coords[mask, 0]
+            gy = global_coords[mask, 1]
+
+            finite = np.isfinite(gx) & np.isfinite(gy)
+
+            if np.any(finite):
+                gnx = float(gx[finite].mean())
+                gny = float(gy[finite].mean())
+
         data.append(
             (
                 concept,
@@ -129,11 +153,11 @@ def write_cluster_info_sqlite(
                     if cluster_id == -1
                     else None
                 ),
-                float( local_coords[ mask, 0, ].mean() ),
-                float( local_coords[ mask, 1, ].mean() ),
-                float( global_coords[ mask, 0, ].mean() ),
-                float( global_coords[ mask, 1, ].mean() ),
-                vector_to_blob( centroid_vector ),
+                float(local_coords[mask, 0].mean()),
+                float(local_coords[mask, 1].mean()),
+                gnx,
+                gny,
+                vector_to_blob(centroid_vector),
                 int(mask.sum()),
                 None,
             )
@@ -233,13 +257,28 @@ def cluster_concept(
     if fit_info["sampled"]:
         logger.info( f"[tier3] {concept}: sampled fit ({fit_info['fit_n']:,}/ {fit_info['n']:,} events, {fit_info['outlier_n']:,} guaranteed outliers)" )
 
-    global_xy = np.asarray(
-        [
-            global_coords[event_id]
-            for event_id in event_ids
-        ],
-        dtype=np.float32,
-    )
+    # global_xy = np.asarray(
+    #     [
+    #         global_coords[event_id]
+    #         for event_id in event_ids
+    #     ],
+    #     dtype=np.float32,
+    # )
+
+    if global_coords is None:
+        global_xy = np.full(
+            (len(event_ids), 2),
+            np.nan,
+            dtype=np.float32,
+        )
+    else:
+        global_xy = np.asarray(
+            [
+                global_coords[event_id]
+                for event_id in event_ids
+            ],
+            dtype=np.float32,
+        )
 
     write_geometry( event_ids, local_coords, global_xy, clusters, )
     write_cluster_info( concept, cluster_centroid_vectors, local_coords, global_xy, clusters, )
@@ -365,7 +404,9 @@ def build_tier3_resources(
         global_coords = {}
 
     else:
-        global_coords = build_global_projection( lookup, uniq_ids, strata=uniq_strata, )
+        # global_coords = build_global_projection( lookup, uniq_ids, strata=uniq_strata, )
+        # TOO EXPENSIVE FOR NOW
+        global_coords = None
 
     return {
         "backend": "parquet+lance",

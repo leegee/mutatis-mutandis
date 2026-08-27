@@ -388,10 +388,7 @@ def main() -> None:
             year_end=year_end,
         )
 
-    logger.info(
-        "[tier2] completed %d concept(s)",
-        len(concept_names),
-    )
+    logger.info( "[tier2] completed %d concept(s)", len(concept_names) )
 
 
 if __name__ == "__main__":
