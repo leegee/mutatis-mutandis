@@ -1,5 +1,3 @@
-# retrieval/observation_index.py
-
 from abc import ABC, abstractmethod
 
 from .models import Float32Array, SearchResult, BatchSearchResult
@@ -18,7 +16,6 @@ class ObservationIndex(ABC):
         """Return the k nearest observations for one query."""
         raise NotImplementedError
 
-
     @abstractmethod
     def batch_search(
         self,
@@ -26,6 +23,13 @@ class ObservationIndex(ABC):
         *,
         k: int,
         oversample: int,
+        query_years: tuple[int, ...] | None = None,
     ) -> BatchSearchResult:
-        """Return the k nearest observations for each query."""
+        """
+        Return the k nearest observations for each query.
+
+        query_years, when supplied, restricts each query to observations
+        from that query's publication year. It is query metadata rather
+        than a property of the global SearchSpace.
+        """
         raise NotImplementedError

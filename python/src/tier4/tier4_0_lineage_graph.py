@@ -422,7 +422,7 @@ def sample_cluster_events(
     neighbour_limit=NEIGHBOUR_SAMPLE_SIZE,
 ):
     """
-    Pulls a small deterministic sample of concrete events belonging to
+    Pull a small deterministic sample of concrete events belonging to
     this (concept, year, cluster).
 
     Events remain individual historical observations. Neighbours are
@@ -434,9 +434,15 @@ def sample_cluster_events(
 
     rows = con.execute(
         """
-        SELECT e.event_id, e.doc_id, e.token_idx, e.token, e.pub_year
+        SELECT
+            e.event_id,
+            e.doc_id,
+            e.token_idx,
+            e.token,
+            e.pub_year
         FROM concept_year_event_cluster c
-        JOIN events e ON e.event_id = c.event_id
+        JOIN events e
+            ON e.event_id = c.event_id
         WHERE c.concept=?
           AND c.pub_year=?
           AND c.cluster_id=?
@@ -452,12 +458,14 @@ def sample_cluster_events(
     if not rows:
         return []
 
-    # Protect against duplicate joins producing repeated observations.
+    # The cluster membership table should contain one row per event, but
+    # keep this defensive deduplication so malformed historical data does
+    # not cause duplicate observations in the exported sample.
     seen_events = set()
     unique_rows = []
 
     for row in rows:
-        event_id = row[0]
+        event_id = int(row[0])
 
         if event_id in seen_events:
             continue
@@ -467,37 +475,45 @@ def sample_cluster_events(
 
     rows = unique_rows
 
+    # Sample evenly across event-id order rather than simply taking the
+    # first N observations. This gives a deterministic spread through the
+    # cluster without introducing randomness into exported JSON.
     if len(rows) > event_limit:
         indices = sorted(
-            set(
+            {
                 int(round(i))
                 for i in np.linspace(
                     0,
                     len(rows) - 1,
                     event_limit,
                 )
-            )
+            }
         )
 
-        rows = [rows[i] for i in indices]
+        rows = [
+            rows[i]
+            for i in indices
+        ]
 
     samples = []
 
-    for event_id, doc_id, token_idx, token, ev_year in rows:
-
+    for (
+        event_id,
+        doc_id,
+        token_idx,
+        token,
+        ev_year,
+    ) in rows:
         neighbour_rows = con.execute(
             """
             SELECT
                 n.neighbour_event_id,
-                e.token,
-                e.doc_id,
-                e.pub_year,
-                e.token_idx,
-                n.score,
-                n.depth
+                n.token,
+                n.doc_id,
+                n.pub_year,
+                n.token_idx,
+                n.score
             FROM neighbours n
-            JOIN events e
-                ON e.event_id = n.neighbour_event_id
             WHERE n.event_id=?
             ORDER BY n.score DESC
             LIMIT ?
@@ -517,51 +533,73 @@ def sample_cluster_events(
             neighbour_year,
             neighbour_token_idx,
             score,
-            depth,
         ) in neighbour_rows:
+            # A malformed neighbour row should not prevent the entire
+            # lineage export from succeeding.
+            if not neighbour_token:
+                continue
 
-            grouped[neighbour_token.lower()].append(
+            neighbour_token = str( neighbour_token ).lower()
+
+            grouped[neighbour_token].append(
                 {
-                    "neighbour_event_id": neighbour_event_id,
+                    "neighbour_event_id": int( neighbour_event_id ),
                     "doc_id": neighbour_doc_id,
-                    "pub_year": neighbour_year,
-                    "token_idx": neighbour_token_idx,
-                    "score": score,
-                    "depth": depth,
+                    "pub_year": (
+                        int(neighbour_year)
+                        if neighbour_year is not None
+                        else None
+                    ),
+                    "token_idx": (
+                        int(neighbour_token_idx)
+                        if neighbour_token_idx is not None
+                        else None
+                    ),
+                    "score": float(score),
                 }
             )
 
         neighbours = [
             {
                 "token": neighbour_token,
-                "count": len(events),
+                "count": len(neighbour_events),
                 "max_score": max(
-                    e["score"]
-                    for e in events
+                    event["score"]
+                    for event in neighbour_events
                 ),
-                "examples": events[:3],
+                "examples": neighbour_events[:3],
             }
-            for neighbour_token, events in grouped.items()
+            for (
+                neighbour_token,
+                neighbour_events,
+            ) in grouped.items()
         ]
 
-        # Rank semantic neighbours by recurrence first, similarity second.
+        # Rank recurring contextual neighbours ahead of one-off matches;
+        # similarity breaks ties.
         neighbours.sort(
-            key=lambda n: (
-                n["count"],
-                n["max_score"],
+            key=lambda neighbour: (
+                neighbour["count"],
+                neighbour["max_score"],
             ),
             reverse=True,
         )
 
-        neighbours = neighbours[:neighbour_limit]
+        neighbours = neighbours[
+            :neighbour_limit
+        ]
 
         samples.append(
             {
-                "event_id": event_id,
+                "event_id": int(event_id),
                 "doc_id": doc_id,
-                "token_idx": token_idx,
+                "token_idx": (
+                    int(token_idx)
+                    if token_idx is not None
+                    else None
+                ),
                 "token": token,
-                "pub_year": ev_year,
+                "pub_year": int(ev_year),
                 "neighbours": neighbours,
             }
         )

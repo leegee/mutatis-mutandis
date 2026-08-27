@@ -1,47 +1,36 @@
+import type { Pool } from "pg";
 import type { Connect } from "vite";
-import { Pool } from "pg";
-import { json, serverError, redirect } from "../lib/response";
+import { json, redirect, serverError } from "../lib/response";
 
-export function createDocumentMiddleware(
-  pool: Pool,
-): Connect.NextHandleFunction {
-  return async (req, res, next) => {
-    if (!req.url) return next();
-    const match = req.url.match(/^\/api\/doc\/([^/]+)$/);
-    if (!match) return next();
-    const docId = match[1];
+export function createDocumentMiddleware(pool: Pool): Connect.NextHandleFunction {
+	return async (req, res, next) => {
+		if (!req.url) return next();
+		const match = req.url.match(/^\/api\/doc\/([^/]+)$/);
+		if (!match) return next();
+		const docId = match[1];
 
-    try {
-      const result = await pool.query(
-        `
-                SELECT *
-                FROM documents
-                WHERE doc_id = $1
-                `,
-        [docId],
-      );
+		try {
+			const result = await pool.query(` SELECT * FROM documents WHERE doc_id = $1 `, [docId]);
 
-      const row = result.rows[0];
+			const row = result.rows[0];
 
-      if (!row) {
-        return json(res, 404, {
-          error: "Document not found",
-          docId,
-        });
-      }
+			if (!row) {
+				return json(res, 404, {
+					error: "Document not found",
+					docId,
+				});
+			}
 
-      if (!row.filepath) {
-        throw new Error('No filepath in db for doc ' + docId)
-      }
+			if (!row.filepath) {
+				throw new Error(`No filepath in db for doc ${docId}`);
+			}
 
-      const filepath: string = row.filepath;
-      const redirectUrl = `/xml/${ filepath }`;
-      console.log(`[api/doc] ${ docId } -> ${ redirectUrl } for ${ req.url }`);
-      return redirect(res, redirectUrl);
-    }
-
-    catch (error) {
-      return serverError(res, error);
-    }
-  };
+			const filepath: string = row.filepath;
+			const redirectUrl = `/xml/${filepath}`;
+			console.log(`[api/doc] ${docId} -> ${redirectUrl} for ${req.url}`);
+			return redirect(res, redirectUrl);
+		} catch (error) {
+			return serverError(res, error);
+		}
+	};
 }

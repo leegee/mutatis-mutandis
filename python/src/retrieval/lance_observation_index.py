@@ -71,28 +71,31 @@ class LanceObservationIndex(ObservationIndex):
         queries: Float32Array,
         *,
         k: int,
-        oversample = 1
+        oversample: int,
     ) -> BatchSearchResult:
         """
-        Use LanceDB's native batched vector search.
+        Search each query independently and return query-major results.
 
-        The ObservationIndex contract requires results to be returned as
-        query-major arrays. LanceDB returns a flat row collection containing
-        a query_index for each result, so the rows are regrouped here.
+        The installed LanceDB version does not reliably expose query_index
+        in the result of a multi-vector search. Using the single-query path
+        therefore keeps the ObservationIndex contract independent of that
+        backend-specific result shape.
 
         Failure mode:
-            A filtered search can return fewer than k neighbours for an
-            individual query. The returned arrays therefore use the actual
-            common result width rather than fabricating invalid event IDs or
-            distances.
+            A filtered search can return fewer than k neighbours. All
+            queries in a batch must nevertheless produce the same width
+            because BatchSearchResult is rectangular. The width is therefore
+            the minimum result count returned by any query.
         """
         if k <= 0:
             raise ValueError("k must be positive")
 
-        query_array = self._prepare_queries(queries)
-        query_count = query_array.shape[0]
+        if oversample <= 0:
+            raise ValueError("oversample must be positive")
 
-        logger.info(f"[lance batch_search] k={k} oversample={oversample}")
+        query_array = self._prepare_queries(queries)
+
+        query_count = query_array.shape[0]
 
         if query_count == 0:
             return BatchSearchResult(
@@ -106,67 +109,32 @@ class LanceObservationIndex(ObservationIndex):
                 ),
             )
 
-        request = (
-            self._table
-            .search(query_array)
-            # LanceDB documentation recommends automatic nprobes tuning.
-            # .nprobes(self._nprobes)
-            .limit(k * oversample)
+        search_k = k
+
+        logger.info(
+            "[lance batch_search] queries=%d k=%d oversample=%d "
+            "year_start=%s year_end=%s",
+            query_count,
+            k,
+            oversample,
+            self._year_start,
+            self._year_end,
         )
 
-        request = self._apply_filter(request)
+        results = []
 
-        rows = request.to_list()
-
-        if not rows:
-            return BatchSearchResult(
-                event_ids=np.empty(
-                    (query_count, 0),
-                    dtype=np.uint64,
-                ),
-                distances=np.empty(
-                    (query_count, 0),
-                    dtype=np.float32,
-                ),
+        for query in query_array:
+            result = self.search(
+                query,
+                k=search_k,
             )
 
-        results_by_query = [
-            []
-            for _ in range(query_count)
-        ]
+            results.append(result)
 
-        for row in rows:
-            query_index = row.get("query_index")
-
-            if query_index is None:
-                raise RuntimeError( "Lance batch search result is missing query_index" )
-
-            query_index = int(query_index)
-
-            if query_index < 0 or query_index >= query_count:
-                raise RuntimeError( f"Lance batch search returned invalid query_index={query_index}" )
-
-            distance = row.get( "_distance", row.get("distance") )
-
-            if distance is None:
-                raise RuntimeError( "Lance batch search result is missing distance" )
-
-            results_by_query[query_index].append(
-                (
-                    int(row["event_id"]),
-                    float(distance),
-                )
-            )
-
-        widths = {
-            len(results)
-            for results in results_by_query
-        }
-
-        if len(widths) != 1:
-            raise RuntimeError( "Lance batch search returned inconsistent result widths across queries" )
-
-        width = widths.pop()
+        width = min(
+            len(result.event_ids)
+            for result in results
+        )
 
         if width == 0:
             return BatchSearchResult(
@@ -190,22 +158,14 @@ class LanceObservationIndex(ObservationIndex):
             dtype=np.float32,
         )
 
-        for query_index, results in enumerate( results_by_query ):
-            event_ids[query_index] = [
-                event_id
-                for event_id, _ in results
-            ]
-
-            distances[query_index] = [
-                distance
-                for _, distance in results
-            ]
+        for query_index, result in enumerate(results):
+            event_ids[query_index] = result.event_ids[:width]
+            distances[query_index] = result.distances[:width]
 
         return BatchSearchResult(
             event_ids=event_ids,
             distances=distances,
         )
-
 
     def _apply_filter(
         self,

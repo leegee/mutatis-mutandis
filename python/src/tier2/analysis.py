@@ -8,6 +8,7 @@ import numpy as np
 
 from lib.corpus_logging import logger
 from tier1.observation_store_api import SCALES
+from retrieval.models import INVALID_EVENT_ID
 
 K = 60
 RRF_K = 60
@@ -89,25 +90,24 @@ def multiscale_search(
     """
     Search each scale using its corresponding Tier 1 embedding.
 
-    Each value in `indexes` implements ObservationIndex. Backend-specific
-    filtering and nearest-neighbour behaviour therefore remain outside the
-    analysis layer.
+    The supplied indexes define the temporal search scope. All scales
+    therefore search the same candidate population for a query.
 
     RRF merges scale rankings by stable event_id.
     """
     if top_n <= 0:
-        raise ValueError( "top_n must be positive" )
+        raise ValueError("top_n must be positive")
 
     if rrf_k <= 0:
-        raise ValueError( "rrf_k must be positive" )
+        raise ValueError("rrf_k must be positive")
 
     if oversample <= 0:
-        raise ValueError( "oversample must be positive" )
+        raise ValueError("oversample must be positive")
 
     scales = tuple(scales)
 
     if not scales:
-        raise ValueError( "at least one scale is required" )
+        raise ValueError("at least one scale is required")
 
     search_k = top_n * oversample
     results_by_scale = {}
@@ -116,7 +116,9 @@ def multiscale_search(
         index = indexes.get(scale)
 
         if index is None:
-            raise RuntimeError( f"Missing observation index for scale={scale}" )
+            raise RuntimeError(
+                f"Missing observation index for scale={scale}"
+            )
 
         queries = np.asarray(
             queries_by_scale[scale],
@@ -124,14 +126,14 @@ def multiscale_search(
         )
 
         if queries.ndim != 2:
-            raise ValueError( f"queries for scale={scale} must be two-dimensional" )
-
-        results_by_scale[scale] = (
-            index.batch_search(
-                queries,
-                k=search_k,
-                oversample=oversample
+            raise ValueError(
+                f"queries for scale={scale} must be two-dimensional"
             )
+
+        results_by_scale[scale] = index.batch_search(
+            queries,
+            k=search_k,
+            oversample=oversample,
         )
 
     first_scale = scales[0]
@@ -142,7 +144,9 @@ def multiscale_search(
 
     for scale in scales[1:]:
         if len(queries_by_scale[scale]) != query_count:
-            raise ValueError( "all scales must contain the same number of query vectors" )
+            raise ValueError(
+                "all scales must contain the same number of query vectors"
+            )
 
     output = []
 
@@ -152,12 +156,8 @@ def multiscale_search(
         for scale in scales:
             result = results_by_scale[scale]
 
-            event_ids = result.event_ids[
-                query_idx
-            ]
-            distances = result.distances[
-                query_idx
-            ]
+            event_ids = result.event_ids[query_idx]
+            distances = result.distances[query_idx]
 
             for rank, (
                 event_id,
@@ -222,8 +222,12 @@ def _window_metadata(
     metadata,
     scale,
 ):
-    window_id = metadata.get( f"{scale}_window_id" )
-    token_pos = metadata.get( f"{scale}_window_token_pos" )
+    window_id = metadata.get(
+        f"{scale}_window_id"
+    )
+    token_pos = metadata.get(
+        f"{scale}_window_token_pos"
+    )
 
     if window_id is not None:
         window_id = int(window_id)
@@ -416,7 +420,7 @@ def _build_batch_events(
 def iter_concept_batches(
     *,
     lookup,
-    indexes,
+    indexes_by_year,
     seed_event_ids,
     scales,
     top_n,
@@ -428,8 +432,14 @@ def iter_concept_batches(
     """
     Yield bounded Tier 2 batches.
 
-    Each scale searches with the corresponding Tier 1 embedding rather than
-    with an averaged ensemble vector.
+    Each seed is searched only against observations from the seed's
+    publication year. Multiscale retrieval and RRF therefore operate
+    within that temporal population.
+
+    Failure mode:
+        A seed year without a corresponding index cannot produce neighbours.
+        This should only occur if the caller constructs indexes inconsistently
+        with the resolved candidate-year set.
     """
     if not seed_event_ids:
         return
@@ -439,9 +449,6 @@ def iter_concept_batches(
         for value in (false_positives or [])
     }
 
-    # Fetch every scale's embeddings for the whole seed set up front, one
-    # batched query per scale. This avoids repeatedly querying the Parquet
-    # store for the same seed embeddings at BATCH_SIZE granularity.
     embeddings_by_scale = {
         scale: lookup.get_scale_embeddings(
             seed_event_ids,
@@ -449,6 +456,17 @@ def iter_concept_batches(
         )
         for scale in scales
     }
+
+    seed_years = []
+
+    for event_id in seed_event_ids:
+        metadata = lookup.get_event_metadata(
+            int(event_id)
+        )
+
+        seed_years.append(
+            int(metadata["pub_year"])
+        )
 
     for start in range(
         0,
@@ -458,32 +476,76 @@ def iter_concept_batches(
         seed_batch = seed_event_ids[
             start:start + batch_size
         ]
-        end = start + len(seed_batch)
+
+        batch_years = seed_years[
+            start:start + len(seed_batch)
+        ]
 
         queries_by_scale = {
             scale: embeddings_by_scale[scale][
-                start:end
+                start:start + len(seed_batch)
             ]
             for scale in scales
         }
 
-        neighbours = multiscale_search(
-            indexes=indexes,
-            queries_by_scale=queries_by_scale,
-            scales=scales,
-            top_n=top_n,
-            rrf_k=rrf_k,
-            oversample=oversample,
-        )
+        batch_events = [
+            None
+            for _ in seed_batch
+        ]
 
-        events = _build_batch_events(
-            seed_event_ids=seed_batch,
-            neighbours=neighbours,
-            lookup=lookup,
-            false_positives=false_positives,
-        )
+        year_groups = {}
+
+        for local_index, year in enumerate(batch_years):
+            year_groups.setdefault(
+                year,
+                [],
+            ).append(local_index)
+
+        for year, local_indices in year_groups.items():
+            indexes = indexes_by_year.get(year)
+
+            if indexes is None:
+                raise RuntimeError(
+                    f"No temporal indexes available for publication year "
+                    f"{year}"
+                )
+
+            year_queries_by_scale = {
+                scale: queries_by_scale[scale][
+                    local_indices
+                ]
+                for scale in scales
+            }
+
+            neighbours = multiscale_search(
+                indexes=indexes,
+                queries_by_scale=year_queries_by_scale,
+                scales=scales,
+                top_n=top_n,
+                rrf_k=rrf_k,
+                oversample=oversample,
+            )
+
+            year_seed_ids = [
+                seed_batch[index]
+                for index in local_indices
+            ]
+
+            events = _build_batch_events(
+                seed_event_ids=year_seed_ids,
+                neighbours=neighbours,
+                lookup=lookup,
+                false_positives=false_positives,
+            )
+
+            for local_index, event in zip(
+                local_indices,
+                events,
+            ):
+                batch_events[local_index] = event
 
         yield {
             "type": "batch",
-            "events": events,
+            "events": batch_events,
         }
+
