@@ -321,14 +321,8 @@ def load_concept_event_rows(
     """
     Load every Tier 2 event belonging to a concept.
 
-    The old implementation selected:
-
-        e.pub_year,
-        e.event_id,
-        e.vector_id
-
-    vector_id is no longer required because the current Tier 1 observation
-    lookup retrieves embeddings directly by event_id.
+    concept_field_events is the explicit concept-to-event association
+    produced by Tier 2. The event table remains the source of event metadata.
     """
 
     rows = con.execute(
@@ -347,16 +341,28 @@ def load_concept_event_rows(
         (concept,),
     ).fetchall()
 
+    if not rows:
+        raise RuntimeError(
+            f"[tier3.1] no Tier 2 events found for concept={concept!r}"
+        )
+
     by_year = {}
 
     for pub_year, group in itertools.groupby(
         rows,
         key=lambda r: r[0],
     ):
-        by_year[pub_year] = [
+        by_year[int(pub_year)] = [
             int(event_id)
             for _, event_id in group
         ]
+
+    logger.info(
+        "[tier3.1] %s: %d events across %d years",
+        concept,
+        len(rows),
+        len(by_year),
+    )
 
     return by_year
 
@@ -394,10 +400,7 @@ def load_event_vectors(
             ),
         )
 
-    vectors = lookup.get_scale_embeddings(
-        event_ids,
-        scale,
-    )
+    vectors = lookup.get_scale_embeddings( event_ids, scale, )
 
     vectors = np.asarray(
         vectors,
@@ -405,22 +408,12 @@ def load_event_vectors(
     )
 
     if vectors.ndim != 2:
-        raise RuntimeError(
-            f"Expected 2-D embeddings for scale={scale}, "
-            f"got shape={vectors.shape}"
-        )
+        raise RuntimeError( f"Expected 2-D embeddings for scale={scale}, got shape={vectors.shape}" )
 
     if len(vectors) != len(event_ids):
-        raise RuntimeError(
-            "Embedding/event alignment mismatch: "
-            f"{len(event_ids)} event IDs but "
-            f"{len(vectors)} vectors"
-        )
+        raise RuntimeError( f"Embedding/event alignment mismatch: {len(event_ids)} event IDs but {len(vectors)} vectors" )
 
-    return (
-        list(event_ids),
-        vectors,
-    )
+    return ( list(event_ids), vectors )
 
 
 # ---------------------------------------------------------------------------
@@ -534,10 +527,19 @@ def process_concept_year(
     resolution_parameter,
     n_neighbors,
 ):
+    """
+    Cluster one concept's events for one publication year.
+
+    Invariant:
+        event_ids, vectors, local coordinates, and cluster assignments
+        remain in exactly the same order throughout this routine.
+    """
+
     logger.info(
-        "[tier3.1] %s %s",
+        "[tier3.1] %s %s: %d events",
         concept,
         pub_year,
+        len(event_ids),
     )
 
     if not event_ids:
@@ -563,21 +565,11 @@ def process_concept_year(
         n_neighbors=n_neighbors,
     )
 
-    # -------------------------------------------------------------------
-    # Global UMAP
-    # -------------------------------------------------------------------
+    # Global UMAP is deliberately disabled for this run.
     #
-    # The global projection is deliberately disabled for this test run.
-    #
-    # When global_coords is unavailable, use the local projection as a
-    # temporary coordinate system for centroid_gnx/gny. This preserves the
-    # database schema and allows the clustering and temporal-edge pipeline
-    # to run without paying the global UMAP cost.
-    #
-    # These are therefore NOT comparable across years/concepts in the same
-    # way that a genuine global projection would be.
-    # -------------------------------------------------------------------
-
+    # Local coordinates are temporarily reused for the global-coordinate
+    # columns so downstream schema consumers can still operate. These
+    # coordinates are not comparable between independent year projections.
     if global_coords is not None:
 
         global_xy = np.asarray(
@@ -607,10 +599,10 @@ def process_concept_year(
         for c in cluster_records
     )
 
-    for c in cluster_records:
+    for cluster in cluster_records:
 
-        c["relative_mass"] = (
-            c["point_count"] / total
+        cluster["relative_mass"] = (
+            cluster["point_count"] / total
             if total > 0
             else 0.0
         )
@@ -644,20 +636,16 @@ def process_concept(
     n_neighbors,
 ):
     """
-    Process every year for one concept.
+    Process every publication year for one concept.
+
+    Existing Tier 3.1 output is removed only after the concept has been
+    confirmed to have Tier 2 events.
     """
 
     by_year = load_concept_event_rows(
         con,
         concept,
     )
-
-    if not by_year:
-        logger.warning(
-            "[tier3.1] no events for concept=%s",
-            concept,
-        )
-        return
 
     delete_concept_clusters(
         con,
@@ -666,6 +654,44 @@ def process_concept(
 
     for pub_year, event_ids in by_year.items():
 
+        process_concept_year(
+            con,
+            lookup,
+            concept,
+            pub_year,
+            event_ids,
+            global_coords,
+            resolution_parameter,
+            n_neighbors,
+        )
+
+    con.commit()
+
+# ---------------------------------------------------------------------------
+# Per-concept processing
+# ---------------------------------------------------------------------------
+
+def process_concept(
+    con,
+    lookup,
+    concept,
+    global_coords,
+    resolution_parameter,
+    n_neighbors,
+):
+    """
+    Process every year for one concept.
+    """
+
+    by_year = load_concept_event_rows( con, concept, )
+
+    if not by_year:
+        logger.warning( "[tier3.1] no events for concept=%s", concept, )
+        return
+
+    delete_concept_clusters( con, concept, )
+
+    for pub_year, event_ids in by_year.items():
         process_concept_year(
             con,
             lookup,
@@ -737,15 +763,9 @@ def build_temporal_edges(
     concept,
     similarity_threshold=0.95,
 ):
-    logger.info(
-        "[tier3.1] building temporal edges %s",
-        concept,
-    )
+    logger.info( "[tier3.1] building temporal edges %s", concept )
 
-    delete_temporal_edges(
-        con,
-        concept,
-    )
+    delete_temporal_edges( con, concept )
 
     years = [
         row[0]
@@ -933,10 +953,7 @@ def build_temporal_edges(
         edges,
     )
 
-    logger.info(
-        "[tier3.1] edges created: %d",
-        len(edges),
-    )
+    logger.info( "[tier3.1] edges created: %d", len(edges) )
 
 
 # ---------------------------------------------------------------------------
@@ -972,40 +989,18 @@ def load_or_build_global_projection(
         and cache_path.exists()
     ):
 
-        logger.info(
-            "[tier3.1] loading cached global projection from %s",
-            cache_path,
-        )
+        logger.info( "[tier3.1] loading cached global projection from %s", cache_path )
 
-        cached = np.load(
-            cache_path,
-            allow_pickle=False,
-        )
+        cached = np.load( cache_path, allow_pickle=False )
 
-        cached_ids = cached[
-            "event_ids"
-        ]
+        cached_ids = cached[ "event_ids" ]
+        cached_xy = cached[ "xy" ]
+        cached_fingerprint = cached[ "fingerprint" ].item()
 
-        cached_xy = cached[
-            "xy"
-        ]
+        if ( cached_fingerprint != event_id_hash(cached["event_ids"]) ):
+            raise RuntimeError( "Global projection cache fingerprint mismatch" )
 
-        cached_fingerprint = cached[
-            "fingerprint"
-        ].item()
-
-        if (
-            cached_fingerprint
-            != event_id_hash(cached["event_ids"])
-        ):
-            raise RuntimeError(
-                "Global projection cache fingerprint mismatch"
-            )
-
-        if (
-            cached_fingerprint
-            == event_id_hash(all_event_ids)
-        ):
+        if ( cached_fingerprint == event_id_hash(all_event_ids) ):
             return {
                 int(event_id): xy
                 for event_id, xy
@@ -1015,18 +1010,11 @@ def load_or_build_global_projection(
                 )
             }
 
-        logger.info(
-            "[tier3.1] cached global projection is stale "
-            "(event set changed) -- rebuilding"
-        )
+        logger.info( "[tier3.1] cached global projection is stale (event set changed) -- rebuilding" )
 
-    global_coords = build_global_projection(
-        lookup,
-        all_event_ids,
-    )
+    global_coords = build_global_projection( lookup, all_event_ids )
 
     if cache_path is not None:
-
         ids_arr = np.asarray(
             all_event_ids,
             dtype=np.int64,
@@ -1049,10 +1037,7 @@ def load_or_build_global_projection(
             ),
         )
 
-        logger.info(
-            "[tier3.1] cached global projection to %s",
-            cache_path,
-        )
+        logger.info( "[tier3.1] cached global projection to %s", cache_path )
 
     return global_coords
 
@@ -1187,10 +1172,7 @@ def _process_concept_worker(
 
     except Exception as exc:
 
-        logger.exception(
-            "[tier3.1] concept=%s failed in worker",
-            concept,
-        )
+        logger.exception( "[tier3.1] concept=%s failed in worker", concept )
 
         return (
             concept,
@@ -1250,31 +1232,13 @@ def run_parallel(
         ):
 
             if err is None:
-
-                logger.info(
-                    "[tier3.1] done: %s",
-                    concept,
-                )
-
+                logger.info( "[tier3.1] done: %s", concept )
             else:
-
-                logger.error(
-                    "[tier3.1] FAILED: %s: %s",
-                    concept,
-                    err,
-                )
-
-                failures.append(
-                    concept
-                )
+                logger.error( "[tier3.1] FAILED: %s: %s", concept, err )
+                failures.append( concept )
 
     if failures:
-
-        raise SystemExit(
-            "[tier3.1] "
-            f"{len(failures)} concept(s) failed: "
-            f"{failures}"
-        )
+        raise SystemExit( f"[tier3.1] {len(failures)} concept(s) failed: {failures}" )
 
 
 # ---------------------------------------------------------------------------
@@ -1282,118 +1246,42 @@ def run_parallel(
 # ---------------------------------------------------------------------------
 
 def main():
-
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        "-c",
-        "--concept",
-        default=None,
-    )
-
-    parser.add_argument(
-        "-t",
-        "--similarity-threshold",
-        type=float,
-        default=0.85,
-    )
-
-    parser.add_argument(
-        "-r",
-        "--resolution",
-        type=float,
-        default=0.8,
-        help=(
-            "Leiden resolution parameter "
-            "(default: 0.8)"
-        ),
-    )
-
-    parser.add_argument(
-        "-n",
-        "--neighbors",
-        type=int,
-        default=15,
-        help=(
-            "kNN graph neighbours "
-            "(default: 15)"
-        ),
-    )
+    parser.add_argument( "-c", "--concept", default=None, )
+    parser.add_argument( "-t", "--similarity-threshold", type=float, default=0.85, )
+    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help=( "Leiden resolution parameter (default: 0.8)" ), )
+    parser.add_argument( "-n", "--neighbors", type=int, default=15, help=( "kNN graph neighbours (default: 15)" ), )
 
     # Retained for CLI compatibility.
     # The current direct event_id lookup path does not use FAISS indexes.
-    parser.add_argument(
-        "--mask",
-        action="store_true",
-        help=(
-            "Retained for compatibility; "
-            "currently unused by direct lookup"
-        ),
-    )
-
-    parser.add_argument(
-        "--clear",
-        action="store_true",
-        help=(
-            "Delete all temporal cluster output "
-            "before processing."
-        ),
-    )
-
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help=(
-            "Number of concepts to process "
-            "in parallel"
-        ),
-    )
+    parser.add_argument( "--mask", action="store_true", help=( "Retained for compatibility; currently unused by direct lookup" ), )
+    parser.add_argument( "--clear", action="store_true", help=( "Delete all temporal cluster output before processing." ), )
+    parser.add_argument( "--workers", type=int, default=1, help=( "Number of concepts to process in parallel" ), )
 
     args = parser.parse_args()
 
-    logger.info(
-        "[tier3.1] options: %s",
-        vars(args),
-    )
-
-    logger.info(
-        "[tier3.1] cluster embedding scale: %s",
-        CLUSTER_SCALE,
-    )
+    logger.info( "[tier3.1] options: %s", vars(args) )
+    logger.info( "[tier3.1] cluster embedding scale: %s", CLUSTER_SCALE )
 
     if CLUSTER_SCALE not in SCALES:
-
-        raise RuntimeError(
-            f"CLUSTER_SCALE={CLUSTER_SCALE!r} "
-            f"is not in available scales={SCALES!r}"
-        )
+        raise RuntimeError( f"CLUSTER_SCALE={CLUSTER_SCALE!r} is not in available scales={SCALES!r}" )
 
     # -------------------------------------------------------------------
     # Tier 1 observation lookup
     # -------------------------------------------------------------------
 
-    lookup = open_observation_lookup(
-        EVENTSTORE_T1_PATH
-    )
+    lookup = open_observation_lookup( EVENTSTORE_T1_PATH )
 
     # -------------------------------------------------------------------
     # Tier 2 SQLite database
     # -------------------------------------------------------------------
 
-    con = sqlite_connection(
-        CORPUS_TIER2_DB_PATH
-    )
-
-    initialise_temporal_tables(
-        con
-    )
+    con = sqlite_connection( CORPUS_TIER2_DB_PATH )
+    initialise_temporal_tables( con )
 
     if args.clear:
-
-        clear_temporal_clusters(
-            con
-        )
+        clear_temporal_clusters( con )
 
     # -------------------------------------------------------------------
     # Global projection
@@ -1429,9 +1317,7 @@ def main():
 
     global_coords = None
 
-    logger.info(
-        "[tier3.1] global UMAP projection disabled"
-    )
+    logger.info( "[tier3.1] global UMAP projection disabled" )
 
     # -------------------------------------------------------------------
     # Concepts
@@ -1445,17 +1331,13 @@ def main():
         )
     ]
 
-    logger.info(
-        "[tier3.1] processing %d concept(s)",
-        len(concepts),
-    )
+    logger.info( "[tier3.1] processing %d concept(s)", len(concepts) )
 
     # -------------------------------------------------------------------
     # Parallel / sequential execution
     # -------------------------------------------------------------------
 
     if args.workers > 1:
-
         run_parallel(
             con,
             concepts,
@@ -1470,7 +1352,6 @@ def main():
     else:
 
         for concept in concepts:
-
             process_concept(
                 con,
                 lookup,
@@ -1480,11 +1361,7 @@ def main():
                 args.neighbors,
             )
 
-            build_temporal_edges(
-                con,
-                concept,
-                args.similarity_threshold,
-            )
+            build_temporal_edges( con, concept, args.similarity_threshold, )
 
             # process_concept() commits its own writes, but
             # build_temporal_edges() does not. Without this commit, the
@@ -1498,13 +1375,9 @@ def main():
 
         con.close()
 
-    logger.info(
-        "[tier3.1] Done."
-    )
+    logger.info( "[tier3.1] Done." )
 
 
 if __name__ == "__main__":
-
     mp.freeze_support()
-
     main()

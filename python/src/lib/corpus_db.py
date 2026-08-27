@@ -29,10 +29,6 @@ host = os.environ.get("PGHOST", "localhost")
 user = os.environ.get("PGUSER", "postgres")
 password = os.environ.get("PGPASSWORD")
 port = os.environ.get("PGPORT", 5432)
-host = os.environ.get("PGHOST", "localhost")
-user = os.environ.get("PGUSER", "postgres")
-password = os.environ.get("PGPASSWORD")
-port = os.environ.get("PGPORT", 5432)
 
 def get_connection(
     *,

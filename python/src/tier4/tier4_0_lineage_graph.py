@@ -715,7 +715,6 @@ def service(
     concept: str,
     write_json: bool = False,
 ) -> dict[str, object]:
-
     started = time.perf_counter()
     result = analyse_concept_lineage( con, concept, )
     elapsed = time.perf_counter() - started
@@ -727,6 +726,7 @@ def service(
         with open( json_path, "w", encoding="utf8", ) as f:
             json.dump( result, f, indent=2, )
         result["json_path"] = str(json_path)
+        logger.info(f"[tier4-service] wrote {json_path}")
 
     logger.info( f"[tier4-service] completed {concept} in {elapsed:.2f}s" )
     return result
@@ -735,7 +735,7 @@ def service(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument( "--concept", )
-    parser.add_argument( "--json", action="store_true", )
+    parser.add_argument( "--json", action="store_true", default=True)
     args = parser.parse_args()
 
     con = sqlite3.connect( CORPUS_TIER2_DB_PATH )

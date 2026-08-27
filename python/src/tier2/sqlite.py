@@ -244,15 +244,9 @@ def write_tier2_sqlite(
         cannot diverge from the persisted neighbour data.
     """
     db_path = Path(db_path)
-    db_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    db_path.parent.mkdir( parents=True, exist_ok=True, )
 
-    logger.info(
-        "[tier2] writing sqlite -> %s",
-        db_path,
-    )
+    logger.info( "[tier2] writing sqlite -> %s", db_path, )
 
     con = sqlite3.connect(db_path)
 
@@ -288,12 +282,19 @@ def write_tier2_sqlite(
         )
 
         event_rows = []
+        field_event_rows = []
+        neighbour_rows = []
+
+        event_rows = []
+        field_event_rows = []
         neighbour_rows = []
 
         for event in events:
+            event_id = int(event["event_id"])
+
             event_rows.append(
                 (
-                    int(event["event_id"]),
+                    event_id,
                     concept_name,
                     None,
                     event["token"],
@@ -305,10 +306,17 @@ def write_tier2_sqlite(
                 )
             )
 
+            field_event_rows.append(
+                (
+                    concept_name,
+                    event_id,
+                )
+            )
+
             for neighbour in event.get("neighbours", []):
                 neighbour_rows.append(
                     (
-                        int(event["event_id"]),
+                        event_id,
                         int(neighbour["event_id"]),
                         None,
                         neighbour["token"],
@@ -337,6 +345,17 @@ def write_tier2_sqlite(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             event_rows,
+        )
+
+        con.executemany(
+            """
+            INSERT INTO concept_field_events (
+                concept,
+                event_id
+            )
+            VALUES (?, ?)
+            """,
+            field_event_rows,
         )
 
         con.executemany(
