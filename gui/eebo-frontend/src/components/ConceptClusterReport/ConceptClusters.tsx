@@ -1,10 +1,9 @@
-import { createSignal, createMemo, Show, For, createResource, createEffect } from "solid-js";
+import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js";
 import { controls } from "../../state/controls.store";
 import ControlsHeader from "../ControlsHeader";
-
-import { loadClusterReport } from "./loadClusterReport";
-import DocRow from "./DocRow";
 import ClusterExport from "./ClusterExport";
+import DocRow from "./DocRow";
+import { loadClusterReport } from "./loadClusterReport";
 
 import "./ConceptClusters.css";
 import { buildCssColorMap, type CssClusterColor } from "../../lib/colour";
@@ -24,10 +23,7 @@ function clusterFetchParams() {
 }
 
 export default function ConceptClusters() {
-    const [clusterReport] = createResource(
-        clusterFetchParams,
-        loadClusterReport
-    );
+    const [clusterReport] = createResource(clusterFetchParams, loadClusterReport);
 
     const [selectedCluster, setSelectedCluster] = createSignal<number | null>(null);
     const [showDominantOnly, setShowDominantOnly] = createSignal(true);
@@ -38,26 +34,26 @@ export default function ConceptClusters() {
         buildCssColorMap(
             clusters()
                 .sort((a, b) => b.eventCount - a.eventCount)
-                .map(c => String(c.id)),
-            24
-        )
+                .map((c) => String(c.id)),
+            24,
+        ),
     );
 
     const getClusterColor = (id: number): CssClusterColor =>
         clusterColors().get(String(id)) ?? {
             bg: "rgb(128,128,128)",
-            fg: "#fff"
+            fg: "#fff",
         };
 
     const visibleClusters = createMemo(() => {
         const list = clusters();
         if (!showDominantOnly() || list.length === 0) return list;
-        const max = Math.max(...list.map(c => c.eventCount));
+        const max = Math.max(...list.map((c) => c.eventCount));
         const cutoff = max * 0.1;
-        return list.filter(c => c.eventCount > cutoff);
+        return list.filter((c) => c.eventCount > cutoff);
     });
 
-    const selectedClusterData = createMemo(() => clusters().find(c => c.id === selectedCluster()) ?? null);
+    const selectedClusterData = createMemo(() => clusters().find((c) => c.id === selectedCluster()) ?? null);
 
     createEffect(() => {
         const report = clusterReport();
@@ -93,9 +89,10 @@ export default function ConceptClusters() {
                 </Show>
 
                 <label class="switch">
-                    <input type="checkbox"
+                    <input
+                        type="checkbox"
                         checked={controls.showExemplars}
-                        onInput={e => controlsActions.setShowExemplars(e.currentTarget.checked)}
+                        onInput={(e) => controlsActions.setShowExemplars(e.currentTarget.checked)}
                     />
                     <span></span>
                 </label>
@@ -107,9 +104,7 @@ export default function ConceptClusters() {
             </Show>
 
             <Show when={clusterReport.error}>
-                <aside class="error-container">
-                    {String(clusterReport.error)}
-                </aside>
+                <aside class="error-container">{String(clusterReport.error)}</aside>
             </Show>
 
             <Show when={clusterReport()}>
@@ -118,23 +113,28 @@ export default function ConceptClusters() {
                 <nav class="scroll bottom-padding">
                     <div class="field middle-align">
                         <label class="switch">
-                            <span class="small-text">Dominant <br />clusters only</span>
-                            <input class="left-margin"
+                            <span class="small-text">
+                                Dominant <br />
+                                clusters only
+                            </span>
+                            <input
+                                class="left-margin"
                                 type="checkbox"
                                 checked={showDominantOnly()}
-                                onInput={e => setShowDominantOnly(e.currentTarget.checked)}
+                                onInput={(e) => setShowDominantOnly(e.currentTarget.checked)}
                             />
                             <span></span>
                         </label>
                     </div>
 
                     <For each={visibleClusters()}>
-                        {(c, i) => (
-                            <button
+                        {(c) => (
+                            <button type="button"
                                 class="chip"
                                 onClick={() => setSelectedCluster(c.id)}
                                 style={{
-                                    background: selectedCluster() === c.id ? getClusterColor(c.id).bg : "var(--color-background-secondary)",
+                                    background:
+                                        selectedCluster() === c.id ? getClusterColor(c.id).bg : "var(--color-background-secondary)",
                                     color: selectedCluster() === c.id ? getClusterColor(c.id).fg : "var(--color-secondary)",
                                 }}
                             >
@@ -154,7 +154,7 @@ export default function ConceptClusters() {
                                 <table class="surface">
                                     <caption>Top Tokens</caption>
                                     <For each={c().topTokens}>
-                                        {([t, n], i) => (
+                                        {([t, n]) => (
                                             <tr>
                                                 <td>x {n}</td>
                                                 <td>{t}</td>
@@ -166,9 +166,7 @@ export default function ConceptClusters() {
                                 <Show when={clusterReport()?.diagnostics}>
                                     {(d) => (
                                         <table>
-                                            <caption>
-                                                Cluster Diagnostics
-                                            </caption>
+                                            <caption>Cluster Diagnostics</caption>
                                             <tbody>
                                                 <tr>
                                                     <th>Events</th>
@@ -190,11 +188,8 @@ export default function ConceptClusters() {
 
                             <div class="s10">
                                 <div class="large-height scroll surface">
-
                                     <table class="stripes no-border scroll max">
-                                        <caption>
-                                            Top Documents
-                                        </caption>
+                                        <caption>Top Documents</caption>
                                         <thead class="fixed">
                                             <tr>
                                                 <td></td>
@@ -215,21 +210,18 @@ export default function ConceptClusters() {
                                                         author={clusterReport()?.docMeta[doc_id]?.author ?? null}
                                                         pub_year={clusterReport()?.docMeta[doc_id]?.pub_year ?? null}
                                                         title={clusterReport()?.docMeta[doc_id]?.title ?? null}
-                                                        exemplars={
-                                                            controls.showExemplars ? clusterExemplarsByDoc()?.[doc_id] ?? [] : []
-                                                        }
+                                                        exemplars={controls.showExemplars ? (clusterExemplarsByDoc()?.[doc_id] ?? []) : []}
                                                     />
                                                 )}
                                             </For>
                                         </tbody>
                                     </table>
-
                                 </div>
                             </div>
                         </div>
                     )}
                 </Show>
             </Show>
-        </article >
+        </article>
     );
 }

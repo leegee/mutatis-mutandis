@@ -2,30 +2,28 @@
 // Full-screen WebGL scatter plot for event data.
 // Pure render component: all state lives in the parent.
 
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { Deck, OrthographicView, LinearInterpolator } from "@deck.gl/core";
+import type { OrthographicViewState } from "@deck.gl/core";
+import { Deck, LinearInterpolator, OrthographicView } from "@deck.gl/core";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
-import type { OrthographicViewState, PickingInfo } from "@deck.gl/core";
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 
-import { GlowScatterplotLayer } from './GlowScatterplotLayer';
+import { GlowScatterplotLayer } from "./GlowScatterplotLayer";
 
 import "./style.css";
-import type { BfsDataset, ConceptDatasetSqlite, LabelPoint, PointData, ViewBounds } from "./types";
+import { buildColorMap } from "../../lib/colour";
+import type { ProjectionModeType } from "../../state/controls.store";
+import { fitDatasetBounds } from "./fitDatasetBounds";
 import { CanvasDragPlugin } from "./SelectionPlugin/CanvasDragPlugin";
 import { DeckClickPlugin } from "./SelectionPlugin/DeckClickPlugin";
 import { SelectionController } from "./SelectionPlugin/SelectionController";
 import type { Id, ScreenRect } from "./SelectionPlugin/types";
-import { buildColorMap } from "../../lib/colour";
-import { type ProjectionModeType } from "../../state/controls.store";
-import { fitDatasetBounds } from "./fitDatasetBounds";
+import type { BfsDataset, ConceptDatasetSqlite, LabelPoint, PointData, ViewBounds } from "./types";
 
 type RGB = [number, number, number];
 type RGBA = [number, number, number, number];
 
-
 const ZOOM_THRESHOLD = 7;
 const DRAG_THRESHOLD_PX = 6;
-
 
 const DEPTH_COLORS: Record<number, RGBA> = {
   0: [0, 0, 0, 0],
@@ -36,10 +34,10 @@ const DEPTH_COLORS: Record<number, RGBA> = {
 const GREY: RGBA = [120, 120, 130, 140];
 
 const INITIAL_VIEW_STATE: OrthographicViewState = {
-  target: [0.5, 0.5, 0],
+  target: [0, 0, 0],
   zoom: 10,
-  minZoom: 8,
-  maxZoom: 20,
+  minZoom: -10,
+  maxZoom: 100,
 };
 
 const brighten = ([r, g, b]: RGB | RGBA): RGBA => [
@@ -49,12 +47,7 @@ const brighten = ([r, g, b]: RGB | RGBA): RGBA => [
   255,
 ];
 
-const dim = ([r, g, b, a]: RGBA): RGBA => [
-  r * 0.75,
-  g * 0.75,
-  b * 0.75,
-  a,
-];
+const dim = ([r, g, b, a]: RGBA): RGBA => [r * 0.75, g * 0.75, b * 0.75, a];
 
 interface PlotProps {
   datasets: ConceptDatasetSqlite[];
@@ -83,13 +76,12 @@ const getBfsPosition = (p: PointData) => [p.gnx, p.gny, 0] as [number, number, n
 const getPosition = (p: PointData | LabelPoint, projection: ProjectionModeType): [number, number, number] =>
   projection === "global" ? [p.gnx, p.gny, 0] : [p.nx, p.ny, 0];
 
-
 export default function Plot(props: PlotProps) {
   let canvas!: HTMLCanvasElement;
   let deck: Deck<OrthographicView> | null = null;
   let controller: SelectionController<PointData> | undefined;
   let currentPoints: PointData[] = [];
-  let fontFamily = getComputedStyle(document.body).fontFamily;
+  const fontFamily = getComputedStyle(document.body).fontFamily;
 
   // Separate signal that only flips when the threshold actually crosses,
   // used solely to trigger a layer rebuild on that one frame.
@@ -106,8 +98,10 @@ export default function Plot(props: PlotProps) {
 
   const allPoints = createMemo(() => {
     const start = performance.now();
-    const result = props.datasets.flatMap(d => d.points || []);
-    console.debug(`[Plot] allPoints memo computed ${ result.length } points in ${ (performance.now() - start).toFixed(1) }ms`);
+    const result = props.datasets.flatMap((d) => d.points || []);
+    console.debug(
+      `[Plot] allPoints memo computed ${ result.length } points in ${ (performance.now() - start).toFixed(1) }ms`,
+    );
     return result;
   });
 
@@ -116,7 +110,7 @@ export default function Plot(props: PlotProps) {
   // Only rebuilds when the colour field values change, not every unrelated dataset mutation.
   const colorFieldValues = createMemo(() => {
     const field = props.colorBy;
-    return allPoints().map(p => String(p[field as keyof PointData] ?? ""));
+    return allPoints().map((p) => String(p[field as keyof PointData] ?? ""));
   });
 
   const colorMap = createMemo(() => buildColorMap(colorFieldValues()));
@@ -141,16 +135,9 @@ export default function Plot(props: PlotProps) {
         const opacity = props.neighbourOpacity ?? 100;
         const depth = p.depth ?? 1;
 
-        const alpha = depth === 2
-          ? Math.floor(opacity * 0.45)
-          : opacity;
+        const alpha = depth === 2 ? Math.floor(opacity * 0.45) : opacity;
 
-        base = [
-          base[0],
-          base[1],
-          base[2],
-          alpha,
-        ];
+        base = [base[0], base[1], base[2], alpha];
       }
 
       // Selection highlighting
@@ -162,11 +149,17 @@ export default function Plot(props: PlotProps) {
     };
   });
 
-  const mergedConceptPoints = createMemo(() => props.datasets.filter(d => d.type === "concept").flatMap(d => d.points || []));
+  const mergedConceptPoints = createMemo(() =>
+    props.datasets.filter((d) => d.type === "concept").flatMap((d) => d.points || []),
+  );
 
-  const mergedNeighbourPoints = createMemo(() => props.datasets.filter(d => d.type === "concept_neighbours").flatMap(d => d.points || []));
+  const mergedNeighbourPoints = createMemo(() =>
+    props.datasets.filter((d) => d.type === "concept_neighbours").flatMap((d) => d.points || []),
+  );
 
-  const mergedClusterPoints = createMemo(() => props.datasets.filter(d => d.type === "concept_clusters").flatMap(d => d.points || []));
+  const mergedClusterPoints = createMemo(() =>
+    props.datasets.filter((d) => d.type === "concept_clusters").flatMap((d) => d.points || []),
+  );
 
   const layers = createMemo(() => {
     const proj = props.projectionMode;
@@ -179,8 +172,8 @@ export default function Plot(props: PlotProps) {
     const clusterPoints = props.showClusterCentroids ? mergedClusterPoints() : [];
     const psf = props.plotPointScaleFactor;
 
+    // biome-ignore lint/suspicious/noExplicitAny: <time, sigh>
     const layersList: any[] = [];
-
 
     if (props.bfsDataset?.points?.length && proj === "global" && props.bfsOpacity) {
       layersList.push(
@@ -188,7 +181,7 @@ export default function Plot(props: PlotProps) {
           id: "bfs-global",
           data: props.bfsDataset.points,
           getPosition: getBfsPosition,
-          getFillColor: p => {
+          getFillColor: (p) => {
             const depth = p.depth ?? 0;
             const base = DEPTH_COLORS[depth] || DEPTH_COLORS[2];
             return [base[0], base[1], base[2], props.bfsOpacity ?? 90];
@@ -199,49 +192,48 @@ export default function Plot(props: PlotProps) {
           pickable: zoomed,
           updateTriggers: {
             getFillColor: [props.bfsOpacity],
-          }
-        })
+          },
+        }),
       );
     }
 
     if (clusterPoints.length > 0) {
-      layersList.push(new GlowScatterplotLayer<PointData>({
-        id: "clusters-merged",
-        coordinateSystem: "cartesian",
-        data: clusterPoints,
-        getPosition: p => getPosition(p, proj),
-        getFillColor: p => getColor()(p, 'concept_clusters'),
-        getRadius: 10.0 * psf,
-        radiusUnits: "pixels",
-        opacity: 0.25,
-        pickable: true,
-        autoHighlight: true,
-        highlightColor: [255, 255, 100, 180],
-        transitions: {
-          getPosition: { duration: 300 },
-          getFillColor: { duration: 300 },
-        },
-        updateTriggers: {
-          getRadius: [props.plotPointScaleFactor],
-          getPosition: [proj],
-          getFillColor: [props.colorBy, selectedEventIds()],
-        },
-        onHover: info => {
-          if (isDragging) return;
-          const point = info.object
-            ? { ...info.object, origin: "concept_clusters", }
-            : null;
-          props.onPointHover?.(point, point ? [info.x, info.y] : null);
-        }
-
-      }));
+      layersList.push(
+        new GlowScatterplotLayer<PointData>({
+          id: "clusters-merged",
+          coordinateSystem: "cartesian",
+          data: clusterPoints,
+          getPosition: (p) => getPosition(p, proj),
+          getFillColor: (p) => getColor()(p, "concept_clusters"),
+          getRadius: 10.0 * psf,
+          radiusUnits: "pixels",
+          opacity: 0.25,
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 100, 180],
+          transitions: {
+            getPosition: { duration: 300 },
+            getFillColor: { duration: 300 },
+          },
+          updateTriggers: {
+            getRadius: [props.plotPointScaleFactor],
+            getPosition: [proj],
+            getFillColor: [props.colorBy, selectedEventIds()],
+          },
+          onHover: (info) => {
+            if (isDragging) return;
+            const point = info.object ? { ...info.object, origin: "concept_clusters" } : null;
+            props.onPointHover?.(point, point ? [info.x, info.y] : null);
+          },
+        }),
+      );
 
       layersList.push(
         new TextLayer<LabelPoint>({
           id: "clusters-labels",
           data: clusterPoints,
           coordinateSystem: "cartesian",
-          getPosition: p => getPosition(p, proj),
+          getPosition: (p) => getPosition(p, proj),
           getSize: 12,
           getPixelOffset: [0, 20],
           fontFamily: fontFamily,
@@ -263,17 +255,14 @@ export default function Plot(props: PlotProps) {
             getPosition: [proj],
             getText: [props.colorBy],
           },
-          onHover: info => {
+          onHover: (info) => {
             if (isDragging) return;
-            const point = info.object
-              ? { ...info.object, origin: "concept_clusters", }
-              : null;
+            const point = info.object ? { ...info.object, origin: "concept_clusters" } : null;
             props.onPointHover?.(point, point ? [info.x, info.y] : null);
-          }
-        })
+          },
+        }),
       );
     }
-
 
     if (neighbourPoints.length > 0) {
       layersList.push(
@@ -281,10 +270,10 @@ export default function Plot(props: PlotProps) {
           id: "neighbours-merged",
           coordinateSystem: "cartesian",
           data: neighbourPoints,
-          getPosition: p => getPosition(p, proj),
-          getFillColor: p => getColor()(p, "neighbours"),
+          getPosition: (p) => getPosition(p, proj),
+          getFillColor: (p) => getColor()(p, "neighbours"),
           radiusUnits: "pixels",
-          getRadius: p => (p.depth === 2 ? 1.8 : 2.8) * psf,
+          getRadius: (p) => (p.depth === 2 ? 1.8 : 2.8) * psf,
           pickable: true, // zoomed,
           autoHighlight: true, // zoomed,
           highlightColor: [255, 255, 255, 100],
@@ -297,14 +286,12 @@ export default function Plot(props: PlotProps) {
             getPosition: [proj],
             getFillColor: [props.neighbourOpacity, props.colorBy, selectedEventIds()],
           },
-          onHover: info => {
+          onHover: (info) => {
             if (isDragging) return;
-            const point = info.object
-              ? { ...info.object, origin: "neighbours", }
-              : null;
+            const point = info.object ? { ...info.object, origin: "neighbours" } : null;
             props.onPointHover?.(point, point ? [info.x, info.y] : null);
-          }
-        })
+          },
+        }),
       );
     }
 
@@ -314,8 +301,8 @@ export default function Plot(props: PlotProps) {
           id: "concepts-merged",
           coordinateSystem: "cartesian",
           data: conceptPoints,
-          getPosition: p => getPosition(p, proj),
-          getFillColor: p => getColor()(p),
+          getPosition: (p) => getPosition(p, proj),
+          getFillColor: (p) => getColor()(p),
           radiusUnits: "pixels",
           getRadius: 5 * psf,
           opacity: 0.96,
@@ -332,14 +319,12 @@ export default function Plot(props: PlotProps) {
             getPosition: [proj],
             getFillColor: [props.colorBy, selectedEventIds(), props.colorByFields],
           },
-          onHover: info => {
+          onHover: (info) => {
             if (isDragging) return;
-            const point = info.object
-              ? { ...info.object, origin: "concept", }
-              : null;
+            const point = info.object ? { ...info.object, origin: "concept" } : null;
             props.onPointHover?.(point, point ? [info.x, info.y] : null);
-          }
-        })
+          },
+        }),
       );
     }
 
@@ -351,9 +336,9 @@ export default function Plot(props: PlotProps) {
     deck.setProps({
       initialViewState: {
         target,
-        zoom: newZoom,
-        minZoom: 2,
-        maxZoom: 30,
+        zoom: Math.max(INITIAL_VIEW_STATE.minZoom as number, Math.min(INITIAL_VIEW_STATE.maxZoom as number, newZoom)),
+        minZoom: INITIAL_VIEW_STATE.minZoom,
+        maxZoom: INITIAL_VIEW_STATE.maxZoom,
         transitionDuration: duration,
         transitionInterpolator: new LinearInterpolator(["target", "zoom"]),
       } as OrthographicViewState,
@@ -372,9 +357,9 @@ export default function Plot(props: PlotProps) {
     }
 
     if (props.onBoundsChange) {
-      const scale = Math.pow(2, z);
-      const halfW = (window.innerWidth / 2) / (512 * scale);
-      const halfH = (window.innerHeight / 2) / (512 * scale);
+      const scale = 2 ** z;
+      const halfW = window.innerWidth / 2 / (512 * scale);
+      const halfH = window.innerHeight / 2 / (512 * scale);
       const [cx, cy] = vs.target as [number, number, number];
       props.onBoundsChange({
         minX: cx - halfW,
@@ -403,9 +388,9 @@ export default function Plot(props: PlotProps) {
       multiKey: "Shift",
     });
 
-    controller.setChangeHandler(set => {
+    controller.setChangeHandler((set) => {
       console.debug("[plot.SelectionController changeHandler]", set);
-      const points = set ? currentPoints.filter(p => set.has(p.event_id)) : null;
+      const points = set ? currentPoints.filter((p) => set.has(p.event_id)) : null;
       props.onSelectionChange?.(points);
     });
 
@@ -417,12 +402,10 @@ export default function Plot(props: PlotProps) {
       }
     };
 
-    controller
-      .use(new DeckClickPlugin(deck, controller))
-      .use(new CanvasDragPlugin(canvas, deck, controller));
+    controller.use(new DeckClickPlugin(deck, controller)).use(new CanvasDragPlugin(canvas, deck, controller));
 
     // Record pointer-down position for distance-based click vs drag detection.
-    canvas.addEventListener("pointerdown", e => {
+    canvas.addEventListener("pointerdown", (e) => {
       pointerDownX = e.offsetX;
       pointerDownY = e.offsetY;
     });
@@ -433,7 +416,7 @@ export default function Plot(props: PlotProps) {
     // We restore pointerup here because click fires after the drag plugin
     // has already cleared isDragging, making the flag unreliable for filtering
     // drag-end events. pointerup fires before that cleanup.
-    canvas.addEventListener("pointerup", async e => {
+    canvas.addEventListener("pointerup", async (e) => {
       // Distance guard: if the pointer travelled more than DRAG_THRESHOLD_PX
       // this is a drag-end, not a click so ignore.
       const dx = e.offsetX - pointerDownX;
@@ -446,13 +429,11 @@ export default function Plot(props: PlotProps) {
       });
 
       // Avoid BFS and clsuter-markers
-      const cleanPick = pick
-        ?.filter(p => !p.sourceLayer?.id.startsWith("bfs-"))
-        .map(p => p.object)
-        .filter((o): o is PointData =>
-          !!o?.event_id &&
-          o.origin !== "concept_clusters"
-        ) ?? [];
+      const cleanPick =
+        pick
+          ?.filter((p) => !p.sourceLayer?.id.startsWith("bfs-"))
+          .map((p) => p.object)
+          .filter((o): o is PointData => !!o?.event_id && o.origin !== "concept_clusters") ?? [];
 
       if (cleanPick.length) {
         controller?.dispatch({ type: "click", payload: cleanPick });
@@ -473,24 +454,51 @@ export default function Plot(props: PlotProps) {
   // Fit camera to dataset bounds whenever projection mode or datasets change. This could be improved.
   createEffect(() => {
     const points = allPoints();
-    if (!points.length) return;
-    if (!deck || !points.length) return;
 
-    const fit = fitDatasetBounds(points, props.projectionMode);
+    console.log("[FIT EFFECT]", {
+      points: points.length,
+      deck: !!deck,
+      projection: props.projectionMode,
+    });
+
+    if (!points.length || !deck) return;
+
+    const fit = fitDatasetBounds(
+      points,
+      props.projectionMode,
+    );
+
+    console.log("[FIT]", fit);
+
     if (!fit) return;
 
     const padding = 1.2;
-    const zoom = Math.max(
-      2,
-      Math.min(
-        20,
-        Math.log2(
-          Math.min(canvas.clientWidth, canvas.clientHeight) /
-          (fit.extent * padding)
-        )
-      )
+    const canvasSize = Math.min(
+      canvas.clientWidth,
+      canvas.clientHeight,
     );
-    flyTo([fit.cx, fit.cy, 0], zoom, 400);
+
+    if (canvasSize <= 0) return;
+
+    const zoom = Math.max(
+      INITIAL_VIEW_STATE.minZoom as number,
+      Math.min(
+        INITIAL_VIEW_STATE.maxZoom as number,
+        Math.log2(canvasSize / (fit.extent * padding)),
+      ),
+    );
+
+    console.log("[FIT CAMERA]", {
+      target: [fit.cx, fit.cy, 0],
+      zoom,
+      canvasSize,
+    });
+
+    flyTo(
+      [fit.cx, fit.cy, 0],
+      zoom,
+      400,
+    );
   });
 
   onCleanup(() => {

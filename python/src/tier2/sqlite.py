@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS neighbours (
 CREATE TABLE IF NOT EXISTS concept_field_events (
     concept  TEXT    NOT NULL,
     event_id INTEGER NOT NULL,
+    role     TEXT    NOT NULL,
 
     PRIMARY KEY (concept, event_id),
     FOREIGN KEY (concept) REFERENCES concepts(concept),
@@ -285,10 +286,6 @@ def write_tier2_sqlite(
         field_event_rows = []
         neighbour_rows = []
 
-        event_rows = []
-        field_event_rows = []
-        neighbour_rows = []
-
         for event in events:
             event_id = int(event["event_id"])
 
@@ -310,6 +307,7 @@ def write_tier2_sqlite(
                 (
                     concept_name,
                     event_id,
+                    'seed',
                 )
             )
 
@@ -351,9 +349,10 @@ def write_tier2_sqlite(
             """
             INSERT INTO concept_field_events (
                 concept,
-                event_id
+                event_id,
+                role
             )
-            VALUES (?, ?)
+            VALUES (?, ?, ?)
             """,
             field_event_rows,
         )
