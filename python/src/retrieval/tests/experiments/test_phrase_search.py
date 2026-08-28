@@ -13,10 +13,7 @@ from lib.corpus_config import EVENTSTORE_T1_PATH
 from retrieval.diskann_observation_index_store import (
     DiskANNObservationIndexStore,
 )
-from retrieval.macberth_phrase_encoder import (
-    DEFAULT_CARRIER,
-    MacBertMeanPhraseEncoder,
-)
+from retrieval.macberth_phrase_encoder import MacBertMeanPhraseEncoder
 from retrieval.models import SearchSpace
 from retrieval.observation_retriever import IndexedObservationRetriever
 from retrieval.parquet_context import ParquetContext
@@ -35,12 +32,20 @@ K = 20
 
 PHRASE = "hair white as snow"
 
+# Generic wrapper for full, already-specified phrase queries. Unlike
+# single-term seeds (see retrieval/seed_carriers.py), a complete phrase
+# like this carries its own internal context and doesn't need a
+# disambiguating carrier -- this is just enough surrounding syntax for
+# MacBERTh to treat the span as an utterance rather than a bare fragment.
+CARRIER = "This refers to {}."
+
 
 def main() -> None:
     encoder = MacBertMeanPhraseEncoder()
 
     query = encoder.encode(
         PHRASE,
+        carrier=CARRIER,
     )
 
     index_store = DiskANNObservationIndexStore()
@@ -67,7 +72,7 @@ def main() -> None:
     logger.info("=" * 70)
     logger.info(f"phrase:     {PHRASE}")
     logger.info(f"encoder:    {type(encoder).__name__}")
-    logger.info(f"carrier:    {DEFAULT_CARRIER}")
+    logger.info(f"carrier:    {CARRIER}")
     logger.info(f"year:       {YEAR}")
     logger.info(f"scale:      {SCALE}")
     logger.info(f"k:          {K}")
