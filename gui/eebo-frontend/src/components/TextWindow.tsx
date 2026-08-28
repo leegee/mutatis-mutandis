@@ -1,7 +1,7 @@
 import { createResource, Show } from "solid-js";
 import { queryEventById } from "../services/db";
 import { fetchWindowBatch } from "../services/tokenWindowBatchApi";
-import { setWindowCache, getWindowCacheStore } from "../services/windowCache";
+import { getWindowCacheStore, setWindowCache } from "../services/windowCache";
 
 type TextWindowProps =
     | {
@@ -25,47 +25,44 @@ export default function TextWindow(props: TextWindowProps) {
         return `${ props.doc_id }:${ props.token_idx }`;
     };
 
-    const [windowText] = createResource(
-        windowKey,
-        async (key): Promise<string | null> => {
-            const cached = cache[key];
-            if (cached) return cached;
+    const [windowText] = createResource(windowKey, async (key): Promise<string | null> => {
+        const cached = cache[key];
+        if (cached) return cached;
 
-            let docId: string | null = null;
-            let tokenIdx: number | null = null;
-            let cacheKey = key;
+        let docId: string | null = null;
+        let tokenIdx: number | null = null;
+        let cacheKey = key;
 
-            if ("eventid" in props) {
-                const event = await queryEventById(props.eventid);
+        if ("eventid" in props) {
+            const event = await queryEventById(props.eventid);
 
-                if (!event || event.doc_id == null || event.token_idx == null) {
-                    return null;
-                }
-
-                docId = event.doc_id;
-                tokenIdx = event.token_idx;
-                cacheKey = event.event_id;
-            } else {
-                docId = props.doc_id;
-                tokenIdx = props.token_idx;
+            if (!event || event.doc_id == null || event.token_idx == null) {
+                return null;
             }
 
-            const res = await fetchWindowBatch([
-                {
-                    docId,
-                    tokenIdx,
-                },
-            ]);
-
-            const item = res.results[0];
-            if (!item) return null;
-
-            setWindowCache(cacheKey, item.content);
-            return item.content;
+            docId = event.doc_id;
+            tokenIdx = event.token_idx;
+            cacheKey = event.event_id;
+        } else {
+            docId = props.doc_id;
+            tokenIdx = props.token_idx;
         }
-    );
 
-    const style = () => "max-width: 100%;" + (props.style ?? "");
+        const res = await fetchWindowBatch([
+            {
+                docId,
+                tokenIdx,
+            },
+        ]);
+
+        const item = res.results[0];
+        if (!item) return null;
+
+        setWindowCache(cacheKey, item.content);
+        return item.content;
+    });
+
+    const style = () => `max-width: 100%;${ props.style ?? "" }`;
 
     return (
         <Show when={!windowText.loading} fallback={<progress />}>

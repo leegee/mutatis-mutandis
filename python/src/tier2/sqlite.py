@@ -48,7 +48,10 @@ CREATE TABLE IF NOT EXISTS neighbours (
     token_idx             INTEGER,
     window_id             INTEGER,
     window_token_pos     INTEGER,
-    score                REAL,
+    score                 REAL,
+    score_local            REAL,
+    score_medium           REAL,
+    score_broad            REAL,
 
     PRIMARY KEY (event_id, neighbour_event_id),
     FOREIGN KEY (event_id) REFERENCES events(event_id)
@@ -142,9 +145,14 @@ _DELETE_CONCEPT = (
         SELECT event_id FROM events WHERE concept = ?
     )
     """,
+    "DELETE FROM concept_field_events WHERE concept = ?",   # <-- add this
     "DELETE FROM events WHERE concept = ?",
     "DELETE FROM concepts WHERE concept = ?",
 )
+
+
+def _maybe_float(value):
+    return None if value is None else float(value)
 
 
 def _aggregate_rows(
@@ -152,41 +160,70 @@ def _aggregate_rows(
     events: list[dict],
 ):
     """
-    Yield the established concept_aggregate rows.
+    Yield concept_aggregate rows for the retrieved neighbourhood.
 
-    Aggregates describe the retrieved neighbourhood, not the lexical seed
-    set. A neighbour contributes once for each seed relationship in which it
-    occurs, so the same event may legitimately contribute multiple times.
+    Token and document rankings are weighted by each neighbour's RRF-fused
+    score, not just by how many seed events happened to retrieve it. RRF
+    score is derived from rank position within each scale's L2 search
+    results, which makes it comparable across neighbours even though raw
+    L2 distance is not directly comparable across queries or scales
+    (distance scale depends on embedding dimensionality and vector norm,
+    neither of which this aggregation should assume). This keeps
+    high-frequency, weakly-related tokens (short function words, numbers,
+    etc. that surface as "hub" points across many unrelated searches) from
+    dominating the aggregate ahead of genuinely close matches.
 
-    Windows use the neighbour's local window because that is the window
-    represented by the existing Tier 2 aggregate schema.
+    Windows retain retrieval-count semantics because each local window
+    represents a concrete retrieved relationship.
 
     Failure mode:
         A neighbour without a local_window_id cannot contribute to
         top_windows, but remains eligible for token and document aggregates.
     """
-    token_counts: Counter[str] = Counter()
-    doc_counts: Counter[str] = Counter()
+    token_seed_weight: dict[str, dict[int, float]] = {}
+    doc_seed_weight: dict[str, dict[int, float]] = {}
     window_counts: Counter[tuple[str, int]] = Counter()
 
     for event in events:
+        event_id = int(event["event_id"])
+
         for neighbour in event.get("neighbours", []):
+            weight = float(neighbour.get("score", 0.0))
+
             token = neighbour.get("token")
+
             if token is not None:
-                token_counts[str(token)] += 1
+                token = str(token)
+                per_event = token_seed_weight.setdefault(token, {})
+                # A seed event may retrieve the same token more than once;
+                # keep its single best (highest-weight) contribution.
+                per_event[event_id] = max(
+                    per_event.get(event_id, 0.0),
+                    weight,
+                )
 
             doc_id = neighbour.get("doc_id")
+
             if doc_id is not None:
                 doc_id = str(doc_id)
-                doc_counts[doc_id] += 1
+                per_event = doc_seed_weight.setdefault(doc_id, {})
+                per_event[event_id] = max(
+                    per_event.get(event_id, 0.0),
+                    weight,
+                )
 
             window_id = neighbour.get("local_window_id")
+
             if doc_id is not None and window_id is not None:
                 window_counts[(doc_id, int(window_id))] += 1
 
-    for rank, (token, count) in enumerate(
-        token_counts.most_common()
-    ):
+    token_ranked = sorted(
+        token_seed_weight.items(),
+        key=lambda item: sum(item[1].values()),
+        reverse=True,
+    )
+
+    for rank, (token, per_event) in enumerate(token_ranked):
         yield (
             concept_name,
             "token",
@@ -194,12 +231,16 @@ def _aggregate_rows(
             token,
             None,
             None,
-            count,
+            len(per_event),
         )
 
-    for rank, (doc_id, count) in enumerate(
-        doc_counts.most_common()
-    ):
+    doc_ranked = sorted(
+        doc_seed_weight.items(),
+        key=lambda item: sum(item[1].values()),
+        reverse=True,
+    )
+
+    for rank, (doc_id, per_event) in enumerate(doc_ranked):
         yield (
             concept_name,
             "doc",
@@ -207,7 +248,7 @@ def _aggregate_rows(
             doc_id,
             None,
             None,
-            count,
+            len(per_event),
         )
 
     for rank, ((doc_id, window_id), count) in enumerate(
@@ -222,6 +263,7 @@ def _aggregate_rows(
             window_id,
             count,
         )
+
 
 
 def write_tier2_sqlite(
@@ -324,9 +366,11 @@ def write_tier2_sqlite(
                         neighbour["local_window_id"],
                         neighbour["local_window_token_pos"],
                         float(neighbour["score"]),
+                        _maybe_float(neighbour.get("score_local")),
+                        _maybe_float(neighbour.get("score_medium")),
+                        _maybe_float(neighbour.get("score_broad")),
                     )
                 )
-
         con.executemany(
             """
             INSERT INTO events (
@@ -369,9 +413,12 @@ def write_tier2_sqlite(
                 token_idx,
                 window_id,
                 window_token_pos,
-                score
+                score,
+                score_local,
+                score_medium,
+                score_broad
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             neighbour_rows,
         )

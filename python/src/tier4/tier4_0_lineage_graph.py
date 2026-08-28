@@ -19,10 +19,8 @@ appears.
 These observations are produced from Tier 1 contextual embeddings: each
 occurrence of a concept-bearing token in EEBO is located within its local
 linguistic environment and encoded by MacBERTh. Thus two occurrences of the
-same lexical form (for example, "law") are separate observations if they
-appear in different passages, documents, or rhetorical contexts. Conversely,
-occurrences from different documents may occupy nearby regions of semantic
-space when their surrounding contexts are similar.
+same lexical form are separate observations when they appear in different
+passages, documents, or rhetorical contexts.
 
 Clustering these observations therefore groups recurring patterns of
 meaning-in-use rather than occurrences of the same spelling alone. A node
@@ -50,10 +48,9 @@ Lineage assignment therefore combines two signals:
        founding centroid of its lineage rather than merely following a chain
        of locally similar but progressively drifting clusters.
 
-The resulting graph is designed as an exploratory Digital Humanities
-instrument: a way to inspect possible trajectories of meaning change in the
-EEBO corpus, linking computationally identified semantic movements back to
-concrete contextual observations and source documents.
+Neighbour-profile deltas are a separate derived Tier 4 signal. They are
+computed from the completed Tier 2/3 database when this Tier 4 analysis runs,
+then included in the exported lineage graph.
 
 The graph should therefore be read as a map of changing semantic landscapes,
 not as a deterministic model of lexical evolution.
@@ -62,74 +59,57 @@ not as a deterministic model of lexical evolution.
 from __future__ import annotations
 
 import argparse
-import time
-import sqlite3
-from sqlite3 import Connection
 import json
+import sqlite3
+import time
 from collections import defaultdict
-import numpy as np
+from sqlite3 import Connection
+
 import networkx as nx
+import numpy as np
 
 from lib.corpus_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
-from lib.sqlite_vector_blob import blob_to_vector
 from lib.corpus_logging import logger
 from lib.get_processed_concepts import get_processed_concepts
+from lib.sqlite_vector_blob import blob_to_vector
 
-OUTPUT_DIR = GUI_PUBLIC_DIR / 'lineage'
+from tier4.temporal_neighbour_delta import (
+    build_neighbour_deltas_for_concept,
+    deltas_for_export,
+)
+
+
+OUTPUT_DIR = GUI_PUBLIC_DIR / "lineage"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Below this cosine similarity to its lineage's founding centroid, a node
-# is considered to have drifted away from the original concept even if
-# the edge that produced it had high structural confidence. This decouples
-# "plausible successor cluster" (edge confidence) from "still the same
-# concept" (semantic persistence).
+
+# A lineage may follow locally strong edges while gradually moving away from
+# its founding semantic region. This threshold detects that cumulative drift.
 DRIFT_THRESHOLD = 0.75
 
-# Structural confidence floor for treating an edge as a continuation at all.
+# Structural confidence required before an edge can continue an existing
+# lineage.
 CONFIDENCE_THRESHOLD = 0.95
 
-# How many concrete events (and, per event, how many neighbours) to embed
-# in each cluster node's export so the JSON is inspectable without going
-# back to the database.
+# Keep exports inspectable without copying every observation into JSON.
 EVENT_SAMPLE_SIZE = 8
 NEIGHBOUR_SAMPLE_SIZE = 5
+
+# Weak neighbour matches are excluded from both sampled contextual evidence
+# and the Tier 4 neighbour-profile comparison.
+MIN_NEIGHBOUR_SCORE = 0.02
 
 
 def cosine_similarity(a, b):
     a = np.asarray(a, dtype=np.float64)
     b = np.asarray(b, dtype=np.float64)
 
-    denom = (np.linalg.norm(a) * np.linalg.norm(b))
+    denom = np.linalg.norm(a) * np.linalg.norm(b)
 
     if denom == 0:
         return 0.0
 
     return float(np.dot(a, b) / denom)
-
-
-def load_clusters(con, concept):
-    rows = con.execute(
-        """
-        SELECT concept, pub_year, cluster_id, centroid_vector, point_count
-        FROM concept_year_cluster_info
-        WHERE concept=? AND cluster_id >= 0
-        ORDER BY pub_year, cluster_id
-        """,
-        (concept,),
-    )
-
-    clusters = []
-
-    for row in rows:
-        clusters.append( {
-            "concept": row[0],
-            "year": int(row[1]),
-            "cluster": int(row[2]),
-            "vector": blob_to_vector(row[3]),
-            "size": int(row[4]),
-        } )
-
-    return clusters
 
 
 def load_temporal_graph(con, concept):
@@ -146,11 +126,13 @@ def load_temporal_graph(con, concept):
     )
 
     for row in nodes:
-        concept, year, cluster, size, centroid_vector = row
+        concept_row, year, cluster, size, centroid_vector = row
+
         node_id = f"{year}:{cluster}"
+
         G.add_node(
             node_id,
-            concept=concept,
+            concept=concept_row,
             year=int(year),
             cluster=int(cluster),
             size=int(size),
@@ -163,7 +145,14 @@ def load_temporal_graph(con, concept):
 
     edges = con.execute(
         """
-        SELECT source_year, source_cluster, target_year, target_cluster, similarity, edge_type, confidence
+        SELECT
+            source_year,
+            source_cluster,
+            target_year,
+            target_cluster,
+            similarity,
+            edge_type,
+            confidence
         FROM temporal_cluster_edges
         WHERE concept=?
         """,
@@ -171,15 +160,21 @@ def load_temporal_graph(con, concept):
     )
 
     for row in edges:
-        ( sy, sc, ty, tc, similarity, edge_type, confidence, ) = row
+        (
+            source_year,
+            source_cluster,
+            target_year,
+            target_cluster,
+            similarity,
+            edge_type,
+            confidence,
+        ) = row
 
-        source_id = f"{sy}:{sc}"
-        target_id = f"{ty}:{tc}"
+        source_id = f"{source_year}:{source_cluster}"
+        target_id = f"{target_year}:{target_cluster}"
 
-        # Guard against edges referencing clusters filtered out of the
-        # node query above (e.g. noise clusters with cluster_id == -1).
-        # Without this, add_edge silently creates a bare node with no
-        # "year"/"vector" attrs, which later crashes assign_lineages.
+        # Edges referring to filtered-out clusters must not create implicit
+        # NetworkX nodes without the attributes required by lineage analysis.
         if source_id not in G or target_id not in G:
             logger.warning(
                 f"[tier4] skipping edge referencing missing node: "
@@ -192,9 +187,11 @@ def load_temporal_graph(con, concept):
             target_id,
             similarity=float(similarity),
             edge_type=edge_type,
-            confidence=float(
-                confidence
-            ) if confidence is not None else 0.0,
+            confidence=(
+                float(confidence)
+                if confidence is not None
+                else 0.0
+            ),
         )
 
     return G
@@ -231,7 +228,6 @@ def aggregate_cluster_context(
             continue
 
         token = token.lower()
-
         counts[token] = counts.get(token, 0) + 1
 
     return [
@@ -249,22 +245,18 @@ def aggregate_cluster_context(
 
 def assign_lineages(G):
     """
-    Assigns a lineage id to every node, and additionally tracks semantic
-    persistence: whether a node's centroid is still close to the centroid
-    that founded its lineage, independent of edge-level confidence.
+    Assign lineage ids while measuring semantic persistence against each
+    lineage's founding centroid rather than only its immediate parent.
 
-    Structural continuity (a confident edge exists) is necessary but not
-    sufficient for semantic persistence -- a chain of individually
-    plausible hops can still drift the meaning of a cluster over time.
-    So each node is checked against its lineage's *origin* vector, not
-    just its immediate parent's.
+    A strong sequence of local temporal edges can therefore still terminate
+    and start a new lineage when cumulative semantic drift becomes too large.
     """
 
     lineage = {}
     merged_from = {}
     persistence_score = {}
-    lineage_anchor = {}     # lineage_id -> founding node's vector
-    lineage_founder = {}    # lineage_id -> founding node id
+    lineage_anchor = {}
+    lineage_founder = {}
     next_lineage = 0
 
     nodes = sorted(
@@ -272,7 +264,7 @@ def assign_lineages(G):
         key=lambda n: (
             G.nodes[n]["year"],
             G.nodes[n]["cluster"],
-        )
+        ),
     )
 
     for node in nodes:
@@ -287,11 +279,11 @@ def assign_lineages(G):
             next_lineage += 1
             continue
 
-        # Rank all candidate parents by structural confidence so we can
-        # both pick the best one and record the rest as merge sources.
+        # The highest-confidence parent supplies structural continuity;
+        # remaining parents can be retained as merge sources.
         ranked = sorted(
             incoming,
-            key=lambda p: G.edges[p, node]["confidence"],
+            key=lambda parent: G.edges[parent, node]["confidence"],
             reverse=True,
         )
 
@@ -302,10 +294,13 @@ def assign_lineages(G):
         anchor_vector = lineage_anchor.get(parent_lineage)
 
         if node_vector is not None and anchor_vector is not None:
-            persistence = cosine_similarity(node_vector, anchor_vector)
+            persistence = cosine_similarity(
+                node_vector,
+                anchor_vector,
+            )
         else:
-            # No vector available -- fall back to structural confidence
-            # only, since we can't evaluate semantic drift directly.
+            # Without vectors, structural confidence is the only available
+            # continuity signal.
             persistence = confidence
 
         is_continuation = (
@@ -314,10 +309,8 @@ def assign_lineages(G):
         )
 
         if not is_continuation:
-            # Either the structural link is weak, or the cluster has
-            # drifted far enough from its lineage's origin that it no
-            # longer represents the same concept. Either way: new
-            # lineage, re-anchored at this node.
+            # The node either lacks sufficient structural support or has
+            # drifted too far from its lineage origin, so it starts anew.
             lineage[node] = next_lineage
             lineage_anchor[next_lineage] = node_vector
             lineage_founder[next_lineage] = node
@@ -327,15 +320,13 @@ def assign_lineages(G):
             lineage[node] = parent_lineage
             persistence_score[node] = persistence
 
-        # Any other incoming edge represents a merge: an earlier lineage
-        # folding into this node's lineage. Record it even though it
-        # didn't "win" the parent selection, so the merge isn't silently
-        # discarded.
+        # Preserve incoming edges from other lineages as merge evidence.
         other_lineages = sorted(
             {
-                lineage[p]
-                for p in ranked[1:]
-                if p in lineage and lineage[p] != lineage[node]
+                lineage[parent]
+                for parent in ranked[1:]
+                if parent in lineage
+                and lineage[parent] != lineage[node]
             }
         )
 
@@ -346,22 +337,22 @@ def assign_lineages(G):
     nx.set_node_attributes(G, merged_from, "merged_from")
     nx.set_node_attributes(G, persistence_score, "persistence")
 
-    # Per-lineage summary: the weakest persistence score seen anywhere in
-    # the lineage's chain. A lineage that never dips below DRIFT_THRESHOLD
-    # is "stable"; one that does dip is flagged even though every
-    # individual edge cleared the confidence bar.
     lineage_min_persistence = {}
 
-    for node, lid in lineage.items():
+    for node, lineage_id in lineage.items():
         score = persistence_score[node]
-        lineage_min_persistence[lid] = min(
+
+        lineage_min_persistence[lineage_id] = min(
             score,
-            lineage_min_persistence.get(lid, 1.0),
+            lineage_min_persistence.get(lineage_id, 1.0),
         )
 
     lineage_stability = {
-        lid: (min_score >= DRIFT_THRESHOLD)
-        for lid, min_score in lineage_min_persistence.items()
+        lineage_id: (
+            min_score >= DRIFT_THRESHOLD
+        )
+        for lineage_id, min_score
+        in lineage_min_persistence.items()
     }
 
     G.graph["lineage_min_persistence"] = lineage_min_persistence
@@ -373,37 +364,42 @@ def assign_lineages(G):
 
 def analyse_lineage(G):
     births = [
-        n
-        for n in G.nodes
-        if G.in_degree(n) == 0
+        node
+        for node in G.nodes
+        if G.in_degree(node) == 0
     ]
 
     deaths = [
-        n
-        for n in G.nodes
-        if G.out_degree(n) == 0
+        node
+        for node in G.nodes
+        if G.out_degree(node) == 0
     ]
 
     branching = [
-        (n, G.out_degree(n))
-        for n in G.nodes
-        if G.out_degree(n) > 1
+        (node, G.out_degree(node))
+        for node in G.nodes
+        if G.out_degree(node) > 1
     ]
 
     merging = [
-        (n, G.in_degree(n))
-        for n in G.nodes
-        if G.in_degree(n) > 1
+        (node, G.in_degree(node))
+        for node in G.nodes
+        if G.in_degree(node) > 1
     ]
 
     unstable = [
-        lid
-        for lid, stable in G.graph.get("lineage_stability", {}).items()
+        lineage_id
+        for lineage_id, stable
+        in G.graph.get("lineage_stability", {}).items()
         if not stable
     ]
 
-    logger.debug(f"[tier4] unstable lineages (drifted below {DRIFT_THRESHOLD}):")
+    logger.debug(
+        f"[tier4] unstable lineages "
+        f"(drifted below {DRIFT_THRESHOLD}):"
+    )
     logger.debug(unstable)
+
     return {
         "births": births,
         "deaths": deaths,
@@ -420,16 +416,14 @@ def sample_cluster_events(
     cluster_id,
     event_limit=EVENT_SAMPLE_SIZE,
     neighbour_limit=NEIGHBOUR_SAMPLE_SIZE,
+    min_neighbour_score=MIN_NEIGHBOUR_SCORE,
 ):
     """
-    Pull a small deterministic sample of concrete events belonging to
-    this (concept, year, cluster).
+    Pull a deterministic sample of concrete observations from a cluster.
 
-    Events remain individual historical observations. Neighbours are
-    aggregated by lexical form for display so repeated contextual matches
-    do not overwhelm the detail panel.
-
-    The underlying event ids and positions are retained inside examples.
+    Neighbours are grouped by lexical form so recurring contextual matches
+    remain visible without allowing individual neighbour rows to dominate
+    the exported detail.
     """
 
     rows = con.execute(
@@ -442,7 +436,7 @@ def sample_cluster_events(
             e.pub_year
         FROM concept_year_event_cluster c
         JOIN events e
-            ON e.event_id = c.event_id
+             ON e.event_id = c.event_id
         WHERE c.concept=?
           AND c.pub_year=?
           AND c.cluster_id=?
@@ -458,9 +452,8 @@ def sample_cluster_events(
     if not rows:
         return []
 
-    # The cluster membership table should contain one row per event, but
-    # keep this defensive deduplication so malformed historical data does
-    # not cause duplicate observations in the exported sample.
+    # Membership should be unique, but defensive deduplication prevents
+    # malformed historical data from duplicating exported observations.
     seen_events = set()
     unique_rows = []
 
@@ -475,9 +468,8 @@ def sample_cluster_events(
 
     rows = unique_rows
 
-    # Sample evenly across event-id order rather than simply taking the
-    # first N observations. This gives a deterministic spread through the
-    # cluster without introducing randomness into exported JSON.
+    # Even sampling gives a deterministic spread through the cluster rather
+    # than systematically favouring the first event ids.
     if len(rows) > event_limit:
         indices = sorted(
             {
@@ -490,10 +482,7 @@ def sample_cluster_events(
             }
         )
 
-        rows = [
-            rows[i]
-            for i in indices
-        ]
+        rows = [rows[i] for i in indices]
 
     samples = []
 
@@ -515,11 +504,13 @@ def sample_cluster_events(
                 n.score
             FROM neighbours n
             WHERE n.event_id=?
+              AND n.score >= ?
             ORDER BY n.score DESC
             LIMIT ?
             """,
             (
                 event_id,
+                min_neighbour_score,
                 neighbour_limit * 5,
             ),
         ).fetchall()
@@ -534,16 +525,14 @@ def sample_cluster_events(
             neighbour_token_idx,
             score,
         ) in neighbour_rows:
-            # A malformed neighbour row should not prevent the entire
-            # lineage export from succeeding.
             if not neighbour_token:
                 continue
 
-            neighbour_token = str( neighbour_token ).lower()
+            neighbour_token = str(neighbour_token).lower()
 
             grouped[neighbour_token].append(
                 {
-                    "neighbour_event_id": int( neighbour_event_id ),
+                    "neighbour_event_id": int(neighbour_event_id),
                     "doc_id": neighbour_doc_id,
                     "pub_year": (
                         int(neighbour_year)
@@ -575,8 +564,8 @@ def sample_cluster_events(
             ) in grouped.items()
         ]
 
-        # Rank recurring contextual neighbours ahead of one-off matches;
-        # similarity breaks ties.
+        # Recurrence is ranked ahead of isolated matches; similarity breaks
+        # ties between equally recurrent contextual neighbours.
         neighbours.sort(
             key=lambda neighbour: (
                 neighbour["count"],
@@ -584,10 +573,6 @@ def sample_cluster_events(
             ),
             reverse=True,
         )
-
-        neighbours = neighbours[
-            :neighbour_limit
-        ]
 
         samples.append(
             {
@@ -600,103 +585,193 @@ def sample_cluster_events(
                 ),
                 "token": token,
                 "pub_year": int(ev_year),
-                "neighbours": neighbours,
+                "neighbours": neighbours[:neighbour_limit],
             }
         )
 
     return samples
 
 
-def export_lineage(con, concept, G, analysis=None,):
+def export_lineage(
+    con,
+    concept,
+    G,
+    analysis=None,
+):
     nodes = []
+
+    # This only reads the Tier 4-derived delta table. Computation happens
+    # once, before export, in analyse_concept_lineage().
+    neighbour_deltas = deltas_for_export(
+        con,
+        concept,
+    )
 
     rows = con.execute(
         """
-        SELECT concept, pub_year, cluster_id, point_count, centroid_nx, centroid_ny, centroid_gnx, centroid_gny
+        SELECT
+            concept,
+            pub_year,
+            cluster_id,
+            point_count,
+            centroid_nx,
+            centroid_ny,
+            centroid_gnx,
+            centroid_gny
         FROM concept_year_cluster_info
         WHERE concept=?
         ORDER BY pub_year, cluster_id
         """,
-        (concept,)
+        (concept,),
     )
 
-    lineage_min_persistence = G.graph.get("lineage_min_persistence", {})
-    lineage_stability = G.graph.get("lineage_stability", {})
+    lineage_stability = G.graph.get(
+        "lineage_stability",
+        {},
+    )
 
     for row in rows:
-        ( concept, year, cluster, size, nx, ny, gnx, gny, ) = row
+        (
+            concept_row,
+            year,
+            cluster,
+            size,
+            local_x,
+            local_y,
+            global_x,
+            global_y,
+        ) = row
+
         node_id = f"{year}:{cluster}"
 
         if node_id not in G:
-            # e.g. noise cluster, filtered out of the graph entirely
             continue
 
         node_lineage = G.nodes[node_id].get("lineage")
 
-        nodes.append({
-            "id": f"{year}:{cluster}",
-            "year": year,
-            "cluster": cluster,
-            "size": size,
-            "lineage": node_lineage,
-            "merged_from": G.nodes[node_id].get("merged_from", []),
-            "persistence_score": G.nodes[node_id].get("persistence"),
-            "lineage_stable": lineage_stability.get(node_lineage),
-            "local": {
-                "x": nx if nx is not None else 0,
-                "y": ny if ny is not None else 0,
-            },
-            "global": {
-                "x": gnx if gnx is not None else 0,
-                "y": gny if gny is not None else 0,
-            },
-            "event_sample": sample_cluster_events(
-                con, concept, year, cluster,
-            ),
-            "context_profile": aggregate_cluster_context(
-                con, concept, year, cluster,
-            ),
-        })
-
+        nodes.append(
+            {
+                "id": node_id,
+                "year": year,
+                "cluster": cluster,
+                "size": size,
+                "lineage": node_lineage,
+                "merged_from": G.nodes[node_id].get(
+                    "merged_from",
+                    [],
+                ),
+                "persistence_score": G.nodes[node_id].get(
+                    "persistence"
+                ),
+                "lineage_stable": lineage_stability.get(
+                    node_lineage
+                ),
+                "local": {
+                    "x": (
+                        local_x
+                        if local_x is not None
+                        else 0
+                    ),
+                    "y": (
+                        local_y
+                        if local_y is not None
+                        else 0
+                    ),
+                },
+                "global": {
+                    "x": (
+                        global_x
+                        if global_x is not None
+                        else 0
+                    ),
+                    "y": (
+                        global_y
+                        if global_y is not None
+                        else 0
+                    ),
+                },
+                "event_sample": sample_cluster_events(
+                    con,
+                    concept,
+                    year,
+                    cluster,
+                    min_neighbour_score=MIN_NEIGHBOUR_SCORE,
+                ),
+                "retrieval_profile": aggregate_cluster_context(
+                    con,
+                    concept,
+                    year,
+                    cluster,
+                ),
+            }
+        )
 
     edges = []
 
     rows = con.execute(
         """
-        SELECT source_year, source_cluster, target_year, target_cluster, similarity, confidence, edge_type
+        SELECT
+            source_year,
+            source_cluster,
+            target_year,
+            target_cluster,
+            similarity,
+            confidence,
+            edge_type
         FROM temporal_cluster_edges
         WHERE concept=?
         """,
-        (concept,)
+        (concept,),
     )
-
 
     for row in rows:
         (
-            sy,
-            sc,
-            ty,
-            tc,
-            sim,
+            source_year,
+            source_cluster,
+            target_year,
+            target_cluster,
+            similarity,
             confidence,
             edge_type,
         ) = row
 
-        edges.append({
-            "source": f"{sy}:{sc}",
-            "target": f"{ty}:{tc}",
-            "similarity": sim,
+        source = f"{source_year}:{source_cluster}"
+        target = f"{target_year}:{target_cluster}"
+
+        link = {
+            "source": source,
+            "target": target,
+            "similarity": similarity,
             "confidence": confidence,
             "type": edge_type,
-        })
+        }
+
+        delta = neighbour_deltas["by_edge"].get(
+            f"{source}->{target}"
+        )
+
+        if delta is not None:
+            link["neighbour"] = {
+                "jaccard": delta["jaccard"],
+                "cosine": delta["cosine"],
+                "gained": delta["gained"][:10],
+                "lost": delta["lost"][:10],
+                "stable": delta["stable"][:10],
+            }
+
+        edges.append(link)
 
     lineages_summary = [
         {
-            "lineage": lid,
+            "lineage": lineage_id,
             "min_persistence": min_score,
-            "stable": lineage_stability.get(lid),
+            "stable": lineage_stability.get(lineage_id),
         }
-        for lid, min_score in lineage_min_persistence.items()
+        for lineage_id, min_score
+        in G.graph.get(
+            "lineage_min_persistence",
+            {},
+        ).items()
     ]
 
     return {
@@ -704,26 +779,71 @@ def export_lineage(con, concept, G, analysis=None,):
         "concept": concept,
         "nodes": nodes,
         "links": edges,
+        "neighbour_deltas": neighbour_deltas,
         "lineages": lineages_summary,
         "drift_threshold": DRIFT_THRESHOLD,
         "confidence_threshold": CONFIDENCE_THRESHOLD,
+        "neighbour_min_score": MIN_NEIGHBOUR_SCORE,
         "summary": {
             "nodes": G.number_of_nodes(),
             "edges": G.number_of_edges(),
-            "lineages": len(lineage_min_persistence),
-            "stable_lineages": sum(lineage_stability.values()),
-            "births": len(analysis["births"]) if analysis else 0,
-            "deaths": len(analysis["deaths"]) if analysis else 0,
-            "branching": len(analysis["branching"]) if analysis else 0,
-            "merging": len(analysis["merging"]) if analysis else 0,
-            "unstable_lineages": len(analysis["unstable"]) if analysis else 0,
+            "lineages": len(lineages_summary),
+            "stable_lineages": sum(
+                bool(value)
+                for value in lineage_stability.values()
+            ),
+            "births": (
+                len(analysis["births"])
+                if analysis
+                else 0
+            ),
+            "deaths": (
+                len(analysis["deaths"])
+                if analysis
+                else 0
+            ),
+            "branching": (
+                len(analysis["branching"])
+                if analysis
+                else 0
+            ),
+            "merging": (
+                len(analysis["merging"])
+                if analysis
+                else 0
+            ),
+            "unstable_lineages": (
+                len(analysis["unstable"])
+                if analysis
+                else 0
+            ),
         },
         "events": {
-            "births": analysis["births"] if analysis else [],
-            "deaths": analysis["deaths"] if analysis else [],
-            "branching": analysis["branching"] if analysis else [],
-            "merging": analysis["merging"] if analysis else [],
-            "unstable": analysis["unstable"] if analysis else [],
+            "births": (
+                analysis["births"]
+                if analysis
+                else []
+            ),
+            "deaths": (
+                analysis["deaths"]
+                if analysis
+                else []
+            ),
+            "branching": (
+                analysis["branching"]
+                if analysis
+                else []
+            ),
+            "merging": (
+                analysis["merging"]
+                if analysis
+                else []
+            ),
+            "unstable": (
+                analysis["unstable"]
+                if analysis
+                else []
+            ),
         },
     }
 
@@ -731,13 +851,27 @@ def export_lineage(con, concept, G, analysis=None,):
 def analyse_concept_lineage(
     con: Connection,
     concept: str,
+    *,
+    min_neighbour_score: float = MIN_NEIGHBOUR_SCORE,
 ) -> dict[str, object]:
-    logger.info( f"[tier4] analysing {concept}" )
+    logger.info(f"[tier4] analysing {concept}")
 
-    G = load_temporal_graph( con, concept, )
+    G = load_temporal_graph(
+        con,
+        concept,
+    )
 
     G = assign_lineages(G)
     analysis = analyse_lineage(G)
+
+    # Neighbour deltas are a derived Tier 4 analysis. The database is
+    # treated as the completed Tier 2/3 input; export only reads this result.
+    build_neighbour_deltas_for_concept(
+        con,
+        concept,
+        min_score=min_neighbour_score,
+        top_n=20,
+    )
 
     return export_lineage(
         con,
@@ -752,31 +886,76 @@ def service(
     con: Connection,
     concept: str,
     write_json: bool = False,
+    min_neighbour_score: float = MIN_NEIGHBOUR_SCORE,
 ) -> dict[str, object]:
     started = time.perf_counter()
-    result = analyse_concept_lineage( con, concept, )
+
+    result = analyse_concept_lineage(
+        con,
+        concept,
+        min_neighbour_score=min_neighbour_score,
+    )
+
     elapsed = time.perf_counter() - started
 
-    result["elapsed_seconds"] = round( elapsed, 3, )
+    result["elapsed_seconds"] = round(
+        elapsed,
+        3,
+    )
 
     if write_json:
-        json_path = ( OUTPUT_DIR / f"{concept}_lineage.json" )
-        with open( json_path, "w", encoding="utf8", ) as f:
-            json.dump( result, f, indent=2, )
-        result["json_path"] = str(json_path)
-        logger.info(f"[tier4-service] wrote {json_path}")
+        json_path = OUTPUT_DIR / f"{concept}_lineage.json"
 
-    logger.info( f"[tier4-service] completed {concept} in {elapsed:.2f}s" )
+        with open(
+            json_path,
+            "w",
+            encoding="utf8",
+        ) as f:
+            json.dump(
+                result,
+                f,
+                indent=2,
+            )
+
+        result["json_path"] = str(json_path)
+
+        logger.info(
+            f"[tier4-service] wrote {json_path}"
+        )
+
+    logger.info(
+        f"[tier4-service] completed "
+        f"{concept} in {elapsed:.2f}s"
+    )
+
     return result
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--concept", )
-    parser.add_argument( "--json", action="store_true", default=True)
+
+    parser.add_argument(
+        "--concept",
+    )
+
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        default=True,
+    )
+
+    parser.add_argument(
+        "--min-score",
+        default=MIN_NEIGHBOUR_SCORE,
+        type=float,
+        help="Minimum neighbour similarity used by Tier 4 neighbour-profile analysis",
+    )
+
     args = parser.parse_args()
 
-    con = sqlite3.connect( CORPUS_TIER2_DB_PATH )
+    con = sqlite3.connect(
+        CORPUS_TIER2_DB_PATH
+    )
 
     try:
         concepts = (
@@ -788,8 +967,17 @@ def main():
         )
 
         for concept in concepts:
-            result = service( con=con, concept=concept, write_json=args.json, )
-            logger.info( f"[tier4-main] {result['concept']} complete" )
+            result = service(
+                con=con,
+                concept=concept,
+                write_json=args.json,
+                min_neighbour_score=args.min_score,
+            )
+
+            logger.info(
+                f"[tier4-main] "
+                f"{result['concept']} complete"
+            )
 
     finally:
         con.close()
@@ -797,4 +985,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

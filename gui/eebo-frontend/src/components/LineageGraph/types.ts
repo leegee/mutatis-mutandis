@@ -1,84 +1,82 @@
 export type Neighbour = {
-    token: string;
-    count: number;
-    max_score: number;
-    examples: {
-        doc_id: string;
-        token_idx: number;
-        pub_year: number;
-        score: number;
-        depth: number;
-    }[];
+	token: string;
+	count: number;
+	max_score: number;
+	examples: {
+		doc_id: string;
+		token_idx: number;
+		pub_year: number;
+		score: number;
+		depth: number;
+	}[];
 };
 
 export type ContextProfileItem = {
-    token: string;
-    count: number;
-}
+	token: string;
+	count: number;
+};
 
 export type EventSample = {
-    event_id: string;
-    doc_id: string;
-    token_idx: number;
-    token: string;
-    pub_year: number;
-    neighbours: Neighbour[];
+	event_id: string;
+	doc_id: string;
+	token_idx: number;
+	token: string;
+	pub_year: number;
+	neighbours: Neighbour[];
 };
 
 export type LineageNode = {
-    id: string;
-    year: number;
-    cluster: number;
-    size: number;
-    lineage?: number;
-    merged_from?: number[];
-    persistence_score?: number;
-    lineage_stable?: boolean;
-    event_sample?: EventSample[];
-    context_profile: ContextProfileItem[]
-    local?: {
-        x: number;
-        y: number;
-    };
+	id: string;
+	year: number;
+	cluster: number;
+	size: number;
+	lineage?: number;
+	merged_from?: number[];
+	persistence_score?: number;
+	lineage_stable?: boolean;
+	event_sample?: EventSample[];
+	retrieval_profile: ContextProfileItem[];
+	local?: {
+		x: number;
+		y: number;
+	};
 
-    global?: {
-        x: number;
-        y: number;
-    };
+	global?: {
+		x: number;
+		y: number;
+	};
 };
 
-
 export type LineageLink = {
-    source: string;
-    target: string;
-    similarity: number;
-    confidence: number;
-    type: string;
+	source: string;
+	target: string;
+	similarity: number;
+	confidence: number;
+	type: string;
 };
 
 export type LineageData = {
-    concept: string;
-    nodes: LineageNode[];
-    links: LineageLink[];
+	concept: string;
+	nodes: LineageNode[];
+	links: LineageLink[];
 };
 
 export type TooltipState = {
-    node: LineageNode;
-    x: number;
-    y: number;
+	node: LineageNode;
+	x: number;
+	y: number;
 };
 
-
 export type ViewportRatio = {
-    // Both 0..1, expressed as a fraction of the detail view's full
-    // scrollable width -- not pixels, so they stay meaningful regardless
-    // of container size or how many years are in the timeline.
-    startRatio: number;
-    endRatio: number;
+	// Both 0..1, expressed as a fraction of the detail view's full
+	// scrollable width -- not pixels, so they stay meaningful regardless
+	// of container size or how many years are in the timeline.
+	startRatio: number;
+	endRatio: number;
 };
 
 export type ScrollState = {
-    scrollLeft: number;
-    scrollWidth: number;
-    clientWidth: number;
+	scrollLeft: number;
+	scrollWidth: number;
+	clientWidth: number;
 };

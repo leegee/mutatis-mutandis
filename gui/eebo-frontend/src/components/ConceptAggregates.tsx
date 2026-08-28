@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, For } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import { execRows } from "../services/db";
 import { controls } from "../state/controls.store";
 import ControlsHeader from "./ControlsHeader";
@@ -59,8 +59,8 @@ export default function ConceptAggregates() {
         count: Number(row[5]),
       }));
 
-      setTokenRows(typedRows.filter(r => r.category === 'Top Token'));
-      setDocRows(typedRows.filter(r => r.category === 'Top Document'));
+      setTokenRows(typedRows.filter((r) => r.category === "Top Token"));
+      setDocRows(typedRows.filter((r) => r.category === "Top Document"));
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to execute query");
@@ -96,18 +96,20 @@ export default function ConceptAggregates() {
       </Show>
 
       <Show when={error()}>
-        <aside class="error-container"><h3>Error</h3>{error()}</aside>
+        <aside class="error-container">
+          <h3>Error</h3>
+          {error()}
+        </aside>
       </Show>
 
       <div class="grid">
-
         {/* Tokens Table - Left Column */}
         <div class="s6">
           <Show when={tokenRows().length > 0 && !loading()}>
             <section>
               <h3>Top Tokens</h3>
               <div class="large-height scroll surface">
-                <table class="stripes no-border scroll max">
+                <table class="stripes no-border  max">
                   <thead class="fixed">
                     <tr>
                       <th>Rank</th>
@@ -120,7 +122,9 @@ export default function ConceptAggregates() {
                       {(row) => (
                         <tr>
                           <td>{row.rank + 1}</td>
-                          <td><strong>{row.item}</strong></td>
+                          <td>
+                            <strong>{row.item}</strong>
+                          </td>
                           <td>{new Intl.NumberFormat().format(row.count)}</td>
                         </tr>
                       )}
@@ -138,7 +142,7 @@ export default function ConceptAggregates() {
             <section>
               <h3>Top Documents</h3>
               <div class="large-height scroll surface">
-                <table class="stripes no-border scroll max">
+                <table class="stripes no-border max">
                   <thead class="fixed">
                     <tr>
                       <th>Rank</th>
@@ -153,14 +157,15 @@ export default function ConceptAggregates() {
                       {(row) => {
                         const avgPerEvent = row.nEvents > 0 ? (row.count / row.nEvents).toFixed(2) : "0.00";
                         const totalNeighbourSlots = row.nEvents * 25;
-                        const percent = totalNeighbourSlots > 0
-                          ? ((row.count / totalNeighbourSlots) * 100).toFixed(1)
-                          : "0.0";
+                        const percent =
+                          totalNeighbourSlots > 0 ? ((row.count / totalNeighbourSlots) * 100).toFixed(1) : "0.0";
 
                         return (
                           <tr>
                             <td>{row.rank + 1}</td>
-                            <td><strong>{row.item}</strong></td>
+                            <td>
+                              <strong>{row.item}</strong>
+                            </td>
                             <td>{new Intl.NumberFormat().format(row.count)}</td>
                             <td>{avgPerEvent}</td>
                             <td>{percent}%</td>
@@ -174,7 +179,6 @@ export default function ConceptAggregates() {
             </section>
           </Show>
         </div>
-
       </div>
 
       <Show when={!controls.conceptSelection[0]}>

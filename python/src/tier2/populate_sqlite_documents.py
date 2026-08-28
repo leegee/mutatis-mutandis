@@ -114,7 +114,8 @@ def fetch_documents(
                     corpus,
                     author,
                     title,
-                    pub_year
+                    pub_year,
+                    pub_place
                 FROM documents
                 WHERE doc_id = ANY(%s)
                 """,
@@ -205,14 +206,16 @@ def populate_documents(
                 corpus,
                 author,
                 title,
-                pub_year
+                pub_year,
+                pub_place
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(doc_id) DO UPDATE SET
                 corpus = excluded.corpus,
                 author = excluded.author,
                 title = excluded.title,
-                pub_year = excluded.pub_year
+                pub_year = excluded.pub_year,
+                pub_place = excluded.pub_place,
             """,
             rows,
         )

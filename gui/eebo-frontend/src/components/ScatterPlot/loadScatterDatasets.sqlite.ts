@@ -3,85 +3,61 @@ import type { YearMode } from "../../types";
 import type { ConceptDatasetSqlite, PointData } from "./types";
 
 type SqlFragment = {
-    sql: string;
-    params: any[];
+	sql: string;
+	params: any[];
 };
 
-function yearFilter(
-    tablePrefix: string,
-    yearMode: YearMode,
-    fromYear: number,
-    toYear: number
-): SqlFragment {
-    const col = `${ tablePrefix }pub_year`;
+function yearFilter(tablePrefix: string, yearMode: YearMode, fromYear: number, toYear: number): SqlFragment {
+	const col = `${tablePrefix}pub_year`;
 
-    if (yearMode === "single") {
-        return {
-            sql: `AND ${ col } = ?`,
-            params: [fromYear],
-        };
-    }
+	if (yearMode === "single") {
+		return {
+			sql: `AND ${col} = ?`,
+			params: [fromYear],
+		};
+	}
 
-    return {
-        sql: `AND ${ col } BETWEEN ? AND ?`,
-        params: [fromYear, toYear],
-    };
+	return {
+		sql: `AND ${col} BETWEEN ? AND ?`,
+		params: [fromYear, toYear],
+	};
 }
-
 
 function authorMatchFilter(str: string): SqlFragment {
-    const term = str
-        .replace(/\\/g, "\\\\")
-        .replace(/%/g, "\\%")
-        .replace(/_/g, "\\_");
+	const term = str.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 
-    return {
-        sql: `AND d.author LIKE ? ESCAPE '\\'`,
-        params: [`%${ term }%`],
-    };
+	return {
+		sql: `AND d.author LIKE ? ESCAPE '\\'`,
+		params: [`%${term}%`],
+	};
 }
-
 
 interface LoadDatasetsParams {
-    concepts: string[];
-    fromYear: number;
-    toYear: number;
-    yearMode: YearMode;
-    authorMatch: string;
-    dataType: string;
+	concepts: string[];
+	fromYear: number;
+	toYear: number;
+	yearMode: YearMode;
+	authorMatch: string;
+	dataType: string;
 }
 
+export async function loadDatasets(params: LoadDatasetsParams): Promise<ConceptDatasetSqlite[]> {
+	console.debug(`[loadDatasets] START ${params.dataType}`, params.concepts);
 
-export async function loadDatasets(
-    params: LoadDatasetsParams
-): Promise<ConceptDatasetSqlite[]> {
+	const start = performance.now();
 
-    console.debug(
-        `[loadDatasets] START ${ params.dataType }`,
-        params.concepts
-    );
+	try {
+		const rv = await Promise.all(
+			params.concepts.map(async (concept) => {
+				let sql = "";
+				let queryParams: any[] = [];
 
-    const start = performance.now();
+				if (params.dataType === "concept_neighbours") {
+					const year = yearFilter("neighbourhood_event.", params.yearMode, params.fromYear, params.toYear);
 
-    try {
-        const rv = await Promise.all(
-            params.concepts.map(async (concept) => {
-                let sql = "";
-                let queryParams: any[] = [];
+					const author = params.authorMatch?.trim() ? authorMatchFilter(params.authorMatch) : null;
 
-                if (params.dataType === "concept_neighbours") {
-                    const year = yearFilter(
-                        "neighbourhood_event.",
-                        params.yearMode,
-                        params.fromYear,
-                        params.toYear
-                    );
-
-                    const author = params.authorMatch?.trim()
-                        ? authorMatchFilter(params.authorMatch)
-                        : null;
-
-                    sql = `SELECT
+					sql = `SELECT
                             neighbourhood_event.event_id,
                             neighbourhood_event.token,
                             neighbourhood_event.doc_id,
@@ -93,28 +69,20 @@ export async function loadDatasets(
                             neighbourhood_event.gnx,
                             neighbourhood_event.gny,
                             neighbourhood_event.cluster_id,
-                            neighbourhood_event.cluster_label,
-                            n.depth
+                            neighbourhood_event.cluster_label
                         FROM concept_field_events seed
                             JOIN neighbours n ON n.event_id = seed.event_id
                             JOIN events neighbourhood_event
                                 ON neighbourhood_event.event_id = n.neighbour_event_id
                             WHERE seed.concept = ?
                             AND seed.role = 'seed'
-                          ${ author ? author.sql : "" }
-                          ${ year.sql }
+                          ${author ? author.sql : ""}
+                          ${year.sql}
                     `;
 
-                    queryParams = [
-                        concept,
-                        ...(author ? author.params : []),
-                        ...year.params,
-                    ];
-
-                }
-
-                else if (params.dataType === "concept_clusters") {
-                    sql = `
+					queryParams = [concept, ...(author ? author.params : []), ...year.params];
+				} else if (params.dataType === "concept_clusters") {
+					sql = `
                         SELECT
                             c.cluster_id,
                             c.cluster_label,
@@ -137,23 +105,13 @@ export async function loadDatasets(
                         ORDER BY c.cluster_id
                     `;
 
-                    queryParams = [concept, params.fromYear, params.toYear,];
-                }
+					queryParams = [concept, params.fromYear, params.toYear];
+				} else {
+					const year = yearFilter("e.", params.yearMode, params.fromYear, params.toYear);
 
-                else {
-                    const year = yearFilter(
-                        "e.",
-                        params.yearMode,
-                        params.fromYear,
-                        params.toYear
-                    );
+					const author = params.authorMatch?.trim() ? authorMatchFilter(params.authorMatch) : null;
 
-                    const author =
-                        params.authorMatch?.trim()
-                            ? authorMatchFilter(params.authorMatch)
-                            : null;
-
-                    sql = `
+					sql = `
                         SELECT
                             e.event_id,
                             e.token,
@@ -172,105 +130,87 @@ export async function loadDatasets(
                             LEFT JOIN documents d ON d.doc_id = e.doc_id
                             WHERE f.concept = ?
                             AND f.role = 'seed'
-                          ${ author ? author.sql : "" }
-                          ${ year.sql }
+                          ${author ? author.sql : ""}
+                          ${year.sql}
                     `;
 
-                    queryParams = [
-                        concept,
-                        ...(author ? author.params : []),
-                        ...year.params,
-                    ];
-                }
+					queryParams = [concept, ...(author ? author.params : []), ...year.params];
+				}
 
-                const points = await execRows(sql, queryParams);
+				const points = await execRows(sql, queryParams);
 
-                console.debug(`[loadDatasets] ${ concept } | ${ params.dataType } | ${ points.length }`);
+				console.debug(`[loadDatasets] ${concept} | ${params.dataType} | ${points.length}`);
 
-                return {
-                    concept,
-                    type: params.dataType,
-                    points: (points as any[]).map((p: any[]) => {
-                        if (params.dataType === "concept_clusters") {
-                            return {
-                                event_id: `${ concept }-cluster-${ p[0] }`,
-                                cluster_id: p[0],
-                                cluster_label: p[1],
-                                nx: p[2],
-                                ny: p[3],
-                                gnx: p[4],
-                                gny: p[5],
-                                point_count: p[6],
-                                label: p[7],
-                                description: p[8],
-                                concept,
-                                token: "_NULL_",
-                                token_idx: -999,
-                                doc_id: "_NULL_",
-                                pub_year: -999,
-                                vector_id: "_NULL_",
-                                window_id: -999,
-                                window_token_pos: -999,
-                                windowKey: "_NULL_",
-                            } as PointData;
-                        }
+				return {
+					concept,
+					type: params.dataType,
+					points: (points as any[]).map((p: any[]) => {
+						if (params.dataType === "concept_clusters") {
+							return {
+								event_id: `${concept}-cluster-${p[0]}`,
+								cluster_id: p[0],
+								cluster_label: p[1],
+								nx: p[2],
+								ny: p[3],
+								gnx: p[4],
+								gny: p[5],
+								point_count: p[6],
+								label: p[7],
+								description: p[8],
+								concept,
+								token: "_NULL_",
+								token_idx: -999,
+								doc_id: "_NULL_",
+								pub_year: -999,
+								vector_id: "_NULL_",
+								window_id: -999,
+								window_token_pos: -999,
+								windowKey: "_NULL_",
+							} as PointData;
+						}
 
-                        return {
-                            event_id: String(p[0]),
-                            token: p[1],
-                            doc_id: p[2],
-                            pub_year: p[3],
-                            token_idx: p[4],
-                            window_id: p[5],
-                            nx: p[6],
-                            ny: p[7],
-                            gnx: p[8],
-                            gny: p[9],
-                            cluster_id: p[10],
-                            cluster_label: p[11],
-                            depth: p[12],
-                            concept,
-                        } as PointData;
-                    }),
-                } as ConceptDatasetSqlite;
+						return {
+							event_id: String(p[0]),
+							token: p[1],
+							doc_id: p[2],
+							pub_year: p[3],
+							token_idx: p[4],
+							window_id: p[5],
+							nx: p[6],
+							ny: p[7],
+							gnx: p[8],
+							gny: p[9],
+							cluster_id: p[10],
+							cluster_label: p[11],
+							concept,
+						} as PointData;
+					}),
+				} as ConceptDatasetSqlite;
+			}),
+		);
 
-            })
-        );
-
-        console.debug(`[loadDatasets] FINISHED in ${ (performance.now() - start).toFixed(1) }ms`);
-        return rv;
-    }
-
-    catch (error) {
-        console.error("loadDatasets error", error);
-        return [];
-    }
+		console.debug(`[loadDatasets] FINISHED in ${(performance.now() - start).toFixed(1)}ms`);
+		return rv;
+	} catch (error) {
+		console.error("loadDatasets error", error);
+		return [];
+	}
 }
 
+export async function loadBfsDataset(params: { fromYear: number; toYear: number; yearMode: YearMode }) {
+	if (!params) {
+		return {
+			type: "bfs_global",
+			points: [],
+		};
+	}
 
-export async function loadBfsDataset(params: {
-    fromYear: number;
-    toYear: number;
-    yearMode: YearMode;
-}) {
+	console.time("[loadBfsDataset]");
 
-    if (!params) {
-        return {
-            type: "bfs_global",
-            points: [],
-        };
-    }
+	const year = yearFilter("neighbourhood_event.", params.yearMode, params.fromYear, params.toYear);
 
-    console.time("[loadBfsDataset]");
-
-    const year = yearFilter(
-        "neighbourhood_event.",
-        params.yearMode,
-        params.fromYear,
-        params.toYear
-    );
-
-    const points = await execRows(`
+	const points = await execRows(
+		`
         SELECT
             neighbourhood_event.event_id,
             neighbourhood_event.token,
@@ -281,23 +221,22 @@ export async function loadBfsDataset(params: {
             neighbourhood_event.nx,
             neighbourhood_event.ny,
             neighbourhood_event.gnx,
-            neighbourhood_event.gny,
-            n.depth
+            neighbourhood_event.gny
         FROM neighbours n
         JOIN events neighbourhood_event
             ON neighbourhood_event.event_id = n.neighbour_event_id
         WHERE neighbourhood_event.pub_year IS NOT NULL
-        ${ year.sql }
+        ${year.sql}
         `,
-        year.params
-    );
-    console.timeEnd("[loadBfsDataset]");
+		year.params,
+	);
+	console.timeEnd("[loadBfsDataset]");
 
-    return {
-        type: "bfs_global",
-        points: (points as any[]).map((p) => ({
-            ...p,
-            event_id: String(p.event_id),
-        })),
-    };
+	return {
+		type: "bfs_global",
+		points: (points as any[]).map((p) => ({
+			...p,
+			event_id: String(p.event_id),
+		})),
+	};
 }

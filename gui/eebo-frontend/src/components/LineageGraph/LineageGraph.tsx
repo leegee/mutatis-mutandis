@@ -1,12 +1,11 @@
-import { createEffect, createSignal, onMount, onCleanup, Show } from "solid-js";
 import * as d3 from "d3";
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 
 import { CORPUS_END_YEAR, CORPUS_START_YEAR } from "../../corpus_config";
-
+import DetailPanel from "./DetailPanel";
 import styles from "./LineageGraph.module.css";
 import Tooltip from "./Tooltip";
-import DetailPanel from "./DetailPanel";
-import type { LineageData, LineageNode, ViewportRatio, ScrollState, } from "./types";
+import type { LineageData, LineageNode, ScrollState, ViewportRatio } from "./types";
 
 const YEAR_RANGE_FROM_DATA = false;
 
@@ -42,18 +41,10 @@ type TooltipState = {
     y: number;
 };
 
+function semanticDistance(a: LineageNode, b: LineageNode): number {
+    if (!a.global || !b.global) return 0;
 
-function semanticDistance(
-    a: LineageNode,
-    b: LineageNode
-): number {
-    if (!a.global || !b.global)
-        return 0;
-
-    return Math.hypot(
-        a.global.x - b.global.x,
-        a.global.y - b.global.y
-    );
+    return Math.hypot(a.global.x - b.global.x, a.global.y - b.global.y);
 }
 
 /**
@@ -67,18 +58,17 @@ function semanticDistance(
  * projection, so we compute the direction actually justified by the
  * data's own spread rather than picking an axis arbitrarily.
  */
-function projectOntoPrincipalAxis(
-    points: { x: number; y: number }[]
-): number[] {
+function projectOntoPrincipalAxis(points: { x: number; y: number }[]): number[] {
     const n = points.length;
 
-    if (n === 0)
-        return [];
+    if (n === 0) return [];
 
-    const meanX = d3.mean(points, p => p.x) ?? 0;
-    const meanY = d3.mean(points, p => p.y) ?? 0;
+    const meanX = d3.mean(points, (p) => p.x) ?? 0;
+    const meanY = d3.mean(points, (p) => p.y) ?? 0;
 
-    let varX = 0, varY = 0, covXY = 0;
+    let varX = 0,
+        varY = 0,
+        covXY = 0;
 
     for (const p of points) {
         const dx = p.x - meanX;
@@ -110,10 +100,8 @@ function projectOntoPrincipalAxis(
         ey /= norm;
     }
 
-    return points.map(p => (p.x - meanX) * ex + (p.y - meanY) * ey);
+    return points.map((p) => (p.x - meanX) * ex + (p.y - meanY) * ey);
 }
-
-
 
 export default function LineageGraph(props: LineageGraphProps) {
     let svgRef!: SVGSVGElement;
@@ -125,8 +113,7 @@ export default function LineageGraph(props: LineageGraphProps) {
     const variant = () => props.variant ?? "detail";
 
     onMount(() => {
-        if (variant() !== "detail")
-            return;
+        if (variant() !== "detail") return;
 
         props.onContainerReady?.(containerRef);
 
@@ -140,13 +127,10 @@ export default function LineageGraph(props: LineageGraphProps) {
 
         const onWheel = (e: WheelEvent) => {
             // Ignore pinch zoom
-            if (e.ctrlKey)
-                return;
+            if (e.ctrlKey) return;
 
             // If the user is already scrolling horizontally (ie trackpad), preserve that.
-            const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY)
-                ? e.deltaX
-                : e.deltaY;
+            const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
 
             if (delta !== 0) {
                 e.preventDefault();
@@ -165,8 +149,7 @@ export default function LineageGraph(props: LineageGraphProps) {
     });
 
     createEffect(() => {
-        if (!svgRef || !props.data)
-            return;
+        if (!svgRef || !props.data) return;
 
         render(props.data);
     });
@@ -191,10 +174,8 @@ export default function LineageGraph(props: LineageGraphProps) {
 
         const years = [
             ...new Set(
-                YEAR_RANGE_FROM_DATA
-                    ? graph.nodes.map(n => n.year)
-                    : d3.range(CORPUS_START_YEAR, CORPUS_END_YEAR + 1)
-            )
+                YEAR_RANGE_FROM_DATA ? graph.nodes.map((n) => n.year) : d3.range(CORPUS_START_YEAR, CORPUS_END_YEAR + 1),
+            ),
         ].sort();
 
         const margin = isOverview
@@ -211,31 +192,26 @@ export default function LineageGraph(props: LineageGraphProps) {
 
             const usableWidth = graphWidth - margin.left - margin.right;
 
-            x = d3.scaleOrdinal<number, number>()
+            x = d3
+                .scaleOrdinal<number, number>()
                 .domain(years)
                 .range(
                     years.map((_, i) =>
-                        years.length <= 1
-                            ? graphWidth / 2
-                            : margin.left + (i / (years.length - 1)) * usableWidth
-                    )
+                        years.length <= 1 ? graphWidth / 2 : margin.left + (i / (years.length - 1)) * usableWidth,
+                    ),
                 );
         } else {
             const yearSpacing = 180;
 
-            graphWidth =
-                margin.left + margin.right +
-                Math.max(0, years.length - 1) * yearSpacing;
+            graphWidth = margin.left + margin.right + Math.max(0, years.length - 1) * yearSpacing;
 
-            x = d3.scaleOrdinal<number, number>()
+            x = d3
+                .scaleOrdinal<number, number>()
                 .domain(years)
-                .range(
-                    years.map((_, i) => margin.left + i * yearSpacing)
-                );
+                .range(years.map((_, i) => margin.left + i * yearSpacing));
         }
 
-        svg.attr("viewBox", `0 0 ${ graphWidth } ${ height }`)
-            .attr("preserveAspectRatio", "xMinYMin meet");
+        svg.attr("viewBox", `0 0 ${ graphWidth } ${ height }`).attr("preserveAspectRatio", "xMinYMin meet");
 
         if (!isOverview) {
             // Clicking empty canvas dismisses the detail panel.
@@ -243,30 +219,26 @@ export default function LineageGraph(props: LineageGraphProps) {
         }
 
         const principalCoords = projectOntoPrincipalAxis(
-            graph.nodes.map(n => ({
+            graph.nodes.map((n) => ({
                 x: n.global?.x ?? 0,
                 y: n.global?.y ?? 0,
-            }))
+            })),
         );
 
-        const y = d3.scaleLinear()
+        const y = d3
+            .scaleLinear()
             .domain(d3.extent(principalCoords) as [number, number])
             .range([margin.top, height - margin.bottom]);
 
         const positions = new Map<string, [number, number]>();
 
         graph.nodes.forEach((node, i) => {
-            positions.set(node.id, [
-                x(node.year)!,
-                y(principalCoords[i])
-            ]);
+            positions.set(node.id, [x(node.year)!, y(principalCoords[i])]);
         });
 
-        const radius = d3.scaleSqrt()
-            .domain([
-                0,
-                d3.max(graph.nodes, d => d.size) ?? 1
-            ])
+        const radius = d3
+            .scaleSqrt()
+            .domain([0, d3.max(graph.nodes, (d) => d.size) ?? 1])
             .range(isOverview ? [1, 5] : [6, 40]);
 
         if (!isOverview) {
@@ -283,19 +255,17 @@ export default function LineageGraph(props: LineageGraphProps) {
             // exceeds twice the max node radius, so this naturally stays
             // scoped within each year without needing to constrain it
             // explicitly.
-            const simNodes = graph.nodes.map(node => {
+            const simNodes = graph.nodes.map((node) => {
                 const [px, py] = positions.get(node.id)!;
                 return { id: node.id, x: px, y: py, targetX: px, targetY: py };
             });
 
             d3.forceSimulation(simNodes)
-                .force("x", d3.forceX<typeof simNodes[number]>(d => d.targetX).strength(0.9))
-                .force("y", d3.forceY<typeof simNodes[number]>(d => d.targetY).strength(0.9))
+                .force("x", d3.forceX<(typeof simNodes)[number]>((d) => d.targetX).strength(0.9))
+                .force("y", d3.forceY<(typeof simNodes)[number]>((d) => d.targetY).strength(0.9))
                 .force(
                     "collide",
-                    d3.forceCollide<typeof simNodes[number]>(
-                        d => radius(graph.nodes.find(n => n.id === d.id)!.size) + 1
-                    )
+                    d3.forceCollide<(typeof simNodes)[number]>((d) => radius(graph.nodes.find((n) => n.id === d.id)!.size) + 1),
                 )
                 .stop()
                 .tick(120);
@@ -313,14 +283,12 @@ export default function LineageGraph(props: LineageGraphProps) {
 
             // Highlights which slice of the (much wider) detail view is
             // currently scrolled into view.
-            root.append("rect")
+            root
+                .append("rect")
                 .attr("class", styles.viewportBand)
                 .attr("x", margin.left + vp.startRatio * usableWidth)
                 .attr("y", 0)
-                .attr(
-                    "width",
-                    Math.max(2, (vp.endRatio - vp.startRatio) * usableWidth)
-                )
+                .attr("width", Math.max(2, (vp.endRatio - vp.startRatio) * usableWidth))
                 .attr("height", height);
 
             const navigate = (event: MouseEvent) => {
@@ -337,11 +305,12 @@ export default function LineageGraph(props: LineageGraphProps) {
             });
 
             svg.on("mousemove", (event: MouseEvent) => {
-                if (dragging)
-                    navigate(event);
+                if (dragging) navigate(event);
             });
 
-            const stopDrag = () => { dragging = false; };
+            const stopDrag = () => {
+                dragging = false;
+            };
 
             svg.on("mouseup", stopDrag);
             svg.on("mouseleave", stopDrag);
@@ -351,56 +320,41 @@ export default function LineageGraph(props: LineageGraphProps) {
         // edges
         //
 
-        root.selectAll("path")
+        root
+            .selectAll("path")
             .data(graph.links)
             .enter()
             .append("path")
             .attr("class", styles.edge)
-            .attr(
-                "d",
-                link => {
-                    const a = positions.get(link.source);
-                    const b = positions.get(link.target);
+            .attr("d", (link) => {
+                const a = positions.get(link.source);
+                const b = positions.get(link.target);
 
-                    if (!a || !b)
-                        return "";
+                if (!a || !b) return "";
 
-                    const mid = (a[0] + b[0]) / 2;
+                const mid = (a[0] + b[0]) / 2;
 
-                    return `
+                return `
                 M ${ a[0] } ${ a[1] }
                 C ${ mid } ${ a[1] },
                   ${ mid } ${ b[1] },
                   ${ b[0] } ${ b[1] }
             `;
-                }
-            )
-            .attr(
-                "stroke-width",
-                d => Math.max(isOverview ? 0.5 : 1, d.confidence * (isOverview ? 3 : 8))
-            )
-            .attr("opacity", d => Math.max(0.2, d.similarity))
-            .attr(
-                "stroke-dasharray",
-                d => (!isOverview && d.type !== "CONTINUATION") ? "6,4" : null
-            );
+            })
+            .attr("stroke-width", (d) => Math.max(isOverview ? 0.5 : 1, d.confidence * (isOverview ? 3 : 8)))
+            .attr("opacity", (d) => Math.max(0.2, d.similarity))
+            .attr("stroke-dasharray", (d) => (!isOverview && d.type !== "CONTINUATION" ? "6,4" : null));
 
         //
         // nodes
 
-        const nodeById = new Map(
-            graph.nodes.map(n => [n.id, n])
-        );
+        const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
 
         // Distance from immediate predecessor.
         const driftDistance = new Map<string, number>();
 
         for (const node of graph.nodes) {
-            const incoming = graph.links.find(
-                l =>
-                    l.target === node.id &&
-                    l.type === "CONTINUATION"
-            );
+            const incoming = graph.links.find((l) => l.target === node.id && l.type === "CONTINUATION");
 
             if (!incoming) {
                 // Founder node: no previous meaning state.
@@ -410,12 +364,7 @@ export default function LineageGraph(props: LineageGraphProps) {
 
             const parent = nodeById.get(incoming.source);
 
-            driftDistance.set(
-                node.id,
-                parent
-                    ? semanticDistance(node, parent)
-                    : 0
-            );
+            driftDistance.set(node.id, parent ? semanticDistance(node, parent) : 0);
         }
 
         const persistenceScore = new Map<string, number>();
@@ -428,39 +377,28 @@ export default function LineageGraph(props: LineageGraphProps) {
             // predecessor, so both should count -- otherwise every
             // split's secondary branch renders as a false "new lineage".
             const incoming = graph.links.filter(
-                l =>
-                    l.target === node.id &&
-                    (l.type === "CONTINUATION" || l.type === "SIGNIFICANT")
+                (l) => l.target === node.id && (l.type === "CONTINUATION" || l.type === "SIGNIFICANT"),
             );
 
             if (incoming.length === 0) {
                 persistenceScore.set(node.id, NaN);
             } else {
-                persistenceScore.set(
-                    node.id,
-                    d3.max(incoming, e => e.similarity) ?? NaN
-                );
+                persistenceScore.set(node.id, d3.max(incoming, (e) => e.similarity) ?? NaN);
             }
         }
 
-        const lineageColour =
-            d3.scaleSequential<string>()
-                .domain([0.85, 1])
-                .interpolator(d3.interpolateRdYlGn);
+        const lineageColour = d3.scaleSequential<string>().domain([0.85, 1]).interpolator(d3.interpolateRdYlGn);
 
-        const circles = root.selectAll("circle")
+        const circles = root
+            .selectAll("circle")
             .data(graph.nodes)
             .enter()
             .append("circle")
-            .attr("class", d =>
-                d.id === selectedNode()?.id
-                    ? `${ styles.node } ${ styles.nodeSelected }`
-                    : styles.node
-            )
-            .attr("cx", d => positions.get(d.id)![0])
-            .attr("cy", d => positions.get(d.id)![1])
-            .attr("r", d => radius(d.size))
-            .attr("fill", d => {
+            .attr("class", (d) => (d.id === selectedNode()?.id ? `${ styles.node } ${ styles.nodeSelected }` : styles.node))
+            .attr("cx", (d) => positions.get(d.id)![0])
+            .attr("cy", (d) => positions.get(d.id)![1])
+            .attr("r", (d) => radius(d.size))
+            .attr("fill", (d) => {
                 const score = persistenceScore.get(d.id);
 
                 // no predecessor = new lineage
@@ -470,10 +408,7 @@ export default function LineageGraph(props: LineageGraphProps) {
 
                 return lineageColour(score);
             })
-            .attr(
-                "stroke-dasharray",
-                d => d.lineage_stable === false ? "3,2" : null
-            );
+            .attr("stroke-dasharray", (d) => (d.lineage_stable === false ? "3,2" : null));
 
         if (!isOverview) {
             // Per-node hover/click detail only makes sense at detail
@@ -505,40 +440,31 @@ export default function LineageGraph(props: LineageGraphProps) {
             //
             // years labels
             //
-            root.selectAll("text")
+            root
+                .selectAll("text")
                 .data(years)
                 .enter()
                 .append("text")
-                .attr("x", yr => x(yr)!)
+                .attr("x", (yr) => x(yr)!)
                 .attr("y", 20)
                 .attr("text-anchor", "middle")
-                .text(yr => yr);
+                .text((yr) => yr);
         }
     }
 
     return (
         <article
-            class={
-                variant() === "overview"
-                    ? `${ styles.component } ${ styles.overview }`
-                    : styles.component
-            }
+            class={variant() === "overview" ? `${ styles.component } ${ styles.overview }` : styles.component}
             ref={containerRef}
         >
             <svg ref={svgRef} />
 
             <Show when={variant() === "detail" && tooltip()}>
-                {t => <Tooltip tooltip={t()} concept={props.data.concept} />}
+                {(t) => <Tooltip tooltip={t()} concept={props.data.concept} />}
             </Show>
 
             <Show when={variant() === "detail" && selectedNode()}>
-                {n => (
-                    <DetailPanel
-                        node={n()}
-                        concept={props.data.concept}
-                        onClose={() => setSelectedNode(null)}
-                    />
-                )}
+                {(n) => <DetailPanel node={n()} concept={props.data.concept} onClose={() => setSelectedNode(null)} />}
             </Show>
         </article>
     );
