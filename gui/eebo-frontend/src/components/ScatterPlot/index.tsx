@@ -4,7 +4,7 @@ import { useSearchParams } from "@solidjs/router";
 import { createEffect, createResource, createSignal, Match, Show, Switch } from "solid-js";
 import { controlsActions } from "../../state/controls.actions";
 import { selectIds } from "../../state/controls.selectors";
-import { type ColorScatterByType, controls, type ProjectionModeType } from "../../state/controls.store";
+import { type ColorScatterByType, controls, } from "../../state/controls.store";
 import ControlsHeader from "../ControlsHeader";
 import GlobalMessageDisplay from "../GlobalMessageDisplay";
 import SidebarMultiple from "../SidebarMultiple";
