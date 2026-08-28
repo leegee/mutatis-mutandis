@@ -322,8 +322,8 @@ def build_tier3_resources(
     observation access.
 
     SQLite remains the disposable Tier 3 result store because the
-    downstream schema and consumers still expect the existing events
-    and concept_cluster_info tables.
+    downstream schema and consumers still expect the existing
+    events and concept_cluster_info tables.
     """
     store_path = Path( store_path or EVENTSTORE_T1_PATH )
     db_path    = Path( db_path or CORPUS_TIER2_DB_PATH )
@@ -352,56 +352,10 @@ def build_tier3_resources(
     def load_rows_for_concept( concept ):
         return load_event_rows( con, concept )
 
-    all_field_event_ids = []
-    strata = []
-
-    for concept in concepts:
-        rows = load_rows_for_concept( concept )
-
-        for row in rows:
-            event_id = int( row[0] )
-
-            if ( len(row) > 2 and row[2] is not None ):
-                year = int(row[2])
-            else:
-                year = int( lookup.pub_year[
-                    lookup.get_pos( event_id )
-                ] )
-
-            all_field_event_ids.append( event_id )
-
-            strata.append(
-                (
-                    concept,
-                    year // YEAR_BUCKET,
-                )
-            )
-
-    seen = {}
-
-    for event_id, stratum in zip(
-        all_field_event_ids,
-        strata,
-    ):
-        if event_id not in seen:
-            seen[event_id] = stratum
-
-    uniq_ids = list(
-        seen.keys()
-    )
-
-    uniq_strata = [
-        seen[event_id]
-        for event_id in uniq_ids
-    ]
-
-    if not uniq_ids:
-        global_coords = {}
-
-    else:
-        # global_coords = build_global_projection( lookup, uniq_ids, strata=uniq_strata, )
-        # TOO EXPENSIVE FOR NOW
-        global_coords = None
+    # Global projection is disabled because its cost is currently
+    # disproportionate to its value. Do not scan the event field merely
+    # to construct inputs for a projection that is not being built.
+    global_coords = None
 
     return {
         "backend": "parquet+lance",
@@ -513,7 +467,7 @@ def main():
                 n_neighbors=args.neighbors,
             )
 
-            logger.info( "[tier3-main] completed {result.get('concept')}" )
+            logger.info( f"[tier3-main] completed {result.get('concept')}" )
 
     finally:
         con = resources.get("con")

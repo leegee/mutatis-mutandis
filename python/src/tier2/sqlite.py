@@ -304,7 +304,13 @@ def write_tier2_sqlite(
 
         con.execute("BEGIN")
 
-        for statement in _DELETE_CONCEPT:
+        for index, statement in enumerate(_DELETE_CONCEPT):
+            logger.info(
+                "[tier2] deleting concept=%s phase=%d",
+                concept_name,
+                index,
+            )
+
             con.execute(
                 statement,
                 (concept_name,),
