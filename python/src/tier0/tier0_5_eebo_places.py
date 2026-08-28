@@ -10,9 +10,8 @@ import requests
 import re
 import unicodedata
 from collections import defaultdict
-import sqlite3
 
-from lib.corpus_db import get_connection
+from lib.corpus_db import get_connection, analysis_db_connection
 from lib.corpus_logging import logger
 from lib.corpus_config import CORPUS_TIER2_DB_PATH
 
@@ -604,8 +603,6 @@ def geocode_places(conn: psycopg.Connection):
 
 
 def export_document_places_sqlite(conn, sqlite):
-    import sqlite3
-
     pg_rows = []
 
     with conn.cursor() as cur:
@@ -655,7 +652,7 @@ def main():
     conn = get_connection(application_name="normalize_places")
     create_place(conn)
     geocode_places(conn)
-    sqlite = sqlite3.connect(CORPUS_TIER2_DB_PATH)
+    sqlite = analysis_db_connection(CORPUS_TIER2_DB_PATH)
     export_document_places_sqlite( conn, sqlite )
     sqlite.close()
     final_sql(conn)

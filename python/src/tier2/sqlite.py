@@ -4,11 +4,11 @@ tier2/sqlite.py
 
 from __future__ import annotations
 
-import sqlite3
 from collections import Counter
 from pathlib import Path
 
 from lib.corpus_logging import logger
+from lib.corpus_db import analysis_db_connection
 
 
 _SCHEMA_INIT = """
@@ -291,7 +291,7 @@ def write_tier2_sqlite(
 
     logger.info( "[tier2] writing sqlite -> %s", db_path, )
 
-    con = sqlite3.connect(db_path)
+    con = analysis_db_connection(db_path)
 
     try:
         con.execute("PRAGMA foreign_keys = ON")

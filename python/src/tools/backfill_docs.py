@@ -9,7 +9,6 @@ The EEBO catalogue is never loaded into memory.
 from __future__ import annotations
 
 import json
-import sqlite3
 
 from lib.corpus_config import CORPUS_TIER2_DB_PATH
 from lib.corpus_db import get_connection
@@ -19,7 +18,7 @@ BATCH_SIZE = 1000
 
 
 def sqlite_connection(path):
-    con = sqlite3.connect(path)
+    con = analysis_db_connection(path)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=NORMAL")
     return con

@@ -6,7 +6,6 @@ tier3/tier3_0_project_cluster.py
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import time
 from pathlib import Path
 
@@ -27,12 +26,13 @@ from lib.corpus_config import (
 from lib.corpus_logging import logger
 from lib.sqlite_vector_blob import vector_to_blob
 from tier1.observation_store_api import open_observation_lookup
+from lib.corpus_db import analysis_db_connection
 
 YEAR_BUCKET = 10
 
 
 def sqlite_connection(path: Path):
-    con = sqlite3.connect(path)
+    con = analysis_db_connection(path)
     con.execute("PRAGMA busy_timeout=5000")
     return con
 

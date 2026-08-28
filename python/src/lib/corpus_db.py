@@ -366,7 +366,16 @@ def refresh_views(conn: Connection) -> None:
 
 def sqlite3_connection(db_path):
     import sqlite3
-    con = sqlite3.connect(db_path)
+    con = analysis_db_connection(db_path)
     con.execute("PRAGMA journal_mode=WAL;")
     con.execute("PRAGMA synchronous=NORMAL;")
     return con
+
+
+def analysis_db_connection(db_path):
+    import sqlite3
+    con = (db_path)
+    con.execute("PRAGMA journal_mode=WAL;")
+    con.execute("PRAGMA synchronous=NORMAL;")
+    return con
+

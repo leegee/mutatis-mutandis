@@ -60,11 +60,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import time
 from collections import defaultdict
 from sqlite3 import Connection
-
+from lib.corpus_db import analysis_db_connection
 import networkx as nx
 import numpy as np
 
@@ -953,9 +952,7 @@ def main():
 
     args = parser.parse_args()
 
-    con = sqlite3.connect(
-        CORPUS_TIER2_DB_PATH
-    )
+    con = analysis_db_connection( CORPUS_TIER2_DB_PATH )
 
     try:
         concepts = (

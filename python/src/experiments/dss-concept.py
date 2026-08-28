@@ -16,8 +16,8 @@ No dimensionality reduction.
 from __future__ import annotations
 
 import argparse
-import sqlite3
 
+from lib.corpus_db import analysis_db_connection
 from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     CORPUS_MAX_YEAR,
@@ -31,7 +31,7 @@ from lib.zarr_event_lookup import ZarrEventLookup
 
 
 def sqlite_connection():
-    con = sqlite3.connect(CORPUS_TIER2_DB_PATH)
+    con = analysis_db_connection(CORPUS_TIER2_DB_PATH)
     con.execute("PRAGMA busy_timeout=5000")
     return con
 

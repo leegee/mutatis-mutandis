@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from lib.corpus_config import CORPUS_TIER2_DB_PATH
-from lib.corpus_db import get_connection
+from lib.corpus_db import get_connection, analysis_db_connection
 from lib.corpus_logging import logger
 
 
@@ -145,7 +145,7 @@ def populate_documents(
             f"Tier 2 SQLite database does not exist: {sqlite_path}"
         )
 
-    with sqlite3.connect(sqlite_path) as sqlite_conn:
+    with analysis_db_connection(sqlite_path) as sqlite_conn:
         sqlite_conn.execute(
             "PRAGMA foreign_keys = ON"
         )

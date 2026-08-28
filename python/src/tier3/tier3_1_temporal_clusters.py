@@ -22,6 +22,7 @@ from lib.corpus_config import (
     TMP_DIR,
 )
 
+from lib.corpus_db import analysis_db_connection
 from lib.concept_resolve import resolve_concepts
 from lib.corpus_logging import logger
 from lib.sqlite_vector_blob import vector_to_blob
@@ -251,29 +252,12 @@ def sqlite_connection(
     path: Path,
     busy_timeout_ms: int = 30000,
 ):
-    con = sqlite3.connect(
-        path
-    )
-
-    con.execute(
-        f"PRAGMA busy_timeout={busy_timeout_ms}"
-    )
-
-    con.execute(
-        "PRAGMA journal_mode=WAL"
-    )
-
-    con.execute(
-        "PRAGMA synchronous=NORMAL"
-    )
-
-    con.execute(
-        "PRAGMA wal_autocheckpoint=1000"
-    )
-
-    con.execute(
-        "PRAGMA locking_mode=NORMAL"
-    )
+    con = analysis_db_connection(path)
+    con.execute( f"PRAGMA busy_timeout={busy_timeout_ms}" )
+    con.execute( "PRAGMA journal_mode=WAL" )
+    con.execute( "PRAGMA synchronous=NORMAL" )
+    con.execute( "PRAGMA wal_autocheckpoint=1000" )
+    con.execute( "PRAGMA locking_mode=NORMAL" )
 
     return con
 

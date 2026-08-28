@@ -57,7 +57,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
 
-from lib.corpus_db import get_connection
+from lib.corpus_db import get_connection, analysis_db_connection
 from lib.corpus_logging import logger
 from lib.corpus_config import CORPUS_TIER2_DB_PATH
 
@@ -139,9 +139,8 @@ class ClusterSample:
 
 
 #  SQLite side
-
 def sqlite_cx():
-    dbh = sqlite3.connect(CORPUS_TIER2_DB_PATH)
+    dbh = analysis_db_connection(CORPUS_TIER2_DB_PATH)
     dbh.row_factory = sqlite3.Row
     return dbh
 
@@ -251,7 +250,7 @@ def write_label_to_sqlite(
     sample_event_ids: list[int],
     concentration: float,
 ):
-    con = sqlite3.connect(CORPUS_TIER2_DB_PATH)
+    con = analysis_db_connection(CORPUS_TIER2_DB_PATH)
 
     con.execute(
         """

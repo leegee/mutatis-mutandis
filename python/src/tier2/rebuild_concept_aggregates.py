@@ -13,12 +13,12 @@ the token/document, rather than raw retrieval multiplicity.
 from __future__ import annotations
 
 import argparse
-import sqlite3
 from collections import defaultdict
 from pathlib import Path
 
 from lib.corpus_config import CORPUS_TIER2_DB_PATH
 from lib.corpus_logging import logger
+from lib.corpus_db import analysis_db_connection
 
 
 def rebuild_concept_aggregates(
@@ -26,7 +26,7 @@ def rebuild_concept_aggregates(
     *,
     concept: str | None = None,
 ) -> None:
-    conn = sqlite3.connect(db_path)
+    conn = analysis_db_connection(db_path)
 
     try:
         conn.execute("PRAGMA foreign_keys = ON")
