@@ -47,6 +47,7 @@ import math
 import time
 from pathlib import Path
 
+import numpy as np
 import lancedb
 import pyarrow as pa
 import pyarrow.dataset as ds
@@ -97,33 +98,67 @@ def choose_index_config(
     dimensions: int,
 ):
     """
-    Density-aware index type/parameter selection, mirroring the reasoning
-    in tier1_5_build_all_diskann_indexes.size_build_parameters(): don't pay
-    for lossy compression where raw vectors already fit comfortably.
+    Choose a Lance vector index while preserving the FAISS geometry:
+
+        unit-normalised vectors + cosine distance
+
+    RRF consumes rank rather than absolute distance, but retaining cosine
+    semantics here keeps diagnostics and direct score comparisons meaningful.
     """
-    raw_gb = (observation_count * dimensions * 4) / (1024 ** 3)
+    raw_gb = (
+        observation_count
+        * dimensions
+        * 4
+    ) / (1024 ** 3)
 
     if raw_gb <= FLAT_INDEX_MAX_RAW_GB:
         logger.info(
-            "Corpus footprint %.2f GiB <= %.2f GiB threshold: using IvfFlat (no PQ).",
+            "Corpus footprint %.2f GiB <= %.2f GiB threshold: "
+            "using IvfFlat.",
             raw_gb,
             FLAT_INDEX_MAX_RAW_GB,
         )
-        num_partitions = max(16, min(1024, round(math.sqrt(observation_count))))
-        return IvfFlat(distance_type="l2", num_partitions=num_partitions)
+
+        num_partitions = max(
+            16,
+            min(
+                1024,
+                round(math.sqrt(observation_count)),
+            ),
+        )
+
+        return IvfFlat(
+            distance_type="cosine",
+            num_partitions=num_partitions,
+        )
 
     logger.info(
-        "Corpus footprint %.2f GiB > %.2f GiB threshold: using IvfPq.",
+        "Corpus footprint %.2f GiB > %.2f GiB threshold: "
+        "using IvfPq.",
         raw_gb,
         FLAT_INDEX_MAX_RAW_GB,
     )
-    num_partitions = max(64, min(4096, round(math.sqrt(observation_count))))
-    num_sub_vectors = dimensions // 8 if dimensions % 8 == 0 else dimensions // 4
+
+    num_partitions = max(
+        64,
+        min(
+            4096,
+            round(math.sqrt(observation_count)),
+        ),
+    )
+
+    num_sub_vectors = (
+        dimensions // 8
+        if dimensions % 8 == 0
+        else dimensions // 4
+    )
+
     return IvfPq(
-        distance_type="l2",
+        distance_type="cosine",
         num_partitions=num_partitions,
         num_sub_vectors=num_sub_vectors,
     )
+
 
 
 def build_scale_table(
@@ -149,114 +184,159 @@ def build_scale_table(
             scale=scale,
             dimensions=dimensions,
         )
+
+        vectors = np.asarray(
+            vectors,
+            dtype=np.float32,
+        )
+
         n = len(event_ids)
+
+        if vectors.shape != (n, dimensions):
+            raise ValueError(
+                f"Invalid vector shape for year={year}, scale={scale}: "
+                f"{vectors.shape}, expected ({n}, {dimensions})"
+            )
+
+        norms = np.linalg.norm(
+            vectors,
+            axis=1,
+            keepdims=True,
+        )
+
+        if np.any(~np.isfinite(norms)) or np.any(norms == 0):
+            raise ValueError(
+                f"Invalid embedding vectors for year={year}, scale={scale}"
+            )
+
+        vectors = vectors / norms
+
         if n == 0:
-            logger.info("year=%d scale=%s: no observations, skipping", year, scale)
+            logger.info( "year=%d scale=%s: no observations, skipping", year, scale, )
             continue
 
         data = {
-            "event_id": pa.array(event_ids, type=pa.uint64()),
-            "year": pa.array([year] * n, type=pa.int32()),
+            "event_id": pa.array(
+                event_ids,
+                type=pa.uint64(),
+            ),
+            "year": pa.array(
+                [year] * n,
+                type=pa.int32(),
+            ),
             "vector": pa.FixedSizeListArray.from_arrays(
-                pa.array(vectors.reshape(-1), type=pa.float32()),
+                pa.array(
+                    vectors.reshape(-1),
+                    type=pa.float32(),
+                ),
                 dimensions,
             ),
         }
 
-        # Always emit an embedding_model column
+        # Keep model provenance in the Lance row so retrieval can enforce
+        # model boundaries without consulting Parquet at query time.
         if model_column:
-            dataset = ds.dataset(store, format="parquet", partitioning="hive")
+            dataset = ds.dataset(
+                store,
+                format="parquet",
+                partitioning="hive",
+            )
+
             model_tbl = (
                 dataset
                 .scanner(
-                    columns=["event_id", model_column],
+                    columns=[
+                        "event_id",
+                        model_column,
+                    ],
                     filter=ds.field("year") == year,
                 )
                 .to_table()
             )
+
             model_map = dict(
                 zip(
                     model_tbl.column("event_id").to_pylist(),
                     model_tbl.column(model_column).to_pylist(),
                 )
             )
-            model_values = [model_map.get(eid, default_model) for eid in event_ids]
+
+            model_values = [
+                model_map.get(
+                    int(eid),
+                    default_model,
+                )
+                for eid in event_ids
+            ]
         else:
             model_values = [default_model] * n
 
-        data["embedding_model"] = pa.array(model_values)
+        data["embedding_model"] = pa.array(
+            model_values
+        )
 
         batch = pa.table(data)
 
         if tbl is None:
-            tbl = db.create_table(table_name, data=batch, mode="overwrite")
+            tbl = db.create_table(
+                table_name,
+                data=batch,
+                mode="overwrite",
+            )
         else:
             tbl.add(batch)
 
         logger.debug( "year=%d scale=%s: appended %d rows (table total=%d)", year, scale, n, tbl.count_rows(), )
 
     if tbl is None:
-        raise RuntimeError(f"No observations found for scale={scale}")
+        raise RuntimeError(
+            f"No observations found for scale={scale}"
+        )
 
     ingest_seconds = time.time() - t0
     total_rows = tbl.count_rows()
+
     logger.info( "scale=%s: ingestion complete, %d rows in %.1fs", scale, total_rows, ingest_seconds, )
 
-    # Vector index
-    index_config = choose_index_config(
-        observation_count=total_rows,
-        dimensions=dimensions,
-    )
+    # The vector index provides semantic nearest-neighbour retrieval.
+    #
+    # Lance retains the original vector alongside the ANN index. Reconstruction
+    # is therefore an event_id lookup against the table rather than a
+    # reconstruction operation against the ANN index itself.
+    index_config = choose_index_config( observation_count=total_rows, dimensions=dimensions, )
+
     t0 = time.time()
-    tbl.create_index("vector", config=index_config)
-    logger.info("scale=%s: vector index built in %.1fs", scale, time.time() - t0)
 
-    # Year scalar index
+    tbl.create_index( "vector", config=index_config, )
+
+    logger.info( "scale=%s: vector index built in %.1fs", scale, time.time() - t0, )
+
+    # Event IDs are the stable semantic identity of observations.
+    #
+    # This is the Lance equivalent of FAISS's IndexIDMap2: event_id is not
+    # merely metadata attached to a vector; it is the key by which callers
+    # recover the canonical observation associated with a retrieved vector.
     t0 = time.time()
-    tbl.create_index("year", config=BTree())
-    logger.info("scale=%s: year scalar index built in %.1fs", scale, time.time() - t0)
 
-    # Model provenance index (always present)
+    tbl.create_index( "event_id", config=BTree(), )
+
+    logger.info( "scale=%s: event_id scalar index built in %.1fs", scale, time.time() - t0, )
+
+    # Year remains a query-time restriction rather than a physical
+    # partitioning boundary.
     t0 = time.time()
-    tbl.create_index("embedding_model", config=BTree())
-    logger.info(
-        "scale=%s: embedding_model scalar index built in %.1fs",
-        scale,
-        time.time() - t0,
-    )
 
+    tbl.create_index( "year", config=BTree(), )
 
-# def query_window(
-#     *,
-#     db_path: Path,
-#     scale: str,
-#     query_vector,
-#     year_start: int,
-#     year_end: int,
-#     k: int = 10,
-#     nprobes: int = 20,
-#     model: str | None = None,
-# ) -> list[dict]:
-#     """
-#     Example of the thing this whole migration is for: a 50-year (or any)
-#     search window as a query-time filter against a single scale-wide
-#     table, replacing "find and merge results across N physical bucket
-#     indices."
-#     """
-#     db = lancedb.connect(str(db_path))
-#     tbl = db.open_table(scale)
+    logger.info( "scale=%s: year scalar index built in %.1fs", scale, time.time() - t0, )
 
-#     where = f"year >= {year_start} AND year <= {year_end}"
-#     if model is not None:
-#         where += f" AND embedding_model = '{model}'"
+    # Model provenance is kept alongside the vector so retrieval can
+    # restrict a search to the embedding model that produced the query.
+    t0 = time.time()
 
-#     return (
-#         tbl.search(query_vector)
-#         .where(where)
-#         .nprobes(nprobes)
-#         .limit(k)
-#         .to_list()
-#     )
+    tbl.create_index( "embedding_model", config=BTree(), )
+
+    logger.info( "scale=%s: embedding_model scalar index built in %.1fs", scale, time.time() - t0, )
 
 
 def parse_args() -> argparse.Namespace:

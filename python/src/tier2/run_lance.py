@@ -408,19 +408,10 @@ def main() -> None:
         scale=None,
     )
 
-    logger.info(
-        "[tier2] processing %d concept(s)",
-        len(concept_names),
-    )
+    logger.info( "[tier2] processing %d concept(s)", len(concept_names), )
+    logger.info( "[tier2] SQLite output: %s", args.sqlite, )
 
-    logger.info(
-        "[tier2] SQLite output: %s",
-        args.sqlite,
-    )
-
-    lookup = open_observation_lookup(
-        args.store
-    )
+    lookup = open_observation_lookup( args.store )
 
     (
         candidate_years,
@@ -433,11 +424,7 @@ def main() -> None:
         scales,
     )
 
-    logger.info(
-        "[tier2] SearchSpace years=%s scales=%s",
-        candidate_years,
-        scales,
-    )
+    logger.info( "[tier2] SearchSpace years=%s scales=%s", candidate_years, scales, )
 
     db_started = time.perf_counter()
 
@@ -447,10 +434,7 @@ def main() -> None:
         available_scales=scales,
     )
 
-    logger.info(
-        "[tier2] opened Lance observation index store in %.3fs",
-        time.perf_counter() - db_started,
-    )
+    logger.info( "[tier2] opened Lance observation index store in %.3fs", time.perf_counter() - db_started, )
 
     indexes_by_year = {
         year: index_store.get(
@@ -462,28 +446,17 @@ def main() -> None:
         for year in candidate_years
     }
 
-    logger.info(
-        "[tier2] prepared temporal indexes for %d year(s)",
-        len(indexes_by_year),
-    )
+    logger.info( "[tier2] prepared temporal indexes for %d year(s)", len(indexes_by_year), )
 
     for index, concept_name in enumerate(
         concept_names,
         start=1,
     ):
-        logger.info(
-            "[tier2] ===== concept %d/%d: %s =====",
-            index,
-            len(concept_names),
-            concept_name,
-        )
+        logger.info( "[tier2] ===== concept %d/%d: %s =====", index, len(concept_names), concept_name, )
 
         # --clear is deliberately consumed only by the first concept.
         # Otherwise every concept would erase the results of its predecessor.
-        clear = (
-            args.clear
-            and index == 1
-        )
+        clear = ( args.clear and index == 1 )
 
         run_lance_tier2(
             top_n=args.k,

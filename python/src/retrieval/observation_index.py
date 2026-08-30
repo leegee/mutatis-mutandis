@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
-from .models import Float32Array, SearchResult, BatchSearchResult
+from .models import (
+    BatchSearchResult,
+    Float32Array,
+    SearchResult,
+)
 
 
 class ObservationIndex(ABC):

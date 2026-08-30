@@ -1,5 +1,15 @@
 """
 tier2/analysis.py
+
+The current within-year restriction is deliberate. Tier 2 is not itself intended to perform the final diachronic analysis.
+
+The immediate objective is to establish **local semantic neighbourhoods** around a concept within a temporally coherent corpus slice. Those neighbourhoods can then be compared across broader chronological buckets—initially perhaps 50-year periods—and subsequently aligned with Modern BERT.
+
+The diachronic process will therefore work backwards from the apparently polysamous or semantically divergent results: identify observations whose neighbourhoods differ substantially across periods, then trace those apparent semantic developments back through progressively narrower historical slices and the underlying corpus evidence.
+
+In that architecture, Tier 2 remains a retrieval layer. Its job is to establish reliable semantic neighbourhoods and preserve the event IDs and provenance needed for subsequent diachronic analysis. The later tiers perform the actual temporal alignment, comparison, and investigation of semantic drift.
+
+
 """
 
 from __future__ import annotations
@@ -9,6 +19,7 @@ import numpy as np
 from lib.corpus_logging import logger
 from tier1.observation_store_api import SCALES
 from retrieval.models import INVALID_EVENT_ID
+from retrieval.lance_search import multiscale_search
 
 K = 60
 RRF_K = 60
@@ -35,11 +46,7 @@ def resolve_concept_positions(
         for value in (false_positives or [])
     }
 
-    logger.info(
-        "[tier2] %s forms: %s",
-        concept_name,
-        sorted(forms)[:50],
-    )
+    logger.info( "[tier2] %s forms: %s", concept_name, sorted(forms)[:50], )
 
     event_ids = lookup.find_matching_event_ids(
         forms,
@@ -51,11 +58,7 @@ def resolve_concept_positions(
         for event_id in event_ids
     ]
 
-    logger.info(
-        "[tier2] %s: %d seed events",
-        concept_name,
-        len(event_ids),
-    )
+    logger.info( "[tier2] %s: %d seed events", concept_name, len(event_ids), )
 
     by_year = {}
 
@@ -77,136 +80,6 @@ def resolve_concept_positions(
         "by_year": by_year,
     }
 
-
-def multiscale_search(
-    *,
-    indexes,
-    queries_by_scale,
-    top_n=K,
-    rrf_k=RRF_K,
-    oversample=OVERSAMPLE,
-    scales=SCALES,
-):
-    """
-    Search each scale using its corresponding Tier 1 embedding.
-
-    The supplied indexes define the temporal search scope. All scales
-    therefore search the same candidate population for a query.
-
-    RRF merges scale rankings by stable event_id.
-    """
-    if top_n <= 0:
-        raise ValueError("top_n must be positive")
-
-    if rrf_k <= 0:
-        raise ValueError("rrf_k must be positive")
-
-    if oversample <= 0:
-        raise ValueError("oversample must be positive")
-
-    scales = tuple(scales)
-
-    if not scales:
-        raise ValueError("at least one scale is required")
-
-    search_k = top_n * oversample
-    results_by_scale = {}
-
-    for scale in scales:
-        index = indexes.get(scale)
-
-        if index is None:
-            raise RuntimeError(
-                f"Missing observation index for scale={scale}"
-            )
-
-        queries = np.asarray(
-            queries_by_scale[scale],
-            dtype=np.float32,
-        )
-
-        if queries.ndim != 2:
-            raise ValueError(
-                f"queries for scale={scale} must be two-dimensional"
-            )
-
-        results_by_scale[scale] = index.batch_search(
-            queries,
-            k=search_k,
-            oversample=oversample,
-        )
-
-    first_scale = scales[0]
-
-    query_count = len(
-        queries_by_scale[first_scale]
-    )
-
-    for scale in scales[1:]:
-        if len(queries_by_scale[scale]) != query_count:
-            raise ValueError(
-                "all scales must contain the same number of query vectors"
-            )
-
-    output = []
-
-    for query_idx in range(query_count):
-        fused = {}
-
-        for scale in scales:
-            result = results_by_scale[scale]
-
-            event_ids = result.event_ids[query_idx]
-            distances = result.distances[query_idx]
-
-            for rank, (
-                event_id,
-                distance,
-            ) in enumerate(
-                zip(
-                    event_ids,
-                    distances,
-                ),
-                start=1,
-            ):
-                event_id = int(event_id)
-
-                item = fused.setdefault(
-                    event_id,
-                    {
-                        "score": 0.0,
-                        "score_local": None,
-                        "score_medium": None,
-                        "score_broad": None,
-                    },
-                )
-
-                item["score"] += (
-                    1.0
-                    / (rrf_k + rank)
-                )
-
-                item[
-                    f"score_{scale}"
-                ] = float(distance)
-
-        ranked = sorted(
-            fused.items(),
-            key=lambda item: item[1]["score"],
-            reverse=True,
-        )
-
-        output.append(
-            [
-                {
-                    "event_id": event_id,
-                    **payload,
-                }
-                for event_id, payload in ranked[:top_n]
-            ]
-        )
-
-    return output
 
 
 def _metadata_for_event(
