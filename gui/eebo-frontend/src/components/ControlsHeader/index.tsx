@@ -121,7 +121,7 @@ const ControlsHeader: ParentComponent<Props> = (props) => {
       </Show>
 
       <Show when={props.authorMatch}>
-        <div class="field label border small no-margin no-padding">
+        <div class="field label border small no-margin no-padding author-match">
           <input
             type="search"
             value={controls.authorMatch || ""}

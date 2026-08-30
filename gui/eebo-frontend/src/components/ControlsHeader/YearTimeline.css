@@ -1,34 +1,43 @@
 .year-timeilne {
-    gap: 0;
+	gap: 0;
 
-    button.year {
-        width: 12px;
-        height: 100%;
-        display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        cursor: crosshair;
-        border-radius: 0;
+	.year-buttons {
+		display: flex;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		height: 100%;
+		width: 100%;
+		min-width: 50vw;
+		max-width: 60vw;
 
-        .year-data {
-            width: 8px;
-            border-radius: 0;
+		button.year {
+			min-width: 2pt;
+			max-width: 12px;
+			height: 95%;
+			display: flex;
+			align-items: flex-end;
+			justify-content: center;
+			cursor: crosshair;
+			border-radius: 0;
 
-        }
+			.year-data {
+				width: 8px;
+				border-radius: 0;
+			}
 
-        &:hover {
-            background-color: var(--on-primary) !important;
-        }
-    }
-
+			&:hover {
+				background-color: var(--on-primary) !important;
+			}
+		}
+	}
 }
 
 #giant-year-range {
-    font-size: 48pt;
-    font-weight: 900;
-    position: fixed;
-    bottom: 12pt;
-    right: 12pt;
-    opacity: 0.3;
-    pointer-events: none;
+	font-size: 48pt;
+	font-weight: 900;
+	position: fixed;
+	bottom: 12pt;
+	right: 12pt;
+	opacity: 0.3;
+	pointer-events: none;
 }

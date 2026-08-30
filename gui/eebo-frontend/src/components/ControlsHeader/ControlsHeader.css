@@ -1,13 +1,23 @@
 .toolbar {
-    zoom: 0.7;
+	zoom: 0.7;
+	height: 10vh;
+	width: 100%;
 
-    :is(hr, .divider).vertical {
-        height: 74%;
-        max-width: 1pt;
-    }
+	:is(hr, .divider).vertical {
+		height: 74%;
+		max-width: 1pt;
+	}
 
-    .tooltip {
-        zoom: 1.5;
-        z-index: 100;
-    }
+	.tooltip {
+		zoom: 1.5;
+		z-index: 100;
+	}
+
+	.author-match {
+		max-width: 10em;
+	}
+
+	.year-timeilne {
+		flex: 1;
+	}
 }
