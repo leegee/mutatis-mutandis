@@ -138,6 +138,7 @@ DROP TABLE IF EXISTS concepts;
 
 
 _DELETE_CONCEPT = (
+    "DELETE FROM concept_cluster_info WHERE concept = ?",
     "DELETE FROM concept_aggregate WHERE concept = ?",
     """
     DELETE FROM neighbours
@@ -145,11 +146,10 @@ _DELETE_CONCEPT = (
         SELECT event_id FROM events WHERE concept = ?
     )
     """,
-    "DELETE FROM concept_field_events WHERE concept = ?",   # <-- add this
+    "DELETE FROM concept_field_events WHERE concept = ?",
     "DELETE FROM events WHERE concept = ?",
     "DELETE FROM concepts WHERE concept = ?",
 )
-
 
 def _maybe_float(value):
     return None if value is None else float(value)
