@@ -1,5 +1,6 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { execRows } from "../services/db";
+import { showDocument } from "../services/documentApi";
 import { controls } from "../state/controls.store";
 import ControlsHeader from "./ControlsHeader";
 
@@ -164,7 +165,9 @@ export default function ConceptAggregates() {
                           <tr>
                             <td>{row.rank + 1}</td>
                             <td>
-                              <strong>{row.item}</strong>
+                              <button type="button" title="Click to view" class="chip" onClick={() => showDocument(row.item)}>
+                                {row.item}
+                              </button>
                             </td>
                             <td>{new Intl.NumberFormat().format(row.count)}</td>
                             <td>{avgPerEvent}</td>
