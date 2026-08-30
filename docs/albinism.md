@@ -1,77 +1,74 @@
-# Thoughts on the Humanities Aspects of Applying the diachronic Semantic Search Application
+# From Theophany to Pathology: The Symbolic Semantics of Extreme Bodily Whiteness in English Literary Culture
 
-Working title:
+## Project Concept
 
-## From Theophany to Pathology: The Symbolic Semantics of Extreme Bodily Whiteness in English Literary Culture
+This project investigates the changing symbolic meanings of extreme bodily whiteness in English literary culture from the early modern period to the nineteenth century, while situating English traditions within their biblical and broader European intellectual inheritance.
 
-# Disclaimer
+Rather than taking the modern medical category of "albinism" as its starting point, the project examines the historically recurring physiognomic complex of unusually white, extraordinary palor, and in some representations eyes described as flame-like, luminous or supernaturally bright. The central question is how such visible characteristics acquired different symbolic meanings across literary, religious, scientific and cultural contexts.
 
-This project is a study of the representation of albinism by one with albinism, so the author feels it prudent to
-state up-front that which he takes for granted, namely that at no point does the project attempt to ascribe any
-specific value to albinism, albinos, or the exceptionally pale in general. Rather the object of study is a corpus
-of text from which observations shall be drawn and analysed in their natural context both literary, linguistically
-and historically through whatever historical documents are avaialable. Such observations and clusters thereof
-will be assessed for semantic value, their evolution through time compared and contrasted, and labels will eventually
-be drawn from the above evidience (and ultimately compared to the output of various LLM alongisde the LLM's explanation).
+The project begins with the theophanic imagery of the "Son of Man" in Revelation 1 as one important and influential articulation of extreme bodily whiteness within the Christian tradition. It does not, however, assume a simple or continuous line of descent from biblical imagery to later representations. Instead, it asks how subsequent literary, theological, scientific and cultural traditions reworked, transformed, reinterpreted or departed from earlier symbolic complexes.
 
-This project aims to be as clsoe to objective as it is possible to be whilst acknowledging in the text any awareness of
-whenever the author inevitably interprets subjectively rather than in refrence to an external source. Any such personal
-interjection will be consciously avoided as best as possible.
+Its central concern is the changing symbolic function of marked bodies. In different historical contexts, how could extreme bodily whiteness signify divine majesty, sanctity, wisdom and supernatural power, but also death, monstrosity, pathology, evil or moral otherness? Rather than presupposing a single developmental trajectory, the project investigates how these associations emerged, coexisted, diverged and occasionally converged across different historical periods and discursive traditions.
 
-# Project Concept
+Particular attention will be paid to the point at which older symbolic constructions of extreme bodily whiteness began to intersect with emerging medical-scientific understandings of albinism, changing conceptions of race, and literary representations of visibly different bodies. Albinism therefore occupies a distinctive position within the project: not simply as the starting-point of the investigation, but as an historically significant point at which an older symbolic vocabulary encountered increasingly medicalised understandings of bodily difference.
 
-This project investigates the **symbolic semantics of extreme bodily whiteness** in English literary culture from the early modern period to the nineteenth century, while situating that tradition within its biblical and broader European intellectual inheritance. Rather than taking albinism as its starting point, it examines the historical construction of a distinctive physiognomic and lexical complex: white or snow-white hair, extraordinarily pale or chalk-white skin, sometimes with eyes described as fiery, flame-like, or otherwise supernaturally luminous.
+The project combines close reading, reception history, the history of the body and computational historical semantics. Using large-scale diachronic semantic and collocational analysis across EEBO, ECCO and other historical corpora, it will investigate changes not merely in the frequency of relevant vocabulary but in the semantic environments surrounding representations of extreme bodily whiteness.
 
-The project begins with the influential theophanic imagery of the "Son of Man" in Revelation 1, whose hair is described as "white like wool, as white as snow" and whose eyes are "like a flame of fire" - as one early and highly influential articulation of extreme bodily whiteness within the Christian tradition. Rather than assuming a direct line of descent from this imagery, the research asks how later literary, theological, medical and cultural traditions reworked, transformed, reinterpreted, or departed from this symbolic complex.
-
-Its central concern is the changing symbolic function of **marked bodies**. How did extreme bodily whiteness come, in different historical contexts, to signify divine majesty, sanctity, wisdom, supernatural power, death, monstrosity, pathology  or moral otherness? Rather than presupposing a single developmental trajectory, the project investigates how these symbolic associations emerged, coexisted, diverged, and occasionally converged across different historical periods and discursive traditions.
-
-Particular attention is paid to the point at which symbolic constructions of extreme bodily whiteness began to intersect with emerging medical-scientific understandings of albinism, changing conceptions of race, and literary representations of visibly different bodies. In this way, albinism functions not as the primary subject of the thesis but as an historically significant point at which an older symbolic vocabulary encountered an increasingly medicalised understanding of bodily difference.
-
-Methodologically, the project combines close reading, reception history, and the history of the body with computational historical semantics. Using large-scale diachronic semantic and collocational analysis across EEBO, ECCO, and later English-language corpora, it seeks to reconstruct changes not merely in vocabulary but in the semantic neighbourhoods surrounding representations of extreme bodily whiteness. Rather than simply identifying additional examples, the computational analysis will enable the systematic investigation of changing representational systems across millions of words and several centuries, identifying historically significant semantic shifts that can then be interpreted through close textual and historical analysis.
-
-The project therefore positions itself at the intersection of literary history, biblical reception, disability history, the history of the body, medical humanities, and Digital Humanities. The computational component would benefit from co-supervision by a specialist in historical semantics and digital methods (Barbara McGillivray has indicated her willingness to serve in this capacity), while the principal supervisory expertise sought is in one or more of the following areas: medieval and early modern literary culture, biblical reception, the cultural history of the body, disability history, or the historical semantics of embodiment.
+The computational methodology is intended to support, rather than replace, humanities interpretation. Large-scale analysis may reveal patterns of association, discontinuity and semantic change that would be difficult to identify through selective reading alone; those patterns will subsequently be tested through close textual, literary and historical analysis. The principal object of the project remains the historical interpretation of changing systems of representation.
 
 ## Positioning within Existing Scholarship
 
-Thomas White's important doctoral thesis, *'Their Whiteness Is Not Like Ours': A Social and Cultural History of Albinism and Albino Identities, 1650–1914* (University of Manchester, 2012), provides the principal historiographical foundation for research into the social, medical and racial construction of albinism in the early modern and modern periods. White traces the emergence of albinism as a medico-scientific category through travel writing, natural history, medical classification, heredity theory, and racial discourse.
+Thomas White's important doctoral thesis *'Their Whiteness Is Not Like Ours': A Social and Cultural History of Albinism and Albino Identities, 1650–1914* (University of Manchester, 2012) provides an important historiographical foundation for research into the social, medical and racial construction of albinism in the early modern and modern periods. White traces the emergence of albinism as a medico-scientific category through travel writing, natural history, medical classification, heredity theory and racial discourse.
 
-The present project builds directly upon that scholarship while asking a different primary question. Rather than investigating the historical construction of albinism itself, it examines the longer history of the cultural semantics of extreme bodily whiteness and asks how an older physiognomic and lexical complex—including white hair, snow-white skin, and fiery or luminous eyes—interacted with, influenced, or was transformed by the emergence of medical, racial and literary discourses surrounding albinism and visibly marked bodies.
+The present project builds upon this scholarship while asking a different primary question. Rather than investigating principally the historical construction of albinism itself, it examines the longer history of the cultural semantics surrounding extreme bodily whiteness and asks how an older physiognomic and lexical complex—including white hair, unusually pale skin and luminous or fiery eyes—interacted with, influenced, or was transformed by the emergence of medical, racial and literary discourses surrounding albinism and visibly marked bodies.
 
-A further point of distinction lies in methodology. Existing scholarship has necessarily depended upon selective close reading of texts. By combining computational historical semantics with traditional literary-historical methods, this project seeks to identify large-scale shifts in symbolic association and semantic neighbourhood across several centuries of English literary culture before subjecting those patterns to detailed historical and literary interpretation. The computational component is therefore not an end in itself but a means of addressing questions of symbolic continuity, transformation and reception that cannot readily be investigated through conventional methods alone.
+The project has also been informed by Charlotte Baker's scholarship on the literary representation of albinism in Francophone contexts, on the cultural meanings and representations attached to albinism. That comparative scholarship is relevant to the project's wider concern with the relationship between literary representation, bodily difference and the historical construction of meaning. Although the principal corpus of the proposed research is English, the project necessarily recognises that English literary culture developed within wider European, biblical and intellectual traditions.
 
---
+A further point of distinction lies in methodology. Existing scholarship has necessarily depended primarily upon selective reading of individual texts and bodies of material. By combining computational historical semantics with traditional literary-historical methods, this project seeks to identify large-scale changes in symbolic association and semantic environment across several centuries of English textual culture before subjecting those patterns to detailed historical and literary interpretation.
 
-## Research questions
+The computational component is therefore not an end in itself, nor is it intended simply to generate additional examples. Its purpose is to address questions of symbolic continuity, transformation, divergence and reception at a scale that conventional methods alone cannot easily sustain.
 
-How is extreme bodily whiteness symbolically constructed in English literary culture?
+## Research Questions
 
-How do the semantic associations surrounding extreme bodily whiteness change between the early modern period and the nineteenth century?
+1. How is extreme bodily whiteness symbolically constructed in English literary culture between the early modern period and the nineteenth century?
 
-How do religious, medical and literary discourses interact in shaping those changes?
+2. How do the semantic associations surrounding extreme bodily whiteness change across this period?
 
-Under what historical conditions do symbolic representations become attached to actual bodily conditions such as albinism?
+3. How do religious, literary, medical and scientific discourses interact in producing those changes?
+
+4. How and under what historical conditions do symbolic representations of extreme bodily whiteness become associated with actual bodily conditions, particularly albinism?
+
+5. What continuities, transformations and discontinuities can be identified between earlier theological and literary representations and later medicalised understandings of bodily difference?
+
+## Researcher Position and Reflexivity
+
+This project concerns the historical representation of albinism and extreme bodily whiteness and is undertaken by a researcher who himself has albinism. This relationship to the subject informs the choice of research questions and creates a particular awareness of the potential consequences of historical representation. It does not, however, determine the meanings that the research seeks to identify.
+
+The project does not assume that albinism, extreme bodily whiteness or the people represented through these categories possess any inherent symbolic, moral or cultural value. Its object is instead historical: to investigate the meanings that particular writers, communities and discursive traditions have attached to visibly marked bodies.
+
+The project will therefore adopt an explicitly reflexive methodology. Interpretative claims will be grounded wherever possible in textual, linguistic and historical evidence, while distinctions will be maintained between evidence, scholarly interpretation and the researcher's own critical judgement. The aim is not to claim complete objectivity, but to ensure methodological transparency and critical awareness of the processes through which interpretation is produced.
+
 
 ## Notes
 
-**Potential Supervisors, Adjacent Scholars, and Thomas White’s Thesis**
+Potential Supervisors, Adjacent Scholars, and Thomas White’s Thesis
 
 ### Strongest Matches
-- **Charlotte Baker** (Professor of French and Critical Disability Studies, Lancaster University)
+- Charlotte Baker (Professor of French and Critical Disability Studies, Lancaster University)
   Explicitly lists albinism, critical disability studies, cultural representations of the marked body, and related topics among her PhD supervision interests. Her published work focuses mainly on African contexts, stigma, literature, and human rights, but she is one of the few senior UK scholars who treat albinism as a serious object of cultural and disability analysis. A European historical project that begins with the theophanic image and uses computational methods could appeal as a complementary extension, especially if framed through disability history and the construction of visible difference. Lancaster is structurally open to interdisciplinary co-supervision.
 
-- **Thomas White** (University of Manchester PhD, 2012)
+- Thomas White (University of Manchester PhD, 2012)
   Author of *‘Their Whiteness Is Not Like Ours’: A Social and Cultural History of Albinism and Albino Identities, 1650–1914*. The single closest existing piece of scholarship on the cultural history of albinism in the early-modern to early-twentieth-century period. Even if he is not currently supervising, he remains the key historiographical contact.
 
-- **Sarah-Maria Schober** (University of Zurich)
+- Sarah-Maria Schober (University of Zurich)
   Author of “A Hairy Tale: Eighteenth-Century Strands of Albinism and Race,” which examines Blumenbach’s collection of albino hair samples and the shift from “white Negroes” as racial curiosity to albinism as pathology. Directly relevant to Enlightenment medicalisation and racialisation of extreme pallor.
 
-- **Josh Davies** (KCL Sr Lecturer in Medieval Lit)
+- Josh Davies (KCL Sr Lecturer in Medieval Lit)
 
 ### Useful Adjacent Scholars
 
-- **John L. Hilton** — Author of “Albinism in the Ancient Mediterranean World.” Assembles classical and late-antique evidence and discusses the Book of Enoch description of Noah (body white as snow, hair white as wool, eyes shining like the sun), the closest ancient parallel to the Revelation “Son of Man” imagery.
-- **Martin White** (University of Winchester) — PhD research on *The Evil Albino Trope: The Depiction of Albinism in Modern and Contemporary Fiction*. Close to the later “villainous images” strand.
+- John L. Hilton — Author of “Albinism in the Ancient Mediterranean World.” Assembles classical and late-antique evidence and discusses the Book of Enoch description of Noah (body white as snow, hair white as wool, eyes shining like the sun), the closest ancient parallel to the Revelation “Son of Man” imagery.
+- Martin White (University of Winchester) — PhD research on *The Evil Albino Trope: The Depiction of Albinism in Modern and Contemporary Fiction*. Close to the later “villainous images” strand.
 - Broader disability history / history of the body / facial-difference scholars (e.g., work on physiognomy, marked or “monstrous” bodies, visual difference across early modern to modern periods). These frameworks can absorb the material without requiring the supervisor to be an albinism specialist.
 
 ## To investigate (after White):
@@ -103,7 +100,7 @@ Under what historical conditions do symbolic representations become attached to 
  * On Enoch's birth/white hair: "James Bruce and His Copies of Ethiopic Enoch" by Ariel Hessayon, published within a 2023 Brill volume entitled "Rediscovering Enoch? The Antediluvian Past from the Fifteenth to Nineteenth Centuries." Enoch in Zohar/Kabbalah, but not the Ethiopic text.
 
 
-### **Albinism in the Ancient Mediterranean World**
+### Albinism in the Ancient Mediterranean World
 Prof John Laurence Hilton, University of the Free State <jlhilton@webafrica.org.za>
 
 Contains an interesting list of historical figures from the Middle East and Africa, starting with
@@ -257,3 +254,9 @@ https://www.scribd.com/document/818559122/These-1995-Les-Figures-Du-Surnaturel-D
 The study explicitly states that white (bán) functions as an external sign that an animal belongs to the supernatural world. It also emphasises that this makes the animal ambivalent, not simply benevolent: white Otherworld animals can be beneficial or hostile.
 
 Also: Bébinn - white woman
+
+Alaric Hall on Elves - Heimdall cf elves & Germ. . Elb or Alb, hence Albtraum > Elfdream > Nightmare
+Chaucer, Shakespeare etc
+
+
+https://interestingliterature.com/2021/04/colour-white-symbolism-in-literature-myth-analysis-meaning/
