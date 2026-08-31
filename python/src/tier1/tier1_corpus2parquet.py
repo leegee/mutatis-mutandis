@@ -1168,7 +1168,6 @@ def main():
         )
 
     store_path = resolve_store_path(
-        store_backend='parquet',
         masked=args.mask,
         store=args.store,
         shard=args.shard,
