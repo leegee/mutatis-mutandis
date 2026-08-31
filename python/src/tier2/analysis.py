@@ -333,31 +333,19 @@ def iter_concept_batches(
     seed_years = []
 
     for event_id in seed_event_ids:
-        metadata = lookup.get_event_metadata(
-            int(event_id)
-        )
+        metadata = lookup.get_event_metadata( int(event_id) )
 
-        seed_years.append(
-            int(metadata["pub_year"])
-        )
+        seed_years.append( int(metadata["pub_year"]) )
 
     for start in range(
         0,
         len(seed_event_ids),
         batch_size,
     ):
-        seed_batch = seed_event_ids[
-            start:start + batch_size
-        ]
-
-        batch_years = seed_years[
-            start:start + len(seed_batch)
-        ]
-
+        seed_batch = seed_event_ids[ start:start + batch_size ]
+        batch_years = seed_years[ start:start + len(seed_batch) ]
         queries_by_scale = {
-            scale: embeddings_by_scale[scale][
-                start:start + len(seed_batch)
-            ]
+            scale: embeddings_by_scale[scale][ start:start + len(seed_batch) ]
             for scale in scales
         }
 

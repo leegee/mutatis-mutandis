@@ -21,6 +21,8 @@ CORPUS_INPUT_DIRS = {
     "ecco": XML_ROOT_DIR / "ecco_all",
 }
 
+CLMET_CORPUS_INPUT_DIR = PROJECT_ROOT / "corpus" / "clmet" / "corpus"
+
 try:
     import google.colab  #
     COLAB_MODE = True
