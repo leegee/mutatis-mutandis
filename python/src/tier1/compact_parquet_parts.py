@@ -32,7 +32,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from tier1.observation_store_api import (
-    configure_store_backend,
     resolve_store_path,
 )
 
@@ -179,11 +178,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
-
-    configure_store_backend(
-        "parquet",
-        num_shards=args.num_shards,
-    )
 
     root = resolve_store_path(
         store_backend="parquet",

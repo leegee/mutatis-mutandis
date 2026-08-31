@@ -32,7 +32,6 @@ from lib.corpus_logging import logger
 from lib.stopwords_min import STOPWORDS
 
 from tier1.observation_store_api import (
-    configure_store_backend,
     resolve_store_path,
 )
 
@@ -60,11 +59,6 @@ def resolve_integrity_stores(args) -> list[Path]:
     integrity test must inspect those stores rather than silently falling
     back to the unsharded default path.
     """
-    configure_store_backend(
-        "parquet",
-        num_shards=args.num_shards,
-    )
-
     if args.store:
         store = Path(args.store)
 

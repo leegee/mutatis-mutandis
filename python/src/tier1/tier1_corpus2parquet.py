@@ -47,7 +47,6 @@ from lib.stopwords_min import STOPWORDS
 from tier0.tier0_clmet_extreme_whiteness import SEPARATOR
 
 from tier1.observation_store_api import (
-    configure_store_backend,
     resolve_store_path,
     open_observation_writer,
 )
@@ -1167,8 +1166,6 @@ def main():
             os.environ.get("OMP_NUM_THREADS"),
             torch.get_num_threads(),
         )
-
-    configure_store_backend( "parquet", num_shards=args.num_shards, )
 
     store_path = resolve_store_path(
         store_backend='parquet',
