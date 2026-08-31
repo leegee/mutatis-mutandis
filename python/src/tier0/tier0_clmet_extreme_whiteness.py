@@ -35,7 +35,8 @@ The extracted contexts are inserted using the existing documents/tokens
 schema. No database schema changes are required.
 
 Existing derived documents are skipped. This prevents rerunning the
-extraction from creating duplicate token rows.
+extraction from creating duplicate token rows. Use `--clear` to
+remove existing documents.
 """
 
 from __future__ import annotations
@@ -443,6 +444,40 @@ def tokenize_extracted_text(
     return TOKEN_RE.findall(text)
 
 
+def clear_derived_documents() -> None:
+    """
+    Delete previously generated CLMET extreme-whiteness documents
+    and their tokens.
+
+    The tokens table no longer has an FK to documents, so token rows
+    must be explicitly deleted.
+    """
+    with corpus_db.get_connection(
+        application_name="tier0-clmet-extreme-whiteness-clear",
+    ) as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+
+                cur.execute("""
+                    DELETE FROM tokens
+                    WHERE corpus = 'clmet'
+                      AND doc_id LIKE 'CLMET3%';
+                """)
+                token_count = cur.rowcount
+
+                cur.execute("""
+                    DELETE FROM documents
+                    WHERE corpus = 'clmet'
+                      AND doc_id LIKE 'CLMET3%';
+                """)
+                document_count = cur.rowcount
+
+                logger.info(
+                    f"[clmet] Cleared {document_count:,} derived documents "
+                    f"and {token_count:,} tokens"
+                )
+
+
 # Metadata
 def metadata_from_text_file(
     doc_id: str,
@@ -450,24 +485,57 @@ def metadata_from_text_file(
     token_count: int,
 ) -> dict:
     """
-    Construct metadata for the derived CLMET document.
+    Extract CLMET metadata from the XML-like header in the source file.
 
-    The first pass deliberately does not attempt to build a separate
-    CLMET metadata parser.
+    CLMET headers look like XML but are not guaranteed to be valid XML,
+    so deliberately parse the simple metadata tags without ElementTree.
     """
+
+    text = filepath.read_text(
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    header = text.split("<text>", 1)[0]
+
+    def get_tag(tag: str) -> str | None:
+        match = re.search(
+            rf"<{re.escape(tag)}>(.*?)</{re.escape(tag)}>",
+            header,
+            flags=re.DOTALL,
+        )
+
+        if not match:
+            return None
+
+        value = match.group(1).strip()
+
+        return value or None
+
+    year = get_tag("year")
+
+    try:
+        pub_year = int(year) if year else None
+    except ValueError:
+        pub_year = None
 
     return {
         "corpus": CORPUS_NAME,
         "doc_id": f"CLMET3{doc_id}",
+
         "filepath": filepath.relative_to(
             config.CLMET_CORPUS_INPUT_DIR
         ).as_posix(),
-        "title": None,
-        "author": None,
-        "pub_year": None,
+
+        "title": get_tag("title"),
+        "author": get_tag("author"),
+        "pub_year": pub_year,
+
         "publisher": None,
         "pub_place": None,
-        "source_date_raw": None,
+
+        "source_date_raw": get_tag("period"),
+
         "token_count": token_count,
         "lang": "eng",
     }
@@ -793,7 +861,7 @@ def process(
     existing_ids = existing_document_ids( derived_doc_ids )
 
     if existing_ids:
-        logger.info( "[clmet] Existing derived documents: {len(existing_ids):,} (will be skipped)" )
+        logger.info( f"[clmet] Existing derived documents: {len(existing_ids):,} (will be skipped)" )
 
     processed = 0
     skipped_existing = 0
@@ -951,26 +1019,27 @@ def process(
     with corpus_db.get_connection(
         application_name="tier0-clmet-extreme-whiteness-rematerialise-views",
     ) as conn:
-        refresh_views(conn)
+        corpus_db.refresh_views(conn)
         conn.close()
+
 
 # CLI
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Extract large contexts around CLMET "
-            "extreme-whiteness concordance occurrences "
-            "and insert them as ordinary documents and tokens."
-        )
+        description=( "Extract large contexts around CLMET extreme-whiteness concordance occurrences and insert them as ordinary documents and tokens." )
+    )
+
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help=( "Delete all previously generated CLMET derived documents (doc_id LIKE 'CLMET3%') and their tokens before processing." ),
     )
 
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help=(
-            "Maximum number of source documents to process."
-        ),
+        help=( "Maximum number of source documents to process." ),
     )
 
     parser.add_argument(
@@ -1002,6 +1071,9 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    if (args.clear):
+        clear_derived_documents()
 
     process(
         concordance_path=args.concordance,
