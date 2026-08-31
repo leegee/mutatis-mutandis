@@ -131,12 +131,12 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
     If drop_existing=True, all existing tables are dropped first.
     Intended for clean re-ingestion runs.
     """
-    logger.info("Initialising database schema")
+    logger.info("[corpus_db] Initialising database schema")
 
     with conn.transaction():
         with conn.cursor() as cur:
             if drop_existing:
-                logger.info("Dropping existing tables")
+                logger.info("[corpus_db] Dropping existing tables")
                 cur.execute("""
                     -- DROP MATERIALIZED VIEW IF EXISTS document_search CASCADE;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
@@ -148,7 +148,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     DROP SEQUENCE IF EXISTS vector_id_seq;
                 """)
 
-            logger.info("Creating tables")
+            logger.info("[corpus_db] Creating tables")
             # Prototype assumption: doc_id is globally unique across loaded corpora (EEBO/ECCO).
             # Introducing a joint corpus/doc_id PK introduced too much work for consumers so
             # was rolled back and kept in git history.
@@ -184,12 +184,12 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 );
             """)
 
-    logger.info("Database schema initiated")
+    logger.info("[corpus_db] Database schema initiated")
 
 
 
 def drop_token_indexes(conn: Connection) -> None:
-    logger.info("Dropping token indexes")
+    logger.info("[corpus_db] Dropping token indexes")
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("""
@@ -200,11 +200,11 @@ def drop_token_indexes(conn: Connection) -> None:
                 DROP INDEX IF EXISTS idx_documents_lang;
                 DROP INDEX IF EXISTS idx_documents_filepath;
             """)
-    logger.info("Token indexes dropped")
+    logger.info("[corpus_db] Token indexes dropped")
 
 
 def create_token_indexes(conn: Connection) -> None:
-    logger.info("Creating basic token indexes")
+    logger.info("[corpus_db] Creating basic token indexes")
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token            ON tokens(token);")
@@ -216,11 +216,11 @@ def create_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filter        ON documents(lang, pub_year, token_count);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_corpus_doc_idx   ON tokens(corpus, doc_id, token_idx);")
 
-    logger.info("Basic token indexes created")
+    logger.info("[corpus_db] Basic token indexes created")
 
 
 def create_views(conn: Connection) -> None:
-    logger.info("Creating view")
+    logger.info("[corpus_db] Creating view")
 
     earliest = config.CORPUS_MIN_YEAR
     latest   = config.CORPUS_MAX_YEAR
@@ -229,7 +229,7 @@ def create_views(conn: Connection) -> None:
     with conn.transaction():
         with conn.cursor() as cur:
             # Materialized view for pamphlet_corpus
-            logger.info("Creating materialised view pamphlet_corpus")
+            logger.info("[corpus_db] [corpus_db] Creating materialised view pamphlet_corpus")
 
             # Just in case I previously messed-up - TODO check and tidy.
             cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;")
@@ -241,6 +241,7 @@ def create_views(conn: Connection) -> None:
             else:
                 size_filter = ""
 
+            logger.info(f"[corpus_db] CREATE MATERIALIZED VIEW pamphlet_corpus with dates {earliest} and {latest} and size filter of '{size_filter}'")
             cur.execute(f"""
                 CREATE MATERIALIZED VIEW pamphlet_corpus AS
                 SELECT *
@@ -248,16 +249,17 @@ def create_views(conn: Connection) -> None:
                 WHERE pub_year >= {earliest}
                 AND pub_year <= {latest}
                 {size_filter}
-                AND title !~* '(tragedy|comedy|farce|interlude|play)'
-                AND lang = 'eng';
+                AND (lang = 'eng' OR lang IS NULL);
             """)
 
             # Index for fast joins (non-concurrent)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(corpus, doc_id);")
 
             # Materialized view for pamphlet_tokens
-            logger.info("Creating materialised view pamphlet_tokens")
+            logger.info("[corpus_db] Creating materialised view pamphlet_tokens")
             cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;")
+
+            # TODO Drop vector_id, no longer used
             cur.execute("""
                 CREATE MATERIALIZED VIEW pamphlet_tokens AS
                 SELECT
@@ -274,7 +276,7 @@ def create_views(conn: Connection) -> None:
             """)
 
             # Materialized view for document_search
-            # logger.info("Creating materialised view document_search")
+            # logger.info("[corpus_db] Creating materialised view document_search")
             # cur.execute("""
             #     CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
             #     WITH numbered_tokens AS (
@@ -313,7 +315,7 @@ def create_views(conn: Connection) -> None:
 
 
 def create_tiered_token_indexes(conn: Connection) -> None:
-    # logger.info("Creating tiered token indexes")
+    # logger.info("[corpus_db] Creating tiered token indexes")
     # earliest = config.CORPUS_MIN_YEAR
     # latest   = config.CORPUS_MAX_YEAR
     # Create non-concurrent indexes and materialized views inside a transaction
@@ -322,34 +324,35 @@ def create_tiered_token_indexes(conn: Connection) -> None:
     #         # GIN index can stay in transaction
     #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
     #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
-    # logger.info("create_tiered_token_indexes complete")
-    logger.info("create_tiered_token_indexes = noop")
+    # logger.info("[corpus_db] create_tiered_token_indexes complete")
+    logger.info("[corpus_db] create_tiered_token_indexes = noop")
 
 
 def create_concurrent_indexes():
-    logger.info("create_concurrent_indexes enter to create CONCURRENT indexes")
+    logger.info("[corpus_db] create_concurrent_indexes enter to create CONCURRENT indexes")
     with get_autocommit_connection() as conn:
         with conn.cursor() as cur:
             with conn.cursor() as cur:
                 cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_occurrence_id ON pamphlet_tokens(token_occurrence_id);")
                 cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(corpus, doc_id, token, token_idx);")
-    logger.info("create_concurrent_indexes complete")
+    logger.info("[corpus_db] create_concurrent_indexes complete")
 
 
 
 def drop_tokens_fk(conn: Connection) -> None:
-    logger.info("Dropping tokens.doc_id foreign key")
+    logger.info("[corpus_db] Dropping tokens.doc_id foreign key")
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE IF EXISTS tokens DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;")
-    logger.info("tokens.doc_id foreign key dropped")
+    logger.info("[corpus_db] tokens.doc_id foreign key dropped")
 
 
 def create_tokens_fk(conn: Connection) -> None:
-    logger.info("NOT creating tokens.doc_id foreign key as v slow and immutable data  makes it irrelevant")
+    logger.info("[corpus_db] NOT creating tokens.doc_id foreign key as v slow and immutable data  makes it irrelevant")
+
 
 def refresh_views(conn: Connection) -> None:
-    logger.info("Refreshing materialized views")
+    logger.info("[corpus_db] Refreshing materialized views")
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -357,11 +360,9 @@ def refresh_views(conn: Connection) -> None:
                 "pamphlet_tokens", "pamphlet_corpus",
                 # "document_search"
             ]:
-                logger.info(f"Refreshing {view}")
-                cur.execute(
-                    sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) )
-                )
-    logger.info("All views refreshed and committed")
+                logger.info(f"[corpus_db] Refreshing {view}")
+                cur.execute( sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) ) )
+    logger.info("[corpus_db] All views refreshed and committed")
 
 
 
