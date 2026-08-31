@@ -818,7 +818,6 @@ class CorpusProcessor:
             writer_kwargs["min_bytes"] = self.parquet_min_bytes
 
         store = open_observation_writer(
-            self.store_backend,
             self.store_path,
             dim=self.pipeline.hidden_size,
             **writer_kwargs,

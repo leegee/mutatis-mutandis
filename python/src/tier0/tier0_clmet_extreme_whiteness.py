@@ -478,7 +478,226 @@ def clear_derived_documents() -> None:
                 )
 
 
-# Metadata
+# ---------------------------------------------------------------------------
+# Date parsing / metadata
+# ---------------------------------------------------------------------------
+
+def midpoint(a: int, b: int) -> int:
+    """Return integer midpoint, rounded to nearest year."""
+    return int(round((a + b) / 2))
+
+
+def expand_short_year(start: int, end_raw: str) -> int:
+    """
+    Expand abbreviated CLMET year ranges.
+
+    Examples:
+
+        1730-1  -> 1731
+        1740-41 -> 1741
+        1760-1  -> 1761
+        1773-4  -> 1774
+        1780-96 -> 1796
+        1820-2  -> 1822
+        1810-3  -> 1813
+        1904-5  -> 1905
+        1888-9  -> 1889
+    """
+
+    end = int(end_raw)
+
+    if len(end_raw) == 1:
+        end = (start // 10) * 10 + end
+
+    elif len(end_raw) == 2:
+        end = (start // 100) * 100 + end
+
+    else:
+        end = int(end_raw)
+
+    if end < start:
+        end += 100
+
+    return end
+
+
+def clean_metadata_value(value: str) -> str:
+    """
+    Remove CLMET annotation prefixes while retaining the actual date.
+
+    Examples:
+
+        ?1750      -> 1750
+        X1780-96   -> 1780-96
+        a1911      -> 1911
+    """
+
+    value = value.strip()
+
+    value = (
+        value
+        .replace("–", "-")
+        .replace("—", "-")
+        .replace("−", "-")
+    )
+
+    # CLMET uses occasional annotation prefixes such as ?, X and a.
+    value = re.sub(r"^[?XaA]+", "", value)
+
+    return value.strip()
+
+
+def parse_year(value: str | None) -> int | None:
+    """
+    Parse a CLMET <year> value.
+
+    Examples:
+
+        1750       -> 1750
+        ?1750      -> 1750
+        1730-1     -> 1730
+        1780-96    -> 1788
+        1746-71    -> 1759
+        1796-1817  -> 1807
+    """
+
+    if not value:
+        return None
+
+    value = clean_metadata_value(value)
+
+    # Single year.
+    m = re.fullmatch(r"(\d{4})", value)
+
+    if m:
+        return int(m.group(1))
+
+    # Year range with abbreviated or full endpoint.
+    m = re.fullmatch(
+        r"(\d{4})\s*-\s*(\d{1,4})",
+        value,
+    )
+
+    if m:
+        start = int(m.group(1))
+        end_raw = m.group(2)
+
+        end = expand_short_year(
+            start,
+            end_raw,
+        )
+
+        return midpoint(start, end)
+
+    return None
+
+
+def parse_decade(value: str | None) -> int | None:
+    """
+    Parse a CLMET <decade> value.
+
+    Examples:
+
+        1750s -> 1755
+        1710s -> 1715
+
+    Also handles malformed/non-standard values such as:
+
+        1911s -> 1916
+    """
+
+    if not value:
+        return None
+
+    value = clean_metadata_value(value)
+
+    m = re.fullmatch(r"(\d{4})s", value)
+
+    if m:
+        return int(m.group(1)) + 5
+
+    return None
+
+
+def parse_period(value: str | None) -> int | None:
+    """
+    Parse a CLMET <period> as a last-resort range.
+
+    Examples:
+
+        1710-1780 -> 1745
+        1780-1850 -> 1815
+        1850-1920 -> 1885
+    """
+
+    if not value:
+        return None
+
+    value = clean_metadata_value(value)
+
+    m = re.fullmatch(
+        r"(\d{4})\s*-\s*(\d{4})",
+        value,
+    )
+
+    if m:
+        return midpoint(
+            int(m.group(1)),
+            int(m.group(2)),
+        )
+
+    return None
+
+
+def derive_pub_year(
+    year_raw: str | None,
+    decade_raw: str | None,
+    period_raw: str | None,
+) -> tuple[int | None, str | None]:
+    """
+    Derive a single publication year from CLMET metadata.
+
+    Priority:
+
+        <year>
+        <decade>
+        <period>
+
+    Ranges are represented by their midpoint.
+
+    Returns:
+
+        (derived_year, source)
+
+    where source is one of:
+
+        "year"
+        "decade"
+        "period"
+        None
+    """
+
+    if year_raw:
+        derived = parse_year(year_raw)
+
+        if derived is not None:
+            return derived, "year"
+
+    if decade_raw:
+        derived = parse_decade(decade_raw)
+
+        if derived is not None:
+            return derived, "decade"
+
+    if period_raw:
+        derived = parse_period(period_raw)
+
+        if derived is not None:
+            return derived, "period"
+
+    return None, None
+
+
 def metadata_from_text_file(
     doc_id: str,
     filepath: Path,
@@ -487,8 +706,17 @@ def metadata_from_text_file(
     """
     Extract CLMET metadata from the XML-like header in the source file.
 
-    CLMET headers look like XML but are not guaranteed to be valid XML,
-    so deliberately parse the simple metadata tags without ElementTree.
+    Publication year is derived using the same rules as
+    inspect_clmet_missing_years.py:
+
+        <year>
+        <decade>
+        <period>
+
+    Ranges are converted to their midpoint.
+
+    The source filepath remains relative to
+    config.CLMET_CORPUS_INPUT_DIR.
     """
 
     text = filepath.read_text(
@@ -496,7 +724,10 @@ def metadata_from_text_file(
         errors="replace",
     )
 
-    header = text.split("<text>", 1)[0]
+    header = text.split(
+        "<text>",
+        1,
+    )[0]
 
     def get_tag(tag: str) -> str | None:
         match = re.search(
@@ -512,12 +743,33 @@ def metadata_from_text_file(
 
         return value or None
 
-    year = get_tag("year")
+    title = get_tag("title")
+    author = get_tag("author")
 
-    try:
-        pub_year = int(year) if year else None
-    except ValueError:
-        pub_year = None
+    year_raw = get_tag("year")
+    decade_raw = get_tag("decade")
+    period_raw = get_tag("period")
+
+    pub_year, year_source = derive_pub_year(
+        year_raw,
+        decade_raw,
+        period_raw,
+    )
+
+    if pub_year is None:
+        logger.warning(
+            f"[clmet] Could not derive publication year for "
+            f"{doc_id}: "
+            f"year={year_raw!r}, "
+            f"decade={decade_raw!r}, "
+            f"period={period_raw!r}"
+        )
+    else:
+        logger.debug(
+            f"[clmet] {doc_id}: "
+            f"pub_year={pub_year} "
+            f"(source={year_source})"
+        )
 
     return {
         "corpus": CORPUS_NAME,
@@ -527,14 +779,16 @@ def metadata_from_text_file(
             config.CLMET_CORPUS_INPUT_DIR
         ).as_posix(),
 
-        "title": get_tag("title"),
-        "author": get_tag("author"),
+        "title": title,
+        "author": author,
         "pub_year": pub_year,
 
         "publisher": None,
         "pub_place": None,
 
-        "source_date_raw": get_tag("period"),
+        # Preserve the original broad CLMET period rather than replacing
+        # it with the derived midpoint.
+        "source_date_raw": period_raw,
 
         "token_count": token_count,
         "lang": "eng",
