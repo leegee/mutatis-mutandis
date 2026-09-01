@@ -36,8 +36,7 @@ export default function RelationInspector(props: RelationInspectorProps) {
         <Show when={props.relation}>
             {(relation) => (
                 <aside class="padding surface-container">
-                    <Show
-                        when={!editing()}
+                    <Show when={!editing()}
                         fallback={
                             <RelationForm
                                 relation={relation()}
@@ -50,13 +49,13 @@ export default function RelationInspector(props: RelationInspectorProps) {
                             />
                         }
                     >
-                        <header class="fixed surface top-padding" style="top:0">
+                        <header class="bottom-margin">
                             <nav>
-                                <h2 class="max">Relationship</h2>
-
-                                <button class="circle transparent" type="button" onClick={() => props.onClose?.(relation())}>
-                                    <i>close</i>
+                                <button class="circle transparent" type="button" title="Close" onClick={() => props.onClose?.(relation())}>
+                                    <i>arrow_back</i>
                                 </button>
+
+                                <h2 class="max"> Relationship </h2>
                             </nav>
                         </header>
 

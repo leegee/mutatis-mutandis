@@ -123,8 +123,19 @@ export default function RelationForm(props: RelationFormProps) {
 
     return (
         <form onSubmit={submit}>
-            <div class="">
-                <h3>{editing() ? "Edit Relationship" : "Add a new relationship"}</h3>
+            <div class="surface-container">
+                <header class="bottom-margin">
+                    <nav>
+                        <button class="circle transparent" type="button" title="Close" onClick={() => props.onCancel?.()} >
+                            <i>arrow_back</i>
+                        </button>
+
+                        <h2 class="max">
+                            {editing() ? "Edit Relationship" : "Add a new relationship"}
+                        </h2>
+                    </nav>
+                </header>
+
                 <EntityAutocomplete
                     value={sourceValue()}
                     onInput={inputSource}
@@ -176,6 +187,8 @@ export default function RelationForm(props: RelationFormProps) {
                                 : "Add relationship"}
                     </button>
                 </nav>
+                <br />
+                <p class="top-margin extra-margin small medium-opacity center-align">Delete this relationship by right-clicking it on the graph</p>
             </div>
         </form>
     );
