@@ -108,7 +108,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 						</header>
 
 						<Show when={entity().description}>
-							<section class="surface">
+							<section class="surface-container">
 								<p> {entity().description} </p>
 							</section>
 						</Show>
@@ -129,11 +129,10 @@ export default function EntityInspector(props: EntityInspectorProps) {
 							}}
 						/>
 
-						<section class="surface">
+						<section class="surface-container">
 							<h3>Relationships</h3>
 
-							<Show
-								when={outgoing().length > 0 || incoming().length > 0}
+							<Show when={outgoing().length > 0 || incoming().length > 0}
 								fallback={<p class={no_data_fallback_class}>Right-click a node to estabish a relationship </p>}
 							>
 								<Show when={outgoing().length > 0}>

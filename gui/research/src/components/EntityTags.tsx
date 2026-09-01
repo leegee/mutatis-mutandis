@@ -45,7 +45,7 @@ export default function EntityTags(props: EntityTagsProps) {
 	}
 
 	return (
-		<section class="surface">
+		<section class="surface-container">
 			<AutoComplete<string>
 				value={tagInput()}
 				items={tags()}
@@ -57,13 +57,8 @@ export default function EntityTags(props: EntityTagsProps) {
 				isTitle
 			/>
 
-			<Show
-				when={props.entity.tags.length > 0}
-				fallback={
-					<p class={no_data_fallback_class}>No tags.</p>
-				}
-			>
-				<div class="row wrap tiny-space">
+			<Show when={props.entity.tags.length > 0} fallback={<p class={no_data_fallback_class}>No tags.</p>} >
+				<div class="row wrap tiny-space tiny-margin bottom-margin top-margin">
 					<For each={props.entity.tags}>
 						{(tag) => (
 							<span class="small chip left-padding">
