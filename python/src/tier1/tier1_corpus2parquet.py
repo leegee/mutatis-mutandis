@@ -585,27 +585,6 @@ class EmbeddingPipeline:
 
         return windows
 
-    @staticmethod
-    def _best_window_for_token(
-        windows: list[dict],
-        word_id: int,
-    ) -> dict | None:
-        """
-        Return the window giving a token the most centred placement.
-        """
-
-        best = None
-        best_dist = None
-
-        for window in windows:
-            if window["min_word"] <= word_id <= window["max_word"]:
-                dist = abs(window["mid"] - word_id)
-
-                if best is None or dist < best_dist:
-                    best = window
-                    best_dist = dist
-
-        return best
 
     def _encode(self, tokens):
         """
