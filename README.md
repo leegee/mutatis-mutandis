@@ -44,9 +44,9 @@ So: instead of corpus-wide embedding, we recursively probe system where semantic
             |
     Postgres (text + meta)
             |
-    Zarr (event log: contextual embeddings)         TODO: Parquet
+    Parquet or Zarr (event log: contextual embeddings)
             |
-    FAISS (approximate semantic geometry index)     TODO: Milvus
+    LanceDB or FAISS (approximate semantic geometry index)     TODO Check: Milvus
             |
     Query layer (token/window/hybrid encoding)
             |
@@ -67,6 +67,12 @@ Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/por
 Don't forget to restart the Colab session when the IP changes.
 
 (Colab workbooks are well out of date)
+
+## Sources
+
+* [The Corpus of Late Modern English Texts, version 3.1](https://fedora.clarin-d.uni-saarland.de/clmet/clmet.html)
+* [Eighteenth Century Collection Online TCP](https://github.com/Text-Creation-Partnership/ECCO-TCP)
+* [Early English Books Online TCP](https://github.com/Text-Creation-Partnership/EEBO-TCP-Collections-Navigations)
 
 ## Bibliography
 
