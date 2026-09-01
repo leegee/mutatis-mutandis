@@ -17,7 +17,7 @@ ECCO_HEADER_DIR = Path( "d:/src/mutatis-mutandis/corpus/ecco_all/ecco/headers" )
 XML_ROOT_DIR = PROJECT_ROOT / "corpus"
 
 CORPUS_INPUT_DIRS = {
-    "eebo": XML_ROOT_DIR / "eebo_all",
+    # "eebo": XML_ROOT_DIR / "eebo_all",
     "ecco": XML_ROOT_DIR / "ecco_all",
 }
 

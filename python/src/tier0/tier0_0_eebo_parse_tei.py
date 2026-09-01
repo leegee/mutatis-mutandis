@@ -7,26 +7,32 @@ NB Corpus roots are defined in config.CORPUS_INPUT_DIRS
 """
 
 from __future__ import annotations
+
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Optional
 import argparse
-import os
 import csv
 import io
+import os
 import re
 import sys
 import tempfile
-import unicodedata
 import traceback
-from concurrent.futures import ProcessPoolExecutor
+import unicodedata
 
 from psycopg import sql
 import xml.etree.ElementTree as etree
 import langdetect
+
 import lib.corpus_config as config
 import lib.corpus_db as corpus_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.corpus_logging import logger
+from lib.wordlist_whiteness import WHITENESS, WHITENESS_WEIGHTS, WEAK_WHITENESS_PATTERNS
+
+MIN_WHITENESS_SCORE = 2.0
 
 NUM_WORKERS = 4
 BATCH_DOCS = 100
@@ -43,6 +49,44 @@ MAX_DOCS: Optional[int] = None
 SKIP_EXISTING_DOCS  = True
 
 TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
+
+
+def whiteness_seed_score(
+    tokens: list[str],
+) -> tuple[int, Counter[str]]:
+
+    hits = Counter(
+        token.lower()
+        for token in tokens
+        if token.lower() in WHITENESS
+    )
+
+    score = sum(
+        count * WHITENESS_WEIGHTS.get(lemma, 1)
+        for lemma, count in hits.items()
+    )
+
+    return score, hits
+
+
+def passes_whiteness_filter( doc_id: str, tokens: list[str] ) -> bool:
+    score, hits = whiteness_seed_score(tokens)
+
+    if not hits:
+        return False
+
+    seeds = set(hits)
+
+    # White/grey/gray alone are too non-diagnostic,
+    # regardless of how frequently they occur.
+    if any(seeds <= weak for weak in WEAK_WHITENESS_PATTERNS):
+        return False
+
+    if score < MIN_WHITENESS_SCORE:
+        return False
+
+    logger.info( f"[tier0] Whiteness filter PASS: {doc_id} score={score}, hits={dict(hits)}" )
+    return True
 
 
 def normalize_early_modern(text: str) -> str:
@@ -262,6 +306,10 @@ def process_ecco_file(tree, xml_path):
         return None
 
     tokens = re.findall( r"\w+|[^\w\s]", normalized )
+
+    if not passes_whiteness_filter(doc_id, tokens):
+        logger.debug( f"[tier0] Rejecting {doc_id}: not enough extreme-whiteness hits" )
+        return None
 
     if len(tokens) > config.MAX_TOKENS_IN_DOC:
         logger.warning(
