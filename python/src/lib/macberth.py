@@ -21,6 +21,10 @@ MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 ONNX_MODEL_DIR = MODELS_DIR / "./macberth-onnx-fp32"
 ONNX_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+ONNX_INT8_MODEL_DIR = MODELS_DIR / "./macberth-onnx-int8"
+ONNX_INT8_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+
 @dataclass
 class MacberthModel:
     tokenizer: AutoTokenizer
@@ -68,6 +72,11 @@ def load_macberth(
     The encoder is accessed through model.base_model.
 
     (The MLM head is currently used by Tier 1.4.)
+
+    Re q8:  BERT-family models are known to have outlier activation channels where a small number of dimensions with much larger
+    magnitude than the rest, especially in later layers. Naive per-tensor dynamic quantization  can handle these poorly,
+    disproportionately distorting those specific dimensions rather than degrading uniformly. This doesn't usually break embeddings
+    wholesale, but it means the error isn't perfectly isotropic — worth knowing if you see weirdly specific failure patterns later.
     """
 
     logger.info("Loading MacBERTh model...")
@@ -242,13 +251,22 @@ class OnnxMacberthModel:
         return self._hidden_size
 
     def encode(self, input_ids, attention_mask, token_type_ids=None, **kwargs):
+        # This model is CPU-only (self.device == "cpu"), so input_ids /
+        # attention_mask / token_type_ids never need to round-trip through
+        # torch here -- go straight to numpy, which is all ORT accepts
+        # anyway. This runs once per batch on the hot path.
+        input_ids_np = input_ids.cpu().numpy()
+        attention_mask_np = attention_mask.cpu().numpy()
+
         if token_type_ids is None:
-            token_type_ids = torch.zeros_like(input_ids)
+            token_type_ids_np = np.zeros_like(input_ids_np)
+        else:
+            token_type_ids_np = token_type_ids.cpu().numpy()
 
         feed = {
-            "input_ids": input_ids.cpu().numpy(),
-            "attention_mask": attention_mask.cpu().numpy(),
-            "token_type_ids": token_type_ids.cpu().numpy(),
+            "input_ids": input_ids_np,
+            "attention_mask": attention_mask_np,
+            "token_type_ids": token_type_ids_np,
         }
 
         outputs = self.session.run(None, feed)
@@ -298,24 +316,127 @@ def _export_macberth_onnx(export_dir: Path = ONNX_MODEL_DIR) -> None:
     logger.info(f"ONNX export completed at {export_dir}")
 
 
+def _quantize_macberth_onnx(
+    fp32_dir: Path = ONNX_MODEL_DIR,
+    int8_dir: Path = ONNX_INT8_MODEL_DIR,
+) -> None:
+    """
+    Dynamically quantizes the fp32 ONNX export to int8 (weights only;
+    activations are quantized on the fly at inference time).
+
+    Dynamic quantization is generally low-loss for encoder-only
+    transformers, but "generally" isn't "always" -- if you change this,
+    spot-check cosine similarity between fp32 and int8 vectors on a
+    sample of documents before trusting it for the full corpus run.
+    """
+    from onnxruntime.quantization import quantize_dynamic, QuantType
+    import shutil
+
+    if not (fp32_dir / "model.onnx").exists():
+        _export_macberth_onnx(fp32_dir)
+
+    logger.info(f"Quantizing ONNX MacBERTh to int8 at {int8_dir}...")
+
+    if int8_dir.exists():
+        shutil.rmtree(int8_dir)
+    int8_dir.mkdir(parents=True, exist_ok=True)
+
+    quantize_dynamic(
+        model_input=str(fp32_dir / "model.onnx"),
+        model_output=str(int8_dir / "model.onnx"),
+        weight_type=QuantType.QInt8,
+    )
+
+    # Tokenizer / config files live alongside the model but aren't part
+    # of the quantization step -- copy them over so int8_dir is a
+    # complete, independently loadable export.
+    for pattern in ("*.json", "*.txt"):
+        for f in fp32_dir.glob(pattern):
+            shutil.copy(f, int8_dir / f.name)
+
+    logger.info(f"ONNX int8 quantization completed at {int8_dir}")
+
+
+def _configure_ort_session_options() -> ort.SessionOptions:
+    """
+    Centralizes CPU thread/execution tuning for the ONNX session.
+
+    Rationale (all CPU-bound-specific):
+      - intra_op_num_threads is set explicitly rather than left to ORT's
+        default, and is coordinated with cpu_count() so it doesn't
+        silently pick a value that fights the rest of the pipeline
+        (tokenization, window bookkeeping, parquet writes) for cores.
+        ORT_NUM_THREADS env var still overrides if set.
+      - inter_op_num_threads=1 because a single BERT encoder graph has
+        essentially no independent branches to parallelize across --
+        inter-op parallelism here is pure scheduling overhead.
+      - ORT_SEQUENTIAL over the default ORT_PARALLEL for the same reason:
+        parallel execution mode is built for graphs with concurrent
+        branches, not a single linear encoder stack.
+      - allow_spinning=0 so idle ORT worker threads yield the CPU
+        instead of busy-waiting, which matters because this process
+        interleaves non-trivial Python work between forward passes
+        rather than running back-to-back inference in a tight loop.
+    """
+    import os
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+
+    try:
+        n = int(os.environ.get("ORT_NUM_THREADS", "0"))
+    except ValueError:
+        n = 0
+
+    if n <= 0:
+        n = os.cpu_count() or 4
+
+    sess_options.intra_op_num_threads = n
+    sess_options.inter_op_num_threads = 1
+
+    sess_options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+
+    logger.info(
+        "[macberth] ORT session config: intra_op_num_threads=%d, "
+        "inter_op_num_threads=1, execution_mode=SEQUENTIAL, spinning=off",
+        n,
+    )
+
+    return sess_options
+
+
 def load_macberth_onnx(
-    export_dir: Path = ONNX_MODEL_DIR,
+    export_dir: Optional[Path] = None,
     providers: Optional[List[str]] = None,
+    *,
+    quantize: bool = True,
 ) -> OnnxMacberthModel:
     """
-    Loads the fp32 ONNX MacBERTh model for inference. Exports it first
-    if it doesn't already exist on disk.
+    Loads the ONNX MacBERTh model for inference. Exports it first if it
+    doesn't already exist on disk.
+
+    quantize=True (default) uses the dynamically-quantized int8 export,
+    which is substantially faster on CPU for an encoder-only transformer
+    like this one -- exactly the case here, since DirectML is unusable
+    and CPU is the only viable backend. Pass quantize=False to fall back
+    to the fp32 export (e.g. if you need to A/B against int8 output).
 
     Default provider is CPU-only (stable for long Tier 1 runs on Windows).
     Pass `providers=["DmlExecutionProvider", "CPUExecutionProvider"]` or set
     `MACBERTH_ONNX_PROVIDER=dml` to use DirectML.
-
     """
     import os
+
+    if export_dir is None:
+        export_dir = ONNX_INT8_MODEL_DIR if quantize else ONNX_MODEL_DIR
     export_dir = Path(export_dir)
 
     if not (export_dir / "model.onnx").exists():
-        _export_macberth_onnx(export_dir)
+        if quantize:
+            _quantize_macberth_onnx(ONNX_MODEL_DIR, export_dir)
+        else:
+            _export_macberth_onnx(export_dir)
 
     if providers is None:
         # Env override: MACBERTH_ONNX_PROVIDER=dml|cpu
@@ -334,16 +455,7 @@ def load_macberth_onnx(
         for p in usable
     ]
 
-    sess_options = ort.SessionOptions()
-    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-    # Respect ORT_NUM_THREADS if set; helps long CPU runs stay predictable
-    try:
-        n = int(os.environ.get("ORT_NUM_THREADS", "0"))
-        if n > 0:
-            sess_options.intra_op_num_threads = n
-            sess_options.inter_op_num_threads = 1
-    except ValueError:
-        pass
+    sess_options = _configure_ort_session_options()
 
     session = ort.InferenceSession(
         f"{export_dir}/model.onnx",
@@ -351,7 +463,11 @@ def load_macberth_onnx(
         providers=usable,
         provider_options=provider_options,
     )
-    logger.info("[macberth.load_macberth_onnx] Loaded ONNX MacBERTh, providers: %s", session.get_providers())
+    logger.info(
+        "[macberth.load_macberth_onnx] Loaded ONNX MacBERTh (quantize=%s), providers: %s",
+        quantize,
+        session.get_providers(),
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(export_dir, local_files_only=True)
 
