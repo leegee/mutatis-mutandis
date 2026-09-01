@@ -148,8 +148,7 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 					<div class="field border">
 						<For each={suggestions()}>
 							{(item, index) => (
-								<button
-									type="button"
+								<button type="button"
 									classList={{
 										"no-round": true,
 										active: index() === highlighted(),
@@ -165,16 +164,11 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 						</For>
 
 						<Show when={canCreate()}>
-							<button
-								type="button"
-								class="no-round"
+							<button type="button" class="no-round"
 								onMouseDown={(event) => event.preventDefault()}
 								onClick={() => {
 									const value = createValue();
-
-									if (value) {
-										void props.onCreate?.(value);
-									}
+									if (value) void props.onCreate?.(value);
 								}}
 							>
 								<i>add</i>

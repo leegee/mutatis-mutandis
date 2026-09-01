@@ -64,8 +64,7 @@ export default function EntityTags(props: EntityTagsProps) {
 							<span class="small chip left-padding">
 								{tag}
 
-								<button
-									type="button"
+								<button type="button"
 									class="transparent small circle no-padding"
 									title={`Remove ${ tag }`}
 									aria-label={`Remove tag ${ tag }`}
