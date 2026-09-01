@@ -5,6 +5,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from lib.wordlist_whiteness import WHITENESS
 
 VRT = Path(r"d:/Downloads/clmet3_1/clmet/corpus/clmet.vrt")
 OUT_DIR = VRT.parent / "extreme_whiteness"
@@ -15,57 +16,6 @@ OUT_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 # Lexical field
 # ---------------------------------------------------------------------------
-
-WHITENESS = {
-    # white
-    "white",
-    "whiteness",
-    "whiten",
-    "whitened",
-    "whitening",
-
-    # pale
-    "pale",
-    "paleness",
-    "paleness",
-    "pallid",
-    "pallor",
-
-    # related descriptions
-    "wan",
-    "wanly",
-    "wanness",
-    "bloodless",
-    "colourless",
-    "colorless",
-    "colourlessness",
-    "colorlessness",
-
-    # hair / age whiteness
-    "hoary",
-    "grey",
-    "gray",
-    "greyness",
-    "grayness",
-
-    # bleaching / loss of colour
-    "bleach",
-    "bleached",
-    "bleaching",
-
-    # diagnostic extreme-whiteness vocabulary
-    "albino",
-    "albinos",
-    "albinoes",
-    "albinism",
-    "albinotic",
-    "albinistic",
-
-    # useful figurative / comparative possibilities
-    "ghostly",
-    "cadaverous",
-    "livid",
-}
 
 
 BODY = {

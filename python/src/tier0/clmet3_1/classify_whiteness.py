@@ -5,6 +5,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from lib.wordlist_whiteness import WHITENESS
 
 INPUT = Path(
     r"d:/Downloads/clmet3_1/clmet/corpus/extreme_whiteness/"
@@ -119,41 +120,6 @@ PERSON = {
     "girls",
 }
 
-
-WHITENESS = {
-    "white",
-    "whiteness",
-    "whiten",
-    "whitened",
-    "whitening",
-    "pale",
-    "paleness",
-    "pallid",
-    "pallor",
-    "wan",
-    "wanly",
-    "wanness",
-    "grey",
-    "gray",
-    "greyness",
-    "grayness",
-    "hoary",
-    "bleach",
-    "bleached",
-    "bleaching",
-    "bloodless",
-    "colourless",
-    "colorless",
-    "livid",
-    "cadaverous",
-    "ghostly",
-    "albino",
-    "albinos",
-    "albinoes",
-    "albinism",
-    "albinotic",
-    "albinistic",
-}
 
 
 # ---------------------------------------------------------------------------
