@@ -44,8 +44,6 @@ import lib.corpus_config as config
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS
 
-from tier0.tier0_clmet_extreme_whiteness import SEPARATOR
-
 from tier1.observation_store_api import (
     resolve_store_path,
     open_observation_writer,
@@ -72,17 +70,10 @@ def stable_hash(key: str) -> np.int64:
     return np.int64(h & 0x7FFFFFFFFFFFFFFF)
 
 
-def is_separator_token(token: str) -> bool:
-    return token == SEPARATOR
-
-
 def is_content_token(token: str) -> bool:
     stripped = token.strip().lower()
 
     if not stripped or stripped in STOPWORDS:
-        return False
-
-    if is_separator_token(token):
         return False
 
     if all(
@@ -624,20 +615,10 @@ class EmbeddingPipeline:
         MacBERTh literally because it is not part of the pretrained
         vocabulary.
 
-        We substitute a normal punctuation token for model encoding so that
-        the separator still occupies exactly one word-level position and
-        therefore does not disturb word_ids alignment.
-
-        The original corpus token list remains unchanged.
         """
 
-        model_tokens = [
-            "." if is_separator_token(token) else token
-            for token in tokens
-        ]
-
         enc = self.tokenizer(
-            model_tokens,
+            tokens,
             is_split_into_words=True,
             truncation=False,
             return_tensors="pt",

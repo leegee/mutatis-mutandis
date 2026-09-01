@@ -33,7 +33,7 @@ port = os.environ.get("PGPORT", 5432)
 def get_connection(
     *,
     connect_timeout: int = 5,
-    application_name: str = "eebo",
+    application_name: str = "corpus",
 ) -> Connection:
     """
     Create and return a PostgreSQL connection with autocommit disabled.
@@ -79,7 +79,7 @@ def get_connection(
 def get_autocommit_connection(
     *,
     connect_timeout: int = 5,
-    application_name: str = "eebo",
+    application_name: str = "borpus",
 ) -> Connection:
     """
     Get a fresh PostgreSQL connection in autocommit mode.
