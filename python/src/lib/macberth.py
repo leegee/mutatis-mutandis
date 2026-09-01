@@ -72,11 +72,6 @@ def load_macberth(
     The encoder is accessed through model.base_model.
 
     (The MLM head is currently used by Tier 1.4.)
-
-    Re q8:  BERT-family models are known to have outlier activation channels where a small number of dimensions with much larger
-    magnitude than the rest, especially in later layers. Naive per-tensor dynamic quantization  can handle these poorly,
-    disproportionately distorting those specific dimensions rather than degrading uniformly. This doesn't usually break embeddings
-    wholesale, but it means the error isn't perfectly isotropic — worth knowing if you see weirdly specific failure patterns later.
     """
 
     logger.info("Loading MacBERTh model...")
@@ -330,6 +325,7 @@ def _quantize_macberth_onnx(
     sample of documents before trusting it for the full corpus run.
     """
     from onnxruntime.quantization import quantize_dynamic, QuantType
+    from onnxruntime.quantization.shape_inference import quant_pre_process
     import shutil
 
     if not (fp32_dir / "model.onnx").exists():
@@ -341,11 +337,58 @@ def _quantize_macberth_onnx(
         shutil.rmtree(int8_dir)
     int8_dir.mkdir(parents=True, exist_ok=True)
 
+    # ORT recommends running shape-inference/node-fusion pre-processing
+    # before dynamic quantization; skipping it (the previous version of
+    # this function did) measurably degrades int8 accuracy. This writes
+    # an intermediate "preprocessed" fp32 model that quantize_dynamic then
+    # reads from, rather than quantizing the raw export directly.
+    #
+    # Symbolic shape inference (skip_symbolic_shape=False) is more
+    # thorough but commonly fails on transformer exports that contain
+    # dynamic reshapes/attention ops it can't fully resolve -- this is a
+    # known ORT limitation, not specific to this model. Fall back to
+    # basic (non-symbolic) shape inference in that case rather than
+    # aborting quantization entirely.
+    preprocessed_path = int8_dir / "model.preprocessed.onnx"
+
+    try:
+        quant_pre_process(
+            input_model=str(fp32_dir / "model.onnx"),
+            output_model_path=str(preprocessed_path),
+            skip_symbolic_shape=False,
+        )
+    except Exception as e:
+        logger.warning(
+            "[macberth] Symbolic shape inference failed during "
+            "quant_pre_process (%s); falling back to basic "
+            "(non-symbolic) shape inference. This is a known ORT "
+            "limitation on some transformer exports.",
+            e,
+        )
+        quant_pre_process(
+            input_model=str(fp32_dir / "model.onnx"),
+            output_model_path=str(preprocessed_path),
+            skip_symbolic_shape=True,
+        )
+
+    # NOTE: per_channel=True was tried here and rejected. On this model's
+    # exported graph it produced badly broken embeddings (same-sentence
+    # fp32-vs-int8 cosine similarity ~0.46, i.e. near-uncorrelated) rather
+    # than a subtler accuracy change. This matches a known ORT failure
+    # mode where per-channel dynamic quantization assumes a particular
+    # weight layout and misapplies scales along the wrong axis on
+    # transposed-MatMul graphs (common in HF/optimum ONNX exports that
+    # use MatMul rather than Gemm). Do not re-enable without first
+    # fixing the graph layout (e.g. via a Gemm-producing export path or
+    # explicit axis correction) -- otherwise it silently corrupts output
+    # rather than just losing accuracy.
     quantize_dynamic(
-        model_input=str(fp32_dir / "model.onnx"),
+        model_input=str(preprocessed_path),
         model_output=str(int8_dir / "model.onnx"),
         weight_type=QuantType.QInt8,
     )
+
+    preprocessed_path.unlink(missing_ok=True)
 
     # Tokenizer / config files live alongside the model but aren't part
     # of the quantization step -- copy them over so int8_dir is a
@@ -410,7 +453,7 @@ def load_macberth_onnx(
     export_dir: Optional[Path] = None,
     providers: Optional[List[str]] = None,
     *,
-    quantize: bool = True,
+    quantize: bool = False,
 ) -> OnnxMacberthModel:
     """
     Loads the ONNX MacBERTh model for inference. Exports it first if it

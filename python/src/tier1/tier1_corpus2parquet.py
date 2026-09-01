@@ -21,6 +21,8 @@ import psutil
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+# Those control PyTorch's BLAS backend, not ONNX Runtime.
 os.environ.setdefault("OMP_NUM_THREADS", "4")
 os.environ.setdefault("MKL_NUM_THREADS", "4")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
@@ -635,57 +637,32 @@ class EmbeddingPipeline:
         return out.last_hidden_state[0].cpu().numpy()
 
     @staticmethod
-    def _iter_windows_config(
-        input_ids,
-        attention_mask,
-        word_ids,
-        window_size,
-        stride,
-    ):
+    def _iter_windows_config(input_ids, attention_mask, word_ids, window_size, stride):
         n = len(input_ids)
-
         if n == 0:
             return
 
-        valid_word_ids = [
-            wid
-            for wid in word_ids
-            if wid is not None and wid >= 0
-        ]
+        first_encoded_idx = {}
+        for i, wid in enumerate(word_ids):
+            if wid is not None and wid >= 0 and wid not in first_encoded_idx:
+                first_encoded_idx[wid] = i
 
-        n_words = (
-            max(valid_word_ids) + 1
-            if valid_word_ids
-            else 0
-        )
+        valid_word_ids = [wid for wid in word_ids if wid is not None and wid >= 0]
+        n_words = max(valid_word_ids) + 1 if valid_word_ids else 0
 
         start_word = 0
-
         while start_word < n_words:
-            try:
-                encoded_start = next(
-                    i
-                    for i, wid in enumerate(word_ids)
-                    if wid == start_word
-                )
-            except StopIteration:
+            encoded_start = first_encoded_idx.get(start_word)
+            if encoded_start is None:
                 break
 
-            encoded_end = min(
-                encoded_start + window_size,
-                n,
-            )
-
-            yield (
-                start_word,
-                input_ids[encoded_start:encoded_end],
+            encoded_end = min(encoded_start + window_size, n)
+            yield (start_word, input_ids[encoded_start:encoded_end],
                 attention_mask[encoded_start:encoded_end],
-                word_ids[encoded_start:encoded_end],
-            )
+                word_ids[encoded_start:encoded_end])
 
             if encoded_end == n:
                 break
-
             start_word += stride
 
     @staticmethod

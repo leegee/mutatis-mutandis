@@ -85,3 +85,5 @@ gui/dss-explorer/*
 corpus/
 python/dss_semantic_trajectory.json
 python/data/
+python/*.data
+python/*.onnx

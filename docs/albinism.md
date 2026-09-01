@@ -67,6 +67,12 @@ Potential Supervisors, Adjacent Scholars, and Thomas White’s Thesis
 
 - Josh Davies (KCL Sr Lecturer in Medieval Lit)
 
+- David Turner (Swansea, Professor; social and cultural historian of disability)
+Leading UK figure on physical impairment, cultural representations of disability, and the history of the body from the long eighteenth century into the industrial period. Author of Disability in Eighteenth-Century England and work on disability in industrial Britain. Explicitly available for postgraduate supervision. Excellent for the shift toward pathology, medicalisation, and marked bodies; less focused on early modern literary symbolism or biblical theophany, but strong on how bodily difference acquires social and cultural meanings.
+
+- Mark S. Dawson (Australian National University, Senior Lecturer in Early Modern History)
+Author of Bodies Complexioned: Human Variation and Racism in Early Modern English Culture, c. 1600–1750. Directly addresses early modern English understandings of bodily difference (complexion, humoral physiology, skin, hair, features), social discrimination based on visible markers, and the pre-modern roots of racial thinking. Extremely close to the physiognomic and symbolic complex you describe for the earlier period. Geography is a practical hurdle for primary supervision, but he could work as an external/co-supervisor or advisor, especially given the project’s European intellectual inheritance.
+
 ### Useful Adjacent Scholars
 
 - John L. Hilton — Author of “Albinism in the Ancient Mediterranean World.” Assembles classical and late-antique evidence and discusses the Book of Enoch description of Noah (body white as snow, hair white as wool, eyes shining like the sun), the closest ancient parallel to the Revelation “Son of Man” imagery.
