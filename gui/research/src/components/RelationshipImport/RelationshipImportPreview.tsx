@@ -32,22 +32,28 @@ export function rowIsValid(row: ImportRow): boolean {
 
 function RelationshipRowStatus(props: { row: ImportRow }) {
 	return (
-		<div class="s1 relationship-import-status">
+		<h2 class="s1 relationship-import-status padding large-opacity">
 			<Show when={rowIsComplete(props.row)}
 				fallback={
-					<Show when={rowIsValid(props.row)}>
-						<label class="checkbox">
-							<input type="checkbox" checked disabled />
-							<span />
-						</label>
-					</Show>
+					<>
+						<Show when={rowIsValid(props.row)}>
+							<span class="relationship-import-ok" aria-description="Relationship already exists">
+								✓
+							</span>
+						</Show>
+						<Show when={!rowIsValid(props.row)}>
+							<span class="relationship-import-not-ok" aria-description="Relationship does not exists">
+								✗
+							</span>
+						</Show>
+					</>
 				}
 			>
 				<span class="relationship-import-ok" aria-description="Relationship already exists">
 					✓
 				</span>
 			</Show>
-		</div>
+		</h2>
 	);
 }
 
