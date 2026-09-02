@@ -6,12 +6,7 @@ import { controls } from "../../state/controls.store";
 import "./YearTimeline.css";
 import { Portal } from "solid-js/web";
 
-interface YearTimelineProps {
-  tooltipPosition?: "top" | "bottom" | null;
-  onSelect?: (year: number) => void;
-}
-
-export const YearTimeline: Component<YearTimelineProps> = (props) => {
+export const YearTimeline: Component = () => {
   const [yearBucketsResource] = createResource(
     () => controls.conceptSelection[0],
     (concept) => getYearBuckets(concept),
