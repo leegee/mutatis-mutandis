@@ -91,10 +91,21 @@ export default function EntityForm(props: EntityFormProps) {
 
 	return (
 		<form onSubmit={submit}>
-			<Show
-				when={!editing()}
+			<Show when={!editing()}
 				fallback={
 					<div class="field border">
+						<header class="bottom-margin">
+							<nav>
+								<button class="circle transparent" type="button" title="Close" onClick={() => props.onCancel?.()} >
+									<i>arrow_back</i>
+								</button>
+
+								<h2 class="max">
+									{editing() ? "Edit Entity" : "Add a new entity"}
+								</h2>
+							</nav>
+						</header>
+
 						<input
 							type="text"
 							value={label()}
