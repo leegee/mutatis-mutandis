@@ -163,8 +163,8 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 	}
 
 	return (
-		<div class="autocomplete tiny-padding">
-			<div class={`field small label ${ isTitle() ? "suffix title" : "border" }`}>
+		<div class="autocomplete padding">
+			<div class={`field label ${ isTitle() ? "suffix title" : "border" }`}>
 				<input
 					ref={inputRef}
 					type="text"
