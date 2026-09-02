@@ -160,7 +160,7 @@ export const YearTimeline: Component = () => {
       <Portal>
         <div class="fill round" id="giant-year-range">
           {controls.fromYear}
-          {controls.toYear !== controls.fromYear ? "-" + controls.toYear : ""}
+          {controls.toYear !== controls.fromYear ? `-${ controls.toYear }` : ""}
         </div>
       </Portal>
     </>
