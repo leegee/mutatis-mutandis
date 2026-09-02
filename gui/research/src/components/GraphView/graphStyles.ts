@@ -50,7 +50,7 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 			css: {
 				"font-size": 32,
 				"font-weight": 600,
-				"z-index": 999999,
+				"z-index": 9999,
 			},
 		},
 

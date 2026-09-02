@@ -398,7 +398,7 @@ export default function GraphView(props: GraphViewProps) {
 							position: "absolute",
 							left: `${ menu().x }px`,
 							top: `${ menu().y }px`,
-							"z-index": 100000,
+							"z-index": 1000,
 						}}
 						onClick={(event) => event.stopPropagation()}
 					>
@@ -539,7 +539,7 @@ export default function GraphView(props: GraphViewProps) {
 						top: "1em",
 						left: "50%",
 						transform: "translateX(-50%)",
-						"z-index": 100000,
+						"z-index": 1000,
 					}}
 				>
 					<nav class="no-space top-margin">
@@ -580,7 +580,7 @@ export default function GraphView(props: GraphViewProps) {
 						bottom: "2em",
 						left: "50%",
 						transform: "translateX(-50%)",
-						"z-index": 100000,
+						"z-index": 1000,
 					}}
 				>
 					Click a node to create the relation. Press Escape to cancel.
