@@ -23,7 +23,7 @@ export default function RelationAutoComplete(props: RelationAutoCompleteProps) {
 			placeholder="Relationship"
 			openOnFocus
 			clearOnSelect={false}
-			maxSuggestions={20}
+			maxSuggestions={10}
 			outputField={props.outputField}
 		/>
 	);

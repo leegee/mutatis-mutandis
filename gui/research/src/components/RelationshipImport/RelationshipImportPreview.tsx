@@ -33,8 +33,7 @@ export function rowIsValid(row: ImportRow): boolean {
 function RelationshipRowStatus(props: { row: ImportRow }) {
 	return (
 		<div class="s1 relationship-import-status">
-			<Show
-				when={rowIsComplete(props.row)}
+			<Show when={rowIsComplete(props.row)}
 				fallback={
 					<Show when={rowIsValid(props.row)}>
 						<label class="checkbox">
