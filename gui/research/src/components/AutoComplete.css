@@ -5,17 +5,8 @@
 .autocomplete {
 	position: relative;
 	width: 100%;
-
-	.autocomplete-menu {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		z-index: 1000;
-
-		max-height: 20rem;
-		overflow-y: auto;
-	}
+	overflow: auto;
+	z-index: 100000000;
 
 	.field.label.title {
 		input[type="text"] {
@@ -30,4 +21,11 @@
 			margin-right: -0.5em !important;
 		}
 	}
+}
+
+.autocomplete-menu {
+	position: fixed;
+	z-index: 100000000;
+	max-height: 20rem;
+	overflow-y: auto;
 }

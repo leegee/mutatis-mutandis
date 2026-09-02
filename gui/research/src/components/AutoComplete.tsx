@@ -1,6 +1,7 @@
 import "./AutoComplete.css";
-import { createMemo, createSignal, For, type JSX, Show } from "solid-js";
-
+import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
+import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
+import { Portal } from "solid-js/web";
 
 interface AutocompleteProps<T> {
 	value: string;
@@ -37,6 +38,9 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 	const [highlighted, setHighlighted] = createSignal(0);
 	const isTitle = createMemo(() => props.isTitle);
 
+	let inputRef!: HTMLInputElement;
+	let menuRef!: HTMLDivElement;
+
 	const createValue = () => props.value.trim();
 
 	const canCreate = () =>
@@ -49,11 +53,54 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 
 		const matching = props.items.filter((item) => {
 			const label = props.getLabel(item).toLocaleLowerCase();
-
 			return !query || label.includes(query);
 		});
 
 		return matching.slice(0, props.maxSuggestions ?? 8);
+	});
+
+	const updateMenuPosition = async () => {
+		if (!inputRef || !menuRef || !open()) return;
+
+		const input = inputRef;
+		const menu = menuRef;
+
+		const { x, y } = await computePosition(input, menu, {
+			placement: "bottom-start",
+			strategy: "fixed",
+			middleware: [offset(4), flip(), shift({ padding: 8 })],
+		});
+
+		// The menu may have been closed while computePosition() was running.
+		if (!open() || menuRef !== menu) return;
+
+		Object.assign(menu.style, {
+			left: `${ x }px`,
+			top: `${ y }px`,
+		});
+	};
+
+	let stopAutoUpdate: (() => void) | undefined;
+
+	createEffect(() => {
+		const isOpen = open();
+		const hasSuggestions = suggestions().length > 0 || canCreate();
+
+		stopAutoUpdate?.();
+		stopAutoUpdate = undefined;
+
+		if (!isOpen || !hasSuggestions) return;
+
+		// <Show>/<Portal> need to have rendered the menu before we can
+		// attach Floating UI to it.
+		queueMicrotask(() => {
+			if (!open() || !inputRef || !menuRef) return;
+			stopAutoUpdate = autoUpdate(inputRef, menuRef, updateMenuPosition);
+		});
+	});
+
+	onCleanup(() => {
+		stopAutoUpdate?.();
 	});
 
 	function input(value: string) {
@@ -63,6 +110,11 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 		setOpen(value.trim().length > 0 || !!props.openOnFocus);
 	}
 
+	function close() {
+		setOpen(false);
+		setHighlighted(0);
+	}
+
 	function select(item: T) {
 		props.onSelect(item);
 
@@ -70,8 +122,7 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 			props.onInput("");
 		}
 
-		setOpen(false);
-		setHighlighted(0);
+		close();
 	}
 
 	function keydown(event: KeyboardEvent) {
@@ -89,15 +140,10 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 			return;
 		}
 
-		if (!open()) {
-			return;
-		}
+		if (!open()) return;
 
 		const items = suggestions();
-
-		if (items.length === 0) {
-			return;
-		}
+		if (items.length === 0) return;
 
 		switch (event.key) {
 			case "ArrowDown":
@@ -111,7 +157,7 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 				break;
 
 			case "Escape":
-				setOpen(false);
+				close();
 				break;
 		}
 	}
@@ -120,13 +166,16 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 		<div class="autocomplete tiny-padding">
 			<div class={`field small label ${ isTitle() ? "suffix title" : "border" }`}>
 				<input
+					ref={inputRef}
 					type="text"
 					value={props.value}
 					placeholder={props.isTitle ? "" : props.placeholder}
 					disabled={props.disabled}
 					autocomplete="off"
 					onKeyDown={keydown}
-					onBlur={() => { setTimeout(() => setOpen(false), 100); }}
+					onBlur={() => {
+						setTimeout(close, 100);
+					}}
 					onInput={(event) => input(event.currentTarget.value)}
 					onFocus={() => {
 						if (props.value.trim() || props.openOnFocus) {
@@ -134,49 +183,53 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 						}
 					}}
 				/>
-				<label> {props.placeholder} </label>
-				<Show when={props.outputField}>
-					{props.outputField}
-				</Show>
+
+				<label>{props.placeholder}</label>
+
+				<Show when={props.outputField}>{props.outputField}</Show>
+
 				<Show when={isTitle()}>
 					<i>add</i>
 				</Show>
 			</div>
 
 			<Show when={open() && (suggestions().length > 0 || canCreate())}>
-				<div class="autocomplete-menu elevate">
-					<div class="field border">
-						<For each={suggestions()}>
-							{(item, index) => (
-								<button type="button"
-									classList={{
-										"no-round": true,
-										active: index() === highlighted(),
-									}}
-									onMouseDown={(event) => event.preventDefault()}
-									onClick={() => select(item)}
-								>
-									{props.renderItem
-										? props.renderItem(item)
-										: props.getLabel(item)}
-								</button>
-							)}
-						</For>
+				<Portal>
+					<div ref={menuRef} class="autocomplete-menu large-elevate">
+						<div class="field border">
+							<For each={suggestions()}>
+								{(item, index) => (
+									<button
+										type="button"
+										classList={{
+											"no-round": true,
+											active: index() === highlighted(),
+										}}
+										onMouseDown={(event) => event.preventDefault()}
+										onClick={() => select(item)}
+									>
+										{props.renderItem ? props.renderItem(item) : props.getLabel(item)}
+									</button>
+								)}
+							</For>
 
-						<Show when={canCreate()}>
-							<button type="button" class="no-round"
-								onMouseDown={(event) => event.preventDefault()}
-								onClick={() => {
-									const value = createValue();
-									if (value) void props.onCreate?.(value);
-								}}
-							>
-								<i>add</i>
-								Create "{createValue()}"
-							</button>
-						</Show>
+							<Show when={canCreate()}>
+								<button
+									type="button"
+									class="no-round"
+									onMouseDown={(event) => event.preventDefault()}
+									onClick={() => {
+										const value = createValue();
+										if (value) void props.onCreate?.(value);
+									}}
+								>
+									<i>add</i>
+									Create "{createValue()}"
+								</button>
+							</Show>
+						</div>
 					</div>
-				</div>
+				</Portal>
 			</Show>
 		</div>
 	);
