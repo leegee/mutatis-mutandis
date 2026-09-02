@@ -43,8 +43,8 @@ h6 {
 }
 
 nav.footer {
-	margin-top: 2em !important;
-	padding-top: 1em !important;
+	margin-top: 2rem !important;
+	padding-top: 2rem !important;
 	border-top: 1px dotted var(--footer-border);
 	justify-content: space-between;
 }

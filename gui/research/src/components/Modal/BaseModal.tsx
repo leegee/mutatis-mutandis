@@ -57,16 +57,13 @@ export default function BaseModal(props: ModalProps) {
                     onPointerDown={handleBackdropClick}
                 >
                     <dialog
-                        class="modal padding large-elevate active"
+                        class="modal surface-container-high padding large-elevate active border"
                         aria-modal="true"
                         aria-label={props.title}
                         style={props.style}
                     >
                         <Show when={props.title}>
-                            <header
-                                class="fixed surface-container-high bottom-margin left-padding "
-                                style="top:-1.2em"
-                            >
+                            <header class="fixed bottom-margin left-padding top-padding " >
                                 <nav>
                                     <h2 class="max">
                                         {props.title}

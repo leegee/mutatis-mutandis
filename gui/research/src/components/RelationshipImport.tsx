@@ -230,10 +230,10 @@ export function RelationshipImport(props: RelationshipImportProps) {
 
 					<label>Paste graph code</label>
 
-					<output class="small-text medium-opacity">
-						white men --&gt; express --&gt; whiteness
+					<output class="small-text medium-opacity top-margin bottom-margin">
+						aelf --&gt; express --&gt; whiteness
 						<br />
-						white men | associated-with | purity
+						aelf | associated-with | purity
 						<br />
 						hvítr &gt; expresses &gt; whiteness
 					</output>
