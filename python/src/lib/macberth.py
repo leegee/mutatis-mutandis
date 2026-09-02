@@ -24,6 +24,7 @@ ONNX_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 ONNX_INT8_MODEL_DIR = MODELS_DIR / "./macberth-onnx-int8"
 ONNX_INT8_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+BATCH_SIZE = 64
 
 @dataclass
 class MacberthModel:
@@ -129,6 +130,63 @@ class MacBERThEmbedder:
     def hidden_size(self) -> int:
         return self.macberth.hidden_size
 
+    # def encode(
+    #     self,
+    #     texts: Union[str, List[str]],
+    #     show_progress_bar: bool = False,
+    #     convert_to_numpy: bool = True,
+    #     **kwargs,
+    # ) -> np.ndarray:
+
+    #     if isinstance(texts, str):
+    #         texts = [texts]
+
+    #     all_embeddings = []
+
+    #     with torch.no_grad():
+    #         for text in texts:
+
+    #             encoded = self.macberth.tokenizer(
+    #                 text,
+    #                 padding=True,
+    #                 truncation=True,
+    #                 max_length=512,
+    #                 return_tensors="pt",
+    #             )
+
+    #             encoded = {
+    #                 k: v.to(self.device)
+    #                 for k, v in encoded.items()
+    #             }
+
+    #             # Encoder only, not MLM head
+    #             outputs = self.macberth.encode(**encoded)
+
+    #             if self.pooling == "cls":
+    #                 emb = outputs.last_hidden_state[:, 0, :]
+
+    #             elif self.pooling == "max":
+    #                 emb = outputs.last_hidden_state.max(dim=1).values
+
+    #             else:
+    #                 attention_mask = encoded["attention_mask"]
+    #                 emb = self._mean_pooling(
+    #                     outputs.last_hidden_state,
+    #                     attention_mask,
+    #                 )
+
+    #             all_embeddings.append(
+    #                 emb.cpu().numpy().squeeze()
+    #             )
+
+    #     embeddings = np.array(all_embeddings)
+
+    #     if convert_to_numpy:
+    #         return embeddings
+
+    #     return torch.tensor(embeddings)
+
+
     def encode(
         self,
         texts: Union[str, List[str]],
@@ -143,10 +201,11 @@ class MacBERThEmbedder:
         all_embeddings = []
 
         with torch.no_grad():
-            for text in texts:
+            for start in range(0, len(texts), BATCH_SIZE):
+                batch_texts = texts[start:start + BATCH_SIZE]
 
                 encoded = self.macberth.tokenizer(
-                    text,
+                    batch_texts,
                     padding=True,
                     truncation=True,
                     max_length=512,
@@ -158,7 +217,6 @@ class MacBERThEmbedder:
                     for k, v in encoded.items()
                 }
 
-                # Encoder only, not MLM head
                 outputs = self.macberth.encode(**encoded)
 
                 if self.pooling == "cls":
@@ -174,9 +232,7 @@ class MacBERThEmbedder:
                         attention_mask,
                     )
 
-                all_embeddings.append(
-                    emb.cpu().numpy().squeeze()
-                )
+                all_embeddings.extend(emb.cpu().numpy())
 
         embeddings = np.array(all_embeddings)
 
@@ -185,17 +241,19 @@ class MacBERThEmbedder:
 
         return torch.tensor(embeddings)
 
+
+
     def encode_normalized(
         self,
         texts: Union[str, List[str]],
     ) -> np.ndarray:
 
         embeddings = self.encode(texts)
-
         return np.array([
             normalize(v)
             for v in embeddings
         ])
+
 
     @staticmethod
     def _mean_pooling(
@@ -319,10 +377,34 @@ def _quantize_macberth_onnx(
     Dynamically quantizes the fp32 ONNX export to int8 (weights only;
     activations are quantized on the fly at inference time).
 
-    Dynamic quantization is generally low-loss for encoder-only
-    transformers, but "generally" isn't "always" -- if you change this,
-    spot-check cosine similarity between fp32 and int8 vectors on a
-    sample of documents before trusting it for the full corpus run.
+    Dynamic quantization terrible - do not use it.
+
+    $ python src/tests/test_quantization_noise_vs_drift.py
+    [quant-test] Loading fp32 and int8 ONNX models...
+    [macberth] ORT session config: intra_op_num_threads=8, inter_op_num_threads=1, execution_mode=SEQUENTIAL, spinning=off
+    [macberth.load_macberth_onnx] Loaded ONNX MacBERTh (quantize=False), providers: ['CPUExecutionProvider']
+    [macberth] ORT session config: intra_op_num_threads=8, inter_op_num_threads=1, execution_mode=SEQUENTIAL, spinning=off
+    [macberth.load_macberth_onnx] Loaded ONNX MacBERTh (quantize=True), providers: ['CPUExecutionProvider']
+
+    Embedding 6 sentence(s) with both models...
+
+    [0.45867] The king did graciously receive the petition of his loyal subjects.
+    [0.46124] It is reported that the plague hath spread through the parish.
+    [0.46857] Concerning the nature of witchcraft, many learned men have written.
+    [0.46696] The merchant sold his wares at the market on Thursday last.
+    [0.47593] Let all men know that this covenant is binding before God.
+    [0.50061] The soldiers marched upon the town at break of day.
+
+    === Summary (as cosine distance, 1 - similarity) ===
+
+    NOISE      (fp32 vs int8, same sentence): n=6  mean=0.52800  p5=0.50556  median=0.53223  p95=0.54068
+    REFERENCE  (fp32 vs fp32, different sentences): n=15  mean=0.11196  p5=0.08632  median=0.10968  p95=0.14221
+
+    noise_median / reference_median = 4.8527
+
+    Note: 'reference' here is the gap between semantically different sentences, which is a coarse scale check, not a measurement of real diachronic drift. A small ratio is reassuring but doesn't by itself confirm int8 is safe for subtle across-year semantic-change analysis -- that specifically needs real corpus occurrences across years.
+$
+
     """
     from onnxruntime.quantization import quantize_dynamic, QuantType
     from onnxruntime.quantization.shape_inference import quant_pre_process
