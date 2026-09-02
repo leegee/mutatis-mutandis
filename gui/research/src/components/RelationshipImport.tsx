@@ -201,7 +201,7 @@ export function RelationshipImport(props: RelationshipImportProps) {
 	}
 
 	return (
-		<div class="relationship-import padding">
+		<div class="relationship-import">
 			<Show
 				when={!preview()}
 				fallback={

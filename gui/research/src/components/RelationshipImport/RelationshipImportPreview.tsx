@@ -55,11 +55,11 @@ function RelationshipRowStatus(props: { row: ImportRow }) {
 
 export function RelationshipImportPreview(props: RelationshipImportPreviewProps) {
 	return (
-		<div class="relationship-import-preview">
-			<div class="relationship-import-grid">
+		<div class="relationship-import-preview no-round">
+			<section class="relationship-import-grid">
 				<For each={props.rows}>
 					{(row, index) => (
-						<div class="row relationship-import-row">
+						<div class="row relationship-import-row top-margin">
 							<div class="s4">
 								<EntityImportField
 									value={row.source}
@@ -97,15 +97,15 @@ export function RelationshipImportPreview(props: RelationshipImportPreviewProps)
 						</div>
 					)}
 				</For>
-			</div>
+			</section>
 
-			<div class="relationship-import-summary">
+			<section class="relationship-import-summary top-padding top-margin extra-margin">
 				<span>{props.validRows.length} valid</span>
 
 				<span class="left-padding right-padding">{props.rowsToCreate.length} to create</span>
 
 				<span>{props.rows.length - props.validRows.length} invalid</span>
-			</div>
+			</section>
 
 			<Show when={props.error}>
 				<div class="relationship-import-error error-container">{props.error}</div>
