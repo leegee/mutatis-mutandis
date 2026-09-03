@@ -34,7 +34,6 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 		{
 			selector: "node:selected",
 			css: {
-				"background-color": "#10063f",
 				"text-background-color": "#37474f",
 				"border-width": 3,
 				"border-color": "#ffffff",

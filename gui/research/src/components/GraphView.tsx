@@ -7,7 +7,7 @@ import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switc
 
 import type { Entity } from "~/domain/entity";
 import type { Relation } from "~/domain/relation";
-
+import ctrlZoom from "../lib/cytoscape-ctrl-zoom";
 import { hueForType } from "./GraphView/clrs";
 import { graphStyles } from "./GraphView/graphStyles";
 import { useConfirm } from "./Modal/index";
@@ -102,6 +102,9 @@ export default function GraphView(props: GraphViewProps) {
 	const [hiddenTypes, setHiddenTypes] = createSignal<Set<string>>(new Set());
 	const [filterOpen, setFilterOpen] = createSignal(false);
 
+	cytoscape.use(cytoscapeElk);
+	cytoscape.use(ctrlZoom);
+
 	function toggleType(type: string) {
 		setHiddenTypes((prev) => {
 			const next = new Set(prev);
@@ -182,6 +185,8 @@ export default function GraphView(props: GraphViewProps) {
 			style: graphStyles(props.entities),
 			layout: LAYOUT_PARAMS,
 		});
+
+		instance.ctrlZoomBox();
 
 		tooltip = document.createElement("div");
 		tooltip.className = "graph-node-tooltip";
@@ -440,12 +445,10 @@ export default function GraphView(props: GraphViewProps) {
 										onClick={() => {
 											const item = menu();
 											if (item.kind !== "canvas") return;
-
 											props.onAddEntity?.({
 												x: item.x,
 												y: item.y,
 											});
-
 											setContextMenu(undefined);
 										}}
 									>
@@ -615,8 +618,7 @@ export default function GraphView(props: GraphViewProps) {
 			<button
 				type="button"
 				onClick={() => setFilterOpen((v) => !v)}
-				class="circle tertiary"
-				style="position: absolute; bottom: 1rem; right: 1rem"
+				class="circle tertiary filter-button"
 				title="Filter node types"
 			>
 				<Show when={filterOpen()}>

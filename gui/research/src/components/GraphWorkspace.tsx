@@ -41,10 +41,11 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 		setEditingEntity(true);
 	}
 
-	function handleSelectRelation(relation: Relation) {
-		setSelectedRelation(relation);
-		setEditingRelation(false);
-	}
+	// function handleSelectRelation(relation: Relation) {
+	// 	setSelectedRelation(relation);
+	// 	setEditingRelation(false);
+	// }
+
 	function handleEditRelation(relation: Relation) {
 		setSelectedRelation(relation);
 		setEditingRelation(true);

@@ -2,6 +2,9 @@
 
 body,
 body.dark {
+	padding: 0;
+	margin: 0;
+
 	--primary: rgb(165, 165, 207) !important;
 	--on-primary: rgb(39, 39, 102) !important;
 
@@ -40,7 +43,7 @@ h4,
 h5,
 h6 {
 	font-size: 1em;
-	font-weight: bold !important;
+	font-weight: bold;
 }
 
 nav.footer {

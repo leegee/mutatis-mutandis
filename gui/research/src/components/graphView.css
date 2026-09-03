@@ -1,8 +1,11 @@
 .graph-view-container {
-	position: "relative";
+	position: absolute;
 	width: 100%;
-	height: 99vh;
-	min-height: 500px;
+	max-height: 100vh;
+	min-height: 100vh;
+	padding: 0;
+	margin: 0;
+	overflow: hidden;
 }
 
 .graph-node-tooltip {
@@ -19,4 +22,10 @@
 	max-width: 30em;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.filter-button {
+	position: fixed;
+	bottom: 1rem;
+	right: 1rem;
 }
