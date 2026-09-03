@@ -94,9 +94,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 					>
 						{/* NORMAL INSPECTOR VIEW */}
 						<header class="fixed surface top-padding" style="top:0">
-							<nav class="no-padding">
-								<button
-									class="circle transparent"
+							<nav class="no-padding top-align">
+								<button class="circle transparent top-margin  small-margin"
 									type="button"
 									title="Close"
 									onClick={() => props.onClose?.(entity())}
