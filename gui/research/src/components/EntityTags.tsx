@@ -45,7 +45,7 @@ export default function EntityTags(props: EntityTagsProps) {
 	}
 
 	return (
-		<section class="surface-container">
+		<section class="surface-container no-padding no-margin">
 			<AutoComplete<string>
 				value={tagInput()}
 				items={tags()}

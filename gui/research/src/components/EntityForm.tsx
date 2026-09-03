@@ -93,7 +93,7 @@ export default function EntityForm(props: EntityFormProps) {
 		<form onSubmit={submit}>
 			<Show when={!editing()}
 				fallback={
-					<div class="field border">
+					<div class="field border surface-container large-elevate" style="z-index:1000">
 						<header class="bottom-margin">
 							<nav>
 								<button class="circle transparent" type="button" title="Close" onClick={() => props.onCancel?.()} >

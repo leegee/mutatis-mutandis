@@ -45,7 +45,7 @@ export default function EntityAliases(props: EntityAliasesProps) {
 	}
 
 	return (
-		<section class="surface-container">
+		<section class="surface-container no-padding no-margin">
 			<AutoComplete<string>
 				value={aliasInput()}
 				items={aliases()}

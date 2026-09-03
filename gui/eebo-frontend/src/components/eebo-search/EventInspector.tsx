@@ -72,7 +72,7 @@ export default function EventInspector(props: Props) {
           token,
           maxSimilarity: v.maxSim,
 
-          // 🔽 SORT BUCKETS by strongest similarity first
+          // SORT BUCKETS by strongest similarity first
           buckets: Array.from(v.buckets.entries())
             .map(([range, b]) => ({
               range,
@@ -82,7 +82,7 @@ export default function EventInspector(props: Props) {
             .sort((a, b) => b.maxSim - a.maxSim),
         }))
 
-        // 🔽 SORT TOKENS by strongest similarity first
+        // SORT TOKENS by strongest similarity first
         .sort((a, b) => b.maxSimilarity - a.maxSimilarity)
     );
   };

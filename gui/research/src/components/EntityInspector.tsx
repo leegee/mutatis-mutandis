@@ -133,11 +133,9 @@ export default function EntityInspector(props: EntityInspectorProps) {
 							}}
 						/>
 
-						<section class="surface-container">
+						<section class="surface-container top-padding top-margin">
 							<h3>Relationships</h3>
-
-							<Show
-								when={outgoing().length > 0 || incoming().length > 0}
+							<Show when={outgoing().length > 0 || incoming().length > 0}
 								fallback={<p class={no_data_fallback_class}>Right-click a node to estabish a relationship </p>}
 							>
 								<Show when={outgoing().length > 0}>

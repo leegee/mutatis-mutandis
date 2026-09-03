@@ -122,8 +122,8 @@ export default function RelationForm(props: RelationFormProps) {
     }
 
     return (
-        <form onSubmit={submit}>
-            <div class="surface-container">
+        <form onSubmit={submit} >
+            <div class="surface-container large-elevate" style="z-index:1000">
                 <header class="bottom-margin">
                     <nav>
                         <button class="circle transparent" type="button" title="Close" onClick={() => props.onCancel?.()} >
