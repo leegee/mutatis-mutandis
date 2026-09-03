@@ -78,9 +78,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 	return (
 		<Show when={props.entity} fallback={""}>
 			{(entity) => (
-				<aside class="padding surface-container">
-					<Show
-						when={!editing()}
+				<aside class="surface-container padding top-margin">
+					<Show when={!editing()}
 						fallback={
 							<EntityForm
 								entity={entity()}
