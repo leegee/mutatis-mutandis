@@ -18,8 +18,8 @@ function Navigation() {
 	const isActive = (path: string) => location.pathname === path;
 
 	return (
-		<div class="navigation-button-menu">
-			<button type="button" class="surface-container-lowest margin" onClick={toggleMenu}>
+		<div class="navigation-button-menu surface-container-lowest round">
+			<button type="button" class="margin transparent" onClick={toggleMenu}>
 				<i>{menuOpen() ? "menu_open" : "menu"}</i>
 				<span>Navigation</span>
 				<i>{menuOpen() ? "arrow_drop_up" : "arrow_drop_down"}</i>
