@@ -99,7 +99,7 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 					display: "grid",
 					"grid-template-columns": selectedEntity() || selectedRelation() ? "minmax(0, 1fr) 30vw" : "minmax(0, 1fr)",
 					gap: "1rem",
-					height: "100vh",
+					height: "100%",
 					overflow: "none",
 					padding: 0,
 					margin: 0,

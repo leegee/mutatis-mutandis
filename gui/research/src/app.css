@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noImportantStyles: <BeerCSS overrides> */
 
+body,
 body.dark {
 	--primary: rgb(165, 165, 207) !important;
 	--on-primary: rgb(39, 39, 102) !important;
@@ -52,6 +53,11 @@ nav.footer {
 /* Counter BeerCSS */
 header {
 	padding: 0 !important;
+
+	button {
+		--_size: 1rem;
+		margin-right: 1em;
+	}
 }
 
 header.title {

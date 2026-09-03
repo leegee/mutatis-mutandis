@@ -90,14 +90,14 @@ export default function EntityInspector(props: EntityInspectorProps) {
 					>
 						{/* NORMAL INSPECTOR VIEW */}
 						<header class="fixed surface top-padding" style="top:0">
-							<nav>
+							<nav class="no-padding">
 								<button
-									class="circle transparent top-align"
+									class="circle transparent"
 									type="button"
 									title="Close"
 									onClick={() => props.onClose?.(entity())}
 								>
-									<i>arrow_back</i>
+									<i>close</i>
 								</button>
 
 								<div class="max">
@@ -108,7 +108,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 						</header>
 
 						<Show when={entity().description}>
-							<section class="surface-container">
+							<section class="surface-container padding">
 								<p> {entity().description} </p>
 							</section>
 						</Show>

@@ -52,15 +52,15 @@ export default function RelationInspector(props: RelationInspectorProps) {
                         <header class="bottom-margin">
                             <nav>
                                 <button class="circle transparent" type="button" title="Close" onClick={() => props.onClose?.(relation())}>
-                                    <i>arrow_back</i>
+                                    <i>close</i>
                                 </button>
 
                                 <h2 class="max"> Relationship </h2>
                             </nav>
                         </header>
 
-                        <section class="surface">
-                            <p>
+                        <section class="surface-container">
+                            <p class="padding">
                                 <strong> {entityLabel(relation().sourceId)} </strong>
                                 {" → "}
                                 <strong> {relation().type} </strong>
