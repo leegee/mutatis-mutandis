@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/a11y/useKeyWithClickEvents: Time is limited now */
 /** biome-ignore-all lint/a11y/noStaticElementInteractions: Time is limited now */
 
-import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
+import cytoscape, { type Core, type EdgeSingular, type ElementDefinition, type NodeSingular } from "cytoscape";
 import cytoscapeElk from "cytoscape-elk";
 import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 
@@ -11,6 +11,8 @@ import type { Relation } from "~/domain/relation";
 import { hueForType } from "./GraphView/clrs";
 import { graphStyles } from "./GraphView/graphStyles";
 import { useConfirm } from "./Modal/index";
+
+import "./graphView.css";
 
 cytoscape.use(cytoscapeElk);
 
@@ -91,6 +93,7 @@ function nodeSize(incoming: number): number {
 
 export default function GraphView(props: GraphViewProps) {
 	let container!: HTMLDivElement;
+	let tooltip!: HTMLDivElement;
 	let searchInput!: HTMLInputElement;
 	const confirm = useConfirm();
 	const [cy, setCy] = createSignal<Core>();
@@ -180,6 +183,68 @@ export default function GraphView(props: GraphViewProps) {
 			layout: LAYOUT_PARAMS,
 		});
 
+		tooltip = document.createElement("div");
+		tooltip.className = "graph-node-tooltip";
+		tooltip.style.display = "none";
+		document.body.appendChild(tooltip);
+
+		function showNodeTooltip(node: NodeSingular) {
+			const rect = container.getBoundingClientRect();
+			const position = node.renderedPosition();
+			tooltip.textContent = String(node.data("label") ?? "");
+			tooltip.style.left = `${ rect.left + position.x }px`;
+			tooltip.style.top = `${ rect.top + position.y - node.renderedOuterHeight() / 2 - 8 }px`;
+			tooltip.style.display = "block";
+		}
+
+		function showEdgeTooltip(edge: EdgeSingular) {
+			const rect = container.getBoundingClientRect();
+			const source = edge.source().renderedPosition();
+			const target = edge.target().renderedPosition();
+			const x = (source.x + target.x) / 2;
+			const y = (source.y + target.y) / 2;
+			tooltip.textContent = String(edge.data("label") ?? "");
+			tooltip.style.left = `${ rect.left + x }px`;
+			tooltip.style.top = `${ rect.top + y - 8 }px`;
+			tooltip.style.display = "block";
+		}
+
+		function hideTooltip() {
+			tooltip.style.display = "none";
+		}
+
+		instance.on("mouseover", "node", (event) => {
+			const node = event.target;
+			node.addClass("hovered");
+			instance.edges().removeClass("hover-connected hover-unconnected");
+			instance.edges().forEach((edge) => {
+				if (edge.source().id() === node.id() || edge.target().id() === node.id()) {
+					edge.addClass("hover-connected");
+				} else {
+					edge.addClass("hover-unconnected");
+				}
+			});
+			showNodeTooltip(node);
+		});
+
+		instance.on("mouseout", "node", (event) => {
+			event.target.removeClass("hovered");
+			instance.edges().removeClass("hover-connected hover-unconnected");
+			hideTooltip();
+		});
+
+		instance.on("mouseover", "edge", (event) => {
+			const edge = event.target;
+			instance.edges().not(edge).removeClass("hovered");
+			edge.addClass("hovered");
+			showEdgeTooltip(edge);
+		});
+
+		instance.on("mouseout", "edge", (event) => {
+			event.target.removeClass("hovered");
+			hideTooltip();
+		});
+
 		instance.on("cxttap", (event) => {
 			event.originalEvent.preventDefault();
 
@@ -259,36 +324,6 @@ export default function GraphView(props: GraphViewProps) {
 			}
 		});
 
-		instance.on("mouseover", "node", (event) => {
-			const node = event.target;
-			node.addClass("hovered");
-
-			instance.edges().removeClass("hover-connected hover-unconnected");
-
-			instance.edges().forEach((edge) => {
-				if (edge.source().id() === node.id() || edge.target().id() === node.id()) {
-					edge.addClass("hover-connected");
-				} else {
-					edge.addClass("hover-unconnected");
-				}
-			});
-		});
-
-		instance.on("mouseout", "node", (event) => {
-			event.target.removeClass("hovered");
-			instance.edges().removeClass("hover-connected hover-unconnected");
-		});
-
-		instance.on("mouseover", "edge", (event) => {
-			const edge = event.target;
-			edge.addClass("hovered");
-			instance.edges().not(edge).removeClass("hovered");
-		});
-
-		instance.on("mouseout", "edge", (event) => {
-			event.target.removeClass("hovered");
-		});
-
 		setCy(instance);
 
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -320,7 +355,10 @@ export default function GraphView(props: GraphViewProps) {
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
-		onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+		onCleanup(() => {
+			window.removeEventListener("keydown", handleKeyDown);
+			tooltip.remove();
+		});
 	});
 
 	createEffect(() => {
@@ -379,16 +417,7 @@ export default function GraphView(props: GraphViewProps) {
 
 	return (
 		<>
-			<div
-				ref={container}
-				style={{
-					position: "relative",
-					width: "100%",
-					height: "100%",
-					"min-height": "500px",
-				}}
-				onClick={() => setContextMenu(undefined)}
-			></div>
+			<div ref={container} class="graph-view-container" onClick={() => setContextMenu(undefined)}></div>
 
 			<Show when={contextMenu()}>
 				{(menu) => (
@@ -602,7 +631,7 @@ export default function GraphView(props: GraphViewProps) {
 					<i> filter_alt</i>
 					<span class="tooltip left">Open visible node filter</span>
 				</Show>
-			</button >
+			</button>
 
 			<Show when={filterOpen()}>
 				<div
@@ -620,22 +649,24 @@ export default function GraphView(props: GraphViewProps) {
 						{(type) => {
 							const count = () => props.entities.filter((e) => e.type === type).length;
 							return (
-								<label style={{
-									display: "flex",
-									"flex-direction": "row-reverse",
-									"align-items": "center",
-									gap: "0.5em",
-									padding: "0.25em 0",
-								}}
+								<label
+									style={{
+										display: "flex",
+										"flex-direction": "row-reverse",
+										"align-items": "center",
+										gap: "0.5em",
+										padding: "0.25em 0",
+									}}
 								>
 									<input type="checkbox" checked={!hiddenTypes().has(type)} onChange={() => toggleType(type)} />
-									<span style={{
-										display: "inline-block",
-										width: "1em",
-										height: "1em",
-										"border-radius": "50%",
-										"background-color": `hsl(${ hueForType(type) }, 94%, 52%)`,
-									}}
+									<span
+										style={{
+											display: "inline-block",
+											width: "1em",
+											height: "1em",
+											"border-radius": "50%",
+											"background-color": `hsl(${ hueForType(type) }, 94%, 52%)`,
+										}}
 									/>
 									<span>
 										{type} ({count()})

@@ -48,8 +48,8 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 		{
 			selector: "node.hovered",
 			css: {
-				"font-size": 32,
-				"font-weight": 600,
+				"border-width": 3,
+				"border-color": "#ffffff",
 				"z-index": 9999,
 			},
 		},
@@ -108,6 +108,17 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 				"border-color": "#ffffff",
 				"overlay-color": "#ffffff",
 				"overlay-opacity": 0.15,
+			},
+		},
+
+		{
+			selector: "edge.hovered",
+			css: {
+				width: 4,
+				"line-color": "#ffffff",
+				"target-arrow-color": "#ffffff",
+				color: "#ffffff",
+				"text-background-color": "#37474f",
 			},
 		},
 
