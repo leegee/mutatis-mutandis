@@ -459,15 +459,11 @@ export default function GraphView(props: GraphViewProps) {
 										class="fill"
 										onClick={() => {
 											const item = menu();
-
 											if (item.kind !== "node") return;
-
 											const entity = props.entities.find((entity) => entity.id === item.nodeId);
-
 											if (entity) {
 												props.onEditEntity?.(entity);
 											}
-
 											setContextMenu(undefined);
 										}}
 									>

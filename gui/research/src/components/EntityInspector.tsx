@@ -13,19 +13,23 @@ interface EntityInspectorProps {
 	entity: Entity | undefined;
 	entities: Entity[];
 	relations: Relation[];
+	editing?: boolean;
 
 	onChanged?: (entity: Entity) => void | Promise<void>;
 	onClose?: (entity: Entity) => void;
 }
 
 export default function EntityInspector(props: EntityInspectorProps) {
-	const [editing, setEditing] = createSignal(false);
-	const [currentEntity, setCurrentEntity] = createSignal<Entity>(props.entity!);
 	const confirm = useConfirm();
+	const [editing, setEditing] = createSignal(props.editing ?? false);
+	const [currentEntity, setCurrentEntity] = createSignal<Entity>(props.entity!);
 
 	createEffect(() => {
 		if (props.entity) {
 			setCurrentEntity(props.entity);
+		}
+		if (props.editing !== undefined) {
+			setEditing(props.editing);
 		}
 	});
 
@@ -132,7 +136,8 @@ export default function EntityInspector(props: EntityInspectorProps) {
 						<section class="surface-container">
 							<h3>Relationships</h3>
 
-							<Show when={outgoing().length > 0 || incoming().length > 0}
+							<Show
+								when={outgoing().length > 0 || incoming().length > 0}
 								fallback={<p class={no_data_fallback_class}>Right-click a node to estabish a relationship </p>}
 							>
 								<Show when={outgoing().length > 0}>

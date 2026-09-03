@@ -21,6 +21,7 @@ interface GraphWorkspaceProps {
 
 export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
+	const [editingEntity, setEditingEntity] = createSignal(false);
 	const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
 	const [addingRelation, setAddingRelation] = createSignal<{
 		source: Entity;
@@ -28,6 +29,15 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	}>();
 
 	const modal = useModal();
+
+	function handleSelectEntity(entity: Entity) {
+		setSelectedEntity(entity);
+		setEditingEntity(false);
+	}
+	function handleEditEntity(entity: Entity) {
+		setSelectedEntity(entity);
+		setEditingEntity(true);
+	}
 
 	async function handleAddEntity() {
 		await modal(
@@ -43,11 +53,6 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 			),
 			"Add entity",
 		);
-	}
-
-	function handleEditEntity(entity: Entity) {
-		setSelectedEntity(entity);
-		setSelectedRelation(undefined);
 	}
 
 	async function handleDeleteEntity(entity: Entity) {
@@ -110,10 +115,7 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 					<GraphView
 						entities={props.entities}
 						relations={props.relations}
-						onSelectEntity={(entity) => {
-							setSelectedEntity(entity);
-							setSelectedRelation(undefined);
-						}}
+						onSelectEntity={handleSelectEntity}
 						onSelectRelation={(relation) => {
 							setSelectedRelation(relation);
 							setSelectedEntity(undefined);
@@ -145,7 +147,11 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 									entities={props.entities}
 									relations={props.relations}
 									onChanged={handleEntityChanged}
-									onClose={() => setSelectedEntity(undefined)}
+									editing={editingEntity()}
+									onClose={() => {
+										setSelectedEntity(undefined);
+										setEditingEntity(false);
+									}}
 								/>
 							)}
 						</Show>
