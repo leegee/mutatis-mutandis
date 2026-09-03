@@ -34,13 +34,11 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 		{
 			selector: "node:selected",
 			css: {
-				// "font-size": "48px",
 				"background-color": "#10063f",
 				"text-background-color": "#37474f",
 				"border-width": 3,
 				"border-color": "#ffffff",
 				color: "#ffffff",
-				"text-max-width": "30em",
 				"overlay-color": "#26084d",
 				"overlay-opacity": 0.08,
 			},
@@ -92,7 +90,6 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 		{
 			selector: "edge:selected",
 			css: {
-				width: 3,
 				"line-color": "#ffffff",
 				"target-arrow-color": "#ffffff",
 				color: "#ffffff",
