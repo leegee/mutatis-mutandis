@@ -23,6 +23,8 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
 	const [editingEntity, setEditingEntity] = createSignal(false);
 	const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
+	const [editingRelation, setEditingRelation] = createSignal(false);
+
 	const [addingRelation, setAddingRelation] = createSignal<{
 		source: Entity;
 		target: Entity;
@@ -37,6 +39,15 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	function handleEditEntity(entity: Entity) {
 		setSelectedEntity(entity);
 		setEditingEntity(true);
+	}
+
+	function handleSelectRelation(relation: Relation) {
+		setSelectedRelation(relation);
+		setEditingRelation(false);
+	}
+	function handleEditRelation(relation: Relation) {
+		setSelectedRelation(relation);
+		setEditingRelation(true);
 	}
 
 	async function handleAddEntity() {
@@ -80,10 +91,6 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 		setAddingRelation(undefined);
 	}
 
-	function handleEditRelation(relation: Relation) {
-		setSelectedRelation(relation);
-		setSelectedEntity(undefined);
-	}
 
 	async function handleDeleteRelation(relation: Relation) {
 		await deleteRelation(relation.id);
@@ -137,7 +144,11 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 								<RelationInspector
 									relation={selectedRelation()}
 									entities={props.entities}
-									onClose={() => setSelectedRelation(undefined)}
+									editing={editingRelation()}
+									onClose={() => {
+										setSelectedRelation(undefined);
+										setEditingRelation(false);
+									}}
 								/>
 							}
 						>

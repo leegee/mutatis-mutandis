@@ -144,7 +144,7 @@ export default function RelationForm(props: RelationFormProps) {
                     placeholder="Source entity"
                 />
 
-                <div class="field label border">
+                <div class="field label border left-padding right-padding">
                     <select
                         value={relationType()}
                         onChange={(event) =>
