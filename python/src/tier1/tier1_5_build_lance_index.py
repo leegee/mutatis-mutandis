@@ -2,6 +2,13 @@
 """
 tier1_5_build_lance_index.py
 
+    Work in progress
+
+    Retrieval architecture must be chronologically aware,
+    and ultimately chronologically adaptive because we will
+    be using aligned vectors from MacBERTh and a modern BERT
+    and hopefully BERTs to handle Old Norse/Old English
+
 Build one LanceDB table per embedding scale (local/medium/broad), covering
 every year in the Parquet observation store.
 

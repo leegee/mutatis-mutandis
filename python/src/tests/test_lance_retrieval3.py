@@ -33,11 +33,12 @@ OBSERVATION_ROOT = EVENTSTORE_T1_PATH
 LANCE_ROOT = LANCE_INDEXES_DIR
 
 SEED_FORMS = (
-    # "white",
-    # "pale",
-    # "bright",
+    "white",
+    "pale",
+    "bright",
     "blond",
-    # "hoary",
+    "hoary",
+    "albino",
 )
 
 SEEDS_PER_FORM = 1
@@ -54,9 +55,7 @@ K_VALUES = (
 GROUND_TRUTH_K = max(K_VALUES)
 
 NPROBES_VALUES = (
-    100,
     150,
-    200,
 )
 
 SEED_EVENT_IDS = {

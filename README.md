@@ -8,13 +8,13 @@
 
 ## Code Synopsis
 
+    cd $PROJECT_ROOT/gui/research && bun dev    #  Research graph
+
     cd $PROJECT_ROOT/python
-    source .venv/Scripts/activate       # Load environment
+    source .venv/Scripts/activate               # Load environment
 
     cd $PROJECT_ROOT
-    ./pipeline --all                    # Ingest the XML corpus from eebo_all
-    ./run-ws.sh                         # Run the WebSocket service for diachronic search
-    cd gui/eebo-frontend && bun dev     # Run the frontend dev server
+    python src/tier.... in order
 
 ## Conceptual Synopsis
 
@@ -27,19 +27,34 @@
 > Who were considered terrorists in the 17th century? (Fanatics, Sectaries, Enthusiasts, Levellers, Diggers, Muggltonians, Anabaptists, Jesuits...)
 >
 > How in the past was the concept we term X referenced  if at all?
-
-Can we recursively reverse search over diachronic ranges, taking top results for each period as bridge terms to search with in the earlier  date range?
+>
+> Specifically: how has the typological symbol of the Son Of Man been transmitted and received through the millennia and how has it interacted
+> with surrounding pysiognomic imagery?
+>
+> What do the contextual embeddings of 'albino' and 'albinism' retrieve through past centuries and in European traditions for which we have corpus?
+>
+> Can we recursively reverse search over diachronic ranges, taking top results for each period as bridge terms to search with in the earlier  date range?
 
 ## Progress
 
 Ideally this project would build a complete Ontological Topology of a corpus, a gigantic semantic space as a structured geometric object, where meaning is illustrated by relative positions, continuity and deformation of distributions across time, rather than through dictionaries. Nice idea but requires 2-5 days GPU or about 6 weeks of CPU...
 
-So: instead of corpus-wide embedding, we recursively probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation, and performed recursively in reverse chronological order:
+We tried avoiding corpus-wide embedding, we recursively probe system where semantic topology is reconstructed through anchored neighbourhood expansion rather than exhaustive representation, and performed recursively in reverse chronological order:
 
 1. Search 2026-1926: search 'privacy' - store semantic neighbours
 1. Search 1826-2026: search above neighbours, store and repeat for previous century, etc
 
+When we added the EEBO Bibles, FAISS failed us. Now we have added selected texts from ECCO and CLMET, we have had to switch to a disk-based ANN system.
 
+Microsoft's old DiskANNpy library failed at scale, and although the new version in Rust looks promising, there is no Python interface and
+not sure we yet have time to fast-itterate in Rust.
+
+Currently trying embeddings over the full corpus with the open source Lance for our 16,000,000 embeddings.
+
+So should we, instead of treating the corpus as an exhaustively represented semantic space to be queried by fixed lexical anchors, instead recursively probe it through anchored neighbourhood expansion, reconstructing semantic topology from contextual observations while traversing the corpus in reverse chronological order.
+
+
+```
         XML Corpus
             |
     Postgres (text + meta)
@@ -53,6 +68,7 @@ So: instead of corpus-wide embedding, we recursively probe system where semantic
     Analysis (drift, clustering, interpretation)
             |
     GUI (Solid, d3, CosmosGL, DeckGL)
+```
 
 Currently experimenting with ensemble embeddings. Ideally would process clauses, sentances and paragraphs, but MacBERTh is somewhat restricted and EEBO somewhat noisy, so that is not trivial to use or create a sentence transformer.
 
