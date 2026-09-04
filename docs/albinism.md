@@ -268,3 +268,8 @@ Chaucer, Shakespeare etc
 
 
 https://interestingliterature.com/2021/04/colour-white-symbolism-in-literature-myth-analysis-meaning/
+
+
+Pocs Eva, 1989 - Fairies and Witches at the Boundary of South-Eastern and Central Europe (Folklore Fellows' Communications 243, Helsinki: Academia Scientiarum Fennica)
+
+Pocs Eva, "Tündéres and the Order of St Ilona, or Did the Hungarians Have Fairy Magicians?" (in her edited volume Folk Religion and Folk Belief in Central-Eastern Europe, 2008)
