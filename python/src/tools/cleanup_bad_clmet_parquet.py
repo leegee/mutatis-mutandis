@@ -46,7 +46,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from lib.corpus_config import EVENTSTORE_T1_PATH
-from lib.parquet_observation_backend import write_observation_parquet
+from tier1.parquet_observation_backend import write_observation_parquet
 
 
 # ---------------------------------------------------------------------------

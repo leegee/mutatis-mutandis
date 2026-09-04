@@ -132,7 +132,7 @@ def compact_year_dir(
         try:
             from parquet_observation_backend import write_observation_parquet
         except ImportError:
-            from lib.parquet_observation_backend import write_observation_parquet  # type: ignore
+            from tier1.parquet_observation_backend import write_observation_parquet  # type: ignore
         write_observation_parquet(table, tmp)
         tmp.rename(dest)
         written += 1

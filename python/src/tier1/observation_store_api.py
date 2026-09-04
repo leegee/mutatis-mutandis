@@ -359,7 +359,7 @@ def open_observation_writer(
 
     The storage backend is fixed; callers do not select a backend.
     """
-    from lib.parquet_observation_backend import ParquetObservationWriter
+    from tier1.parquet_observation_backend import ParquetObservationWriter
 
     return ParquetObservationWriter(
         path,
@@ -375,7 +375,7 @@ def open_observation_stream(
     """
     Open the Parquet observation stream.
     """
-    from lib.parquet_observation_backend import ParquetObservationStream
+    from tier1.parquet_observation_backend import ParquetObservationStream
 
     return ParquetObservationStream(
         root,
@@ -390,7 +390,7 @@ def open_observation_lookup(
     """
     Open the Parquet observation lookup.
     """
-    from lib.parquet_observation_backend import ParquetObservationLookup
+    from tier1.parquet_observation_backend import ParquetObservationLookup
 
     return ParquetObservationLookup(
         root,

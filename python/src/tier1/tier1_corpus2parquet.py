@@ -51,7 +51,7 @@ from tier1.observation_store_api import (
     open_observation_writer,
 )
 
-import lib.parquet_observation_backend
+import tier1.parquet_observation_backend
 
 WINDOW_CONFIGS = [
     {"name": "local", "size": 256, "stride": 128},

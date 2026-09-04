@@ -39,6 +39,7 @@ class LanceObservationIndex(ObservationIndex):
         self._model = model
         self._nprobes = nprobes
 
+
     def search(
         self,
         query: Float32Array,
@@ -56,6 +57,33 @@ class LanceObservationIndex(ObservationIndex):
                 query_array,
                 vector_column_name="vector",
             )
+            .nprobes(self._nprobes)
+            .limit(k)
+            .select(["event_id", "_distance"]) # _distance is unclear
+        )
+
+        request = self._apply_filter(
+            request,
+            prefilter=True,
+        )
+
+        rows = request.to_list()
+
+        return self._convert_rows(rows)
+
+
+        if k <= 0:
+            raise ValueError("k must be positive")
+
+        query_array = self._prepare_query(query)
+
+        request = (
+            self._table
+            .search(
+                query_array,
+                vector_column_name="vector",
+            )
+            .nprobes(self._nprobes)
             .limit(k)
             .select(["event_id"])
         )

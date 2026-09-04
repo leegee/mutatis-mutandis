@@ -13,11 +13,11 @@ MAX_TOKENS_IN_DOC = 400_000
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-ECCO_HEADER_DIR = Path( "d:/src/mutatis-mutandis/corpus/ecco_all/ecco/headers" )
+ECCO_HEADER_DIR = Path( PROJECT_ROOT / "corpus/ecco_all/ecco/headers" )
 XML_ROOT_DIR = PROJECT_ROOT / "corpus"
 
 CORPUS_INPUT_DIRS = {
-    # "eebo": XML_ROOT_DIR / "eebo_all",
+    "eebo": XML_ROOT_DIR / "eebo_all",
     "ecco": XML_ROOT_DIR / "ecco_all",
 }
 
@@ -74,7 +74,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-FAISS_SCALES = ("local", "medium", "broad")
+SCALES = ("local", "medium", "broad")
 
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
