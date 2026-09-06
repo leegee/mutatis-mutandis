@@ -7,9 +7,13 @@ from typing import Iterator, Literal
 import lancedb
 import numpy as np
 
-from lib.corpus_config import LANCE_INDEXES_DIR
 from lib.corpus_logging import logger
 from tier1.observation_store_api import SCALES
+from lib.corpus_config import (
+    CORPUS_MAX_YEAR,
+    CORPUS_MIN_YEAR,
+    LANCE_INDEXES_DIR,
+)
 
 from .lance_observation_index import LanceObservationIndex
 from .models import Float32Array, SearchResult, SearchSpace
@@ -37,7 +41,10 @@ class LanceObservationIndexStore(ObservationIndexStore):
         self,
         lance_root: str | Path = LANCE_INDEXES_DIR,
         *,
-        available_years,
+        available_years=range(
+            CORPUS_MIN_YEAR,
+            CORPUS_MAX_YEAR + 1,
+        ),
         available_scales: tuple[str, ...] = SCALES,
         dimensions: int = 768,
         nprobes: int = 20,
@@ -63,6 +70,10 @@ class LanceObservationIndexStore(ObservationIndexStore):
             "[retrieval] opened %d chronological Lance observation indexes",
             len(self._tables),
         )
+
+    @property
+    def available_scales(self) -> tuple[str, ...]:
+        return self._available_scales
 
     def get(
         self,
@@ -153,9 +164,7 @@ class LanceObservationIndexStore(ObservationIndexStore):
                 f"invalid direction: {direction!r}"
             )
 
-        scales = space.resolve_scales(
-            set(self._available_scales)
-        )
+        scales = space.resolve_scales( set(self._available_scales) )
 
         if not scales:
             raise ValueError(
@@ -224,9 +233,7 @@ class LanceObservationIndexStore(ObservationIndexStore):
 
         requested_start, requested_end = space.years
 
-        scales = space.resolve_scales(
-            set(self._available_scales)
-        )
+        scales = space.resolve_scales( set(self._available_scales) )
 
         buckets = set()
 

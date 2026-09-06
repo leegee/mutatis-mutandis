@@ -17,3 +17,7 @@ class ObservationIndexStore(ABC):
     ) -> list[ObservationIndex]:
         """Return the indexes required to search the requested space."""
         raise NotImplementedError
+
+    @property
+    def available_scales(self) -> tuple[str, ...]:
+        ...

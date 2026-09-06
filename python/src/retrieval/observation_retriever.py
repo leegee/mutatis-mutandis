@@ -42,14 +42,14 @@ class IndexedObservationRetriever(ObservationRetriever):
         The method yields buckets in chronological traversal order and never
         combines observations from different buckets into one global ranking.
         """
-        scales = space.resolve_scales(self.index_store.available_scales)
+        scales = space.resolve_scales( set(self._index_store.available_scales) )
 
         queries_by_scale = {
             scale: query
             for scale in scales
         }
 
-        for bucket, results_by_scale in self.index_store.diachronic_search(
+        for bucket, results_by_scale in self._index_store.diachronic_search(
             queries_by_scale,
             space,
             k=k,
@@ -63,7 +63,9 @@ class IndexedObservationRetriever(ObservationRetriever):
                         self._with_context(result)
                     )
 
-            results.sort(key=lambda result: result.distance)
+            results.sort(
+                key=lambda result: result.distance
+            )
 
             yield bucket, results
 
