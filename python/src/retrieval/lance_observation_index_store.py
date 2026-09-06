@@ -7,8 +7,10 @@ from typing import Iterator, Literal
 import lancedb
 import numpy as np
 
+from lib.corpus_config import LANCE_INDEXES_DIR
 from lib.corpus_logging import logger
 from tier1.observation_store_api import SCALES
+
 from .lance_observation_index import LanceObservationIndex
 from .models import Float32Array, SearchResult, SearchSpace
 from .observation_index import ObservationIndex
@@ -33,7 +35,7 @@ class LanceObservationIndexStore(ObservationIndexStore):
 
     def __init__(
         self,
-        lance_root: str | Path,
+        lance_root: str | Path = LANCE_INDEXES_DIR,
         *,
         available_years,
         available_scales: tuple[str, ...] = SCALES,
@@ -53,9 +55,7 @@ class LanceObservationIndexStore(ObservationIndexStore):
         self._nprobes = nprobes
         self._model = model
 
-        self._db = lancedb.connect(
-            str(self._lance_root)
-        )
+        self._db = lancedb.connect( str(self._lance_root) )
 
         self._tables = self._discover_tables()
 

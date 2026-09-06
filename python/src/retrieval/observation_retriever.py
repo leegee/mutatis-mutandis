@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import numpy as np
+from collections.abc import Iterator
+from typing import Literal
 
-from .models import Float32Array, SearchResult, SearchSpace
-from .observation_index_store import ObservationIndexStore
-from .parquet_context import ObservationContext, ParquetContext
-from .retriever import ObservationRetriever
+from retrieval.models import Float32Array, SearchResult, SearchSpace
+from retrieval.observation_index_store import ObservationIndexStore
+from retrieval.parquet_context import ObservationContext, ParquetContext
+from retrieval.retriever import ObservationRetriever
 
 
 class IndexedObservationRetriever(ObservationRetriever):
@@ -18,6 +20,52 @@ class IndexedObservationRetriever(ObservationRetriever):
     ) -> None:
         self._index_store = index_store
         self._context = context
+
+
+    def diachronic_search(
+        self,
+        query: Float32Array,
+        *,
+        space: SearchSpace,
+        k: int,
+        direction: Literal["forward", "backward"] = "forward",
+    ) -> Iterator[tuple[tuple[int, int], list[SearchResult]]]:
+        """Search the requested chronology one physical bucket at a time.
+
+        Bucket boundaries are owned by the index store; callers specify only
+        the logical chronological search space and traversal direction.
+
+        A single query vector is reused across all requested scales. This is
+        appropriate for phrase queries, where the query has one representation
+        while the observation index may expose multiple retrieval scales.
+
+        The method yields buckets in chronological traversal order and never
+        combines observations from different buckets into one global ranking.
+        """
+        scales = space.resolve_scales(self.index_store.available_scales)
+
+        queries_by_scale = {
+            scale: query
+            for scale in scales
+        }
+
+        for bucket, results_by_scale in self.index_store.diachronic_search(
+            queries_by_scale,
+            space,
+            k=k,
+            direction=direction,
+        ):
+            results = []
+
+            for scale in scales:
+                for result in results_by_scale[scale]:
+                    results.append(
+                        self._with_context(result)
+                    )
+
+            results.sort(key=lambda result: result.distance)
+
+            yield bucket, results
 
 
     def search(

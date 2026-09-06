@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 """
-Experiment: search the observation index using a MacBERTh phrase query.
+Experiment: diachronic semantic search using a MacBERTh phrase query.
 
 Run with:
 
-    python -m retrieval.tests.experiments.test_phrase_search
+    python -m retrieval.tests.experiments.test_phrase_search2
 """
 
-from lib.corpus_logging import logger
 from lib.corpus_config import EVENTSTORE_T1_PATH
+from lib.corpus_logging import logger
 from retrieval.lance_observation_index_store import (
     LanceObservationIndexStore,
 )
@@ -30,9 +30,6 @@ K = 50
 
 PHRASE = "white as wool"
 
-# A complete phrase carries its own linguistic context. The carrier merely
-# places the phrase into a minimal utterance so that MacBERTh encodes it as
-# an occurrence-like span rather than as an isolated fragment.
 CARRIER = "This refers to {}."
 
 
@@ -57,14 +54,15 @@ def main() -> None:
         context=context,
     )
 
-    results = retriever.search(
+    results = retriever.diachronic_search(
         query,
         space=space,
         k=K,
+        direction="forward",
     )
 
     logger.info("")
-    logger.info("PHRASE SEARCH")
+    logger.info("DIACHRONIC PHRASE SEARCH")
     logger.info("=" * 70)
     logger.info(f"phrase:     {PHRASE}")
     logger.info(f"encoder:    {type(encoder).__name__}")
@@ -72,26 +70,34 @@ def main() -> None:
     logger.info(f"year:       {YEAR}")
     logger.info(f"scale:      {SCALE}")
     logger.info(f"k:          {K}")
+    logger.info(f"direction:  forward")
     logger.info("." * 70)
 
     logger.info("")
     logger.info("RESULTS")
     logger.info("=" * 70)
 
-    for rank, result in enumerate(results, start=1):
-        observation = result.observation
-
+    for (bucket_start, bucket_end), bucket_results in results:
+        logger.info("")
         logger.info(
-            f"{rank:>2}. "
-            f"{result.distance:.6f} "
-            f"{result.event_id} "
-            f"{observation['doc_id']} "
-            f"{observation['token']!r}"
+            f"BUCKET {bucket_start}-{bucket_end}"
         )
+        logger.info("-" * 70)
 
-        logger.info(
-            f"    {result.text}"
-        )
+        for rank, result in enumerate(bucket_results, start=1):
+            observation = result.observation
+
+            logger.info(
+                f"{rank:>2}. "
+                f"{result.distance:.6f} "
+                f"{result.event_id} "
+                f"{observation['doc_id']} "
+                f"{observation['token']!r}"
+            )
+
+            logger.info(
+                f"    {result.text}"
+            )
 
     logger.info("." * 70)
 
