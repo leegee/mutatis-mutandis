@@ -12,7 +12,7 @@ from .observation_index import ObservationIndex
 
 
 class LanceObservationIndex(ObservationIndex):
-    """LanceDB-backed immutable index over observation embeddings."""
+    """LanceDB-backed immutable index over one or more chronological buckets."""
 
     RECONSTRUCT_BATCH_SIZE = 500
 
@@ -32,13 +32,20 @@ class LanceObservationIndex(ObservationIndex):
         if nprobes <= 0:
             raise ValueError("nprobes must be positive")
 
-        self._table = table
+        if isinstance(table, (tuple, list)):
+            tables = tuple(table)
+        else:
+            tables = (table,)
+
+        if not tables:
+            raise ValueError("at least one Lance table is required")
+
+        self._tables = tables
         self._dimensions = dimensions
         self._year_start = year_start
         self._year_end = year_end
         self._model = model
         self._nprobes = nprobes
-
 
     def search(
         self,
@@ -51,51 +58,62 @@ class LanceObservationIndex(ObservationIndex):
 
         query_array = self._prepare_query(query)
 
-        request = (
-            self._table
-            .search(
-                query_array,
-                vector_column_name="vector",
+        results = []
+
+        for table in self._tables:
+            request = (
+                table
+                .search(
+                    query_array,
+                    vector_column_name="vector",
+                )
+                .nprobes(self._nprobes)
+                .limit(k)
+                .select(["event_id", "_distance"])
             )
-            .nprobes(self._nprobes)
-            .limit(k)
-            .select(["event_id", "_distance"]) # _distance is unclear
-        )
 
-        request = self._apply_filter(
-            request,
-            prefilter=True,
-        )
-
-        rows = request.to_list()
-
-        return self._convert_rows(rows)
-
-
-        if k <= 0:
-            raise ValueError("k must be positive")
-
-        query_array = self._prepare_query(query)
-
-        request = (
-            self._table
-            .search(
-                query_array,
-                vector_column_name="vector",
+            request = self._apply_filter(
+                request,
+                prefilter=True,
             )
-            .nprobes(self._nprobes)
-            .limit(k)
-            .select(["event_id"])
+
+            rows = request.to_list()
+
+            if rows:
+                results.append(rows)
+
+        if not results:
+            return SearchResult(
+                event_ids=np.empty(
+                    0,
+                    dtype=np.uint64,
+                ),
+                distances=np.empty(
+                    0,
+                    dtype=np.float32,
+                ),
+            )
+
+        rows = [
+            row
+            for table_rows in results
+            for row in table_rows
+        ]
+
+        converted = self._convert_rows(rows)
+
+        if len(converted.event_ids) <= k:
+            return converted
+
+        order = np.argsort(
+            -converted.distances,
+            kind="stable",
+        )[:k]
+
+        return SearchResult(
+            event_ids=converted.event_ids[order],
+            distances=converted.distances[order],
         )
-
-        request = self._apply_filter(
-            request,
-            prefilter=True,
-        )
-
-        rows = request.to_list()
-
-        return self._convert_rows(rows)
 
     def batch_search(
         self,
@@ -138,8 +156,9 @@ class LanceObservationIndex(ObservationIndex):
         search_k = k * oversample
 
         logger.debug(
-            "[lance batch_search] queries=%d k=%d search_k=%d "
+            "[lance batch_search] tables=%d queries=%d k=%d search_k=%d "
             "year_start=%s year_end=%s",
+            len(self._tables),
             query_count,
             k,
             search_k,
@@ -198,42 +217,43 @@ class LanceObservationIndex(ObservationIndex):
         """
         Retrieve the stored normalised vector for one event.
 
-        This is the Lance equivalent of FAISS reconstruct(event_id).
-
         The lookup is by stable semantic event ID, never by Lance row
         position. Tier 1 remains authoritative for the observation's
         metadata and provenance.
         """
         event_id = int(event_id)
 
-        rows = (
-            self._table
-            .search()
-            .where(
-                self._event_id_filter(event_id),
-                prefilter=True,
-            )
-            .select(["event_id", "vector"])
-            .limit(1)
-            .to_list()
-        )
-
-        if not rows:
-            raise KeyError(
-                f"Lance index does not contain event_id={event_id}"
+        for table in self._tables:
+            rows = (
+                table
+                .search()
+                .where(
+                    self._event_id_filter(event_id),
+                    prefilter=True,
+                )
+                .select(["event_id", "vector"])
+                .limit(1)
+                .to_list()
             )
 
-        row = rows[0]
+            if not rows:
+                continue
 
-        if int(row["event_id"]) != event_id:
-            raise RuntimeError(
-                f"Lance returned unexpected event_id="
-                f"{row['event_id']} for requested {event_id}"
+            row = rows[0]
+
+            if int(row["event_id"]) != event_id:
+                raise RuntimeError(
+                    f"Lance returned unexpected event_id="
+                    f"{row['event_id']} for requested {event_id}"
+                )
+
+            return self._validate_vector(
+                row["vector"],
+                event_id,
             )
 
-        return self._validate_vector(
-            row["vector"],
-            event_id,
+        raise KeyError(
+            f"Lance index does not contain event_id={event_id}"
         )
 
     def reconstruct_many(
@@ -273,43 +293,49 @@ class LanceObservationIndex(ObservationIndex):
 
             unique_ids = set(chunk)
 
-            conditions = [
-                self._event_id_filter(event_id)
-                for event_id in unique_ids
-            ]
+            remaining_ids = set(unique_ids)
 
-            rows = (
-                self._table
-                .search()
-                .where(
-                    " OR ".join(conditions),
-                    prefilter=True,
+            for table in self._tables:
+                if not remaining_ids:
+                    break
+
+                conditions = [
+                    self._event_id_filter(event_id)
+                    for event_id in remaining_ids
+                ]
+
+                rows = (
+                    table
+                    .search()
+                    .where(
+                        " OR ".join(conditions),
+                        prefilter=True,
+                    )
+                    .select(["event_id", "vector"])
+                    .limit(len(remaining_ids))
+                    .to_list()
                 )
-                .select(["event_id", "vector"])
-                .limit(len(unique_ids))
-                .to_list()
-            )
 
-            for row in rows:
-                event_id = int(row["event_id"])
+                for row in rows:
+                    event_id = int(row["event_id"])
 
-                if event_id not in unique_ids:
-                    raise RuntimeError(
-                        f"Lance returned unexpected event_id="
-                        f"{event_id}"
+                    if event_id not in unique_ids:
+                        raise RuntimeError(
+                            f"Lance returned unexpected event_id="
+                            f"{event_id}"
+                        )
+
+                    vectors[event_id] = self._validate_vector(
+                        row["vector"],
+                        event_id,
                     )
 
-                vectors[event_id] = self._validate_vector(
-                    row["vector"],
-                    event_id,
-                )
+                remaining_ids = unique_ids.difference(vectors)
 
-            missing = unique_ids.difference(vectors)
-
-            if missing:
+            if remaining_ids:
                 raise KeyError(
                     f"Lance index missing event_ids="
-                    f"{sorted(missing)[:10]}"
+                    f"{sorted(remaining_ids)[:10]}"
                 )
 
         return np.asarray(
@@ -478,10 +504,9 @@ class LanceObservationIndex(ObservationIndex):
 
         distances = np.asarray(
             [
-                row.get(
-                    "_distance",
-                    row.get("distance"),
-                )
+                row["_distance"]
+                if "_distance" in row
+                else row["distance"]
                 for row in rows
             ],
             dtype=np.float32,
@@ -489,13 +514,20 @@ class LanceObservationIndex(ObservationIndex):
 
         similarities = 1.0 - distances
 
+        event_ids = np.asarray(
+            [
+                row["event_id"]
+                for row in rows
+            ],
+            dtype=np.uint64,
+        )
+
+        order = np.argsort(
+            -similarities,
+            kind="stable",
+        )
+
         return SearchResult(
-            event_ids=np.asarray(
-                [
-                    row["event_id"]
-                    for row in rows
-                ],
-                dtype=np.uint64,
-            ),
-            distances=similarities,
+            event_ids=event_ids[order],
+            distances=similarities[order],
         )

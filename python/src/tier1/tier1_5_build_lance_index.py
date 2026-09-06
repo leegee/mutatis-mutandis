@@ -1,415 +1,578 @@
-#!/usr/bin/env python
-"""
-tier1_5_build_lance_index.py
+# test_lance_retrieval3.py
 
-    Work in progress
-
-    Retrieval architecture must be chronologically aware,
-    and ultimately chronologically adaptive because we will
-    be using aligned vectors from MacBERTh and a modern BERT
-    and hopefully BERTs to handle Old Norse/Old English
-
-Build one LanceDB table per embedding scale (local/medium/broad), covering
-every year in the Parquet observation store.
-
-This replaces physical bucket-partitioned indices (tier1_5_build_diskann_index.py
-/ tier1_5_build_all_diskann_indexes.py) with a single index per scale plus a
-scalar range index on `year`. A 50-year search window becomes a query-time
-filter (`year >= start AND year <= end`) instead of a directory you had to
-pre-decide the boundaries of and rebuild on schema/boundary changes.
-
-What this does NOT yet handle:
-    - Cross-model separation. If a scale's embeddings span both the
-      MacBERTh-derived and modern-BERT-derived eras, mixing them in one
-      table's vector index is the same category of bug as mixing them in
-      one DiskANN index -- see tier1_5_build_all_diskann_indexes.py's
-      model_boundary_year handling for the reasoning. This script detects
-      an `embedding_model` column IF one is already present in the Parquet
-      schema and, if so, uses the real values. When the column is missing
-      it fabricates a constant value of "macberth" for every row so that
-      the column always exists and can be filtered/indexed. Once the real
-      provenance column lands in the store, cross-era queries become safe.
-
-Ingestion streams one year at a time via table.add(), so no single Python
-process ever holds a full scale's vectors in memory -- unlike the pilot
-script, which called load_embeddings() once for the whole requested range.
-
-Index type is chosen from the corpus-wide observation count for that scale:
-    - Small enough to fit comfortably in RAM at full precision -> IvfFlat
-      (no PQ compression -- exact vectors, better recall, no quantization
-      loss). This is very likely what you want for the sparser early
-      centuries of the corpus.
-    - Larger than that -> IvfPq, with num_partitions scaled to corpus size.
-      Sub-vector count follows the same reasoning discussed in the DiskANN
-      orchestrator: pick a size where dimensions divide evenly.
-
-These thresholds are heuristic starting points, not measured constants --
-validate against the recall/build-time pilot results for a given scale
-before trusting them at full scale.
-"""
 from __future__ import annotations
 
-import argparse
-import math
+import os
+
+os.environ.setdefault("LANCE_LOG", "error")
+
 import time
-from pathlib import Path
 
 import numpy as np
-import lancedb
-import pyarrow as pa
-import pyarrow.dataset as ds
-from lancedb.index import BTree, IvfFlat, IvfPq
 
-import lib.corpus_config as config
-from lib.corpus_logging import logger
-from retrieval.parquet_embeddings import load_embeddings
+from tier1.observation_store_api import (
+    SCALES,
+    open_observation_lookup,
+)
+from tier1.parquet_observation_backend import ParquetObservationLookup
+from retrieval.exact_knn_search import (
+    discover_shards,
+    exact_knn,
+)
+from retrieval.models import SearchSpace
+from retrieval.lance_observation_index import LanceObservationIndex
+from retrieval.lance_observation_index_store import (
+    LanceObservationIndexStore,
+)
+from tier1.tier1_5_build_lance_index import (
+    CHRONOLOGY_BUCKET_YEARS,
+)
+from lib.corpus_config import (
+    EVENTSTORE_T1_PATH,
+    LANCE_INDEXES_DIR,
+)
 
-SCALES = ("local", "medium", "broad")
-DEFAULT_DIMENSIONS = 768
-DEFAULT_MODEL = "macberth"
 
-# Below this raw footprint, skip PQ compression entirely and use IvfFlat.
-# 83,375 vectors at 768 dims (~245 MiB) measured comfortably fast in the
-# pilot; this threshold gives real headroom under a 64 GB budget while
-# still leaving room for query-time caches and the OS.
-FLAT_INDEX_MAX_RAW_GB = 8.0
+OBSERVATION_ROOT = EVENTSTORE_T1_PATH
+LANCE_ROOT = LANCE_INDEXES_DIR
+
+SEED_FORMS = (
+    "white",
+    "pale",
+    "bright",
+    "blond",
+    "hoary",
+    "albino",
+)
+
+SEEDS_PER_FORM = 1
+
+K_VALUES = (
+    10,
+    30,
+    60,
+    100,
+    300,
+    1000,
+)
+
+GROUND_TRUTH_K = max(K_VALUES)
+
+NPROBES_VALUES = (
+    150,
+)
+
+SEED_EVENT_IDS = {
+    "white": 2558990645162150216,
+    "pale": 6649491879278404957,
+    "bright": 8001102461466607531,
+    "blond": 8837468744104859267,
+    "hoary": 6590234528837436395,
+}
 
 
-def discover_years(store: Path) -> list[int]:
-    dataset = ds.dataset(store, format="parquet", partitioning="hive")
-    years = (
-        dataset
-        .scanner(columns=["year"])
-        .to_table()
-        .column("year")
-        .to_pylist()
+def bucket_for_year(
+    year: int,
+) -> tuple[int, int]:
+    start = (
+        year // CHRONOLOGY_BUCKET_YEARS
+    ) * CHRONOLOGY_BUCKET_YEARS
+
+    return (
+        start,
+        start + CHRONOLOGY_BUCKET_YEARS - 1,
     )
-    return sorted(set(int(year) for year in years))
 
 
-def detect_model_column(store: Path) -> str | None:
-    """
-    Return "embedding_model" if the Parquet schema already carries per-row
-    model provenance, else None. Never fabricates this from year -- see
-    module docstring.
-    """
-    dataset = ds.dataset(store, format="parquet", partitioning="hive")
-    if "embedding_model" in dataset.schema.names:
-        return "embedding_model"
-    return None
-
-
-def choose_index_config(
+def get_bucket_shards(
+    shards,
     *,
-    observation_count: int,
-    dimensions: int,
+    bucket_start: int,
+    bucket_end: int,
 ):
-    """
-    Choose a Lance vector index while preserving the FAISS geometry:
+    """Return exactly the Parquet shards belonging to one chronology bucket."""
+    return [
+        shard
+        for shard in shards
+        if shard.year is not None
+        and bucket_start <= shard.year <= bucket_end
+    ]
 
-        unit-normalised vectors + cosine distance
 
-    RRF consumes rank rather than absolute distance, but retaining cosine
-    semantics here keeps diagnostics and direct score comparisons meaningful.
-    """
-    raw_gb = (
-        observation_count
-        * dimensions
-        * 4
-    ) / (1024 ** 3)
+def get_seed_event_ids(
+    lookup: ParquetObservationLookup,
+) -> list[int]:
+    """Select a small deterministic sample of real corpus occurrences."""
+    selected: list[int] = []
 
-    if raw_gb <= FLAT_INDEX_MAX_RAW_GB:
-        logger.info(
-            "Corpus footprint %.2f GiB <= %.2f GiB threshold: "
-            "using IvfFlat.",
-            raw_gb,
-            FLAT_INDEX_MAX_RAW_GB,
+    for form in SEED_FORMS:
+        event_ids = lookup.find_matching_event_ids([form])
+
+        if not event_ids:
+            print(
+                f"WARNING: no occurrences found for {form!r}"
+            )
+            continue
+
+        selected.extend(
+            int(event_id)
+            for event_id in event_ids[:SEEDS_PER_FORM]
         )
 
-        num_partitions = max(
-            16,
-            min(
-                1024,
-                round(math.sqrt(observation_count)),
-            ),
+    return selected
+
+
+def get_seed_vectors(
+    lookup: ParquetObservationLookup,
+    event_ids: list[int],
+) -> dict[int, dict[str, np.ndarray]]:
+    """Fetch all scale vectors while preserving event order."""
+    vectors: dict[int, dict[str, np.ndarray]] = {
+        event_id: {}
+        for event_id in event_ids
+    }
+
+    for scale in SCALES:
+        matrix = lookup._scale_for_ids(
+            event_ids,
+            scale,
         )
 
-        return IvfFlat(
-            distance_type="cosine",
-            num_partitions=num_partitions,
-        )
+        if matrix.shape[0] != len(event_ids):
+            raise RuntimeError(
+                f"{scale}: returned {matrix.shape[0]} vectors "
+                f"for {len(event_ids)} event IDs"
+            )
 
-    logger.info(
-        "Corpus footprint %.2f GiB > %.2f GiB threshold: "
-        "using IvfPq.",
-        raw_gb,
-        FLAT_INDEX_MAX_RAW_GB,
+        for index, event_id in enumerate(event_ids):
+            vectors[event_id][scale] = matrix[index]
+
+    return vectors
+
+
+def open_lance_indexes(
+    lookup: ParquetObservationLookup,
+) -> dict[str, LanceObservationIndex]:
+    store = LanceObservationIndexStore(
+        LANCE_ROOT,
+        available_years=lookup.available_years,
+        available_scales=SCALES,
+        dimensions=768,
+        nprobes=NPROBES_VALUES[0],
+        model="macberth",
     )
 
-    num_partitions = max(
-        64,
-        min(
-            4096,
-            round(math.sqrt(observation_count)),
+    return store.get(
+        SearchSpace(
+            years=None,
+            scale=tuple(SCALES),
+        )
+    )
+
+
+def search_index(
+    index: LanceObservationIndex,
+    vector: np.ndarray,
+    k: int,
+) -> list[int]:
+    """Run one ANN query and return event IDs in ranked order."""
+    result = index.search(
+        vector,
+        k=k,
+    )
+
+    return [
+        int(event_id)
+        for event_id in result.event_ids
+    ]
+
+
+def exact_search(
+    vector: np.ndarray,
+    shards,
+    scale: str,
+    k: int,
+    event_id: int,
+    *,
+    bucket_start: int,
+    bucket_end: int,
+) -> tuple[list[int], float]:
+    """
+    Compute exact bucket-local ground-truth neighbours.
+
+    Failure mode:
+        This scores every vector in the seed's chronological bucket and is
+        deliberately independent of the Lance index. It therefore measures
+        ANN recall within the actual retrieval domain.
+    """
+    started = time.perf_counter()
+
+    bucket_shards = get_bucket_shards(
+        shards,
+        bucket_start=bucket_start,
+        bucket_end=bucket_end,
+    )
+
+    if not bucket_shards:
+        raise RuntimeError(
+            f"No Parquet shards found for bucket "
+            f"{bucket_start}-{bucket_end}"
+        )
+
+    _scores, ids = exact_knn(
+        vector.reshape(1, -1),
+        bucket_shards,
+        k=k,
+        scale=scale,
+        workers=1,
+        pool="thread",
+        exclude_self=True,
+        query_event_ids=np.asarray(
+            [event_id],
+            dtype=np.int64,
         ),
     )
 
-    num_sub_vectors = (
-        dimensions // 8
-        if dimensions % 8 == 0
-        else dimensions // 4
+    elapsed = time.perf_counter() - started
+
+    return (
+        [
+            int(event_id)
+            for event_id in ids[0]
+        ],
+        elapsed,
     )
 
-    return IvfPq(
-        distance_type="cosine",
-        num_partitions=num_partitions,
-        num_sub_vectors=num_sub_vectors,
-    )
+
+def recall_at_k(
+    ann_ids: list[int],
+    exact_ids: list[int],
+    k: int,
+) -> float:
+    ann = set(ann_ids[:k])
+    exact = set(exact_ids[:k])
+
+    if not exact:
+        return 0.0
+
+    return len(ann & exact) / len(exact)
 
 
-
-def build_scale_table(
-    *,
-    store: Path,
-    db_path: Path,
+def benchmark_scale(
+    index: LanceObservationIndex,
+    vector: np.ndarray,
     scale: str,
-    dimensions: int,
-    years: list[int],
-    model_column: str | None,
-    default_model: str = DEFAULT_MODEL,
+    event_id: int,
+    shards,
+    *,
+    bucket_start: int,
+    bucket_end: int,
+) -> dict[int, dict[str, float]]:
+    print()
+    print(
+        f"  Scale={scale} "
+        f"seed={event_id}"
+    )
+
+    print(
+        f"    exact bucket ground truth @ {GROUND_TRUTH_K} "
+        f"({bucket_start}-{bucket_end})..."
+    )
+
+    exact_ids, exact_elapsed = exact_search(
+        vector,
+        shards,
+        scale,
+        GROUND_TRUTH_K,
+        event_id,
+        bucket_start=bucket_start,
+        bucket_end=bucket_end,
+    )
+
+    print(
+        f"    exact bucket: "
+        f"{exact_elapsed:.3f}s "
+        f"({len(exact_ids)} results)"
+    )
+
+    results: dict[int, dict[str, float]] = {}
+
+    for nprobes in NPROBES_VALUES:
+        # The wrapper forwards this value to Lance's IVF search.
+        index._nprobes = nprobes
+
+        start = time.perf_counter()
+
+        ann_ids = search_index(
+            index,
+            vector,
+            k=GROUND_TRUTH_K + 1,
+        )
+
+        ann_ids = [
+            candidate
+            for candidate in ann_ids
+            if candidate != event_id
+        ][:GROUND_TRUTH_K]
+
+        ann_elapsed = time.perf_counter() - start
+
+        print(
+            f"    nprobes={nprobes:4d} "
+            f"ANN @ {GROUND_TRUTH_K}: "
+            f"{ann_elapsed * 1000.0:.2f} ms "
+            f"({len(ann_ids)} results)"
+        )
+
+        for k in K_VALUES:
+            recall = recall_at_k(
+                ann_ids,
+                exact_ids,
+                k,
+            )
+
+            results.setdefault(k, {})[
+                f"recall_{nprobes}"
+            ] = recall
+
+            print(
+                f"      k={k:4d} "
+                f"recall={recall * 100:6.2f}%"
+            )
+
+    return results
+
+
+def print_summary(
+    all_results: dict[
+        str,
+        dict[int, dict[int, dict[str, float]]],
+    ],
 ) -> None:
-    db = lancedb.connect(str(db_path))
-    table_name = scale
-    tbl = None
-    t0 = time.time()
+    print()
+    print("BUCKET-EXACT RECALL SUMMARY")
+    print("=" * 100)
 
-    for year in years:
-        event_ids, vectors = load_embeddings(
-            store,
-            year_start=year,
-            year_end=year,
-            scale=scale,
-            dimensions=dimensions,
-        )
+    for scale in SCALES:
+        scale_results = all_results[scale]
 
-        vectors = np.asarray(
-            vectors,
-            dtype=np.float32,
-        )
+        print()
+        print(f"{scale.upper()}")
 
-        n = len(event_ids)
-
-        if vectors.shape != (n, dimensions):
-            raise ValueError(
-                f"Invalid vector shape for year={year}, scale={scale}: "
-                f"{vectors.shape}, expected ({n}, {dimensions})"
+        for nprobes in NPROBES_VALUES:
+            print()
+            print(f"nprobes={nprobes}")
+            print(
+                f"{'k':>6} "
+                f"{'mean recall':>15} "
+                f"{'min recall':>15}"
             )
+            print("-" * 42)
 
-        norms = np.linalg.norm(
-            vectors,
-            axis=1,
-            keepdims=True,
-        )
+            for k in K_VALUES:
+                rows = [
+                    result[k][f"recall_{nprobes}"]
+                    for result in scale_results.values()
+                ]
 
-        if np.any(~np.isfinite(norms)) or np.any(norms == 0):
-            raise ValueError(
-                f"Invalid embedding vectors for year={year}, scale={scale}"
-            )
-
-        vectors = vectors / norms
-
-        if n == 0:
-            logger.info( "year=%d scale=%s: no observations, skipping", year, scale, )
-            continue
-
-        data = {
-            "event_id": pa.array(
-                event_ids,
-                type=pa.uint64(),
-            ),
-            "year": pa.array(
-                [year] * n,
-                type=pa.int32(),
-            ),
-            "vector": pa.FixedSizeListArray.from_arrays(
-                pa.array(
-                    vectors.reshape(-1),
-                    type=pa.float32(),
-                ),
-                dimensions,
-            ),
-        }
-
-        # Keep model provenance in the Lance row so retrieval can enforce
-        # model boundaries without consulting Parquet at query time.
-        if model_column:
-            dataset = ds.dataset(
-                store,
-                format="parquet",
-                partitioning="hive",
-            )
-
-            model_tbl = (
-                dataset
-                .scanner(
-                    columns=[
-                        "event_id",
-                        model_column,
-                    ],
-                    filter=ds.field("year") == year,
+                mean_recall = float(
+                    np.mean(rows)
                 )
-                .to_table()
-            )
 
-            model_map = dict(
-                zip(
-                    model_tbl.column("event_id").to_pylist(),
-                    model_tbl.column(model_column).to_pylist(),
+                min_recall = float(
+                    np.min(rows)
                 )
-            )
 
-            model_values = [
-                model_map.get(
-                    int(eid),
-                    default_model,
+                print(
+                    f"{k:6d} "
+                    f"{mean_recall * 100:14.2f}% "
+                    f"{min_recall * 100:14.2f}%"
                 )
-                for eid in event_ids
-            ]
-        else:
-            model_values = [default_model] * n
-
-        data["embedding_model"] = pa.array(
-            model_values
-        )
-
-        batch = pa.table(data)
-
-        if tbl is None:
-            tbl = db.create_table(
-                table_name,
-                data=batch,
-                mode="overwrite",
-            )
-        else:
-            tbl.add(batch)
-
-        logger.debug( "year=%d scale=%s: appended %d rows (table total=%d)", year, scale, n, tbl.count_rows(), )
-
-    if tbl is None:
-        raise RuntimeError(
-            f"No observations found for scale={scale}"
-        )
-
-    ingest_seconds = time.time() - t0
-    total_rows = tbl.count_rows()
-
-    logger.info( "scale=%s: ingestion complete, %d rows in %.1fs", scale, total_rows, ingest_seconds, )
-
-    # The vector index provides semantic nearest-neighbour retrieval.
-    #
-    # Lance retains the original vector alongside the ANN index. Reconstruction
-    # is therefore an event_id lookup against the table rather than a
-    # reconstruction operation against the ANN index itself.
-    index_config = choose_index_config( observation_count=total_rows, dimensions=dimensions, )
-
-    t0 = time.time()
-
-    tbl.create_index( "vector", config=index_config, )
-
-    logger.info( "scale=%s: vector index built in %.1fs", scale, time.time() - t0, )
-
-    # Event IDs are the stable semantic identity of observations.
-    #
-    # This is the Lance equivalent of FAISS's IndexIDMap2: event_id is not
-    # merely metadata attached to a vector; it is the key by which callers
-    # recover the canonical observation associated with a retrieved vector.
-    t0 = time.time()
-
-    tbl.create_index( "event_id", config=BTree(), )
-
-    logger.info( "scale=%s: event_id scalar index built in %.1fs", scale, time.time() - t0, )
-
-    # Year remains a query-time restriction rather than a physical
-    # partitioning boundary.
-    t0 = time.time()
-
-    tbl.create_index( "year", config=BTree(), )
-
-    logger.info( "scale=%s: year scalar index built in %.1fs", scale, time.time() - t0, )
-
-    # Model provenance is kept alongside the vector so retrieval can
-    # restrict a search to the embedding model that produced the query.
-    t0 = time.time()
-
-    tbl.create_index( "embedding_model", config=BTree(), )
-
-    logger.info( "scale=%s: embedding_model scalar index built in %.1fs", scale, time.time() - t0, )
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Build one LanceDB table per scale across the full corpus."
-    )
-    parser.add_argument("--store", type=Path, default=config.EVENTSTORE_T1_PATH)
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path(config.LANCE_INDEXES_DIR),
-        help="Root directory for the Lance database (one table per scale).",
-    )
-    parser.add_argument("--dimensions", type=int, default=DEFAULT_DIMENSIONS)
-    parser.add_argument(
-        "--scale",
-        choices=SCALES,
-        action="append",
-        help="Scale to build. May be supplied multiple times. Defaults to all scales.",
-    )
-    parser.add_argument("--year-from", type=int)
-    parser.add_argument("--year-to", type=int)
-    parser.add_argument(
-        "--default-model",
-        type=str,
-        default=DEFAULT_MODEL,
-        help="Value written for embedding_model when the column is absent from the store.",
-    )
-    return parser.parse_args()
 
 
 def main() -> None:
-    args = parse_args()
+    lookup = open_observation_lookup(
+        OBSERVATION_ROOT,
+    )
 
-    years = discover_years(args.store)
-    if args.year_from is not None:
-        years = [y for y in years if y >= args.year_from]
-    if args.year_to is not None:
-        years = [y for y in years if y <= args.year_to]
-    if not years:
-        raise RuntimeError(f"No Parquet years found under {args.store}")
+    observation_count = len(lookup)
 
-    model_column = detect_model_column(args.store)
-    if model_column:
-        logger.info("Detected embedding model provenance column: %s", model_column)
-    else:
-        logger.info( "No embedding_model column in source schema; defaulting every row to '%s'.", args.default_model, )
+    print(
+        "Opening Tier 1 observation lookup..."
+    )
 
-    scales = tuple(args.scale) if args.scale else SCALES
-    logger.info( "Building Lance tables for scales=%s, years=%d-%d", scales, min(years), max(years), )
+    print(
+        f"Tier 1 observations: "
+        f"{observation_count:,}"
+    )
 
-    for scale in scales:
-        logger.info("=" * 70)
-        logger.info("scale=%s", scale)
-        build_scale_table(
-            store=args.store,
-            db_path=args.output,
-            scale=scale,
-            dimensions=args.dimensions,
-            years=years,
-            model_column=model_column,
-            default_model=args.default_model,
+    years = lookup.available_years
+
+    if len(years):
+        print(
+            f"Available years: "
+            f"{int(years.min())}-"
+            f"{int(years.max())}"
         )
 
-    logger.info("=" * 70)
-    logger.info("Lance build complete: %s", args.output)
+    print()
+    print("Opening Lance indexes...")
+
+    indexes = open_lance_indexes(
+        lookup,
+    )
+
+    print()
+    print("Opening exact-search Parquet shards...")
+
+    shards = discover_shards(
+        OBSERVATION_ROOT,
+    )
+
+    print(
+        f"Parquet shards: "
+        f"{len(shards):,}"
+    )
+
+    print()
+    print("Checking Lance indexes...")
+
+    for scale in SCALES:
+        print(
+            f"{scale:>8}: index opened successfully "
+            f"(Tier 1 population = "
+            f"{observation_count:,})"
+        )
+
+    print()
+    print(
+        "Sampling seed occurrences for: "
+        f"{', '.join(SEED_FORMS)}"
+    )
+
+    print(
+        f"Seeds per form: {SEEDS_PER_FORM}"
+    )
+
+    seed_event_ids = get_seed_event_ids(
+        lookup,
+    )
+
+    print(
+        f"Selected "
+        f"{len(seed_event_ids)} "
+        f"seed occurrences."
+    )
+
+    if not seed_event_ids:
+        raise RuntimeError(
+            "No seed occurrences found"
+        )
+
+    print()
+    print("Fetching seed vectors...")
+
+    seed_vectors = get_seed_vectors(
+        lookup,
+        seed_event_ids,
+    )
+
+    print("Seed vectors loaded.")
+
+    seed_buckets: dict[int, tuple[int, int]] = {}
+
+    for event_id in seed_event_ids:
+        metadata = lookup.get_event_metadata(
+            event_id,
+        )
+
+        pub_year = int(metadata["pub_year"])
+
+        bucket = bucket_for_year(
+            pub_year,
+        )
+
+        seed_buckets[event_id] = bucket
+
+        print(
+            f"  {event_id}: "
+            f"{metadata['token']!r} "
+            f"{metadata['doc_id']} "
+            f"{pub_year} "
+            f"bucket={bucket[0]}-{bucket[1]}"
+        )
+
+    print()
+    print("EXACT BUCKET VS ANN RECALL BENCHMARK")
+    print("=" * 78)
+
+    print()
+    print(
+        f"Chronological buckets: "
+        f"{CHRONOLOGY_BUCKET_YEARS}-year buckets"
+    )
+
+    print(
+        f"Ground truth: independent exact top-{GROUND_TRUTH_K} "
+        f"Parquet search within the seed's chronological bucket"
+    )
+
+    print(
+        f"ANN: one top-{GROUND_TRUTH_K + 1} Lance query for each "
+        f"nprobes value; the seed occurrence is removed before "
+        f"evaluating the resulting top-{GROUND_TRUTH_K}; smaller "
+        f"k values are evaluated from the same ranked result"
+    )
+
+    all_results: dict[
+        str,
+        dict[int, dict[int, dict[str, float]]],
+    ] = {
+        scale: {}
+        for scale in SCALES
+    }
+
+    total_start = time.perf_counter()
+
+    for event_id in seed_event_ids:
+        bucket_start, bucket_end = seed_buckets[event_id]
+
+        print()
+        print(
+            f"Seed event_id={event_id} "
+            f"bucket={bucket_start}-{bucket_end}"
+        )
+
+        for scale in SCALES:
+            result = benchmark_scale(
+                indexes[scale],
+                seed_vectors[event_id][scale],
+                scale,
+                event_id,
+                shards,
+                bucket_start=bucket_start,
+                bucket_end=bucket_end,
+            )
+
+            all_results[scale][event_id] = result
+
+    total_elapsed = (
+        time.perf_counter()
+        - total_start
+    )
+
+    print_summary(
+        all_results,
+    )
+
+    print()
+    print(
+        f"Total benchmark time: "
+        f"{total_elapsed / 60.0:.2f} minutes"
+    )
+
+    print()
+    print("DONE")
 
 
 if __name__ == "__main__":

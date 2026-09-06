@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Iterator, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -107,6 +108,62 @@ class SearchSpace:
                 raise TypeError(
                     "scale must be a string or tuple of strings"
                 )
+
+    def buckets(
+        self,
+        bucket_size: int = 50,
+        direction: Literal["forward", "backward"] = "forward",
+    ) -> Iterator[tuple[int, int]]:
+        """
+        Yield chronological year ranges within this search space.
+
+        ``forward`` traverses from the earliest requested year to the latest.
+        ``backward`` traverses from the latest requested year to the earliest.
+
+        Failure mode:
+            An unbounded space cannot be traversed because there is no
+            finite chronological interval to divide into buckets.
+        """
+        if self.years is None:
+            raise ValueError(
+                "bucket traversal requires an explicit year range"
+            )
+
+        if not isinstance(bucket_size, int) or bucket_size <= 0:
+            raise ValueError(
+                "bucket_size must be a positive integer"
+            )
+
+        if direction not in ("forward", "backward"):
+            raise ValueError(
+                f"invalid direction: {direction!r}"
+            )
+
+        start, end = self.years
+
+        if direction == "forward":
+            current = start
+
+            while current <= end:
+                bucket_end = min(
+                    current + bucket_size - 1,
+                    end,
+                )
+
+                yield current, bucket_end
+                current = bucket_end + 1
+
+        else:
+            current = end
+
+            while current >= start:
+                bucket_start = max(
+                    start,
+                    current - bucket_size + 1,
+                )
+
+                yield bucket_start, current
+                current = bucket_start - 1
 
     def resolve_years(
         self,

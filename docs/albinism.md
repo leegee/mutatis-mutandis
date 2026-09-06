@@ -8,7 +8,7 @@ Rather than taking the modern medical category of “albinism” as its starting
 
 The project begins with the theophanic imagery of the “Son of Man” in Revelation 1 as one important and influential articulation of extreme bodily whiteness within the Christian tradition. It does not, however, assume a simple or continuous line of descent from biblical imagery to later representations. Instead, it asks how subsequent literary, theological, scientific and cultural traditions reworked, transformed, reinterpreted or departed from earlier symbolic complexes.
 
-This central biblical articulation does not stand alone even within its own tradition. Related imagery appears in the Hebrew Bible and Second Temple literature that shaped it and ran alongside it - the "Ancient of Days" of Daniel 7, whose hair is "like pure wool," supplies the imagery Revelation 1 itself draws on directly, while the account of Noah's birth in 1 Enoch 106 offers an earlier and notably more ambivalent treatment of the same physiognomic complex: white hair, luminous eyes and radiant skin here provoke not recognition of divinity but paternal terror and suspicion of illegitimate, hybrid or angelic parentage. This apocryphal material is valuable to the project precisely because it demonstrates that extreme bodily whiteness carried unstable and contested meanings from a very early point in its textual history, rather than acquiring ambivalence only through later secularisation or medicalisation.
+This central biblical articulation does not stand alone even within its own tradition. Related imagery appears in the Hebrew Bible and Second Temple literature that shaped it and ran alongside it - the "Ancient of Days" of Daniel 7, whose hair is "like pure wool," supplies the imagery Revelation 1 itself draws on directly, while the account of Noah's birth in 1 Enoch 106 (attested in English translation 1601 [TODO check name and date]) offers an earlier and notably more ambivalent treatment of the same physiognomic complex: white hair, luminous eyes and radiant skin here provoke not recognition of divinity but paternal terror and suspicion of illegitimate, hybrid or angelic parentage. This apocryphal material is valuable to the project precisely because it demonstrates that extreme bodily whiteness carried unstable and contested meanings from a very early point in its textual history, rather than acquiring ambivalence only through later secularisation or medicalisation.
 
 A second, distinct body of comparative material derives from classical ethnography and paradoxography. Pliny the Elder and Julius Solinus record traditions of a white-haired, pale-eyed people inhabiting ancient Caucasian Albania, whose appearance was read variously as omen, wonder and portent. This material runs in a genre parallel to, rather than in descent from, the biblical tradition, and situates extreme bodily whiteness within a second, non-theological framework of the marvellous and the anomalous - one with its own afterlife in medieval and early modern accounts of remote or monstrous peoples.
 
@@ -28,19 +28,63 @@ A further point of distinction lies in methodology. Existing scholarship has nec
 
 The computational component is therefore not an end in itself, nor is it intended simply to generate additional examples. Its purpose is to address questions of symbolic continuity, transformation, divergence and reception at a scale that conventional methods alone cannot easily sustain.
 
+## Thoughts On A Control Mechanism
+
+### Extreme phenotype and the recording of reaction
+
+A central methodological problem in investigating historical representations of albinism and extreme bodily whiteness is that the surviving textual record may disproportionately preserve reactions to the phenotype rather than the ordinary experience of encountering it.
+
+Descriptions of individuals identified as albino, or otherwise represented as extraordinarily white, frequently occur in contexts of astonishment, curiosity, admiration, disgust, fear, amusement, theological interpretation, medical speculation, or other forms of heightened response. It would be tempting to infer from such evidence that extreme bodily whiteness itself ordinarily elicited an extreme response. Such an inference, however, may be affected by the fundamental property  of textual transmission, that events that provoke a reaction are more likely to be recorded than mundane events that do not.
+
+An observer who encounters an unusually white person and regards the appearance as unremarkable provides little reason to record the encounter. Conversely, an encounter that produces astonishment, fascination, revulsion, or speculation is intrinsically more narratively salient. The historical corpus may therefore contain a systematic selection effect in which the intensity of recorded reaction is partly a function of the probability that the encounter was recorded in the first place.
+
+This raises a question that can be investigated empirically:
+
+> Are mundane or non-reactive encounters with extreme bodily whiteness represented in the historical corpus,
+> or has the process of textual recording preferentially selected encounters that generated an explicit reaction?
+
+The absence of recorded reaction must therefore not automatically be treated as evidence that no reaction occurred. Conversely, the prevalence of highly charged reactions must not automatically be treated as evidence that such reactions were typical of the population as a whole.
+
+The investigation would consequently treat reaction as an independent textual variable rather than as an inherent property of the phenotype. Occurrences could be classified according to whether the text records an explicit reaction, and perhaps when one is present it could be further classified  according to its character and intensity. Particular attention would be given to occurrences in which extreme whiteness is described in apparently matter-of-fact terms, without accompanying affective, evaluative, supernatural, medical, racial, or otherwise interpretive response.
+
+This produces an important distinction between two questions:
+
+* How frequently is extreme whiteness associated with recorded reactions in surviving texts?
+* How likely was an encounter with extreme whiteness to be recorded when it produced no remarkable reaction?
+
+The first question is accessible to corpus analysis; the second can only be approached indirectly because the unrecorded population of encounters is necessarily unavailable. Nevertheless, the distinction is methodologically crucial.
+
+The project therefore proposes to investigate not simply the semantics of extreme bodily whiteness, but also the conditions under which that phenotype becomes textually salient. A description of extreme whiteness may become significant not merely because of what the body is represented as being, but because of what observers are represented as doing with that perception.
+
+This allows for the possibility that the historical corpus contains two superimposed distributions: a distribution of representations of the phenotype itself and a distribution of recorded reactions to the phenotype. The latter may be substantially more extreme than the reactions that occurred in everyday life.
+
+The search for mundane representations is consequently not a search for evidence that historical observers were generally indifferent to albinism. It is a means of testing the degree to which the surviving textual record is structured by narrative and documentary salience.
+
+This distinction may also help explain why representations of extreme whiteness appear repeatedly at points of heightened semantic significance. The unusual body may function as a prompt for interpretation precisely because it is unusual; but the historical visibility of that interpretive response may itself be an artefact of what people chose to record.
+
 ## Research Questions
 
-1. How is extreme bodily whiteness symbolically constructed in English literary culture between the early modern period and the nineteenth century?
+  phenotype >> representation >> symbolic type >> recurring configuration
 
-2. How do the semantic associations surrounding extreme bodily whiteness change across this period?
+### 1. Construction and change ###
 
-3. How do religious, literary, medical and scientific discourses interact in producing those changes?
+How is extreme bodily whiteness symbolically constructed in English literary culture between the early modern period and the nineteenth century, and how do its semantic associations change across this period?
 
-4. How and under what historical conditions do symbolic representations of extreme bodily whiteness become associated with actual bodily conditions, particularly albinism?
+### 2. Discursive interaction and medicalisation ###
 
-5. What continuities, transformations and discontinuities can be identified between earlier theological and literary representations and later medicalised understandings of bodily difference?
+How do religious, literary, medical and scientific discourses interact in shaping representations of extreme bodily whiteness, and under what historical conditions do symbolic representations become associated with actual bodily conditions, particularly albinism?
 
-6. How does the English literary tradition's treatment of extreme bodily whiteness relate to structurally comparable symbolic complexes in adjacent traditions — biblical apocrypha, classical ethnography, and Norse and Central-European folk belief - and what does this comparison reveal about what is historically specific to the English case?
+### 3. Continuity and comparison ###
+
+What continuities, transformations and discontinuities can be identified between earlier theological and literary representations of extreme bodily whiteness and later medicalised understandings of bodily difference, and how do structurally comparable complexes in adjacent traditions illuminate what is historically specific to the English case?
+
+### 4. Phenotype versus type ###
+
+Do mundane depictions of the extreme white phenotype/physiotype parallel, or differ from, depictions in which extreme whiteness functions as a symbolic type?
+
+### 5. Diachronic Semantic Search ###
+
+Can a reverse time-bracketed embedding search anchored on the modern term albino reveal recurring physiognomically similar historical types - such as the Ancient of Days, Son of Man, and Baldr - without presupposing their equivalence?
 
 ## Researcher Position and Reflexivity
 
@@ -275,3 +319,11 @@ https://interestingliterature.com/2021/04/colour-white-symbolism-in-literature-m
 Pocs Eva, 1989 - Fairies and Witches at the Boundary of South-Eastern and Central Europe (Folklore Fellows' Communications 243, Helsinki: Academia Scientiarum Fennica)
 
 Pocs Eva, "Tündéres and the Order of St Ilona, or Did the Hungarians Have Fairy Magicians?" (in her edited volume Folk Religion and Folk Belief in Central-Eastern Europe, 2008)
+
+
+Michael Moorcock: If an Eternal Champion can be represented as African and still be an albino, then Moorcock has effectively separated:phenotypic whiteness from racial/ethnic whiteness.
+
+
+### African albino wtiches of the king
+
+> Andrew Battell's account of Loango, based on his African travels around 1590–1610, is particularly important. He says that white children were occasionally born to "Negro" parents; they were called Dondos, presented to the king, and treated as his witches. They could move about with extraordinary privileges because people stood in awe of them. -- https://classic-literature.net/andrew-battell-1560-1613/the-strange-adventures-of-andrew-battell-of-leigh-in-angola-and-the-adjoining-regions/
