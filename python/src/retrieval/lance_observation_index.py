@@ -79,6 +79,15 @@ class LanceObservationIndex(ObservationIndex):
 
             rows = request.to_list()
 
+            logger.debug(
+                "[lance search] years=%s-%s model=%s table_candidates=%d k=%d",
+                self._year_start,
+                self._year_end,
+                self._model,
+                len(rows),
+                k,
+            )
+
             if rows:
                 results.append(rows)
 
@@ -512,22 +521,17 @@ class LanceObservationIndex(ObservationIndex):
             dtype=np.float32,
         )
 
-        similarities = 1.0 - distances
-
         event_ids = np.asarray(
-            [
-                row["event_id"]
-                for row in rows
-            ],
+            [row["event_id"] for row in rows],
             dtype=np.uint64,
         )
 
         order = np.argsort(
-            -similarities,
+            distances,
             kind="stable",
         )
 
         return SearchResult(
             event_ids=event_ids[order],
-            distances=similarities[order],
+            distances=distances[order],
         )

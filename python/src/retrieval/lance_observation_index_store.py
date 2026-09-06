@@ -130,6 +130,7 @@ class LanceObservationIndexStore(ObservationIndexStore):
 
         return indexes
 
+
     def diachronic_search(
         self,
         queries_by_scale: dict[str, Float32Array],
@@ -143,18 +144,11 @@ class LanceObservationIndexStore(ObservationIndexStore):
             dict[str, SearchResult],
         ]
     ]:
-        """
-        Search the physical chronological buckets in sequence.
+        """Search each physical chronological bucket independently.
 
-        Each yielded result contains exactly one physical Lance bucket.
-        Buckets are traversed chronologically in the requested direction.
-
-        Query vectors are supplied independently for each scale because the
-        three embedding spaces are distinct.
-
-        Failure mode:
-            A requested scale without a query vector is rejected rather than
-            silently substituting a vector from another embedding space.
+        Each scale is searched independently within the current bucket. The
+        retriever is responsible for merging those scale results and applying the
+        final k limit across scales.
         """
         if k <= 0:
             raise ValueError("k must be positive")
@@ -164,7 +158,9 @@ class LanceObservationIndexStore(ObservationIndexStore):
                 f"invalid direction: {direction!r}"
             )
 
-        scales = space.resolve_scales( set(self._available_scales) )
+        scales = space.resolve_scales(
+            set(self._available_scales)
+        )
 
         if not scales:
             raise ValueError(
@@ -200,18 +196,18 @@ class LanceObservationIndexStore(ObservationIndexStore):
 
             indexes = self.get(bucket_space)
 
-            results = {}
+            results_by_scale: dict[str, SearchResult] = {}
 
             for scale in scales:
-                results[scale] = indexes[scale].search(
+                results_by_scale[scale] = indexes[scale].search(
                     queries_by_scale[scale],
                     k=k,
                 )
 
             yield (
-                bucket_start,
-                bucket_end,
-            ), results
+                (bucket_start, bucket_end),
+                results_by_scale,
+            )
 
     def _buckets_for_search(
         self,
@@ -226,14 +222,15 @@ class LanceObservationIndexStore(ObservationIndexStore):
         logical range such as 1476–1920 from being split at arbitrary
         boundaries that do not correspond to the stored ANN indexes.
         """
+        scales = space.resolve_scales(
+            set(self._available_scales)
+        )
+
         if space.years is None:
-            raise ValueError(
-                "diachronic traversal requires an explicit year range"
-            )
-
-        requested_start, requested_end = space.years
-
-        scales = space.resolve_scales( set(self._available_scales) )
+            requested_start = None
+            requested_end = None
+        else:
+            requested_start, requested_end = space.years
 
         buckets = set()
 
@@ -246,10 +243,16 @@ class LanceObservationIndexStore(ObservationIndexStore):
             if table_scale not in scales:
                 continue
 
-            if bucket_end < requested_start:
+            if (
+                requested_start is not None
+                and bucket_end < requested_start
+            ):
                 continue
 
-            if bucket_start > requested_end:
+            if (
+                requested_end is not None
+                and bucket_start > requested_end
+            ):
                 continue
 
             buckets.add(

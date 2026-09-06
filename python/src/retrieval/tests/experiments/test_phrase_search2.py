@@ -77,14 +77,18 @@ def main() -> None:
     logger.info("RESULTS")
     logger.info("=" * 70)
 
+    all_results = []
+
     for (bucket_start, bucket_end), bucket_results in results:
+        all_results.extend(bucket_results)
+
         logger.info("")
         logger.info(
             f"BUCKET {bucket_start}-{bucket_end}"
         )
         logger.info("-" * 70)
 
-        for rank, result in enumerate(bucket_results, start=1):
+        for rank, result in enumerate(bucket_results[:5], start=1):
             observation = result.observation
 
             logger.info(
@@ -98,6 +102,30 @@ def main() -> None:
             logger.info(
                 f"    {result.text}"
             )
+
+    all_results.sort(
+        key=lambda result: result.distance,
+    )
+
+    logger.info("")
+    logger.info("")
+    logger.info("GLOBAL TOP 50")
+    logger.info("=" * 70)
+
+    for rank, result in enumerate(all_results[:50], start=1):
+        observation = result.observation
+
+        logger.info(
+            f"{rank:>2}. "
+            f"{result.distance:.6f} "
+            f"{result.event_id} "
+            f"{observation['doc_id']} "
+            f"{observation['token']!r}"
+        )
+
+        logger.info(
+            f"    {result.text}"
+        )
 
     logger.info("." * 70)
 

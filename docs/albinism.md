@@ -68,11 +68,11 @@ This distinction may also help explain why representations of extreme whiteness 
 
 ### 1. Construction and change ###
 
-How is extreme bodily whiteness symbolically constructed in English literary culture between the early modern period and the nineteenth century, and how do its semantic associations change across this period?
+How is extreme bodily whiteness symbolically constructed in English literary culture between the early modern period and the nineteenth century, and how do its semantic associations change across this period? To include detailed context of any typology found the earliest period covered (ie references to Noah should situate the subject not just as received but as he was transmitted and evidenced earliest).
 
 ### 2. Discursive interaction and medicalisation ###
 
-How do religious, literary, medical and scientific discourses interact in shaping representations of extreme bodily whiteness, and under what historical conditions do symbolic representations become associated with actual bodily conditions, particularly albinism?
+How do religious, literary, medical and scientific discourses interact in shaping representations of the body of 'the other', specifically examining extreme bodily whiteness, and under what historical conditions do symbolic representations become associated with actual bodily conditions, particularly albinism?
 
 ### 3. Continuity and comparison ###
 

@@ -29,7 +29,7 @@ class IndexedObservationRetriever(ObservationRetriever):
         space: SearchSpace,
         k: int,
         direction: Literal["forward", "backward"] = "forward",
-    ) -> Iterator[tuple[tuple[int, int], list[SearchResult]]]:
+    ) -> Iterator[tuple[tuple[int, int], list[ObservationContext]]]:
         """Search the requested chronology one physical bucket at a time.
 
         Bucket boundaries are owned by the index store; callers specify only
@@ -39,10 +39,16 @@ class IndexedObservationRetriever(ObservationRetriever):
         appropriate for phrase queries, where the query has one representation
         while the observation index may expose multiple retrieval scales.
 
-        The method yields buckets in chronological traversal order and never
-        combines observations from different buckets into one global ranking.
+        Results from all requested scales are merged within each bucket and
+        ranked by distance. Observations from different buckets are never
+        combined into one global ranking.
         """
-        scales = space.resolve_scales( set(self._index_store.available_scales) )
+        if k <= 0:
+            raise ValueError("k must be positive")
+
+        scales = space.resolve_scales(
+            set(self._index_store.available_scales)
+        )
 
         queries_by_scale = {
             scale: query
@@ -55,17 +61,47 @@ class IndexedObservationRetriever(ObservationRetriever):
             k=k,
             direction=direction,
         ):
-            results = []
+            results: list[ObservationContext] = []
 
             for scale in scales:
-                for result in results_by_scale[scale]:
-                    results.append(
-                        self._with_context(result)
+                results.extend(
+                    self._context.get_many(
+                        results_by_scale[scale],
                     )
+                )
+
+            best_by_event_id: dict[int, ObservationContext] = {}
+
+            for result in results:
+                existing = best_by_event_id.get(result.event_id)
+
+                if existing is None or result.distance < existing.distance:
+                    best_by_event_id[result.event_id] = result
+
+            results = list(best_by_event_id.values())
 
             results.sort(
-                key=lambda result: result.distance
+                key=lambda result: result.distance,
             )
+
+            if len(results) > k:
+                results = results[:k]
+
+            yield bucket, results
+
+
+            results: list[ObservationContext] = []
+
+            for scale in scales:
+                results.extend(
+                    self._context.get_many(
+                        results_by_scale[scale],
+                    )
+                )
+
+            results.sort( key=lambda result: result.distance )
+            if len(results) > k:
+                results = results[:k]
 
             yield bucket, results
 
@@ -90,7 +126,7 @@ class IndexedObservationRetriever(ObservationRetriever):
                 query,
                 k=k,
             )
-            for index in indexes
+            for index in indexes.values()
         ]
 
         event_ids = np.concatenate(
@@ -147,7 +183,7 @@ class IndexedObservationRetriever(ObservationRetriever):
                 k=k,
                 oversample=oversample,
             )
-            for index in indexes
+            for index in indexes.values()
         ]
 
         merged_results: list[SearchResult] = []

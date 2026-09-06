@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
+from typing import Literal, Iterator
+
 
 from .models import (
     BatchSearchResult,
     Float32Array,
     SearchResult,
+    SearchSpace
 )
 
 
@@ -37,3 +40,4 @@ class ObservationIndex(ABC):
         than a property of the global SearchSpace.
         """
         raise NotImplementedError
+
