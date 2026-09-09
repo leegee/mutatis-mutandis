@@ -39,24 +39,39 @@ def reciprocal_rank_fusion(
 
 
 def multiscale_search(
-    indexes: dict[str, LanceObservationIndex],
+    neighbour_indexes: dict[str, LanceObservationIndex],
     queries_by_scale: dict[str, np.ndarray],
     scales: tuple[str, ...],
     top_n: int,
     *,
     rrf_k: int = 60,
     oversample: int = 5,
+    exclude_event_ids: tuple[int, ...] | None = None,
 ) -> list[list[dict]]:
     """
-    Search the selected Lance indexes and fuse their rankings with RRF.
+    Search an explicit neighbour population and fuse its rankings with RRF.
 
-    Query vectors are supplied by the caller because the caller owns the
-    mapping from seed observations to their canonical embeddings.
+    Query vectors belong to the seed population and are supplied separately.
+    neighbour_indexes define the observations eligible to answer those
+    queries.
 
-    Failure mode:
-        Every selected scale must have an index and a query array with the
-        same number of queries. A mismatch would otherwise silently associate
-        neighbours with the wrong seed.
+    Each query may exclude its own seed event. Exclusion occurs before RRF
+    so that a seed cannot consume a retrieval slot or contribute to its
+    fused ranking.
+
+    Failure modes:
+        A missing scale index or query array is an explicit configuration
+        error.
+
+        All scales must contain the same number of query vectors. Otherwise
+        results could be associated with the wrong seed.
+
+        If exclude_event_ids is supplied, it must contain exactly one event
+        ID per query.
+
+        Oversampling is applied by the observation index before population
+        exclusions so that excluded candidates do not unnecessarily reduce
+        the final top_n.
     """
     if top_n <= 0:
         raise ValueError("top_n must be positive")
@@ -71,15 +86,14 @@ def multiscale_search(
         raise ValueError("at least one scale is required")
 
     per_scale = {}
-
     query_count = None
 
     for scale in scales:
-        index = indexes.get(scale)
+        index = neighbour_indexes.get(scale)
 
         if index is None:
             raise KeyError(
-                f"Missing Lance index for scale={scale}"
+                f"Missing neighbour index for scale={scale}"
             )
 
         queries = queries_by_scale.get(scale)
@@ -116,9 +130,29 @@ def multiscale_search(
     if query_count is None:
         return []
 
+    if exclude_event_ids is not None:
+        if len(exclude_event_ids) != query_count:
+            raise ValueError(
+                "exclude_event_ids must contain exactly one "
+                "event ID per query"
+            )
+
+        excluded_by_query = tuple(
+            int(event_id)
+            for event_id in exclude_event_ids
+        )
+    else:
+        excluded_by_query = None
+
     fused = []
 
     for query_index in range(query_count):
+        excluded_event_id = (
+            excluded_by_query[query_index]
+            if excluded_by_query is not None
+            else None
+        )
+
         scale_scores = {}
 
         for scale in scales:
@@ -130,13 +164,14 @@ def multiscale_search(
                     result.event_ids[query_index],
                     result.distances[query_index],
                 )
-                if int(event_id) != -1
+                if (
+                    int(event_id) != -1
+                    and int(event_id) != excluded_event_id
+                )
             }
 
         ranked_lists = [
-            list(
-                scale_scores[scale].keys()
-            )
+            list(scale_scores[scale].keys())
             for scale in scales
         ]
 
@@ -150,6 +185,7 @@ def multiscale_search(
             [
                 {
                     "event_id": event_id,
+                    "rank": rank,
                     "rrf_score": rrf_score,
                     "score": rrf_score,
                     "score_local": (
@@ -171,7 +207,11 @@ def multiscale_search(
                         ).get(event_id)
                     ),
                 }
-                for event_id, rrf_score in fused_ids
+                for rank, (event_id, rrf_score)
+                in enumerate(
+                    fused_ids,
+                    start=1,
+                )
             ]
         )
 

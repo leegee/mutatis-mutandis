@@ -1,26 +1,36 @@
 """
-Tier 2 retrieval and result assembly.
+Tier 2 seed selection, neighbour retrieval, and result assembly.
 
 PostgreSQL is authoritative for Tier 1 event identity and provenance.
 Lance is authoritative for embedding geometry.
 
-Tier 2 searches each seed only against observations from the seed's
-publication year. Temporal restriction therefore belongs to the Lance
-search population, while event metadata comes from PostgreSQL.
+Tier 2 has two explicit stages:
 
-Tier 2 does not repair missing vectors and does not maintain a second
-observation store. A repaired Tier 1 event becomes visible automatically
-when the current Lance tables are opened.
+    1. Seed selection
+       PostgreSQL selects the observations that constitute the current
+       conceptual query population.
+
+    2. Neighbour retrieval
+       Lance searches those seed observations against an explicitly chosen
+       observation population.
+
+A seed is an event selected for querying. A neighbour is an event returned
+by semantic retrieval. Retrieval must not implicitly promote neighbours to
+seeds.
+
+Temporal restriction is a property of the neighbour search population, not
+of seed selection.
 
 Failure mode:
-    A seed event may exist in PostgreSQL without a corresponding vector
-    in Lance. The caller must treat that as a Tier 1 integrity failure,
-    rather than silently reconstructing the observation here.
+    A seed event may exist in PostgreSQL without a corresponding vector in
+    Lance. This is a Tier 1 integrity failure; Tier 2 must not silently
+    reconstruct or otherwise repair it.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any, Iterable
 
 from lib.corpus_logging import logger
@@ -29,10 +39,25 @@ from retrieval.models import SCALES
 
 K = 60
 RRF_K = 60
-OVERSAMPLE = 5
-BATCH_SIZE = 32 # 128
+OVERSAMPLE = 2
+BATCH_SIZE = 32
 
 _NO_WPOS = -1
+
+
+@dataclass(frozen=True, slots=True)
+class SeedPopulation:
+    """
+    Immutable description of the observations selected as query seeds.
+
+    Seed selection is independent of neighbour retrieval. The same event may
+    belong to multiple conceptual seed populations.
+    """
+    concept_name: str
+    event_ids: tuple[int, ...]
+    by_year: dict[int, tuple[int, ...]]
+    forms: frozenset[str]
+    false_positives: frozenset[str]
 
 
 def _normalise_forms(values: Iterable[str]) -> set[str]:
@@ -122,18 +147,38 @@ def _fetch_event_metadata(
     return metadata
 
 
+def _reconstruct_seed_queries(
+    *,
+    indexes,
+    seed_event_ids,
+    scales,
+) -> dict[str, Any]:
+    """
+    Materialise the embeddings required to query a seed batch.
+
+    Lance remains the authoritative embedding store. The returned arrays are
+    transient query vectors and are not a second observation store.
+    """
+    return {
+        scale: indexes[scale].reconstruct_many(
+            seed_event_ids
+        )
+        for scale in scales
+    }
+
+
 def resolve_concept_positions(
     *,
     connection,
     concept_name,
     concept,
     false_positives=None,
-):
+) -> SeedPopulation:
     """
-    Resolve lexical seed events directly from PostgreSQL.
+    Resolve the lexical observations that constitute a concept's seeds.
 
-    PostgreSQL is the source of truth for event identity. No observation
-    store is involved.
+    PostgreSQL is the source of truth for seed identity. No Lance lookup or
+    neighbour retrieval occurs here.
     """
     forms = _normalise_forms(
         concept.get("forms", [])
@@ -152,13 +197,13 @@ def resolve_concept_positions(
     )
 
     if not forms:
-        return {
-            "forms": forms,
-            "false_positives": false_positives,
-            "event_ids": [],
-            "event_ids_set": set(),
-            "by_year": {},
-        }
+        return SeedPopulation(
+            concept_name=concept_name,
+            event_ids=(),
+            by_year={},
+            forms=frozenset(),
+            false_positives=frozenset(false_positives),
+        )
 
     with connection.cursor() as cursor:
         if false_positives:
@@ -186,15 +231,22 @@ def resolve_concept_positions(
 
         rows = cursor.fetchall()
 
-    event_ids = [
+    event_ids = tuple(
         int(row[0])
         for row in rows
-    ]
+    )
 
     by_year: dict[int, list[int]] = defaultdict(list)
 
     for event_id, year in rows:
+        if year is None:
+            continue
         by_year[int(year)].append(int(event_id))
+
+    resolved_by_year = {
+        year: tuple(ids)
+        for year, ids in by_year.items()
+    }
 
     logger.info(
         "[tier2] %s: %d seed events",
@@ -202,13 +254,13 @@ def resolve_concept_positions(
         len(event_ids),
     )
 
-    return {
-        "forms": forms,
-        "false_positives": false_positives,
-        "event_ids": event_ids,
-        "event_ids_set": set(event_ids),
-        "by_year": dict(by_year),
-    }
+    return SeedPopulation(
+        concept_name=concept_name,
+        event_ids=event_ids,
+        by_year=resolved_by_year,
+        forms=frozenset(forms),
+        false_positives=frozenset(false_positives),
+    )
 
 
 def _window_metadata(
@@ -234,7 +286,7 @@ def _window_metadata(
     return window_id, token_pos
 
 
-def _build_batch_events(
+def _build_seed_results(
     *,
     seed_event_ids,
     neighbours,
@@ -253,20 +305,12 @@ def _build_batch_events(
         neighbours_out = []
 
         for item in seed_neighbours:
-            neighbour_id = int(
-                item["event_id"]
-            )
-
-            if neighbour_id == seed_event_id:
-                continue
+            neighbour_id = int( item["event_id"] )
 
             metadata = metadata_by_id.get(neighbour_id)
 
             if metadata is None:
-                raise RuntimeError(
-                    "Lance returned an event absent from PostgreSQL: "
-                    f"{neighbour_id}"
-                )
+                raise RuntimeError( f"Lance returned an event absent from PostgreSQL: {neighbour_id}" )
 
             token = str(metadata["token"])
 
@@ -314,8 +358,7 @@ def _build_batch_events(
                     "score_local": item["score_local"],
                     "score_medium": item["score_medium"],
                     "score_broad": item["score_broad"],
-                    "depth": 1,
-                    "via_event_id": None,
+                    "rank": item["rank"],
                 }
             )
 
@@ -363,7 +406,7 @@ def _build_batch_events(
     return output
 
 
-def iter_concept_batches(
+def iter_neighbour_batches(
     *,
     connection,
     indexes_by_year,
@@ -376,14 +419,15 @@ def iter_concept_batches(
     batch_size,
 ):
     """
-    Yield bounded Tier 2 batches.
-
-    PostgreSQL supplies seed identity and provenance. Lance supplies the
-    seed vectors and performs temporally restricted ANN retrieval.
-
-    Each seed is searched only against the Lance index for its publication
-    year. Multiscale fusion therefore occurs within a single chronological
+    Retrieve first-order semantic neighbours for an established seed
     population.
+
+    This function does not select seeds. Every event in seed_event_ids was
+    selected by the preceding seed-selection stage.
+
+    Each seed is searched against the observation population represented by
+    its year-filtered Lance index. Retrieved observations remain neighbours;
+    they are not promoted to seeds by this operation.
 
     Failure mode:
         A seed year without a corresponding temporal index is a construction
@@ -421,7 +465,7 @@ def iter_concept_batches(
             )
             year_groups[year].append(local_index)
 
-        batch_events = [
+        batch_results = [
             None
             for _ in seed_batch
         ]
@@ -443,20 +487,20 @@ def iter_concept_batches(
             # PostgreSQL establishes event identity, but only Lance owns the
             # corresponding embedding. Missing vectors therefore indicate a
             # broken Tier 1 completeness invariant.
-            queries_by_scale = {
-                scale: indexes[scale].reconstruct_many(
-                    year_seed_ids
-                )
-                for scale in scales
-            }
+            queries_by_scale = _reconstruct_seed_queries(
+                indexes=indexes,
+                seed_event_ids=year_seed_ids,
+                scales=scales,
+            )
 
             neighbours = multiscale_search(
-                indexes=indexes,
+                neighbour_indexes=indexes,
                 queries_by_scale=queries_by_scale,
                 scales=scales,
                 top_n=top_n,
                 rrf_k=rrf_k,
                 oversample=oversample,
+                exclude_event_ids=tuple(year_seed_ids),
             )
 
             referenced_ids = set(year_seed_ids)
@@ -474,7 +518,7 @@ def iter_concept_batches(
                 )
             )
 
-            events = _build_batch_events(
+            events = _build_seed_results(
                 seed_event_ids=year_seed_ids,
                 neighbours=neighbours,
                 metadata_by_id=metadata_by_id,
@@ -485,9 +529,9 @@ def iter_concept_batches(
                 local_indices,
                 events,
             ):
-                batch_events[local_index] = event
+                batch_results[local_index] = event
 
         yield {
             "type": "batch",
-            "events": batch_events,
+            "events": batch_results,
         }

@@ -126,6 +126,7 @@ class LanceObservationIndex(ObservationIndex):
             distances=converted.distances[order],
         )
 
+    #
     def batch_search(
         self,
         queries: Float32Array,
@@ -134,15 +135,21 @@ class LanceObservationIndex(ObservationIndex):
         oversample: int = 1,
     ) -> BatchSearchResult:
         """
-        Search all queries in each Lance table using LanceDB's native
-        multi-query search API, then merge the chronological table results.
+        Search each query independently and merge results across tables.
 
-        LanceDB returns a query_index for each result row. That index is the
-        invariant linking a result back to its input query; losing it would
-        silently associate neighbours with the wrong seed.
+        The installed LanceDB version does not provide native multi-query
+        result correlation, so each query is executed as a normal
+        one-dimensional vector search. Queries are processed in chunks so
+        that Python never holds the result dictionaries for the entire
+        workset at once.
+
+        Each query produces at most k * oversample candidates per physical
+        table. Candidates are merged and reduced to the requested k results
+        before moving on to the next query chunk.
         """
         if k <= 0:
             raise ValueError("k must be positive")
+
         if oversample <= 0:
             raise ValueError("oversample must be positive")
 
@@ -151,8 +158,14 @@ class LanceObservationIndex(ObservationIndex):
 
         if query_count == 0:
             return BatchSearchResult(
-                event_ids=np.empty((0, 0), dtype=np.uint64),
-                distances=np.empty((0, 0), dtype=np.float32),
+                event_ids=np.empty(
+                    (0, 0),
+                    dtype=np.uint64,
+                ),
+                distances=np.empty(
+                    (0, 0),
+                    dtype=np.float32,
+                ),
             )
 
         search_k = k * oversample
@@ -168,87 +181,109 @@ class LanceObservationIndex(ObservationIndex):
             self._year_end,
         )
 
-        per_query: list[list[tuple[int, float]]] = [
-            []
-            for _ in range(query_count)
-        ]
+        # Keep the number of live Lance result sets bounded. This is
+        # deliberately independent of Lance's native multi-query support.
+        query_chunk_size = 32
 
-        for table in self._tables:
-            request = (
-                table
-                .search(
-                    query_array,
-                    vector_column_name="vector",
-                )
-                .nprobes(self._nprobes)
-                .limit(search_k)
-                .select(["event_id", "_distance"])
+        result_event_ids: list[np.ndarray] = []
+        result_distances: list[np.ndarray] = []
+
+        for chunk_start in range(0, query_count, query_chunk_size):
+            chunk_end = min(
+                chunk_start + query_chunk_size,
+                query_count,
             )
 
-            request = self._apply_filter(request, prefilter=True)
-            rows = request.to_list()
+            chunk_queries = query_array[chunk_start:chunk_end]
+            chunk_count = chunk_queries.shape[0]
 
-            for row in rows:
-                query_index = int(row["query_index"])
-                event_id = int(row["event_id"])
-                distance = float(row["_distance"])
+            chunk_event_ids = np.empty(
+                (chunk_count, k),
+                dtype=np.uint64,
+            )
+            chunk_distances = np.empty(
+                (chunk_count, k),
+                dtype=np.float32,
+            )
 
-                if not 0 <= query_index < query_count:
-                    raise RuntimeError(
-                        f"Lance returned invalid query_index={query_index} "
-                        f"for {query_count} queries"
+            for local_query_index, single_query in enumerate(
+                chunk_queries
+            ):
+                candidates: list[tuple[int, float]] = []
+
+                for table in self._tables:
+                    request = (
+                        table
+                        .search(
+                            single_query,
+                            vector_column_name="vector",
+                        )
+                        .nprobes(self._nprobes)
+                        .limit(search_k)
+                        .select(["event_id", "_distance"])
                     )
 
-                per_query[query_index].append(
-                    (event_id, distance)
+                    request = self._apply_filter(
+                        request,
+                        prefilter=True,
+                    )
+
+                    rows = request.to_list()
+
+                    candidates.extend(
+                        (
+                            int(row["event_id"]),
+                            float(row["_distance"]),
+                        )
+                        for row in rows
+                    )
+
+                    # The Lance result dictionaries are no longer needed
+                    # after their scalar values have been extracted.
+
+                candidates.sort(
+                    key=lambda item: item[1],
                 )
 
-        widths = [
-            min(k, len(rows))
-            for rows in per_query
-        ]
+                selected = candidates[:k]
 
-        width = min(widths, default=0)
+                if len(selected) != k:
+                    raise RuntimeError(
+                        "Lance returned insufficient neighbours: "
+                        f"query_index={chunk_start + local_query_index} "
+                        f"expected={k} "
+                        f"got={len(selected)}"
+                    )
 
-        if width == 0:
-            return BatchSearchResult(
-                event_ids=np.empty(
-                    (query_count, 0),
-                    dtype=np.uint64,
-                ),
-                distances=np.empty(
-                    (query_count, 0),
-                    dtype=np.float32,
-                ),
+                chunk_event_ids[local_query_index] = [
+                    event_id
+                    for event_id, _ in selected
+                ]
+
+                chunk_distances[local_query_index] = [
+                    distance
+                    for _, distance in selected
+                ]
+
+            result_event_ids.append(chunk_event_ids)
+            result_distances.append(chunk_distances)
+
+            logger.debug(
+                "[lance batch_search] completed queries %d-%d/%d",
+                chunk_start,
+                chunk_end - 1,
+                query_count,
             )
 
-        event_ids = np.empty(
-            (query_count, width),
-            dtype=np.uint64,
-        )
-        distances = np.empty(
-            (query_count, width),
-            dtype=np.float32,
-        )
-
-        for query_index, rows in enumerate(per_query):
-            # Lance distance is lower-is-better.
-            rows.sort(key=lambda item: item[1])
-
-            selected = rows[:width]
-
-            event_ids[query_index] = [
-                event_id
-                for event_id, _ in selected
-            ]
-            distances[query_index] = [
-                distance
-                for _, distance in selected
-            ]
-
         return BatchSearchResult(
-            event_ids=event_ids,
-            distances=distances,
+            event_ids=np.concatenate(
+                result_event_ids,
+                axis=0,
+            ),
+            distances=np.concatenate(
+                result_distances,
+                axis=0,
+            ),
         )
 
 

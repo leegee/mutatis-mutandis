@@ -1,15 +1,22 @@
 """
-Tier 2 command-line runner.
+Run one concept and persist its Tier 2 result.
 
-This module owns orchestration only.
+Seed selection is performed independently of neighbour retrieval.
 
-PostgreSQL is authoritative for Tier 1 event identity and provenance.
-Lance is authoritative for embedding geometry.
-The retrieval algorithm itself lives in tier2.analysis.
+Current retrieval configuration:
+    Seeds are selected from candidate_years. Each seed is then searched
+    against the observation population for its own publication year.
+
+The retrieval configuration is persisted with the result so that a
+SQLite database records not only what was found, but under which
+analytical conditions it was found.
 
 Failure mode:
-    Tier 2 must not silently compensate for a broken Tier 1
-    PostgreSQL/Lance completeness invariant.
+    candidate_years currently defines both the seed workset and the
+    available year-specific neighbour indexes. This is valid for the
+    current same-publication-year retrieval configuration but must not
+    become an implicit assumption when broader neighbour populations
+    are introduced.
 """
 
 from __future__ import annotations
@@ -23,22 +30,22 @@ from lib.corpus_config import (
     CORPUS_TIER2_DB_PATH,
     LANCE_INDEXES_DIR,
 )
+from lib.macberth import MACBERTH_MODEL_NAME
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from retrieval.lance_observation_index_store import (
     LanceObservationIndexStore,
 )
 from retrieval.models import SCALES, SearchSpace
+from tier2.sqlite import write_tier2_sqlite
 from tier2.analysis import (
     BATCH_SIZE,
     K,
     OVERSAMPLE,
     RRF_K,
-    iter_concept_batches,
+    iter_neighbour_batches,
     resolve_concept_positions,
 )
-from tier2.sqlite import write_tier2_sqlite
-
 
 def _available_event_years(connection) -> tuple[int, ...]:
     """
@@ -131,11 +138,14 @@ def _build_indexes_by_year(
     Build one logical Lance index set per publication year.
 
     The physical Lance tables remain chronological 50-year buckets. The
-    observation index store maps a single publication year onto the
-    physical bucket containing that year.
+    observation index store maps a single publication year onto the physical
+    bucket containing that year.
 
-    This preserves the Tier 2 invariant that a seed from year Y is searched
-    only against observations from year Y.
+    Current retrieval configuration:
+        A seed from year Y is searched against observations from year Y.
+
+    This temporal restriction belongs to the selected neighbour population,
+    not to seed identity.
     """
     store = LanceObservationIndexStore(
         lance_root,
@@ -185,9 +195,18 @@ def run_lance_tier2(
     """
     Run one concept and persist its Tier 2 result.
 
-    Retrieval remains in tier2.analysis. This function only resolves the
-    workset, consumes batches, and hands the completed result to the
-    established SQLite export layer.
+    Seed selection is performed independently of neighbour retrieval.
+    Temporal restriction currently means that each seed is searched against
+    the Lance index for its own publication year.
+
+    The retrieval configuration is persisted with the result so that a
+    SQLite database records not only what was found, but under which
+    analytical conditions it was found.
+
+    Failure mode:
+        candidate_years controls the seed workset. It must not silently be
+        interpreted as the complete definition of the neighbour population
+        once broader search populations are supported.
     """
     started = time.perf_counter()
 
@@ -195,8 +214,6 @@ def run_lance_tier2(
         "[tier2] resolving concept=%s",
         concept_name,
     )
-
-    resolve_started = time.perf_counter()
 
     resolved = resolve_concept_positions(
         connection=connection,
@@ -206,33 +223,30 @@ def run_lance_tier2(
     )
 
     logger.info(
-        "[tier2] resolved concept=%s in %.3fs",
-        concept_name,
-        time.perf_counter() - resolve_started,
+        "[tier2] seed population: %d events across %d years",
+        len(resolved.event_ids),
+        len(resolved.by_year),
     )
 
     seed_ids = [
         event_id
         for year in candidate_years
-        for event_id in resolved["by_year"].get(
-            year,
-            (),
-        )
+        for event_id in resolved.by_year.get(year, ())
     ]
 
     logger.info(
-        "[tier2] query workset: %d seed events, search years=%s-%s",
+        "[tier2] seed workset: %d events, years=%s-%s",
         len(seed_ids),
         min(candidate_years) if candidate_years else None,
         max(candidate_years) if candidate_years else None,
     )
 
-    output_events = []
+    output_seed_results = []
 
     search_started = time.perf_counter()
     batch_count = 0
 
-    for batch in iter_concept_batches(
+    for batch in iter_neighbour_batches(
         connection=connection,
         indexes_by_year=indexes_by_year,
         seed_event_ids=seed_ids,
@@ -240,10 +254,10 @@ def run_lance_tier2(
         top_n=top_n,
         rrf_k=rrf_k,
         oversample=oversample,
-        false_positives=resolved["false_positives"],
+        false_positives=resolved.false_positives,
         batch_size=batch_size,
     ):
-        output_events.extend(
+        output_seed_results.extend(
             batch["events"]
         )
         batch_count += 1
@@ -256,7 +270,7 @@ def run_lance_tier2(
     logger.info(
         "[tier2] search complete: %d batches, %d seed events, %.3fs",
         batch_count,
-        len(output_events),
+        len(output_seed_results),
         search_time,
     )
 
@@ -267,8 +281,15 @@ def run_lance_tier2(
     write_tier2_sqlite(
         db_path=sqlite_path,
         concept_name=concept_name,
-        events=output_events,
+        events=output_seed_results,
         clear=clear,
+        seed_population="lexical_forms",
+        neighbour_population="same_publication_year",
+        scales=scales,
+        top_n=top_n,
+        rrf_k=rrf_k,
+        oversample=oversample,
+        model=MACBERTH_MODEL_NAME,
     )
 
     write_time = (
@@ -446,9 +467,11 @@ def main() -> None:
     connection = get_connection()
 
     try:
-        available_years = _available_event_years( connection )
+        available_years = _available_event_years(
+            connection
+        )
 
-        logger.debug( "[tier2] available event years: %s", available_years, )
+        logger.info( "[tier2] available event years: %s", available_years, )
 
         (
             candidate_years,
@@ -472,7 +495,9 @@ def main() -> None:
             scales=scales,
         )
 
-        logger.info( "[tier2] prepared %d temporal index sets in %.3fs", len(indexes_by_year), time.perf_counter() - index_started, )
+        logger.info( "[tier2] prepared %d temporal index sets in %.3fs", len(indexes_by_year),
+            time.perf_counter() - index_started,
+        )
 
         false_positives = (
             [

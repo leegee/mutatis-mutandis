@@ -229,3 +229,15 @@ Michael Moorcock: If an Eternal Champion can be represented as African and still
 ### African albino wtiches of the king
 
 > Andrew Battell's account of Loango, based on his African travels around 1590–1610, is particularly important. He says that white children were occasionally born to "Negro" parents; they were called Dondos, presented to the king, and treated as his witches. They could move about with extraordinary privileges because people stood in awe of them. -- https://classic-literature.net/andrew-battell-1560-1613/the-strange-adventures-of-andrew-battell-of-leigh-in-angola-and-the-adjoining-regions/
+
+
+
+QUADRIGA - CHRISTIAN PARDES, kinda
+
+                  ┌── literal/physical
+                  │
+WHITE ────────────┼── social/symbolic
+                  │
+                  ├── moral/religious
+                  │
+                  └── metaphysical

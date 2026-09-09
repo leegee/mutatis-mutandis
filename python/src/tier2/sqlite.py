@@ -1,10 +1,42 @@
 """
-tier2/sqlite.py
+Tier 2 persistence.
+
+PostgreSQL is authoritative for corpus event identity and provenance.
+Lance is authoritative for embedding geometry.
+
+Tier 2 SQLite stores analytical provenance and derived products:
+
+    concepts
+        conceptual queries being analysed
+
+    concept_seeds
+        deliberate membership of corpus events in a concept's seed population
+
+    retrieval_runs
+        configuration and identity of one retrieval experiment
+
+    neighbour_edges
+        relationships discovered by a retrieval run
+
+    concept_aggregate
+        derived token/document/window summaries
+
+    concept_cluster_info
+        derived spatial/cluster summaries
+
+Event metadata is deliberately not duplicated here. It remains available
+from PostgreSQL through event_id.
+
+Failure mode:
+    A Tier 2 row referring to an event that no longer exists in PostgreSQL
+    represents broken cross-store provenance and should be detected by
+    validation rather than silently repaired here.
 """
 
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 from lib.corpus_logging import logger
@@ -17,54 +49,57 @@ CREATE TABLE IF NOT EXISTS concepts (
     n_events INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS events (
-    event_id         INTEGER PRIMARY KEY,
-    concept          TEXT    NOT NULL,
-    vector_id        INTEGER,
-    token            TEXT,
-    doc_id           TEXT,
-    pub_year         INTEGER,
-    token_idx        INTEGER,
-    window_id        INTEGER,
-    window_token_pos INTEGER,
-
-    nx               REAL,
-    ny               REAL,
-    gnx              REAL,
-    gny              REAL,
-    cluster_id       INTEGER,
-    cluster_label    TEXT,
-
-    FOREIGN KEY (concept) REFERENCES concepts(concept)
-);
-
-CREATE TABLE IF NOT EXISTS neighbours (
-    event_id             INTEGER NOT NULL,
-    neighbour_event_id   INTEGER NOT NULL,
-    vector_id            INTEGER,
-    token                TEXT,
-    doc_id               TEXT,
-    pub_year             INTEGER,
-    token_idx             INTEGER,
-    window_id             INTEGER,
-    window_token_pos     INTEGER,
-    score                 REAL,
-    score_local            REAL,
-    score_medium           REAL,
-    score_broad            REAL,
-
-    PRIMARY KEY (event_id, neighbour_event_id),
-    FOREIGN KEY (event_id) REFERENCES events(event_id)
-);
-
-CREATE TABLE IF NOT EXISTS concept_field_events (
-    concept  TEXT    NOT NULL,
-    event_id INTEGER NOT NULL,
-    role     TEXT    NOT NULL,
+CREATE TABLE IF NOT EXISTS concept_seeds (
+    concept       TEXT    NOT NULL,
+    event_id      INTEGER NOT NULL,
+    role          TEXT    NOT NULL,
 
     PRIMARY KEY (concept, event_id),
-    FOREIGN KEY (concept) REFERENCES concepts(concept),
-    FOREIGN KEY (event_id) REFERENCES events(event_id)
+
+    FOREIGN KEY (concept)
+        REFERENCES concepts(concept)
+);
+
+CREATE TABLE IF NOT EXISTS retrieval_runs (
+    run_id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    concept               TEXT    NOT NULL,
+    seed_population       TEXT    NOT NULL,
+    neighbour_population  TEXT    NOT NULL,
+    scales                TEXT    NOT NULL,
+    top_n                 INTEGER NOT NULL,
+    rrf_k                 INTEGER NOT NULL,
+    oversample            INTEGER NOT NULL,
+    model                 TEXT,
+    created_at            TEXT    NOT NULL,
+
+    FOREIGN KEY (concept)
+        REFERENCES concepts(concept)
+);
+
+CREATE TABLE IF NOT EXISTS neighbour_edges (
+    run_id             INTEGER NOT NULL,
+    seed_event_id      INTEGER NOT NULL,
+    neighbour_event_id INTEGER NOT NULL,
+
+    depth              INTEGER NOT NULL,
+    via_event_id       INTEGER,
+
+    rank               INTEGER NOT NULL,
+    score              REAL,
+    score_local        REAL,
+    score_medium       REAL,
+    score_broad        REAL,
+
+    PRIMARY KEY (
+        run_id,
+        seed_event_id,
+        neighbour_event_id,
+        depth,
+        via_event_id
+    ),
+
+    FOREIGN KEY (run_id)
+        REFERENCES retrieval_runs(run_id)
 );
 
 CREATE TABLE IF NOT EXISTS concept_aggregate (
@@ -77,7 +112,8 @@ CREATE TABLE IF NOT EXISTS concept_aggregate (
     window_id     INTEGER,
     count         INTEGER NOT NULL,
 
-    FOREIGN KEY (concept) REFERENCES concepts(concept)
+    FOREIGN KEY (concept)
+        REFERENCES concepts(concept)
 );
 
 CREATE TABLE IF NOT EXISTS concept_cluster_info (
@@ -93,63 +129,61 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
     description      TEXT,
 
     PRIMARY KEY (concept, cluster_id),
-    FOREIGN KEY (concept) REFERENCES concepts(concept)
+
+    FOREIGN KEY (concept)
+        REFERENCES concepts(concept)
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_concept
-    ON events(concept);
+CREATE INDEX IF NOT EXISTS idx_concept_seeds_concept
+    ON concept_seeds(concept);
 
-CREATE INDEX IF NOT EXISTS idx_events_token
-    ON events(token);
+CREATE INDEX IF NOT EXISTS idx_concept_seeds_event
+    ON concept_seeds(event_id);
 
-CREATE INDEX IF NOT EXISTS idx_events_event_id
-    ON events(event_id);
+CREATE INDEX IF NOT EXISTS idx_retrieval_runs_concept
+    ON retrieval_runs(concept);
 
-CREATE INDEX IF NOT EXISTS idx_events_doc_id
-    ON events(doc_id);
+CREATE INDEX IF NOT EXISTS idx_neighbour_edges_run
+    ON neighbour_edges(run_id);
 
-CREATE INDEX IF NOT EXISTS idx_events_concept_year
-    ON events(concept, pub_year);
+CREATE INDEX IF NOT EXISTS idx_neighbour_edges_seed
+    ON neighbour_edges(seed_event_id);
 
-CREATE INDEX IF NOT EXISTS idx_neighbours_event_id
-    ON neighbours(event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbour_edges_neighbour
+    ON neighbour_edges(neighbour_event_id);
 
-CREATE INDEX IF NOT EXISTS idx_neighbours_token
-    ON neighbours(token);
-
-CREATE INDEX IF NOT EXISTS idx_field_events_concept
-    ON concept_field_events(concept);
-
-CREATE INDEX IF NOT EXISTS idx_field_events_event
-    ON concept_field_events(event_id);
+CREATE INDEX IF NOT EXISTS idx_neighbour_edges_run_seed
+    ON neighbour_edges(run_id, seed_event_id);
 
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept
     ON concept_aggregate(concept, kind);
 """
 
-_SCHEMA_CLEAR = """
-DROP TABLE IF EXISTS concept_cluster_info;
-DROP TABLE IF EXISTS concept_aggregate;
-DROP TABLE IF EXISTS concept_field_events;
-DROP TABLE IF EXISTS neighbours;
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS concepts;
-"""
-
+_SCHEMA_CLEAR = (
+    "DELETE FROM neighbour_edges",
+    "DELETE FROM retrieval_runs",
+    "DELETE FROM concept_seeds",
+    "DELETE FROM concept_cluster_info",
+    "DELETE FROM concept_aggregate",
+    "DELETE FROM concepts",
+)
 
 _DELETE_CONCEPT = (
     "DELETE FROM concept_cluster_info WHERE concept = ?",
     "DELETE FROM concept_aggregate WHERE concept = ?",
     """
-    DELETE FROM neighbours
-    WHERE event_id IN (
-        SELECT event_id FROM events WHERE concept = ?
+    DELETE FROM neighbour_edges
+    WHERE run_id IN (
+        SELECT run_id
+        FROM retrieval_runs
+        WHERE concept = ?
     )
     """,
-    "DELETE FROM concept_field_events WHERE concept = ?",
-    "DELETE FROM events WHERE concept = ?",
+    "DELETE FROM retrieval_runs WHERE concept = ?",
+    "DELETE FROM concept_seeds WHERE concept = ?",
     "DELETE FROM concepts WHERE concept = ?",
 )
+
 
 def _maybe_float(value):
     return None if value is None else float(value)
@@ -163,18 +197,11 @@ def _aggregate_rows(
     Yield concept_aggregate rows for the retrieved neighbourhood.
 
     Token and document rankings are weighted by each neighbour's RRF-fused
-    score, not just by how many seed events happened to retrieve it. RRF
-    score is derived from rank position within each scale's L2 search
-    results, which makes it comparable across neighbours even though raw
-    L2 distance is not directly comparable across queries or scales
-    (distance scale depends on embedding dimensionality and vector norm,
-    neither of which this aggregation should assume). This keeps
-    high-frequency, weakly-related tokens (short function words, numbers,
-    etc. that surface as "hub" points across many unrelated searches) from
-    dominating the aggregate ahead of genuinely close matches.
+    score, not just by how many seed events happened to retrieve it.
 
-    Windows retain retrieval-count semantics because each local window
-    represents a concrete retrieved relationship.
+    A seed event may retrieve the same token or document more than once;
+    retain its strongest contribution so repeated retrieval of the same
+    target by one seed does not artificially inflate its aggregate.
 
     Failure mode:
         A neighbour without a local_window_id cannot contribute to
@@ -195,8 +222,6 @@ def _aggregate_rows(
             if token is not None:
                 token = str(token)
                 per_event = token_seed_weight.setdefault(token, {})
-                # A seed event may retrieve the same token more than once;
-                # keep its single best (highest-weight) contribution.
                 per_event[event_id] = max(
                     per_event.get(event_id, 0.0),
                     weight,
@@ -265,6 +290,150 @@ def _aggregate_rows(
         )
 
 
+def _normalise_scales(scales) -> str:
+    """
+    Persist scale configuration deterministically.
+
+    Retrieval provenance must not depend on the incidental ordering of a
+    caller's collection.
+    """
+    return ",".join(sorted(str(scale) for scale in scales))
+
+
+def _insert_retrieval_run(
+    con,
+    *,
+    concept_name: str,
+    seed_population: str,
+    neighbour_population: str,
+    scales,
+    top_n: int,
+    rrf_k: int,
+    oversample: int,
+    model: str | None,
+) -> int:
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    cursor = con.execute(
+        """
+        INSERT INTO retrieval_runs (
+            concept,
+            seed_population,
+            neighbour_population,
+            scales,
+            top_n,
+            rrf_k,
+            oversample,
+            model,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            concept_name,
+            seed_population,
+            neighbour_population,
+            _normalise_scales(scales),
+            int(top_n),
+            int(rrf_k),
+            int(oversample),
+            model,
+            created_at,
+        ),
+    )
+
+    return int(cursor.lastrowid)
+
+
+def _insert_seed_rows(
+    con,
+    *,
+    concept_name: str,
+    events: list[dict],
+):
+    rows = [
+        (
+            concept_name,
+            int(event["event_id"]),
+            "seed",
+        )
+        for event in events
+    ]
+
+    if not rows:
+        return
+
+    con.executemany(
+        """
+        INSERT INTO concept_seeds (
+            concept,
+            event_id,
+            role
+        )
+        VALUES (?, ?, ?)
+        """,
+        rows,
+    )
+
+
+def _insert_neighbour_edges(
+    con,
+    *,
+    run_id: int,
+    events: list[dict],
+):
+    """
+    Persist first-order retrieval relationships.
+
+    Event metadata is intentionally absent. event_id is the stable bridge
+    back to PostgreSQL, while this table records what the retrieval operation
+    discovered and the evidence supporting that relationship.
+    """
+    rows = []
+
+    for event in events:
+        seed_event_id = int(event["event_id"])
+
+        for neighbour in event.get("neighbours", []):
+            rows.append(
+                (
+                    int(run_id),
+                    seed_event_id,
+                    int(neighbour["event_id"]),
+                    1,
+                    None,
+                    int(neighbour["rank"]),
+                    _maybe_float(neighbour.get("score")),
+                    _maybe_float(neighbour.get("score_local")),
+                    _maybe_float(neighbour.get("score_medium")),
+                    _maybe_float(neighbour.get("score_broad")),
+                )
+            )
+
+    if not rows:
+        return 0
+
+    con.executemany(
+        """
+        INSERT INTO neighbour_edges (
+            run_id,
+            seed_event_id,
+            neighbour_event_id,
+            depth,
+            via_event_id,
+            rank,
+            score,
+            score_local,
+            score_medium,
+            score_broad
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+
+    return len(rows)
+
 
 def write_tier2_sqlite(
     *,
@@ -272,41 +441,66 @@ def write_tier2_sqlite(
     concept_name: str,
     events: list[dict],
     clear: bool = False,
+    seed_population: str = "lexical_forms",
+    neighbour_population: str = "temporal_year",
+    scales=("local", "medium", "broad"),
+    top_n: int = 60,
+    rrf_k: int = 60,
+    oversample: int = 5,
+    model: str | None = None,
 ):
     """
-    Write one concept's Tier 2 results to the established SQLite schema.
+    Persist one Tier 2 retrieval result.
 
-    Existing rows for this concept are removed before replacement so repeated
-    runs remain idempotent without disturbing other concepts.
+    The concept seed membership and the retrieval relationships are stored
+    separately. This allows an event to participate in multiple concepts and
+    allows the same seed/neighbour relationship to recur in different runs.
+
+    Existing analytical data for this concept is replaced when clear=False;
+    this keeps the existing concept-level output behaviour while preserving
+    the explicit provenance within the newly written result.
 
     Failure mode:
-        neighbour membership belongs to the seed event. The same neighbour
-        may therefore legitimately appear under many rows in neighbours.
-
-        Aggregates are derived from those same relationships so their meaning
-        cannot diverge from the persisted neighbour data.
+        neighbour_edges cannot use (seed_event_id, neighbour_event_id) alone
+        as a key because the same relationship may legitimately occur in
+        multiple retrieval runs.
     """
     db_path = Path(db_path)
-    db_path.parent.mkdir( parents=True, exist_ok=True, )
+    db_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    logger.info( "[tier2] writing sqlite -> %s", db_path, )
+    logger.info(
+        "[tier2] writing sqlite -> %s",
+        db_path,
+    )
 
     con = analysis_db_connection(db_path)
 
     try:
-        con.execute("PRAGMA foreign_keys = ON")
-
-        if clear:
-            logger.info("[tier2] clearing sqlite database")
-            con.executescript(_SCHEMA_CLEAR)
 
         con.executescript(_SCHEMA_INIT)
 
         con.execute("BEGIN")
+        con.execute("PRAGMA foreign_keys = ON")
+
+        if clear:
+            logger.info("[tier2] clearing sqlite database")
+            for statement in _SCHEMA_CLEAR:
+                con.execute(statement)
+
 
         for index, statement in enumerate(_DELETE_CONCEPT):
-            logger.info( "[tier2] deleting concept=%s phase=%d", concept_name, index, )
-            con.execute( statement, (concept_name,), )
+            logger.info(
+                "[tier2] deleting concept=%s phase=%d",
+                concept_name,
+                index,
+            )
+            con.execute(
+                statement,
+                (concept_name,),
+            )
 
         con.execute(
             """
@@ -322,103 +516,28 @@ def write_tier2_sqlite(
             ),
         )
 
-        event_rows = []
-        field_event_rows = []
-        neighbour_rows = []
-
-        for event in events:
-            event_id = int(event["event_id"])
-
-            event_rows.append(
-                (
-                    event_id,
-                    concept_name,
-                    None,
-                    event["token"],
-                    event["doc_id"],
-                    int(event["pub_year"]),
-                    int(event["token_idx"]),
-                    event["local_window_id"],
-                    event["local_window_token_pos"],
-                )
-            )
-
-            field_event_rows.append(
-                (
-                    concept_name,
-                    event_id,
-                    'seed',
-                )
-            )
-
-            for neighbour in event.get("neighbours", []):
-                neighbour_rows.append(
-                    (
-                        event_id,
-                        int(neighbour["event_id"]),
-                        None,
-                        neighbour["token"],
-                        neighbour["doc_id"],
-                        int(neighbour["pub_year"]),
-                        int(neighbour["token_idx"]),
-                        neighbour["local_window_id"],
-                        neighbour["local_window_token_pos"],
-                        float(neighbour["score"]),
-                        _maybe_float(neighbour.get("score_local")),
-                        _maybe_float(neighbour.get("score_medium")),
-                        _maybe_float(neighbour.get("score_broad")),
-                    )
-                )
-        con.executemany(
-            """
-            INSERT INTO events (
-                event_id,
-                concept,
-                vector_id,
-                token,
-                doc_id,
-                pub_year,
-                token_idx,
-                window_id,
-                window_token_pos
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            event_rows,
+        _insert_seed_rows(
+            con,
+            concept_name=concept_name,
+            events=events,
         )
 
-        con.executemany(
-            """
-            INSERT INTO concept_field_events (
-                concept,
-                event_id,
-                role
-            )
-            VALUES (?, ?, ?)
-            """,
-            field_event_rows,
+        run_id = _insert_retrieval_run(
+            con,
+            concept_name=concept_name,
+            seed_population=seed_population,
+            neighbour_population=neighbour_population,
+            scales=scales,
+            top_n=top_n,
+            rrf_k=rrf_k,
+            oversample=oversample,
+            model=model,
         )
 
-        con.executemany(
-            """
-            INSERT INTO neighbours (
-                event_id,
-                neighbour_event_id,
-                vector_id,
-                token,
-                doc_id,
-                pub_year,
-                token_idx,
-                window_id,
-                window_token_pos,
-                score,
-                score_local,
-                score_medium,
-                score_broad
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            neighbour_rows,
+        neighbour_count = _insert_neighbour_edges(
+            con,
+            run_id=run_id,
+            events=events,
         )
 
         aggregate_rows = list(
@@ -456,8 +575,9 @@ def write_tier2_sqlite(
 
     logger.info(
         "[tier2] sqlite write complete: "
-        "concept=%s events=%d neighbours=%d",
+        "concept=%s run=%d seeds=%d neighbours=%d",
         concept_name,
+        run_id,
         len(events),
-        len(neighbour_rows),
+        neighbour_count,
     )

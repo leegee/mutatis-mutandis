@@ -255,7 +255,7 @@ def main() -> None:
         base = {
             "event_id": eid,
             "year": h["year"],
-            "embedding_model": h.get("embedding_model"),
+            # "embedding_model": h.get("embedding_model"),
             "distance": h["_distance"],
         }
         meta = obs.get(eid)
