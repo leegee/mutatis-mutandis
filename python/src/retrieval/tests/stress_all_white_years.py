@@ -16,10 +16,14 @@ if str(ROOT) not in sys.path:
 from lib.corpus_config import LANCE_INDEXES_DIR
 from lib.corpus_db import get_connection
 from lib.macberth import MACBERTH_MODEL_NAME
+from tier2.analysis import (
+    BATCH_SIZE,
+    K,
+    OVERSAMPLE,
+    RRF_K
+)
 
 
-K = 60
-OVERSAMPLE = 1.2
 NPROBES = 20
 DIMENSIONS = 768
 

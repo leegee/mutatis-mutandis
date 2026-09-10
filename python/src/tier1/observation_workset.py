@@ -23,13 +23,13 @@ from tier1.observation_store_api import (
     DEFAULT_ENSEMBLE_WEIGHTS,
     open_observation_lookup,
 )
+from tier2.analysis import (
+    BATCH_SIZE,
+    K,
+    OVERSAMPLE,
+    RRF_K,
+)
 
-# These are deliberately the same retrieval parameters used by the current
-# multiscale Lance search. They determine the candidate population, not a
-# semantic classification threshold.
-TOP_K = 60
-RRF_K = 60
-OVERSAMPLE = 1.2
 NPROBES = 150
 
 Occurrence = tuple[str, str, int]

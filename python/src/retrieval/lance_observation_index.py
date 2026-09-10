@@ -198,7 +198,7 @@ class LanceObservationIndex(ObservationIndex):
         queries: Float32Array,
         *,
         k: int,
-        oversample: int = 1,
+        oversample: float | int = 1,
     ) -> BatchSearchResult:
         """
         Search all queries in each Lance table and merge results per query.
@@ -262,7 +262,7 @@ class LanceObservationIndex(ObservationIndex):
                 ),
             )
 
-        search_k = k * oversample
+        search_k = max(k, int(round(k * oversample)))
 
         logger.debug(
             "[lance batch_search] tables=%d queries=%d k=%d search_k=%d "
@@ -276,105 +276,25 @@ class LanceObservationIndex(ObservationIndex):
             type(self)._native_batch_supported,
         )
 
-        result_event_ids: list[np.ndarray] = []
-        result_distances: list[np.ndarray] = []
+        result_event_ids = []
+        result_distances = []
 
-        for chunk_start in range(
-            0,
-            query_count,
-            self.QUERY_CHUNK_SIZE,
-        ):
-            chunk_end = min(
-                chunk_start + self.QUERY_CHUNK_SIZE,
-                query_count,
-            )
-
+        for chunk_start in range(0, query_count, self.QUERY_CHUNK_SIZE):
+            chunk_end = min(chunk_start + self.QUERY_CHUNK_SIZE, query_count)
             chunk_queries = query_array[chunk_start:chunk_end]
-            chunk_count = chunk_queries.shape[0]
 
-            candidates_by_query = self._search_chunk(
-                chunk_queries,
-                search_k=search_k,
+            # Now returns NumPy arrays directly
+            chunk_ids, chunk_dists = self._search_chunk(
+                chunk_queries, search_k=search_k
             )
 
-            chunk_event_ids = np.empty(
-                (chunk_count, k),
-                dtype=np.uint64,
-            )
-            chunk_distances = np.empty(
-                (chunk_count, k),
-                dtype=np.float32,
-            )
-
-            shortfall_count = 0
-
-            for local_query_index, candidates in enumerate(
-                candidates_by_query
-            ):
-                # Lance distance is lower-is-better.
-                candidates.sort(
-                    key=lambda item: item[1],
-                )
-
-                selected = candidates[:k]
-                missing = k - len(selected)
-
-                if missing > 0:
-                    # Pad this query only. Other queries in the same
-                    # chunk keep their own full results -- a sparse
-                    # neighbourhood (e.g. an early, thinly-populated
-                    # chronological bucket) must not degrade recall for
-                    # queries that had plenty of genuine candidates.
-                    shortfall_count += 1
-
-                    selected = selected + [
-                        (
-                            int(self.EVENT_ID_SENTINEL),
-                            float(self.DISTANCE_SENTINEL),
-                        )
-                    ] * missing
-
-                chunk_event_ids[local_query_index] = [
-                    event_id
-                    for event_id, _ in selected
-                ]
-
-                chunk_distances[local_query_index] = [
-                    distance
-                    for _, distance in selected
-                ]
-
-            if shortfall_count:
-                logger.debug(
-                    "[lance batch_search] %d/%d queries in chunk %d-%d "
-                    "had fewer than k=%d genuine neighbours and were "
-                    "padded with sentinel entries",
-                    shortfall_count,
-                    chunk_count,
-                    chunk_start,
-                    chunk_end - 1,
-                    k,
-                )
-
-            result_event_ids.append(chunk_event_ids)
-            result_distances.append(chunk_distances)
-
-            logger.debug(
-                "[lance batch_search] completed queries %d-%d/%d",
-                chunk_start,
-                chunk_end - 1,
-                query_count,
-            )
+            # Truncate / pad to exactly k (already padded with sentinels)
+            result_event_ids.append(chunk_ids[:, :k])
+            result_distances.append(chunk_dists[:, :k])
 
         return BatchSearchResult(
-            event_ids=np.concatenate(
-                result_event_ids,
-                axis=0,
-            ),
-            distances=np.concatenate(
-                result_distances,
-                axis=0,
-            ),
+            event_ids=np.concatenate(result_event_ids, axis=0),
+            distances=np.concatenate(result_distances, axis=0),
         )
 
     def _search_chunk(
@@ -463,48 +383,85 @@ class LanceObservationIndex(ObservationIndex):
 
         return candidates_by_query
 
+
     def _search_chunk_per_query(
         self,
         chunk_queries: Float32Array,
         *,
         search_k: int,
-    ) -> list[list[tuple[int, float]]]:
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Returns two arrays of shape (chunk_count, search_k):
+            event_ids   uint64
+            distances   float32
+        Padded with EVENT_ID_SENTINEL / DISTANCE_SENTINEL when a query
+        has fewer than search_k genuine hits.
+        """
         chunk_count = chunk_queries.shape[0]
 
-        candidates_by_query: list[list[tuple[int, float]]] = [
-            []
-            for _ in range(chunk_count)
-        ]
+        # Pre-allocate the final result for the whole chunk
+        all_event_ids = np.full(
+            (chunk_count, search_k),
+            self.EVENT_ID_SENTINEL,
+            dtype=np.uint64,
+        )
+        all_distances = np.full(
+            (chunk_count, search_k),
+            self.DISTANCE_SENTINEL,
+            dtype=np.float32,
+        )
 
-        for local_query_index, single_query in enumerate(chunk_queries):
+        for local_idx, query in enumerate(chunk_queries):
+            # Collect candidates from every table that belongs to this index
+            cand_ids = []
+            cand_dists = []
+
             for table in self._tables:
                 request = (
                     table
-                    .search(
-                        single_query,
-                        vector_column_name="vector",
-                    )
+                    .search(query, vector_column_name="vector")
                     .nprobes(self._nprobes)
                     .limit(search_k)
                     .select(["event_id", "_distance"])
                 )
+                request = self._apply_filter(request, prefilter=True)
 
-                request = self._apply_filter(
-                    request,
-                    prefilter=True,
-                )
+                # Prefer Arrow → NumPy instead of .to_list()
+                # (lancedb ≥0.6 returns a pyarrow.Table from .to_arrow())
+                arrow = request.to_arrow()
+                if arrow.num_rows == 0:
+                    continue
 
-                rows = request.to_list()
+                ids = arrow.column("event_id").to_numpy(zero_copy_only=False).astype(np.uint64)
+                dists = arrow.column("_distance").to_numpy(zero_copy_only=False).astype(np.float32)
 
-                candidates_by_query[local_query_index].extend(
-                    (
-                        int(row["event_id"]),
-                        float(row["_distance"]),
-                    )
-                    for row in rows
-                )
+                cand_ids.append(ids)
+                cand_dists.append(dists)
 
-        return candidates_by_query
+            if not cand_ids:
+                continue  # already filled with sentinels
+
+            # Concatenate & keep the best search_k
+            ids = np.concatenate(cand_ids)
+            dists = np.concatenate(cand_dists)
+
+            if len(ids) > search_k:
+                order = np.argpartition(dists, search_k)[:search_k]
+                # stable sort of the selected slice
+                order = order[np.argsort(dists[order], kind="stable")]
+                ids = ids[order]
+                dists = dists[order]
+            else:
+                order = np.argsort(dists, kind="stable")
+                ids = ids[order]
+                dists = dists[order]
+
+            n = len(ids)
+            all_event_ids[local_idx, :n] = ids
+            all_distances[local_idx, :n] = dists
+
+        return all_event_ids, all_distances
+
 
     def reconstruct(
         self,

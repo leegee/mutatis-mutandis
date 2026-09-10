@@ -11,32 +11,31 @@ def reciprocal_rank_fusion(
     k: int = 60,
     top_n: int | None = None,
 ) -> list[tuple[int, float]]:
+    """Kept for backward compatibility / single-list callers."""
     scores: dict[int, float] = {}
 
     for ranked in ranked_lists:
-        for rank, event_id in enumerate(
-            ranked,
-            start=1,
-        ):
+        for rank, event_id in enumerate(ranked, start=1):
             if event_id == INVALID_EVENT_ID:
                 continue
+            scores[event_id] = scores.get(event_id, 0.0) + 1.0 / (k + rank)
 
-            scores[event_id] = (
-                scores.get(event_id, 0.0)
-                + 1.0 / (k + rank)
-            )
+    fused = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    return fused[:top_n] if top_n is not None else fused
 
-    fused = sorted(
-        scores.items(),
-        key=lambda item: item[1],
-        reverse=True,
-    )
 
-    return (
-        fused[:top_n]
-        if top_n is not None
-        else fused
-    )
+def _lookup_distance(
+    all_ids: np.ndarray,
+    all_dists: np.ndarray,
+    scale_idx: int,
+    query_idx: int,
+    event_id: int,
+) -> float | None:
+    """Return the distance for (scale, query, event_id) or None."""
+    mask = all_ids[scale_idx, query_idx] == event_id
+    if np.any(mask):
+        return float(all_dists[scale_idx, query_idx][mask][0])
+    return None
 
 
 def multiscale_search(
@@ -46,76 +45,41 @@ def multiscale_search(
     top_n: int,
     *,
     rrf_k: int = 60,
-    oversample: int = 5,
+    oversample: int | float = 1,
     exclude_event_ids: tuple[int, ...] | None = None,
 ) -> list[list[dict]]:
     """
     Search an explicit neighbour population and fuse its rankings with RRF.
 
-    Query vectors belong to the seed population and are supplied separately.
-    neighbour_indexes define the observations eligible to answer those
-    queries.
-
-    Each query may exclude its own seed event. Exclusion occurs before RRF
-    so that a seed cannot consume a retrieval slot or contribute to its
-    fused ranking.
-
-    A query whose observation population is smaller than top_n (e.g. a
-    sparse chronological bucket) may have fewer than top_n genuine
-    neighbours. batch_search() pads such rows with INVALID_EVENT_ID rather
-    than truncating other queries in the same call or raising; those
-    padded slots are filtered out here before RRF ever sees them, exactly
-    like an excluded seed event.
-
-    Failure modes:
-        A missing scale index or query array is an explicit configuration
-        error.
-
-        All scales must contain the same number of query vectors. Otherwise
-        results could be associated with the wrong seed.
-
-        If exclude_event_ids is supplied, it must contain exactly one event
-        ID per query.
-
-        Oversampling is applied by the observation index before population
-        exclusions so that excluded candidates do not unnecessarily reduce
-        the final top_n.
+    This version keeps intermediate results in NumPy arrays for as long as
+    possible and only materialises Python dicts for the final per-seed
+    result lists that the rest of the Tier-2 pipeline expects.
     """
     if top_n <= 0:
         raise ValueError("top_n must be positive")
-
     if rrf_k <= 0:
         raise ValueError("rrf_k must be positive")
-
     if oversample <= 0:
         raise ValueError("oversample must be positive")
-
     if not scales:
         raise ValueError("at least one scale is required")
 
-    per_scale = {}
-    query_count = None
+    # ------------------------------------------------------------------
+    # 1. Run the per-scale batch searches (still the dominant cost)
+    # ------------------------------------------------------------------
+    per_scale: dict[str, object] = {}
+    query_count: int | None = None
 
     for scale in scales:
         index = neighbour_indexes.get(scale)
-
         if index is None:
-            raise KeyError(
-                f"Missing neighbour index for scale={scale}"
-            )
+            raise KeyError(f"Missing neighbour index for scale={scale}")
 
         queries = queries_by_scale.get(scale)
-
         if queries is None:
-            raise KeyError(
-                f"Missing queries for scale={scale}"
-            )
+            raise KeyError(f"Missing queries for scale={scale}")
 
-        queries = np.asarray(
-            queries,
-            dtype=np.float32,
-        )
-
+        queries = np.asarray(queries, dtype=np.float32)
         if queries.ndim != 2:
             raise ValueError(
                 f"queries for scale={scale} must be two-dimensional"
@@ -125,8 +89,7 @@ def multiscale_search(
             query_count = queries.shape[0]
         elif queries.shape[0] != query_count:
             raise ValueError(
-                "all scale query arrays must contain the same "
-                "number of queries"
+                "all scale query arrays must contain the same number of queries"
             )
 
         per_scale[scale] = index.batch_search(
@@ -135,92 +98,105 @@ def multiscale_search(
             oversample=oversample,
         )
 
-    if query_count is None:
+    if query_count is None or query_count == 0:
         return []
 
+    N = query_count
+    S = len(scales)
+    K = top_n
+
+    # ------------------------------------------------------------------
+    # 2. Stack into contiguous NumPy arrays: shape (S, N, K)
+    # ------------------------------------------------------------------
+    all_ids = np.stack(
+        [per_scale[s].event_ids for s in scales],
+        axis=0,
+    )  # uint64
+    all_dists = np.stack(
+        [per_scale[s].distances for s in scales],
+        axis=0,
+    )  # float32
+
+    # ------------------------------------------------------------------
+    # 3. Build validity mask (sentinel + optional exclusion)
+    # ------------------------------------------------------------------
+    is_sentinel = all_ids == INVALID_EVENT_ID
+
     if exclude_event_ids is not None:
-        if len(exclude_event_ids) != query_count:
+        if len(exclude_event_ids) != N:
             raise ValueError(
-                "exclude_event_ids must contain exactly one "
-                "event ID per query"
+                "exclude_event_ids must contain exactly one event ID per query"
             )
-
-        excluded_by_query = tuple(
-            int(event_id)
-            for event_id in exclude_event_ids
-        )
+        excl = np.asarray(exclude_event_ids, dtype=np.uint64)  # (N,)
+        is_excluded = all_ids == excl[None, :, None]           # (S, N, K)
     else:
-        excluded_by_query = None
+        is_excluded = np.zeros_like(all_ids, dtype=bool)
 
-    fused = []
+    valid = ~(is_sentinel | is_excluded)  # (S, N, K)
 
-    for query_index in range(query_count):
-        excluded_event_id = (
-            excluded_by_query[query_index]
-            if excluded_by_query is not None
-            else None
-        )
+    # ------------------------------------------------------------------
+    # 4. Per-query RRF (still a Python loop over N, but everything
+    #    inside stays in NumPy / small dicts)
+    # ------------------------------------------------------------------
+    fused: list[list[dict]] = []
 
-        scale_scores = {}
+    # Pre-compute scale index for the three well-known names
+    scale_to_idx = {name: i for i, name in enumerate(scales)}
 
-        for scale in scales:
-            result = per_scale[scale]
+    for q in range(N):
+        # Gather every valid (event_id, scale_rank) pair for this query
+        # We build a small dict: event_id → list of ranks (one per scale)
+        ranks_by_id: dict[int, list[int]] = {}
 
-            scale_scores[scale] = {
-                int(event_id): float(score)
-                for event_id, score in zip(
-                    result.event_ids[query_index],
-                    result.distances[query_index],
-                )
-                if (
-                    int(event_id) != INVALID_EVENT_ID
-                    and int(event_id) != excluded_event_id
-                )
-            }
+        for s in range(S):
+            mask = valid[s, q]                     # (K,)
+            if not np.any(mask):
+                continue
 
-        ranked_lists = [
-            list(scale_scores[scale].keys())
-            for scale in scales
-        ]
+            ids_s = all_ids[s, q, mask]            # 1-D
+            # ranks start at 1 and follow the order already present
+            # (batch_search returns results sorted by distance)
+            ranks_s = np.arange(1, len(ids_s) + 1, dtype=np.int32)
 
-        fused_ids = reciprocal_rank_fusion(
-            ranked_lists,
-            k=rrf_k,
-            top_n=top_n,
-        )
+            for eid, rank in zip(ids_s.tolist(), ranks_s.tolist()):
+                ranks_by_id.setdefault(int(eid), []).append(rank)
 
-        fused.append(
-            [
-                {
-                    "event_id": event_id,
-                    "rank": rank,
-                    "rrf_score": rrf_score,
-                    "score": rrf_score,
-                    "score_local": (
-                        scale_scores.get(
-                            "local",
-                            {},
-                        ).get(event_id)
-                    ),
-                    "score_medium": (
-                        scale_scores.get(
-                            "medium",
-                            {},
-                        ).get(event_id)
-                    ),
-                    "score_broad": (
-                        scale_scores.get(
-                            "broad",
-                            {},
-                        ).get(event_id)
-                    ),
-                }
-                for rank, (event_id, rrf_score)
-                in enumerate(
-                    fused_ids,
-                    start=1,
-                )
-            ]
-        )
+        if not ranks_by_id:
+            fused.append([])
+            continue
+
+        # Compute RRF scores
+        scored = []
+        for eid, rank_list in ranks_by_id.items():
+            score = sum(1.0 / (rrf_k + r) for r in rank_list)
+            scored.append((eid, score))
+
+        # Sort descending by score and keep top_n
+        scored.sort(key=lambda t: t[1], reverse=True)
+        top = scored[:top_n]
+
+        # Materialise the final dicts (only place we leave pure NumPy)
+        q_result = []
+        for rank, (eid, rrf_score) in enumerate(top, start=1):
+            q_result.append({
+                "event_id": eid,
+                "rank": rank,
+                "rrf_score": float(rrf_score),
+                "score": float(rrf_score),
+                "score_local": _lookup_distance(
+                    all_ids, all_dists,
+                    scale_to_idx.get("local", -1), q, eid
+                ) if "local" in scale_to_idx else None,
+                "score_medium": _lookup_distance(
+                    all_ids, all_dists,
+                    scale_to_idx.get("medium", -1), q, eid
+                ) if "medium" in scale_to_idx else None,
+                "score_broad": _lookup_distance(
+                    all_ids, all_dists,
+                    scale_to_idx.get("broad", -1), q, eid
+                ) if "broad" in scale_to_idx else None,
+            })
+
+        fused.append(q_result)
 
     return fused
