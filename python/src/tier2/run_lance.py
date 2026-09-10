@@ -29,6 +29,8 @@ from lib.corpus_config import (
     CONCEPT_SETS,
     CORPUS_TIER2_DB_PATH,
     LANCE_INDEXES_DIR,
+    CORPUS_MIN_YEAR,
+    CORPUS_MAX_YEAR
 )
 from lib.macberth import MACBERTH_MODEL_NAME
 from lib.corpus_db import get_connection
@@ -68,6 +70,39 @@ def _available_event_years(connection) -> tuple[int, ...]:
             int(row[0])
             for row in cursor.fetchall()
         )
+
+
+def _year_intervals(
+    from_year: int,
+    to_year: int,
+    interval: int = 10,
+) -> tuple[tuple[int, int], ...]:
+    """
+    Split an inclusive year range into non-overlapping intervals.
+
+    The final interval may contain fewer than `interval` years so that the
+    requested upper bound is preserved exactly.
+
+    Invariant:
+        The returned intervals cover every requested year exactly once.
+    """
+    if interval <= 0:
+        raise ValueError("interval must be positive")
+
+    intervals = []
+
+    start = from_year
+
+    while start <= to_year:
+        end = min(
+            start + interval - 1,
+            to_year,
+        )
+
+        intervals.append((start, end))
+        start = end + 1
+
+    return tuple(intervals)
 
 
 def _year_range(
@@ -368,14 +403,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--from-year",
         type=int,
-        default=None,
+        default=CORPUS_MIN_YEAR,
         help="Earliest publication year to search.",
     )
 
     parser.add_argument(
         "--to-year",
         type=int,
-        default=None,
+        default=CORPUS_MAX_YEAR,
         help="Latest publication year to search.",
     )
 
@@ -446,19 +481,10 @@ def main() -> None:
         else None
     )
 
-    search_space = SearchSpace(
-        years=_year_range(
-            args.from_year,
-            args.to_year,
-        ),
-        scale=requested_scales,
-    )
-
     logger.info(
         "[tier2] processing %d concept(s)",
         len(concept_names),
     )
-
     logger.info(
         "[tier2] SQLite output: %s",
         args.sqlite,
@@ -471,32 +497,14 @@ def main() -> None:
             connection
         )
 
-        logger.info( "[tier2] available event years: %s", available_years, )
-
-        (
-            candidate_years,
-            scales,
-        ) = _resolve_search_scope(
-            search_space,
+        logger.info(
+            "[tier2] available event years: %s",
             available_years,
         )
 
-        # logger.info( "[tier2] SearchSpace years=%s scales=%s", candidate_years, scales, )
-
-        if not candidate_years:
-            logger.warning( "[tier2] no candidate years; nothing to run" )
-            return
-
-        index_started = time.perf_counter()
-
-        indexes_by_year = _build_indexes_by_year(
-            lance_root=args.lance,
-            candidate_years=candidate_years,
-            scales=scales,
-        )
-
-        logger.info( "[tier2] prepared %d temporal index sets in %.3fs", len(indexes_by_year),
-            time.perf_counter() - index_started,
+        year_intervals = _year_intervals(
+            args.from_year,
+            args.to_year,
         )
 
         false_positives = (
@@ -509,39 +517,96 @@ def main() -> None:
             else None
         )
 
-        for index, concept_name in enumerate(
-            concept_names,
+        first_run = True
+
+        for interval_index, (
+            from_year,
+            to_year,
+        ) in enumerate(
+            year_intervals,
             start=1,
         ):
             logger.info(
-                "[tier2] ===== concept %d/%d: %s =====",
-                index,
-                len(concept_names),
-                concept_name,
+                "[tier2] ===== years %d/%d: %d-%d =====",
+                interval_index,
+                len(year_intervals),
+                from_year,
+                to_year,
             )
 
-            # --clear belongs only to the first concept; otherwise each
-            # subsequent concept would erase the preceding results.
-            clear = (
-                args.clear
-                and index == 1
+            search_space = SearchSpace(
+                years=_year_range(
+                    from_year,
+                    to_year,
+                ),
+                scale=requested_scales,
             )
 
-            run_lance_tier2(
-                connection=connection,
-                concept_name=concept_name,
-                concept=CONCEPT_SETS[concept_name],
-                indexes_by_year=indexes_by_year,
+            (
+                candidate_years,
+                scales,
+            ) = _resolve_search_scope(
+                search_space,
+                available_years,
+            )
+
+            if not candidate_years:
+                logger.info(
+                    "[tier2] no candidate years in %d-%d; skipping",
+                    from_year,
+                    to_year,
+                )
+                continue
+
+            index_started = time.perf_counter()
+
+            indexes_by_year = _build_indexes_by_year(
+                lance_root=args.lance,
                 candidate_years=candidate_years,
                 scales=scales,
-                sqlite_path=args.sqlite,
-                top_n=args.k,
-                rrf_k=args.rrf_k,
-                oversample=args.oversample,
-                batch_size=args.batch_size,
-                false_positives=false_positives,
-                clear=clear,
             )
+
+            logger.info(
+                "[tier2] prepared %d temporal index sets in %.3fs",
+                len(indexes_by_year),
+                time.perf_counter() - index_started,
+            )
+
+            for concept_index, concept_name in enumerate(
+                concept_names,
+                start=1,
+            ):
+                logger.info(
+                    "[tier2] ===== concept %d/%d: %s (%d-%d) =====",
+                    concept_index,
+                    len(concept_names),
+                    concept_name,
+                    from_year,
+                    to_year,
+                )
+
+                clear = (
+                    args.clear
+                    and first_run
+                )
+
+                run_lance_tier2(
+                    connection=connection,
+                    concept_name=concept_name,
+                    concept=CONCEPT_SETS[concept_name],
+                    indexes_by_year=indexes_by_year,
+                    candidate_years=candidate_years,
+                    scales=scales,
+                    sqlite_path=args.sqlite,
+                    top_n=args.k,
+                    rrf_k=args.rrf_k,
+                    oversample=args.oversample,
+                    batch_size=args.batch_size,
+                    false_positives=false_positives,
+                    clear=clear,
+                )
+
+                first_run = False
 
         logger.info(
             "[tier2] completed %d concept(s)",
@@ -554,3 +619,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
