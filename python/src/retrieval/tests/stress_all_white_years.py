@@ -19,7 +19,7 @@ from lib.macberth import MACBERTH_MODEL_NAME
 
 
 K = 60
-OVERSAMPLE = 2
+OVERSAMPLE = 1.2
 NPROBES = 20
 DIMENSIONS = 768
 

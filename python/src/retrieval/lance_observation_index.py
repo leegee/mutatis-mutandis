@@ -43,7 +43,7 @@ class LanceObservationIndex(ObservationIndex):
 
     # Bounds the number of live Lance result sets held in Python at once.
     # Independent of whether native multi-query dispatch is available.
-    QUERY_CHUNK_SIZE = 32
+    QUERY_CHUNK_SIZE = 256
 
     # Process-wide capability cache for native multi-query batch dispatch
     # (a single .search() call over multiple query vectors, correlated via

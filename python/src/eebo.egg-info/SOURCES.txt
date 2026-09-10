@@ -44,7 +44,6 @@ src/lib/agent-tools/__init__.py
 src/lib/agent-tools/semantic_search.py
 src/retrieval/__init__.py
 src/retrieval/context_models.py
-src/retrieval/exact_knn_search.py
 src/retrieval/lance_observation_index.py
 src/retrieval/lance_observation_index_store.py
 src/retrieval/lance_search.py
@@ -57,18 +56,14 @@ src/retrieval/observation_index_store.py
 src/retrieval/phrase_encoder.py
 src/retrieval/postgres_token_store.py
 src/retrieval/retriever.py
-src/retrieval/test_parquet_for_dupes.py
 src/retrieval/tests/stress_all_white_years.py
 src/retrieval/tests/test_ann_index_integrity.py
 src/retrieval/tests/experiments/test_phrase_search.py
 src/retrieval/tests/experiments/test_phrase_search2.py
 src/retrieval/tests/integration/macberrth_phrase_encoder_int.py
-src/retrieval/tests/integration/test_parquet_observations_int.py
 src/retrieval/tests/unit/macberth_mean_phrase_encoder.unit.py
 src/retrieval/tests/unit/test_observation_context_unit.py
 src/retrieval/tests/unit/test_observation_retriever_unit.py
-src/retrieval/tests/unit/test_parquet_context_unit.py
-src/retrieval/tests/unit/test_parquet_observations_unit.py
 src/retrieval/tests/unit/test_search_space_unit.py
 src/scripts/test_semantic_search_tool.py
 src/search-flask/search_service.py

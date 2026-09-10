@@ -39,8 +39,8 @@ from retrieval.models import SCALES
 
 K = 60
 RRF_K = 60
-OVERSAMPLE = 2
-BATCH_SIZE = 32
+OVERSAMPLE = 1.2
+BATCH_SIZE = 256
 
 _NO_WPOS = -1
 

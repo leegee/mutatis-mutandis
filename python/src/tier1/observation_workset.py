@@ -29,7 +29,7 @@ from tier1.observation_store_api import (
 # semantic classification threshold.
 TOP_K = 60
 RRF_K = 60
-OVERSAMPLE = 2
+OVERSAMPLE = 1.2
 NPROBES = 150
 
 Occurrence = tuple[str, str, int]
