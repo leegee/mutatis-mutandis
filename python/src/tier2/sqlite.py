@@ -479,7 +479,6 @@ def write_tier2_sqlite(
     con = analysis_db_connection(db_path)
 
     try:
-
         con.executescript(_SCHEMA_INIT)
 
         con.execute("BEGIN")
@@ -489,27 +488,18 @@ def write_tier2_sqlite(
             logger.info("[tier2] clearing sqlite database")
             for statement in _SCHEMA_CLEAR:
                 con.execute(statement)
+            for index, statement in enumerate(_DELETE_CONCEPT):
+                logger.info(
+                    "[tier2] deleting concept=%s phase=%d",
+                    concept_name,
+                    index,
+                )
+                con.execute(
+                    statement,
+                    (concept_name,),
+                )
 
-
-        for index, statement in enumerate(_DELETE_CONCEPT):
-            logger.info(
-                "[tier2] deleting concept=%s phase=%d",
-                concept_name,
-                index,
-            )
-            con.execute(
-                statement,
-                (concept_name,),
-            )
-
-        con.execute(
-            """
-            INSERT INTO concepts (
-                concept,
-                n_events
-            )
-            VALUES (?, ?)
-            """,
+        con.execute("INSERT INTO concepts ( concept, n_events ) VALUES (?, ?)",
             (
                 concept_name,
                 len(events),
