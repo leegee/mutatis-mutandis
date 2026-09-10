@@ -78,6 +78,19 @@ Currently experimenting with ensemble embeddings. Ideally would process clauses,
 
 Managed by UV (`uv sync`) and bun (`bun install`)
 
+## Next Steps
+
+### Classification: not quite sentiment analysis
+
+* Investigate prior art: **Osgood**'s semantic differential; **Mehrabian & Russell** / **Warriner et al.** on Valence–Arousal–Dominance (VAD); **NRC VAD Lexicon** (Mohammad).
+* Investigate **SentProp** — Hamilton, Clark, Leskovec & Jurafsky: seed-based, embedding-derived domain sentiment lexicons, including diachronic sentiment change.
+* Investigate historical emotion/affect work using VAD and historical expert annotation (e.g. **Buechel et al.**).
+* Experiment with MacBERTh embeddings + seeded **conceptual poles** rather than imposing modern positive/negative sentiment.
+* Explore **Koselleck-style historically motivated poles** (e.g. sacred ↔ pathological, pure ↔ polluted) and measure contextual observations relative to their centroids.
+* Test whether pole vocabularies can be induced/validated from embedding neighbourhoods and tracked diachronically.
+* Keep VAD as an external baseline; investigate whether historically derived affective/evaluative fields provide a more appropriate model for EEBO.
+
+
 ## Colab Notebooks
 
 Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/port output from `ngrok tcp 5432`.
