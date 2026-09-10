@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from retrieval.lance_observation_index import LanceObservationIndex
+from retrieval.models import INVALID_EVENT_ID
 
 
 def reciprocal_rank_fusion(
@@ -17,7 +18,7 @@ def reciprocal_rank_fusion(
             ranked,
             start=1,
         ):
-            if event_id == -1:
+            if event_id == INVALID_EVENT_ID:
                 continue
 
             scores[event_id] = (
@@ -58,6 +59,13 @@ def multiscale_search(
     Each query may exclude its own seed event. Exclusion occurs before RRF
     so that a seed cannot consume a retrieval slot or contribute to its
     fused ranking.
+
+    A query whose observation population is smaller than top_n (e.g. a
+    sparse chronological bucket) may have fewer than top_n genuine
+    neighbours. batch_search() pads such rows with INVALID_EVENT_ID rather
+    than truncating other queries in the same call or raising; those
+    padded slots are filtered out here before RRF ever sees them, exactly
+    like an excluded seed event.
 
     Failure modes:
         A missing scale index or query array is an explicit configuration
@@ -165,7 +173,7 @@ def multiscale_search(
                     result.distances[query_index],
                 )
                 if (
-                    int(event_id) != -1
+                    int(event_id) != INVALID_EVENT_ID
                     and int(event_id) != excluded_event_id
                 )
             }

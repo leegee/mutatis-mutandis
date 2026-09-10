@@ -1,20 +1,87 @@
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from lib.corpus_logging import logger
 from .models import (
     BatchSearchResult,
     Float32Array,
+    INVALID_EVENT_ID,
     SearchResult,
 )
 from .observation_index import ObservationIndex
+
+
+# Whether to probe LanceDB's native multi-query batch dispatch at all.
+#
+# Confirmed broken on both lancedb 0.37.1 and 0.38.0 (schema error: no
+# field named query_index), and this appears to be a longer-standing gap
+# in the Python bindings specifically -- see lancedb/lancedb#1887
+# ("Searching multiple vectors in one query will throw exception"), not
+# something a routine version bump is likely to fix soon. Probing is
+# therefore off by default so every process doesn't pay for one guaranteed
+# -to-fail call before falling back.
+#
+# Set LANCE_PROBE_NATIVE_BATCH_SEARCH=1 to re-enable probing once a
+# lancedb release is expected to support this, without needing a code
+# change to find out.
+_PROBE_NATIVE_BATCH_SEARCH = (
+    os.environ.get(
+        "LANCE_PROBE_NATIVE_BATCH_SEARCH",
+        "0",
+    )
+    == "1"
+)
 
 
 class LanceObservationIndex(ObservationIndex):
     """LanceDB-backed immutable index over one or more chronological buckets."""
 
     RECONSTRUCT_BATCH_SIZE = 500
+
+    # Bounds the number of live Lance result sets held in Python at once.
+    # Independent of whether native multi-query dispatch is available.
+    QUERY_CHUNK_SIZE = 32
+
+    # Process-wide capability cache for native multi-query batch dispatch
+    # (a single .search() call over multiple query vectors, correlated via
+    # a query_index field on each result row).
+    #
+    # None  = probing enabled but not yet attempted this process
+    # True  = native dispatch works, use it
+    # False = native dispatch is not attempted/available; fall back to one
+    #         .search() per query. This is the default -- see
+    #         _PROBE_NATIVE_BATCH_SEARCH above for why.
+    #
+    # This is a class attribute (not per-instance) because the answer only
+    # depends on the installed lancedb build, not on which table/bucket is
+    # being searched, so resolving it once per process (when probing is
+    # enabled at all) is sufficient.
+    _native_batch_supported: bool | None = (
+        None
+        if _PROBE_NATIVE_BATCH_SEARCH
+        else False
+    )
+
+    # Sentinel used to pad a batch_search() row when a query has fewer
+    # than k genuine neighbours available (e.g. a seed in a sparse
+    # chronological bucket). Padding is per-query: it never borrows width
+    # from, or truncates, any other query in the same batch/chunk.
+    #
+    # This is retrieval.models.INVALID_EVENT_ID, the sentinel that
+    # dataclass module already documents and types BatchSearchResult
+    # (UInt64Array) around -- not an independently invented value. Do not
+    # use -1 here: event_ids is unsigned, and -1 cannot be represented in
+    # a uint64 array without either raising OverflowError on assignment
+    # or silently wrapping to this exact same value.
+    #
+    # DISTANCE_SENTINEL (+inf) sorts last under the lower-is-better
+    # convention used throughout this class, so a padded slot can never
+    # displace a genuine candidate.
+    EVENT_ID_SENTINEL = INVALID_EVENT_ID
+    DISTANCE_SENTINEL = np.float32(np.inf)
 
     def __init__(
         self,
@@ -126,7 +193,6 @@ class LanceObservationIndex(ObservationIndex):
             distances=converted.distances[order],
         )
 
-    #
     def batch_search(
         self,
         queries: Float32Array,
@@ -135,17 +201,45 @@ class LanceObservationIndex(ObservationIndex):
         oversample: int = 1,
     ) -> BatchSearchResult:
         """
-        Search each query independently and merge results across tables.
+        Search all queries in each Lance table and merge results per query.
 
-        The installed LanceDB version does not provide native multi-query
-        result correlation, so each query is executed as a normal
-        one-dimensional vector search. Queries are processed in chunks so
-        that Python never holds the result dictionaries for the entire
-        workset at once.
+        Queries are processed in chunks so Python never holds the result
+        dictionaries for the entire workset at once. Each query is issued
+        as its own .search() call per table -- one round trip per
+        (query, table) pair -- because LanceDB's native multi-query batch
+        dispatch (a single .search() call over multiple query vectors,
+        correlated via a query_index field on each result row) is not
+        usable here: it fails with a schema error ("no field named
+        query_index") on both lancedb 0.37.1 and 0.38.0, and the failure
+        mode matches lancedb/lancedb#1887, a longer-standing Python
+        bindings gap for multi-vector .search() calls rather than
+        something a routine version bump resolves. See
+        _PROBE_NATIVE_BATCH_SEARCH at module level: set
+        LANCE_PROBE_NATIVE_BATCH_SEARCH=1 to re-enable a one-time
+        per-process probe of the native path (see _native_batch_supported)
+        once a lancedb release is expected to support it, without needing
+        a code change to find out. Probing, when enabled, costs one cheap
+        schema-validation failure per process rather than a wasted scan;
+        it is off by default so that cost isn't paid on every run given
+        the current, confirmed non-support.
 
-        Each query produces at most k * oversample candidates per physical
-        table. Candidates are merged and reduced to the requested k results
-        before moving on to the next query chunk.
+        If a query has fewer than k genuine neighbours available (e.g. a
+        seed in a sparse chronological bucket), its row is padded with
+        EVENT_ID_SENTINEL (retrieval.models.INVALID_EVENT_ID) /
+        DISTANCE_SENTINEL (+inf) entries rather than either truncating
+        every other query in the same chunk to match it or raising.
+        Padding is strictly per-query: other queries in the same batch
+        always keep their own full, genuine results.
+
+        INVALID_EVENT_ID is the sentinel retrieval.models already defines
+        and documents for exactly this purpose, and BatchSearchResult
+        types event_ids as UInt64Array to match it. Callers must compare
+        against INVALID_EVENT_ID, not -1: the -1 checks currently in
+        retrieval.lance_search.multiscale_search and
+        reciprocal_rank_fusion predate this convention (or an unrelated
+        one) and, since -1 cannot be represented in a uint64 array, have
+        never matched a real padded row -- they need updating to check
+        against INVALID_EVENT_ID for padding to actually be filtered.
         """
         if k <= 0:
             raise ValueError("k must be positive")
@@ -172,30 +266,36 @@ class LanceObservationIndex(ObservationIndex):
 
         logger.debug(
             "[lance batch_search] tables=%d queries=%d k=%d search_k=%d "
-            "year_start=%s year_end=%s",
+            "year_start=%s year_end=%s native_batch=%s",
             len(self._tables),
             query_count,
             k,
             search_k,
             self._year_start,
             self._year_end,
+            type(self)._native_batch_supported,
         )
-
-        # Keep the number of live Lance result sets bounded. This is
-        # deliberately independent of Lance's native multi-query support.
-        query_chunk_size = 32
 
         result_event_ids: list[np.ndarray] = []
         result_distances: list[np.ndarray] = []
 
-        for chunk_start in range(0, query_count, query_chunk_size):
+        for chunk_start in range(
+            0,
+            query_count,
+            self.QUERY_CHUNK_SIZE,
+        ):
             chunk_end = min(
-                chunk_start + query_chunk_size,
+                chunk_start + self.QUERY_CHUNK_SIZE,
                 query_count,
             )
 
             chunk_queries = query_array[chunk_start:chunk_end]
             chunk_count = chunk_queries.shape[0]
+
+            candidates_by_query = self._search_chunk(
+                chunk_queries,
+                search_k=search_k,
+            )
 
             chunk_event_ids = np.empty(
                 (chunk_count, k),
@@ -206,54 +306,33 @@ class LanceObservationIndex(ObservationIndex):
                 dtype=np.float32,
             )
 
-            for local_query_index, single_query in enumerate(
-                chunk_queries
+            shortfall_count = 0
+
+            for local_query_index, candidates in enumerate(
+                candidates_by_query
             ):
-                candidates: list[tuple[int, float]] = []
-
-                for table in self._tables:
-                    request = (
-                        table
-                        .search(
-                            single_query,
-                            vector_column_name="vector",
-                        )
-                        .nprobes(self._nprobes)
-                        .limit(search_k)
-                        .select(["event_id", "_distance"])
-                    )
-
-                    request = self._apply_filter(
-                        request,
-                        prefilter=True,
-                    )
-
-                    rows = request.to_list()
-
-                    candidates.extend(
-                        (
-                            int(row["event_id"]),
-                            float(row["_distance"]),
-                        )
-                        for row in rows
-                    )
-
-                    # The Lance result dictionaries are no longer needed
-                    # after their scalar values have been extracted.
-
+                # Lance distance is lower-is-better.
                 candidates.sort(
                     key=lambda item: item[1],
                 )
 
                 selected = candidates[:k]
+                missing = k - len(selected)
 
-                if len(selected) != k:
-                    raise RuntimeError(
-                        "Lance returned insufficient neighbours: "
-                        f"query_index={chunk_start + local_query_index} "
-                        f"expected={k} "
-                        f"got={len(selected)}"
-                    )
+                if missing > 0:
+                    # Pad this query only. Other queries in the same
+                    # chunk keep their own full results -- a sparse
+                    # neighbourhood (e.g. an early, thinly-populated
+                    # chronological bucket) must not degrade recall for
+                    # queries that had plenty of genuine candidates.
+                    shortfall_count += 1
+
+                    selected = selected + [
+                        (
+                            int(self.EVENT_ID_SENTINEL),
+                            float(self.DISTANCE_SENTINEL),
+                        )
+                    ] * missing
 
                 chunk_event_ids[local_query_index] = [
                     event_id
@@ -264,6 +343,18 @@ class LanceObservationIndex(ObservationIndex):
                     distance
                     for _, distance in selected
                 ]
+
+            if shortfall_count:
+                logger.debug(
+                    "[lance batch_search] %d/%d queries in chunk %d-%d "
+                    "had fewer than k=%d genuine neighbours and were "
+                    "padded with sentinel entries",
+                    shortfall_count,
+                    chunk_count,
+                    chunk_start,
+                    chunk_end - 1,
+                    k,
+                )
 
             result_event_ids.append(chunk_event_ids)
             result_distances.append(chunk_distances)
@@ -286,6 +377,134 @@ class LanceObservationIndex(ObservationIndex):
             ),
         )
 
+    def _search_chunk(
+        self,
+        chunk_queries: Float32Array,
+        *,
+        search_k: int,
+    ) -> list[list[tuple[int, float]]]:
+        """
+        Search one chunk of query vectors against every table, returning
+        per-query candidate (event_id, distance) lists.
+
+        Tries native multi-query dispatch first (see batch_search
+        docstring) unless it is already known to be unsupported on this
+        install; falls back to a per-query loop otherwise.
+        """
+        if type(self)._native_batch_supported is not False:
+            try:
+                return self._search_chunk_native(
+                    chunk_queries,
+                    search_k=search_k,
+                )
+            except Exception as exc:
+                if "query_index" not in str(exc):
+                    raise
+
+                logger.warning(
+                    "[lance batch_search] native multi-query dispatch "
+                    "unsupported on this lancedb install (%s); falling "
+                    "back to one .search() call per query. Upgrading "
+                    "lancedb (>=0.38.0) restores native batching.",
+                    exc,
+                )
+
+                type(self)._native_batch_supported = False
+
+        return self._search_chunk_per_query(
+            chunk_queries,
+            search_k=search_k,
+        )
+
+    def _search_chunk_native(
+        self,
+        chunk_queries: Float32Array,
+        *,
+        search_k: int,
+    ) -> list[list[tuple[int, float]]]:
+        chunk_count = chunk_queries.shape[0]
+
+        candidates_by_query: list[list[tuple[int, float]]] = [
+            []
+            for _ in range(chunk_count)
+        ]
+
+        for table in self._tables:
+            request = (
+                table
+                .search(
+                    chunk_queries,
+                    vector_column_name="vector",
+                )
+                .nprobes(self._nprobes)
+                .limit(search_k)
+                .select(["event_id", "_distance", "query_index"])
+            )
+
+            request = self._apply_filter(request, prefilter=True)
+            rows = request.to_list()
+
+            for row in rows:
+                query_index = int(row["query_index"])
+                event_id = int(row["event_id"])
+                distance = float(row["_distance"])
+
+                if not 0 <= query_index < chunk_count:
+                    raise RuntimeError(
+                        f"Lance returned invalid query_index={query_index} "
+                        f"for {chunk_count} queries in this chunk"
+                    )
+
+                candidates_by_query[query_index].append(
+                    (event_id, distance)
+                )
+
+        type(self)._native_batch_supported = True
+
+        return candidates_by_query
+
+    def _search_chunk_per_query(
+        self,
+        chunk_queries: Float32Array,
+        *,
+        search_k: int,
+    ) -> list[list[tuple[int, float]]]:
+        chunk_count = chunk_queries.shape[0]
+
+        candidates_by_query: list[list[tuple[int, float]]] = [
+            []
+            for _ in range(chunk_count)
+        ]
+
+        for local_query_index, single_query in enumerate(chunk_queries):
+            for table in self._tables:
+                request = (
+                    table
+                    .search(
+                        single_query,
+                        vector_column_name="vector",
+                    )
+                    .nprobes(self._nprobes)
+                    .limit(search_k)
+                    .select(["event_id", "_distance"])
+                )
+
+                request = self._apply_filter(
+                    request,
+                    prefilter=True,
+                )
+
+                rows = request.to_list()
+
+                candidates_by_query[local_query_index].extend(
+                    (
+                        int(row["event_id"]),
+                        float(row["_distance"]),
+                    )
+                    for row in rows
+                )
+
+        return candidates_by_query
 
     def reconstruct(
         self,

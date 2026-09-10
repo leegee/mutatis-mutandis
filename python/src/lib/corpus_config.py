@@ -53,9 +53,6 @@ JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
-DISKANN_INDEXES_DIR = INDEXES_DIR / "diskann"
-DISKANN_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
-
 LANCE_INDEXES_DIR = INDEXES_DIR / "lance"
 LANCE_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 

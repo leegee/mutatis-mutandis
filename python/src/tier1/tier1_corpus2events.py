@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import time
 import unicodedata
@@ -33,6 +34,24 @@ WINDOW_CONFIGS = (
 
 LANCE_MODEL_NAME = "macberth"
 LANCE_BUCKET_SIZE = 50
+
+# Vector index configuration. IVF_FLAT is used deliberately -- it retains
+# full-precision vectors inside each partition (only *which partitions get
+# probed* is approximate, via nprobes at query time). IVF_PQ or any *_SQ
+# variant would additionally quantize the stored vectors themselves, which
+# is a real accuracy loss this corpus cannot tolerate. Do not change this
+# to IVF_PQ for a "smaller index" without re-litigating that tradeoff.
+VECTOR_INDEX_TYPE = "IVF_FLAT"
+VECTOR_INDEX_METRIC = "cosine"
+
+# Bucket densities vary enormously across a chronological corpus (a sparse
+# 1476-1525 bucket vs. a busy 1650-1699 bucket), so a fixed num_partitions
+# is wrong in both directions: too many partitions for a small bucket
+# degrades IVF cluster quality (or fails to build at all), too few for a
+# large bucket gives up recall/speed. Partition count is therefore derived
+# from the table's own row count at build time, not hardcoded.
+MIN_VECTOR_INDEX_PARTITIONS = 1
+MAX_VECTOR_INDEX_PARTITIONS = 256
 
 
 def stable_hash(key: str) -> int:
@@ -94,6 +113,27 @@ def lance_table_name(scale: str, year: int) -> str:
     return (
         f"{scale}__{LANCE_MODEL_NAME}__"
         f"{start:04d}_{end:04d}"
+    )
+
+
+def vector_index_partitions(row_count: int) -> int:
+    """
+    Size num_partitions from the table's actual row count.
+
+    sqrt(row_count) is a standard IVF starting heuristic: it keeps the
+    average partition size (and therefore per-partition training/search
+    cost) growing sublinearly as the table grows, without requiring more
+    partitions than a small bucket has rows to support.
+    """
+    if row_count <= 0:
+        raise ValueError("row_count must be positive")
+
+    return max(
+        MIN_VECTOR_INDEX_PARTITIONS,
+        min(
+            MAX_VECTOR_INDEX_PARTITIONS,
+            int(math.sqrt(row_count)),
+        ),
     )
 
 
@@ -625,6 +665,80 @@ class EventWriter:
         # The repair unit is a document whose current event records already
         # exist; Lance is reconciled only for the explicitly requested work.
         return self._write_lance(observations)
+
+    def build_indexes(self) -> None:
+        """
+        (Re)build indexes for every Lance table touched this run.
+
+        Called once per script invocation, after all writes are done --
+        not per document -- because rebuilding an IVF index is a
+        table-scan-sized operation, not an incremental one. LanceDB OSS
+        has no automatic indexing (see table.list_indices() /
+        num_unindexed_rows): unlike LanceDB Cloud/Enterprise, nothing
+        keeps these indexes current except this explicit step, so a run
+        that doesn't call it will leave newly appended rows served by
+        brute-force scan until the next time it does.
+
+        The vector index is rebuilt from scratch (create_index with
+        replace=True) rather than incrementally optimised: at these row
+        counts a full rebuild is cheap, and it guarantees the index
+        reflects every row currently in the table rather than trusting an
+        incremental merge to have kept up -- important given accuracy,
+        not just speed, is the requirement here.
+
+        Only tables in self.tables (opened by this run, whether newly
+        created or appended to) are touched. A table this run never wrote
+        to already has a correct index from whichever prior run last
+        rebuilt it; there is nothing to redo.
+        """
+        for table_name, table in self.tables.items():
+            row_count = table.count_rows()
+
+            if row_count == 0:
+                logger.warning(
+                    "[tier1] skipping index build for empty table: %s",
+                    table_name,
+                )
+                continue
+
+            num_partitions = vector_index_partitions(row_count)
+
+            logger.info(
+                "[tier1] building indexes for %s (%d rows, "
+                "%d partitions)",
+                table_name,
+                row_count,
+                num_partitions,
+            )
+
+            started = time.perf_counter()
+
+            table.create_index(
+                metric=VECTOR_INDEX_METRIC,
+                index_type=VECTOR_INDEX_TYPE,
+                vector_column_name="vector",
+                num_partitions=num_partitions,
+                replace=True,
+            )
+
+            for scalar_column in (
+                "event_id",
+                "year",
+                "embedding_model",
+            ):
+                table.create_scalar_index(
+                    scalar_column,
+                    index_type="BTREE",
+                    replace=True,
+                )
+
+            elapsed = time.perf_counter() - started
+
+            logger.info(
+                "[tier1] indexes built for %s in %.2fs",
+                table_name,
+                elapsed,
+            )
 
     def _new_observations(
         self,
@@ -1197,6 +1311,18 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--skip-indexing",
+        action="store_true",
+        help=(
+            "Skip the post-run index (re)build step. Useful for a quick "
+            "--doc-id smoke test where rebuilding a whole table's IVF "
+            "index isn't worth the time; queries remain correct in the "
+            "meantime via LanceDB's brute-force fallback on unindexed "
+            "rows, just slower."
+        ),
+    )
+
+    parser.add_argument(
         "--lance-root",
         type=Path,
         default=Path(LANCE_INDEXES_DIR),
@@ -1259,6 +1385,14 @@ def main() -> None:
                 corpus=args.corpus,
                 doc_id=args.doc_id,
             )
+
+        if args.skip_indexing:
+            logger.info(
+                "[tier1] --skip-indexing set; leaving index (re)build "
+                "for a later run"
+            )
+        else:
+            writer.build_indexes()
     finally:
         conn.close()
 

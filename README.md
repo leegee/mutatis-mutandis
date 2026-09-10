@@ -14,6 +14,8 @@
     source .venv/Scripts/activate               # Load environment
 
     cd $PROJECT_ROOT
+    uv sync
+    uv pip install -e .
     python src/tier.... in order
 
 ## Conceptual Synopsis
