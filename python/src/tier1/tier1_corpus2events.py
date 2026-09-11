@@ -19,6 +19,7 @@ from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.macberth import load_macberth
 from retrieval.models import SCALES
+from tier1.check_disk_space import _check_index_disk_space
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("OMP_NUM_THREADS", "4")
@@ -31,6 +32,7 @@ WINDOW_CONFIGS = (
     {"name": "medium", "size": 512, "stride": 256},
     {"name": "broad", "size": 512, "stride": 384},
 )
+ACTIVE_SCALES = ("local",)
 
 LANCE_MODEL_NAME = "macberth"
 LANCE_BUCKET_SIZE = 50
@@ -223,6 +225,9 @@ class MacBERThPipeline:
             )
 
         for config in WINDOW_CONFIGS:
+            if config["name"] not in ACTIVE_SCALES:
+                continue
+
             jobs = self._make_jobs(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -258,7 +263,7 @@ class MacBERThPipeline:
         for position in sorted(target_positions):
             missing_scales = [
                 scale
-                for scale in SCALES
+                for scale in ACTIVE_SCALES
                 if scale not in results[position]
             ]
 
@@ -287,7 +292,7 @@ class MacBERThPipeline:
 
             raise RuntimeError(
                 f"{len(missing)} observations did not receive "
-                "all three scale embeddings."
+                "all active embeddings."
             )
 
         return results
@@ -632,6 +637,7 @@ class EventWriter:
         lance_root: Path,
     ) -> None:
         self.conn = conn
+        self.lance_root = lance_root
         self.lance = lancedb.connect(str(lance_root))
         self.tables: dict[str, object] = {}
 
@@ -666,6 +672,7 @@ class EventWriter:
         # exist; Lance is reconciled only for the explicitly requested work.
         return self._write_lance(observations)
 
+
     def build_indexes(self) -> None:
         """
         (Re)build indexes for every Lance table touched this run.
@@ -691,54 +698,60 @@ class EventWriter:
         to already has a correct index from whichever prior run last
         rebuilt it; there is nothing to redo.
         """
-        for table_name, table in self.tables.items():
-            row_count = table.count_rows()
+        for table_name in self.tables:
+            table = self.tables[table_name]
 
+            row_count = table.count_rows()
             if row_count == 0:
-                logger.warning(
-                    "[tier1] skipping index build for empty table: %s",
-                    table_name,
-                )
                 continue
 
             num_partitions = vector_index_partitions(row_count)
 
+            self._check_index_disk_space(
+                self.lance_root,
+                table_name,
+                row_count,
+            )
+
             logger.info(
-                "[tier1] building indexes for %s (%d rows, "
-                "%d partitions)",
+                "[tier1] building indexes for %s (%d rows, %d partitions)",
                 table_name,
                 row_count,
                 num_partitions,
             )
 
-            started = time.perf_counter()
+            started = time.monotonic()
 
             table.create_index(
-                metric=VECTOR_INDEX_METRIC,
-                index_type=VECTOR_INDEX_TYPE,
+                metric="cosine",
+                index_type="IVF_FLAT",
                 vector_column_name="vector",
                 num_partitions=num_partitions,
                 replace=True,
             )
 
-            for scalar_column in (
+            table.create_scalar_index(
                 "event_id",
+                index_type="BTREE",
+                replace=True,
+            )
+            table.create_scalar_index(
                 "year",
+                index_type="BTREE",
+                replace=True,
+            )
+            table.create_scalar_index(
                 "embedding_model",
-            ):
-                table.create_scalar_index(
-                    scalar_column,
-                    index_type="BTREE",
-                    replace=True,
-                )
-
-            elapsed = time.perf_counter() - started
+                index_type="BTREE",
+                replace=True,
+            )
 
             logger.info(
                 "[tier1] indexes built for %s in %.2fs",
                 table_name,
-                elapsed,
+                time.monotonic() - started,
             )
+
 
     def _new_observations(
         self,
@@ -826,7 +839,7 @@ class EventWriter:
                     "a chronological Lance table."
                 )
 
-            for scale in SCALES:
+            for scale in ACTIVE_SCALES:
                 table_name = lance_table_name(
                     scale,
                     observation.pub_year,
@@ -1334,9 +1347,7 @@ def parse_args() -> argparse.Namespace:
         args.corpus is not None
         or args.doc_id is not None
     ):
-        parser.error(
-            "--repair cannot be combined with --corpus or --doc-id"
-        )
+        parser.error( "--repair cannot be combined with --corpus or --doc-id" )
 
     return args
 
@@ -1375,22 +1386,12 @@ def main() -> None:
 
         if args.repair is not None:
             corpus, doc_id = args.repair
-
-            processor.repair(
-                corpus=corpus,
-                doc_id=doc_id,
-            )
+            processor.repair( corpus=corpus, doc_id=doc_id, )
         else:
-            processor.process(
-                corpus=args.corpus,
-                doc_id=args.doc_id,
-            )
+            processor.process( corpus=args.corpus, doc_id=args.doc_id, )
 
         if args.skip_indexing:
-            logger.info(
-                "[tier1] --skip-indexing set; leaving index (re)build "
-                "for a later run"
-            )
+            logger.info( "[tier1] --skip-indexing set; leaving index (re)build  for a later run" )
         else:
             writer.build_indexes()
     finally:

@@ -226,6 +226,8 @@ def run_lance_tier2(
     batch_size: int = BATCH_SIZE,
     false_positives: list[str] | None = None,
     clear: bool = False,
+    from_year: int,
+    to_year: int,
 ) -> Path:
     """
     Run one concept and persist its Tier 2 result.
@@ -268,6 +270,14 @@ def run_lance_tier2(
         for year in candidate_years
         for event_id in resolved.by_year.get(year, ())
     ]
+
+    logger.info(
+        "[tier2] seed workset by year: %s",
+        {
+            year: len(resolved.by_year.get(year, ()))
+            for year in candidate_years
+        },
+    )
 
     logger.info(
         "[tier2] seed workset: %d events, years=%s-%s",
@@ -325,6 +335,8 @@ def run_lance_tier2(
         rrf_k=rrf_k,
         oversample=oversample,
         model=MACBERTH_MODEL_NAME,
+        from_year=from_year,
+        to_year=to_year,
     )
 
     write_time = (
@@ -604,6 +616,8 @@ def main() -> None:
                     batch_size=args.batch_size,
                     false_positives=false_positives,
                     clear=clear,
+                    from_year=from_year,
+                    to_year=to_year,
                 )
 
                 first_run = False

@@ -27,6 +27,10 @@ Tier 2 SQLite stores analytical provenance and derived products:
 Event metadata is deliberately not duplicated here. It remains available
 from PostgreSQL through event_id.
 
+Temporal interval is retrieval provenance rather than corpus metadata. It
+identifies which independently replaceable search interval produced a seed
+or retrieval run.
+
 Failure mode:
     A Tier 2 row referring to an event that no longer exists in PostgreSQL
     represents broken cross-store provenance and should be detected by
@@ -51,10 +55,12 @@ CREATE TABLE IF NOT EXISTS concepts (
 
 CREATE TABLE IF NOT EXISTS concept_seeds (
     concept       TEXT    NOT NULL,
+    from_year     INTEGER NOT NULL,
+    to_year       INTEGER NOT NULL,
     event_id      INTEGER NOT NULL,
     role          TEXT    NOT NULL,
 
-    PRIMARY KEY (concept, event_id),
+    PRIMARY KEY (concept, from_year, to_year, event_id),
 
     FOREIGN KEY (concept)
         REFERENCES concepts(concept)
@@ -63,6 +69,8 @@ CREATE TABLE IF NOT EXISTS concept_seeds (
 CREATE TABLE IF NOT EXISTS retrieval_runs (
     run_id                INTEGER PRIMARY KEY AUTOINCREMENT,
     concept               TEXT    NOT NULL,
+    from_year             INTEGER NOT NULL,
+    to_year               INTEGER NOT NULL,
     seed_population       TEXT    NOT NULL,
     neighbour_population  TEXT    NOT NULL,
     scales                TEXT    NOT NULL,
@@ -111,6 +119,7 @@ CREATE TABLE IF NOT EXISTS concept_aggregate (
     window_doc_id TEXT,
     window_id     INTEGER,
     count         INTEGER NOT NULL,
+    score         REAL NOT NULL,
 
     FOREIGN KEY (concept)
         REFERENCES concepts(concept)
@@ -140,8 +149,14 @@ CREATE INDEX IF NOT EXISTS idx_concept_seeds_concept
 CREATE INDEX IF NOT EXISTS idx_concept_seeds_event
     ON concept_seeds(event_id);
 
+CREATE INDEX IF NOT EXISTS idx_concept_seeds_interval
+    ON concept_seeds(concept, from_year, to_year);
+
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_concept
     ON retrieval_runs(concept);
+
+CREATE INDEX IF NOT EXISTS idx_retrieval_runs_interval
+    ON retrieval_runs(concept, from_year, to_year);
 
 CREATE INDEX IF NOT EXISTS idx_neighbour_edges_run
     ON neighbour_edges(run_id);
@@ -168,25 +183,79 @@ _SCHEMA_CLEAR = (
     "DELETE FROM concepts",
 )
 
-_DELETE_CONCEPT = (
-    "DELETE FROM concept_cluster_info WHERE concept = ?",
-    "DELETE FROM concept_aggregate WHERE concept = ?",
-    """
-    DELETE FROM neighbour_edges
-    WHERE run_id IN (
-        SELECT run_id
-        FROM retrieval_runs
-        WHERE concept = ?
-    )
-    """,
-    "DELETE FROM retrieval_runs WHERE concept = ?",
-    "DELETE FROM concept_seeds WHERE concept = ?",
-    "DELETE FROM concepts WHERE concept = ?",
-)
-
 
 def _maybe_float(value):
     return None if value is None else float(value)
+
+
+def _delete_interval(
+    con,
+    *,
+    concept_name: str,
+    from_year: int,
+    to_year: int,
+) -> None:
+    """
+    Remove one independently replaceable retrieval interval.
+
+    Whole-concept derived products are deliberately left untouched. They
+    are rebuilt after all intervals have been persisted.
+
+    Failure mode:
+        Deleting seeds by the current event IDs would leave stale seeds if
+        the rerun produces a different seed population. Interval provenance
+        on concept_seeds makes replacement independent of that population.
+    """
+    run_ids = [
+        row[0]
+        for row in con.execute(
+            """
+            SELECT run_id
+            FROM retrieval_runs
+            WHERE concept = ?
+              AND from_year = ?
+              AND to_year = ?
+            """,
+            (
+                concept_name,
+                from_year,
+                to_year,
+            ),
+        ).fetchall()
+    ]
+
+    if run_ids:
+        placeholders = ",".join("?" for _ in run_ids)
+
+        con.execute(
+            f"""
+            DELETE FROM neighbour_edges
+            WHERE run_id IN ({placeholders})
+            """,
+            run_ids,
+        )
+
+        con.execute(
+            f"""
+            DELETE FROM retrieval_runs
+            WHERE run_id IN ({placeholders})
+            """,
+            run_ids,
+        )
+
+    con.execute(
+        """
+        DELETE FROM concept_seeds
+        WHERE concept = ?
+          AND from_year = ?
+          AND to_year = ?
+        """,
+        (
+            concept_name,
+            from_year,
+            to_year,
+        ),
+    )
 
 
 def _aggregate_rows(
@@ -304,6 +373,8 @@ def _insert_retrieval_run(
     con,
     *,
     concept_name: str,
+    from_year: int,
+    to_year: int,
     seed_population: str,
     neighbour_population: str,
     scales,
@@ -318,6 +389,8 @@ def _insert_retrieval_run(
         """
         INSERT INTO retrieval_runs (
             concept,
+            from_year,
+            to_year,
             seed_population,
             neighbour_population,
             scales,
@@ -327,10 +400,12 @@ def _insert_retrieval_run(
             model,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             concept_name,
+            int(from_year),
+            int(to_year),
             seed_population,
             neighbour_population,
             _normalise_scales(scales),
@@ -349,11 +424,15 @@ def _insert_seed_rows(
     con,
     *,
     concept_name: str,
+    from_year: int,
+    to_year: int,
     events: list[dict],
 ):
     rows = [
         (
             concept_name,
+            int(from_year),
+            int(to_year),
             int(event["event_id"]),
             "seed",
         )
@@ -367,10 +446,12 @@ def _insert_seed_rows(
         """
         INSERT INTO concept_seeds (
             concept,
+            from_year,
+            to_year,
             event_id,
             role
         )
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
         """,
         rows,
     )
@@ -440,6 +521,8 @@ def write_tier2_sqlite(
     db_path: str | Path,
     concept_name: str,
     events: list[dict],
+    from_year: int,
+    to_year: int,
     clear: bool = False,
     seed_population: str = "lexical_forms",
     neighbour_population: str = "temporal_year",
@@ -450,20 +533,16 @@ def write_tier2_sqlite(
     model: str | None = None,
 ):
     """
-    Persist one Tier 2 retrieval result.
+    Persist one Tier 2 retrieval interval.
 
-    The concept seed membership and the retrieval relationships are stored
-    separately. This allows an event to participate in multiple concepts and
-    allows the same seed/neighbour relationship to recur in different runs.
-
-    Existing analytical data for this concept is replaced when clear=False;
-    this keeps the existing concept-level output behaviour while preserving
-    the explicit provenance within the newly written result.
+    The concept seed membership and retrieval relationships are stored
+    separately. A temporal interval is independently replaceable, while
+    concept-wide derived products remain untouched until they are rebuilt.
 
     Failure mode:
-        neighbour_edges cannot use (seed_event_id, neighbour_event_id) alone
-        as a key because the same relationship may legitimately occur in
-        multiple retrieval runs.
+        concept_aggregate must not be written from the current interval
+        because its rankings are whole-concept products. Writing them here
+        would create competing rank=0 rows for different intervals.
     """
     db_path = Path(db_path)
     db_path.parent.mkdir(
@@ -478,6 +557,9 @@ def write_tier2_sqlite(
 
     con = analysis_db_connection(db_path)
 
+    run_id = None
+    neighbour_count = 0
+
     try:
         con.executescript(_SCHEMA_INIT)
 
@@ -486,35 +568,66 @@ def write_tier2_sqlite(
 
         if clear:
             logger.info("[tier2] clearing sqlite database")
+
             for statement in _SCHEMA_CLEAR:
                 con.execute(statement)
-            for index, statement in enumerate(_DELETE_CONCEPT):
-                logger.info(
-                    "[tier2] deleting concept=%s phase=%d",
-                    concept_name,
-                    index,
-                )
-                con.execute(
-                    statement,
-                    (concept_name,),
-                )
 
-        con.execute("INSERT INTO concepts ( concept, n_events ) VALUES (?, ?)",
-            (
+        else:
+            logger.info(
+                "[tier2] replacing interval %s-%s for concept=%s",
+                from_year,
+                to_year,
                 concept_name,
-                len(events),
-            ),
+            )
+
+            _delete_interval(
+                con,
+                concept_name=concept_name,
+                from_year=from_year,
+                to_year=to_year,
+            )
+
+        con.execute(
+            """
+            INSERT INTO concepts (
+                concept,
+                n_events
+            )
+            VALUES (?, 0)
+            ON CONFLICT(concept) DO NOTHING
+            """,
+            (concept_name,),
         )
 
         _insert_seed_rows(
             con,
             concept_name=concept_name,
+            from_year=from_year,
+            to_year=to_year,
             events=events,
+        )
+
+        con.execute(
+            """
+            UPDATE concepts
+            SET n_events = (
+                SELECT COUNT(*)
+                FROM concept_seeds
+                WHERE concept = ?
+            )
+            WHERE concept = ?
+            """,
+            (
+                concept_name,
+                concept_name,
+            ),
         )
 
         run_id = _insert_retrieval_run(
             con,
             concept_name=concept_name,
+            from_year=from_year,
+            to_year=to_year,
             seed_population=seed_population,
             neighbour_population=neighbour_population,
             scales=scales,
@@ -530,30 +643,6 @@ def write_tier2_sqlite(
             events=events,
         )
 
-        aggregate_rows = list(
-            _aggregate_rows(
-                concept_name,
-                events,
-            )
-        )
-
-        if aggregate_rows:
-            con.executemany(
-                """
-                INSERT INTO concept_aggregate (
-                    concept,
-                    kind,
-                    rank,
-                    value,
-                    window_doc_id,
-                    window_id,
-                    count
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                aggregate_rows,
-            )
-
         con.commit()
 
     except Exception:
@@ -565,8 +654,10 @@ def write_tier2_sqlite(
 
     logger.info(
         "[tier2] sqlite write complete: "
-        "concept=%s run=%d seeds=%d neighbours=%d",
+        "concept=%s interval=%s-%s run=%d seeds=%d neighbours=%d",
         concept_name,
+        from_year,
+        to_year,
         run_id,
         len(events),
         neighbour_count,
