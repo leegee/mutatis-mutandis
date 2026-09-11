@@ -32,8 +32,7 @@ except ModuleNotFoundError:
     COLAB_MODE = False
 
 # Could use env var
-# OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
-OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else Path("G:") / "corpus-out"
+OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TMP_DIR = OUT_DIR / "tmp"

@@ -19,7 +19,7 @@ from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.macberth import load_macberth
 from retrieval.models import SCALES
-from tier1.check_disk_space import _check_index_disk_space
+# from tier1.check_disk_space import _check_index_disk_space
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("OMP_NUM_THREADS", "4")
@@ -673,58 +673,80 @@ class EventWriter:
         return self._write_lance(observations)
 
 
+    def index_existing_tables(self) -> None:
+        prefixes = tuple(
+            f"{scale}__{LANCE_MODEL_NAME}__"
+            for scale in ACTIVE_SCALES
+        )
+
+        for table_name in sorted(
+            name
+            for name in self.lance.list_tables().tables
+            if name.startswith(prefixes)
+        ):
+            self.tables[table_name] = self.lance.open_table(table_name)
+
+        self.build_indexes()
+
+
     def build_indexes(self) -> None:
         """
-        (Re)build indexes for every Lance table touched this run.
+        Rebuild indexes for tables that are missing an index or contain
+        unindexed rows.
 
-        Called once per script invocation, after all writes are done --
-        not per document -- because rebuilding an IVF index is a
-        table-scan-sized operation, not an incremental one. LanceDB OSS
-        has no automatic indexing (see table.list_indices() /
-        num_unindexed_rows): unlike LanceDB Cloud/Enterprise, nothing
-        keeps these indexes current except this explicit step, so a run
-        that doesn't call it will leave newly appended rows served by
-        brute-force scan until the next time it does.
-
-        The vector index is rebuilt from scratch (create_index with
-        replace=True) rather than incrementally optimised: at these row
-        counts a full rebuild is cheap, and it guarantees the index
-        reflects every row currently in the table rather than trusting an
-        incremental merge to have kept up -- important given accuracy,
-        not just speed, is the requirement here.
-
-        Only tables in self.tables (opened by this run, whether newly
-        created or appended to) are touched. A table this run never wrote
-        to already has a correct index from whichever prior run last
-        rebuilt it; there is nothing to redo.
+        Indexes are treated as derived acceleration structures. A table is
+        complete only when all required indexes exist and cover every row.
         """
-        for table_name in self.tables:
-            table = self.tables[table_name]
+        expected_indexes = {
+            "vector_idx",
+            "event_id_idx",
+            "year_idx",
+            "embedding_model_idx",
+        }
 
+        for table_name, table in self.tables.items():
             row_count = table.count_rows()
+
             if row_count == 0:
                 continue
 
+            indices = {
+                index.name: index
+                for index in table.list_indices()
+            }
+
+            if (
+                expected_indexes <= indices.keys()
+                and all(
+                    indices[name].num_unindexed_rows == 0
+                    for name in expected_indexes
+                )
+            ):
+                logger.info(
+                    "[tier1] indexes already complete for %s (%d rows)",
+                    table_name,
+                    row_count,
+                )
+                continue
+
+            # _check_index_disk_space(
+            #     self.lance_root,
+            #     table_name,
+            #     row_count,
+            # )
+
             num_partitions = vector_index_partitions(row_count)
 
-            self._check_index_disk_space(
-                self.lance_root,
-                table_name,
-                row_count,
-            )
-
             logger.info(
-                "[tier1] building indexes for %s (%d rows, %d partitions)",
+                "[tier1] rebuilding indexes for %s (%d rows, %d partitions)",
                 table_name,
                 row_count,
                 num_partitions,
             )
 
-            started = time.monotonic()
-
             table.create_index(
-                metric="cosine",
-                index_type="IVF_FLAT",
+                metric=VECTOR_INDEX_METRIC,
+                index_type=VECTOR_INDEX_TYPE,
                 vector_column_name="vector",
                 num_partitions=num_partitions,
                 replace=True,
@@ -744,12 +766,6 @@ class EventWriter:
                 "embedding_model",
                 index_type="BTREE",
                 replace=True,
-            )
-
-            logger.info(
-                "[tier1] indexes built for %s in %.2fs",
-                table_name,
-                time.monotonic() - started,
             )
 
 
@@ -1290,6 +1306,12 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--index-only",
+        action="store_true",
+        help="Rebuild incomplete indexes on existing active-scale Lance tables",
+    )
+
+    parser.add_argument(
         "--repair",
         type=parse_repair_target,
         metavar="CORPUS/DOC_ID",
@@ -1355,12 +1377,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    torch.set_num_threads(
-        int(os.environ.get("OMP_NUM_THREADS", "4"))
-    )
+    torch.set_num_threads( int(os.environ.get("OMP_NUM_THREADS", "4")) )
     torch.set_num_interop_threads(1)
 
     conn = get_connection()
+
+    if args.index_only:
+        writer = EventWriter(conn, args.lance_root)
+        writer.index_existing_tables()
+        return
 
     try:
         mac = load_macberth()
