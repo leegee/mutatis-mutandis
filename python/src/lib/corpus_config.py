@@ -48,11 +48,11 @@ CORPUS_TIER2_MASKED_DB_URL = str(Path('data') / 'tier2_concept_neighbours_MASKED
 CORPUS_TIER2_DB_PATH        = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_DB_URL)
 CORPUS_TIER2_MASKED_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_MASKED_DB_URL)
 
-CORPUS_TIER3_DB_URL        = str(Path('data') / 'tier2_concept_neighbours2.db')
-CORPUS_TIER3_MASKED_DB_URL = str(Path('data') / 'tier2_concept_neighbours_MASKED2.db')
+CORPUS_TIER3_DB_URL        = str(Path('data') / 'tier3_concept_neighbours.db')
+CORPUS_TIER3_MASKED_DB_URL = str(Path('data') / 'tier3_concept_neighbours_MASKED2.db')
 
-CORPUS_TIER3_DB_PATH        = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_DB_URL)
-CORPUS_TIER3_MASKED_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER2_MASKED_DB_URL)
+CORPUS_TIER3_DB_PATH        = Path(GUI_PUBLIC_DIR / CORPUS_TIER3_DB_URL)
+CORPUS_TIER3_MASKED_DB_PATH = Path(GUI_PUBLIC_DIR / CORPUS_TIER3_MASKED_DB_URL)
 
 JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 
