@@ -1,0 +1,105 @@
+/** biome-ignore-all lint/complexity/noImportantStyles: <BeerCSS overrides> */
+
+body,
+body.dark {
+	padding: 0;
+	margin: 0;
+
+	--primary: rgb(165, 165, 207) !important;
+	--on-primary: rgb(39, 39, 102) !important;
+
+	--secondary: rgb(30, 112, 14) !important;
+	--on-secondary: rgb(189, 202, 187) !important;
+
+	--tertiary: rgb(90, 86, 97) !important;
+	--on-tertiary: rgb(197, 189, 212) !important;
+
+	--error: rgb(245, 108, 108) !important;
+	--on-error: rgb(221, 202, 202) !important;
+
+	--footer-border: rgba(197, 189, 212, 50%) !important;
+
+	--surface-container-lowest: hsl(271, 36%, 2%);
+	--surface-container-low: hsl(271, 56%, 4%);
+	--surface: hsl(271, 76%, 6%);
+	--surface-container: hsl(271, 76%, 6%);
+	--surface-container-high: hsl(271, 86%, 10%);
+	--surface-container-highest: hsl(271, 96%, 16%);
+}
+
+h1 {
+	font-size: 3em;
+}
+
+h2 {
+	font-size: 2em;
+}
+
+h3 {
+	font-size: 1.4em;
+}
+
+h4,
+h5,
+h6 {
+	font-size: 1em;
+	font-weight: bold;
+}
+
+nav.footer {
+	margin-top: 2rem !important;
+	padding-top: 2rem !important;
+	border-top: 1px dotted var(--footer-border);
+	justify-content: space-between;
+}
+
+/* Counter BeerCSS */
+header {
+	padding: 0 !important;
+
+	button {
+		--_size: 1rem;
+		margin-right: 1em;
+	}
+}
+
+header.title {
+	border-left: unset !important;
+	border-top: unset !important;
+	border-right: unset !important;
+	line-height: unset !important;
+	min-block-size: 3em !important;
+
+	h3 {
+		font-size: 1.3em;
+	}
+
+	h3,
+	button {
+		padding: 0 !important;
+		margin: 0 !important;
+	}
+}
+
+.navigation-button-menu {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 999;
+}
+
+/* Counter BeerCSS */
+section:first-of-type {
+	margin-block-start: 0 !important;
+	padding-top: 0 !important;
+}
+
+/* Text pages that center */
+.top-level-view {
+	max-width: clamp(40em, 80em, 90vw);
+	margin: auto;
+}
+
+.invalid-input {
+	color: var(--error, red);
+}

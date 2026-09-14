@@ -1,0 +1,121 @@
+import { createEffect, createSignal, Show } from "solid-js";
+
+import BaseModal from "./BaseModal";
+import { modalState } from "./modal";
+
+export default function ModalHost() {
+	const request = modalState();
+
+	const [value, setValue] = createSignal("");
+
+	createEffect(() => {
+		const current = request();
+
+		if (current?.kind === "prompt") {
+			setValue(current.defaultValue ?? "");
+		} else {
+			setValue("");
+		}
+	});
+
+	function close() {
+		const current = request();
+		if (!current) return;
+
+		switch (current.kind) {
+			case "alert":
+				current.resolve();
+				break;
+
+			case "confirm":
+				current.resolve(false);
+				break;
+
+			case "prompt":
+				current.resolve(null);
+				break;
+
+			case "custom":
+				current.resolve();
+				break;
+		}
+	}
+
+	return (
+		<Show when={request()}>
+			{(current) => (
+				<BaseModal open={true} title={current().title} onClose={close} style={current().style ?? ""}>
+					{(() => {
+						const modal = current();
+
+						switch (modal.kind) {
+							case "alert":
+								return (
+									<div>
+										<p>{modal.message}</p>
+
+										<nav class="footer">
+											<button type="button" onClick={() => modal.resolve()}>
+												OK
+											</button>
+										</nav>
+									</div>
+								);
+
+							case "confirm":
+								return (
+									<div>
+										<p>{modal.message}</p>
+
+										<nav class="footer">
+											<button type="button" class="transparent" onClick={() => modal.resolve(false)}>
+												Cancel
+											</button>
+											<button type="button" class="error" onClick={() => modal.resolve(true)}>
+												Confirm
+											</button>
+										</nav>
+									</div>
+								);
+
+							case "prompt":
+								return (
+									<form
+										onSubmit={(event) => {
+											event.preventDefault();
+											modal.resolve(value());
+										}}
+									>
+										<div>
+											<p>{modal.message}</p>
+
+											<div class="field label border">
+												<input
+													class="text"
+													autofocus
+													value={value()}
+													onInput={(event) => setValue(event.currentTarget.value)}
+												/>
+
+												<label>{modal.message}</label>
+											</div>
+
+											<nav class="footer">
+												<button type="button" class="transparent" onClick={() => modal.resolve(null)}>
+													Cancel
+												</button>
+												<button type="submit">OK</button>
+											</nav>
+										</div>
+									</form>
+								);
+
+							case "custom":
+								return modal.content(modal.resolve);
+						}
+					})()}
+				</BaseModal>
+			)}
+		</Show>
+	);
+}
