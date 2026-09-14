@@ -38,13 +38,14 @@ from lib.corpus_logging import logger
 from retrieval.lance_observation_index_store import (
     LanceObservationIndexStore,
 )
-from retrieval.models import SCALES, SearchSpace
+from retrieval.models import SearchSpace
 from tier2.sqlite import write_tier2_sqlite
 from tier2.analysis import (
     BATCH_SIZE,
     K,
     OVERSAMPLE,
     RRF_K,
+    TIER2_SCALES,
     iter_neighbour_batches,
     resolve_concept_positions,
 )
@@ -144,20 +145,14 @@ def _resolve_search_scope(
         )
 
     scales = tuple(
-        search_space.resolve_scales(
-            set(SCALES)
-        )
+        search_space.resolve_scales( set(TIER2_SCALES) )
     )
 
     if not scales:
-        raise ValueError(
-            "SearchSpace resolves to no available scales"
-        )
+        raise ValueError( "SearchSpace resolves to no available scales" )
 
     if not candidate_years:
-        logger.warning(
-            "[tier2] SearchSpace resolves to no searchable years"
-        )
+        logger.warning( "[tier2] SearchSpace resolves to no searchable years" )
 
     return candidate_years, scales
 
@@ -393,7 +388,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--oversample",
-        type=int,
+        type=float,
         default=OVERSAMPLE,
         help=f"ANN oversampling factor (default: {OVERSAMPLE}).",
     )
@@ -429,7 +424,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scale",
         action="append",
-        choices=SCALES,
+        choices=TIER2_SCALES,
         dest="scales",
         help="Scale to use; may be specified more than once.",
     )

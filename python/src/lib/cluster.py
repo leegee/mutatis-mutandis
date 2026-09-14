@@ -9,6 +9,7 @@ from sklearn.metrics.pairwise import cosine_distances
 from sklearn.neighbors import NearestNeighbors
 
 from lib.corpus_logging import logger
+from retrieval.observation_index import ObservationIndex
 
 MIN_IN_CLUSTER = 7
 
@@ -41,47 +42,23 @@ def load_event_rows(con, concept):
     """
     Load the empirical semantic field for a concept.
 
-    The field is the union of:
-
-      * seed events belonging directly to the concept;
-      * distinct semantic neighbours retrieved from those seeds.
-
-    Tier 2 stores neighbour metadata directly because a neighbour is an
-    occurrence-level observation that may be reached from multiple seeds.
-
-    Returns rows of:
-
-        (event_id, vector_id, pub_year)
+    Tier 2 owns field membership. Corpus metadata remains authoritative in
+    PostgreSQL and embedding geometry remains authoritative in Lance.
     """
     return con.execute(
         """
         SELECT
             event_id,
-            vector_id,
-            pub_year
-        FROM events
+            role
+        FROM event_field
         WHERE concept = ?
-
-        UNION
-
-        SELECT
-            n.neighbour_event_id AS event_id,
-            n.vector_id,
-            n.pub_year
-        FROM neighbours AS n
-        JOIN events AS e
-            ON e.event_id = n.event_id
-        WHERE e.concept = ?
-
         ORDER BY event_id
         """,
-        (
-            concept,
-            concept,
-        ),
+        (concept,),
     ).fetchall()
 
-def load_vectors(lookup, event_rows):
+
+def load_vectors(index, event_rows):
     event_ids = [
         int(row[0])
         for row in event_rows
@@ -96,8 +73,8 @@ def load_vectors(lookup, event_rows):
             ),
         )
 
-    vectors = embeddings_year_major(
-        lookup,
+    vectors = embeddings(
+        index,
         event_ids,
     )
 
@@ -369,20 +346,16 @@ def stratified_sample_ids(
     return chosen
 
 
-def iter_embeddings_year_major(
-    lookup,
+def iter_embeddings(
+    index: ObservationIndex,
     event_ids,
     sub_chunk_size=DEFAULT_EMBED_SUB_CHUNK,
 ):
     """
-    Stream vector chunks grouped by publication year.
+    Stream vectors in bounded chunks.
 
-    The observation lookup owns physical vector storage. This layer does
-    not know or care how vectors are indexed or persisted.
-
-    Sub-chunking bounds the largest individual vector retrieval and
-    temporary array, while year-major access preserves locality in the
-    materialised Tier 1 store.
+    Lance is authoritative for embedding geometry. Event IDs remain the
+    stable lookup key; no physical row position is used.
     """
     event_ids = [
         int(e)
@@ -392,65 +365,43 @@ def iter_embeddings_year_major(
     if not event_ids:
         return
 
-    by_year = {}
+    for start in range(
+        0,
+        len(event_ids),
+        sub_chunk_size,
+    ):
+        chunk_ids = event_ids[
+            start:start + sub_chunk_size
+        ]
 
-    for event_id in event_ids:
-        pos = lookup.get_pos(event_id)
-        year = int(
-            lookup.pub_year[pos]
+        vectors = index.reconstruct_many(
+            chunk_ids
         )
 
-        by_year.setdefault(
-            year,
-            [],
-        ).append(event_id)
-
-    for year in sorted(by_year):
-        ids = by_year[year]
-
-        logger.info(
-            f"[tier3] embeddings year={year} "
-            f"n={len(ids):,} "
-            f"(of {len(event_ids):,} requested)"
+        vectors = np.asarray(
+            vectors,
+            dtype=np.float32,
         )
 
-        for start in range(
-            0,
-            len(ids),
-            sub_chunk_size,
-        ):
-            chunk_ids = ids[
-                start:start + sub_chunk_size
-            ]
+        yield (
+            chunk_ids,
+            vectors,
+        )
 
-            vectors = lookup.get_concatenated_embeddings(
-                chunk_ids
-            )
-
-            vectors = np.asarray(
-                vectors,
-                dtype=np.float32,
-            )
-
-            yield (
-                chunk_ids,
-                vectors,
-            )
-
-            del vectors
+        del vectors
 
 
-def embeddings_year_major(
-    lookup,
+def embeddings(
+    index: ObservationIndex,
     event_ids,
     sub_chunk_size=DEFAULT_EMBED_SUB_CHUNK,
 ):
     """
     Return vectors in the same order as event_ids.
 
-    Retrieval is chunked, but this function intentionally materialises
-    the final matrix because its callers have already bounded the number
-    of events being fitted or transformed.
+    Retrieval is chunked, but this function materialises the final matrix
+    because its callers have already bounded the number of events being
+    fitted or transformed.
     """
     event_ids = [
         int(e)
@@ -463,39 +414,26 @@ def embeddings_year_major(
             dtype=np.float32,
         )
 
-    id_to_vec = {}
+    chunks = []
 
     for (
         chunk_ids,
         chunk_vectors,
-    ) in iter_embeddings_year_major(
-        lookup,
+    ) in iter_embeddings(
+        index,
         event_ids,
         sub_chunk_size=sub_chunk_size,
     ):
-        for i, event_id in enumerate(chunk_ids):
-            id_to_vec[event_id] = chunk_vectors[i]
+        chunks.append(chunk_vectors)
 
-    first = next(
-        iter(id_to_vec.values())
+    return np.concatenate(
+        chunks,
+        axis=0,
     )
-
-    output = np.empty(
-        (
-            len(event_ids),
-            first.shape[0],
-        ),
-        dtype=np.float32,
-    )
-
-    for i, event_id in enumerate(event_ids):
-        output[i] = id_to_vec[event_id]
-
-    return output
 
 
 def fit_coarse_centroids(
-    lookup,
+    index,
     event_ids,
     *,
     k=DEFAULT_COARSE_K,
@@ -523,8 +461,8 @@ def fit_coarse_centroids(
     for (
         chunk_ids,
         chunk_vectors,
-    ) in iter_embeddings_year_major(
-        lookup,
+    ) in iter_embeddings(
+        index,
         event_ids,
         sub_chunk_size=sub_chunk_size,
     ):
@@ -538,7 +476,7 @@ def fit_coarse_centroids(
 
 
 def score_nearest_centroid_distance(
-    lookup,
+    index,
     event_ids,
     centroids,
     *,
@@ -554,8 +492,8 @@ def score_nearest_centroid_distance(
     for (
         chunk_ids,
         chunk_vectors,
-    ) in iter_embeddings_year_major(
-        lookup,
+    ) in iter_embeddings(
+        index,
         event_ids,
         sub_chunk_size=sub_chunk_size,
     ):
@@ -676,7 +614,7 @@ def select_local_fit_sample(
 
 
 def build_global_projection(
-    lookup,
+    index,
     all_field_event_ids,
     *,
     strata=None,
@@ -717,8 +655,8 @@ def build_global_projection(
         }
 
     if n <= fit_max:
-        vectors = embeddings_year_major(
-            lookup,
+        vectors = embeddings(
+            index,
             event_ids,
         )
 
@@ -771,8 +709,8 @@ def build_global_projection(
         f"{transform_batch:,}"
     )
 
-    fit_vectors = embeddings_year_major(
-        lookup,
+    fit_vectors = embeddings(
+        index,
         fit_ids,
     )
 
@@ -812,8 +750,8 @@ def build_global_projection(
             start:start + transform_batch
         ]
 
-        batch_vectors = embeddings_year_major(
-            lookup,
+        batch_vectors = embeddings(
+            index,
             batch_ids,
         )
 
@@ -903,7 +841,7 @@ def compute_cluster_centroids(
 
 
 def compute_cluster_centroid_vectors_streaming(
-    lookup,
+    index,
     event_ids,
     clusters,
     *,
@@ -933,8 +871,8 @@ def compute_cluster_centroid_vectors_streaming(
     for (
         chunk_ids,
         chunk_vectors,
-    ) in iter_embeddings_year_major(
-        lookup,
+    ) in iter_embeddings(
+        index,
         event_ids,
         sub_chunk_size=sub_chunk_size,
     ):
@@ -1001,7 +939,7 @@ def assign_labels_by_nearest_fit(
 
 
 def local_project_and_cluster(
-    lookup,
+    index,
     event_ids,
     *,
     strata=None,
@@ -1064,8 +1002,8 @@ def local_project_and_cluster(
         }
 
     if n <= fit_max:
-        vectors = embeddings_year_major(
-            lookup,
+        vectors = embeddings(
+            index,
             event_ids,
         )
 
@@ -1129,14 +1067,14 @@ def local_project_and_cluster(
     )
 
     centroids = fit_coarse_centroids(
-        lookup,
+        index,
         event_ids,
         k=coarse_k,
         seed=seed,
     )
 
     distances = score_nearest_centroid_distance(
-        lookup,
+        index,
         event_ids,
         centroids,
     )
@@ -1161,8 +1099,8 @@ def local_project_and_cluster(
         f"{transform_batch:,}"
     )
 
-    fit_vectors = embeddings_year_major(
-        lookup,
+    fit_vectors = embeddings(
+        index,
         fit_ids,
     )
 
@@ -1214,8 +1152,8 @@ def local_project_and_cluster(
             start:start + transform_batch
         ]
 
-        batch_vectors = embeddings_year_major(
-            lookup,
+        batch_vectors = embeddings(
+            index,
             batch_ids,
         )
 
@@ -1263,7 +1201,7 @@ def local_project_and_cluster(
 
     cluster_centroid_vectors = (
         compute_cluster_centroid_vectors_streaming(
-            lookup,
+            index,
             event_ids,
             clusters,
         )

@@ -15,6 +15,10 @@ Tier 2 SQLite stores analytical provenance and derived products:
     retrieval_runs
         configuration and identity of one retrieval experiment
 
+    event_field
+        derived population of corpus events constituting a concept's
+        semantic field
+
     neighbour_edges
         relationships discovered by a retrieval run
 
@@ -23,6 +27,13 @@ Tier 2 SQLite stores analytical provenance and derived products:
 
     concept_cluster_info
         derived spatial/cluster summaries
+
+An event is an entity.
+An edge is a relationship.
+A semantic field is a population of entities.
+A retrieval run is an operation that produces relationships between them.
+event_field materialises that population so consumers do not have to
+reconstruct it from retrieval provenance.
 
 Event metadata is deliberately not duplicated here. It remains available
 from PostgreSQL through event_id.
@@ -143,6 +154,21 @@ CREATE TABLE IF NOT EXISTS concept_cluster_info (
         REFERENCES concepts(concept)
 );
 
+
+CREATE TABLE IF NOT EXISTS event_field (
+    concept   TEXT    NOT NULL,
+    event_id  INTEGER NOT NULL,
+    role      TEXT    NOT NULL,
+
+    PRIMARY KEY (concept, event_id),
+
+    FOREIGN KEY (concept)
+        REFERENCES concepts(concept),
+
+    CHECK (role IN ('seed', 'neighbour', 'both'))
+);
+
+
 CREATE INDEX IF NOT EXISTS idx_concept_seeds_concept
     ON concept_seeds(concept);
 
@@ -172,11 +198,19 @@ CREATE INDEX IF NOT EXISTS idx_neighbour_edges_run_seed
 
 CREATE INDEX IF NOT EXISTS idx_aggregate_concept
     ON concept_aggregate(concept, kind);
+
+CREATE INDEX IF NOT EXISTS idx_event_field_concept
+    ON event_field(concept);
+
+CREATE INDEX IF NOT EXISTS idx_event_field_event
+    ON event_field(event_id);
 """
+
 
 _SCHEMA_CLEAR = (
     "DELETE FROM neighbour_edges",
     "DELETE FROM retrieval_runs",
+    "DELETE FROM event_field",
     "DELETE FROM concept_seeds",
     "DELETE FROM concept_cluster_info",
     "DELETE FROM concept_aggregate",
@@ -643,6 +677,11 @@ def write_tier2_sqlite(
             events=events,
         )
 
+        _rebuild_event_field(
+            con,
+            concept_name=concept_name,
+        )
+
         con.commit()
 
     except Exception:
@@ -661,4 +700,80 @@ def write_tier2_sqlite(
         run_id,
         len(events),
         neighbour_count,
+    )
+
+def _rebuild_event_field(
+    con,
+    *,
+    concept_name: str,
+) -> None:
+    """
+    Rebuild the complete event population for one concept.
+
+    event_field is derived from all currently persisted seed membership and
+    retrieval relationships. It deliberately contains no corpus metadata;
+    event_id remains the bridge to PostgreSQL and Lance.
+
+    Failure mode:
+        Rebuilding after an interval replacement prevents events from a
+        removed interval surviving as stale field membership.
+    """
+    con.execute(
+        """
+        DELETE FROM event_field
+        WHERE concept = ?
+        """,
+        (concept_name,),
+    )
+
+    con.execute(
+        """
+        INSERT INTO event_field (
+            concept,
+            event_id,
+            role
+        )
+        SELECT
+            ?,
+            s.event_id,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM neighbour_edges ne
+                    JOIN retrieval_runs rr
+                      ON rr.run_id = ne.run_id
+                    WHERE rr.concept = ?
+                      AND ne.neighbour_event_id = s.event_id
+                )
+                THEN 'both'
+                ELSE 'seed'
+            END
+        FROM concept_seeds s
+        WHERE s.concept = ?
+
+        UNION
+
+        SELECT
+            ?,
+            ne.neighbour_event_id,
+            'neighbour'
+        FROM neighbour_edges ne
+        JOIN retrieval_runs rr
+          ON rr.run_id = ne.run_id
+        WHERE rr.concept = ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM concept_seeds s
+              WHERE s.concept = ?
+                AND s.event_id = ne.neighbour_event_id
+          )
+        """,
+        (
+            concept_name,
+            concept_name,
+            concept_name,
+            concept_name,
+            concept_name,
+            concept_name,
+        ),
     )

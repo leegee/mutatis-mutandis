@@ -35,14 +35,29 @@ from typing import Any, Iterable
 
 from lib.corpus_logging import logger
 from retrieval.lance_search import multiscale_search
-from retrieval.models import SCALES
 
 K = 60
 RRF_K = 60
 OVERSAMPLE = 1.2
 BATCH_SIZE = 256
+TIER2_SCALES = ("local",)
 
 _NO_WPOS = -1
+
+
+def _validate_scales(scales: Iterable[str]) -> tuple[str, ...]:
+    requested = tuple(scales)
+
+    unsupported = set(requested) - set(TIER2_SCALES)
+
+    if unsupported:
+        raise ValueError(
+            "Tier 2 requested unavailable scales: "
+            f"{sorted(unsupported)}; available scales: "
+            f"{list(TIER2_SCALES)}"
+        )
+
+    return requested
 
 
 @dataclass(frozen=True, slots=True)
@@ -435,6 +450,8 @@ def iter_neighbour_batches(
     """
     if not seed_event_ids:
         return
+
+    scales = _validate_scales(scales)
 
     false_positives = _normalise_forms(
         false_positives or []

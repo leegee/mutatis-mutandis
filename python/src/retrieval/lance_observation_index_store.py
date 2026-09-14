@@ -62,8 +62,18 @@ class LanceObservationIndexStore(ObservationIndexStore):
         self._nprobes = nprobes
         self._model = model
 
-        self._db = lancedb.connect( str(self._lance_root) )
+        unsupported_scales = (
+            set(self._available_scales) - set(SCALES)
+        )
 
+        if unsupported_scales:
+            raise ValueError(
+                "Unsupported observation index scale(s): "
+                f"{sorted(unsupported_scales)}; "
+                f"available scales: {list(SCALES)}"
+            )
+
+        self._db = lancedb.connect( str(self._lance_root) )
         self._tables = self._discover_tables()
 
         logger.info(
