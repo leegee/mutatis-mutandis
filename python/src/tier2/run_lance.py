@@ -27,19 +27,18 @@ from pathlib import Path
 
 from lib.corpus_config import (
     CONCEPT_SETS,
-    CORPUS_TIER2_DB_PATH,
     LANCE_INDEXES_DIR,
     CORPUS_MIN_YEAR,
     CORPUS_MAX_YEAR
 )
 from lib.macberth import MACBERTH_MODEL_NAME
-from lib.corpus_db import get_connection
+from lib.corpus_db import get_autocommit_connection
 from lib.corpus_logging import logger
 from retrieval.lance_observation_index_store import (
     LanceObservationIndexStore,
 )
 from retrieval.models import SearchSpace
-from tier2.sqlite import write_tier2_sqlite
+from tier2.postgres import write_tier2_postgres
 from tier2.analysis import (
     BATCH_SIZE,
     K,
@@ -214,7 +213,6 @@ def run_lance_tier2(
     indexes_by_year,
     candidate_years: tuple[int, ...],
     scales: tuple[str, ...],
-    sqlite_path: str | Path = CORPUS_TIER2_DB_PATH,
     top_n: int = K,
     rrf_k: int = RRF_K,
     oversample: int = OVERSAMPLE,
@@ -223,7 +221,7 @@ def run_lance_tier2(
     clear: bool = False,
     from_year: int,
     to_year: int,
-) -> Path:
+) -> int:
     """
     Run one concept and persist its Tier 2 result.
 
@@ -316,10 +314,8 @@ def run_lance_tier2(
 
     write_started = time.perf_counter()
 
-    sqlite_path = Path(sqlite_path)
-
-    write_tier2_sqlite(
-        db_path=sqlite_path,
+    run_id = write_tier2_postgres(
+        connection=connection,
         concept_name=concept_name,
         events=output_seed_results,
         clear=clear,
@@ -334,25 +330,31 @@ def run_lance_tier2(
         to_year=to_year,
     )
 
-    write_time = (
-        time.perf_counter()
-        - write_started
-    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT run_id, concept, from_year, to_year
+            FROM tier2.retrieval_runs
+            WHERE run_id = %s
+            """,
+            (run_id,),
+        )
+        persisted_run = cursor.fetchone()
 
-    total_time = (
-        time.perf_counter()
-        - started
-    )
+    logger.info( "[tier2] post-write visibility: run=%s row=%s", run_id, persisted_run, )
+
+    write_time = ( time.perf_counter() - write_started )
+    total_time = ( time.perf_counter() - started )
 
     logger.info(
-        "[tier2] concept=%s timing: search=%.3fs sqlite=%.3fs total=%.3fs",
+        "[tier2] concept=%s timing: search=%.3fs pg=%.3fs total=%.3fs",
         concept_name,
         search_time,
         write_time,
         total_time,
     )
 
-    return sqlite_path
+    return run_id
 
 
 def parse_args() -> argparse.Namespace:
@@ -368,7 +370,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--clear",
         action="store_true",
-        help="Clear Tier 2 SQLite output before the first concept.",
+        help="Clear Tier 2 output before the first concept.",
     )
 
     parser.add_argument(
@@ -436,13 +438,6 @@ def parse_args() -> argparse.Namespace:
         help="Lance index root.",
     )
 
-    parser.add_argument(
-        "--sqlite",
-        type=str,
-        default=str(CORPUS_TIER2_DB_PATH),
-        help="Tier 2 SQLite output path.",
-    )
-
     return parser.parse_args()
 
 
@@ -488,16 +483,12 @@ def main() -> None:
         else None
     )
 
-    logger.info(
-        "[tier2] processing %d concept(s)",
-        len(concept_names),
-    )
-    logger.info(
-        "[tier2] SQLite output: %s",
-        args.sqlite,
-    )
+    logger.info( "[tier2] processing %d concept(s)", len(concept_names), )
+    logger.info("[tier2] PostgreSQL analytical output")
 
-    connection = get_connection()
+    connection = get_autocommit_connection(
+        application_name="tier2-run-lance",
+    )
 
     try:
         available_years = _available_event_years(
@@ -604,7 +595,6 @@ def main() -> None:
                     indexes_by_year=indexes_by_year,
                     candidate_years=candidate_years,
                     scales=scales,
-                    sqlite_path=args.sqlite,
                     top_n=args.k,
                     rrf_k=args.rrf_k,
                     oversample=args.oversample,
