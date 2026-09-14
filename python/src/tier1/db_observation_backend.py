@@ -1,7 +1,7 @@
+# db_observation_backend.py
+
 from typing import Sequence
-
 from psycopg import Connection
-
 from lib.corpus_logging import logger
 
 
