@@ -1,3 +1,5 @@
+# tier1/tier1_corpus2events.py
+
 from __future__ import annotations
 
 import argparse
