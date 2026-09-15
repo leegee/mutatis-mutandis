@@ -9,17 +9,17 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+import pyarrow as pa
 import lancedb
 import numpy as np
 import torch
-import xxhash
 
 from lib.corpus_config import CONCEPT_SETS, EMBED_BATCH_SIZE, LANCE_INDEXES_DIR
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.macberth import load_macberth
 from retrieval.models import SCALES
-# from tier1.check_disk_space import _check_index_disk_space
+from tier1.db_observation_backend import allocate_event_ids, insert_events, create_events_table
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("OMP_NUM_THREADS", "4")
@@ -37,30 +37,11 @@ ACTIVE_SCALES = ("local",)
 LANCE_MODEL_NAME = "macberth"
 LANCE_BUCKET_SIZE = 50
 
-# Vector index configuration. IVF_FLAT is used deliberately -- it retains
-# full-precision vectors inside each partition (only *which partitions get
-# probed* is approximate, via nprobes at query time). IVF_PQ or any *_SQ
-# variant would additionally quantize the stored vectors themselves, which
-# is a real accuracy loss this corpus cannot tolerate. Do not change this
-# to IVF_PQ for a "smaller index" without re-litigating that tradeoff.
 VECTOR_INDEX_TYPE = "IVF_FLAT"
 VECTOR_INDEX_METRIC = "cosine"
 
-# Bucket densities vary enormously across a chronological corpus (a sparse
-# 1476-1525 bucket vs. a busy 1650-1699 bucket), so a fixed num_partitions
-# is wrong in both directions: too many partitions for a small bucket
-# degrades IVF cluster quality (or fails to build at all), too few for a
-# large bucket gives up recall/speed. Partition count is therefore derived
-# from the table's own row count at build time, not hardcoded.
 MIN_VECTOR_INDEX_PARTITIONS = 1
 MAX_VECTOR_INDEX_PARTITIONS = 256
-
-
-def stable_hash(key: str) -> int:
-    # PostgreSQL BIGINT is signed, whereas xxhash returns an unsigned
-    # 64-bit integer. Keep the stable lower 63 bits so the same occurrence
-    # receives the same PostgreSQL-safe ID on every rerun.
-    return xxhash.xxh64(key, seed=0).intdigest() & 0x7FFFFFFFFFFFFFFF
 
 
 def normalise_token(token: str) -> str:
@@ -149,13 +130,26 @@ class TokenRow:
 
 
 @dataclass(slots=True)
+class EmbeddedVector:
+    vector: np.ndarray
+    window_id: int
+    window_token_pos: int
+
+
+@dataclass(slots=True)
 class Observation:
-    event_id: int
+    event_id: int | None
     corpus: str
     doc_id: str
     token: str
     token_idx: int
     pub_year: int | None
+    local_window_id: int | None
+    local_window_token_pos: int | None
+    medium_window_id: int | None
+    medium_window_token_pos: int | None
+    broad_window_id: int | None
+    broad_window_token_pos: int | None
 
 
 @dataclass(slots=True)
@@ -198,11 +192,11 @@ class MacBERThPipeline:
         self,
         document: DocBuffer,
         target_positions: set[int],
-    ) -> dict[int, dict[str, np.ndarray]]:
+    ) -> dict[int, dict[str, EmbeddedVector]]:
         if not target_positions:
             return {}
 
-        results: dict[int, dict[str, np.ndarray]] = {
+        results: dict[int, dict[str, EmbeddedVector]] = {
             position: {}
             for position in target_positions
         }
@@ -256,7 +250,11 @@ class MacBERThPipeline:
 
                         results[word_position][
                             config["name"]
-                        ] = vector
+                        ] = EmbeddedVector(
+                            vector=vector,
+                            window_id=job["window_id"],
+                            window_token_pos=target["encoded_position"],
+                        )
 
         missing = []
 
@@ -549,6 +547,7 @@ class MacBERThPipeline:
             {
                 "input_ids": window_ids,
                 "attention_mask": window_mask,
+                "window_id": context_start_word,
                 "targets": target_positions_in_window,
             }
         )
@@ -648,17 +647,21 @@ class EventWriter:
         if not observations:
             return 0
 
-        new_observations = self._new_observations(
-            observations
+        event_ids = allocate_event_ids(
+            self.conn,
+            len(observations),
         )
 
-        if not new_observations:
-            return 0
+        for embedded, event_id in zip(
+            observations,
+            event_ids,
+        ):
+            embedded.observation.event_id = event_id
 
-        self._write_postgres(new_observations)
-        self._write_lance(new_observations)
+        self._write_postgres(observations)
+        self._write_lance(observations)
 
-        return len(new_observations)
+        return len(observations)
 
     def repair_lance(
         self,
@@ -667,11 +670,9 @@ class EventWriter:
         if not observations:
             return 0
 
-        # Repair deliberately does not consult or modify PostgreSQL.
-        # The repair unit is a document whose current event records already
-        # exist; Lance is reconciled only for the explicitly requested work.
-        return self._write_lance(observations)
+        self._resolve_repair_event_ids(observations)
 
+        return self._write_lance(observations)
 
     def index_existing_tables(self) -> None:
         prefixes = tuple(
@@ -687,7 +688,6 @@ class EventWriter:
             self.tables[table_name] = self.lance.open_table(table_name)
 
         self.build_indexes()
-
 
     def build_indexes(self) -> None:
         """
@@ -729,12 +729,6 @@ class EventWriter:
                 )
                 continue
 
-            # _check_index_disk_space(
-            #     self.lance_root,
-            #     table_name,
-            #     row_count,
-            # )
-
             num_partitions = vector_index_partitions(row_count)
 
             logger.info(
@@ -768,74 +762,151 @@ class EventWriter:
                 replace=True,
             )
 
-
-    def _new_observations(
+    def _resolve_repair_event_ids(
         self,
         observations: list[EmbeddedObservation],
-    ) -> list[EmbeddedObservation]:
-        event_ids = [
-            embedded.observation.event_id
-            for embedded in observations
-        ]
+    ) -> None:
+        """
+        Repair is allowed to identify an existing event only by its complete
+        contextual provenance. Token position alone is not an observation
+        identity because multiple observations may legitimately share it.
+        """
+        if not observations:
+            return
 
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT event_id
-                FROM events
-                WHERE event_id = ANY(%s)
-                """,
-                (event_ids,),
+        for embedded in observations:
+            observation = embedded.observation
+
+            clauses = [
+                "corpus = %s",
+                "doc_id = %s",
+                "token_idx = %s",
+                "local_window_id IS NOT DISTINCT FROM %s",
+                "local_window_token_pos IS NOT DISTINCT FROM %s",
+                "medium_window_id IS NOT DISTINCT FROM %s",
+                "medium_window_token_pos IS NOT DISTINCT FROM %s",
+                "broad_window_id IS NOT DISTINCT FROM %s",
+                "broad_window_token_pos IS NOT DISTINCT FROM %s",
+            ]
+
+            params = (
+                observation.corpus,
+                observation.doc_id,
+                observation.token_idx,
+                observation.local_window_id,
+                observation.local_window_token_pos,
+                observation.medium_window_id,
+                observation.medium_window_token_pos,
+                observation.broad_window_id,
+                observation.broad_window_token_pos,
             )
 
-            existing_ids = {
-                row[0]
-                for row in cur.fetchall()
-            }
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT event_id
+                    FROM events
+                    WHERE {" AND ".join(clauses)}
+                    """,
+                    params,
+                )
 
-        return [
-            embedded
-            for embedded in observations
-            if embedded.observation.event_id
-            not in existing_ids
-        ]
+                rows = cur.fetchall()
+
+            if not rows:
+                raise RuntimeError(
+                    "Lance repair could not find an existing PostgreSQL "
+                    "event for observation "
+                    f"{observation.corpus}/"
+                    f"{observation.doc_id}/"
+                    f"{observation.token_idx} "
+                    f"with window provenance "
+                    f"local={observation.local_window_id}:"
+                    f"{observation.local_window_token_pos}, "
+                    f"medium={observation.medium_window_id}:"
+                    f"{observation.medium_window_token_pos}, "
+                    f"broad={observation.broad_window_id}:"
+                    f"{observation.broad_window_token_pos}"
+                )
+
+            if len(rows) > 1:
+                raise RuntimeError(
+                    "Lance repair found multiple PostgreSQL events for "
+                    "the same complete observation provenance: "
+                    f"{observation.corpus}/"
+                    f"{observation.doc_id}/"
+                    f"{observation.token_idx}"
+                )
+
+            observation.event_id = int(rows[0][0])
 
     def _write_postgres(
         self,
         observations: list[EmbeddedObservation],
     ) -> None:
-        rows = []
+        if not observations:
+            return
 
-        for embedded in observations:
-            observation = embedded.observation
-
-            rows.append(
-                (
-                    observation.event_id,
-                    observation.corpus,
-                    observation.doc_id,
-                    observation.token,
-                    observation.token_idx,
-                    observation.pub_year,
-                )
+        if any(
+            embedded.observation.event_id is None
+            for embedded in observations
+        ):
+            raise RuntimeError(
+                "Cannot persist observations before PostgreSQL event "
+                "IDs have been allocated."
             )
 
-        with self.conn.cursor() as cur:
-            cur.executemany(
-                """
-                INSERT INTO events (
-                    event_id,
-                    corpus,
-                    doc_id,
-                    token,
-                    token_idx,
-                    pub_year
-                )
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (event_id) DO NOTHING
-                """,
-                rows,
-            )
+        insert_events(
+            self.conn,
+            event_id=[
+                embedded.observation.event_id
+                for embedded in observations
+            ],
+            corpus=[
+                embedded.observation.corpus
+                for embedded in observations
+            ],
+            doc_id=[
+                embedded.observation.doc_id
+                for embedded in observations
+            ],
+            token=[
+                embedded.observation.token
+                for embedded in observations
+            ],
+            token_idx=[
+                embedded.observation.token_idx
+                for embedded in observations
+            ],
+            pub_year=[
+                embedded.observation.pub_year
+                for embedded in observations
+            ],
+            local_window_id=[
+                embedded.observation.local_window_id
+                for embedded in observations
+            ],
+            local_window_token_pos=[
+                embedded.observation.local_window_token_pos
+                for embedded in observations
+            ],
+            medium_window_id=[
+                embedded.observation.medium_window_id
+                for embedded in observations
+            ],
+            medium_window_token_pos=[
+                embedded.observation.medium_window_token_pos
+                for embedded in observations
+            ],
+            broad_window_id=[
+                embedded.observation.broad_window_id
+                for embedded in observations
+            ],
+            broad_window_token_pos=[
+                embedded.observation.broad_window_token_pos
+                for embedded in observations
+            ],
+        )
 
         self.conn.commit()
 
@@ -847,6 +918,12 @@ class EventWriter:
 
         for embedded in observations:
             observation = embedded.observation
+
+            if observation.event_id is None:
+                raise RuntimeError(
+                    "Cannot write an observation to Lance without "
+                    "an authoritative PostgreSQL event ID."
+                )
 
             if observation.pub_year is None:
                 raise ValueError(
@@ -946,12 +1023,17 @@ class EventWriter:
 
         table = self.lance.create_table(
             table_name,
-            schema={
-                "event_id": np.uint64,
-                "year": np.int32,
-                "embedding_model": str,
-                "vector": lancedb.vector(vector_dimensions),
-            },
+            schema=pa.schema(
+                [
+                    pa.field("event_id", pa.uint64()),
+                    pa.field("year", pa.int32()),
+                    pa.field("embedding_model", pa.string()),
+                    pa.field(
+                        "vector",
+                        pa.list_(pa.float32(), vector_dimensions),
+                    ),
+                ]
+            ),
         )
 
         self.tables[table_name] = table
@@ -1136,30 +1218,76 @@ class CorpusProcessor:
         self,
         document: DocBuffer,
         target_positions: set[int],
-        embeddings: dict[int, dict[str, np.ndarray]],
+        embeddings: dict[int, dict[str, EmbeddedVector]],
     ) -> list[EmbeddedObservation]:
         observations = []
 
         for position in sorted(target_positions):
             row = document.rows[position]
 
+            vectors: dict[str, np.ndarray] = {}
+            provenance: dict[str, EmbeddedVector] = {}
+
+            for scale in ACTIVE_SCALES:
+                embedded = embeddings[position].get(scale)
+
+                if embedded is None:
+                    raise RuntimeError(
+                        "Missing embedding provenance for "
+                        f"{document.corpus}/{document.doc_id}/"
+                        f"{row.token_idx}, scale={scale}"
+                    )
+
+                vectors[scale] = embedded.vector
+                provenance[scale] = embedded
+
+            local = provenance.get("local")
+            medium = provenance.get("medium")
+            broad = provenance.get("broad")
+
             observation = Observation(
-                event_id=stable_hash(
-                    f"{row.corpus}:"
-                    f"{row.doc_id}:"
-                    f"{row.token_idx}"
-                ),
+                event_id=None,
                 corpus=row.corpus,
                 doc_id=row.doc_id,
                 token=row.token,
                 token_idx=row.token_idx,
                 pub_year=row.pub_year,
+                local_window_id=(
+                    local.window_id
+                    if local is not None
+                    else None
+                ),
+                local_window_token_pos=(
+                    local.window_token_pos
+                    if local is not None
+                    else None
+                ),
+                medium_window_id=(
+                    medium.window_id
+                    if medium is not None
+                    else None
+                ),
+                medium_window_token_pos=(
+                    medium.window_token_pos
+                    if medium is not None
+                    else None
+                ),
+                broad_window_id=(
+                    broad.window_id
+                    if broad is not None
+                    else None
+                ),
+                broad_window_token_pos=(
+                    broad.window_token_pos
+                    if broad is not None
+                    else None
+                ),
             )
 
             observations.append(
                 EmbeddedObservation(
                     observation=observation,
-                    vectors=embeddings[position],
+                    vectors=vectors,
                 )
             )
 
@@ -1369,7 +1497,9 @@ def parse_args() -> argparse.Namespace:
         args.corpus is not None
         or args.doc_id is not None
     ):
-        parser.error( "--repair cannot be combined with --corpus or --doc-id" )
+        parser.error(
+            "--repair cannot be combined with --corpus or --doc-id"
+        )
 
     return args
 
@@ -1377,10 +1507,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    torch.set_num_threads( int(os.environ.get("OMP_NUM_THREADS", "4")) )
+    torch.set_num_threads(
+        int(os.environ.get("OMP_NUM_THREADS", "4"))
+    )
     torch.set_num_interop_threads(1)
 
     conn = get_connection()
+
+    create_events_table(conn)
 
     if args.index_only:
         writer = EventWriter(conn, args.lance_root)
@@ -1411,12 +1545,21 @@ def main() -> None:
 
         if args.repair is not None:
             corpus, doc_id = args.repair
-            processor.repair( corpus=corpus, doc_id=doc_id, )
+            processor.repair(
+                corpus=corpus,
+                doc_id=doc_id,
+            )
         else:
-            processor.process( corpus=args.corpus, doc_id=args.doc_id, )
+            processor.process(
+                corpus=args.corpus,
+                doc_id=args.doc_id,
+            )
 
         if args.skip_indexing:
-            logger.info( "[tier1] --skip-indexing set; leaving index (re)build  for a later run" )
+            logger.info(
+                "[tier1] --skip-indexing set; leaving index (re)build "
+                "for a later run"
+            )
         else:
             writer.build_indexes()
     finally:

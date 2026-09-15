@@ -28,9 +28,8 @@ def create_events_table(conn: Connection) -> None:
     event_id is the stable identity shared by PostgreSQL and Lance.
     Vector data is deliberately not stored here.
 
-    Multiple events at the same token position are allowed until the
-    existing Parquet data has been checked to establish whether the
-    position is in fact one-to-one with event_id.
+    Multiple observations may legitimately refer to the same corpus token
+    position. event_id therefore identifies an observation, not a token.
     """
     logger.info("[corpus_db] Creating events table")
 
@@ -104,8 +103,8 @@ def sync_event_id_sequence(conn: Connection) -> None:
     """
     Move the event ID sequence beyond the highest imported event ID.
 
-    Historical backfill supplies authoritative IDs; subsequent stock
-    population must therefore allocate IDs after those existing events.
+    PostgreSQL owns event identity. New observations always receive IDs
+    from event_id_seq.
     """
     with conn.transaction():
         with conn.cursor() as cur:
