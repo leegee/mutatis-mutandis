@@ -34,6 +34,8 @@
 > with surrounding pysiognomic imagery?
 >
 > What do the contextual embeddings of 'albino' and 'albinism' retrieve through past centuries and in European traditions for which we have corpus?
+> ie Given that albino is a lexicalised concept in the 19th century, can we discover earlier textual representations of the same/similar
+> phenomenon without assuming beforehand which words expressed it?
 >
 > Can we recursively reverse search over diachronic ranges, taking top results for each period as bridge terms to search with in the earlier  date range?
 

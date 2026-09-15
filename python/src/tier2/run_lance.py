@@ -7,8 +7,8 @@ Current retrieval configuration:
     Seeds are selected from candidate_years. Each seed is then searched
     against the observation population for its own publication year.
 
-The retrieval configuration is persisted with the result so that a
-SQLite database records not only what was found, but under which
+The retrieval configuration is persisted with the result so that the
+analytical database records not only what was found, but under which
 analytical conditions it was found.
 
 Failure mode:
@@ -229,8 +229,8 @@ def run_lance_tier2(
     Temporal restriction currently means that each seed is searched against
     the Lance index for its own publication year.
 
-    The retrieval configuration is persisted with the result so that a
-    SQLite database records not only what was found, but under which
+    The retrieval configuration is persisted with the result so that the
+    analytical database records not only what was found, but under which
     analytical conditions it was found.
 
     Failure mode:
