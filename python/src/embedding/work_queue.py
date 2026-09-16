@@ -247,6 +247,7 @@ def create_work(
 
 def claim_next_work(
     *,
+    model_id: int,
     worker_id: str,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
 ) -> EmbeddingWork | None:
@@ -264,10 +265,13 @@ def claim_next_work(
                     SELECT work_id
                     FROM embedding.work
                     WHERE
-                        status = 'pending'
-                        OR (
-                            status IN ('claimed', 'embedding')
-                            AND lease_expires_at < now()
+                        model_id = %s
+                        AND (
+                            status = 'pending'
+                            OR (
+                                status IN ('claimed', 'embedding')
+                                AND lease_expires_at < now()
+                            )
                         )
                     ORDER BY work_id
                     FOR UPDATE SKIP LOCKED
@@ -297,6 +301,7 @@ def claim_next_work(
                     w.completed_count
                 """,
                 (
+                    model_id,
                     worker_id,
                     lease_seconds,
                 ),
