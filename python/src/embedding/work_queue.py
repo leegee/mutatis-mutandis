@@ -1,3 +1,5 @@
+# embedding/work_queue.py
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -53,9 +55,7 @@ def register_model(
                 )
                 VALUES (%s, %s, %s)
                 ON CONFLICT (model_key, model_revision)
-                DO UPDATE SET
-                    embedding_dimension =
-                        embedding.models.embedding_dimension
+                DO NOTHING
                 RETURNING
                     model_id,
                     model_key,
@@ -70,6 +70,42 @@ def register_model(
             )
 
             row = cur.fetchone()
+
+            if row is None:
+                cur.execute(
+                    """
+                    SELECT
+                        model_id,
+                        model_key,
+                        model_revision,
+                        embedding_dimension
+                    FROM embedding.models
+                    WHERE
+                        model_key = %s
+                        AND model_revision = %s
+                    """,
+                    (
+                        model_key,
+                        model_revision,
+                    ),
+                )
+
+                row = cur.fetchone()
+
+                if row is None:
+                    raise RuntimeError(
+                        "model disappeared after conflict"
+                    )
+
+                existing_dimension = row[3]
+
+                if existing_dimension != embedding_dimension:
+                    raise ValueError(
+                        f"embedding dimension mismatch for "
+                        f"{model_key!r} revision {model_revision!r}: "
+                        f"database has {existing_dimension}, "
+                        f"requested {embedding_dimension}"
+                    )
 
         conn.commit()
 
@@ -365,16 +401,21 @@ def heartbeat(
 
 def record_inventory(
     *,
+    work_id: int,
+    worker_id: str,
     event_id: int,
-    model_id: int,
     embedding_key: str,
 ) -> bool:
     """
-    Record a successfully persisted vector.
+    Record a successfully persisted vector belonging to an owned work item.
 
-    The unique event/model constraint makes retries idempotent at the
-    PostgreSQL inventory level.
+    The work row is authoritative for model identity and event membership.
+    Inventory insertion remains idempotent through the unique
+    (event_id, model_id) constraint.
     """
+    if not worker_id:
+        raise ValueError("worker_id must not be empty")
+
     if not embedding_key:
         raise ValueError("embedding_key must not be empty")
 
@@ -387,19 +428,78 @@ def record_inventory(
                     model_id,
                     embedding_key
                 )
-                VALUES (%s, %s, %s)
+                SELECT
+                    %s,
+                    w.model_id,
+                    %s
+                FROM embedding.work AS w
+                WHERE
+                    w.work_id = %s
+                    AND w.worker_id = %s
+                    AND w.status = 'embedding'
+                    AND %s = ANY(w.event_ids)
                 ON CONFLICT (event_id, model_id)
                 DO NOTHING
                 RETURNING event_id
                 """,
                 (
                     event_id,
-                    model_id,
                     embedding_key,
+                    work_id,
+                    worker_id,
+                    event_id,
                 ),
             )
 
-            inserted = cur.fetchone() is not None
+            row = cur.fetchone()
+
+            if row is not None:
+                inserted = True
+            else:
+                # Distinguish an idempotent retry from an ownership error.
+                cur.execute(
+                    """
+                    SELECT
+                        w.model_id,
+                        w.event_ids,
+                        w.worker_id,
+                        w.status
+                    FROM embedding.work AS w
+                    WHERE w.work_id = %s
+                    """,
+                    (work_id,),
+                )
+
+                work = cur.fetchone()
+
+                if work is None:
+                    raise RuntimeError(
+                        f"work {work_id} does not exist"
+                    )
+
+                model_id, event_ids, owner, status = work
+
+                if owner != worker_id:
+                    raise RuntimeError(
+                        f"work {work_id} is owned by "
+                        f"{owner!r}, not {worker_id!r}"
+                    )
+
+                if status != "embedding":
+                    raise RuntimeError(
+                        f"work {work_id} is not embedding "
+                        f"(status={status!r})"
+                    )
+
+                if event_id not in event_ids:
+                    raise RuntimeError(
+                        f"event {event_id} does not belong to "
+                        f"work {work_id}"
+                    )
+
+                # The vector is already inventoried. This is the expected
+                # result when a batch is being retried after Lance succeeded.
+                inserted = False
 
         conn.commit()
 

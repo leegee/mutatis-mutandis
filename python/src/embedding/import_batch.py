@@ -1,4 +1,5 @@
-# import_batch.py
+# embedding/import_batch.py
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,7 +29,10 @@ class BatchImporter:
 
         self.write_lance(batch)
 
-        self._record_inventory(batch)
+        self._record_inventory(
+            batch,
+            worker_id=worker_id,
+        )
 
         complete_work(
             work_id=batch.work_id,
@@ -41,12 +45,25 @@ class BatchImporter:
         *,
         worker_id: str,
     ) -> None:
+        if not worker_id:
+            raise ValueError("worker_id must not be empty")
+
         if not batch.event_ids:
             raise ValueError("cannot import an empty batch")
 
-        expected_dimension = (
-            self._lance_writer.dimensions
-        )
+        if batch.vectors.ndim != 2:
+            raise ValueError(
+                f"batch vectors must be two-dimensional, "
+                f"got {batch.vectors.ndim} dimensions"
+            )
+
+        if batch.vectors.shape[0] != len(batch.event_ids):
+            raise ValueError(
+                f"batch contains {len(batch.event_ids)} event IDs but "
+                f"{batch.vectors.shape[0]} vectors"
+            )
+
+        expected_dimension = self._lance_writer.dimensions
 
         if batch.vectors.shape[1] != expected_dimension:
             raise ValueError(
@@ -54,6 +71,17 @@ class BatchImporter:
                 f"{batch.vectors.shape[1]} != "
                 f"Lance dimension {expected_dimension}"
             )
+
+        if len(set(batch.event_ids)) != len(batch.event_ids):
+            raise ValueError(
+                "batch contains duplicate event IDs"
+            )
+
+        # Work ownership/model/event membership is validated by
+        # record_inventory() immediately before inventory insertion.
+        #
+        # We deliberately do not duplicate that authoritative check here,
+        # because the work may change state between validation and import.
 
     def write_lance(
         self,
@@ -67,13 +95,15 @@ class BatchImporter:
     def _record_inventory(
         self,
         batch: EmbeddingBatch,
+        *,
+        worker_id: str,
     ) -> None:
         for event_id in batch.event_ids:
             record_inventory(
+                work_id=batch.work_id,
+                worker_id=worker_id,
                 event_id=event_id,
-                model_id=batch.model_id,
                 embedding_key=(
                     f"{batch.model_id}:{event_id}"
                 ),
             )
-
