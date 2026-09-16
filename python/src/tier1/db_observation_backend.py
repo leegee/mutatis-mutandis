@@ -1,5 +1,3 @@
-# db_observation_backend.py
-
 from typing import Sequence
 from psycopg import Connection
 from lib.corpus_logging import logger
@@ -12,12 +10,9 @@ EVENT_COLUMNS = (
     "token",
     "token_idx",
     "pub_year",
-    "local_window_id",
-    "local_window_token_pos",
-    "medium_window_id",
-    "medium_window_token_pos",
-    "broad_window_id",
-    "broad_window_token_pos",
+    "scale",
+    "window_id",
+    "window_token_pos",
 )
 
 
@@ -28,8 +23,8 @@ def create_events_table(conn: Connection) -> None:
     event_id is the stable identity shared by PostgreSQL and Lance.
     Vector data is deliberately not stored here.
 
-    Multiple observations may legitimately refer to the same corpus token
-    position. event_id therefore identifies an observation, not a token.
+    An event identifies one corpus token occurrence in one particular
+    contextual representation.
     """
     logger.info("[corpus_db] Creating events table")
 
@@ -48,14 +43,9 @@ def create_events_table(conn: Connection) -> None:
                     token_idx INTEGER NOT NULL,
                     pub_year INTEGER,
 
-                    local_window_id BIGINT,
-                    local_window_token_pos INTEGER,
-
-                    medium_window_id BIGINT,
-                    medium_window_token_pos INTEGER,
-
-                    broad_window_id BIGINT,
-                    broad_window_token_pos INTEGER,
+                    scale TEXT NOT NULL,
+                    window_id BIGINT NOT NULL,
+                    window_token_pos INTEGER NOT NULL,
 
                     CONSTRAINT events_token_fk
                         FOREIGN KEY (doc_id, token_idx)
@@ -79,15 +69,289 @@ def create_events_table(conn: Connection) -> None:
                 ON events(pub_year);
             """)
 
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    uq_events_observation
+                ON events(
+                    corpus,
+                    doc_id,
+                    token_idx,
+                    scale,
+                    window_id,
+                    window_token_pos
+                );
+            """)
+
     logger.info("[corpus_db] Events table created")
+
+
+def migrate_events_table(conn: Connection) -> None:
+    """
+    Migrate the original scale-specific event provenance columns to the
+    normalized scale/window representation.
+
+    Existing observations are preserved with their existing event IDs.
+
+    If multiple events represent the same normalized observation provenance,
+    retain the event referenced by embedding.inventory when possible;
+    otherwise retain the lowest event_id. Remove the redundant event rows
+    before creating the unique provenance index.
+    """
+    logger.info("[corpus_db] Migrating events table schema")
+
+    with conn.cursor() as cur:
+        # Already migrated.
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                    AND table_name = 'events'
+                    AND column_name = 'scale'
+            )
+        """)
+
+        if cur.fetchone()[0]:
+            logger.info(
+                "[corpus_db] Events table already uses "
+                "normalized provenance"
+            )
+            return
+
+        # Check that the expected old schema exists.
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+                AND table_name = 'events'
+                AND column_name IN (
+                    'local_window_id',
+                    'local_window_token_pos',
+                    'medium_window_id',
+                    'medium_window_token_pos',
+                    'broad_window_id',
+                    'broad_window_token_pos'
+                )
+        """)
+
+        if cur.fetchone()[0] != 6:
+            raise RuntimeError(
+                "events table is neither the old scale-specific "
+                "schema nor the new normalized schema"
+            )
+
+        # Every existing event must represent exactly one scale.
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM events
+            WHERE
+                (
+                    local_window_id IS NOT NULL
+                    OR local_window_token_pos IS NOT NULL
+                )::int
+                + (
+                    medium_window_id IS NOT NULL
+                    OR medium_window_token_pos IS NOT NULL
+                )::int
+                + (
+                    broad_window_id IS NOT NULL
+                    OR broad_window_token_pos IS NOT NULL
+                )::int
+                <> 1
+        """)
+
+        ambiguous = int(cur.fetchone()[0])
+
+        if ambiguous:
+            raise RuntimeError(
+                "Cannot migrate events table: "
+                f"{ambiguous} events have zero or multiple "
+                "scale provenances"
+            )
+
+        # Each populated scale must have both fields.
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM events
+            WHERE
+                (
+                    local_window_id IS NULL
+                    AND local_window_token_pos IS NOT NULL
+                )
+                OR (
+                    local_window_id IS NOT NULL
+                    AND local_window_token_pos IS NULL
+                )
+                OR (
+                    medium_window_id IS NULL
+                    AND medium_window_token_pos IS NOT NULL
+                )
+                OR (
+                    medium_window_id IS NOT NULL
+                    AND medium_window_token_pos IS NULL
+                )
+                OR (
+                    broad_window_id IS NULL
+                    AND broad_window_token_pos IS NOT NULL
+                )
+                OR (
+                    broad_window_id IS NOT NULL
+                    AND broad_window_token_pos IS NULL
+                )
+        """)
+
+        half_populated = int(cur.fetchone()[0])
+
+        if half_populated:
+            raise RuntimeError(
+                "Cannot migrate events table: "
+                f"{half_populated} events have half-populated "
+                "window provenance"
+            )
+
+        logger.info("Add the normalized provenance columns.")
+
+        # Add the normalized provenance columns.
+        cur.execute("""
+            ALTER TABLE events
+                ADD COLUMN scale TEXT,
+                ADD COLUMN window_id BIGINT,
+                ADD COLUMN window_token_pos INTEGER;
+        """)
+
+        logger.info("Convert the old scale-specific representation.")
+
+        # Convert the old scale-specific representation.
+        cur.execute("""
+            UPDATE events
+            SET
+                scale = CASE
+                    WHEN local_window_id IS NOT NULL
+                        THEN 'local'
+                    WHEN medium_window_id IS NOT NULL
+                        THEN 'medium'
+                    WHEN broad_window_id IS NOT NULL
+                        THEN 'broad'
+                END,
+                window_id = COALESCE(
+                    local_window_id,
+                    medium_window_id,
+                    broad_window_id
+                ),
+                window_token_pos = COALESCE(
+                    local_window_token_pos,
+                    medium_window_token_pos,
+                    broad_window_token_pos
+                );
+        """)
+
+        # Verify that conversion produced complete rows.
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM events
+            WHERE scale IS NULL
+                OR window_id IS NULL
+                OR window_token_pos IS NULL
+        """)
+
+        incomplete = int(cur.fetchone()[0])
+
+        if incomplete:
+            raise RuntimeError(
+                "Events migration produced "
+                f"{incomplete} incomplete events"
+            )
+
+        # The normalized provenance is now complete enough to identify
+        # duplicate observations.
+        #
+        # Prefer an event referenced by embedding.inventory. If neither
+        # duplicate is referenced, retain the lowest event_id.
+        logger.info(
+            "[corpus_db] Reconciling duplicate event provenance"
+        )
+
+        cur.execute("""
+            WITH ranked AS (
+                SELECT
+                    e.event_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            e.corpus,
+                            e.doc_id,
+                            e.token_idx,
+                            e.scale,
+                            e.window_id,
+                            e.window_token_pos
+                        ORDER BY
+                            CASE
+                                WHEN EXISTS (
+                                    SELECT 1
+                                    FROM embedding.inventory i
+                                    WHERE i.event_id = e.event_id
+                                )
+                                THEN 0
+                                ELSE 1
+                            END,
+                            e.event_id
+                    ) AS rn
+                FROM events e
+            )
+            DELETE FROM events e
+            USING ranked r
+            WHERE e.event_id = r.event_id
+                AND r.rn > 1
+        """)
+
+        duplicates_removed = cur.rowcount
+
+        logger.info(
+            "[corpus_db] Removed %d duplicate event rows",
+            duplicates_removed,
+        )
+
+        # Now the normalized provenance can safely become unique.
+        cur.execute("""
+            ALTER TABLE events
+                ALTER COLUMN scale SET NOT NULL,
+                ALTER COLUMN window_id SET NOT NULL,
+                ALTER COLUMN window_token_pos SET NOT NULL;
+        """)
+
+        # Remove the obsolete scale-specific representation.
+        cur.execute("""
+            ALTER TABLE events
+                DROP COLUMN local_window_id,
+                DROP COLUMN local_window_token_pos,
+                DROP COLUMN medium_window_id,
+                DROP COLUMN medium_window_token_pos,
+                DROP COLUMN broad_window_id,
+                DROP COLUMN broad_window_token_pos;
+        """)
+
+        # Enforce the normalized event identity.
+        cur.execute("""
+            CREATE UNIQUE INDEX uq_events_observation
+            ON events(
+                corpus,
+                doc_id,
+                token_idx,
+                scale,
+                window_id,
+                window_token_pos
+            );
+        """)
+
+        conn.commit()
+
+    logger.info(
+        "[corpus_db] Events table migration complete"
+    )
 
 
 def drop_events_table(conn: Connection) -> None:
     """
     Drop the event table and its ID sequence.
-
-    This is separate from init_db() because existing Tier 1 observations
-    may need to be backfilled without rebuilding the corpus database.
     """
     logger.info("[corpus_db] Dropping events table")
 
@@ -102,9 +366,6 @@ def drop_events_table(conn: Connection) -> None:
 def sync_event_id_sequence(conn: Connection) -> None:
     """
     Move the event ID sequence beyond the highest imported event ID.
-
-    PostgreSQL owns event identity. New observations always receive IDs
-    from event_id_seq.
     """
     with conn.transaction():
         with conn.cursor() as cur:
@@ -126,13 +387,6 @@ def allocate_event_ids(
     conn: Connection,
     count: int,
 ) -> list[int]:
-    """
-    Reserve a contiguous block of event IDs.
-
-    Sequence gaps are acceptable: event IDs are stable identities, not
-    row numbers, and allocation may occur before a corresponding Lance
-    write succeeds.
-    """
     if count < 0:
         raise ValueError("count must be non-negative")
 
@@ -159,18 +413,16 @@ def insert_events(
     token: Sequence[str],
     token_idx: Sequence[int],
     pub_year: Sequence[int | None],
-    local_window_id: Sequence[int | None] | None = None,
-    local_window_token_pos: Sequence[int | None] | None = None,
-    medium_window_id: Sequence[int | None] | None = None,
-    medium_window_token_pos: Sequence[int | None] | None = None,
-    broad_window_id: Sequence[int | None] | None = None,
-    broad_window_token_pos: Sequence[int | None] | None = None,
+    scale: Sequence[str],
+    window_id: Sequence[int],
+    window_token_pos: Sequence[int],
 ) -> None:
     """
-    Insert a batch of event identities and metadata.
+    Insert a batch of authoritative event identities.
 
-    Vector data is intentionally absent: vectors are written directly to
-    Lance using the same event IDs.
+    Duplicate observation provenance is rejected by the database-level
+    unique index. Callers that need idempotent creation should resolve
+    existing observations before allocating new event IDs.
     """
     n = len(event_id)
 
@@ -181,16 +433,13 @@ def insert_events(
         "token": token,
         "token_idx": token_idx,
         "pub_year": pub_year,
-        "local_window_id": local_window_id,
-        "local_window_token_pos": local_window_token_pos,
-        "medium_window_id": medium_window_id,
-        "medium_window_token_pos": medium_window_token_pos,
-        "broad_window_id": broad_window_id,
-        "broad_window_token_pos": broad_window_token_pos,
+        "scale": scale,
+        "window_id": window_id,
+        "window_token_pos": window_token_pos,
     }
 
     for name, values in columns.items():
-        if values is not None and len(values) != n:
+        if len(values) != n:
             raise ValueError(
                 f"{name} length {len(values)} != event_id length {n}"
             )
@@ -204,12 +453,9 @@ def insert_events(
                 token,
                 token_idx,
                 pub_year,
-                local_window_id,
-                local_window_token_pos,
-                medium_window_id,
-                medium_window_token_pos,
-                broad_window_id,
-                broad_window_token_pos
+                scale,
+                window_id,
+                window_token_pos
             )
             FROM STDIN
         """) as copy:
@@ -221,11 +467,7 @@ def insert_events(
                     token[i],
                     int(token_idx[i]),
                     pub_year[i],
-                    local_window_id[i] if local_window_id is not None else None,
-                    local_window_token_pos[i] if local_window_token_pos is not None else None,
-                    medium_window_id[i] if medium_window_id is not None else None,
-                    medium_window_token_pos[i] if medium_window_token_pos is not None else None,
-                    broad_window_id[i] if broad_window_id is not None else None,
-                    broad_window_token_pos[i] if broad_window_token_pos is not None else None,
+                    scale[i],
+                    int(window_id[i]),
+                    int(window_token_pos[i]),
                 ))
-
