@@ -187,6 +187,7 @@ class MacBERThEventEmbedder:
 
         return results
 
+
     def _load_targets(
         self,
         event_ids: Sequence[int],
@@ -203,12 +204,7 @@ class MacBERThEventEmbedder:
         Events are grouped by corpus/document so each affected document
         is loaded exactly once.
 
-        Returns:
-            Tuples containing:
-
-                document
-                target_positions
-                event_id_by_position
+        The events must all belong to this embedder's configured scale.
         """
         unique_ids = sorted(
             set(int(event_id) for event_id in event_ids)
@@ -221,7 +217,8 @@ class MacBERThEventEmbedder:
                     e.event_id,
                     e.corpus,
                     e.doc_id,
-                    e.token_idx
+                    e.token_idx,
+                    e.scale
                 FROM events AS e
                 WHERE e.event_id = ANY(%s)
                 ORDER BY
@@ -247,12 +244,25 @@ class MacBERThEventEmbedder:
                 f"{sorted(missing)[:20]}"
             )
 
+        wrong_scale = {
+            int(row[0])
+            for row in rows
+            if row[4] != self.scale
+        }
+
+        if wrong_scale:
+            raise RuntimeError(
+                f"Requested event IDs include events for the wrong scale: "
+                f"expected={self.scale!r}, "
+                f"event_ids={sorted(wrong_scale)[:20]}"
+            )
+
         grouped: dict[
             tuple[str, str],
             list[tuple[int, int]],
         ] = {}
 
-        for event_id, corpus, doc_id, token_idx in rows:
+        for event_id, corpus, doc_id, token_idx, scale in rows:
             grouped.setdefault(
                 (corpus, doc_id),
                 [],
@@ -317,6 +327,7 @@ class MacBERThEventEmbedder:
             )
 
         return result
+
 
     def _load_document(
         self,

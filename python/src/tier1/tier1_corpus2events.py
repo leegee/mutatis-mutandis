@@ -390,11 +390,11 @@ class EventWriter:
                     "assigned to a chronological Lance table."
                 )
 
-            for scale in ACTIVE_SCALES:
-                if scale not in embedded.vectors:
+            for scale, vector in embedded.vectors.items():
+                if scale not in {"local", "medium", "broad"}:
                     raise RuntimeError(
-                        f"Observation {observation.event_id} "
-                        f"has no vector for active scale {scale!r}."
+                        f"Unknown embedding scale {scale!r}: "
+                        f"event_id={observation.event_id}"
                     )
 
                 table_name = lance_table_name(
@@ -404,17 +404,10 @@ class EventWriter:
 
                 rows_by_table[table_name].append(
                     {
-                        "event_id": (
-                            observation.event_id
-                        ),
+                        "event_id": ( observation.event_id ),
                         "year": observation.pub_year,
-                        "embedding_model": (
-                            LANCE_MODEL_NAME
-                        ),
-                        "vector": (
-                            embedded.vectors[scale]
-                            .tolist()
-                        ),
+                        "embedding_model": ( LANCE_MODEL_NAME ),
+                        "vector": ( embedded.vectors[scale] .tolist() ),
                     }
                 )
 

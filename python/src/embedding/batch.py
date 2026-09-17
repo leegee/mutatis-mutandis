@@ -1,5 +1,3 @@
-# batch.py
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +9,9 @@ import tempfile
 import numpy as np
 
 
-BATCH_FORMAT_VERSION = 1
+BATCH_FORMAT_VERSION = 2
+
+VALID_SCALES = frozenset({"local", "medium", "broad"})
 
 
 @dataclass(frozen=True)
@@ -20,13 +20,21 @@ class EmbeddingBatch:
     model_id: int
     model_key: str
     model_revision: str
+    scale: str
     event_ids: tuple[int, ...]
     vectors: np.ndarray
 
 
-def embedding_key(model_id: int, event_id: int) -> str:
+def embedding_key(
+    model_id: int,
+    scale: str,
+    event_id: int,
+) -> str:
     """Produce a stable identity shared by retries and transport copies."""
-    return f"{model_id}:{event_id}"
+    if scale not in VALID_SCALES:
+        raise ValueError(f"invalid scale: {scale!r}")
+
+    return f"{model_id}:{scale}:{event_id}"
 
 
 def _vectors_sha256(vectors: np.ndarray) -> str:
@@ -38,6 +46,9 @@ def write_batch(
     batch: EmbeddingBatch,
     destination: Path,
 ) -> None:
+    if batch.scale not in VALID_SCALES:
+        raise ValueError(f"invalid scale: {batch.scale!r}")
+
     vectors = np.asarray(batch.vectors, dtype=np.float32)
 
     if vectors.ndim != 2:
@@ -63,6 +74,7 @@ def write_batch(
         "model_id": batch.model_id,
         "model_key": batch.model_key,
         "model_revision": batch.model_revision,
+        "scale": batch.scale,
         "event_ids": list(batch.event_ids),
         "event_count": len(batch.event_ids),
         "embedding_dimension": vectors.shape[1],
@@ -113,10 +125,30 @@ def read_batch(source: Path) -> EmbeddingBatch:
             f"{manifest.get('format_version')}"
         )
 
+    scale = manifest.get("scale")
+    if scale not in VALID_SCALES:
+        raise ValueError(
+            f"batch manifest contains invalid scale: {scale!r}"
+        )
+
+    event_ids_value = manifest.get("event_ids")
+    if not isinstance(event_ids_value, list):
+        raise ValueError(
+            "batch manifest must contain an event_ids list"
+        )
+
     event_ids = tuple(
         int(event_id)
-        for event_id in manifest["event_ids"]
+        for event_id in event_ids_value
     )
+
+    if len(set(event_ids)) != len(event_ids):
+        raise ValueError("event_ids must be unique")
+
+    if manifest.get("event_count") != len(event_ids):
+        raise ValueError(
+            "manifest event_count does not match event_ids"
+        )
 
     vectors = np.load(
         vectors_path,
@@ -137,12 +169,28 @@ def read_batch(source: Path) -> EmbeddingBatch:
             "vector count does not match event_ids"
         )
 
-    if vectors.shape[1] != manifest["embedding_dimension"]:
+    embedding_dimension = manifest.get("embedding_dimension")
+    if not isinstance(embedding_dimension, int):
+        raise ValueError(
+            "batch manifest must contain an integer embedding_dimension"
+        )
+
+    if vectors.shape[1] != embedding_dimension:
         raise ValueError(
             "vector dimension does not match manifest"
         )
 
-    expected_hash = manifest["vectors_sha256"]
+    if manifest.get("dtype") != "float32":
+        raise ValueError(
+            "batch manifest dtype does not match float32"
+        )
+
+    expected_hash = manifest.get("vectors_sha256")
+    if not isinstance(expected_hash, str) or not expected_hash:
+        raise ValueError(
+            "batch manifest must contain vectors_sha256"
+        )
+
     actual_hash = _vectors_sha256(vectors)
 
     if actual_hash != expected_hash:
@@ -153,8 +201,9 @@ def read_batch(source: Path) -> EmbeddingBatch:
     return EmbeddingBatch(
         work_id=int(manifest["work_id"]),
         model_id=int(manifest["model_id"]),
-        model_key=manifest["model_key"],
-        model_revision=manifest["model_revision"],
+        model_key=str(manifest["model_key"]),
+        model_revision=str(manifest["model_revision"]),
+        scale=scale,
         event_ids=event_ids,
         vectors=vectors,
     )

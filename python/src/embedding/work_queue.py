@@ -1,4 +1,4 @@
-# embedding/work_queue.py
+# work_queue.py
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ class EmbeddingModel:
 class EmbeddingWork:
     work_id: int
     model_id: int
+    scale: str
     event_ids: tuple[int, ...]
     status: str
     attempt_count: int
@@ -152,16 +153,19 @@ def reset_model_work(
 def create_work(
     *,
     model_id: int,
+    scale: str,
     batch_size: int,
     limit: int | None = None,
 ) -> int:
     """
-    Create pending batches for events without an inventory record.
+    Create pending batches for events without an inventory record at the
+    specified model and scale.
 
-    The event IDs are stored explicitly rather than represented as a numeric
-    range because event IDs are identifiers, not a downstream ordering
-    invariant.
+    A work item contains events for exactly one model and one scale.
     """
+    if not scale:
+        raise ValueError("scale must not be empty")
+
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
 
@@ -176,26 +180,39 @@ def create_work(
                 FROM embedding.work
                 WHERE
                     model_id = %s
+                    AND scale = %s
                     AND status IN ('pending', 'claimed', 'embedding')
                 LIMIT 1
                 """,
-                (model_id,),
+                (
+                    model_id,
+                    scale,
+                ),
             )
 
             if cur.fetchone() is not None:
                 raise RuntimeError(
                     f"unfinished embedding work already exists "
-                    f"for model {model_id}"
+                    f"for model {model_id}, scale {scale!r}"
                 )
 
             limit_sql = ""
-            params: list[object] = [model_id]
+            params: list[object] = [
+                model_id,
+                scale,
+            ]
 
             if limit is not None:
                 limit_sql = "LIMIT %s"
                 params.append(limit)
 
-            params.extend((batch_size, model_id))
+            params.append(batch_size)
+            params.extend(
+                (
+                    model_id,
+                    scale,
+                )
+            )
 
             cur.execute(
                 f"""
@@ -205,6 +222,7 @@ def create_work(
                     LEFT JOIN embedding.inventory AS i
                         ON i.event_id = e.event_id
                        AND i.model_id = %s
+                       AND i.scale = %s
                     WHERE i.event_id IS NULL
                     ORDER BY e.event_id
                     {limit_sql}
@@ -225,10 +243,12 @@ def create_work(
                 )
                 INSERT INTO embedding.work (
                     model_id,
+                    scale,
                     event_ids,
                     observation_count
                 )
                 SELECT
+                    %s,
                     %s,
                     event_ids,
                     cardinality(event_ids)
@@ -294,6 +314,7 @@ def claim_next_work(
                 RETURNING
                     w.work_id,
                     w.model_id,
+                    w.scale,
                     w.event_ids,
                     w.status,
                     w.attempt_count,
@@ -317,11 +338,12 @@ def claim_next_work(
     return EmbeddingWork(
         work_id=row[0],
         model_id=row[1],
-        event_ids=tuple(row[2]),
-        status=row[3],
-        attempt_count=row[4],
-        observation_count=row[5],
-        completed_count=row[6],
+        scale=row[2],
+        event_ids=tuple(row[3]),
+        status=row[4],
+        attempt_count=row[5],
+        observation_count=row[6],
+        completed_count=row[7],
     )
 
 
@@ -414,9 +436,9 @@ def record_inventory(
     """
     Record a successfully persisted vector belonging to an owned work item.
 
-    The work row is authoritative for model identity and event membership.
-    Inventory insertion remains idempotent through the unique
-    (event_id, model_id) constraint.
+    The work row is authoritative for model and scale identity and event
+    membership. Inventory insertion is idempotent through the unique
+    (event_id, model_id, scale) constraint.
     """
     if not worker_id:
         raise ValueError("worker_id must not be empty")
@@ -431,11 +453,13 @@ def record_inventory(
                 INSERT INTO embedding.inventory (
                     event_id,
                     model_id,
+                    scale,
                     embedding_key
                 )
                 SELECT
                     %s,
                     w.model_id,
+                    w.scale,
                     %s
                 FROM embedding.work AS w
                 WHERE
@@ -443,7 +467,7 @@ def record_inventory(
                     AND w.worker_id = %s
                     AND w.status = 'embedding'
                     AND %s = ANY(w.event_ids)
-                ON CONFLICT (event_id, model_id)
+                ON CONFLICT (event_id, model_id, scale)
                 DO NOTHING
                 RETURNING event_id
                 """,
@@ -461,11 +485,11 @@ def record_inventory(
             if row is not None:
                 inserted = True
             else:
-                # Distinguish an idempotent retry from an ownership error.
                 cur.execute(
                     """
                     SELECT
                         w.model_id,
+                        w.scale,
                         w.event_ids,
                         w.worker_id,
                         w.status
@@ -482,7 +506,13 @@ def record_inventory(
                         f"work {work_id} does not exist"
                     )
 
-                model_id, event_ids, owner, status = work
+                (
+                    model_id,
+                    scale,
+                    event_ids,
+                    owner,
+                    status,
+                ) = work
 
                 if owner != worker_id:
                     raise RuntimeError(
@@ -527,6 +557,7 @@ def complete_work(
                         FROM embedding.inventory AS i
                         WHERE
                             i.model_id = w.model_id
+                            AND i.scale = w.scale
                             AND i.event_id = ANY(w.event_ids)
                     )
                 WHERE
@@ -663,14 +694,15 @@ def work_summary(
             cur.execute(
                 """
                 SELECT
+                    scale,
                     status,
                     COUNT(*) AS work_items,
                     SUM(observation_count) AS observations,
                     SUM(completed_count) AS completed
                 FROM embedding.work
                 WHERE model_id = %s
-                GROUP BY status
-                ORDER BY status
+                GROUP BY scale, status
+                ORDER BY scale, status
                 """,
                 (model_id,),
             )

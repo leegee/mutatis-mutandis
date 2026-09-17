@@ -1,4 +1,4 @@
-# embedding/work_queue.py
+# embedding/test_queue.py
 #
 # pytest src/embedding/test_queue.py -v
 
@@ -20,6 +20,7 @@ from embedding.work_queue import (
 
 
 TEST_DIMENSION = 768
+TEST_SCALE = "local"
 
 
 @pytest.fixture
@@ -70,11 +71,9 @@ def test_register_model_rejects_dimension_mismatch():
 
 
 def test_inventory_requires_owned_embedding_work(test_model):
-    # Create two one-event work items. This gives us:
-    #   - one event belonging to the claimed work
-    #   - another real event that does not belong to it
     created = create_work(
         model_id=test_model.model_id,
+        scale=TEST_SCALE,
         batch_size=1,
         limit=2,
     )
@@ -89,6 +88,7 @@ def test_inventory_requires_owned_embedding_work(test_model):
     )
 
     assert work is not None
+    assert work.scale == TEST_SCALE
     assert len(work.event_ids) == 1
 
     event_id = work.event_ids[0]
@@ -98,12 +98,15 @@ def test_inventory_requires_owned_embedding_work(test_model):
         worker_id=worker_id,
     )
 
-    # A valid inventory record must succeed.
+    embedding_key = (
+        f"{test_model.model_id}:{TEST_SCALE}:{event_id}"
+    )
+
     inserted = record_inventory(
         work_id=work.work_id,
         worker_id=worker_id,
         event_id=event_id,
-        embedding_key=f"{test_model.model_id}:{event_id}",
+        embedding_key=embedding_key,
     )
 
     assert inserted is True
@@ -113,7 +116,7 @@ def test_inventory_requires_owned_embedding_work(test_model):
         work_id=work.work_id,
         worker_id=worker_id,
         event_id=event_id,
-        embedding_key=f"{test_model.model_id}:{event_id}",
+        embedding_key=embedding_key,
     )
 
     assert inserted is False
@@ -124,7 +127,7 @@ def test_inventory_requires_owned_embedding_work(test_model):
             work_id=work.work_id,
             worker_id="pytest-worker-b",
             event_id=event_id,
-            embedding_key=f"{test_model.model_id}:{event_id}",
+            embedding_key=embedding_key,
         )
 
     # Obtain a real event belonging to a different work item.
@@ -134,6 +137,7 @@ def test_inventory_requires_owned_embedding_work(test_model):
     )
 
     assert other_work is not None
+    assert other_work.scale == TEST_SCALE
     assert len(other_work.event_ids) == 1
 
     other_event_id = other_work.event_ids[0]
@@ -145,11 +149,11 @@ def test_inventory_requires_owned_embedding_work(test_model):
             work_id=work.work_id,
             worker_id=worker_id,
             event_id=other_event_id,
-            embedding_key=f"{test_model.model_id}:{other_event_id}",
+            embedding_key=(
+                f"{test_model.model_id}:{TEST_SCALE}:{other_event_id}"
+            ),
         )
 
-    # The first work contains one event, and that event is inventoried,
-    # so completion should now succeed.
     complete_work(
         work_id=work.work_id,
         worker_id=worker_id,
@@ -159,6 +163,7 @@ def test_inventory_requires_owned_embedding_work(test_model):
 def test_complete_requires_all_inventory(test_model):
     created = create_work(
         model_id=test_model.model_id,
+        scale=TEST_SCALE,
         batch_size=2,
         limit=2,
     )
@@ -173,6 +178,7 @@ def test_complete_requires_all_inventory(test_model):
     )
 
     assert work is not None
+    assert work.scale == TEST_SCALE
     assert len(work.event_ids) == 2
 
     begin_embedding(
@@ -186,10 +192,11 @@ def test_complete_requires_all_inventory(test_model):
         work_id=work.work_id,
         worker_id=worker_id,
         event_id=first_event_id,
-        embedding_key=f"{test_model.model_id}:{first_event_id}",
+        embedding_key=(
+            f"{test_model.model_id}:{TEST_SCALE}:{first_event_id}"
+        ),
     )
 
-    # One of two observations is inventoried, so completion must fail.
     with pytest.raises(RuntimeError, match="incomplete: 1/2 embeddings"):
         complete_work(
             work_id=work.work_id,
@@ -201,7 +208,9 @@ def test_complete_requires_all_inventory(test_model):
         work_id=work.work_id,
         worker_id=worker_id,
         event_id=second_event_id,
-        embedding_key=f"{test_model.model_id}:{second_event_id}",
+        embedding_key=(
+            f"{test_model.model_id}:{TEST_SCALE}:{second_event_id}"
+        ),
     )
 
     complete_work(
@@ -209,3 +218,89 @@ def test_complete_requires_all_inventory(test_model):
         worker_id=worker_id,
     )
 
+
+def test_scale_is_part_of_inventory_identity(test_model):
+    """
+    The same event may have one embedding for each scale.
+
+    Therefore (event_id, model_id) is not sufficient inventory identity.
+    """
+    created = create_work(
+        model_id=test_model.model_id,
+        scale="local",
+        batch_size=1,
+        limit=1,
+    )
+
+    assert created == 1
+
+    local_work = claim_next_work(
+        model_id=test_model.model_id,
+        worker_id="pytest-local",
+    )
+
+    assert local_work is not None
+    event_id = local_work.event_ids[0]
+
+    begin_embedding(
+        work_id=local_work.work_id,
+        worker_id="pytest-local",
+    )
+
+    local_key = (
+        f"{test_model.model_id}:local:{event_id}"
+    )
+
+    assert record_inventory(
+        work_id=local_work.work_id,
+        worker_id="pytest-local",
+        event_id=event_id,
+        embedding_key=local_key,
+    ) is True
+
+    complete_work(
+        work_id=local_work.work_id,
+        worker_id="pytest-local",
+    )
+
+    # The same event can independently require a medium-scale embedding.
+    # We need to create work specifically for that scale; the local
+    # inventory must not satisfy it.
+    created = create_work(
+        model_id=test_model.model_id,
+        scale="medium",
+        batch_size=1,
+        limit=1,
+    )
+
+    assert created == 1
+
+    medium_work = claim_next_work(
+        model_id=test_model.model_id,
+        worker_id="pytest-medium",
+    )
+
+    assert medium_work is not None
+    assert medium_work.scale == "medium"
+    assert medium_work.event_ids == (event_id,)
+
+    begin_embedding(
+        work_id=medium_work.work_id,
+        worker_id="pytest-medium",
+    )
+
+    medium_key = (
+        f"{test_model.model_id}:medium:{event_id}"
+    )
+
+    assert record_inventory(
+        work_id=medium_work.work_id,
+        worker_id="pytest-medium",
+        event_id=event_id,
+        embedding_key=medium_key,
+    ) is True
+
+    complete_work(
+        work_id=medium_work.work_id,
+        worker_id="pytest-medium",
+    )

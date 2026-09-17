@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from embedding.batch import EmbeddingBatch, read_batch
 from embedding.work_queue import complete_work, record_inventory
-
+from embedding.batch import (
+    EmbeddingBatch,
+    embedding_key,
+    read_batch,
+)
 
 class BatchImporter:
     """Import completed embedding batches into the local vector store."""
@@ -88,9 +91,12 @@ class BatchImporter:
         batch: EmbeddingBatch,
     ) -> None:
         self._lance_writer.write(
+            model_id=batch.model_id,
+            scale=batch.scale,
             event_ids=batch.event_ids,
             vectors=batch.vectors,
         )
+
 
     def _record_inventory(
         self,
@@ -103,7 +109,9 @@ class BatchImporter:
                 work_id=batch.work_id,
                 worker_id=worker_id,
                 event_id=event_id,
-                embedding_key=(
-                    f"{batch.model_id}:{event_id}"
+                embedding_key=embedding_key(
+                    batch.model_id,
+                    batch.scale,
+                    event_id,
                 ),
             )
