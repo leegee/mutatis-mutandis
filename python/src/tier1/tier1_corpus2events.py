@@ -87,23 +87,22 @@ def _default_worker_id() -> str:
 # ---------------------------------------------------------------------------
 
 def ensure_jobs_table(conn: Connection) -> None:
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS embedding_jobs (
-                    job_id      BIGSERIAL PRIMARY KEY,
-                    corpus      TEXT NOT NULL,
-                    doc_id      TEXT NOT NULL,
-                    status      TEXT NOT NULL DEFAULT 'pending',
-                    worker_id   TEXT,
-                    claimed_at  TIMESTAMPTZ,
-                    finished_at TIMESTAMPTZ,
-                    error       TEXT,
-                    UNIQUE (corpus, doc_id)
-                );
-                CREATE INDEX IF NOT EXISTS idx_embedding_jobs_status
-                    ON embedding_jobs (status);
-            """)
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS embedding_jobs (
+                job_id      BIGSERIAL PRIMARY KEY,
+                corpus      TEXT NOT NULL,
+                doc_id      TEXT NOT NULL,
+                status      TEXT NOT NULL DEFAULT 'pending',
+                worker_id   TEXT,
+                claimed_at  TIMESTAMPTZ,
+                finished_at TIMESTAMPTZ,
+                error       TEXT,
+                UNIQUE (corpus, doc_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_embedding_jobs_status
+                ON embedding_jobs (status);
+        """)
 
 
 def populate_jobs(
@@ -129,16 +128,15 @@ def populate_jobs(
 
     where = " AND ".join(clauses)
 
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(f"""
-                INSERT INTO embedding_jobs (corpus, doc_id)
-                SELECT d.corpus, d.doc_id
-                FROM documents d
-                WHERE {where}
-                ON CONFLICT (corpus, doc_id) DO NOTHING
-            """, params)
-            return cur.rowcount
+    with conn.cursor() as cur:
+        cur.execute(f"""
+            INSERT INTO embedding_jobs (corpus, doc_id)
+            SELECT d.corpus, d.doc_id
+            FROM documents d
+            WHERE {where}
+            ON CONFLICT (corpus, doc_id) DO NOTHING
+        """, params)
+        return cur.rowcount
 
 
 def claim_job(
