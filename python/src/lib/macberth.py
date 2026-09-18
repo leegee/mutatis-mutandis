@@ -564,22 +564,22 @@ def load_macberth_onnx(
 def _best_backend(preferred: str | None = None) -> str:
     """
     Choose the fastest available backend.
-    Order of preference:
-      1. Explicit request (if valid)
-      2. PyTorch CUDA  (Colab GPU / local NVIDIA)
-      3. ONNX CUDA
-      4. ONNX DirectML (Windows)
+    Priority:
+      1. Explicit request
+      2. PyTorch + CUDA
+      3. ONNX + CUDA
+      4. ONNX + DirectML
       5. ONNX CPU
       6. PyTorch CPU
     """
     if preferred in ("onnx", "pytorch"):
         return preferred
 
-    # 1. PyTorch CUDA
+    # 1. PyTorch CUDA – most reliable on Colab
     if torch.cuda.is_available():
         return "pytorch"
 
-    # 2. ONNX with CUDA provider
+    # 2. ONNX CUDA
     if "CUDAExecutionProvider" in ort.get_available_providers():
         return "onnx"
 
@@ -587,7 +587,7 @@ def _best_backend(preferred: str | None = None) -> str:
     if "DmlExecutionProvider" in ort.get_available_providers():
         return "onnx"
 
-    # 4. Default to ONNX CPU (usually faster than plain PyTorch CPU)
+    # 4. Default to ONNX CPU
     return "onnx"
 
 
