@@ -1,4 +1,4 @@
-# tier1/tier1_corpus2events.py - formerly tier1/window_embedder.py
+# tier1/tier1_corpus2events.py - formerly tier1/tier1_corpus2events.py.py
 """
 Embed fixed medium windows of every document.
 
@@ -67,7 +67,7 @@ PARQUET_DIR = OUT_DIR / "macberth_windows"
 PARQUET_DIR.mkdir(parents=True, exist_ok=True)
 
 logger.info(
-    "[window_embedder] scale=%s size=%d stride=%d; parquet dir=%s",
+    "[tier1_corpus2events.py] scale=%s size=%d stride=%d; parquet dir=%s",
     SCALE, WINDOW_SIZE, WINDOW_STRIDE, PARQUET_DIR
 )
 
@@ -103,6 +103,7 @@ def ensure_jobs_table(conn: Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_embedding_jobs_status
                 ON embedding_jobs (status);
         """)
+        conn.commit()
 
 
 def populate_jobs(
@@ -136,6 +137,7 @@ def populate_jobs(
             WHERE {where}
             ON CONFLICT (corpus, doc_id) DO NOTHING
         """, params)
+        conn.commit()
         return cur.rowcount
 
 
@@ -375,7 +377,7 @@ class VectorWriter:
         if name in existing:
             table = self.db.open_table(name)
         else:
-            logger.info("[window_embedder] creating Lance table %s", name)
+            logger.info("[tier1_corpus2events.py] creating Lance table %s", name)
             schema = pa.schema([
                 pa.field("event_id", pa.uint64()),
                 pa.field("corpus", pa.string()),
@@ -495,7 +497,7 @@ def run_worker(
 ) -> None:
     worker_id = worker_id or _default_worker_id()
     logger.info(
-        "[window_embedder] worker %s starting (COLAB_MODE=%s, dry_run=%s)",
+        "[tier1_corpus2events.py] worker %s starting (COLAB_MODE=%s, dry_run=%s)",
         worker_id, COLAB_MODE, dry_run,
     )
 
@@ -511,7 +513,7 @@ def run_worker(
 
         job = claim_job(conn, worker_id, dry_run=dry_run)
         if job is None:
-            logger.info("[window_embedder] no more pending jobs")
+            logger.info("[tier1_corpus2events.py] no more pending jobs")
             break
 
         job_id, corpus, doc_id = job
@@ -524,12 +526,12 @@ def run_worker(
             mark_job_done(conn, job_id, dry_run=dry_run)
             elapsed = time.perf_counter() - started
             logger.info(
-                "[window_embedder] %s %s/%s  windows=%d  %.1fs",
+                "[tier1_corpus2events.py] %s %s/%s  windows=%d  %.1fs",
                 "dry-run" if dry_run else "done",
                 corpus, doc_id, written, elapsed,
             )
         except Exception as exc:
-            logger.exception("[window_embedder] failed %s/%s", corpus, doc_id)
+            logger.exception("[tier1_corpus2events.py] failed %s/%s", corpus, doc_id)
             mark_job_failed(conn, job_id, str(exc), dry_run=dry_run)
 
         processed += 1
@@ -541,7 +543,7 @@ def run_worker(
 
     conn.close()
     logger.info(
-        "[window_embedder] worker %s finished (%d documents)",
+        "[tier1_corpus2events.py] worker %s finished (%d documents)",
         worker_id, processed,
     )
 
@@ -573,14 +575,16 @@ def main() -> None:
     conn = get_connection()
 
     if args.populate:
+        logger.info("[tier1_corpus2events.py] Shall ensure jobs table")
         ensure_jobs_table(conn)
+        logger.info("[tier1_corpus2events.py] Shall populated jobs")
         n = populate_jobs(
             conn,
             corpus=args.corpus,
             min_year=args.min_year,
             max_year=args.max_year,
         )
-        logger.info("[window_embedder] populated %d jobs", n)
+        logger.info("[tier1_corpus2events.py] populated %d jobs", n)
         conn.close()
         return
 

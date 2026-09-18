@@ -1,6 +1,49 @@
 # ============================================================
 # Colab notebook – MacBERTh medium-window embedder
 # ============================================================
+"""
+### PostgreSQL permissions for the Colab worker
+
+The `colab_reader` role is used by the Colab embedding worker to read corpus data and record its progress in the `embedding_jobs` table.
+
+Although the role is otherwise read-only, the worker needs write access to `public.embedding_jobs` so that it can create and update job records.
+
+Grant the minimum table permissions required:
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE public.embedding_jobs
+TO colab_reader;
+```
+
+If `embedding_jobs` uses a PostgreSQL sequence for an automatically generated ID, the role also needs permission to use that sequence:
+
+```sql
+GRANT USAGE, SELECT
+ON SEQUENCE public.embedding_jobs_id_seq
+TO colab_reader;
+```
+
+These grants give `colab_reader` write access only to the job-tracking table. They do not grant general write access to the corpus tables or the rest of the `public` schema.
+
+The grants should be executed by a database administrator, for example the `postgres` role:
+
+```sql
+\c eebo
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE public.embedding_jobs
+TO colab_reader;
+
+GRANT USAGE, SELECT
+ON SEQUENCE public.embedding_jobs_id_seq
+TO colab_reader;
+```
+
+NB: create the notebook:
+
+    jupytext --to notebook notebooks/colab-macberth-embeddings.py
+"""
 
 import subprocess
 import sys
