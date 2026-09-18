@@ -500,11 +500,6 @@ def run_worker(
     )
 
     conn = get_connection()
-    ensure_jobs_table(conn)
-
-    if not dry_run:
-        create_events_table(conn)
-
     embedder = get_macberth_embedder(pooling="mean", backend=backend)
     writer = VectorWriter(LANCE_INDEXES_DIR, dry_run=dry_run)
 
