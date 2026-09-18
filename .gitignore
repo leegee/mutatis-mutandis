@@ -87,3 +87,4 @@ python/dss_semantic_trajectory.json
 python/data/
 python/*.data
 python/*.onnx
+python/macberth-huggingface.tar.gz
