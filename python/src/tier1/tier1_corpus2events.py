@@ -10,6 +10,17 @@ so any number of workers (local + multiple Colab notebooks) can run
 simultaneously without coordination.
 
 Supports --dry-run (no writes, no job status changes).
+
+Reset:
+
+    UPDATE embedding_jobs
+    SET status      = 'pending',
+        worker_id   = NULL,
+        claimed_at  = NULL,
+        finished_at = NULL,
+        error       = NULL
+    WHERE status IN ('running', 'failed');
+
 """
 
 from __future__ import annotations
@@ -235,7 +246,7 @@ def iter_windows(
     Yield (pub_year, Window) without ever holding the whole document.
     Uses a server-side cursor so Postgres streams the tokens.
     """
-    with conn.cursor(name=f"win_{corpus}_{doc_id}") as cur:  # server-side
+    with conn.cursor() as cur:  # server-side
         cur.itersize = 4096
         cur.execute("""
             SELECT t.token, d.pub_year

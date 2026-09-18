@@ -44,6 +44,14 @@ TO colab_reader;
 GRANT USAGE, SELECT
 ON SEQUENCE public.embedding_jobs_job_id_seq
 TO colab_reader;
+
+GRANT SELECT, INSERT, UPDATE
+ON TABLE public.events
+TO colab_reader;
+
+GRANT USAGE, SELECT
+ON SEQUENCE public.events_id_seq
+TO colab_reader;
 ```
 
 NB: create the notebook:
