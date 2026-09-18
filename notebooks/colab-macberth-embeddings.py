@@ -117,10 +117,6 @@ if gpu_available:
 else:
     print("No GPU detected – staying with CPU onnxruntime.")
 
-
-import onnxruntime as ort
-print("ORT available providers:", ort.get_available_providers())
-
 # ------------------------------------------------------------
 # 4. Postgres credentials
 # ------------------------------------------------------------

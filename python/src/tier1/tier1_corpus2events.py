@@ -500,7 +500,7 @@ def run_worker(
     )
 
     conn = get_connection()
-    backend = None if args.backend == "auto" else args.backend
+    backend = None if backend == "auto" else backend
     embedder = get_macberth_embedder(pooling="mean", backend=backend)
     writer = VectorWriter(LANCE_INDEXES_DIR, dry_run=dry_run)
 
