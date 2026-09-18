@@ -245,16 +245,9 @@ def iter_windows(
 ) -> Iterator[tuple[Optional[int], Window]]:
     """
     Yield (pub_year, Window) without ever holding the whole document.
-    Uses a uniquely-named server-side cursor so Postgres streams the tokens.
+    Uses fetchmany so memory stays bounded even for Bibles.
     """
-    # Must be inside a transaction for a named cursor
-    if conn.info.transaction_status == psycopg.pq.TransactionStatus.IDLE:
-        conn.execute("BEGIN")
-
-    cursor_name = f"win_{corpus}_{doc_id}_{uuid.uuid4().hex[:8]}"
-
-    with conn.cursor(name=cursor_name) as cur:
-        cur.itersize = 4096
+    with conn.cursor() as cur:
         cur.execute("""
             SELECT t.token, d.pub_year
             FROM tokens AS t
@@ -269,22 +262,29 @@ def iter_windows(
         buffer: list[str] = []
         pub_year: Optional[int] = None
         start_of_window = 0
+        FETCH = 4096
 
-        for token, year in cur:
-            if pub_year is None:
-                pub_year = year
-            buffer.append(token)
+        while True:
+            rows = cur.fetchmany(FETCH)
+            if not rows:
+                break
 
-            while len(buffer) >= size:
-                text = " ".join(buffer[:size])
-                yield pub_year, Window(
-                    start_idx=start_of_window,
-                    end_idx=start_of_window + size,
-                    text=text,
-                )
-                del buffer[:stride]
-                start_of_window += stride
+            for token, year in rows:
+                if pub_year is None:
+                    pub_year = year
+                buffer.append(token)
 
+                while len(buffer) >= size:
+                    text = " ".join(buffer[:size])
+                    yield pub_year, Window(
+                        start_idx=start_of_window,
+                        end_idx=start_of_window + size,
+                        text=text,
+                    )
+                    del buffer[:stride]
+                    start_of_window += stride
+
+        # final partial window
         if buffer:
             text = " ".join(buffer)
             yield pub_year, Window(
