@@ -15,14 +15,19 @@ from transformers import AutoTokenizer, AutoModelForMaskedLM
 from lib.corpus_logging import logger
 from lib.corpus_config import MODELS_DIR
 
-MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
-MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
+BATCH_SIZE = 64
+
+# MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
+# MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
 ONNX_MODEL_DIR = MODELS_DIR / "./macberth-onnx-fp32"
 ONNX_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 
-BATCH_SIZE = 64
+# This file lives at .../src/lib/macberth.py
+_THIS_DIR = Path(__file__).resolve().parent
+MACBERTH_MODEL_PATH = _THIS_DIR / "macberth-huggingface"
+MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
 @dataclass
 class MacberthModel:

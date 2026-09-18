@@ -139,6 +139,32 @@ print(f"Postgres target: {os.environ['PGHOST']}:{os.environ['PGPORT']}/{os.envir
 # subprocess that it is running on Colab.
 os.environ["COLAB_MODE"] = "1"
 
+from pathlib import Path
+import os
+
+MODEL_DIR = Path("/content/mutatis-mutandis/python/src/lib/macberth-huggingface")
+DRIVE_TGZ = Path("/content/drive/MyDrive/macberth_models/macberth-huggingface.tar.gz")
+
+print("=== Paths ===")
+print("MODEL_DIR          :", MODEL_DIR)
+print("MODEL_DIR.exists() :", MODEL_DIR.exists())
+print("DRIVE_TGZ          :", DRIVE_TGZ)
+print("DRIVE_TGZ.exists() :", DRIVE_TGZ.exists())
+
+print("\n=== Contents of model dir (if it exists) ===")
+if MODEL_DIR.exists():
+    for p in sorted(MODEL_DIR.rglob("*")):
+        if p.is_file():
+            print(f"  {p.relative_to(MODEL_DIR)}  ({p.stat().st_size:,} bytes)")
+else:
+    print("  (directory does not exist)")
+
+print("\n=== Looking for weight files ===")
+for name in ["config.json", "pytorch_model.bin", "model.safetensors", "tokenizer.json"]:
+    p = MODEL_DIR / name
+    print(f"  {name}: {'FOUND' if p.exists() else 'MISSING'}")
+
+
 # ------------------------------------------------------------
 # 6. Run the window embedder
 # ------------------------------------------------------------
