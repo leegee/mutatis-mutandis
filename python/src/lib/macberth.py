@@ -261,6 +261,136 @@ class OnnxMacberthModel:
         )
 
 
+def _export_macberth_onnx(export_dir: Path) -> None:
+    """
+    Export the MacBERTh encoder to an unquantized FP32 ONNX model.
+
+    The exported graph contains only the transformer encoder and returns
+    last_hidden_state:
+
+        [batch, sequence, hidden_size]
+
+    The MLM head is deliberately not exported because the ONNX backend is
+    currently used for embedding generation only.
+
+    The tokenizer is copied into export_dir so that the ONNX model directory
+    is self-contained.
+    """
+    export_dir = Path(export_dir)
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(
+        "[macberth] Exporting MacBERTh encoder to ONNX: %s",
+        export_dir,
+    )
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        MACBERTH_MODEL_PATH,
+        local_files_only=True,
+    )
+
+    if not getattr(tokenizer, "is_fast", False):
+        raise RuntimeError("Tokenizer must be fast")
+
+    model = AutoModelForMaskedLM.from_pretrained(
+        MACBERTH_MODEL_PATH,
+        local_files_only=True,
+    )
+
+    model.eval()
+    model.cpu()
+
+    class EncoderWrapper(torch.nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.encoder = model.base_model
+
+        def forward(
+            self,
+            input_ids,
+            attention_mask,
+            token_type_ids,
+        ):
+            outputs = self.encoder(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            )
+
+            return outputs.last_hidden_state
+
+    encoder = EncoderWrapper(model)
+    encoder.eval()
+
+    # Representative inputs used only to trace/export the graph.
+    sample = tokenizer(
+        "This is a sample sentence for MacBERTh ONNX export.",
+        return_tensors="pt",
+        padding=False,
+        truncation=True,
+        max_length=512,
+    )
+
+    input_ids = sample["input_ids"]
+    attention_mask = sample["attention_mask"]
+
+    # Keep the ONNX interface stable even if the tokenizer/model does not
+    # normally need token_type_ids.
+    token_type_ids = sample.get(
+        "token_type_ids",
+        torch.zeros_like(input_ids),
+    )
+
+    onnx_path = export_dir / "model.onnx"
+
+    with torch.no_grad():
+        torch.onnx.export(
+            encoder,
+            (
+                input_ids,
+                attention_mask,
+                token_type_ids,
+            ),
+            str(onnx_path),
+            input_names=[
+                "input_ids",
+                "attention_mask",
+                "token_type_ids",
+            ],
+            output_names=[
+                "last_hidden_state",
+            ],
+            dynamic_axes={
+                "input_ids": {
+                    0: "batch",
+                    1: "sequence",
+                },
+                "attention_mask": {
+                    0: "batch",
+                    1: "sequence",
+                },
+                "token_type_ids": {
+                    0: "batch",
+                    1: "sequence",
+                },
+                "last_hidden_state": {
+                    0: "batch",
+                    1: "sequence",
+                },
+            },
+            opset_version=17,
+            do_constant_folding=True,
+        )
+
+    # Make the ONNX directory self-contained.
+    tokenizer.save_pretrained(export_dir)
+
+    logger.info(
+        "[macberth] ONNX export complete: %s",
+        onnx_path,
+    )
+
+
 def load_macberth_onnx(
     export_dir: Optional[Path] = None,
     providers: Optional[List[str]] = None,
