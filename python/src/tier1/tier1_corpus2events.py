@@ -531,7 +531,11 @@ def run_worker(
                 corpus, doc_id, written, elapsed,
             )
         except Exception as exc:
-            logger.exception("[tier1_corpus2events.py] failed %s/%s", corpus, doc_id)
+            logger.exception("[window_embedder] failed %s/%s", corpus, doc_id)
+            try:
+                conn.rollback()          # ← clear the aborted transaction
+            except Exception:
+                pass
             mark_job_failed(conn, job_id, str(exc), dry_run=dry_run)
 
         processed += 1
