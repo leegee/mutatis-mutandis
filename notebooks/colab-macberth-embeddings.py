@@ -7,6 +7,9 @@
 #
 # Do not forget to restart the Colab session when the IP changes.
 #
+# Create the notebook to upload:
+#
+#   jupytext --to notebook notebooks/colab-macberth-embeddings.py
 #
 # ============================================================
 
