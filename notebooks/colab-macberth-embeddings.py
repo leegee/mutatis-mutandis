@@ -113,14 +113,25 @@ sys.path.insert(0, str(src_dir))
 
 print("Starting window embedder worker (Colab → Parquet on Drive) ...")
 
-subprocess.run([
-    "uv", "run",
-    "--directory", str(python_dir),
-    "-m", "tier1.tier1_corpus2events",
-    "--backend", "onnx",
-    # "--max-docs", "5",          # useful for a quick test
-    # "--dry-run",                # embed only, write nothing
-    # "--worker-id", "colab-1",   # optional explicit id
-], check=True)
+try:
+    subprocess.run(
+        [
+            "uv", "run",
+            "--directory", str(python_dir),
+            "-m", "tier1.tier1_corpus2events",
+            "--backend", "onnx",
+            # "--max-docs", "5",          # useful for a quick test
+            # "--dry-run",                # embed only, write nothing
+            # "--worker-id", "colab-1",   # optional explicit id
+        ],
+        check=True,
+        capture_output=True, # Capture stdout and stderr
+        text=True # Decode stdout and stderr as text
+    )
+except subprocess.CalledProcessError as e:
+    print(f"Command failed with exit code {e.returncode}")
+    print(f"Stdout:\n{e.stdout}")
+    print(f"Stderr:\n{e.stderr}")
+    raise # Re-raise the exception to keep the notebook's error state
 
 print("Done.")
