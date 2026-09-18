@@ -44,13 +44,33 @@ os.chdir(python_dir)
 os.environ["PYTHONPATH"] = str(src_dir) + os.pathsep + os.environ.get("PYTHONPATH", "")
 
 # ------------------------------------------------------------
-# 3. Install dependencies
+# 3. Install dependencies with uv
 # ------------------------------------------------------------
-print("Installing Python dependencies...")
+print("Installing uv...")
+
 subprocess.run(
-    [sys.executable, "-m", "pip", "install", "-r", str(python_dir / "requirements.txt")],
+    [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "uv",
+    ],
     check=True,
 )
+
+print("Installing project dependencies from pyproject.toml / uv.lock...")
+
+subprocess.run(
+    [
+        "uv",
+        "sync",
+        "--directory",
+        str(python_dir),
+    ],
+    check=True,
+)
+
 print("Dependencies installed.")
 
 # ------------------------------------------------------------
@@ -89,8 +109,11 @@ sys.path.insert(0, str(src_dir))
 # ], check=True)
 
 print("Starting window embedder worker (Colab → Parquet on Drive) ...")
+
 subprocess.run([
-    sys.executable, "-m", "tier1.tier1_corpus2events",
+    "uv", "run",
+    "--directory", str(python_dir),
+    "-m", "tier1.tier1_corpus2events",
     "--backend", "onnx",
     # "--max-docs", "5",          # useful for a quick test
     # "--dry-run",                # embed only, write nothing
