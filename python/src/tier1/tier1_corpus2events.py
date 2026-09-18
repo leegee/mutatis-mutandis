@@ -37,6 +37,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import lancedb
+import psycopg
 from psycopg import Connection
 
 from lib.corpus_config import (
@@ -244,9 +245,15 @@ def iter_windows(
 ) -> Iterator[tuple[Optional[int], Window]]:
     """
     Yield (pub_year, Window) without ever holding the whole document.
-    Uses a server-side cursor so Postgres streams the tokens.
+    Uses a uniquely-named server-side cursor so Postgres streams the tokens.
     """
-    with conn.cursor() as cur:  # server-side
+    # Must be inside a transaction for a named cursor
+    if conn.info.transaction_status == psycopg.pq.TransactionStatus.IDLE:
+        conn.execute("BEGIN")
+
+    cursor_name = f"win_{corpus}_{doc_id}_{uuid.uuid4().hex[:8]}"
+
+    with conn.cursor(name=cursor_name) as cur:
         cur.itersize = 4096
         cur.execute("""
             SELECT t.token, d.pub_year
@@ -255,7 +262,7 @@ def iter_windows(
                 ON d.corpus = t.corpus
                 AND d.doc_id = t.doc_id
             WHERE t.corpus = %s
-            AND t.doc_id = %s
+              AND t.doc_id = %s
             ORDER BY t.token_idx
         """, (corpus, doc_id))
 
@@ -278,7 +285,6 @@ def iter_windows(
                 del buffer[:stride]
                 start_of_window += stride
 
-        # final partial window (keep for now)
         if buffer:
             text = " ".join(buffer)
             yield pub_year, Window(
@@ -286,7 +292,6 @@ def iter_windows(
                 end_idx=start_of_window + len(buffer),
                 text=text,
             )
-
 
 # ---------------------------------------------------------------------------
 # Lance / Parquet writers

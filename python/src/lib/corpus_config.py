@@ -1,6 +1,7 @@
 # lib/corpus_config.py
 
 import os
+import sys
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
