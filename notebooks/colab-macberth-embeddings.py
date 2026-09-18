@@ -77,6 +77,23 @@ subprocess.run(
 print("Dependencies installed.")
 
 # ------------------------------------------------------------
+# 3b. Make sure MacBERTh model is available locally
+# ------------------------------------------------------------
+MODEL_DIR = Path("/content/mutatis-mutandis/python/src/lib/macberth-huggingface")
+DRIVE_MODEL_TGZ = Path("/content/drive/MyDrive/macberth_models/macberth-huggingface.tar.gz")
+
+if not (MODEL_DIR / "config.json").exists():
+    print("MacBERTh model not found – extracting from Drive ...")
+    MODEL_DIR.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["tar", "-xzf", str(DRIVE_MODEL_TGZ), "-C", str(MODEL_DIR.parent)],
+        check=True,
+    )
+    print("Model extracted.")
+else:
+    print("MacBERTh model already present.")
+
+# ------------------------------------------------------------
 # 4. Postgres credentials (from Drive)
 # ------------------------------------------------------------
 creds_path = Path("/content/drive/MyDrive/macberth_pg_secrets.json")
