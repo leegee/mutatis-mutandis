@@ -398,52 +398,35 @@ def load_macberth_onnx(
     """
     Loads the ONNX MacBERTh model for inference. Exports it first if it
     doesn't already exist on disk.
-
-    The ONNX model is always the unquantized fp32 export.
-
-    Default provider is CPU-only (stable for long Tier 1 runs on Windows).
-    Pass `providers=["DmlExecutionProvider", "CPUExecutionProvider"]`
-    to use DirectML when available.
     """
     import os
 
     if export_dir is None:
         export_dir = ONNX_MODEL_DIR
-
     export_dir = Path(export_dir)
 
     if not (export_dir / "model.onnx").exists():
         _export_macberth_onnx(export_dir)
 
     if providers is None:
-        # Env override: MACBERTH_ONNX_PROVIDER=dml|cpu
-        pref = os.environ.get(
-            "MACBERTH_ONNX_PROVIDER",
-            "cpu",
-        ).strip().lower()
-
-        if pref in ("dml", "directml", "gpu"):
-            providers = [
-                "DmlExecutionProvider",
-                "CPUExecutionProvider",
-            ]
+        # Auto-select the best available provider
+        available = ort.get_available_providers()
+        if "CUDAExecutionProvider" in available:
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        elif "DmlExecutionProvider" in available:
+            providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
         else:
-            providers = [
-                "CPUExecutionProvider",
-            ]
+            providers = ["CPUExecutionProvider"]
 
-    usable = [
-        p for p in providers
-        if p in ort.get_available_providers()
-    ]
-
+    usable = [p for p in providers if p in ort.get_available_providers()]
     if not usable:
         raise RuntimeError(
-            f"None of the requested providers are available: {providers}"
+            f"None of the requested providers are available: {providers}. "
+            f"Available: {ort.get_available_providers()}"
         )
 
     provider_options = [
-        {"device_id": 0} if p == "DmlExecutionProvider" else {}
+        {"device_id": 0} if p in ("CUDAExecutionProvider", "DmlExecutionProvider") else {}
         for p in usable
     ]
 
@@ -456,21 +439,17 @@ def load_macberth_onnx(
         provider_options=provider_options,
     )
 
+    actual = session.get_providers()
     logger.info(
-        "[macberth.load_macberth_onnx] Loaded ONNX MacBERTh, "
-        "providers: %s",
-        session.get_providers(),
+        "[macberth.load_macberth_onnx] Loaded ONNX MacBERTh | "
+        "requested=%s | actual=%s",
+        providers,
+        actual,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        export_dir,
-        local_files_only=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(export_dir, local_files_only=True)
 
-    return OnnxMacberthModel(
-        tokenizer=tokenizer,
-        session=session,
-    )
+    return OnnxMacberthModel(tokenizer=tokenizer, session=session)
 
 
 def _configure_ort_session_options() -> ort.SessionOptions:
@@ -577,25 +556,62 @@ def load_macberth_onnx(
     return OnnxMacberthModel(tokenizer=tokenizer, session=session)
 
 
+def _best_backend(preferred: str | None = None) -> str:
+    """
+    Choose the fastest available backend.
+    Order of preference:
+      1. Explicit request (if valid)
+      2. PyTorch CUDA  (Colab GPU / local NVIDIA)
+      3. ONNX CUDA
+      4. ONNX DirectML (Windows)
+      5. ONNX CPU
+      6. PyTorch CPU
+    """
+    if preferred in ("onnx", "pytorch"):
+        return preferred
+
+    # 1. PyTorch CUDA
+    if torch.cuda.is_available():
+        return "pytorch"
+
+    # 2. ONNX with CUDA provider
+    if "CUDAExecutionProvider" in ort.get_available_providers():
+        return "onnx"
+
+    # 3. ONNX DirectML (Windows)
+    if "DmlExecutionProvider" in ort.get_available_providers():
+        return "onnx"
+
+    # 4. Default to ONNX CPU (usually faster than plain PyTorch CPU)
+    return "onnx"
+
+
 def get_macberth_embedder(
     pooling: str = "mean",
-    backend: str = "onnx",
+    backend: str | None = None,          # None = auto
 ) -> MacBERThEmbedder:
+    backend = _best_backend(backend)
+
+    logger.info("[macberth] selected backend: %s", backend)
 
     if backend == "onnx":
-        macberth_model = load_macberth_onnx()
-    elif backend == "pytorch":
-        macberth_model = load_macberth()
-    else:
-        raise ValueError(
-            f"Unknown MacBERTh backend: {backend!r}. "
-            "Expected 'onnx' or 'pytorch'."
-        )
+        # Prefer CUDA → DirectML → CPU
+        available = ort.get_available_providers()
+        if "CUDAExecutionProvider" in available:
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        elif "DmlExecutionProvider" in available:
+            providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
+        else:
+            providers = ["CPUExecutionProvider"]
 
-    return MacBERThEmbedder(
-        macberth_model,
-        pooling=pooling,
-    )
+        macberth_model = load_macberth_onnx(providers=providers)
+
+    elif backend == "pytorch":
+        macberth_model = load_macberth()          # already moves to CUDA if available
+    else:
+        raise ValueError(f"Unknown backend: {backend}")
+
+    return MacBERThEmbedder(macberth_model, pooling=pooling)
 
 
 def embed_query(

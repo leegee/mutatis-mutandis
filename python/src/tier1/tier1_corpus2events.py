@@ -500,6 +500,7 @@ def run_worker(
     )
 
     conn = get_connection()
+    backend = None if args.backend == "auto" else args.backend
     embedder = get_macberth_embedder(pooling="mean", backend=backend)
     writer = VectorWriter(LANCE_INDEXES_DIR, dry_run=dry_run)
 
@@ -557,8 +558,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-year", type=int, default=None)
     p.add_argument("--worker-id", default=None)
     p.add_argument("--max-docs", type=int, default=None, help="Stop after this many documents (useful for testing)")
-    p.add_argument("--backend", choices=("onnx", "pytorch"), default="onnx")
     p.add_argument("--dry-run", action="store_true", help="Run embedding but write nothing and leave jobs untouched")
+    p.add_argument(
+        "--backend",
+        choices=("auto", "onnx", "pytorch"),
+        default="auto",
+        help="Embedding backend (default: auto = fastest available)",
+    )
     return p.parse_args()
 
 
@@ -579,6 +585,7 @@ def main() -> None:
         return
 
     conn.close()
+
     run_worker(
         worker_id=args.worker_id,
         max_docs=args.max_docs,
