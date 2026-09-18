@@ -25,11 +25,10 @@ CORPUS_INPUT_DIRS = {
 
 CLMET_CORPUS_INPUT_DIR = XML_ROOT_DIR / "clmet" / "corpus" / "txt" / "plain"
 
-try:
-    import google.colab  #
-    COLAB_MODE = True
-except ModuleNotFoundError:
-    COLAB_MODE = False
+COLAB_MODE = (
+    os.environ.get("COLAB_MODE", "").lower() in ("1", "true", "yes")
+    or "google.colab" in sys.modules
+)
 
 # Could use env var
 OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
