@@ -24,7 +24,8 @@ from .observation_index_store import ObservationIndexStore
 _TABLE_PATTERN = re.compile(
     r"^(?P<scale>local|medium|broad)"
     r"__(?P<model>[^_]+(?:_[^_]+)*)"
-    r"__(?P<year_start>\d{4})_(?P<year_end>\d{4})$"
+    r"__(?P<year_start>\d{4})_(?P<year_end>\d{4})"
+    r"(?:\.lance)?$"
 )
 
 
