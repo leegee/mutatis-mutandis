@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 import os
 import time
 import unicodedata
@@ -11,8 +10,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-import pyarrow as pa
-import lancedb
 import numpy as np
 import torch
 
@@ -22,6 +19,7 @@ from lib.corpus_logging import logger
 from lib.macberth import load_macberth
 from retrieval.models import SCALES
 from tier1.db_observation_backend import allocate_event_ids, insert_events, create_events_table
+from tier1.vector_writer import VectorWriter, lance_table_name, year_bucket
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("OMP_NUM_THREADS", "4")
@@ -34,16 +32,17 @@ WINDOW_CONFIGS = (
     {"name": "medium", "size": 512, "stride": 256},
     {"name": "broad", "size": 512, "stride": 384},
 )
-ACTIVE_SCALES = ("local",)
+ACTIVE_SCALES = ("medium",)
 
 LANCE_MODEL_NAME = "macberth"
 LANCE_BUCKET_SIZE = 50
 
-VECTOR_INDEX_TYPE = "IVF_FLAT"
-VECTOR_INDEX_METRIC = "cosine"
-
-MIN_VECTOR_INDEX_PARTITIONS = 1
-MAX_VECTOR_INDEX_PARTITIONS = 256
+# Lance table naming / bucketing and the index/partition tuning constants
+# now live in tier1.vector_writer, shared with tier1_corpus2events.py.
+# lance_table_name/year_bucket are re-exported above for anything that
+# still imports them from this module (e.g. tier1_corpus2events.py's
+# --populate path used to shadow these; new code should import them
+# from tier1.vector_writer directly).
 
 
 def normalise_token(token: str) -> str:
@@ -84,41 +83,6 @@ def is_seed(token: str) -> bool:
     return (
         value in SEED_FORMS
         and value not in FALSE_POSITIVE_FORMS
-    )
-
-
-def year_bucket(year: int) -> tuple[int, int]:
-    start = (year // LANCE_BUCKET_SIZE) * LANCE_BUCKET_SIZE
-    return start, start + LANCE_BUCKET_SIZE - 1
-
-
-def lance_table_name(scale: str, year: int) -> str:
-    start, end = year_bucket(year)
-
-    return (
-        f"{scale}__{LANCE_MODEL_NAME}__"
-        f"{start:04d}_{end:04d}"
-    )
-
-
-def vector_index_partitions(row_count: int) -> int:
-    """
-    Size num_partitions from the table's actual row count.
-
-    sqrt(row_count) is a standard IVF starting heuristic: it keeps the
-    average partition size (and therefore per-partition training/search
-    cost) growing sublinearly as the table grows, without requiring more
-    partitions than a small bucket has rows to support.
-    """
-    if row_count <= 0:
-        raise ValueError("row_count must be positive")
-
-    return max(
-        MIN_VECTOR_INDEX_PARTITIONS,
-        min(
-            MAX_VECTOR_INDEX_PARTITIONS,
-            int(math.sqrt(row_count)),
-        ),
     )
 
 
@@ -632,6 +596,12 @@ class MacBERThPipeline:
 
 
 class EventWriter:
+    """
+    Owns Postgres event provenance and delegates all vector I/O to one
+    VectorWriter per active scale, so seeds2events and corpus2events
+    write Lance rows through the exact same schema/dedup/index code.
+    """
+
     def __init__(
         self,
         conn,
@@ -639,8 +609,16 @@ class EventWriter:
     ) -> None:
         self.conn = conn
         self.lance_root = lance_root
-        self.lance = lancedb.connect(str(lance_root))
-        self.tables: dict[str, object] = {}
+
+        self.vector_writers: dict[str, VectorWriter] = {
+            scale: VectorWriter(
+                lance_root,
+                scale=scale,
+                model_name=LANCE_MODEL_NAME,
+                bucket_size=LANCE_BUCKET_SIZE,
+            )
+            for scale in ACTIVE_SCALES
+        }
 
     def write(
         self,
@@ -677,92 +655,12 @@ class EventWriter:
         return self._write_lance(observations)
 
     def index_existing_tables(self) -> None:
-        prefixes = tuple(
-            f"{scale}__{LANCE_MODEL_NAME}__"
-            for scale in ACTIVE_SCALES
-        )
-
-        for table_name in sorted(
-            name
-            for name in self.lance.list_tables().tables
-            if name.startswith(prefixes)
-        ):
-            self.tables[table_name] = self.lance.open_table(table_name)
-
-        self.build_indexes()
+        for writer in self.vector_writers.values():
+            writer.index_existing_tables()
 
     def build_indexes(self) -> None:
-        """
-        Rebuild indexes for tables that are missing an index or contain
-        unindexed rows.
-
-        Indexes are treated as derived acceleration structures. A table is
-        complete only when all required indexes exist and cover every row.
-        """
-        expected_indexes = {
-            "vector_idx",
-            "event_id_idx",
-            "year_idx",
-            "embedding_model_idx",
-        }
-
-        for table_name, table in self.tables.items():
-            row_count = table.count_rows()
-
-            if row_count == 0:
-                continue
-
-            indices = {
-                index.name: index
-                for index in table.list_indices()
-            }
-
-            if (
-                expected_indexes <= indices.keys()
-                and all(
-                    indices[name].num_unindexed_rows == 0
-                    for name in expected_indexes
-                )
-            ):
-                logger.info(
-                    "[tier1] indexes already complete for %s (%d rows)",
-                    table_name,
-                    row_count,
-                )
-                continue
-
-            num_partitions = vector_index_partitions(row_count)
-
-            logger.info(
-                "[tier1] rebuilding indexes for %s (%d rows, %d partitions)",
-                table_name,
-                row_count,
-                num_partitions,
-            )
-
-            table.create_index(
-                metric=VECTOR_INDEX_METRIC,
-                index_type=VECTOR_INDEX_TYPE,
-                vector_column_name="vector",
-                num_partitions=num_partitions,
-                replace=True,
-            )
-
-            table.create_scalar_index(
-                "event_id",
-                index_type="BTREE",
-                replace=True,
-            )
-            table.create_scalar_index(
-                "year",
-                index_type="BTREE",
-                replace=True,
-            )
-            table.create_scalar_index(
-                "embedding_model",
-                index_type="BTREE",
-                replace=True,
-            )
+        for writer in self.vector_writers.values():
+            writer.build_indexes()
 
     def _resolve_repair_event_ids(
         self,
@@ -916,7 +814,9 @@ class EventWriter:
         self,
         observations: list[EmbeddedObservation],
     ) -> int:
-        rows_by_table: dict[str, list[dict]] = defaultdict(list)
+        # Group by (scale, pub_year): each VectorWriter.write() call is
+        # one Lance table, and a table is scoped to a single year bucket.
+        batches: dict[tuple[str, int], list[EmbeddedObservation]] = defaultdict(list)
 
         for embedded in observations:
             observation = embedded.observation
@@ -935,112 +835,28 @@ class EventWriter:
                 )
 
             for scale in ACTIVE_SCALES:
-                table_name = lance_table_name(
-                    scale,
-                    observation.pub_year,
-                )
+                batches[(scale, observation.pub_year)].append(embedded)
 
-                rows_by_table[table_name].append(
-                    {
-                        "event_id": observation.event_id,
-                        "year": observation.pub_year,
-                        "embedding_model": LANCE_MODEL_NAME,
-                        "vector": embedded.vectors[scale].tolist(),
-                    }
-                )
+        total_written = 0
 
-        written_event_ids: set[int] = set()
+        for (scale, pub_year), batch in batches.items():
+            writer = self.vector_writers[scale]
 
-        for table_name, rows in rows_by_table.items():
-            table = self._open_table(
-                table_name,
-                vector_dimensions=len(rows[0]["vector"]),
-            )
-
-            existing_ids = self._existing_lance_ids(
-                table,
-                {
-                    row["event_id"]
-                    for row in rows
-                },
-            )
-
-            new_rows = [
-                row
-                for row in rows
-                if row["event_id"] not in existing_ids
+            event_ids = [
+                embedded.observation.event_id
+                for embedded in batch
             ]
+            vectors = np.stack(
+                [embedded.vectors[scale] for embedded in batch]
+            )
 
-            if new_rows:
-                table.add(
-                    new_rows,
-                    mode="append",
-                )
+            total_written += writer.write(
+                event_ids=event_ids,
+                pub_year=pub_year,
+                vectors=vectors,
+            )
 
-                written_event_ids.update(
-                    row["event_id"]
-                    for row in new_rows
-                )
-
-        return len(written_event_ids)
-
-    def _existing_lance_ids(
-        self,
-        table,
-        event_ids: set[int],
-    ) -> set[int]:
-        if not event_ids:
-            return set()
-
-        arrow = table.to_arrow()
-
-        existing = set(
-            arrow.column("event_id").to_pylist()
-        )
-
-        return existing.intersection(event_ids)
-
-    def _open_table(
-        self,
-        table_name: str,
-        *,
-        vector_dimensions: int,
-    ):
-        if table_name in self.tables:
-            return self.tables[table_name]
-
-        table_names = set(
-            self.lance.list_tables().tables
-        )
-
-        if table_name in table_names:
-            table = self.lance.open_table(table_name)
-            self.tables[table_name] = table
-            return table
-
-        logger.info(
-            "[tier1] creating Lance table: %s",
-            table_name,
-        )
-
-        table = self.lance.create_table(
-            table_name,
-            schema=pa.schema(
-                [
-                    pa.field("event_id", pa.uint64()),
-                    pa.field("year", pa.int32()),
-                    pa.field("embedding_model", pa.string()),
-                    pa.field(
-                        "vector",
-                        pa.list_(pa.float32(), vector_dimensions),
-                    ),
-                ]
-            ),
-        )
-
-        self.tables[table_name] = table
-
-        return table
+        return total_written
 
 
 class CorpusProcessor:

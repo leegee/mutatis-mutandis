@@ -129,8 +129,17 @@ CONCEPT_SETS: CanonicalRules = {
     "WHITE": {
         "forms": {
             "white",
+            "whit",
+            "hwit",
+            "whyte",
+            "whight",
+            "whyt", "whyte", "hwyte",
+            "whitt",
         },
-        "false_positives": set(),
+        "false_positives": {
+            "wight",
+            "whiten",
+        },
     },
 }
 

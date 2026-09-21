@@ -17,17 +17,19 @@ from lib.corpus_config import MODELS_DIR
 
 BATCH_SIZE = 64
 
-# MACBERTH_MODEL_PATH = Path("./lib/macberth-huggingface")
-# MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
-
 ONNX_MODEL_DIR = MODELS_DIR / "./macberth-onnx-fp32"
 ONNX_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+logger.info(f"ONNX_MODEL_DIR {ONNX_MODEL_DIR}")
 
 # This file lives at .../src/lib/macberth.py
-_THIS_DIR = Path(__file__).resolve().parent
-MACBERTH_MODEL_PATH = _THIS_DIR / "macberth-huggingface"
+# Model path is D:\src\mutatis-mutandis\python\lib
+_THIS_DIR = Path(__file__).resolve().parent.parent.parent
+MACBERTH_MODEL_PATH = _THIS_DIR / "lib" / "macberth-huggingface"
 MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
+
+logger.info(f"MACBERTH_MODEL_PATH {MACBERTH_MODEL_PATH}")
+
 
 @dataclass
 class MacberthModel:
@@ -76,6 +78,13 @@ def load_macberth() -> MacberthModel:
     """
 
     logger.info("Loading MacBERTh model...")
+    logger.info("MacBERTh model path: %s", MACBERTH_MODEL_PATH)
+
+    if not MACBERTH_MODEL_PATH.is_dir():
+        raise FileNotFoundError(
+            f"MacBERTh model directory does not exist: "
+            f"{MACBERTH_MODEL_PATH}"
+        )
 
     tokenizer = AutoTokenizer.from_pretrained(
         MACBERTH_MODEL_PATH,
@@ -100,7 +109,6 @@ def load_macberth() -> MacberthModel:
         model=model,
         device=device,
     )
-
 
 def normalize(v: np.ndarray) -> Optional[np.ndarray]:
     n = np.linalg.norm(v)
