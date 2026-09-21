@@ -40,7 +40,7 @@ K = 60
 RRF_K = 60
 OVERSAMPLE = 1.2
 BATCH_SIZE = 256
-TIER2_SCALES = ("local",)
+TIER2_SCALES = ("medium",)
 
 _NO_WPOS = -1
 
