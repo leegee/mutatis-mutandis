@@ -1,34 +1,50 @@
 """
 tier2/rebuild_concept_aggregates.py
 
-Rebuild derived concept_aggregate rows from persisted Tier 2 retrieval data.
+Rebuild derived tier2.concept_aggregate rows from persisted Tier 2
+retrieval data.
 
-No LanceDB access or semantic retrieval is performed. The retrieval_runs and
-neighbour_edges tables remain unchanged.
+No LanceDB access or semantic retrieval is performed. Retrieval provenance
+is authoritative in PostgreSQL:
 
-Retrieval provenance is authoritative in SQLite:
     retrieval_runs -> neighbour_edges
 
 Corpus provenance is authoritative in PostgreSQL:
+
     neighbour_edges.neighbour_event_id -> events.event_id
 
 Aggregate ranking is based on accumulated RRF score. Counts represent
-distinct seed-event contributions, rather than raw retrieval multiplicity.
+distinct seed-event contributions rather than raw retrieval multiplicity.
 """
 
 from __future__ import annotations
 
 import argparse
 from collections import defaultdict
-from pathlib import Path
 from typing import Any, Iterable
 
-from lib.corpus_config import CORPUS_TIER2_DB_PATH
-from lib.corpus_db import analysis_db_connection, get_connection
+from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 
 
 POSTGRES_BATCH_SIZE = 10_000
+
+
+def _batched(
+    values: Iterable[int],
+    batch_size: int,
+):
+    batch: list[int] = []
+
+    for value in values:
+        batch.append(int(value))
+
+        if len(batch) >= batch_size:
+            yield batch
+            batch = []
+
+    if batch:
+        yield batch
 
 
 def _fetch_event_metadata(
@@ -36,10 +52,10 @@ def _fetch_event_metadata(
     event_ids: Iterable[int],
 ) -> dict[int, dict[str, Any]]:
     """
-    Fetch authoritative Tier 1 provenance from PostgreSQL in one bounded query.
+    Fetch authoritative Tier 1 provenance from PostgreSQL.
 
-    The caller is responsible for batching event_ids so the query remains
-    bounded for large Tier 2 retrievals.
+    Event IDs are batched so large Tier 2 retrievals do not create an
+    unbounded query parameter list.
     """
     ids = [int(event_id) for event_id in event_ids]
 
@@ -111,51 +127,38 @@ def _fetch_event_metadata(
     return metadata
 
 
-def _batched(
-    values: Iterable[int],
-    batch_size: int,
-):
-    batch: list[int] = []
-
-    for value in values:
-        batch.append(int(value))
-
-        if len(batch) >= batch_size:
-            yield batch
-            batch = []
-
-    if batch:
-        yield batch
-
-
 def _fetch_all_neighbour_edges(
-    conn,
+    connection,
     concept: str,
 ) -> list[tuple[int, int, float]]:
     """
     Return persisted first-order retrieval edges for a concept.
 
     Each row is:
+
         seed_event_id, neighbour_event_id, score
 
-    Retrieval runs define the concept and interval. The edge table supplies
-    the actual semantic retrieval evidence.
+    retrieval_runs identifies the concept; neighbour_edges supplies the
+    persisted semantic retrieval evidence.
     """
-    rows = conn.execute(
-        """
-        SELECT
-            ne.seed_event_id,
-            ne.neighbour_event_id,
-            ne.score
-        FROM neighbour_edges ne
-        JOIN retrieval_runs rr
-            ON rr.run_id = ne.run_id
-        WHERE rr.concept = ?
-          AND ne.depth = 1
-        ORDER BY ne.run_id, ne.seed_event_id, ne.rank
-        """,
-        (concept,),
-    ).fetchall()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                ne.seed_event_id,
+                ne.neighbour_event_id,
+                ne.score
+            FROM tier2.neighbour_edges AS ne
+            JOIN tier2.retrieval_runs AS rr
+              ON rr.run_id = ne.run_id
+            WHERE rr.concept = %s
+              AND ne.depth = 1
+            ORDER BY ne.run_id, ne.seed_event_id, ne.rank
+            """,
+            (concept,),
+        )
+
+        rows = cursor.fetchall()
 
     return [
         (
@@ -164,6 +167,7 @@ def _fetch_all_neighbour_edges(
             float(score),
         )
         for seed_event_id, neighbour_event_id, score in rows
+        if score is not None
     ]
 
 
@@ -177,13 +181,13 @@ def _build_aggregates(
     list[tuple[tuple[str, int], set[int], float]],
 ]:
     """
-    Convert retrieval edges plus PostgreSQL event metadata into aggregate data.
+    Convert persisted retrieval edges and event metadata into aggregate data.
 
-    The sets preserve distinct seed-event provenance. Scores are accumulated
-    across distinct seed/neighbour contributions.
+    A seed/neighbour pair contributes at most once. If duplicate persisted
+    rows exist for the same pair, the highest score is retained.
 
-    If the same seed retrieves the same neighbour more than once in persisted
-    data, only one contribution is retained for that seed/neighbour pair.
+    Counts therefore represent distinct seed-event contributions, while
+    scores accumulate the retained retrieval scores.
     """
     unique_edges: dict[tuple[int, int], float] = {}
 
@@ -227,7 +231,7 @@ def _build_aggregates(
 
         token = str(event["token"])
         doc_id = str(event["doc_id"])
-        local_window_id = event["local_window_id"]
+        medium_window_id = event["medium_window_id"]
 
         token_seed_events[token].add(seed_event_id)
         token_scores[token] += score
@@ -235,8 +239,8 @@ def _build_aggregates(
         doc_seed_events[doc_id].add(seed_event_id)
         doc_scores[doc_id] += score
 
-        if local_window_id is not None:
-            window_key = (doc_id, int(local_window_id))
+        if medium_window_id is not None:
+            window_key = (doc_id, int(medium_window_id))
 
             window_seed_events[window_key].add(seed_event_id)
             window_scores[window_key] += score
@@ -297,122 +301,86 @@ def _build_aggregates(
     )
 
 
-def rebuild_concept_aggregates(
-    db_path: Path,
+def _replace_concept_aggregates(
+    connection,
     *,
-    concept: str | None = None,
-) -> None:
-    sqlite_conn = analysis_db_connection(db_path)
-    postgres_conn = get_connection()
+    concept: str,
+    token_ranked,
+    doc_ranked,
+    window_ranked,
+) -> int:
+    """
+    Replace all derived aggregate rows for one concept atomically.
+    """
+    rows = []
 
-    try:
-        sqlite_conn.execute("PRAGMA foreign_keys = ON")
-
-        if concept is None:
-            concepts = [
-                str(row[0])
-                for row in sqlite_conn.execute(
-                    """
-                    SELECT concept
-                    FROM concepts
-                    ORDER BY concept
-                    """
-                )
-            ]
-        else:
-            concepts = [concept]
-
-        for concept_name in concepts:
-            logger.info(
-                "[tier2 aggregates] rebuilding concept=%s",
-                concept_name,
-            )
-
-            edges = _fetch_all_neighbour_edges(
-                sqlite_conn,
-                concept_name,
-            )
-
-            logger.info(
-                "[tier2 aggregates] concept=%s: %d persisted edges",
-                concept_name,
-                len(edges),
-            )
-
+    for rank, (
+        token,
+        seed_events,
+        score,
+    ) in enumerate(token_ranked):
+        rows.append(
             (
-                token_ranked,
-                doc_ranked,
-                window_ranked,
-            ) = _build_aggregates(
-                postgres_connection=postgres_conn,
-                edges=edges,
-            )
-
-            sqlite_conn.execute(
-                """
-                DELETE FROM concept_aggregate
-                WHERE concept = ?
-                """,
-                (concept_name,),
-            )
-
-            aggregate_rows = []
-
-            for rank, (
+                concept,
+                "token",
+                rank,
                 token,
-                seed_events,
+                None,
+                None,
+                len(seed_events),
                 score,
-            ) in enumerate(token_ranked):
-                aggregate_rows.append(
-                    (
-                        concept_name,
-                        "token",
-                        rank,
-                        token,
-                        None,
-                        None,
-                        len(seed_events),
-                        score
-                    )
-                )
+            )
+        )
 
-            for rank, (
+    for rank, (
+        doc_id,
+        seed_events,
+        score,
+    ) in enumerate(doc_ranked):
+        rows.append(
+            (
+                concept,
+                "doc",
+                rank,
                 doc_id,
-                seed_events,
+                None,
+                None,
+                len(seed_events),
                 score,
-            ) in enumerate(doc_ranked):
-                aggregate_rows.append(
-                    (
-                        concept_name,
-                        "doc",
-                        rank,
-                        doc_id,
-                        None,
-                        None,
-                        len(seed_events),
-                    )
-                )
+            )
+        )
 
-            for rank, (
-                (doc_id, window_id),
-                seed_events,
+    for rank, (
+        (doc_id, window_id),
+        seed_events,
+        score,
+    ) in enumerate(window_ranked):
+        rows.append(
+            (
+                concept,
+                "window",
+                rank,
+                None,
+                doc_id,
+                window_id,
+                len(seed_events),
                 score,
-            ) in enumerate(window_ranked):
-                aggregate_rows.append(
-                    (
-                        concept_name,
-                        "window",
-                        rank,
-                        None,
-                        doc_id,
-                        window_id,
-                        len(seed_events),
-                    )
-                )
+            )
+        )
 
-            sqlite_conn.executemany(
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            DELETE FROM tier2.concept_aggregate
+            WHERE concept = %s
+            """,
+            (concept,),
+        )
+
+        if rows:
+            with cursor.copy(
                 """
-                INSERT INTO concept_aggregate (
+                COPY tier2.concept_aggregate (
                     concept,
                     kind,
                     rank,
@@ -420,49 +388,95 @@ def rebuild_concept_aggregates(
                     window_doc_id,
                     window_id,
                     count,
-                    seed
+                    score
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                aggregate_rows,
+                FROM STDIN
+                """
+            ) as copy:
+                for row in rows:
+                    copy.write_row(row)
+
+    return len(rows)
+
+
+def _fetch_concepts(connection) -> list[str]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT concept
+            FROM tier2.concepts
+            ORDER BY concept
+            """
+        )
+
+        return [str(row[0]) for row in cursor.fetchall()]
+
+
+def rebuild_concept_aggregates(
+    connection,
+    *,
+    concept: str | None = None,
+) -> None:
+    """
+    Rebuild derived aggregates from the current PostgreSQL Tier 2 state.
+
+    Each concept is rebuilt in its own transaction so a failure does not
+    leave that concept with its previous aggregate rows deleted.
+    """
+    concepts = (
+        [concept]
+        if concept is not None
+        else _fetch_concepts(connection)
+    )
+
+    for concept_name in concepts:
+        logger.info(
+            "[tier2 aggregates] rebuilding concept=%s",
+            concept_name,
+        )
+
+        edges = _fetch_all_neighbour_edges(
+            connection,
+            concept_name,
+        )
+
+        logger.info(
+            "[tier2 aggregates] concept=%s: %d persisted edges",
+            concept_name,
+            len(edges),
+        )
+
+        (
+            token_ranked,
+            doc_ranked,
+            window_ranked,
+        ) = _build_aggregates(
+            postgres_connection=connection,
+            edges=edges,
+        )
+
+        with connection.transaction():
+            row_count = _replace_concept_aggregates(
+                connection,
+                concept=concept_name,
+                token_ranked=token_ranked,
+                doc_ranked=doc_ranked,
+                window_ranked=window_ranked,
             )
 
-            logger.info(
-                "[tier2 aggregates] concept=%s: "
-                "%d tokens, %d documents, %d windows",
-                concept_name,
-                len(token_ranked),
-                len(doc_ranked),
-                len(window_ranked),
-            )
-
-        sqlite_conn.commit()
-
-    except Exception:
-        sqlite_conn.rollback()
-        raise
-
-    finally:
-        postgres_conn.close()
-        sqlite_conn.close()
+        logger.info(
+            "[tier2 aggregates] concept=%s: %d tokens, %d documents, %d windows, %d rows",
+            concept_name,
+            len(token_ranked),
+            len(doc_ranked),
+            len(window_ranked),
+            row_count,
+        )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Rebuild Tier 2 concept aggregates from persisted "
-            "retrieval data."
-        )
-    )
-
-    parser.add_argument(
-        "--sqlite",
-        type=Path,
-        default=CORPUS_TIER2_DB_PATH,
-        help=(
-            f"Tier 2 SQLite database "
-            f"(default: {CORPUS_TIER2_DB_PATH})."
-        ),
+        description=( "Rebuild Tier 2 concept aggregates from persisted PostgreSQL retrieval data." )
     )
 
     parser.add_argument(
@@ -476,10 +490,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    rebuild_concept_aggregates(
-        args.sqlite,
-        concept=args.concept,
-    )
+    connection = get_connection()
+
+    try:
+        rebuild_concept_aggregates(
+            connection,
+            concept=args.concept,
+        )
+    finally:
+        connection.close()
 
 
 if __name__ == "__main__":

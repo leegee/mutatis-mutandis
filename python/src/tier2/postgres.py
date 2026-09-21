@@ -1,9 +1,11 @@
+# tier2/postgres.py
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
 from lib.corpus_logging import logger
-
+from tier2.analysis import TIER2_SCALES
 
 def _maybe_float(value):
     return None if value is None else float(value)
@@ -315,8 +317,8 @@ def write_tier2_postgres(
     to_year: int,
     clear: bool = False,
     seed_population: str = "lexical_forms",
-    neighbour_population: str = "temporal_year",
-    scales=("local", "medium", "broad"),
+    neighbour_population: str = "same_publication_year",
+    scales=TIER2_SCALES,
     top_n: int = 60,
     rrf_k: int = 60,
     oversample: int = 5,

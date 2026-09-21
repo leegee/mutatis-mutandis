@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
 
 from lib.cluster import (
     LOCAL_UMAP_PARAMS,
@@ -24,14 +23,14 @@ from lib.corpus_config import (
 )
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.sqlite_vector_blob import vector_to_blob
+from lib.vector_blob import vector_to_bytes
 from retrieval.lance_observation_index_store import (
     LanceObservationIndexStore,
 )
 from retrieval.models import SearchSpace
 
 YEAR_BUCKET = 10
-CLUSTER_SCALE = "local"
+CLUSTER_SCALE = "medium"
 
 
 def load_concepts(con):
@@ -50,8 +49,7 @@ def load_concepts(con):
 
     resolved = [
         concept
-        for concept, _
-        in resolve_concepts(concept=None)
+        for concept, _ in resolve_concepts(concept=None)
     ]
 
     concepts = [
@@ -63,7 +61,10 @@ def load_concepts(con):
     return concepts or sorted(present)
 
 
-def load_event_rows(con, concept: str) -> list[tuple[int, int]]:
+def load_event_rows(
+    con,
+    concept: str,
+) -> list[tuple[int, int]]:
     """
     Tier 2 event_field is the complete persisted field population.
 
@@ -208,43 +209,37 @@ def write_cluster_info_postgres(
                 float(local_coords[mask, 1].mean()),
                 gnx,
                 gny,
-                vector_to_blob(centroid_vector),
+                vector_to_bytes(centroid_vector),
                 int(mask.sum()),
                 None,
             )
         )
 
-    with con.cursor() as cur:
-        cur.execute(
-            """
-            DELETE FROM tier3.concept_cluster_info
-            WHERE concept = %s
-            """,
-            (concept,),
-        )
+    if not rows:
+        return
 
-        if rows:
-            cur.executemany(
-                """
-                INSERT INTO tier3.concept_cluster_info (
-                    concept,
-                    cluster_id,
-                    cluster_label,
-                    centroid_nx,
-                    centroid_ny,
-                    centroid_gnx,
-                    centroid_gny,
-                    centroid_vector,
-                    point_count,
-                    description
-                )
-                VALUES (
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s
-                )
-                """,
-                rows,
+    with con.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO tier3.concept_cluster_info (
+                concept,
+                cluster_id,
+                cluster_label,
+                centroid_nx,
+                centroid_ny,
+                centroid_gnx,
+                centroid_gny,
+                centroid_vector,
+                point_count,
+                description
             )
+            VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s
+            )
+            """,
+            rows,
+        )
 
 
 def cluster_concept(
@@ -278,14 +273,12 @@ def cluster_concept(
 
     event_ids = [
         event_id
-        for event_id, _
-        in rows
+        for event_id, _ in rows
     ]
 
     pub_years = {
         event_id: pub_year
-        for event_id, pub_year
-        in rows
+        for event_id, pub_year in rows
     }
 
     strata = [
@@ -326,6 +319,8 @@ def cluster_concept(
             f"{fit_info['outlier_n']:,}",
         )
 
+    # Global projection is intentionally deferred. The schema remains ready
+    # for it, but Tier 3 currently persists only the local projection.
     global_xy = np.full(
         (len(event_ids), 2),
         np.nan,
@@ -333,13 +328,22 @@ def cluster_concept(
     )
 
     with con.transaction():
-        con.cursor().execute(
-            """
-            DELETE FROM tier3.event_geometry
-            WHERE concept = %s
-            """,
-            (concept,),
-        )
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM tier3.event_geometry
+                WHERE concept = %s
+                """,
+                (concept,),
+            )
+
+            cur.execute(
+                """
+                DELETE FROM tier3.concept_cluster_info
+                WHERE concept = %s
+                """,
+                (concept,),
+            )
 
         write_geometry_postgres(
             con,

@@ -11,7 +11,7 @@ from sklearn.neighbors import NearestNeighbors
 from lib.corpus_logging import logger
 from retrieval.observation_index import ObservationIndex
 
-MIN_IN_CLUSTER = 7
+MIN_PROJECTABLE_EVENTS = 7
 
 LOCAL_UMAP_PARAMS = {
     "n_neighbors": 15,
@@ -39,53 +39,37 @@ DEFAULT_LOCAL_TRANSFORM_BATCH = 10_000
 
 
 def load_event_rows(con, concept):
-    """
-    Load the empirical semantic field for a concept.
-
-    Tier 2 owns field membership. Corpus metadata remains authoritative in
-    PostgreSQL and embedding geometry remains authoritative in Lance.
-    """
-    return con.execute(
-        """
-        SELECT
-            event_id,
-            role
-        FROM event_field
-        WHERE concept = ?
-        ORDER BY event_id
-        """,
-        (concept,),
-    ).fetchall()
-
-
-def load_vectors(index, event_rows):
-    event_ids = [
-        int(row[0])
-        for row in event_rows
-    ]
-
-    if not event_ids:
-        return (
-            [],
-            np.empty(
-                (0, 0),
-                dtype=np.float32,
-            ),
+    with con.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                event_id,
+                role
+            FROM tier2.event_field
+            WHERE concept = %s
+            ORDER BY event_id
+            """,
+            (concept,),
         )
+        return cur.fetchall()
 
-    vectors = embeddings(
-        index,
-        event_ids,
-    )
 
-    return (
-        event_ids,
-        vectors,
-    )
+def load_event_ids(con, concept):
+    with con.cursor() as cur:
+        cur.execute(
+            """
+            SELECT event_id
+            FROM tier2.event_field
+            WHERE concept = %s
+            ORDER BY event_id
+            """,
+            (concept,),
+        )
+        return [int(row[0]) for row in cur.fetchall()]
 
 
 def project(vectors, params):
-    if len(vectors) < MIN_IN_CLUSTER:
+    if len(vectors) < MIN_PROJECTABLE_EVENTS:
         return np.zeros(
             (len(vectors), 2),
             dtype=np.float32,
@@ -139,7 +123,7 @@ def leiden_cluster(
     resolution_parameter=0.8,
     n_neighbors=15,
 ):
-    if len(vectors) < MIN_IN_CLUSTER:
+    if len(vectors) < MIN_PROJECTABLE_EVENTS:
         return np.full(
             len(vectors),
             -1,
@@ -645,7 +629,7 @@ def build_global_projection(
     if n == 0:
         return {}
 
-    if n < MIN_IN_CLUSTER:
+    if n < MIN_PROJECTABLE_EVENTS:
         return {
             event_id: np.zeros(
                 2,
@@ -978,7 +962,7 @@ def local_project_and_cluster(
 
     n = len(event_ids)
 
-    if n < MIN_IN_CLUSTER:
+    if n < MIN_PROJECTABLE_EVENTS:
         clusters = np.full(
             n,
             -1,
