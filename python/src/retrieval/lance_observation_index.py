@@ -608,23 +608,17 @@ class LanceObservationIndex(ObservationIndex):
         conditions = []
 
         if self._year_start is not None:
-            conditions.append(
-                f"year >= {int(self._year_start)}"
-            )
+            conditions.append( f"pub_year >= {int(self._year_start)}" )
 
         if self._year_end is not None:
-            conditions.append(
-                f"year <= {int(self._year_end)}"
-            )
+            conditions.append( f"pub_year <= {int(self._year_end)}" )
 
         if self._model is not None:
             escaped_model = self._model.replace(
                 "'",
                 "''",
             )
-            conditions.append(
-                f"embedding_model = '{escaped_model}'"
-            )
+            conditions.append( f"embedding_model = '{escaped_model}'" )
 
         if conditions:
             request = request.where(
