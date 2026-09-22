@@ -250,10 +250,7 @@ def cluster_concept(
     resolution_parameter: float,
     n_neighbors: int,
 ) -> dict[str, object]:
-    logger.info(
-        "[tier3] processing %s",
-        concept,
-    )
+    logger.info( "[tier3] processing %s", concept )
 
     rows = load_event_rows(
         con,
@@ -261,10 +258,7 @@ def cluster_concept(
     )
 
     if not rows:
-        logger.warning(
-            "[tier3] %s: no events",
-            concept,
-        )
+        logger.warning( "[tier3] %s: no events", concept )
         return {
             "concept": concept,
             "status": "no-op",
@@ -286,11 +280,7 @@ def cluster_concept(
         for event_id in event_ids
     ]
 
-    logger.info(
-        "[tier3] %s: field events=%s",
-        concept,
-        f"{len(event_ids):,}",
-    )
+    logger.info( "[tier3] %s: field events=%s", concept, f"{len(event_ids):,}" )
 
     result = local_project_and_cluster(
         index,
@@ -326,6 +316,11 @@ def cluster_concept(
         np.nan,
         dtype=np.float32,
     )
+
+
+    # Session setup in get_connection() may leave an initial transaction open.
+    # End it before starting the atomic delete-and-replace transaction.
+    con.commit()
 
     with con.transaction():
         with con.cursor() as cur:
@@ -432,10 +427,7 @@ def service(
 ) -> dict[str, object]:
     started = time.perf_counter()
 
-    logger.info(
-        "[tier3-service] processing %s",
-        concept,
-    )
+    logger.info( "[tier3-service] processing %s", concept )
 
     result = cluster_concept(
         con=resources["con"],
@@ -447,11 +439,7 @@ def service(
 
     elapsed = time.perf_counter() - started
 
-    logger.info(
-        "[tier3-service] completed %s in %.2fs",
-        concept,
-        elapsed,
-    )
+    logger.info( "[tier3-service] completed %s in %.2fs", concept, elapsed )
 
     return {
         **result,
@@ -504,16 +492,10 @@ def main() -> None:
             concepts = resources["concepts"]
 
         if not concepts:
-            logger.warning(
-                "[tier3-main] no concepts resolved"
-            )
+            logger.warning( "[tier3-main] no concepts resolved" )
             return
 
-        logger.info(
-            "[tier3-main] backend=%s concepts=%s",
-            resources["backend"],
-            len(concepts),
-        )
+        logger.info( "[tier3-main] backend=%s concepts=%s", resources["backend"], len(concepts) )
 
         for concept in concepts:
             result = service(
