@@ -5,8 +5,6 @@ from __future__ import annotations
 import argparse
 import multiprocessing as mp
 import os
-import sqlite3
-import time
 from functools import partial
 from pathlib import Path
 
@@ -23,295 +21,259 @@ from lib.concept_resolve import resolve_concepts
 from lib.corpus_config import (
     CORPUS_MAX_YEAR,
     CORPUS_MIN_YEAR,
-    CORPUS_TIER2_DB_PATH,
-    CORPUS_TIER3_DB_PATH,
     LANCE_INDEXES_DIR,
 )
-from lib.corpus_db import analysis_db_connection, get_connection
+from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.sqlite_vector_blob import vector_to_blob
+from lib.vector_blob import vector_to_bytes
+from retrieval.lance_observation_index import LanceObservationIndex
+from retrieval.lance_observation_index_store import (
+    LanceObservationIndexStore,
+)
 from retrieval.models import SearchSpace
 
-from retrieval.lance_observation_index import LanceObservationIndex
-from retrieval.lance_observation_index_store import LanceObservationIndexStore
+
+CLUSTER_SCALE = "medium"
 
 
-CLUSTER_SCALE = "local"
+def initialise_temporal_tables(con) -> None:
+    """
+    Create Tier 3.1 persistence tables if they do not already exist.
 
+    PostgreSQL owns temporal-cluster persistence. Lance remains authoritative
+    for embedding vectors used during clustering.
+    """
+    with con.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tier3.concept_year_cluster_info (
+                concept TEXT NOT NULL,
+                pub_year INTEGER NOT NULL,
+                cluster_id INTEGER NOT NULL,
+                cluster_label TEXT,
+                centroid_nx DOUBLE PRECISION,
+                centroid_ny DOUBLE PRECISION,
+                centroid_gnx DOUBLE PRECISION,
+                centroid_gny DOUBLE PRECISION,
+                centroid_vector BYTEA,
+                point_count INTEGER,
+                description TEXT,
+                relative_mass DOUBLE PRECISION,
+                PRIMARY KEY (
+                    concept,
+                    pub_year,
+                    cluster_id
+                )
+            )
+            """
+        )
 
-YEAR_CLUSTER_SCHEMA = """
-CREATE TABLE IF NOT EXISTS concept_year_cluster_info (
-    concept TEXT NOT NULL,
-    pub_year INTEGER NOT NULL,
-    cluster_id INTEGER NOT NULL,
-    cluster_label TEXT,
-    centroid_nx REAL,
-    centroid_ny REAL,
-    centroid_gnx REAL,
-    centroid_gny REAL,
-    centroid_vector BLOB,
-    point_count INTEGER,
-    description TEXT,
-    relative_mass REAL,
-    PRIMARY KEY (
-        concept,
-        pub_year,
-        cluster_id
-    )
-);
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_year_clusters
+            ON tier3.concept_year_cluster_info (
+                concept,
+                pub_year
+            )
+            """
+        )
 
-CREATE INDEX IF NOT EXISTS idx_year_clusters
-ON concept_year_cluster_info (
-    concept,
-    pub_year
-);
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tier3.concept_year_event_cluster (
+                concept TEXT NOT NULL,
+                pub_year INTEGER NOT NULL,
+                event_id BIGINT NOT NULL,
+                cluster_id INTEGER NOT NULL,
+                PRIMARY KEY (
+                    concept,
+                    pub_year,
+                    event_id
+                )
+            )
+            """
+        )
 
-CREATE TABLE IF NOT EXISTS concept_year_event_cluster (
-    concept TEXT NOT NULL,
-    pub_year INTEGER NOT NULL,
-    event_id INTEGER NOT NULL,
-    cluster_id INTEGER NOT NULL,
-    PRIMARY KEY (
-        concept,
-        pub_year,
-        event_id
-    )
-);
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_year_event_cluster_lookup
+            ON tier3.concept_year_event_cluster (
+                concept,
+                pub_year,
+                cluster_id
+            )
+            """
+        )
 
-CREATE INDEX IF NOT EXISTS idx_year_event_cluster_lookup
-ON concept_year_event_cluster (
-    concept,
-    pub_year,
-    cluster_id
-);
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tier3.temporal_cluster_edges (
+                concept TEXT NOT NULL,
+                source_year INTEGER NOT NULL,
+                source_cluster INTEGER NOT NULL,
+                target_year INTEGER NOT NULL,
+                target_cluster INTEGER NOT NULL,
+                similarity DOUBLE PRECISION,
+                edge_type TEXT,
+                confidence DOUBLE PRECISION,
+                PRIMARY KEY (
+                    concept,
+                    source_year,
+                    source_cluster,
+                    target_year,
+                    target_cluster,
+                    edge_type
+                )
+            )
+            """
+        )
 
-CREATE TABLE IF NOT EXISTS temporal_cluster_edges (
-    concept TEXT,
-    source_year INTEGER,
-    source_cluster INTEGER,
-    target_year INTEGER,
-    target_cluster INTEGER,
-    similarity REAL,
-    edge_type TEXT,
-    confidence REAL,
-    PRIMARY KEY (
-        concept,
-        source_year,
-        source_cluster,
-        target_year,
-        target_cluster,
-        edge_type
-    )
-);
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_temporal_edges_source
+            ON tier3.temporal_cluster_edges (
+                concept,
+                source_year,
+                source_cluster
+            )
+            """
+        )
 
-CREATE INDEX IF NOT EXISTS idx_temporal_edges_source
-ON temporal_cluster_edges (
-    concept,
-    source_year,
-    source_cluster
-);
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_temporal_edges_target
+            ON tier3.temporal_cluster_edges (
+                concept,
+                target_year,
+                target_cluster
+            )
+            """
+        )
 
-CREATE INDEX IF NOT EXISTS idx_temporal_edges_target
-ON temporal_cluster_edges (
-    concept,
-    target_year,
-    target_cluster
-);
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_temporal_edges_similarity
+            ON tier3.temporal_cluster_edges (
+                concept,
+                similarity
+            )
+            """
+        )
 
-CREATE INDEX IF NOT EXISTS idx_temporal_edges_similarity
-ON temporal_cluster_edges (
-    concept,
-    similarity
-);
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_temporal_edges_year_transition
+            ON tier3.temporal_cluster_edges (
+                concept,
+                source_year,
+                target_year
+            )
+            """
+        )
 
-CREATE INDEX IF NOT EXISTS idx_temporal_edges_year_transition
-ON temporal_cluster_edges (
-    concept,
-    source_year,
-    target_year
-);
-"""
-
-
-def sqlite_connection(
-    path: Path,
-    busy_timeout_ms: int = 30000,
-):
-    con = analysis_db_connection(path)
-
-    con.execute(
-        f"PRAGMA busy_timeout={busy_timeout_ms}"
-    )
-    con.execute("PRAGMA journal_mode=WAL")
-    con.execute("PRAGMA synchronous=NORMAL")
-    con.execute("PRAGMA wal_autocheckpoint=1000")
-    con.execute("PRAGMA locking_mode=NORMAL")
-
-    return con
-
-
-def initialise_temporal_tables(con):
-    con.executescript(YEAR_CLUSTER_SCHEMA)
     con.commit()
 
 
-def clear_temporal_clusters(con):
-    logger.info("[tier3.1] clearing temporal cluster output")
+def clear_temporal_clusters(con) -> None:
+    logger.info(
+        "[tier3.1] clearing temporal cluster output"
+    )
 
-    con.execute(
-        "DROP TABLE IF EXISTS concept_year_cluster_info"
-    )
-    con.execute(
-        "DROP TABLE IF EXISTS concept_year_event_cluster"
-    )
-    con.execute(
-        "DROP TABLE IF EXISTS temporal_cluster_edges"
-    )
+    with con.cursor() as cur:
+        cur.execute(
+            "DROP TABLE IF EXISTS tier3.concept_year_cluster_info"
+        )
+        cur.execute(
+            "DROP TABLE IF EXISTS tier3.concept_year_event_cluster"
+        )
+        cur.execute(
+            "DROP TABLE IF EXISTS tier3.temporal_cluster_edges"
+        )
 
     con.commit()
-
     initialise_temporal_tables(con)
 
 
-def delete_temporal_edges(con, concept):
-    con.execute(
-        """
-        DELETE FROM temporal_cluster_edges
-        WHERE concept=?
-        """,
-        (concept,),
-    )
+def delete_temporal_edges(
+    con,
+    concept: str,
+) -> None:
+    with con.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM tier3.temporal_cluster_edges
+            WHERE concept = %s
+            """,
+            (concept,),
+        )
 
 
-def delete_concept_clusters(con, concept):
-    con.execute(
-        """
-        DELETE FROM concept_year_cluster_info
-        WHERE concept=?
-        """,
-        (concept,),
-    )
+def delete_concept_clusters(
+    con,
+    concept: str,
+) -> None:
+    with con.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM tier3.concept_year_cluster_info
+            WHERE concept = %s
+            """,
+            (concept,),
+        )
 
-    con.execute(
-        """
-        DELETE FROM concept_year_event_cluster
-        WHERE concept=?
-        """,
-        (concept,),
-    )
-
-
-def with_sqlite_retry(
-    fn,
-    retries=10,
-    delay=0.5,
-):
-    for attempt in range(retries):
-        try:
-            return fn()
-
-        except sqlite3.OperationalError as exc:
-            if "database is locked" not in str(exc):
-                raise
-
-            if attempt == retries - 1:
-                raise
-
-            wait = delay * (2 ** attempt)
-
-            logger.warning(
-                "[tier3.1] database locked, retry %d/%d after %.1fs",
-                attempt + 1,
-                retries,
-                wait,
-            )
-
-            time.sleep(wait)
+        cur.execute(
+            """
+            DELETE FROM tier3.concept_year_event_cluster
+            WHERE concept = %s
+            """,
+            (concept,),
+        )
 
 
 def load_concept_event_rows(
-    tier2_con,
-    pg_con,
-    concept,
-):
+    con,
+    concept: str,
+) -> dict[int, list[int]]:
     """
-    Load the empirical semantic field from Tier 2 and resolve publication
-    years from PostgreSQL.
-
-    Tier 2 owns field membership. PostgreSQL owns corpus event metadata.
+    Load the complete persisted Tier 2 semantic field and group event IDs
+    by authoritative publication year.
     """
-
-    event_rows = tier2_con.execute(
-        """
-        SELECT event_id
-        FROM event_field
-        WHERE concept=?
-        ORDER BY event_id
-        """,
-        (concept,),
-    ).fetchall()
-
-    if not event_rows:
-        raise RuntimeError(
-            f"[tier3.1] no Tier 2 field events found for concept={concept!r}"
+    with con.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                ef.event_id,
+                e.pub_year
+            FROM tier2.event_field ef
+            JOIN events e
+              ON e.event_id = ef.event_id
+            WHERE ef.concept = %s
+              AND e.pub_year IS NOT NULL
+            ORDER BY e.pub_year, ef.event_id
+            """,
+            (concept,),
         )
 
-    event_ids = [
-        int(row[0])
-        for row in event_rows
-    ]
+        rows = cur.fetchall()
 
-    metadata = pg_con.execute(
-        """
-        SELECT event_id, pub_year
-        FROM events
-        WHERE event_id = ANY(%s)
-        """,
-        (event_ids,),
-    ).fetchall()
-
-    metadata_by_id = {
-        int(event_id): pub_year
-        for event_id, pub_year in metadata
-    }
-
-    missing = [
-        event_id
-        for event_id in event_ids
-        if event_id not in metadata_by_id
-    ]
-
-    if missing:
+    if not rows:
         raise RuntimeError(
-            f"[tier3.1] {len(missing)} event(s) in Tier 2 "
-            f"event_field are absent from PostgreSQL"
+            f"[tier3.1] no Tier 2 field events found "
+            f"for concept={concept!r}"
         )
 
-    missing_year = [
-        event_id
-        for event_id in event_ids
-        if metadata_by_id[event_id] is None
-    ]
+    by_year: dict[int, list[int]] = {}
 
-    if missing_year:
-        raise RuntimeError(
-            f"[tier3.1] {len(missing_year)} event(s) have no pub_year"
-        )
-
-    by_year = {}
-
-    for event_id in event_ids:
-        pub_year = int(metadata_by_id[event_id])
-
+    for event_id, pub_year in rows:
         by_year.setdefault(
-            pub_year,
+            int(pub_year),
             [],
-        ).append(event_id)
+        ).append(int(event_id))
 
     logger.info(
         "[tier3.1] %s: %d events across %d years",
         concept,
-        len(event_ids),
+        sum(len(ids) for ids in by_year.values()),
         len(by_year),
     )
 
@@ -319,16 +281,15 @@ def load_concept_event_rows(
 
 
 def load_event_vectors(
-    index,
-    event_ids,
-):
+    index: LanceObservationIndex,
+    event_ids: list[int],
+) -> tuple[list[int], np.ndarray]:
     """
     Reconstruct embeddings from Lance using stable event IDs.
 
     The returned vector order must exactly match event_ids. This invariant
     is required because cluster assignments are persisted against event IDs.
     """
-
     if not event_ids:
         return (
             [],
@@ -371,10 +332,10 @@ def load_event_vectors(
 
 def write_year_cluster_info(
     con,
-    concept,
-    pub_year,
+    concept: str,
+    pub_year: int,
     cluster_records,
-):
+) -> None:
     rows = []
 
     for cluster in cluster_records:
@@ -382,7 +343,7 @@ def write_year_cluster_info(
             (
                 concept,
                 pub_year,
-                cluster["cluster_id"],
+                int(cluster["cluster_id"]),
                 (
                     "noise"
                     if cluster["cluster_id"] == -1
@@ -392,44 +353,51 @@ def write_year_cluster_info(
                 cluster["centroid_ny"],
                 cluster["centroid_gnx"],
                 cluster["centroid_gny"],
-                vector_to_blob(
+                vector_to_bytes(
                     cluster["centroid_vector"]
                 ),
                 cluster["point_count"],
-                cluster["relative_mass"],
                 None,
+                cluster["relative_mass"],
             )
         )
 
-    con.executemany(
-        """
-        INSERT INTO concept_year_cluster_info (
-            concept,
-            pub_year,
-            cluster_id,
-            cluster_label,
-            centroid_nx,
-            centroid_ny,
-            centroid_gnx,
-            centroid_gny,
-            centroid_vector,
-            point_count,
-            relative_mass,
-            description
+    if not rows:
+        return
+
+    with con.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO tier3.concept_year_cluster_info (
+                concept,
+                pub_year,
+                cluster_id,
+                cluster_label,
+                centroid_nx,
+                centroid_ny,
+                centroid_gnx,
+                centroid_gny,
+                centroid_vector,
+                point_count,
+                description,
+                relative_mass
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s
+            )
+            """,
+            rows,
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-        """,
-        rows,
-    )
 
 
 def write_year_event_cluster_map(
     con,
-    concept,
-    pub_year,
-    event_ids,
+    concept: str,
+    pub_year: int,
+    event_ids: list[int],
     clusters,
-):
+) -> None:
     rows = [
         (
             concept,
@@ -443,29 +411,40 @@ def write_year_event_cluster_map(
         )
     ]
 
-    con.executemany(
-        """
-        INSERT OR REPLACE INTO concept_year_event_cluster (
-            concept,
-            pub_year,
-            event_id,
-            cluster_id
+    if not rows:
+        return
+
+    with con.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO tier3.concept_year_event_cluster (
+                concept,
+                pub_year,
+                event_id,
+                cluster_id
+            )
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (
+                concept,
+                pub_year,
+                event_id
+            )
+            DO UPDATE SET
+                cluster_id = EXCLUDED.cluster_id
+            """,
+            rows,
         )
-        VALUES (?,?,?,?)
-        """,
-        rows,
-    )
 
 
 def process_concept_year(
     con,
-    index,
-    concept,
-    pub_year,
-    event_ids,
-    resolution_parameter,
-    n_neighbors,
-):
+    index: LanceObservationIndex,
+    concept: str,
+    pub_year: int,
+    event_ids: list[int],
+    resolution_parameter: float,
+    n_neighbors: int,
+) -> None:
     logger.info(
         "[tier3.1] %s %s: %d events",
         concept,
@@ -495,12 +474,12 @@ def process_concept_year(
         n_neighbors=n_neighbors,
     )
 
-    # Tier 3.1 has no corpus-wide coordinate system while global UMAP is
-    # disabled. The local coordinates therefore occupy both coordinate
-    # columns for schema compatibility; they must not be interpreted as
-    # comparable across publication years.
-    global_xy = np.asarray(
-        local_coords,
+    # Global UMAP is currently disabled. Global coordinates therefore remain
+    # NULL rather than reusing local coordinates that are not cross-year
+    # comparable.
+    global_xy = np.full(
+        (len(event_ids), 2),
+        np.nan,
         dtype=np.float32,
     )
 
@@ -540,17 +519,14 @@ def process_concept_year(
 
 
 def process_concept(
-    tier2_con,
-    pg_con,
-    tier3_con,
-    index,
-    concept,
-    resolution_parameter,
-    n_neighbors,
-):
+    con,
+    index: LanceObservationIndex,
+    concept: str,
+    resolution_parameter: float,
+    n_neighbors: int,
+) -> None:
     by_year = load_concept_event_rows(
-        tier2_con,
-        pg_con,
+        con,
         concept,
     )
 
@@ -562,13 +538,13 @@ def process_concept(
         return
 
     delete_concept_clusters(
-        tier3_con,
+        con,
         concept,
     )
 
     for pub_year, event_ids in by_year.items():
         process_concept_year(
-            tier3_con,
+            con,
             index,
             concept,
             pub_year,
@@ -577,36 +553,41 @@ def process_concept(
             n_neighbors,
         )
 
-    tier3_con.commit()
-
 
 def load_year_clusters(
     con,
-    concept,
-    pub_year,
-):
-    rows = con.execute(
-        """
-        SELECT
-            cluster_id,
-            centroid_vector
-        FROM concept_year_cluster_info
-        WHERE
-            concept=?
-            AND pub_year=?
-            AND cluster_id >= 0
-        """,
-        (
-            concept,
-            pub_year,
-        ),
-    ).fetchall()
+    concept: str,
+    pub_year: int,
+) -> list[tuple[int, np.ndarray]]:
+    with con.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                cluster_id,
+                centroid_vector
+            FROM tier3.concept_year_cluster_info
+            WHERE
+                concept = %s
+                AND pub_year = %s
+                AND cluster_id >= 0
+            ORDER BY cluster_id
+            """,
+            (
+                concept,
+                pub_year,
+            ),
+        )
+
+        rows = cur.fetchall()
 
     result = []
 
     for cluster_id, blob in rows:
+        if blob is None:
+            continue
+
         vector = np.frombuffer(
-            blob,
+            bytes(blob),
             dtype=np.float32,
         ).copy()
 
@@ -627,9 +608,9 @@ def load_year_clusters(
 
 def build_temporal_edges(
     con,
-    concept,
-    similarity_threshold=0.95,
-):
+    concept: str,
+    similarity_threshold: float = 0.95,
+) -> None:
     logger.info(
         "[tier3.1] building temporal edges %s",
         concept,
@@ -640,26 +621,33 @@ def build_temporal_edges(
         concept,
     )
 
-    years = [
-        row[0]
-        for row in con.execute(
+    with con.cursor() as cur:
+        cur.execute(
             """
             SELECT DISTINCT pub_year
-            FROM concept_year_cluster_info
+            FROM tier3.concept_year_cluster_info
             WHERE
-                concept=?
+                concept = %s
                 AND cluster_id >= 0
             ORDER BY pub_year
             """,
             (concept,),
         )
-    ]
+
+        years = [
+            int(row[0])
+            for row in cur.fetchall()
+        ]
 
     edges = []
+    year_clusters_cache: dict[
+        int,
+        list[tuple[int, np.ndarray]],
+    ] = {}
 
-    year_clusters_cache = {}
-
-    def get_year_clusters(year):
+    def get_year_clusters(
+        year: int,
+    ) -> list[tuple[int, np.ndarray]]:
         cached = year_clusters_cache.get(year)
 
         if cached is None:
@@ -742,8 +730,9 @@ def build_temporal_edges(
                 - second_score
             )
 
-            # Margin is retained for diagnostics. Confidence currently
-            # remains defined on the raw cosine-similarity scale.
+            # Retain the margin calculation for future confidence
+            # diagnostics without treating it as the current confidence
+            # definition.
             _ = margin
 
             confidence = best_score
@@ -788,22 +777,43 @@ def build_temporal_edges(
                     )
                 )
 
-    con.executemany(
-        """
-        INSERT OR REPLACE INTO temporal_cluster_edges (
-            concept,
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster,
-            similarity,
-            edge_type,
-            confidence
+    if not edges:
+        logger.info(
+            "[tier3.1] edges created: 0",
         )
-        VALUES (?,?,?,?,?,?,?,?)
-        """,
-        edges,
-    )
+        return
+
+    with con.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO tier3.temporal_cluster_edges (
+                concept,
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster,
+                similarity,
+                edge_type,
+                confidence
+            )
+            VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s, %s
+            )
+            ON CONFLICT (
+                concept,
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster,
+                edge_type
+            )
+            DO UPDATE SET
+                similarity = EXCLUDED.similarity,
+                confidence = EXCLUDED.confidence
+            """,
+            edges,
+        )
 
     logger.info(
         "[tier3.1] edges created: %d",
@@ -811,13 +821,41 @@ def build_temporal_edges(
     )
 
 
-_WORKER_TIER2_CON = None
-_WORKER_TIER3_CON = None
-_WORKER_PG_CON = None
+def build_tier3_1_index(
+    lance_root: str | Path = LANCE_INDEXES_DIR,
+) -> LanceObservationIndex:
+    lance_store = LanceObservationIndexStore(
+        lance_root,
+        available_years=range(
+            CORPUS_MIN_YEAR,
+            CORPUS_MAX_YEAR + 1,
+        ),
+        available_scales=(CLUSTER_SCALE,),
+    )
+
+    indexes = lance_store.get(
+        SearchSpace(
+            years=(
+                CORPUS_MIN_YEAR,
+                CORPUS_MAX_YEAR,
+            ),
+            scale=(CLUSTER_SCALE,),
+        )
+    )
+
+    if CLUSTER_SCALE not in indexes:
+        raise RuntimeError(
+            f"Missing Lance scale: {CLUSTER_SCALE}"
+        )
+
+    return indexes[CLUSTER_SCALE]
+
+
+_WORKER_CON = None
 _WORKER_INDEX = None
 
 
-def _pin_single_threaded_math_libs():
+def _pin_single_threaded_math_libs() -> None:
     os.environ["OMP_NUM_THREADS"] = "1"
     os.environ["MKL_NUM_THREADS"] = "1"
     os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -833,47 +871,20 @@ def _pin_single_threaded_math_libs():
 
 
 def _init_worker(
-    tier2_db_path,
-    tier3_db_path,
     lance_root,
-    busy_timeout_ms,
 ):
-    global _WORKER_TIER2_CON, _WORKER_TIER3_CON, _WORKER_PG_CON, _WORKER_INDEX
+    global _WORKER_CON, _WORKER_INDEX
 
     _pin_single_threaded_math_libs()
 
-    _WORKER_TIER2_CON = sqlite_connection(
-        tier2_db_path,
-        busy_timeout_ms=busy_timeout_ms,
-    )
-
-    _WORKER_TIER3_CON = sqlite_connection(
-        tier3_db_path,
-        busy_timeout_ms=busy_timeout_ms,
-    )
-
+    _WORKER_CON = get_connection()
     initialise_temporal_tables(
-        _WORKER_TIER3_CON
+        _WORKER_CON
     )
 
-    _WORKER_PG_CON = get_connection()
-
-    lance_store = LanceObservationIndexStore(
+    _WORKER_INDEX = build_tier3_1_index(
         lance_root,
-        available_scales=("local",),
     )
-
-    indexes = lance_store.get(
-        SearchSpace(
-            years=(
-                CORPUS_MIN_YEAR,
-                CORPUS_MAX_YEAR,
-            ),
-            scale=("local",),
-        )
-    )
-
-    _WORKER_INDEX = indexes["local"]
 
 
 def _process_concept_worker(
@@ -882,43 +893,23 @@ def _process_concept_worker(
     resolution_parameter,
     n_neighbors,
 ):
-    global _WORKER_TIER2_CON, _WORKER_TIER3_CON, _WORKER_PG_CON, _WORKER_INDEX
+    global _WORKER_CON, _WORKER_INDEX
 
     try:
+        with _WORKER_CON.transaction():
+            process_concept(
+                _WORKER_CON,
+                _WORKER_INDEX,
+                concept,
+                resolution_parameter,
+                n_neighbors,
+            )
 
-        def write_concept():
-            try:
-                _WORKER_TIER3_CON.execute(
-                    "BEGIN IMMEDIATE"
-                )
-
-                process_concept(
-                    _WORKER_TIER2_CON,
-                    _WORKER_PG_CON,
-                    _WORKER_TIER3_CON,
-                    _WORKER_INDEX,
-                    concept,
-                    resolution_parameter,
-                    n_neighbors,
-                )
-
-                build_temporal_edges(
-                    _WORKER_TIER3_CON,
-                    concept,
-                    similarity_threshold,
-                )
-
-                _WORKER_TIER3_CON.commit()
-
-            except Exception:
-                if _WORKER_TIER3_CON.in_transaction:
-                    _WORKER_TIER3_CON.rollback()
-
-                raise
-
-        with_sqlite_retry(
-            write_concept
-        )
+            build_temporal_edges(
+                _WORKER_CON,
+                concept,
+                similarity_threshold,
+            )
 
         return (
             concept,
@@ -938,23 +929,15 @@ def _process_concept_worker(
 
 
 def run_parallel(
-    tier2_con,
-    tier3_con,
-    pg_con,
+    con,
     concepts,
     workers,
-    tier2_db_path,
-    tier3_db_path,
     lance_root,
     similarity_threshold,
     resolution_parameter,
     n_neighbors,
 ):
-    global _WORKER_TIER2_CON, _WORKER_TIER3_CON, _WORKER_PG_CON, _WORKER_INDEX
-
-    tier2_con.close()
-    tier3_con.close()
-    pg_con.close()
+    con.close()
 
     ctx = mp.get_context(
         "fork"
@@ -968,10 +951,7 @@ def run_parallel(
         processes=workers,
         initializer=_init_worker,
         initargs=(
-            tier2_db_path,
-            tier3_db_path,
             lance_root,
-            30000,
         ),
     ) as pool:
 
@@ -1006,7 +986,7 @@ def run_parallel(
         )
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -1051,6 +1031,12 @@ def main():
         help="Number of concepts to process in parallel.",
     )
 
+    parser.add_argument(
+        "--lance-root",
+        type=Path,
+        default=LANCE_INDEXES_DIR,
+    )
+
     args = parser.parse_args()
 
     logger.info(
@@ -1063,104 +1049,84 @@ def main():
         CLUSTER_SCALE,
     )
 
-    if CLUSTER_SCALE != "local":
-        raise RuntimeError(
-            "Tier 3.1 must use the local Lance scale"
+    con = get_connection()
+
+    try:
+        initialise_temporal_tables(
+            con
         )
 
-    tier2_con = sqlite_connection(
-        CORPUS_TIER2_DB_PATH
-    )
+        if args.clear:
+            clear_temporal_clusters(
+                con
+            )
 
-    tier3_con = sqlite_connection(
-        CORPUS_TIER3_DB_PATH
-    )
-
-    pg_con = get_connection()
-
-    initialise_temporal_tables(
-        tier3_con
-    )
-
-    if args.clear:
-        clear_temporal_clusters(
-            tier3_con
+        index = build_tier3_1_index(
+            args.lance_root,
         )
 
-    lance_store = LanceObservationIndexStore(
-        LANCE_INDEXES_DIR,
-        available_scales=("local",),
-    )
-
-    indexes = lance_store.get(
-        SearchSpace(
-            years=(
-                CORPUS_MIN_YEAR,
-                CORPUS_MAX_YEAR,
-            ),
-            scale=("local",),
-        )
-    )
-
-    index = indexes["local"]
-
-    logger.info(
-        "[tier3.1] opened local Lance observation index"
-    )
-
-    concepts = [
-        concept
-        for concept, _
-        in resolve_concepts(
-            concept=args.concept
-        )
-    ]
-
-    logger.info(
-        "[tier3.1] processing %d concept(s)",
-        len(concepts),
-    )
-
-    if args.workers > 1:
-        run_parallel(
-            tier2_con,
-            tier3_con,
-            pg_con,
-            concepts,
-            args.workers,
-            CORPUS_TIER2_DB_PATH,
-            CORPUS_TIER3_DB_PATH,
-            LANCE_INDEXES_DIR,
-            args.similarity_threshold,
-            args.resolution,
-            args.neighbors,
+        logger.info(
+            "[tier3.1] opened %s Lance observation index",
+            CLUSTER_SCALE,
         )
 
-    else:
-        try:
+        concepts = [
+            concept
+            for concept, _
+            in resolve_concepts(
+                concept=args.concept
+            )
+        ]
+
+        logger.info(
+            "[tier3.1] processing %d concept(s)",
+            len(concepts),
+        )
+
+        if not concepts:
+            logger.warning(
+                "[tier3.1] no concepts resolved"
+            )
+            return
+
+        if args.workers > 1:
+            run_parallel(
+                con,
+                concepts,
+                args.workers,
+                args.lance_root,
+                args.similarity_threshold,
+                args.resolution,
+                args.neighbors,
+            )
+
+        else:
             for concept in concepts:
-                process_concept(
-                    tier2_con,
-                    pg_con,
-                    tier3_con,
-                    index,
-                    concept,
-                    args.resolution,
-                    args.neighbors,
-                )
+                try:
+                    with con.transaction():
+                        process_concept(
+                            con,
+                            index,
+                            concept,
+                            args.resolution,
+                            args.neighbors,
+                        )
 
-                build_temporal_edges(
-                    tier3_con,
-                    concept,
-                    args.similarity_threshold,
-                )
+                        build_temporal_edges(
+                            con,
+                            concept,
+                            args.similarity_threshold,
+                        )
 
-                tier3_con.commit()
+                except Exception:
+                    logger.exception(
+                        "[tier3.1] concept=%s failed",
+                        concept,
+                    )
+                    raise
 
-        finally:
-            tier2_con.close()
-            tier3_con.close()
-            pg_con.close()
+    finally:
+        con.close()
 
     logger.info(
         "[tier3.1] Done."
