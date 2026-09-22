@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
+    "@solid-primitives/storage": "^4.4.0",
     "@solidjs/meta": "^0.29.4",
     "@solidjs/router": "^1.0.0",
     "@solidjs/start": "^2.0.0",
@@ -22,6 +23,7 @@
     "fuse.js": "^7.5.0",
     "jsonc-parser": "^3.3.1",
     "nitro": "^3.0.260610-beta",
+    "postgres": "^3.4.9",
     "solid-js": "^1.9.14",
     "vite": "^8.0.0"
   },
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
+    "@types/bun": "^1.4.2",
     "@types/cytoscape": "^3.31.0",
     "eslint": "10.8.1",
     "eslint-plugin-solid": "0.15.0"

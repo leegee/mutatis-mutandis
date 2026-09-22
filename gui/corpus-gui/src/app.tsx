@@ -29,35 +29,15 @@ function Navigation() {
 				<menu class="margin" onClick={closeMenu}>
 					<li classList={{ active: isActive("/") }}>
 						<a href="/">
+							<i>home</i>
+							<span>Home</span>
+						</a>
+					</li>
+
+					<li classList={{ active: isActive("/") }}>
+						<a href="/browser">
 							<i>network_node</i>
-							<span>Map</span>
-						</a>
-					</li>
-
-					<li classList={{ active: isActive("/entities") }}>
-						<a href="/entities">
-							<i>circle</i>
-							<span>Entities</span>
-						</a>
-					</li>
-
-					<li classList={{ active: isActive("/relations") }}>
-						<a href="/relations">
-							<i>arrow_and_edge</i>
-							<span>Relations</span>
-						</a>
-					</li>
-
-					<li>
-						<i>content_paste</i>
-						<span class="max">
-						</span>
-					</li>
-
-					<li classList={{ active: isActive("/project") }}>
-						<a href="/project" onClick={closeMenu}>
-							<i>folder_open</i>
-							<span>Project</span>
+							<span>Browser</span>
 						</a>
 					</li>
 				</menu>
@@ -72,8 +52,7 @@ export default function App() {
 			<Router
 				root={(props) => (
 					<MetaProvider>
-						<Title>Research</Title>
-						{/* <SideNavigation /> */}
+						<Title>Visualisation</Title>
 
 						<main class="responsive max no-padding background">
 							<Suspense>
