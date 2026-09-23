@@ -1,4 +1,4 @@
-# tier1/tier1_corpus2events.py
+# tier1/tier1_seeds2events.py
 
 from __future__ import annotations
 
@@ -137,6 +137,23 @@ class DocBuffer:
 
     def __bool__(self) -> bool:
         return bool(self.rows)
+
+
+def existing_event_documents(
+    conn,
+    *,
+    corpus: str,
+) -> set[str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT doc_id
+            FROM events
+            WHERE corpus = %s
+            """,
+            (corpus,),
+        )
+        return {row[0] for row in cur.fetchall()}
 
 
 class MacBERThPipeline:
@@ -897,10 +914,31 @@ class CorpusProcessor:
                 documents[:5],
             )
 
+        completed_docs_by_corpus: dict[str, set[str]] = {}
+
+        for document_corpus, _document_id in documents:
+            if document_corpus not in completed_docs_by_corpus:
+                completed_docs_by_corpus[document_corpus] = (
+                    existing_event_documents(
+                        self.writer.conn,
+                        corpus=document_corpus,
+                    )
+                )
+
         for number, (document_corpus, document_id) in enumerate(
             documents,
             start=1,
         ):
+            completed_docs = completed_docs_by_corpus[document_corpus]
+
+            if document_id in completed_docs:
+                logger.info(
+                    "[tier1] skipping completed document %s/%s",
+                    document_corpus,
+                    document_id,
+                )
+                continue
+
             started = time.perf_counter()
 
             document = self._load_document(
@@ -952,11 +990,14 @@ class CorpusProcessor:
                 elapsed,
             )
 
+            completed_docs.add(document_id)
+
             if number % self.report_every == 0:
                 logger.info(
                     "[tier1] processed %d documents",
                     number,
                 )
+
 
     def repair(
         self,
@@ -1330,7 +1371,9 @@ def main() -> None:
     )
     torch.set_num_interop_threads(1)
 
-    conn = get_connection()
+    conn = get_connection(
+        application_name="tier1-corpus2events",
+    )
 
     create_events_table(conn)
 
