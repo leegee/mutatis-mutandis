@@ -71,7 +71,6 @@ CONCORDANCE_FILE = (
     / "bodily_whiteness_concordance.csv"
 )
 
-# Existing corpus tokenisation convention.
 TOKEN_RE = re.compile(r"\w+|[^\w\s]")
 
 
@@ -98,10 +97,6 @@ HIT_FIELDS = (
 )
 
 
-# ---------------------------------------------------------------------------
-# CSV field handling
-# ---------------------------------------------------------------------------
-
 def resolve_column(
     fieldnames: list[str],
     candidates: tuple[str, ...],
@@ -120,10 +115,6 @@ def resolve_column(
 
     return None
 
-
-# ---------------------------------------------------------------------------
-# Document/path resolution
-# ---------------------------------------------------------------------------
 
 def normalise_doc_id(value: str) -> str:
     """
@@ -193,10 +184,6 @@ def find_source_file(doc_ref: str) -> Path | None:
 
     return None
 
-
-# ---------------------------------------------------------------------------
-# Source text
-# ---------------------------------------------------------------------------
 
 def inspect_source_markup(
     text: str,
@@ -296,10 +283,6 @@ def tokenize_source_text(
     return TOKEN_RE.findall(text)
 
 
-# ---------------------------------------------------------------------------
-# Clearing
-# ---------------------------------------------------------------------------
-
 def clear_derived_documents() -> None:
     """
     Delete previously generated CLMET extreme-whiteness documents
@@ -339,10 +322,6 @@ def clear_derived_documents() -> None:
                     f"and {token_count:,} tokens"
                 )
 
-
-# ---------------------------------------------------------------------------
-# Date parsing / metadata
-# ---------------------------------------------------------------------------
 
 def midpoint(a: int, b: int) -> int:
     """Return integer midpoint, rounded to nearest year."""
@@ -409,7 +388,6 @@ def clean_metadata_value(
         .replace("−", "-")
     )
 
-    # CLMET uses occasional annotation prefixes such as ?, X and a.
     value = re.sub(
         r"^[?XaA]+",
         "",
@@ -665,7 +643,6 @@ def metadata_from_text_file(
         "publisher": None,
         "pub_place": None,
 
-        # Preserve the original broad CLMET period.
         "source_date_raw": period_raw,
 
         "token_count": token_count,
@@ -673,11 +650,8 @@ def metadata_from_text_file(
     }
 
 
-# ---------------------------------------------------------------------------
-# PostgreSQL
-# ---------------------------------------------------------------------------
-
 def existing_document_ids(
+    conn,
     doc_ids: list[str],
 ) -> set[str]:
     """
@@ -687,30 +661,27 @@ def existing_document_ids(
     if not doc_ids:
         return set()
 
-    with corpus_db.get_connection(
-        application_name="tier0-clmet-extreme-whiteness",
-    ) as conn:
+    cur = conn.execute(
+        """
+        SELECT doc_id
+        FROM documents
+        WHERE corpus = %s
+          AND doc_id = ANY(%s)
+        """,
+        (
+            CORPUS_NAME,
+            doc_ids,
+        ),
+    )
 
-        cur = conn.execute(
-            """
-            SELECT doc_id
-            FROM documents
-            WHERE corpus = %s
-              AND doc_id = ANY(%s)
-            """,
-            (
-                CORPUS_NAME,
-                doc_ids,
-            ),
-        )
-
-        return {
-            row[0]
-            for row in cur.fetchall()
-        }
+    return {
+        row[0]
+        for row in cur.fetchall()
+    }
 
 
 def insert_document_with_tokens(
+    conn,
     metadata: dict,
     tokens: list[str],
 ) -> None:
@@ -794,53 +765,44 @@ def insert_document_with_tokens(
     corpus = metadata["corpus"]
     doc_id = metadata["doc_id"]
 
-    with corpus_db.get_connection(
-        application_name="tier0-clmet-extreme-whiteness",
-    ) as conn:
+    with conn.transaction():
 
-        with conn.transaction():
+        with conn.cursor() as cur:
 
-            with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM tokens
+                WHERE corpus = %s
+                  AND doc_id = %s
+                """,
+                (corpus, doc_id),
+            )
 
-                # Make the operation idempotent. If an earlier run left
-                # either the document or its tokens behind, remove them
-                # before rebuilding the complete document.
-                cur.execute(
-                    """
-                    DELETE FROM tokens
-                    WHERE corpus = %s
-                      AND doc_id = %s
-                    """,
-                    (corpus, doc_id),
-                )
+            cur.execute(
+                """
+                DELETE FROM documents
+                WHERE corpus = %s
+                  AND doc_id = %s
+                """,
+                (corpus, doc_id),
+            )
 
-                cur.execute(
-                    """
-                    DELETE FROM documents
-                    WHERE corpus = %s
-                      AND doc_id = %s
-                    """,
-                    (corpus, doc_id),
-                )
+            cur.execute(
+                document_stmt,
+                metadata,
+            )
 
-                cur.execute(
-                    document_stmt,
-                    metadata,
-                )
+            with cur.copy(token_stmt) as copy:
+                for token_idx, token in enumerate(tokens):
+                    row = (
+                        f"{copy_escape(corpus)}\t"
+                        f"{copy_escape(doc_id)}\t"
+                        f"{token_idx}\t"
+                        f"{copy_escape(token)}\n"
+                    )
 
-                with cur.copy(token_stmt) as copy:
-                    for token_idx, token in enumerate(tokens):
-                        row = (
-                            f"{copy_escape(corpus)}\t"
-                            f"{copy_escape(doc_id)}\t"
-                            f"{token_idx}\t"
-                            f"{copy_escape(token)}\n"
-                        )
+                    copy.write(row)
 
-                        copy.write(row)
-
-
-# Concordance
 
 def load_concordance(
     path: Path,
@@ -1001,15 +963,6 @@ def process(
         for doc_id in grouped
     ]
 
-    existing_ids = existing_document_ids(derived_doc_ids)
-
-    if existing_ids:
-        logger.info(
-            "[clmet] Existing derived documents: "
-            f"{len(existing_ids):,} "
-            "(will be skipped)"
-        )
-
     processed = 0
     skipped_existing = 0
     missing = 0
@@ -1019,160 +972,178 @@ def process(
     total_concordance_occurrences = 0
     total_tokens_inserted = 0
 
-    for doc_id, occurrences in grouped.items():
+    with corpus_db.get_connection(
+        application_name="tier0-clmet-extreme-whiteness",
+    ) as conn:
 
-        if limit is not None and processed >= limit:
-            break
+        existing_ids = existing_document_ids(
+            conn,
+            derived_doc_ids,
+        )
 
-        derived_doc_id = f"CLMET3{doc_id}"
-
-        if derived_doc_id in existing_ids:
+        if existing_ids:
             logger.info(
-                f"[clmet] Skipping existing document {derived_doc_id}"
-            )
-            skipped_existing += 1
-            continue
-
-        source_files = {
-            occurrence["source_file"]
-            for occurrence in occurrences
-            if occurrence.get("source_file")
-        }
-
-        if len(source_files) > 1:
-            raise RuntimeError(
-                f"Multiple source files recorded for {doc_id}: "
-                f"{sorted(source_files)}"
+                "[clmet] Existing derived documents: "
+                f"{len(existing_ids):,} "
+                "(will be skipped)"
             )
 
-        source_file = next(
-            iter(source_files),
-            "",
+        for doc_id, occurrences in grouped.items():
+
+            if limit is not None and processed >= limit:
+                break
+
+            derived_doc_id = f"CLMET3{doc_id}"
+
+            if derived_doc_id in existing_ids:
+                logger.info(
+                    f"[clmet] Skipping existing document {derived_doc_id}"
+                )
+                skipped_existing += 1
+                continue
+
+            source_files = {
+                occurrence["source_file"]
+                for occurrence in occurrences
+                if occurrence.get("source_file")
+            }
+
+            if len(source_files) > 1:
+                raise RuntimeError(
+                    f"Multiple source files recorded for {doc_id}: "
+                    f"{sorted(source_files)}"
+                )
+
+            source_file = next(
+                iter(source_files),
+                "",
+            )
+
+            if not source_file:
+                logger.warning(
+                    f"[clmet] Source text not found for {doc_id}"
+                )
+                missing += 1
+                continue
+
+            source_path = find_source_file(source_file)
+
+            if source_path is None:
+                logger.warning(
+                    f"[clmet] Source text not found for {doc_id}: "
+                    f"{source_file}"
+                )
+                missing += 1
+                continue
+
+            try:
+                raw_text = source_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"[clmet] Failed reading {source_path}: {exc}"
+                )
+                missing += 1
+                continue
+
+            source_text = extract_source_text(raw_text)
+
+            if not source_text:
+                logger.warning(
+                    f"[clmet] Empty source text for {doc_id}"
+                )
+                no_text += 1
+                continue
+
+            tokens = tokenize_source_text(source_text)
+
+            if not tokens:
+                logger.warning(
+                    f"[clmet] No tokens generated for {doc_id}"
+                )
+                no_text += 1
+                continue
+
+            metadata = metadata_from_text_file(
+                doc_id,
+                source_path,
+                len(tokens),
+            )
+
+            concordance_count = len(occurrences)
+
+            if dry_run:
+
+                logger.info(
+                    f"[clmet] {doc_id}: "
+                    f"{concordance_count} concordance occurrences, "
+                    f"COMPLETE SOURCE, "
+                    f"{len(tokens):,} tokens"
+                )
+
+                logger.debug(
+                    "[clmet] DRY RUN document:\n"
+                    f"  doc_id: {metadata['doc_id']}\n"
+                    f"  filepath: {metadata['filepath']}\n"
+                    f"  title: {metadata['title']!r}\n"
+                    f"  author: {metadata['author']!r}\n"
+                    f"  pub_year: {metadata['pub_year']}\n"
+                    f"  token_count: {metadata['token_count']}\n"
+                    f"  first tokens: {tokens[:50]}\n"
+                )
+
+            else:
+
+                try:
+                    insert_document_with_tokens(
+                        conn,
+                        metadata,
+                        tokens,
+                    )
+
+                except Exception:
+
+                    logger.error(
+                        f"[clmet] FAILED inserting "
+                        f"{derived_doc_id}"
+                    )
+
+                    raise
+
+                logger.info(
+                    f"[clmet] {doc_id}: "
+                    f"{concordance_count} concordance occurrences, "
+                    f"COMPLETE SOURCE, "
+                    f"{len(tokens):,} tokens inserted"
+                )
+
+            processed += 1
+
+            total_source_tokens += len(tokens)
+            total_concordance_occurrences += concordance_count
+            total_tokens_inserted += len(tokens)
+
+        logger.info(
+            f"[clmet] Prepared {processed:,} complete documents"
         )
-
-        if not source_file:
-            logger.warning(
-                f"[clmet] Source text not found for {doc_id}"
-            )
-            missing += 1
-            continue
-
-        source_path = find_source_file(source_file)
-
-        if source_path is None:
-            logger.warning(
-                f"[clmet] Source text not found for {doc_id}: "
-                f"{source_file}"
-            )
-            missing += 1
-            continue
-
-        try:
-            raw_text = source_path.read_text(
-                encoding="utf-8",
-                errors="replace",
-            )
-        except Exception as exc:
-            logger.warning(
-                f"[clmet] Failed reading {source_path}: {exc}"
-            )
-            missing += 1
-            continue
-
-        source_text = extract_source_text(raw_text)
-
-        if not source_text:
-            logger.warning(
-                f"[clmet] Empty source text for {doc_id}"
-            )
-            no_text += 1
-            continue
-
-        tokens = tokenize_source_text(source_text)
-
-        if not tokens:
-            logger.warning(
-                f"[clmet] No tokens generated for {doc_id}"
-            )
-            no_text += 1
-            continue
-
-        metadata = metadata_from_text_file(
-            doc_id,
-            source_path,
-            len(tokens),
-        )
-
-        concordance_count = len(occurrences)
 
         if dry_run:
 
             logger.info(
-                f"[clmet] {doc_id}: "
-                f"{concordance_count} concordance occurrences, "
-                f"COMPLETE SOURCE, "
-                f"{len(tokens):,} tokens"
-            )
-
-            logger.debug(
-                "[clmet] DRY RUN document:\n"
-                f"  doc_id: {metadata['doc_id']}\n"
-                f"  filepath: {metadata['filepath']}\n"
-                f"  title: {metadata['title']!r}\n"
-                f"  author: {metadata['author']!r}\n"
-                f"  pub_year: {metadata['pub_year']}\n"
-                f"  token_count: {metadata['token_count']}\n"
-                f"  first tokens: {tokens[:50]}\n"
+                f"[clmet] DRY RUN: {processed:,} documents "
+                "would be inserted"
             )
 
         else:
 
-            try:
-
-                insert_document_with_tokens(
-                    metadata,
-                    tokens,
-                )
-
-            except Exception:
-
-                logger.error(
-                    f"[clmet] FAILED inserting "
-                    f"{derived_doc_id}"
-                )
-
-                raise
-
             logger.info(
-                f"[clmet] {doc_id}: "
-                f"{concordance_count} concordance occurrences, "
-                f"COMPLETE SOURCE, "
-                f"{len(tokens):,} tokens inserted"
+                f"[clmet] Inserted {processed:,} complete documents "
+                f"and {total_tokens_inserted:,} tokens"
             )
 
-        processed += 1
-
-        total_source_tokens += len(tokens)
-        total_concordance_occurrences += concordance_count
-        total_tokens_inserted += len(tokens)
-
-    logger.info(
-        f"[clmet] Prepared {processed:,} complete documents"
-    )
-
-    if dry_run:
-
-        logger.info(
-            f"[clmet] DRY RUN: {processed:,} documents "
-            "would be inserted"
-        )
-
-    else:
-
-        logger.info(
-            f"[clmet] Inserted {processed:,} complete documents "
-            f"and {total_tokens_inserted:,} tokens"
-        )
+            corpus_db.refresh_views(conn)
 
     print()
     print("=" * 72)
@@ -1253,15 +1224,6 @@ def process(
 
     print()
 
-    if not dry_run:
-
-        with corpus_db.get_connection(
-            application_name=(
-                "tier0-clmet-extreme-whiteness-rematerialise-views"
-            ),
-        ) as conn:
-            corpus_db.refresh_views(conn)
-
 
 def main() -> None:
 
@@ -1322,3 +1284,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
