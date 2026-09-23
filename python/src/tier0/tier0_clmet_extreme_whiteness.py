@@ -198,33 +198,91 @@ def find_source_file(doc_ref: str) -> Path | None:
 # Source text
 # ---------------------------------------------------------------------------
 
-def extract_source_text(text: str) -> str:
+def inspect_source_markup(
+    text: str,
+) -> tuple[dict[str, int], dict[str, int]]:
     """
-    Extract the complete CLMET textual body.
+    Inventory XML-like tags and character entities inside <text>.
 
-    CLMET source files contain an XML-like metadata header followed by
-    <text>...</text>. We ingest the complete contents of the <text>
-    element, rather than the metadata header.
-
-    If the expected <text> element is absent, fall back to the complete
-    file contents rather than silently producing an empty document.
+    This is read-only diagnostics. It establishes the actual CLMET
+    markup vocabulary before structural tags are removed.
     """
 
     match = re.search(
-        r"<text\b[^>]*>(.*?)</text>",
+        r"<text\b[^>]*>(.*?)</text\s*>",
         text,
         flags=re.DOTALL | re.IGNORECASE,
     )
 
-    if match:
-        return match.group(1).strip()
+    if match is None:
+        raise ValueError(
+            "CLMET source has no <text>...</text> boundary"
+        )
 
-    logger.warning(
-        "[clmet] No <text>...</text> element found; "
-        "using complete source file"
+    body = match.group(1)
+
+    tags: dict[str, int] = defaultdict(int)
+    entities: dict[str, int] = defaultdict(int)
+
+    for tag in re.findall(
+        r"</?([A-Za-z][\w:-]*)\b[^>]*>",
+        body,
+    ):
+        tags[tag.lower()] += 1
+
+    for entity in re.findall(
+        r"&([A-Za-z][A-Za-z0-9]+);",
+        body,
+    ):
+        entities[entity.lower()] += 1
+
+    return dict(tags), dict(entities)
+
+
+def extract_source_text(text: str) -> str:
+    """
+    Extract the corpus text from a CLMET source file.
+
+    The <text> element defines the corpus boundary. XML-like markup
+    inside that boundary is structural and must not become corpus tokens.
+
+    A missing boundary is a malformed source and therefore an error;
+    ingesting the metadata/header as corpus text would corrupt the
+    document while appearing superficially successful.
+    """
+
+    match = re.search(
+        r"<text\b[^>]*>(.*?)</text\s*>",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
     )
 
-    return text.strip()
+    if match is None:
+        raise ValueError(
+            "CLMET source has no <text>...</text> boundary"
+        )
+
+    body = match.group(1)
+
+    body = re.sub(
+        r"<[^>]+>",
+        " ",
+        body,
+    )
+
+    body = re.sub(
+        r"[ \t]+",
+        " ",
+        body,
+    )
+
+    body = re.sub(
+        r"\n[ \t]+",
+        "\n",
+        body,
+    )
+
+    return body.strip()
 
 
 def tokenize_source_text(
@@ -247,8 +305,9 @@ def clear_derived_documents() -> None:
     Delete previously generated CLMET extreme-whiteness documents
     and their tokens.
 
-    The tokens table no longer has an FK to documents, so token rows
-    must be explicitly deleted.
+    These derived documents use the CLMET3-prefixed doc_id namespace.
+    The tokens table has no FK to documents, so token rows must be
+    deleted explicitly.
     """
 
     with corpus_db.get_connection(
@@ -723,6 +782,7 @@ def insert_document_with_tokens(
             LF  -> \\n
             CR  -> \\r
         """
+
         return (
             str(value)
             .replace("\\", "\\\\")
@@ -763,13 +823,11 @@ def insert_document_with_tokens(
                     (corpus, doc_id),
                 )
 
-                # Insert the complete document.
                 cur.execute(
                     document_stmt,
                     metadata,
                 )
 
-                # Insert all tokens in the same transaction.
                 with cur.copy(token_stmt) as copy:
                     for token_idx, token in enumerate(tokens):
                         row = (
@@ -783,6 +841,7 @@ def insert_document_with_tokens(
 
 
 # Concordance
+
 def load_concordance(
     path: Path,
 ) -> dict[str, list[dict[str, str]]]:
@@ -797,7 +856,9 @@ def load_concordance(
     """
 
     if not path.is_file():
-        raise FileNotFoundError( f"Concordance file not found: {path}" )
+        raise FileNotFoundError(
+            f"Concordance file not found: {path}"
+        )
 
     with path.open(
         "r",
@@ -862,9 +923,15 @@ def load_concordance(
                 )
             )
 
-        logger.info( f"[clmet] concordance document column: {doc_column}" )
-        logger.info( f"[clmet] concordance file column: {file_column}" )
-        logger.info( f"[clmet] concordance hit column: {hit_column}" )
+        logger.info(
+            f"[clmet] concordance document column: {doc_column}"
+        )
+        logger.info(
+            f"[clmet] concordance file column: {file_column}"
+        )
+        logger.info(
+            f"[clmet] concordance hit column: {hit_column}"
+        )
 
         grouped: dict[
             str,
@@ -872,20 +939,31 @@ def load_concordance(
         ] = defaultdict(list)
 
         for row in reader:
-            doc_value = ( row.get(doc_column) or "" ).strip()
-            source_file = ( row.get(file_column) or "" ).strip()
-            hit_value = ( row.get(hit_column) or "" ).strip()
+            doc_value = (
+                row.get(doc_column) or ""
+            ).strip()
+
+            source_file = (
+                row.get(file_column) or ""
+            ).strip()
+
+            hit_value = (
+                row.get(hit_column) or ""
+            ).strip()
 
             if not doc_value:
                 continue
 
-            doc_id = normalise_doc_id( doc_value )
+            doc_id = normalise_doc_id(doc_value)
 
             if not doc_id:
                 continue
 
             if not source_file:
-                logger.warning( f"[clmet] No source file recorded for document {doc_id}" )
+                logger.warning(
+                    f"[clmet] No source file recorded for document "
+                    f"{doc_id}"
+                )
                 continue
 
             if not hit_value:
@@ -900,7 +978,7 @@ def load_concordance(
             occurrence["source_file"] = source_file
             occurrence["whiteness_surface"] = hit_value
 
-            grouped[doc_id].append( occurrence )
+            grouped[doc_id].append(occurrence)
 
     return dict(grouped)
 
@@ -911,16 +989,19 @@ def process(
     dry_run: bool = False,
 ) -> None:
 
-    grouped = load_concordance( concordance_path )
+    grouped = load_concordance(concordance_path)
 
-    logger.info( f"[clmet] Documents represented in concordance: {len(grouped):,}" )
+    logger.info(
+        f"[clmet] Documents represented in concordance: "
+        f"{len(grouped):,}"
+    )
 
     derived_doc_ids = [
         f"CLMET3{doc_id}"
         for doc_id in grouped
     ]
 
-    existing_ids = existing_document_ids( derived_doc_ids )
+    existing_ids = existing_document_ids(derived_doc_ids)
 
     if existing_ids:
         logger.info(
@@ -939,52 +1020,80 @@ def process(
     total_tokens_inserted = 0
 
     for doc_id, occurrences in grouped.items():
+
         if limit is not None and processed >= limit:
             break
 
         derived_doc_id = f"CLMET3{doc_id}"
 
         if derived_doc_id in existing_ids:
-            logger.info( f"[clmet] Skipping existing document {derived_doc_id}" )
+            logger.info(
+                f"[clmet] Skipping existing document {derived_doc_id}"
+            )
             skipped_existing += 1
             continue
 
-        source_file = (
-            occurrences[0]
-            .get("source_file", "")
-            .strip()
+        source_files = {
+            occurrence["source_file"]
+            for occurrence in occurrences
+            if occurrence.get("source_file")
+        }
+
+        if len(source_files) > 1:
+            raise RuntimeError(
+                f"Multiple source files recorded for {doc_id}: "
+                f"{sorted(source_files)}"
+            )
+
+        source_file = next(
+            iter(source_files),
+            "",
         )
 
         if not source_file:
-            logger.warning( f"[clmet] Source text not found for {doc_id}" )
+            logger.warning(
+                f"[clmet] Source text not found for {doc_id}"
+            )
             missing += 1
             continue
 
-        source_path = find_source_file( source_file )
+        source_path = find_source_file(source_file)
 
         if source_path is None:
-            logger.warning( f"[clmet] Source text not found for {doc_id}: {source_file}" )
+            logger.warning(
+                f"[clmet] Source text not found for {doc_id}: "
+                f"{source_file}"
+            )
             missing += 1
             continue
 
         try:
-            raw_text = source_path.read_text( encoding="utf-8", errors="replace" )
+            raw_text = source_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            )
         except Exception as exc:
-            logger.warning( f"[clmet] Failed reading {source_path}: {exc}" )
+            logger.warning(
+                f"[clmet] Failed reading {source_path}: {exc}"
+            )
             missing += 1
             continue
 
-        source_text = extract_source_text( raw_text )
+        source_text = extract_source_text(raw_text)
 
         if not source_text:
-            logger.warning( f"[clmet] Empty source text for {doc_id}" )
+            logger.warning(
+                f"[clmet] Empty source text for {doc_id}"
+            )
             no_text += 1
             continue
 
-        tokens = tokenize_source_text( source_text )
+        tokens = tokenize_source_text(source_text)
 
         if not tokens:
-            logger.warning( f"[clmet] No tokens generated for {doc_id}" )
+            logger.warning(
+                f"[clmet] No tokens generated for {doc_id}"
+            )
             no_text += 1
             continue
 
@@ -994,9 +1103,10 @@ def process(
             len(tokens),
         )
 
-        concordance_count = len( occurrences )
+        concordance_count = len(occurrences)
 
         if dry_run:
+
             logger.info(
                 f"[clmet] {doc_id}: "
                 f"{concordance_count} concordance occurrences, "
@@ -1070,7 +1180,10 @@ def process(
     if dry_run:
         print("CLMET EXTREME-WHITENESS COMPLETE-DOCUMENT DRY RUN")
     else:
-        print("CLMET EXTREME-WHITENESS COMPLETE-DOCUMENT INGESTION COMPLETE")
+        print(
+            "CLMET EXTREME-WHITENESS COMPLETE-DOCUMENT "
+            "INGESTION COMPLETE"
+        )
 
     print("=" * 72)
     print()
@@ -1141,14 +1254,17 @@ def process(
     print()
 
     if not dry_run:
-        with corpus_db.get_connection(
-            application_name=( "tier0-clmet-extreme-whiteness-rematerialise-views" ),
-        ) as conn:
-            corpus_db.refresh_views( conn )
 
+        with corpus_db.get_connection(
+            application_name=(
+                "tier0-clmet-extreme-whiteness-rematerialise-views"
+            ),
+        ) as conn:
+            corpus_db.refresh_views(conn)
 
 
 def main() -> None:
+
     parser = argparse.ArgumentParser(
         description=(
             "Ingest complete CLMET source documents represented in "
