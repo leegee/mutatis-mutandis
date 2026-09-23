@@ -3,6 +3,7 @@ import { Router, useLocation } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
 import { createSignal, Suspense } from "solid-js";
 
+import ControlsHeader from './components/ControlsHeader/';
 import ModalHost from "./components/Modal/ModalHost";
 
 import "beercss/dist/cdn/beer.min.css";
@@ -40,6 +41,13 @@ function Navigation() {
 							<span>Browser</span>
 						</a>
 					</li>
+
+					<li classList={{ active: isActive("/") }}>
+						<a href="/scatter">
+							<i>network_node</i>
+							<span>Scatter</span>
+						</a>
+					</li>
 				</menu>
 			)}
 		</div>
@@ -56,6 +64,7 @@ export default function App() {
 
 						<main class="responsive max no-padding background">
 							<Suspense>
+								<ControlsHeader />
 								<Navigation />
 								{props.children}
 							</Suspense>

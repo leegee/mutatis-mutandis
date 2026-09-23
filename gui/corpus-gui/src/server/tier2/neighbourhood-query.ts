@@ -1,4 +1,4 @@
-// neighbourhood-query.ts
+// src/tier2/neighbourhood-query.ts
 
 import { query } from "@solidjs/router";
 import { loadNeighbourhoodData } from "./neighbourhood";

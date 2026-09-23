@@ -1,0 +1,13 @@
+.concept-menu {
+    position: relative;
+    min-width: 15em;
+
+    .concept-dropdown {
+        position: absolute;
+        top: 2.5em;
+        left: 0;
+        min-width: 15em;
+        z-index: 1000;
+        zoom: 1.5;
+    }
+}
