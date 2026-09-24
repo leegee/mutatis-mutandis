@@ -23,7 +23,7 @@ def get_document_xml(doc_id):
     """
     Returns XML file for a document, ready to be displayed in an <iframe>.
     """
-    xml_path = corpus_config.XML_ROOT_DIR / f"{doc_id}.P4.xml"
+    xml_path = corpus_config.CORPUS_ROOT_DIR / f"{doc_id}.P4.xml"
 
     if not xml_path.exists():
         print(f"No XML found at {xml_path}")

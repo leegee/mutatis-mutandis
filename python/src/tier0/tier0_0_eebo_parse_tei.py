@@ -329,7 +329,7 @@ def process_ecco_file(tree, xml_path):
         "pub_year": pub_year,
         "source_date_raw": metadata["date_raw"],
         "token_count": len(tokens),
-        "filepath": str( xml_path.relative_to(config.XML_ROOT_DIR).as_posix() ),
+        "filepath": str( xml_path.relative_to(config.CORPUS_ROOT_DIR).as_posix() ),
         "lang": lang,
     }
 
@@ -420,7 +420,7 @@ def process_eebo_file(tree, xml_path):
         "source_date_raw": date_raw,
         "token_count": len(tokens),
         "filepath": str(
-            xml_path.relative_to(config.XML_ROOT_DIR).as_posix()
+            xml_path.relative_to(config.CORPUS_ROOT_DIR).as_posix()
         ),
         "lang": lang,
     }
