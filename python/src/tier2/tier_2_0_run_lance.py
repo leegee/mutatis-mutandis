@@ -1,5 +1,5 @@
 """
-tier2/run_lance.py - Run one concept and persist its Tier 2 result.
+tier2/tier_2_0_run_lance.py - Run one concept and persist its Tier 2 result.
 
 Seed selection is performed independently of neighbour retrieval.
 
