@@ -5,7 +5,7 @@ import type { YearMode } from "~/types/controls";
 import { get_connection } from "../db";
 
 interface PointRow {
-	event_id: number;
+	event_id: string;
 	token: string;
 	pub_year: number | null;
 	nx: number;

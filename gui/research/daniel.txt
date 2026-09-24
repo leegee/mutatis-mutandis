@@ -6,3 +6,6 @@ Blake's Urizen -> quote -> Like Ancient of Days but “hoary, and age-broken, an
 Book of Daniel, 7:9 -> quote -> Aramaic MT: "וְעַתִּיק יוֹמִין יְתִב/ לְבוּשֵׁהּ כִּתְלַג חִוָּר/ וּשְׂעַר רֵאשֵׁהּ כַּעֲמַר נְקֵא"
 Book of Daniel, 7:9 -> quote -> Septuagint: "καὶ παλαιὸς ἡμερῶν ἐκάθητο / καὶ τὸ ἔνδυμα αὐτοῦ ὡσεὶ χιὼν λευκόν / καὶ ἡ θρὶξ τῆς κεφαλῆς αὐτοῦ ὡσεὶ ἔριον καθαρόν"
 Book of Daniel, 7:9 -> quote -> KJV: "the Ancient of days did sit, whose garment was white as snow, and the hair of his head like the pure wool"
+
+A study of early Christian reception of Daniel records a Byzantine scholion saying that God appeared to Daniel “as a hoary old man with a head white like wool,” and that this is why he is called the Ancient of Days.
+-- The_Son_of_Man_and_the_Ancient_of_Days_O (1).pdf

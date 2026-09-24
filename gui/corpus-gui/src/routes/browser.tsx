@@ -3,7 +3,7 @@ import NeighbourhoodBrowser from "~/components/NeighbourhoodBrowser/Neighbourhoo
 console.log("browser route loaded", NeighbourhoodBrowser);
 console.log("component type", typeof NeighbourhoodBrowser);
 
-export default function NeighbourhoodBrowserPage() {
+export default function NeighbourhoodBrowserRoute() {
 	console.log("browser page rendered");
 	return (
 		<>

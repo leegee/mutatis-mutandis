@@ -9,6 +9,7 @@ from functools import partial
 from pathlib import Path
 
 import numpy as np
+from sklearn.decomposition import IncrementalPCA
 from sklearn.metrics.pairwise import cosine_similarity
 
 from lib.cluster import (
@@ -35,6 +36,8 @@ from retrieval.models import SearchSpace
 
 CLUSTER_SCALE = "medium"
 
+GLOBAL_PCA_COMPONENTS = 2
+GLOBAL_PCA_BATCH_SIZE = 4096
 
 def initialise_temporal_tables(con) -> None:
     """
@@ -171,8 +174,6 @@ def initialise_temporal_tables(con) -> None:
             """
         )
 
-    con.commit()
-
 
 def clear_temporal_clusters(con) -> None:
     logger.info(
@@ -190,7 +191,6 @@ def clear_temporal_clusters(con) -> None:
             "DROP TABLE IF EXISTS tier3.temporal_cluster_edges"
         )
 
-    con.commit()
     initialise_temporal_tables(con)
 
 
@@ -280,6 +280,59 @@ def load_concept_event_rows(
     return by_year
 
 
+def iter_global_event_id_batches(
+    con,
+    concepts: list[str],
+    batch_size: int = GLOBAL_PCA_BATCH_SIZE,
+):
+    """
+    Yield distinct Tier 2 event IDs in bounded batches.
+
+    The global PCA population is the union of events belonging to the
+    requested concepts. Event IDs are streamed so the complete analytical
+    population is never materialised in Python memory.
+    """
+    if not concepts:
+        return
+
+    last_event_id = 0
+
+    while True:
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ef.event_id
+                FROM tier2.event_field ef
+                JOIN events e
+                  ON e.event_id = ef.event_id
+                WHERE ef.concept = ANY(%s)
+                  AND e.pub_year IS NOT NULL
+                  AND ef.event_id > %s
+                ORDER BY ef.event_id
+                LIMIT %s
+                """,
+                (
+                    concepts,
+                    last_event_id,
+                    batch_size,
+                ),
+            )
+
+            rows = cur.fetchall()
+
+        if not rows:
+            return
+
+        event_ids = [
+            int(row[0])
+            for row in rows
+        ]
+
+        yield event_ids
+
+        last_event_id = event_ids[-1]
+
+
 def load_event_vectors(
     index: LanceObservationIndex,
     event_ids: list[int],
@@ -328,6 +381,74 @@ def load_event_vectors(
         list(event_ids),
         vectors,
     )
+
+
+def fit_global_pca(
+    con,
+    index: LanceObservationIndex,
+    concepts: list[str],
+) -> IncrementalPCA:
+    """
+    Fit one shared 2-D projection over the selected Tier 2 event population.
+
+    The population is the union of distinct event IDs belonging to the
+    selected concepts, restricted to events with an authoritative publication
+    year. Vectors are reconstructed from Lance in bounded batches.
+    """
+    pca = IncrementalPCA(
+        n_components=GLOBAL_PCA_COMPONENTS,
+        batch_size=GLOBAL_PCA_BATCH_SIZE,
+    )
+
+    total_events = 0
+    total_batches = 0
+
+    for event_ids in iter_global_event_id_batches(
+        con,
+        concepts,
+    ):
+        _, vectors = load_event_vectors(
+            index,
+            event_ids,
+        )
+
+        if len(vectors) < GLOBAL_PCA_COMPONENTS:
+            continue
+
+        pca.partial_fit(vectors)
+
+        total_events += len(vectors)
+        total_batches += 1
+
+        logger.info(
+            "[tier3.1] global PCA: %d events processed "
+            "(%d batches)",
+            total_events,
+            total_batches,
+        )
+
+    if not hasattr(pca, "components_"):
+        raise RuntimeError(
+            "[tier3.1] global PCA received no usable vectors"
+        )
+
+    logger.info(
+        "[tier3.1] global PCA population: %d distinct events "
+        "from concepts=%s, pub_year IS NOT NULL",
+        total_events,
+        ",".join(concepts),
+    )
+
+    logger.info(
+        "[tier3.1] global PCA fitted: %d events, %d batches, "
+        "components=%d, explained variance=%s",
+        total_events,
+        total_batches,
+        GLOBAL_PCA_COMPONENTS,
+        pca.explained_variance_ratio_,
+    )
+
+    return pca
 
 
 def write_year_cluster_info(
@@ -439,6 +560,7 @@ def write_year_event_cluster_map(
 def process_concept_year(
     con,
     index: LanceObservationIndex,
+    global_pca: IncrementalPCA,
     concept: str,
     pub_year: int,
     event_ids: list[int],
@@ -463,10 +585,7 @@ def process_concept_year(
     if len(event_ids) == 0:
         return
 
-    local_coords = project(
-        vectors,
-        LOCAL_UMAP_PARAMS,
-    )
+    local_coords = project( vectors, LOCAL_UMAP_PARAMS, )
 
     clusters = leiden_cluster(
         vectors,
@@ -474,13 +593,35 @@ def process_concept_year(
         n_neighbors=n_neighbors,
     )
 
-    # Global UMAP is currently disabled. Global coordinates therefore remain
-    # NULL rather than reusing local coordinates that are not cross-year
-    # comparable.
-    global_xy = np.full(
-        (len(event_ids), 2),
-        np.nan,
-        dtype=np.float32,
+    global_xy = global_pca.transform( vectors ).astype(
+        np.float32,
+        copy=False,
+    )
+
+    if global_xy.shape != (
+        len(event_ids),
+        GLOBAL_PCA_COMPONENTS,
+    ):
+        raise RuntimeError(
+            f"Global PCA shape mismatch: "
+            f"{global_xy.shape} != "
+            f"({len(event_ids)}, {GLOBAL_PCA_COMPONENTS})"
+        )
+
+    if not np.isfinite(global_xy).all():
+        raise RuntimeError(
+            "Global PCA produced non-finite coordinates"
+        )
+
+    logger.info(
+        "[tier3.1] %s %s: global PCA range "
+        "x=[%.4f, %.4f], y=[%.4f, %.4f]",
+        concept,
+        pub_year,
+        float(global_xy[:, 0].min()),
+        float(global_xy[:, 0].max()),
+        float(global_xy[:, 1].min()),
+        float(global_xy[:, 1].max()),
     )
 
     cluster_records = compute_cluster_centroids(
@@ -490,17 +631,33 @@ def process_concept_year(
         clusters,
     )
 
-    total = sum(
-        cluster["point_count"]
-        for cluster in cluster_records
-    )
+    total_points = len(vectors)
 
-    for cluster in cluster_records:
-        cluster["relative_mass"] = (
-            cluster["point_count"] / total
-            if total > 0
+    for record in cluster_records:
+        record["relative_mass"] = (
+            record["point_count"] / total_points
+            if total_points
             else 0.0
         )
+
+    for record in cluster_records:
+        if not (
+            np.isfinite(record["centroid_gnx"])
+            and np.isfinite(record["centroid_gny"])
+        ):
+            raise RuntimeError(
+                f"Non-finite global centroid: "
+                f"cluster={record['cluster_id']}, "
+                f"centroid_gnx={record['centroid_gnx']}, "
+                f"centroid_gny={record['centroid_gny']}"
+            )
+
+    logger.info(
+        "[tier3.1] %s %s: global centroids finite=%s",
+        concept,
+        pub_year,
+        True,
+    )
 
     write_year_cluster_info(
         con,
@@ -521,6 +678,7 @@ def process_concept_year(
 def process_concept(
     con,
     index: LanceObservationIndex,
+    global_pca: IncrementalPCA,
     concept: str,
     resolution_parameter: float,
     n_neighbors: int,
@@ -546,6 +704,7 @@ def process_concept(
         process_concept_year(
             con,
             index,
+            global_pca,
             concept,
             pub_year,
             event_ids,
@@ -878,17 +1037,20 @@ def _init_worker(
     _pin_single_threaded_math_libs()
 
     _WORKER_CON = get_connection()
-    initialise_temporal_tables(
-        _WORKER_CON
-    )
 
-    _WORKER_INDEX = build_tier3_1_index(
-        lance_root,
-    )
+    try:
+        initialise_temporal_tables( _WORKER_CON )
+        _WORKER_CON.commit()
+    except Exception:
+        _WORKER_CON.rollback()
+        raise
+
+    _WORKER_INDEX = build_tier3_1_index( lance_root, )
 
 
 def _process_concept_worker(
     concept,
+    global_pca,
     similarity_threshold,
     resolution_parameter,
     n_neighbors,
@@ -896,20 +1058,22 @@ def _process_concept_worker(
     global _WORKER_CON, _WORKER_INDEX
 
     try:
-        with _WORKER_CON.transaction():
-            process_concept(
-                _WORKER_CON,
-                _WORKER_INDEX,
-                concept,
-                resolution_parameter,
-                n_neighbors,
-            )
+        process_concept(
+            _WORKER_CON,
+            _WORKER_INDEX,
+            global_pca,
+            concept,
+            resolution_parameter,
+            n_neighbors,
+        )
 
-            build_temporal_edges(
-                _WORKER_CON,
-                concept,
-                similarity_threshold,
-            )
+        build_temporal_edges(
+            _WORKER_CON,
+            concept,
+            similarity_threshold,
+        )
+
+        _WORKER_CON.commit()
 
         return (
             concept,
@@ -917,10 +1081,8 @@ def _process_concept_worker(
         )
 
     except Exception as exc:
-        logger.exception(
-            "[tier3.1] concept=%s failed in worker",
-            concept,
-        )
+        _WORKER_CON.rollback()
+        logger.exception( "[tier3.1] concept=%s failed in worker", concept, )
 
         return (
             concept,
@@ -933,6 +1095,7 @@ def run_parallel(
     concepts,
     workers,
     lance_root,
+    global_pca,
     similarity_threshold,
     resolution_parameter,
     n_neighbors,
@@ -957,6 +1120,7 @@ def run_parallel(
 
         worker = partial(
             _process_concept_worker,
+            global_pca=global_pca,
             similarity_threshold=similarity_threshold,
             resolution_parameter=resolution_parameter,
             n_neighbors=n_neighbors,
@@ -1052,23 +1216,19 @@ def main() -> None:
     con = get_connection()
 
     try:
-        initialise_temporal_tables(
-            con
-        )
-
         if args.clear:
-            clear_temporal_clusters(
-                con
-            )
+            clear_temporal_clusters( con )
+        else:
+            initialise_temporal_tables( con )
+        con.commit()
 
-        index = build_tier3_1_index(
-            args.lance_root,
-        )
+    except Exception:
+        con.rollback()
+        raise
 
-        logger.info(
-            "[tier3.1] opened %s Lance observation index",
-            CLUSTER_SCALE,
-        )
+    try:
+        index = build_tier3_1_index( args.lance_root, )
+        logger.info( "[tier3.1] opened %s Lance observation index", CLUSTER_SCALE, )
 
         concepts = [
             concept
@@ -1084,10 +1244,16 @@ def main() -> None:
         )
 
         if not concepts:
-            logger.warning(
-                "[tier3.1] no concepts resolved"
-            )
+            logger.warning( "[tier3.1] no concepts resolved" )
             return
+
+        global_pca = fit_global_pca(
+            con,
+            index,
+            concepts,
+        )
+
+        con.commit()
 
         if args.workers > 1:
             run_parallel(
@@ -1095,6 +1261,7 @@ def main() -> None:
                 concepts,
                 args.workers,
                 args.lance_root,
+                global_pca,
                 args.similarity_threshold,
                 args.resolution,
                 args.neighbors,
@@ -1103,26 +1270,25 @@ def main() -> None:
         else:
             for concept in concepts:
                 try:
-                    with con.transaction():
-                        process_concept(
-                            con,
-                            index,
-                            concept,
-                            args.resolution,
-                            args.neighbors,
-                        )
+                    process_concept(
+                        con,
+                        index,
+                        global_pca,
+                        concept,
+                        args.resolution,
+                        args.neighbors,
+                    )
 
-                        build_temporal_edges(
-                            con,
-                            concept,
-                            args.similarity_threshold,
-                        )
+                    build_temporal_edges(
+                        con,
+                        concept,
+                        args.similarity_threshold,
+                    )
+                    con.commit()
 
                 except Exception:
-                    logger.exception(
-                        "[tier3.1] concept=%s failed",
-                        concept,
-                    )
+                    con.rollback()
+                    logger.exception( "[tier3.1] concept=%s failed", concept, )
                     raise
 
     finally:

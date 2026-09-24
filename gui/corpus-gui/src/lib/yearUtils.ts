@@ -58,7 +58,7 @@ export function buildYearSlices(
 			rec.freq += 1;
 			rec.scoreSum += nb.score;
 			if (!seenThisEvent.has(nb.token)) {
-				rec.eventSet.add(String(e.event_id ?? `idx`));
+				rec.eventSet.add(String(e.eventId ?? `idx`));
 				seenThisEvent.add(nb.token);
 			}
 		}

@@ -1,14 +1,16 @@
 export interface Neighbour {
-	eventId: number;
+	eventId: string;
 	docId: string;
+	tokenIdx: string;
 	token: string;
-	tokenIdx: number;
-	pubYear: number | null;
-	score: number;
+	pubYear: number;
+	// count?: number;
+	// max_score?: number;
+	score?: number;
 }
 
 export interface NeighbourhoodEvent {
-	eventId: number;
+	eventId: string;
 	docId: string;
 	token: string;
 	tokenIdx: number;

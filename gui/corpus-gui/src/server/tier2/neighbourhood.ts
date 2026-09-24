@@ -2,7 +2,7 @@ import type { NeighbourhoodData, NeighbourhoodEvent } from "~/types/neighbourhoo
 import { get_connection } from "../db";
 
 interface EventRow {
-	event_id: number;
+	event_id: string;
 	doc_id: string;
 	token: string;
 	token_idx: number;
@@ -10,8 +10,8 @@ interface EventRow {
 }
 
 interface NeighbourRow {
-	seed_event_id: number;
-	neighbour_event_id: number;
+	seed_event_id: string;
+	neighbour_event_id: string;
 	score: number;
 	doc_id: string;
 	token: string;
@@ -75,7 +75,7 @@ export async function loadNeighbourhoodData(
 	`;
 
 	const events: NeighbourhoodEvent[] = eventRows.map((row) => ({
-		eventId: Number(row.event_id),
+		eventId: String(row.event_id),
 		docId: row.doc_id,
 		token: row.token,
 		tokenIdx: Number(row.token_idx),
@@ -86,18 +86,18 @@ export async function loadNeighbourhoodData(
 	const eventsById = new Map(events.map((event) => [event.eventId, event]));
 
 	for (const row of neighbourRows) {
-		const event = eventsById.get(Number(row.seed_event_id));
+		const event = eventsById.get(row.seed_event_id);
 
 		if (!event) {
 			continue;
 		}
 
 		event.neighbours.push({
-			eventId: Number(row.neighbour_event_id),
+			eventId: String(row.neighbour_event_id),
 			docId: row.doc_id,
 			token: row.token,
-			tokenIdx: Number(row.token_idx),
-			pubYear: row.pub_year === null ? null : Number(row.pub_year),
+			tokenIdx: String(row.token_idx),
+			pubYear: Number(row.pub_year),
 			score: Number(row.score),
 		});
 	}

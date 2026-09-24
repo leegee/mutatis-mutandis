@@ -48,6 +48,13 @@ function Navigation() {
 							<span>Scatter</span>
 						</a>
 					</li>
+
+					<li classList={{ active: isActive("/") }}>
+						<a href="/linear">
+							<i>network_node</i>
+							<span>Linear</span>
+						</a>
+					</li>
 				</menu>
 			)}
 		</div>

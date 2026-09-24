@@ -43,7 +43,7 @@
 //                             <section class="small-padding">
 //                                 <div class="small-text">
 //                                     <div>
-//                                         <b>Event ID:</b> {e().event_id}
+//                                         <b>Event ID:</b> {e().eventId}
 //                                     </div>
 //                                     <div>
 //                                         <b>Doc:</b> {e().doc_id}

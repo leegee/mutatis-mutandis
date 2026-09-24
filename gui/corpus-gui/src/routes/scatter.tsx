@@ -1,6 +1,6 @@
 import ScatterPlot from "~/components/ScatterPlot";
 
-export default function ScatterPage() {
+export default function ScatterPlotRoute() {
 	return <ScatterPlot />
 
 }
