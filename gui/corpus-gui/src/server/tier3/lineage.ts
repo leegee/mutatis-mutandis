@@ -8,6 +8,7 @@ const DRIFT_THRESHOLD = 0.75;
 const CONFIDENCE_THRESHOLD = 0.95;
 const EVENT_SAMPLE_SIZE = 8;
 const CONTEXT_PROFILE_SIZE = 10;
+const EVENT_CONTEXT_RADIUS = 12;
 
 interface ClusterRow {
 	concept: string;
@@ -42,6 +43,7 @@ interface EventRow {
 interface ContextRow {
 	token: string;
 	count: number;
+	score: number;
 }
 
 function cosineSimilarity(a: Uint8Array, b: Uint8Array): number {
@@ -71,6 +73,21 @@ function nodeId(year: number, cluster: number): string {
 	return `${year}:${cluster}`;
 }
 
+async function loadEventContext(db: ReturnType<typeof get_connection>, event: LineageEvent): Promise<string> {
+	const start = Math.max(0, event.token_idx - EVENT_CONTEXT_RADIUS);
+	const end = event.token_idx + EVENT_CONTEXT_RADIUS;
+
+	const rows = await db<{ token: string }[]>`
+		SELECT token
+		FROM tokens
+		WHERE doc_id = ${event.doc_id}
+		  AND token_idx BETWEEN ${start} AND ${end}
+		ORDER BY token_idx
+	`;
+
+	return rows.map((row) => row.token).join(" ");
+}
+
 async function loadEvents(
 	db: ReturnType<typeof get_connection>,
 	concept: string,
@@ -93,38 +110,37 @@ async function loadEvents(
 		ORDER BY e.event_id
 	`;
 
+	const sampledRows: EventRow[] = [];
+
 	if (rows.length <= EVENT_SAMPLE_SIZE) {
-		return rows.map((row) => ({
-			event_id: row.event_id,
-			doc_id: row.doc_id,
-			token_idx: Number(row.token_idx),
-			token: row.token,
-			pub_year: row.pub_year === null ? null : Number(row.pub_year),
-		}));
+		sampledRows.push(...rows);
+	} else {
+		const indices = new Set<number>();
+
+		for (let i = 0; i < EVENT_SAMPLE_SIZE; i++) {
+			indices.add(Math.round((i * (rows.length - 1)) / (EVENT_SAMPLE_SIZE - 1)));
+		}
+
+		for (const index of [...indices].sort((a, b) => a - b)) {
+			sampledRows.push(rows[index]);
+		}
 	}
 
-	// Evenly sample the chronological event list so a dense cluster does
-	// not make the response disproportionately large while preserving
-	// deterministic output for the same database state.
-	const indices = new Set<number>();
+	const events: LineageEvent[] = sampledRows.map((row) => ({
+		event_id: row.event_id,
+		doc_id: row.doc_id,
+		token_idx: Number(row.token_idx),
+		token: row.token,
+		pub_year: row.pub_year === null ? null : Number(row.pub_year),
+		context: "",
+	}));
 
-	for (let i = 0; i < EVENT_SAMPLE_SIZE; i++) {
-		indices.add(Math.round((i * (rows.length - 1)) / (EVENT_SAMPLE_SIZE - 1)));
-	}
+	const contexts = await Promise.all(events.map((event) => loadEventContext(db, event)));
 
-	return [...indices]
-		.sort((a, b) => a - b)
-		.map((index) => {
-			const row = rows[index];
-
-			return {
-				event_id: row.event_id,
-				doc_id: row.doc_id,
-				token_idx: Number(row.token_idx),
-				token: row.token,
-				pub_year: row.pub_year === null ? null : Number(row.pub_year),
-			};
-		});
+	return events.map((event, index) => ({
+		...event,
+		context: contexts[index],
+	}));
 }
 
 async function loadContextProfile(
@@ -132,30 +148,95 @@ async function loadContextProfile(
 	concept: string,
 	year: number,
 	cluster: number,
+	includeConcept = false,
 ): Promise<ContextProfileEntry[]> {
 	const rows = await db<ContextRow[]>`
+		WITH cluster_counts AS (
+			SELECT
+				LOWER(e.token) AS token,
+				COUNT(*)::double precision AS count
+			FROM tier3.concept_year_event_cluster c
+			JOIN events e
+				ON e.event_id = c.event_id
+			WHERE c.concept = ${concept}
+			  AND c.pub_year = ${year}
+			  AND c.cluster_id = ${cluster}
+			  AND e.token <> ''
+			  AND (
+				  ${includeConcept}
+				  OR LOWER(e.token) <> LOWER(${concept})
+			  )
+			GROUP BY LOWER(e.token)
+		),
+		background_counts AS (
+			SELECT
+				LOWER(e.token) AS token,
+				COUNT(*)::double precision AS count
+			FROM tier3.concept_year_event_cluster c
+			JOIN events e
+				ON e.event_id = c.event_id
+			WHERE c.concept = ${concept}
+			  AND c.pub_year = ${year}
+			  AND c.cluster_id >= 0
+			  AND c.cluster_id <> ${cluster}
+			  AND e.token <> ''
+			  AND (
+				  ${includeConcept}
+				  OR LOWER(e.token) <> LOWER(${concept})
+			  )
+			GROUP BY LOWER(e.token)
+		),
+		totals AS (
+			SELECT
+				(SELECT COALESCE(SUM(count), 0) FROM cluster_counts) AS cluster_total,
+				(SELECT COALESCE(SUM(count), 0) FROM background_counts) AS background_total,
+				(
+					SELECT COUNT(*)
+					FROM (
+						SELECT token FROM cluster_counts
+						UNION
+						SELECT token FROM background_counts
+					) vocabulary
+				) AS vocabulary_size
+		),
+		scored AS (
+			SELECT
+				c.token,
+				c.count,
+				LN(
+					(c.count + 1.0)
+					/
+					(t.cluster_total + t.vocabulary_size)
+				)
+				-
+				LN(
+					(COALESCE(b.count, 0) + 1.0)
+					/
+					(t.background_total + t.vocabulary_size)
+				) AS score
+			FROM cluster_counts c
+			LEFT JOIN background_counts b
+				ON b.token = c.token
+			CROSS JOIN totals t
+			WHERE c.count >= 2
+		)
 		SELECT
-			LOWER(e.token) AS token,
-			COUNT(*) AS count
-		FROM tier3.concept_year_event_cluster c
-		JOIN events e
-			ON e.event_id = c.event_id
-		WHERE c.concept = ${concept}
-		  AND c.pub_year = ${year}
-		  AND c.cluster_id = ${cluster}
-		  AND e.token <> ''
-		GROUP BY LOWER(e.token)
-		ORDER BY count DESC, token ASC
+			token,
+			count,
+			score
+		FROM scored
+		ORDER BY score DESC, count DESC, token ASC
 		LIMIT ${CONTEXT_PROFILE_SIZE}
 	`;
 
 	return rows.map((row) => ({
 		token: row.token,
 		count: Number(row.count),
+		score: Number(row.score),
 	}));
 }
 
-export const getLineage = query(async (concept: string): Promise<LineageData> => {
+export const getLineage = query(async (concept: string, includeConcept = false): Promise<LineageData> => {
 	"use server";
 
 	const started = performance.now();
@@ -333,7 +414,7 @@ export const getLineage = query(async (concept: string): Promise<LineageData> =>
 
 		const [eventSample, contextProfile] = await Promise.all([
 			loadEvents(db, concept, cluster.pub_year, cluster.cluster_id),
-			loadContextProfile(db, concept, cluster.pub_year, cluster.cluster_id),
+			loadContextProfile(db, concept, cluster.pub_year, cluster.cluster_id, includeConcept),
 		]);
 
 		nodes.push({

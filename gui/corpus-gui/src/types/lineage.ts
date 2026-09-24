@@ -6,11 +6,13 @@ export interface LineageEvent {
 	token_idx: number;
 	token: string;
 	pub_year: number | null;
+	context: string;
 }
 
 export interface ContextProfileEntry {
 	token: string;
 	count: number;
+	score: number;
 }
 
 export interface LineageNode {

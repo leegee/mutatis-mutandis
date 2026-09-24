@@ -1,13 +1,6 @@
-import { createSignal, For, Show } from "solid-js";
-// import { showDocument } from "../../services/documentApi";
-// import TextWindow from "../TextWindow";
+import { For, Show } from "solid-js";
+import type { LineageEvent, LineageNode } from "~/types/lineage";
 import styles from "./LineageGraph.module.css";
-import type {
-    LineageEvent,
-    LineageNode,
-    Neighbour,
-} from "./types";
-
 
 type DetailPanelProps = {
     node: LineageNode;
@@ -39,116 +32,127 @@ function groupEventsByDocument(events: LineageEvent[]): EventGroup[] {
     }));
 }
 
-function NeighbourItem(props: { neighbour: Neighbour }) {
-    const nb = props.neighbour;
-
+function ContextProfile(props: {
+    profile: LineageNode["context_profile"];
+}) {
     return (
-        <div class="padding">
-            <h6>
-                <span class="code large-text">{nb.token}</span>
-                {" "}&mdash;{" "}
-                <span class={styles.neighbourMeta}>
-                    {"×"}
-                    {nb.count}
-                    {" · "}
-                    {nb.max_score.toFixed(2)}
-                </span>
-            </h6>
+        <Show when={props.profile.length}>
+            <section class={styles.contextProfile}>
+                <h6>Characteristic vocabulary</h6>
 
-            <ul class="list no-space border small-text">
-                <For each={nb.examples}>
-                    {(example) => (
-                        <li>
-                            {example.doc_id}
-                            {" @ "}
-                            {example.token_idx}
-                            {" · "}
-                            {example.score.toFixed(2)}
-                        </li>
-                    )}
-                </For>
-            </ul>
-        </div>
+                <ul class="list no-space border small-text">
+                    <For each={props.profile}>
+                        {(entry) => (
+                            <li class="padding">
+                                <span class="code large-text">
+                                    {entry.token}
+                                </span>
+
+                                <span class={styles.neighbourMeta}>
+                                    {" · "}
+                                    {entry.count}{" "}
+                                    {entry.count === 1
+                                        ? "occurrence"
+                                        : "occurrences"}
+                                    {" · "}
+                                    distinctiveness{" "}
+                                    {entry.score.toFixed(2)}
+                                </span>
+                            </li>
+                        )}
+                    </For>
+                </ul>
+            </section>
+        </Show>
     );
 }
+
 
 function EventSampleItem(props: { event: LineageEvent }) {
-    const ev = props.event;
-    const [showNeighbours, setShowNeighbours] = createSignal(false);
+    const event = props.event;
+
+    const documentUrl = () =>
+        `/corpus/document/${ encodeURIComponent(event.doc_id) }?token_idx=${ event.token_idx }`;
 
     return (
-        <div>
-            {/* <div class="row">
-                <button
-                    type="button"
-                    class="no-round transparent padding"
-                    onDblClick={() => showDocument(ev.doc_id, ev.token_idx)}
-                >
-                    <TextWindow doc_id={String(ev.doc_id)} token_idx={ev.token_idx} />
-                </button>
-                <div class="tooltip top">Double click to view the text</div>
-            </div> */}
+        <div class={styles.eventSample}>
+            <a
+                href={documentUrl()}
+                target="_blank"
+                rel="noreferrer"
+            >
+                <strong>{event.token}</strong>
+            </a>
 
-            <Show when={ev.neighbours.length}>
-                <div class="row">
-                    <button
-                        type="button"
-                        class="chip transparent small-text responsive"
-                        onClick={() => setShowNeighbours(!showNeighbours())}
-                        aria-expanded={showNeighbours()}
-                    >
-                        <i>{showNeighbours() ? "expand_less" : "expand_more"}</i>
-                        {showNeighbours() ? "Hide" : `Neighbours (${ ev.neighbours.length })`}
-                    </button>
-                </div>
-
-                <Show when={showNeighbours()}>
-                    <For each={ev.neighbours}>{(neighbour) => <NeighbourItem neighbour={neighbour} />}</For>
-                </Show>
-            </Show>
+            <span class={styles.neighbourMeta}>
+                {" · "}
+                {event.doc_id}
+                {" · "}
+                {event.token_idx}
+            </span>
         </div>
     );
 }
-
 
 
 function DocumentGroup(props: { group: EventGroup }) {
     const group = props.group;
-    const [expanded, setExpanded] = createSignal(true);
+
     return (
         <div>
-            <button type="button" class={`row transparent small-text`}
-                onClick={() => setExpanded(!expanded())} aria-expanded={expanded()} >
-                <i> {expanded() ? "expand_less" : "expand_more"} </i>
+            <button
+                type="button"
+                class="row transparent small-text"
+                aria-expanded="true"
+            >
+                <i>expand_less</i>
+
                 <strong>{group.doc_id}</strong>
+
                 <span>
-                    {" · "} {group.events.length}{" "} {group.events.length === 1 ? "event" : "events"}
+                    {" · "}
+                    {group.events.length}{" "}
+                    {group.events.length === 1 ? "event" : "events"}
                 </span>
             </button>
-            <Show when={expanded()}>
-                <div class={styles.documentEvents}>
-                    <For each={group.events}>
-                        {(event) => (<EventSampleItem event={event} />)}
-                    </For>
-                </div>
-            </Show>
-        </div>);
+
+            <div class={styles.documentEvents}>
+                <For each={group.events}>
+                    {(event) => <EventSampleItem event={event} />}
+                </For>
+            </div>
+        </div>
+    );
 }
 
-
-
 export default function DetailPanel(props: DetailPanelProps) {
-    const eventGroups = () => groupEventsByDocument(props.node.event_sample ?? []);
+    const eventGroups = () =>
+        groupEventsByDocument(props.node.event_sample ?? []);
 
     return (
-        <aside class={`${ styles.detailPanel } no-margin left-padding right-padding surface-container-high`}>
-            <header class={`${ styles.detailPanelHeader } middle-align transparent`}>
+        <aside
+            class={`${ styles.detailPanel } no-margin left-padding right-padding surface-container-high`}
+        >
+            <header
+                class={`${ styles.detailPanelHeader } middle-align transparent`}
+            >
                 <h6 class="max medium-text">
-                    <strong>{props.concept}</strong> · {props.node.year}
-                    <span class="max small-text"> · cluster {props.node.cluster}</span>
+                    <strong>{props.concept}</strong>
+                    {" · "}
+                    {props.node.year}
+
+                    <span class="max small-text">
+                        {" · cluster "}
+                        {props.node.cluster}
+                    </span>
                 </h6>
 
-                <button type="button" class={styles.detailPanelClose} onClick={props.onClose}>
+                <button
+                    type="button"
+                    class={styles.detailPanelClose}
+                    onClick={props.onClose}
+                    aria-label="Close cluster details"
+                >
                     <i>close</i>
                 </button>
             </header>
@@ -157,26 +161,47 @@ export default function DetailPanel(props: DetailPanelProps) {
                 <span>mass {props.node.size}</span>
 
                 <Show when={props.node.persistence_score !== undefined}>
-                    <span>persistence {props.node.persistence_score!.toFixed(2)}</span>
+                    <span>
+                        persistence{" "}
+                        {props.node.persistence_score.toFixed(2)}
+                    </span>
                 </Show>
 
                 <Show when={props.node.lineage_stable === false}>
-                    <span class={styles.driftedTag}>drifted lineage</span>
+                    <span class={styles.driftedTag}>
+                        drifted lineage
+                    </span>
                 </Show>
 
-                <Show when={props.node.merged_from?.length}>
+                <Show when={props.node.merged_from.length}>
                     <span>
                         merged from lineage
-                        {props.node.merged_from!.length > 1 ? "s" : ""} {props.node.merged_from!.join(", ")}
+                        {props.node.merged_from.length > 1 ? "s" : ""}{" "}
+                        {props.node.merged_from.join(", ")}
                     </span>
                 </Show>
             </div>
 
-            <Show when={eventGroups().length} fallback={<p class={styles.detailPanelEmpty}>No sampled events.</p>}>
-                <div class="no-space">
-                    <For each={eventGroups()}>{(group) => <DocumentGroup group={group} />}</For>
-                </div>
-            </Show>
+            <ContextProfile profile={props.node.context_profile} />
+
+            <section>
+                <h6>Sampled events</h6>
+
+                <Show
+                    when={eventGroups().length}
+                    fallback={
+                        <p class={styles.detailPanelEmpty}>
+                            No sampled events.
+                        </p>
+                    }
+                >
+                    <div class="no-space">
+                        <For each={eventGroups()}>
+                            {(group) => <DocumentGroup group={group} />}
+                        </For>
+                    </div>
+                </Show>
+            </section>
         </aside>
     );
 }

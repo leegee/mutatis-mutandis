@@ -633,7 +633,7 @@ def metadata_from_text_file(
         "doc_id": f"CLMET3{doc_id}",
 
         "filepath": filepath.relative_to(
-            config.CLMET_CORPUS_INPUT_DIR
+            config.CORPUS_ROOT_DIR
         ).as_posix(),
 
         "title": title,

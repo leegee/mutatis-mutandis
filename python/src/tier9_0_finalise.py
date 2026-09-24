@@ -16,6 +16,7 @@ output_path = Path(GUI_PUBLIC_ROOT) / "src" / "corpus_config.ts"
 content = f"""
 export const CORPUS_START_YEAR = {CORPUS_START_YEAR};
 export const CORPUS_END_YEAR = {CORPUS_END_YEAR};
+export const CORPUS_ROOT_DIR = {CORPUS_ROOT_DIR};
 """.lstrip()
 
 output_path.write_text(content, encoding="utf-8")
