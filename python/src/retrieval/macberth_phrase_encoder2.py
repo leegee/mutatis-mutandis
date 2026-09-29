@@ -1,4 +1,4 @@
-# retrieval/macberth_phrase_encoder2.py - no carriers
+# retrieval/macberth_phrase_encoder2.py
 
 from __future__ import annotations
 
@@ -7,17 +7,21 @@ import numpy as np
 from lib.macberth import load_macberth_onnx
 from retrieval.phrase_encoder import PhraseQueryEncoder
 
-
 class MacBertMeanPhraseEncoder(PhraseQueryEncoder):
     """
-    Encode a phrase by mean-pooling the MacBERTh representations of the
-    phrase's own subword tokens inside a caller-supplied carrier sentence.
+    Encode text using mean-pooled MacBERTh representations.
 
-    The carrier is supplied per call (not fixed at construction) so that
-    callers can select a carrier matching the phrase's grammatical role
-    and collocation pattern. This class only handles span extraction and
-    pooling -- it has no opinion about which carrier is linguistically
-    appropriate for a given term.
+    Public APIs
+    -----------
+    encode(phrase, carrier)
+        Backwards-compatible API. Inserts `phrase` into `carrier` and pools
+        only the MacBERTh subword tokens belonging to the phrase.
+
+    encode_text(text)
+        Encodes a complete text directly and mean-pools all of its
+        non-special-token MacBERTh representations.
+
+    `_encode()` contains the common MacBERTh encoding and pooling machinery.
     """
 
     def __init__(self):
@@ -29,12 +33,17 @@ class MacBertMeanPhraseEncoder(PhraseQueryEncoder):
         phrase: str,
         carrier: str,
     ) -> np.ndarray:
+        """
+        Backwards-compatible phrase-in-carrier API.
+        """
 
         if not phrase.strip():
             raise ValueError("Phrase must not be empty")
 
         if "{}" not in carrier:
-            raise ValueError(f"Carrier must contain a {{}} placeholder: {carrier!r}")
+            raise ValueError(
+                f"Carrier must contain a {{}} placeholder: {carrier!r}"
+            )
 
         sentence = carrier.format(phrase)
 
@@ -47,8 +56,40 @@ class MacBertMeanPhraseEncoder(PhraseQueryEncoder):
         phrase_start = sentence.index(phrase)
         phrase_end = phrase_start + len(phrase)
 
-        encoded = self.tokenizer(
+        return self._encode(
             sentence,
+            span=(phrase_start, phrase_end),
+        )
+
+    def encode_text(
+        self,
+        text: str,
+    ) -> np.ndarray:
+        """
+        Encode a complete piece of text directly, without a carrier.
+
+        All non-special MacBERTh subword tokens in `text` are mean-pooled.
+        """
+
+        if not text.strip():
+            raise ValueError("Text must not be empty")
+
+        return self._encode(text)
+
+    def _encode(
+        self,
+        text: str,
+        span: tuple[int, int] | None = None,
+    ) -> np.ndarray:
+        """
+        Common MacBERTh encoding and mean-pooling implementation.
+
+        If `span` is supplied, only tokens wholly contained within the span
+        are pooled. Otherwise all non-special tokens are pooled.
+        """
+
+        encoded = self.tokenizer(
+            text,
             return_offsets_mapping=True,
             return_tensors="pt",
             truncation=True,
@@ -65,7 +106,7 @@ class MacBertMeanPhraseEncoder(PhraseQueryEncoder):
         outputs = self.macberth.encode(**encoded)
         hidden = outputs.last_hidden_state[0]
 
-        phrase_vectors = []
+        vectors = []
 
         for vector, offset in zip(hidden, offsets):
             start, end = (
@@ -73,21 +114,35 @@ class MacBertMeanPhraseEncoder(PhraseQueryEncoder):
                 int(offset[1]),
             )
 
+            # Skip special tokens and other zero-width offsets.
             if start == end:
                 continue
 
-            if start >= phrase_start and end <= phrase_end:
-                phrase_vectors.append(vector)
+            if span is not None:
+                span_start, span_end = span
 
-        if not phrase_vectors:
+                if not (
+                    start >= span_start
+                    and end <= span_end
+                ):
+                    continue
+
+            vectors.append(vector)
+
+        if not vectors:
+            if span is not None:
+                raise ValueError(
+                    f"No MacBERTh tokens found for phrase span."
+                )
+
             raise ValueError(
-                f"No MacBERTh tokens found for phrase span: {phrase!r}"
+                f"No MacBERTh tokens found for text: {text!r}"
             )
 
         vector = (
             np.stack([
                 item.detach().cpu().numpy()
-                for item in phrase_vectors
+                for item in vectors
             ])
             .mean(axis=0)
             .astype(np.float32)
