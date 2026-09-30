@@ -147,13 +147,22 @@ def existing_event_documents(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT DISTINCT doc_id
-            FROM events
-            WHERE corpus = %s
+            SELECT DISTINCT
+                e.doc_id,
+                e.pub_year
+            FROM events e
+            WHERE e.corpus = %s
+            AND e.pub_year BETWEEN %s AND %s
+            ORDER BY e.pub_year, e.doc_id
             """,
-            (corpus,),
+            (
+                "clmet",
+                bucket_start,
+                bucket_end,
+            ),
         )
-        return {row[0] for row in cur.fetchall()}
+
+        documents = cur.fetchall()
 
 
 class MacBERThPipeline:
@@ -1274,6 +1283,87 @@ def parse_repair_target(value: str) -> tuple[str, str]:
     return corpus, doc_id
 
 
+def repair_year_range(
+    processor: CorpusProcessor,
+    conn,
+    start_year: int,
+    end_year: int,
+) -> int:
+    """
+    Repair CLMET documents represented by existing PostgreSQL events
+    within the complete 50-year buckets covering the requested range.
+
+    The year range is expanded outward to complete Lance buckets.
+    Documents without existing events are excluded because processor.repair()
+    reconstructs vectors for existing event provenance; it is not an
+    event-generation operation.
+    """
+
+    if start_year > end_year:
+        raise ValueError(
+            f"start_year ({start_year}) must not exceed "
+            f"end_year ({end_year})"
+        )
+
+    bucket_start = (
+        start_year // LANCE_BUCKET_SIZE
+    ) * LANCE_BUCKET_SIZE
+
+    bucket_end = (
+        ((end_year // LANCE_BUCKET_SIZE) + 1)
+        * LANCE_BUCKET_SIZE
+    ) - 1
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT
+                e.doc_id,
+                e.pub_year
+            FROM events e
+            WHERE e.corpus = %s
+              AND e.pub_year BETWEEN %s AND %s
+            ORDER BY e.pub_year, e.doc_id
+            """,
+            (
+                "clmet",
+                bucket_start,
+                bucket_end,
+            ),
+        )
+
+        documents = cur.fetchall()
+
+    logger.info(
+        f"[repair] Requested years {start_year}–{end_year}; "
+        f"repairing complete buckets "
+        f"{bucket_start}–{bucket_end}; "
+        f"{len(documents):,} CLMET documents with existing events"
+    )
+
+    repaired = 0
+
+    for doc_id, pub_year in documents:
+        logger.info(
+            f"[repair] {doc_id} "
+            f"(pub_year={pub_year})"
+        )
+
+        processor.repair(
+            corpus="clmet",
+            doc_id=doc_id,
+        )
+
+        repaired += 1
+
+    logger.info(
+        f"[repair] Repaired {repaired:,} CLMET documents "
+        f"for buckets {bucket_start}–{bucket_end}"
+    )
+
+    return repaired
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -1282,14 +1372,18 @@ def parse_args() -> argparse.Namespace:
         )
     )
 
-    parser.add_argument(
-        "--corpus",
-        default=None,
-    )
+    parser.add_argument( "--corpus", default=None, )
+    parser.add_argument( "--doc-id", default=None, )
+
+    parser.add_argument( "--neighbour-radius", type=int, default=256, )
+    parser.add_argument( "--lance-root", type=Path, default=Path(LANCE_INDEXES_DIR), )
+    parser.add_argument( "--batch-size", type=int, default=EMBED_BATCH_SIZE, )
+    parser.add_argument( "--report-every", type=int, default=1, )
 
     parser.add_argument(
-        "--doc-id",
-        default=None,
+        "--mask",
+        action="store_true",
+        help="Replace target tokens with [MASK] before embedding.",
     )
 
     parser.add_argument(
@@ -1309,27 +1403,14 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--neighbour-radius",
+        "--repair-years",
+        nargs=2,
         type=int,
-        default=256,
-    )
-
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=EMBED_BATCH_SIZE,
-    )
-
-    parser.add_argument(
-        "--report-every",
-        type=int,
-        default=25,
-    )
-
-    parser.add_argument(
-        "--mask",
-        action="store_true",
-        help="Replace target tokens with [MASK] before embedding.",
+        metavar=("START_YEAR", "END_YEAR"),
+        help=(
+            "Repair all CLMET documents in the complete 50-year Lance "
+            "buckets containing this year range."
+        ),
     )
 
     parser.add_argument(
@@ -1344,21 +1425,13 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
-    parser.add_argument(
-        "--lance-root",
-        type=Path,
-        default=Path(LANCE_INDEXES_DIR),
-    )
-
     args = parser.parse_args()
 
     if args.repair is not None and (
         args.corpus is not None
         or args.doc_id is not None
     ):
-        parser.error(
-            "--repair cannot be combined with --corpus or --doc-id"
-        )
+        parser.error( "--repair cannot be combined with --corpus or --doc-id" )
 
     return args
 
@@ -1404,12 +1477,28 @@ def main() -> None:
             report_every=args.report_every,
         )
 
-        if args.repair is not None:
-            corpus, doc_id = args.repair
+        #
+        if args.repair and args.repair_years:
+            parser.error( "--repair and --repair-years cannot be used together" )
+
+        if args.repair:
+            corpus, doc_id = args.repair.split("/", 1)
+
             processor.repair(
                 corpus=corpus,
                 doc_id=doc_id,
             )
+
+        elif args.repair_years:
+            start_year, end_year = args.repair_years
+
+            repair_year_range(
+                processor=processor,
+                conn=conn,
+                start_year=start_year,
+                end_year=end_year,
+            )
+
         else:
             processor.process(
                 corpus=args.corpus,
@@ -1417,10 +1506,7 @@ def main() -> None:
             )
 
         if args.skip_indexing:
-            logger.info(
-                "[tier1] --skip-indexing set; leaving index (re)build "
-                "for a later run"
-            )
+            logger.info( "[tier1] --skip-indexing set; leaving index (re)build for a later run" )
         else:
             writer.build_indexes()
     finally:

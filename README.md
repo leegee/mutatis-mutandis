@@ -20,24 +20,42 @@
 
 ## Conceptual Synopsis
 
-> Who today is using the concept of liberty as it was used by Milton, or Hobbes, or Locke?
->
-> Who during the 1600s was expressing in their own language concepts we differntly express today?
->
-> How was our contemporary concept of privacy referenced in the past? Cf Entick v Carrington (1765)
->
-> Who were considered terrorists in the 17th century? (Fanatics, Sectaries, Enthusiasts, Levellers, Diggers, Muggltonians, Anabaptists, Jesuits...)
->
-> How in the past was the concept we term X referenced  if at all?
->
-> Specifically: how has the typological symbol of the Son Of Man been transmitted and received through the millennia and how has it interacted
-> with surrounding pysiognomic imagery?
->
-> What do the contextual embeddings of 'albino' and 'albinism' retrieve through past centuries and in European traditions for which we have corpus?
-> ie Given that albino is a lexicalised concept in the 19th century, can we discover earlier textual representations of the same/similar
-> phenomenon without assuming beforehand which words expressed it?
->
-> Can we recursively reverse search over diachronic ranges, taking top results for each period as bridge terms to search with in the earlier  date range?
+The project follows prior art as much as possible to provide a context within which to
+satisfactorily answer the following questions through close reading of well-known and less
+well-known texts in a corpus composed through intuitively-gathered and mechanically identified
+source material from Noah, Daniel, John of Patmos, through Buldr, Balðraz/Baldr through Stoker
+and Eco, to include texts that, when embeddeded in a MacBERTh vector space, cluster with the named
+sources which, if you will, act as seeds in the embedding vector space from which we collect kNN
+to populate an ANN (currently Lance after scaling-up from FAISS and Zarr).
+
+* Who today is using the concept of liberty as it was used by Milton, or Hobbes, or Locke?
+* How in the past was the concept we term `X` referenced, if at all?
+> [!INFO]
+> (ie reverse diachronic semantic search, in this case multi-modal but generally bucketed to help
+> the Procrustes alignment of vector spaces from diffeernt models)
+
+* Who during the 1600s was expressing in their own language concepts we differntly express today?
+> [!INFO]
+> (forward diachronic semantic search)
+
+* How was our contemporary concept of privacy referenced in the past?
+> [!INFO]
+> (cf Entick v Carrington, 1765, secretedness, and semantic drift)
+
+* Who were considered terrorists in the 17th century? (Fanatics, Sectaries, Enthusiasts, Levellers, Diggers, Muggltonians, Anabaptists, Jesuits...)
+> [!INFO]
+> (reverse diachronic semantic search for embedded phrases - careful attention paid to "carrier" phrase that produces the embedding of the search term)
+
+### Specifically and in depth:
+
+  * how has the typological symbol expressed by Enoch's Noah, The Ancient of Days, The Son Of Man, Stoker's Dracula and the villians of Eco,
+  * been transmitted and received through the millennia and how has it interacted with surrounding physiognomy imagery?
+
+  * What do the contextual embeddings of 'albino' and 'albinism' retrieve through past centuries and in European traditions for which we have corpus?
+    > ie Given that albino is a lexicalised concept in the 19th century, can we discover earlier textual representations of the same/similar
+    > phenomenon without assuming beforehand which words expressed it?
+
+    * Can we recursively reverse search over diachronic ranges, taking top results for each period as bridge terms to search with in the earlier  date range?
 
 ## Progress
 

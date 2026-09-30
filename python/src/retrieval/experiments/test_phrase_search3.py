@@ -333,9 +333,7 @@ def format_context(
     for index, token in context:
 
         if index == token_idx:
-            rendered.append(
-                f"[{token}]"
-            )
+            rendered.append( f"\n[{token}]\n" )
         else:
             rendered.append(token)
 
