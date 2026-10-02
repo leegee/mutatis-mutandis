@@ -148,21 +148,17 @@ def existing_event_documents(
         cur.execute(
             """
             SELECT DISTINCT
-                e.doc_id,
-                e.pub_year
-            FROM events e
+                e.doc_id
+            FROM events AS e
             WHERE e.corpus = %s
-            AND e.pub_year BETWEEN %s AND %s
-            ORDER BY e.pub_year, e.doc_id
             """,
-            (
-                "clmet",
-                bucket_start,
-                bucket_end,
-            ),
+            (corpus,),
         )
 
-        documents = cur.fetchall()
+        return {
+            row[0]
+            for row in cur.fetchall()
+        }
 
 
 class MacBERThPipeline:

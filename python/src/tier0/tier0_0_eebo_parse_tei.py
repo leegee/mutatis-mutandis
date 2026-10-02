@@ -347,14 +347,6 @@ def process_ecco_file(tree, xml_path):
 def process_misc_file(tree, xml_path):
     """
     Process generic TEI sources in the misc corpus.
-
-    These are TEI editions rather than EEBO/ECCO source records, so
-    metadata and text extraction follow the TEI header directly.
-    """
-
-def process_misc_file(tree, xml_path):
-    """
-    Process generic TEI sources in the misc corpus.
     """
 
     root = tree.getroot()
@@ -752,9 +744,33 @@ def ingest_xml_parallel(
     max_workers: int     = 4,
     batch_docs: int      = 50,
     batch_tokens: int    = 50000,
-    corpus: str          = None
+    corpus: str          = None,
+    doc_id: str | None   = None,
 ):
     xml_files = list(xml_dir.rglob("*.xml"))
+
+    if doc_id:
+        with corpus_db.get_connection(
+            application_name="tier0-target"
+        ) as conn:
+            filepath = corpus_db.get_document_filepath( conn, doc_id, corpus=corpus, )
+
+        if filepath is None:
+            parser.error( f"Document {doc_id!r} does not exist in corpus {corpus!r}" )
+
+        # filepath = config.CORPUS_INPUT_DIRS[corpus] / Path(filepath)
+        filepath = config.CORPUS_ROOT_DIR / Path(filepath)
+
+        xml_file = Path(filepath)
+
+        if not xml_file.is_file():
+            raise FileNotFoundError( f"Document {doc_id!r} is registered at {xml_file}, but that file does not exist." )
+
+        with corpus_db.get_connection( application_name="tier0-replace" ) as conn:
+            deleted = corpus_db.delete_document( conn, doc_id, corpus=corpus, )
+        if not deleted:
+            logger.warning( "[tier0] --replace requested, but document %s does not  currently exist in corpus %s", doc_id, corpus, )
+
 
     logger.info(f"[tier0] Input directory: {xml_dir}")
     logger.info(f"[tier0] Found {len(xml_files)} XML files")
@@ -797,13 +813,21 @@ def main():
     parser.add_argument("--create", action="store_true", help="Creates the database from scratch, deleting existing data. Requires manual confirmation.")
     parser.add_argument("--justindex", action="store_true", help="Does not parse any files but recreates database view and indicies.")
     parser.add_argument( "--corpus", choices=sorted(config.CORPUS_INPUT_DIRS.keys()), default=None, help="Process only this predefined corpus.")
+    parser.add_argument( "--doc-id", default=None, help="Process only the specified document ID." )
+    parser.add_argument( "--replace", action="store_true", help="Replace an existing document when used with --doc-id." )
     args = parser.parse_args()
+
+    if args.replace and not args.doc_id:
+        parser.error("--replace requires --doc-id")
+
+    if args.doc_id and not args.corpus:
+        parser.error("--doc-id requires --corpus")
 
     validate_corpus_years() # Eventually allow flags
 
     global MAX_DOCS, SKIP_EXISTING_DOCS
-    MAX_DOCS             = args.limit
-    SKIP_EXISTING_DOCS   = not args.create
+    MAX_DOCS           = args.limit
+    SKIP_EXISTING_DOCS = not (args.create or args.replace)
 
     with corpus_db.get_connection() as conn:
         if args.create:
@@ -837,18 +861,23 @@ def main():
                 batch_docs=BATCH_DOCS,
                 batch_tokens=BATCH_TOKENS,
                 corpus=corpus,
+                doc_id=args.doc_id,
             )
 
     # Wait for other connections to finish
     with corpus_db.get_connection() as conn:
         while True:
-            cur = conn.execute("""
-                SELECT count(*) FROM pg_stat_activity
-                WHERE datname = 'eebo'
-                  AND pid <> pg_backend_pid()
-                  AND state IN ('active', 'idle in transaction');
-            """)
+            cur = conn.execute(
+                """
+                SELECT count(*)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                AND pid <> pg_backend_pid()
+                AND state IN ('active', 'idle in transaction');
+                """
+            )
             n = cur.fetchone()[0]
+
             if n == 0:
                 break
 

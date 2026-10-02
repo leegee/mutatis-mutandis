@@ -551,3 +551,103 @@ def create_tier3_schema(conn: Connection) -> None:
                     tier3_cluster_info_concept_idx
                 ON tier3.concept_cluster_info (concept);
             """)
+
+
+def delete_document(
+    conn: Connection,
+    doc_id: str,
+    *,
+    corpus: str | None = None,
+) -> bool:
+    """
+    Delete one document and its tokens.
+
+    The tokens foreign key may not exist in normal corpus operation,
+    so tokens are deleted explicitly before the document.
+
+    Returns True if a document was deleted, otherwise False.
+
+    doc_id is globally unique in the current schema. The optional
+    corpus argument is therefore a safety check.
+    """
+    with conn.transaction():
+        with conn.cursor() as cur:
+            if corpus is not None:
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM documents
+                    WHERE doc_id = %s
+                      AND corpus = %s
+                    """,
+                    (doc_id, corpus),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM documents
+                    WHERE doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+
+            if cur.fetchone() is None:
+                return False
+
+            cur.execute(
+                """
+                DELETE FROM tokens
+                WHERE doc_id = %s
+                """,
+                (doc_id,),
+            )
+
+            cur.execute(
+                """
+                DELETE FROM documents
+                WHERE doc_id = %s
+                """,
+                (doc_id,),
+            )
+
+    logger.info(
+        "[corpus_db] Deleted document %s%s",
+        doc_id,
+        f" (corpus={corpus})" if corpus else "",
+    )
+
+    return True
+
+
+def get_document_filepath(
+    conn: Connection,
+    doc_id: str,
+    *,
+    corpus: str | None = None,
+) -> str | None:
+    with conn.cursor() as cur:
+        if corpus is not None:
+            cur.execute(
+                """
+                SELECT filepath
+                FROM documents
+                WHERE doc_id = %s
+                  AND corpus = %s
+                """,
+                (doc_id, corpus),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT filepath
+                FROM documents
+                WHERE doc_id = %s
+                """,
+                (doc_id,),
+            )
+
+        row = cur.fetchone()
+
+    return row[0] if row else None
+
