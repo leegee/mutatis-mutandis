@@ -127,70 +127,61 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 
 	return (
 		<>
-			<div
-				class="background"
-				style={{
-					display: "grid",
-					"grid-template-columns": selectedEntity() || selectedRelation() ? "minmax(0, 1fr) 30vw" : "minmax(0, 1fr)",
-					gap: "1rem",
-					// height: "100%",
-					overflow: "none",
-					padding: 0,
-					margin: 0,
-					"min-height": "500px",
-				}}
-			>
-				<div style={{ "min-width": "0" }}>
-					<GraphView
-						entities={props.entities}
-						relations={props.relations}
-						onSelectEntity={handleSelectEntity}
-						onSelectRelation={(relation) => {
-							setSelectedRelation(relation);
-							setSelectedEntity(undefined);
-						}}
-						onAddEntity={handleAddEntity}
-						onEditEntity={handleEditEntity}
-						onDeleteEntity={handleDeleteEntity}
-						onAddRelation={handleAddRelation}
-						onEditRelation={handleEditRelation}
-						onDeleteRelation={handleDeleteRelation}
-					/>
-				</div>
-
-				<Show when={selectedEntity() || selectedRelation()}>
-					<div class="transparent" style={{ "overflow-y": "auto" }}>
-						<Show
-							when={selectedEntity()}
-							fallback={
-								<RelationInspector
-									relation={selectedRelation()}
-									entities={props.entities}
-									editing={editingRelation()}
-									onClose={() => {
-										setSelectedRelation(undefined);
-										setEditingRelation(false);
-									}}
-								/>
-							}
-						>
-							{(entity) => (
-								<EntityInspector
-									entity={entity()}
-									entities={props.entities}
-									relations={props.relations}
-									onChanged={handleEntityChanged}
-									editing={editingEntity()}
-									onClose={() => {
-										setSelectedEntity(undefined);
-										setEditingEntity(false);
-									}}
-								/>
-							)}
-						</Show>
-					</div>
-				</Show>
+			<div style={{ "min-width": "0" }}>
+				<GraphView
+					entities={props.entities}
+					relations={props.relations}
+					onSelectEntity={handleSelectEntity}
+					onSelectRelation={(relation) => {
+						setSelectedRelation(relation);
+						setSelectedEntity(undefined);
+					}}
+					onAddEntity={handleAddEntity}
+					onEditEntity={handleEditEntity}
+					onDeleteEntity={handleDeleteEntity}
+					onAddRelation={handleAddRelation}
+					onEditRelation={handleEditRelation}
+					onDeleteRelation={handleDeleteRelation}
+				/>
 			</div>
+
+			<Show when={selectedEntity() || selectedRelation()}>
+				<div class="transparent" style={{
+					position: "fixed",
+					right: "1em",
+					"overflow-y": "auto",
+					"min-width": "30rem",
+					"max-width": "50vw",
+				}}>
+					<Show when={selectedEntity()}
+						fallback={
+							<RelationInspector
+								relation={selectedRelation()}
+								entities={props.entities}
+								editing={editingRelation()}
+								onClose={() => {
+									setSelectedRelation(undefined);
+									setEditingRelation(false);
+								}}
+							/>
+						}
+					>
+						{(entity) => (
+							<EntityInspector
+								entity={entity()}
+								entities={props.entities}
+								relations={props.relations}
+								onChanged={handleEntityChanged}
+								editing={editingEntity()}
+								onClose={() => {
+									setSelectedEntity(undefined);
+									setEditingEntity(false);
+								}}
+							/>
+						)}
+					</Show>
+				</div>
+			</Show>
 
 			<Show when={addingRelation()}>
 				{(pending) => (
