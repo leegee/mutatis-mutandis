@@ -21,7 +21,6 @@ interface GraphWorkspaceProps {
 
 export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
-	const [editingEntity, setEditingEntity] = createSignal(false);
 	const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
 	const [editingRelation, setEditingRelation] = createSignal(false);
 
@@ -38,7 +37,6 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 
 			if (selectedEntity()) {
 				setSelectedEntity(undefined);
-				setEditingEntity(false);
 			}
 
 			if (selectedRelation()) {
@@ -56,11 +54,9 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 
 	function handleSelectEntity(entity: Entity) {
 		setSelectedEntity(entity);
-		setEditingEntity(false);
 	}
 	function handleEditEntity(entity: Entity) {
 		setSelectedEntity(entity);
-		setEditingEntity(true);
 	}
 
 	// function handleSelectRelation(relation: Relation) {
@@ -178,11 +174,7 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 								entities={props.entities}
 								relations={props.relations}
 								onChanged={handleEntityChanged}
-								editing={editingEntity()}
-								onClose={() => {
-									setSelectedEntity(undefined);
-									setEditingEntity(false);
-								}}
+								onClose={() => { setSelectedEntity(undefined); }}
 							/>
 						)}
 					</Show>
