@@ -6,6 +6,7 @@ export const typeColors: Record<string, { hue: number }> = {
 	person: { hue: 23 },
 	evidence: { hue: 204 },
 	source: { hue: 244 },
+	tradition: { hue: 210 },
 	quote: { hue: 220 },
 	group: { hue: 190 },
 };

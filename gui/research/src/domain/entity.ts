@@ -10,6 +10,7 @@ export const entityTypes = [
 	"person",
 	"quote",
 	"source",
+	"tradition",
 ] as const;
 
 export type EntityType = (typeof entityTypes)[number];

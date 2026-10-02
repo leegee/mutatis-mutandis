@@ -70,7 +70,7 @@ export const graphStyles = (entities: Entity[]): StylesheetCSS[] => {
 				"text-background-opacity": 1,
 				"text-background-padding": "3px",
 
-				"font-size": "15px",
+				"font-size": "10px",
 				"font-weight": 500,
 			},
 		},
