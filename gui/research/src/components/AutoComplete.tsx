@@ -163,7 +163,7 @@ export default function AutoComplete<T>(props: AutocompleteProps<T>) {
 	}
 
 	return (
-		<div class="autocomplete padding">
+		<div class="autocomplete top-padding">
 			<div class={`field label ${ isTitle() ? "suffix title" : "border" }`}>
 				<input
 					ref={inputRef}
