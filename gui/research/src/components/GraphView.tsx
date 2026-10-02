@@ -661,16 +661,8 @@ export default function GraphView(props: GraphViewProps) {
 			</button>
 
 			<Show when={filterOpen()}>
-				<div
-					class="graph-filter-panel surface padding round elevate border small-round right-align"
+				<div class="graph-filter-panel surface padding round elevate border small-round right-align"
 					onClick={(event) => event.stopPropagation()}
-					style={{
-						position: "absolute",
-						right: "0rem",
-						bottom: "4rem",
-						"z-index": 10,
-						"min-width": "10em",
-					}}
 				>
 					<For each={[...new Set(props.entities.map((e) => e.type))].sort()}>
 						{(type) => {

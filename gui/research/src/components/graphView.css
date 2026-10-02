@@ -29,3 +29,11 @@
 	bottom: 1rem;
 	right: 1rem;
 }
+
+.graph-filter-panel {
+	position: fixed;
+	right: 2rem;
+	bottom: 5rem;
+	z-index: 10;
+	min-width: 10em;
+}
