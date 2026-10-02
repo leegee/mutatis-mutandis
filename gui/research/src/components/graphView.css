@@ -36,4 +36,19 @@
 	bottom: 5rem;
 	z-index: 10;
 	min-width: 10em;
+
+	label {
+		display: flex;
+		flex-direction: row-reverse;
+		align-items: center;
+		gap: 0.5em;
+		padding: 0.25em 0;
+
+		.label-text {
+			display: inline-block;
+			width: 1em;
+			height: 1em;
+			border-radius: 50%;
+		}
+	}
 }

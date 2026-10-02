@@ -668,24 +668,10 @@ export default function GraphView(props: GraphViewProps) {
 						{(type) => {
 							const count = () => props.entities.filter((e) => e.type === type).length;
 							return (
-								<label
-									style={{
-										display: "flex",
-										"flex-direction": "row-reverse",
-										"align-items": "center",
-										gap: "0.5em",
-										padding: "0.25em 0",
-									}}
-								>
+								<label>
 									<input type="checkbox" checked={!hiddenTypes().has(type)} onChange={() => toggleType(type)} />
-									<span
-										style={{
-											display: "inline-block",
-											width: "1em",
-											height: "1em",
-											"border-radius": "50%",
-											"background-color": `hsl(${ hueForType(type) }, 94%, 52%)`,
-										}}
+									<span class="label-text"
+										style={{ "background-color": `hsl(${ hueForType(type) }, 94%, 52%)`, }}
 									/>
 									<span>
 										{type} ({count()})
