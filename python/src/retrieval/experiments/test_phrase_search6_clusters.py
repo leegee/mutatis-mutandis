@@ -315,7 +315,7 @@ def fetch_context(
         token = str(token)
 
         if token_idx == observation.token_idx:
-            token = f"<u>{html.escape(token)}</u>"
+            token = f"▶<u>{html.escape(token)}</u>◀"
         else:
             token = html.escape(token)
 
