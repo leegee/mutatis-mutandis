@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-eebo_parse_tei.py - Multi-process streaming EEBO TEI XML ingestion pipeline
+tier0/tier0_0_eebo_parse_tei.py - Multi-process streaming EEBO TEI XML ingestion pipeline
 
 NB Corpus roots are defined in config.CORPUS_INPUT_DIRS
 
@@ -336,6 +336,131 @@ def process_ecco_file(tree, xml_path):
     return meta, tokens
 
 
+def process_misc_file(tree, xml_path):
+    """
+    Process generic TEI sources in the misc corpus.
+
+    These are TEI editions rather than EEBO/ECCO source records, so
+    metadata and text extraction follow the TEI header directly.
+    """
+
+def process_misc_file(tree, xml_path):
+    """
+    Process generic TEI sources in the misc corpus.
+    """
+
+    root = tree.getroot()
+
+    root_id = root.attrib.get( "{http://www.w3.org/XML/1998/namespace}id" )
+
+    if not root_id:
+        logger.warning( f"[tier0] No xml:id in misc TEI document {xml_path}" )
+        return None
+
+    doc_id = root_id
+
+    title_elem = tree.find(
+        ".//tei:teiHeader//tei:titleStmt/tei:title",
+        TEI_NS,
+    )
+    author_elem = tree.find(
+        ".//tei:teiHeader//tei:titleStmt/tei:author",
+        TEI_NS,
+    )
+    publisher_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:publisher",
+        TEI_NS,
+    )
+    place_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:pubPlace",
+        TEI_NS,
+    )
+    date_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:date",
+        TEI_NS,
+    )
+
+    date_raw = safe_text(date_elem)
+    pub_year = extract_year(date_raw)
+
+    if pub_year is None:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"No publication year in misc document {doc_id} at {xml_path}"
+        )
+        return None
+
+    if not year_in_corpus(pub_year):
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"Year not in corpus: {pub_year} for {doc_id} at {xml_path}"
+        )
+        return None
+
+    body = tree.findall(
+        ".//tei:text/tei:body",
+        TEI_NS,
+    )
+
+    if not body:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"No BODY in misc document {doc_id} at {xml_path}"
+        )
+        return None
+
+    raw_text = " ".join(
+        render_text(b)
+        for b in body
+    )
+
+    normalized = normalize_early_modern(
+        eebo_ocr_fixes.apply_ocr_fixes(raw_text)
+    )
+
+    if len(normalized) < 100:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"misc document {doc_id} has normalized text length < 100 "
+            f"at {xml_path}"
+        )
+        return None
+
+    tokens = re.findall(
+        r"\w+|[^\w\s]",
+        normalized,
+    )
+
+    if len(tokens) > config.MAX_TOKENS_IN_DOC:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"misc document {doc_id} has {len(tokens)} tokens, "
+            f"which exceeds MAX_TOKENS_IN_DOC "
+            f"{config.MAX_TOKENS_IN_DOC}"
+        )
+
+    lang = extract_language(tree, raw_text)
+
+    meta = {
+        "doc_id": doc_id,
+        "title": safe_text(title_elem),
+        "author": safe_text(author_elem),
+        "publisher": safe_text(publisher_elem),
+        "pub_place": safe_text(place_elem),
+        "pub_year": pub_year,
+        "source_date_raw": date_raw,
+        "token_count": len(tokens),
+        "filepath": str(
+            xml_path.relative_to(
+                config.CORPUS_ROOT_DIR
+            ).as_posix()
+        ),
+        "lang": lang,
+    }
+
+    return meta, tokens
+
+
 def process_eebo_file(tree, xml_path):
     doc_id_elem = tree.find(".//tei:idno[@type='DLPS']", TEI_NS)
 
@@ -439,6 +564,8 @@ def process_file(xml_path: Path, corpus):
         return process_eebo_file(tree, xml_path)
     elif corpus == "ecco":
         return process_ecco_file(tree, xml_path)
+    elif corpus == "misc":
+        return process_misc_file(tree, xml_path)
     else:
         logger.warning(f"[tier0] Unknown corpus {corpus} - ignoring path {xml_path}")
         return None
@@ -661,6 +788,7 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="Maximum number of documents to parse/add.")
     parser.add_argument("--create", action="store_true", help="Creates the database from scratch, deleting existing data. Requires manual confirmation.")
     parser.add_argument("--justindex", action="store_true", help="Does not parse any files but recreates database view and indicies.")
+    parser.add_argument( "--corpus", choices=sorted(config.CORPUS_INPUT_DIRS.keys()), default=None, help="Process only this predefined corpus.")
     args = parser.parse_args()
 
     validate_corpus_years() # Eventually allow flags
@@ -683,10 +811,17 @@ def main():
     if args.justindex:
         logger.info("[tier0] === Just indexing the DB, not parsing or ingesting files ===")
     else:
-        for corpus, xml_dir in config.CORPUS_INPUT_DIRS.items():
+        corpora = (
+            {args.corpus: config.CORPUS_INPUT_DIRS[args.corpus]}
+            if args.corpus
+            else config.CORPUS_INPUT_DIRS
+        )
+
+        for corpus, xml_dir in corpora.items():
             logger.info(f"[tier0] Process {corpus} from {xml_dir}")
+
             if not xml_dir.is_dir():
-                parser.error(f"Input directory for {corpus} does not exist: {xml_dir}")
+                parser.error( f"Input directory for {corpus} does not exist: {xml_dir}" )
 
             ingest_xml_parallel(
                 xml_dir=xml_dir,

@@ -21,6 +21,7 @@ ECCO_HEADER_DIR = Path( PROJECT_ROOT / "corpus/ecco_all/ecco/headers" )
 CORPUS_ROOT_DIR = Path("G:") / "corpus"
 
 CORPUS_INPUT_DIRS = {
+    "misc": CORPUS_ROOT_DIR / "misc",
     "eebo": CORPUS_ROOT_DIR / "eebo_all",
     "ecco": CORPUS_ROOT_DIR / "ecco_all",
 }
