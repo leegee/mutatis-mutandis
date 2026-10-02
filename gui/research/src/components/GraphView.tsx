@@ -329,6 +329,24 @@ export default function GraphView(props: GraphViewProps) {
 			}
 		});
 
+		instance.on("dbltap", "node", (event) => {
+			const nodeId = event.target.id();
+			const entity = props.entities.find((entity) => entity.id === nodeId);
+
+			if (entity) {
+				props.onEditEntity?.(entity);
+			}
+		});
+
+		instance.on("dbltap", "edge", (event) => {
+			const relationId = event.target.id();
+			const relation = props.relations.find((relation) => relation.id === relationId);
+
+			if (relation) {
+				props.onEditRelation?.(relation);
+			}
+		});
+
 		setCy(instance);
 
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -445,10 +463,13 @@ export default function GraphView(props: GraphViewProps) {
 										onClick={() => {
 											const item = menu();
 											if (item.kind !== "canvas") return;
-											props.onAddEntity?.({
-												x: item.x,
-												y: item.y,
-											});
+											const instance = cy();
+											if (!instance) return;
+											const position = {
+												x: (item.x - instance.pan().x) / instance.zoom(),
+												y: (item.y - instance.pan().y) / instance.zoom(),
+											};
+											props.onAddEntity?.(position);
 											setContextMenu(undefined);
 										}}
 									>
