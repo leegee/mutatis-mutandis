@@ -108,6 +108,40 @@ def normalize_early_modern(text: str) -> str:
     return text.strip()
 
 
+def render_lic_text(node):
+    """
+    Render Literature in Context TEI into corpus text.
+
+    Literary textual content is retained while structural, media,
+    navigation, and editorial-note elements are excluded.
+    """
+
+    parts = []
+
+    if node.text:
+        parts.append(node.text)
+
+    for child in node:
+        local_name = child.tag.rsplit("}", 1)[-1]
+
+        if local_name in {
+            "pb",
+            "graphic",
+            "note",
+        }:
+            # Page breaks, images, and editorial/media notes are
+            # provenance or presentation material, not corpus text.
+            pass
+
+        else:
+            parts.append(render_lic_text(child))
+
+        if child.tail:
+            parts.append(child.tail)
+
+    return "".join(parts)
+
+
 def render_text(node):
     """Render EEBO XML into plain text while preserving editorial GAP markers."""
     parts = []
@@ -165,6 +199,50 @@ def year_in_corpus(pub_year: int | None):
 
 def safe_text(x):
     return x.text.strip() if x is not None and x.text else None
+
+
+def extract_person_name(elem):
+    """
+    Extract a human-readable person name from a TEI <author>/<editor>/<persName>
+    element, including nested <name>, <forename>, and <surname> elements.
+    """
+    if elem is None:
+        return None
+
+    # Prefer explicit forename/surname structure.
+    names = []
+
+    for name_elem in elem.findall(".//tei:name", TEI_NS):
+        parts = [
+            text
+            for child in name_elem
+            for text in [safe_text(child)]
+            if text
+        ]
+        if parts:
+            names.append(" ".join(parts))
+
+    if names:
+        return "; ".join(names)
+
+    # Fallback: collect direct textual content if there is no structured name.
+    text = " ".join(" ".join(elem.itertext()).split())
+    return text or None
+
+
+def extract_tei_date(date_elem):
+    """
+    Extract a publication date from a TEI <date> element.
+
+    Prefer the machine-readable @when value, falling back to element text.
+    """
+    if date_elem is None:
+        return None
+
+    return (
+        date_elem.attrib.get("when")
+        or safe_text(date_elem)
+    )
 
 
 def to_doc_row(meta: dict) -> tuple:
@@ -347,14 +425,21 @@ def process_ecco_file(tree, xml_path):
 def process_misc_file(tree, xml_path):
     """
     Process generic TEI sources in the misc corpus.
+
+    Supports LiC and other TEI sources whose document identity and
+    bibliographic metadata are expressed using the standard TEI namespace.
     """
 
     root = tree.getroot()
 
-    root_id = root.attrib.get( "{http://www.w3.org/XML/1998/namespace}id" )
+    root_id = root.attrib.get(
+        "{http://www.w3.org/XML/1998/namespace}id"
+    )
 
     if not root_id:
-        logger.warning( f"[tier0] No xml:id in misc TEI document {xml_path}" )
+        logger.warning(
+            f"[tier0] No xml:id in misc TEI document {xml_path}"
+        )
         return None
 
     doc_id = root_id
@@ -363,37 +448,46 @@ def process_misc_file(tree, xml_path):
         ".//tei:teiHeader//tei:titleStmt/tei:title",
         TEI_NS,
     )
+
     author_elem = tree.find(
         ".//tei:teiHeader//tei:titleStmt/tei:author",
         TEI_NS,
     )
+
     publisher_elem = tree.find(
-        ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:publisher",
-        TEI_NS,
-    )
-    place_elem = tree.find(
-        ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:pubPlace",
-        TEI_NS,
-    )
-    date_elem = tree.find(
-        ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:date",
+        ".//tei:teiHeader//tei:sourceDesc"
+        "//tei:imprint/tei:publisher",
         TEI_NS,
     )
 
-    date_raw = safe_text(date_elem)
+    place_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc"
+        "//tei:imprint/tei:pubPlace",
+        TEI_NS,
+    )
+
+    date_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc"
+        "//tei:imprint/tei:date",
+        TEI_NS,
+    )
+
+    date_raw = extract_tei_date(date_elem)
     pub_year = extract_year(date_raw)
 
     if pub_year is None:
         logger.warning(
             f"[tier0 worker {os.getpid()}] "
-            f"No publication year in misc document {doc_id} at {xml_path}"
+            f"No publication year in misc document "
+            f"{doc_id} at {xml_path}"
         )
         return None
 
     if not year_in_corpus(pub_year):
         logger.warning(
             f"[tier0 worker {os.getpid()}] "
-            f"Year not in corpus: {pub_year} for {doc_id} at {xml_path}"
+            f"Year not in corpus: {pub_year} "
+            f"for {doc_id} at {xml_path}"
         )
         return None
 
@@ -405,12 +499,13 @@ def process_misc_file(tree, xml_path):
     if not body:
         logger.warning(
             f"[tier0 worker {os.getpid()}] "
-            f"No BODY in misc document {doc_id} at {xml_path}"
+            f"No BODY in misc document "
+            f"{doc_id} at {xml_path}"
         )
         return None
 
     raw_text = " ".join(
-        render_text(b)
+        render_lic_text(b)
         for b in body
     )
 
@@ -421,8 +516,8 @@ def process_misc_file(tree, xml_path):
     if len(normalized) < 100:
         logger.warning(
             f"[tier0 worker {os.getpid()}] "
-            f"misc document {doc_id} has normalized text length < 100 "
-            f"at {xml_path}"
+            f"misc document {doc_id} has normalized "
+            f"text length < 100 at {xml_path}"
         )
         return None
 
@@ -444,7 +539,7 @@ def process_misc_file(tree, xml_path):
     meta = {
         "doc_id": doc_id,
         "title": safe_text(title_elem),
-        "author": safe_text(author_elem),
+        "author": extract_person_name(author_elem),
         "publisher": safe_text(publisher_elem),
         "pub_place": safe_text(place_elem),
         "pub_year": pub_year,
