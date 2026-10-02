@@ -123,6 +123,14 @@ def render_text(node):
             m = re.search(r"(\d+)", extent)
             n = int(m.group(1)) if m else 1
             parts.append("_" * n)
+
+        elif (
+            local_name == "note"
+            and child.attrib.get("type") == "footnotelink"
+        ):
+            # Editorial footnote marker: do not include its content.
+            pass
+
         else:
             parts.append(render_text(child))
 
