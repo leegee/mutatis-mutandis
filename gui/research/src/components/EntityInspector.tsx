@@ -93,7 +93,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 					>
 						{/* NORMAL INSPECTOR VIEW */}
 						<header class="fixed surface top-padding" style="top:0">
-							<nav class="no-padding top-align">
+							<nav class="no-padding bottom-margin top-align">
 								<button class="circle transparent top-margin  small-margin"
 									type="button"
 									title="Close"
@@ -111,7 +111,7 @@ export default function EntityInspector(props: EntityInspectorProps) {
 
 						<Show when={entity().description}>
 							<section class="surface-container padding">
-								<p> {entity().description} </p>
+								<div style="white-space: pre-line"> {entity().description} </div>
 							</section>
 						</Show>
 
