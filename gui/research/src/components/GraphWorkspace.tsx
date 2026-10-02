@@ -74,19 +74,25 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	}
 
 	async function handleAddEntity() {
-		await modal(
-			(close) => (
-				<EntityForm
-					onCreated={(entity: Entity) => {
-						setSelectedEntity(entity);
-						setSelectedRelation(undefined);
-						close();
-					}}
-					onCancel={close}
-				/>
-			),
-			"Add entity",
-		);
+		return await new Promise<Entity | undefined>((resolve) => {
+			modal(
+				(close) => (
+					<EntityForm
+						onCreated={(entity: Entity) => {
+							setSelectedEntity(entity);
+							setSelectedRelation(undefined);
+							close();
+							resolve(entity);
+						}}
+						onCancel={() => {
+							close();
+							resolve(undefined);
+						}}
+					/>
+				),
+				"Add entity",
+			);
+		});
 	}
 
 	async function handleDeleteEntity(entity: Entity) {

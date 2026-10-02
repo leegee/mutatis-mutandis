@@ -43,18 +43,18 @@ interface GraphViewProps {
 	entities: Entity[];
 	relations: Relation[];
 
-	onSelectEntity?: (entity: Entity) => void;
-	onSelectRelation?: (relation: Relation) => void;
+	onSelectEntity: (entity: Entity) => void;
+	onSelectRelation: (relation: Relation) => void;
 
-	onAddEntity?: (position: { x: number; y: number }) => void;
+	onAddEntity: () => Promise<Entity | undefined>;
 
-	onEditEntity?: (entity: Entity) => void;
-	onDeleteEntity?: (entity: Entity) => void;
+	onEditEntity: (entity: Entity) => void;
+	onDeleteEntity: (entity: Entity) => void;
 
-	onAddRelation?: (sourceId: string, targetId: string) => void;
+	onAddRelation: (sourceId: string, targetId: string) => void;
 
-	onEditRelation?: (relation: Relation) => void;
-	onDeleteRelation?: (relation: Relation) => void;
+	onEditRelation: (relation: Relation) => void;
+	onDeleteRelation: (relation: Relation) => void;
 }
 
 const NODE_SCALE_FACTOR = () => 50;
@@ -302,7 +302,7 @@ export default function GraphView(props: GraphViewProps) {
 			const relationId = event.target.id();
 			const relation = props.relations.find((relation) => relation.id === relationId);
 			if (relation) {
-				props.onSelectRelation?.(relation);
+				props.onSelectRelation(relation);
 			}
 		});
 
@@ -317,7 +317,7 @@ export default function GraphView(props: GraphViewProps) {
 					instance.getElementById(sourceId).removeClass("link-source");
 					const target = props.entities.find((entity) => entity.id === targetId);
 					if (target) {
-						props.onAddRelation?.(sourceId, targetId);
+						props.onAddRelation(sourceId, targetId);
 					}
 				}
 				return;
@@ -325,7 +325,7 @@ export default function GraphView(props: GraphViewProps) {
 
 			const entity = props.entities.find((item) => item.id === targetId);
 			if (entity) {
-				props.onSelectEntity?.(entity);
+				props.onSelectEntity(entity);
 			}
 		});
 
@@ -334,7 +334,7 @@ export default function GraphView(props: GraphViewProps) {
 			const entity = props.entities.find((entity) => entity.id === nodeId);
 
 			if (entity) {
-				props.onEditEntity?.(entity);
+				props.onEditEntity(entity);
 			}
 		});
 
@@ -343,7 +343,7 @@ export default function GraphView(props: GraphViewProps) {
 			const relation = props.relations.find((relation) => relation.id === relationId);
 
 			if (relation) {
-				props.onEditRelation?.(relation);
+				props.onEditRelation(relation);
 			}
 		});
 
@@ -460,7 +460,7 @@ export default function GraphView(props: GraphViewProps) {
 									<button
 										type="button"
 										class="fill"
-										onClick={() => {
+										onClick={async () => {
 											const item = menu();
 											if (item.kind !== "canvas") return;
 											const instance = cy();
@@ -469,7 +469,15 @@ export default function GraphView(props: GraphViewProps) {
 												x: (item.x - instance.pan().x) / instance.zoom(),
 												y: (item.y - instance.pan().y) / instance.zoom(),
 											};
-											props.onAddEntity?.(position);
+											const created = await props.onAddEntity();
+											if (created) {
+												const node = instance.getElementById(created.id);
+
+												if (node.length) {
+													node.position(position);
+												}
+											}
+
 											setContextMenu(undefined);
 										}}
 									>
@@ -486,7 +494,7 @@ export default function GraphView(props: GraphViewProps) {
 											if (item.kind !== "node") return;
 											const entity = props.entities.find((entity) => entity.id === item.nodeId);
 											if (entity) {
-												props.onEditEntity?.(entity);
+												props.onEditEntity(entity);
 											}
 											setContextMenu(undefined);
 										}}
@@ -524,7 +532,7 @@ export default function GraphView(props: GraphViewProps) {
 
 											const entity = props.entities.find((entity) => entity.id === item.nodeId);
 											if (entity) {
-												props.onDeleteEntity?.(entity);
+												props.onDeleteEntity(entity);
 											}
 
 											setContextMenu(undefined);
@@ -543,7 +551,7 @@ export default function GraphView(props: GraphViewProps) {
 
 											const relation = props.relations.find((relation) => relation.id === item.relationId);
 											if (relation) {
-												props.onEditRelation?.(relation);
+												props.onEditRelation(relation);
 											}
 
 											setContextMenu(undefined);
@@ -564,7 +572,7 @@ export default function GraphView(props: GraphViewProps) {
 
 											const relation = props.relations.find((relation) => relation.id === item.relationId);
 											if (relation) {
-												props.onDeleteRelation?.(relation);
+												props.onDeleteRelation(relation);
 											}
 
 											setContextMenu(undefined);
