@@ -57,7 +57,7 @@ export default function EntityAliases(props: EntityAliasesProps) {
 				isTitle
 			/>
 
-			<Show when={props.entity.aliases.length > 0} fallback={<p class={no_data_fallback_class}>No aliases.</p>} >
+			<Show when={props.entity.aliases.length > 0} >
 				<div class="row wrap tiny-space tiny-margin bottom-margin top-margin">
 					<For each={props.entity.aliases}>
 						{(alias) => (

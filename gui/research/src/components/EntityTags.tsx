@@ -57,7 +57,7 @@ export default function EntityTags(props: EntityTagsProps) {
 				isTitle
 			/>
 
-			<Show when={props.entity.tags.length > 0} fallback={<p class={no_data_fallback_class}>No tags.</p>} >
+			<Show when={props.entity.tags.length > 0}>
 				<div class="row wrap tiny-space tiny-margin bottom-margin top-margin">
 					<For each={props.entity.tags}>
 						{(tag) => (
