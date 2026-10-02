@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
 
 import EntityInspector from "~/components/EntityInspector";
 import GraphView from "~/components/GraphView";
@@ -31,6 +31,28 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	}>();
 
 	const modal = useModal();
+
+	onMount(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+
+			if (selectedEntity()) {
+				setSelectedEntity(undefined);
+				setEditingEntity(false);
+			}
+
+			if (selectedRelation()) {
+				setSelectedRelation(undefined);
+				setEditingRelation(false);
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+
+		onCleanup(() => {
+			window.removeEventListener("keydown", handleKeyDown);
+		});
+	});
 
 	function handleSelectEntity(entity: Entity) {
 		setSelectedEntity(entity);
@@ -91,7 +113,6 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	function handleCancelAddRelation() {
 		setAddingRelation(undefined);
 	}
-
 
 	async function handleDeleteRelation(relation: Relation) {
 		await deleteRelation(relation.id);
