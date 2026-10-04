@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 ECCO_HEADER_DIR = Path( PROJECT_ROOT / "corpus/ecco_all/ecco/headers" )
 
 # CORPUS_ROOT_DIR = PROJECT_ROOT / "corpus"
-CORPUS_ROOT_DIR = Path("G:") / "corpus"
+CORPUS_ROOT_DIR = Path("G:/") / "corpus"
 
 CORPUS_INPUT_DIRS = {
     "misc": CORPUS_ROOT_DIR / "misc",

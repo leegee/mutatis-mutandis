@@ -31,8 +31,10 @@ uvicorn==0.51.0
 grok>=6.2
 openai>=2.48.0
 xxhash>=3.8.1
+diskannpy>=0.7.0
 pyarrow>=25.0.1
 pytest>=9.1.1
 duckdb>=1.5.5
 psutil>=7.2.2
-lancedb>=0.37.1
+lancedb>=0.38.0
+lxml>=6.1.3

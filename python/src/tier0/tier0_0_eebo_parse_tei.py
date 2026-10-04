@@ -24,6 +24,7 @@ import unicodedata
 
 from psycopg import sql
 import xml.etree.ElementTree as etree
+from lxml import etree as lxml_etree
 import langdetect
 
 import lib.corpus_config as config
@@ -49,12 +50,12 @@ MAX_DOCS: Optional[int] = None
 SKIP_EXISTING_DOCS  = True
 
 TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
+TEI_URI = TEI_NS["tei"]
 
 
 def whiteness_seed_score(
     tokens: list[str],
 ) -> tuple[int, Counter[str]]:
-
     hits = Counter(
         token.lower()
         for token in tokens
@@ -89,6 +90,13 @@ def passes_whiteness_filter( doc_id: str, tokens: list[str] ) -> bool:
     return True
 
 
+def normalize_tei_namespace(root):
+    """Put un-namespaced elements (xmlns="") into the TEI namespace."""
+    for el in root.iter():
+        if isinstance(el.tag, str) and not el.tag.startswith("{"):
+            el.tag = f"{{{TEI_URI}}}{el.tag}"
+
+
 def normalize_early_modern(text: str) -> str:
     text = text.lower()
     text = re.sub(r"(\w)[’‘ʼ′´](\w)", r"\1'\2", text)
@@ -108,6 +116,18 @@ def normalize_early_modern(text: str) -> str:
     return text.strip()
 
 
+def parse_tei(xml_path):
+    try:
+        return etree.parse(str(xml_path))
+    except etree.ParseError as strict_err:
+        parser = lxml_etree.XMLParser(recover=True, huge_tree=True)
+        tree = lxml_etree.parse(str(xml_path), parser)
+        if tree.getroot() is None:
+            raise
+        logger.warning(f"[tier0] RECOVERED malformed XML {xml_path}: {strict_err}")
+        return tree
+
+
 def render_lic_text(node):
     """
     Render Literature in Context TEI into corpus text.
@@ -122,6 +142,10 @@ def render_lic_text(node):
         parts.append(node.text)
 
     for child in node:
+        if not isinstance(child.tag, str):   # comment / PI
+            if child.tail:
+                parts.append(child.tail)
+            continue
         local_name = child.tag.rsplit("}", 1)[-1]
 
         if local_name in {
@@ -202,30 +226,28 @@ def safe_text(x):
 
 
 def extract_person_name(elem):
-    """
-    Extract a human-readable person name from a TEI <author>/<editor>/<persName>
-    element, including nested <name>, <forename>, and <surname> elements.
-    """
     if elem is None:
         return None
 
-    # Prefer explicit forename/surname structure.
     names = []
-
     for name_elem in elem.findall(".//tei:name", TEI_NS):
-        parts = [
-            text
-            for child in name_elem
-            for text in [safe_text(child)]
-            if text
-        ]
-        if parts:
-            names.append(" ".join(parts))
+        fore = " ".join(
+            (f.text or "").strip()
+            for f in name_elem.findall("tei:forename", TEI_NS)
+            if f.text and f.text.strip()
+        )
+        sur = " ".join(
+            (s.text or "").strip()
+            for s in name_elem.findall("tei:surname", TEI_NS)
+            if s.text and s.text.strip()
+        )
+        full = f"{fore} {sur}".strip()
+        if full:
+            names.append(full)
 
     if names:
         return "; ".join(names)
 
-    # Fallback: collect direct textual content if there is no structured name.
     text = " ".join(" ".join(elem.itertext()).split())
     return text or None
 
@@ -431,10 +453,8 @@ def process_misc_file(tree, xml_path):
     """
 
     root = tree.getroot()
-
-    root_id = root.attrib.get(
-        "{http://www.w3.org/XML/1998/namespace}id"
-    )
+    normalize_tei_namespace(root)
+    root_id = root.attrib.get( "{http://www.w3.org/XML/1998/namespace}id" )
 
     if not root_id:
         logger.warning(
@@ -650,9 +670,14 @@ def process_eebo_file(tree, xml_path):
 
 def process_file(xml_path: Path, corpus):
     try:
-        tree = etree.parse(str(xml_path))
-    except Exception:
-        logger.warning(f"[tier0] Failed to parse {xml_path}")
+        # tree = etree.parse(str(xml_path))
+        tree = parse_tei(xml_path)
+    except etree.ParseError as e:
+        line, col = e.position
+        logger.warning(f"[tier0] Failed to parse {xml_path}: {e} (line {line}, col {col})")
+        return None
+    except Exception as e:
+        logger.warning(f"[tier0] Failed to read {xml_path}: {e!r}")
         return None
 
     if corpus == "eebo":
@@ -746,91 +771,66 @@ def filter_existing_docs(rows, corpus):
 
 
 def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs, corpus):
-    logger.info( f"[tier0 worker {os.getpid()}] received {len(files)} {corpus} files" )
-    doc_batch = []
-    token_batch = []
-    inserted_doc_ids = set()
+    logger.info(f"[tier0 worker {os.getpid()}] received {len(files)} {corpus} files")
 
+    pending = []          # list of (doc_row, token_rows)
+    pending_tokens = 0
+    seen_ids = set()      # guards against duplicate ids across files in this worker
     docs_seen = 0
 
-    def log_progress():
-        if docs_seen % LOG_EVERY_N_DOCS == 0 and docs_seen > 0:
-            logger.info(f"[tier0 worker {os.getpid()}] ingested {docs_seen} docs")
-
-    def flush_docs():
-        nonlocal doc_batch, inserted_doc_ids
-        if not doc_batch:
+    def flush():
+        nonlocal pending, pending_tokens
+        if not pending:
             return
+        batch, pending, pending_tokens = pending, [], 0
 
-        rows = doc_batch
-        doc_batch = []
-
+        doc_rows = [d for d, _ in batch]
         if skip_existing_docs:
-            rows = filter_existing_docs(rows, corpus)
-
-        if not rows:
+            keep = {r[1] for r in filter_existing_docs(doc_rows, corpus)}
+            batch = [(d, t) for d, t in batch if d[1] in keep]
+        if not batch:
             return
 
-        inserted_doc_ids.update(
-            (r[0], r[1])
-            for r in rows
-        )
+        stream_copy("documents", [
+            "corpus", "doc_id", "title", "author", "pub_year",
+            "publisher", "pub_place", "source_date_raw",
+            "token_count", "filepath", "lang",
+        ], [d for d, _ in batch])
 
-        stream_copy(
-            "documents",
-            [
-                "corpus", "doc_id", "title", "author", "pub_year",
-                "publisher", "pub_place", "source_date_raw",
-                "token_count", "filepath", "lang",
-            ],
-            rows,
-        )
-
-    def flush_tokens():
-        nonlocal token_batch
-        if not token_batch:
-            return
-
-        rows = token_batch
-        token_batch = []
-
-        stream_copy(
-            "tokens",
-            ["corpus", "doc_id", "token_idx", "token"],
-            rows,
-        )
+        stream_copy("tokens", ["corpus", "doc_id", "token_idx", "token"],
+                    [row for _, toks in batch for row in toks])
 
     for fp in files:
         try:
-            result = process_file_to_temp(fp, corpus)
+            result = process_file(fp, corpus)
             if not result:
                 continue
+            meta, tokens = result
+            meta["corpus"] = corpus
 
-            meta, token_file, _ = result
+            if meta["doc_id"] in seen_ids:
+                logger.warning(f"[tier0] Duplicate doc_id {meta['doc_id']} in {fp}; skipping")
+                continue
+            seen_ids.add(meta["doc_id"])
 
-            doc_batch.append(to_doc_row(meta))
-
-            with open(token_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    corpus, doc_id, idx, tok = line.rstrip("\n").split("\t")
-                    token_batch.append((corpus, doc_id, int(idx), tok))
-
-            if (
-                len(doc_batch) >= batch_docs
-                or len(token_batch) >= batch_tokens
-            ):
-                flush_docs()
-                flush_tokens()
-
+            rows = [(corpus, meta["doc_id"], i, t) for i, t in enumerate(tokens)]
+            pending.append((to_doc_row(meta), rows))
+            pending_tokens += len(rows)
             docs_seen += 1
-            log_progress()
 
+            if len(pending) >= batch_docs or pending_tokens >= batch_tokens:
+                flush()
+
+            if docs_seen % LOG_EVERY_N_DOCS == 0:
+                logger.info(f"[tier0 worker {os.getpid()}] ingested {docs_seen} docs")
         except Exception:
             logger.error(f"[tier0] FAILED FILE: {fp}")
             logger.error(traceback.format_exc())
 
-    flush_docs()
-    flush_tokens()
+    try:
+        flush()
+    except Exception:
+        logger.error(traceback.format_exc())
     logger.info(f"[tier0 worker {os.getpid()}] finished: {docs_seen} docs processed")
 
 
@@ -910,6 +910,7 @@ def main():
     parser.add_argument( "--corpus", choices=sorted(config.CORPUS_INPUT_DIRS.keys()), default=None, help="Process only this predefined corpus.")
     parser.add_argument( "--doc-id", default=None, help="Process only the specified document ID." )
     parser.add_argument( "--replace", action="store_true", help="Replace an existing document when used with --doc-id." )
+
     args = parser.parse_args()
 
     if args.replace and not args.doc_id:
