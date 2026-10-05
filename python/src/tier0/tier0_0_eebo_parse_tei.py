@@ -11,14 +11,12 @@ from __future__ import annotations
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 import argparse
-import csv
 import io
 import os
 import re
 import sys
-import tempfile
 import traceback
 import unicodedata
 
@@ -49,8 +47,16 @@ _ECCO_HEADER_INDEX = None
 MAX_DOCS: Optional[int] = None
 SKIP_EXISTING_DOCS  = True
 
+# Files (by name) to leave out of ingestion entirely, quietly.
+SKIP_FILES: set[str] = set()
+
 TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
 TEI_URI = TEI_NS["tei"]
+XML_ID = "{http://www.w3.org/XML/1998/namespace}id"
+
+# Block-level elements: a space is appended after them when rendering, so
+# hand-written </p><p> or </l><l> with no whitespace cannot fuse words.
+BLOCK_TAGS = {"p", "l", "lg", "head", "div", "ab", "item", "sp", "speaker", "stage"}
 
 
 def whiteness_seed_score(
@@ -117,6 +123,7 @@ def normalize_early_modern(text: str) -> str:
 
 
 def parse_tei(xml_path):
+    """Strict parse first; fall back to lxml's recovering parser, with a warning."""
     try:
         return etree.parse(str(xml_path))
     except etree.ParseError as strict_err:
@@ -146,6 +153,7 @@ def render_lic_text(node):
             if child.tail:
                 parts.append(child.tail)
             continue
+
         local_name = child.tag.rsplit("}", 1)[-1]
 
         if local_name in {
@@ -159,6 +167,8 @@ def render_lic_text(node):
 
         else:
             parts.append(render_lic_text(child))
+            if local_name in BLOCK_TAGS:
+                parts.append(" ")
 
         if child.tail:
             parts.append(child.tail)
@@ -174,6 +184,11 @@ def render_text(node):
         parts.append(node.text)
 
     for child in node:
+        if not isinstance(child.tag, str):   # comment / PI (lxml recovery path)
+            if child.tail:
+                parts.append(child.tail)
+            continue
+
         local_name = child.tag.rsplit("}", 1)[-1]
 
         if local_name == "gap":
@@ -252,19 +267,50 @@ def extract_person_name(elem):
     return text or None
 
 
-def extract_tei_date(date_elem):
-    """
-    Extract a publication date from a TEI <date> element.
+def _year_from_date_elem(d):
+    """Return (raw, year) from a TEI <date>, trying attributes then text."""
+    for raw in (
+        d.attrib.get("when"),
+        d.attrib.get("notBefore"),
+        d.attrib.get("from"),
+        safe_text(d),
+    ):
+        y = extract_year(raw) if raw else None
+        if y and y > 0:                 # rejects when="0000" template junk
+            return raw, y
+    return None, None
 
-    Prefer the machine-readable @when value, falling back to element text.
-    """
-    if date_elem is None:
-        return None
 
-    return (
-        date_elem.attrib.get("when")
-        or safe_text(date_elem)
+# Strongest source first. Composition dates are deliberately NOT here:
+# pub_year is the date of the text as we hold it, not of the original work.
+DATE_XPATHS = [
+    ("imprint",     ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:date"),
+    ("translation", ".//tei:teiHeader//tei:sourceDesc//tei:bibl/tei:date[@type='translation']"),
+    ("docDate",     ".//tei:text/tei:front//tei:docDate"),
+]
+
+
+def pick_pub_year(tree):
+    """First usable date, strongest source first. Returns (raw, year, source)."""
+    for source, xp in DATE_XPATHS:
+        for d in tree.findall(xp, TEI_NS):
+            raw, y = _year_from_date_elem(d)
+            if y:
+                return raw, y, source
+    return None, None, None
+
+
+def pick_composition_date(tree):
+    """Original composition date as a display string, or None. Never used for pub_year."""
+    d = tree.find(
+        ".//tei:teiHeader//tei:profileDesc/tei:creation/tei:date", TEI_NS
     )
+    if d is None:
+        return None
+    nb, na = d.attrib.get("notBefore"), d.attrib.get("notAfter")
+    if nb or na:
+        return f"{nb or '?'}-{na or '?'}"
+    return d.attrib.get("when") or safe_text(d)
 
 
 def to_doc_row(meta: dict) -> tuple:
@@ -454,13 +500,14 @@ def process_misc_file(tree, xml_path):
 
     root = tree.getroot()
     normalize_tei_namespace(root)
-    root_id = root.attrib.get( "{http://www.w3.org/XML/1998/namespace}id" )
+
+    root_id = root.attrib.get(XML_ID)
 
     if not root_id:
-        logger.warning(
-            f"[tier0] No xml:id in misc TEI document {xml_path}"
+        root_id = xml_path.stem
+        logger.info(
+            f"[tier0] No xml:id in {xml_path}; using filename stem {root_id!r}"
         )
-        return None
 
     doc_id = root_id
 
@@ -486,14 +533,8 @@ def process_misc_file(tree, xml_path):
         TEI_NS,
     )
 
-    date_elem = tree.find(
-        ".//tei:teiHeader//tei:sourceDesc"
-        "//tei:imprint/tei:date",
-        TEI_NS,
-    )
-
-    date_raw = extract_tei_date(date_elem)
-    pub_year = extract_year(date_raw)
+    date_raw, pub_year, date_source = pick_pub_year(tree)
+    composition_raw = pick_composition_date(tree)
 
     if pub_year is None:
         logger.warning(
@@ -510,6 +551,16 @@ def process_misc_file(tree, xml_path):
             f"for {doc_id} at {xml_path}"
         )
         return None
+
+    if date_source != "imprint":
+        logger.info(
+            f"[tier0] {doc_id}: year {pub_year} taken from {date_source} "
+            f"(no usable imprint date)"
+        )
+
+    source_date_raw = date_raw
+    if composition_raw:
+        source_date_raw = f"{date_raw} | composition {composition_raw}"
 
     body = tree.findall(
         ".//tei:text/tei:body",
@@ -563,7 +614,7 @@ def process_misc_file(tree, xml_path):
         "publisher": safe_text(publisher_elem),
         "pub_place": safe_text(place_elem),
         "pub_year": pub_year,
-        "source_date_raw": date_raw,
+        "source_date_raw": source_date_raw,
         "token_count": len(tokens),
         "filepath": str(
             xml_path.relative_to(
@@ -670,7 +721,6 @@ def process_eebo_file(tree, xml_path):
 
 def process_file(xml_path: Path, corpus):
     try:
-        # tree = etree.parse(str(xml_path))
         tree = parse_tei(xml_path)
     except etree.ParseError as e:
         line, col = e.position
@@ -689,31 +739,6 @@ def process_file(xml_path: Path, corpus):
     else:
         logger.warning(f"[tier0] Unknown corpus {corpus} - ignoring path {xml_path}")
         return None
-
-
-def process_file_to_temp(xml_path: Path, corpus: str):
-    result = process_file(xml_path, corpus)
-    if not result:
-        return None
-
-    meta, tokens = result
-
-    meta["corpus"] = corpus
-
-    tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="", suffix=".tsv")
-    writer = csv.writer(tmp, delimiter="\t")
-
-    for i, tok in enumerate(tokens):
-        writer.writerow([
-            meta["corpus"],
-            meta["doc_id"],
-            i,
-            tok
-        ])
-
-    tmp.close()
-
-    return meta, tmp.name, len(tokens)
 
 
 def stream_copy(table: str, columns: list[str], rows):
@@ -809,8 +834,12 @@ def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs, corpus):
             meta["corpus"] = corpus
 
             if meta["doc_id"] in seen_ids:
-                logger.warning(f"[tier0] Duplicate doc_id {meta['doc_id']} in {fp}; skipping")
-                continue
+                # A copy-pasted xml:id in the source is the usual cause; fix it there.
+                new_id = f'{meta["doc_id"]}__{fp.stem}'
+                logger.warning(
+                    f"[tier0] Duplicate doc_id {meta['doc_id']} in {fp}; using {new_id}"
+                )
+                meta["doc_id"] = new_id
             seen_ids.add(meta["doc_id"])
 
             rows = [(corpus, meta["doc_id"], i, t) for i, t in enumerate(tokens)]
@@ -834,6 +863,36 @@ def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs, corpus):
     logger.info(f"[tier0 worker {os.getpid()}] finished: {docs_seen} docs processed")
 
 
+def resolve_input_file(file_arg: str, corpus: str) -> Path:
+    """
+    Locate a single input file for --file. Tries, in order: the path as given
+    (absolute or relative to cwd), relative to the corpus input dir, then
+    relative to CORPUS_ROOT_DIR. The file must live under CORPUS_ROOT_DIR,
+    since documents.filepath is stored relative to it.
+    """
+    p = Path(file_arg)
+    candidates = [p] if p.is_absolute() else [
+        Path.cwd() / p,
+        config.CORPUS_INPUT_DIRS[corpus] / p,
+        config.CORPUS_ROOT_DIR / p,
+    ]
+
+    for c in candidates:
+        if c.is_file():
+            # abspath (not resolve) so symlinks don't break relative_to below
+            found = Path(os.path.abspath(c))
+            try:
+                found.relative_to(config.CORPUS_ROOT_DIR)
+            except ValueError:
+                raise SystemExit( f"{found} is not under CORPUS_ROOT_DIR ({config.CORPUS_ROOT_DIR})" )
+            return found
+
+    raise SystemExit(
+        f"--file {file_arg!r} not found. Tried:\n  "
+        + "\n  ".join(str(c) for c in candidates)
+    )
+
+
 def ingest_xml_parallel(
     xml_dir: Path | None = None,
     max_workers: int     = 4,
@@ -841,8 +900,15 @@ def ingest_xml_parallel(
     batch_tokens: int    = 50000,
     corpus: str          = None,
     doc_id: str | None   = None,
+    file: Path | None    = None,
 ):
-    xml_files = list(xml_dir.rglob("*.xml"))
+    if file is not None:
+        xml_files = [file]
+    else:
+        xml_files = [
+            p for p in xml_dir.rglob("*.xml")
+            if p.name not in SKIP_FILES
+        ]
 
     if doc_id:
         with corpus_db.get_connection(
@@ -851,12 +917,9 @@ def ingest_xml_parallel(
             filepath = corpus_db.get_document_filepath( conn, doc_id, corpus=corpus, )
 
         if filepath is None:
-            parser.error( f"Document {doc_id!r} does not exist in corpus {corpus!r}" )
+            raise SystemExit( f"Document {doc_id!r} does not exist in corpus {corpus!r}" )
 
-        # filepath = config.CORPUS_INPUT_DIRS[corpus] / Path(filepath)
-        filepath = config.CORPUS_ROOT_DIR / Path(filepath)
-
-        xml_file = Path(filepath)
+        xml_file = Path(config.CORPUS_ROOT_DIR / Path(filepath))
 
         if not xml_file.is_file():
             raise FileNotFoundError( f"Document {doc_id!r} is registered at {xml_file}, but that file does not exist." )
@@ -864,8 +927,10 @@ def ingest_xml_parallel(
         with corpus_db.get_connection( application_name="tier0-replace" ) as conn:
             deleted = corpus_db.delete_document( conn, doc_id, corpus=corpus, )
         if not deleted:
-            logger.warning( "[tier0] --replace requested, but document %s does not  currently exist in corpus %s", doc_id, corpus, )
+            logger.warning( "[tier0] --replace requested, but document %s does not currently exist in corpus %s", doc_id, corpus, )
 
+        # Only reprocess the targeted file, not the whole directory.
+        xml_files = [xml_file]
 
     logger.info(f"[tier0] Input directory: {xml_dir}")
     logger.info(f"[tier0] Found {len(xml_files)} XML files")
@@ -876,6 +941,7 @@ def ingest_xml_parallel(
     if MAX_DOCS is not None:
         xml_files = xml_files[:MAX_DOCS]
 
+    max_workers = max(1, min(max_workers, len(xml_files)))
     chunks = [xml_files[i::max_workers] for i in range(max_workers)]
 
     with ProcessPoolExecutor(max_workers=max_workers) as ex:
@@ -910,12 +976,16 @@ def main():
     parser.add_argument( "--corpus", choices=sorted(config.CORPUS_INPUT_DIRS.keys()), default=None, help="Process only this predefined corpus.")
     parser.add_argument( "--doc-id", default=None, help="Process only the specified document ID." )
     parser.add_argument( "--replace", action="store_true", help="Replace an existing document when used with --doc-id." )
+    parser.add_argument("--file", default=None, help="Ingest only this XML file (requires --corpus). Path may be absolute, " "relative to cwd, to the corpus input dir, or to CORPUS_ROOT_DIR.")
 
     args = parser.parse_args()
 
+    if args.file and not args.corpus:
+        parser.error("--file requires --corpus")
+    if args.file and args.doc_id:
+        parser.error("--file and --doc-id are mutually exclusive")
     if args.replace and not args.doc_id:
         parser.error("--replace requires --doc-id")
-
     if args.doc_id and not args.corpus:
         parser.error("--doc-id requires --corpus")
 
@@ -924,6 +994,8 @@ def main():
     global MAX_DOCS, SKIP_EXISTING_DOCS
     MAX_DOCS           = args.limit
     SKIP_EXISTING_DOCS = not (args.create or args.replace)
+
+    target_file = resolve_input_file(args.file, args.corpus) if args.file else None
 
     with corpus_db.get_connection() as conn:
         if args.create:
@@ -958,6 +1030,7 @@ def main():
                 batch_tokens=BATCH_TOKENS,
                 corpus=corpus,
                 doc_id=args.doc_id,
+                file=target_file,
             )
 
     # Wait for other connections to finish
