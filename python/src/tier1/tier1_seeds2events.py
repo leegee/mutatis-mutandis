@@ -1284,79 +1284,57 @@ def repair_year_range(
     conn,
     start_year: int,
     end_year: int,
+    corpus: str | None = None,
 ) -> int:
     """
-    Repair CLMET documents represented by existing PostgreSQL events
-    within the complete 50-year buckets covering the requested range.
+    Repair documents represented by existing PostgreSQL events within the
+    complete 50-year buckets covering the requested range.
 
-    The year range is expanded outward to complete Lance buckets.
-    Documents without existing events are excluded because processor.repair()
-    reconstructs vectors for existing event provenance; it is not an
-    event-generation operation.
+    corpus=None means every corpus present in events.
     """
-
     if start_year > end_year:
         raise ValueError(
             f"start_year ({start_year}) must not exceed "
             f"end_year ({end_year})"
         )
 
-    bucket_start = (
-        start_year // LANCE_BUCKET_SIZE
-    ) * LANCE_BUCKET_SIZE
-
-    bucket_end = (
-        ((end_year // LANCE_BUCKET_SIZE) + 1)
-        * LANCE_BUCKET_SIZE
-    ) - 1
+    bucket_start = (start_year // LANCE_BUCKET_SIZE) * LANCE_BUCKET_SIZE
+    bucket_end = ((end_year // LANCE_BUCKET_SIZE) + 1) * LANCE_BUCKET_SIZE - 1
 
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT DISTINCT
-                e.doc_id,
-                e.pub_year
+            SELECT DISTINCT e.corpus, e.doc_id, e.pub_year
             FROM events e
-            WHERE e.corpus = %s
+            WHERE (%s::text IS NULL OR e.corpus = %s)
               AND e.pub_year BETWEEN %s AND %s
-            ORDER BY e.pub_year, e.doc_id
+            ORDER BY e.pub_year, e.corpus, e.doc_id
             """,
-            (
-                "clmet",
-                bucket_start,
-                bucket_end,
-            ),
+            (corpus, corpus, bucket_start, bucket_end),
         )
-
         documents = cur.fetchall()
 
     logger.info(
-        f"[repair] Requested years {start_year}–{end_year}; "
-        f"repairing complete buckets "
-        f"{bucket_start}–{bucket_end}; "
-        f"{len(documents):,} CLMET documents with existing events"
+        "[repair] Requested years %d-%d; repairing complete buckets "
+        "%d-%d; %d documents with existing events (corpus=%s)",
+        start_year, end_year, bucket_start, bucket_end,
+        len(documents), corpus or "all",
     )
 
     repaired = 0
 
-    for doc_id, pub_year in documents:
+    for number, (doc_corpus, doc_id, pub_year) in enumerate(documents, start=1):
         logger.info(
-            f"[repair] {doc_id} "
-            f"(pub_year={pub_year})"
+            "[repair] %d/%d %s/%s (pub_year=%s)",
+            number, len(documents), doc_corpus, doc_id, pub_year,
         )
-
-        processor.repair(
-            corpus="clmet",
-            doc_id=doc_id,
-        )
-
+        processor.repair(corpus=doc_corpus, doc_id=doc_id)
         repaired += 1
 
     logger.info(
-        f"[repair] Repaired {repaired:,} CLMET documents "
-        f"for buckets {bucket_start}–{bucket_end}"
+        "[repair] Repaired %d documents for buckets %d-%d",
+        repaired, bucket_start, bucket_end,
     )
-
     return repaired
 
 
@@ -1493,6 +1471,7 @@ def main() -> None:
                 conn=conn,
                 start_year=start_year,
                 end_year=end_year,
+                corpus=args.corpus,   # None = all corpora
             )
 
         else:
