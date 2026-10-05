@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TypedDict, Set, Dict
 
 CORPUS_MIN_YEAR = 1000
-CORPUS_MAX_YEAR = 2000
+CORPUS_MAX_YEAR = 2026
 
 FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
@@ -136,6 +136,7 @@ CONCEPT_SETS: CanonicalRules = {
             "whight",
             "whyt", "whyte", "hwyte",
             "whitt",
+            "auburn" # early 15c off-white cf alb, but meaning shifted 16c. to "reddish-brown" under influence of Middle English brun
         },
         "false_positives": {
             "wight",
