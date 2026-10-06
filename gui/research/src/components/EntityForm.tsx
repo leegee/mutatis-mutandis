@@ -38,10 +38,7 @@ export default function EntityForm(props: EntityFormProps) {
 
 	function handleInput(value: string) {
 		setLabel(value);
-
-		if (!editing()) {
-			setSelected(undefined);
-		}
+		if (!editing()) setSelected(undefined);
 	}
 
 	function handleSelect(entity: Entity) {
@@ -53,18 +50,11 @@ export default function EntityForm(props: EntityFormProps) {
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
 		if (saving()) return;
-
 		const value = label().trim();
 		if (!value) return;
 
-		/*
-		 * Add mode:
-		 *
-		 * If autocomplete selected an existing entity,
-		 * don't create a duplicate.
-		 */
+		// If autocomplete selected an existing entity, don't create a duplicate.
 		if (!editing() && selected()) return;
-
 		setSaving(true);
 
 		try {
@@ -74,14 +64,12 @@ export default function EntityForm(props: EntityFormProps) {
 					type: type(),
 					description: description().trim(),
 				});
-
 				await props.onUpdated?.(updated);
-			} else {
-				const created = await createEntity(value, type());
-
+			}
+			else {
+				const created = await createEntity(value, type(), description());
 				setLabel("");
 				setSelected(undefined);
-
 				await props.onCreated?.(created);
 			}
 		} finally {
@@ -91,41 +79,42 @@ export default function EntityForm(props: EntityFormProps) {
 
 	return (
 		<form onSubmit={submit}>
-			<Show when={!editing()}
+			{/*
+			<Show when={editing()}
 				fallback={
-					<div class="field border surface-container large-elevate" style="z-index:1000">
-						<header class="bottom-margin">
-							<nav>
-								<button class="circle transparent" type="button" title="Close" onClick={() => props.onCancel?.()} >
-									<i>arrow_back</i>
-								</button>
-
-								<h2 class="max">
-									{editing() ? "Edit Entity" : "Add a new entity"}
-								</h2>
-							</nav>
-						</header>
-
-						<input
-							type="text"
-							value={label()}
-							disabled={saving()}
-							onInput={(event) => setLabel(event.currentTarget.value)}
-						/>
-						<output>Label</output>
-					</div>
+					<EntityAutocomplete value={label()} onInput={handleInput} onSelect={handleSelect} disabled={saving()} />
 				}
 			>
-				<EntityAutocomplete value={label()} onInput={handleInput} onSelect={handleSelect} disabled={saving()} />
-			</Show>
+				<div class="field border surface-container large-elevate" style="z-index:1000">
+					<header class="bottom-margin">
+						<nav>
+							<button class="circle transparent" type="button" title="Close" onClick={() => props.onCancel?.()} >
+								<i>arrow_back</i>
+							</button>
+							<h2 class="max"> "Edit Entity" </h2>
+						</nav>
+					</header>
 
-			<Show when={!editing() && selected()}>
+					<input
+						type="text"
+						value={label()}
+						disabled={saving()}
+						onInput={(event) => setLabel(event.currentTarget.value)}
+					/>
+					<output>Label</output>
+				</div>
+			</Show>
+			*/}
+
+			{/* <Show when={!editing() && selected()}>
 				{(entity) => (
 					<small>
 						Existing {entity().type}: <strong>{entity().label}</strong>
 					</small>
 				)}
-			</Show>
+			</Show> */}
+
+			<EntityAutocomplete value={label()} onInput={handleInput} onSelect={handleSelect} disabled={saving()} />
 
 			<div class="field border">
 				<select
