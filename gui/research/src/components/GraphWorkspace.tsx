@@ -2,7 +2,7 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 
 import EntityInspector from "~/components/EntityInspector";
 import GraphView from "~/components/GraphView";
-import { Modal } from "~/components/Modal";
+import { Modal, useConfirm } from "~/components/Modal";
 import RelationForm from "~/components/RelationForm";
 import RelationInspector from "~/components/RelationInspector";
 
@@ -20,6 +20,8 @@ interface GraphWorkspaceProps {
 }
 
 export default function GraphWorkspace(props: GraphWorkspaceProps) {
+	const confirm = useConfirm();
+
 	const [selectedEntity, setSelectedEntity] = createSignal<Entity>();
 	const [selectedRelation, setSelectedRelation] = createSignal<Relation>();
 	const [editingRelation, setEditingRelation] = createSignal(false);
@@ -93,7 +95,8 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 
 	async function handleDeleteEntity(entity: Entity) {
 		await deleteEntity(entity.id);
-
+		const ok = await confirm(`Delete "${ entity.label }"?`);
+		if (!ok) return;
 		if (selectedEntity()?.id === entity.id) {
 			setSelectedEntity(undefined);
 		}
@@ -117,6 +120,8 @@ export default function GraphWorkspace(props: GraphWorkspaceProps) {
 	}
 
 	async function handleDeleteRelation(relation: Relation) {
+		const ok = await confirm(`Delete "${ relation.type }"?`);
+		if (!ok) return;
 		await deleteRelation(relation.id);
 		if (selectedRelation()?.id === relation.id) {
 			setSelectedRelation(undefined);

@@ -472,12 +472,10 @@ export default function GraphView(props: GraphViewProps) {
 											const created = await props.onAddEntity();
 											if (created) {
 												const node = instance.getElementById(created.id);
-
 												if (node.length) {
 													node.position(position);
 												}
 											}
-
 											setContextMenu(undefined);
 										}}
 									>
@@ -529,12 +527,8 @@ export default function GraphView(props: GraphViewProps) {
 										onClick={() => {
 											const item = menu();
 											if (item.kind !== "node") return;
-
 											const entity = props.entities.find((entity) => entity.id === item.nodeId);
-											if (entity) {
-												props.onDeleteEntity(entity);
-											}
-
+											if (entity) props.onDeleteEntity(entity);
 											setContextMenu(undefined);
 										}}
 									>
