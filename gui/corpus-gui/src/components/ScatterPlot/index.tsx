@@ -13,8 +13,8 @@ export default function ScatterPlot() {
     } | null>(null);
 
     const [dataset] = createResource(
-        () => [controls.conceptSelection[0], controls.yearMode, controls.fromYear, controls.toYear] as const,
-        ([concept, yearMode, fromYear, toYear]) => getUmapData(concept, yearMode, fromYear, toYear),
+        () => [controls.conceptSelection[0], controls.yearMode, controls.fromYear, controls.toYear, controls.seedsOnly] as const,
+        ([concept, yearMode, fromYear, toYear, seedsOnly]) => getUmapData(concept, yearMode, fromYear, toYear, seedsOnly),
     );
 
     return (
@@ -22,8 +22,8 @@ export default function ScatterPlot() {
             {(data) => (
                 <>
                     <Plot
-                        colorBy="docId"
-                        colorByFields={["clusterId", "token", "eventId"]} // UmapPoint
+                        colorBy="pubYear"
+                        colorByFields={["clusterId", "token", "eventId", "pubYear"]} // UmapPoint
                         dataset={data()}
                         plotPointScaleFactor={1}
                         selectedEventIds={controls.selectedEventIds}

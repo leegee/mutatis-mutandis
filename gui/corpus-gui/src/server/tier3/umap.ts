@@ -12,6 +12,7 @@ interface PointRow {
 	nx: number;
 	ny: number;
 	cluster_id: number | null;
+	is_seed: boolean;
 }
 
 interface ClusterRow {
@@ -49,7 +50,13 @@ export async function loadUmapData(
 			e.pub_year,
 			eg.nx,
 			eg.ny,
-			eg.cluster_id
+			eg.cluster_id,
+			EXISTS (
+			SELECT 1
+			FROM tier2.concept_seeds cs
+			WHERE cs.concept = eg.concept
+			AND cs.event_id = eg.event_id
+		) AS is_seed
 		FROM tier3.event_geometry eg
 		JOIN events e ON e.event_id = eg.event_id
 		WHERE eg.concept = ${concept}
@@ -65,7 +72,13 @@ export async function loadUmapData(
 			e.pub_year,
 			eg.nx,
 			eg.ny,
-			eg.cluster_id
+			eg.cluster_id,
+			EXISTS (
+				SELECT 1
+				FROM tier2.concept_seeds cs
+				WHERE cs.concept = eg.concept
+				AND cs.event_id = eg.event_id
+			) AS is_seed
 		FROM tier3.event_geometry eg
 		JOIN events e ON e.event_id = eg.event_id
 		WHERE eg.concept = ${concept}
@@ -94,6 +107,7 @@ export async function loadUmapData(
 		x: Number(row.nx),
 		y: Number(row.ny),
 		clusterId: row.cluster_id === null ? null : Number(row.cluster_id),
+		isSeed: row.is_seed,
 	}));
 
 	const clusters: UmapCluster[] = clusterRows.map((row) => ({

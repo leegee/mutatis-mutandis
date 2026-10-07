@@ -8,6 +8,7 @@ export type ControlsState = {
 	fromYear: number;
 	toYear: number;
 	selectedEventIds: Set<string>;
+	seedsOnly: boolean;
 };
 
 const initialControls: ControlsState = {
@@ -16,6 +17,7 @@ const initialControls: ControlsState = {
 	fromYear: CORPUS_START_YEAR,
 	toYear: CORPUS_END_YEAR,
 	selectedEventIds: new Set<string>(),
+	seedsOnly: true,
 };
 
 export const [controls, setControls] = createStore<ControlsState>(initialControls);

@@ -426,16 +426,12 @@ export default function Plot(props: PlotProps) {
               typeof object.eventId === "string"
           ) ?? [];
 
+
       if (pickedPoints.length) {
-        controller?.dispatch({
-          type: "click",
-          payload: pickedPoints,
-        });
+        console.log("[Plot] dispatching click", pickedPoints);
+        controller?.dispatch({ type: "click", payload: pickedPoints, });
       } else {
-        controller?.dispatch({
-          type: "null-select",
-          payload: null,
-        });
+        controller?.dispatch({ type: "null-select", payload: null, });
       }
     });
   });

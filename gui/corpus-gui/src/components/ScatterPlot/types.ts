@@ -6,6 +6,7 @@ export interface UmapPoint {
 	x: number;
 	y: number;
 	clusterId: number | null;
+	isSeed: boolean;
 }
 
 export interface UmapCluster {
