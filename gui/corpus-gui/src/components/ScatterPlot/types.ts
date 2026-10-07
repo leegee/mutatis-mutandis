@@ -1,5 +1,6 @@
 export interface UmapPoint {
 	eventId: string;
+	docId: string;
 	token: string;
 	pubYear: number | null;
 	x: number;

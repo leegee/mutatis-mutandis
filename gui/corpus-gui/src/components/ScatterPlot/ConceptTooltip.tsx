@@ -14,7 +14,10 @@ export default function ConceptTooltip(props: Props) {
             </header>
 
             <div class="left-padding right-padding bottom-margin">
-                <span class="large-opacity">
+                <span class="row">
+                    {props.point.docId}
+                </span>
+                <span class="row large-opacity">
                     <span class="bold">
                         {props.point.pubYear ?? "Unknown year"}
                     </span>

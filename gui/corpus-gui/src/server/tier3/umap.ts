@@ -6,6 +6,7 @@ import { get_connection } from "../db";
 
 interface PointRow {
 	event_id: string;
+	doc_id: string;
 	token: string;
 	pub_year: number | null;
 	nx: number;
@@ -43,6 +44,7 @@ export async function loadUmapData(
 		pointRows = await db<PointRow[]>`
 		SELECT
 			eg.event_id,
+			e.doc_id,
 			e.token,
 			e.pub_year,
 			eg.nx,
@@ -58,6 +60,7 @@ export async function loadUmapData(
 		pointRows = await db<PointRow[]>`
 		SELECT
 			eg.event_id,
+			e.doc_id,
 			e.token,
 			e.pub_year,
 			eg.nx,
@@ -85,6 +88,7 @@ export async function loadUmapData(
 
 	const points: UmapPoint[] = pointRows.map((row) => ({
 		eventId: String(row.event_id),
+		docId: String(row.doc_id),
 		token: row.token,
 		pubYear: row.pub_year === null ? null : Number(row.pub_year),
 		x: Number(row.nx),

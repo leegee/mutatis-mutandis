@@ -18,10 +18,12 @@ export default function ScatterPlot() {
     );
 
     return (
-        <Show when={dataset()} fallback={<div>Loading…</div>}>
+        <Show when={dataset()} fallback={<progress />}>
             {(data) => (
                 <>
                     <Plot
+                        colorBy="docId"
+                        colorByFields={["clusterId", "token", "eventId"]} // UmapPoint
                         dataset={data()}
                         plotPointScaleFactor={1}
                         selectedEventIds={controls.selectedEventIds}

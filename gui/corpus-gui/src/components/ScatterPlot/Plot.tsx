@@ -5,7 +5,6 @@
 import { Deck, LinearInterpolator, OrthographicView, type OrthographicViewState } from "@deck.gl/core";
 import { TextLayer } from "@deck.gl/layers";
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { controlsActions } from "~/state/controls.actions";
 
 import { buildColorMap } from "../../lib/colour";
 import { GlowScatterplotLayer } from "./GlowScatterplotLayer";
@@ -39,19 +38,39 @@ const brighten = ([r, g, b]: RGB | RGBA): RGBA => [
   255,
 ];
 
-const dim = ([r, g, b, a]: RGBA): RGBA => [r * 0.75, g * 0.75, b * 0.75, a];
+const dim = ([r, g, b, a]: RGBA): RGBA => [
+  r * 0.75,
+  g * 0.75,
+  b * 0.75,
+  a,
+];
 
 interface PlotProps {
   dataset: UmapDataset;
+
+  colorBy: string;
+  colorByFields: string[];
+
   pointRadius?: number;
   selectedEventIds?: Set<string>;
   plotPointScaleFactor: number;
   showClusterCentroids?: boolean;
-  onPointHover?: (point: UmapPoint | UmapCluster | null, screenXY: [number, number] | null) => void;
+
+  onPointHover?: (
+    point: UmapPoint | UmapCluster | null,
+    screenXY: [number, number] | null
+  ) => void;
+
   onSelectionChange?: (eventIds: Set<string>) => void;
 }
 
-const getPosition = (point: UmapPoint | UmapCluster): [number, number, number] => [point.x, point.y, 0];
+const getPosition = (
+  point: UmapPoint | UmapCluster
+): [number, number, number] => [
+    point.x,
+    point.y,
+    0,
+  ];
 
 function getDatasetBounds(points: UmapPoint[]) {
   if (!points.length) return;
@@ -96,13 +115,38 @@ export default function Plot(props: PlotProps) {
 
   const allPoints = createMemo(() => props.dataset.points);
 
-  const selectedEventIds = createMemo(() => props.selectedEventIds ?? new Set<string>());
+  const selectedEventIds = createMemo(
+    () => props.selectedEventIds ?? new Set<string>()
+  );
 
-  const colorMap = createMemo(() => buildColorMap(allPoints().map((point) => String(point.clusterId ?? ""))));
+  // Values of the currently selected colour field.
+  // colorByFields is included as a dependency so that changes to the
+  // available colour fields cause the colour mapping to be recalculated.
+  const colorFieldValues = createMemo(() => {
+    const field = props.colorBy;
+
+    // Read colorByFields so Solid tracks changes to the available fields.
+    props.colorByFields;
+
+    return allPoints().map((point) =>
+      String(point[field as keyof UmapPoint] ?? "")
+    );
+  });
+
+  // Build colours from the currently selected field rather than always
+  // using clusterId.
+  const colorMap = createMemo(() =>
+    buildColorMap(colorFieldValues())
+  );
 
   const getPointColor = createMemo(() => {
     return (point: UmapPoint): RGBA => {
-      const base = colorMap().get(String(point.clusterId ?? "")) ?? GREY;
+      const field = props.colorBy;
+
+      const base =
+        colorMap().get(
+          String(point[field as keyof UmapPoint] ?? "")
+        ) ?? GREY;
 
       const selected = selectedEventIds();
 
@@ -118,7 +162,10 @@ export default function Plot(props: PlotProps) {
 
   const layers = createMemo(() => {
     const points = allPoints();
-    const clusters = props.showClusterCentroids ? props.dataset.clusters : [];
+    const clusters = props.showClusterCentroids
+      ? props.dataset.clusters
+      : [];
+
     const pointScale = props.plotPointScaleFactor;
     const pointRadius = props.pointRadius ?? 5;
 
@@ -132,27 +179,42 @@ export default function Plot(props: PlotProps) {
           coordinateSystem: "cartesian",
           data: clusters,
           getPosition,
-          getFillColor: (cluster) => colorMap().get(String(cluster.clusterId)) ?? GREY,
+
+          // Cluster centroids retain their cluster colouring.
+          getFillColor: (cluster) =>
+            colorMap().get(String(cluster.clusterId)) ?? GREY,
+
           getRadius: 10 * pointScale,
           radiusUnits: "pixels",
           opacity: 0.25,
           pickable: true,
           autoHighlight: true,
           highlightColor: [255, 255, 100, 180],
+
           transitions: {
             getPosition: { duration: 300 },
             getFillColor: { duration: 300 },
           },
+
           updateTriggers: {
             getRadius: [props.plotPointScaleFactor],
-            getFillColor: [props.dataset, selectedEventIds()],
+            getFillColor: [
+              props.colorBy,
+              props.colorByFields,
+              colorFieldValues(),
+              selectedEventIds(),
+            ],
           },
+
           onHover: (info) => {
             if (isDragging) return;
 
             const cluster = info.object ?? null;
 
-            props.onPointHover?.(cluster, cluster ? [info.x, info.y] : null);
+            props.onPointHover?.(
+              cluster,
+              cluster ? [info.x, info.y] : null
+            );
           },
         }),
       );
@@ -179,12 +241,23 @@ export default function Plot(props: PlotProps) {
           getBackgroundColor: [0, 0, 0, 140],
           backgroundPadding: [4, 2],
           pickable: true,
+
+          updateTriggers: {
+            getText: [
+              props.colorBy,
+              props.colorByFields,
+            ],
+          },
+
           onHover: (info) => {
             if (isDragging) return;
 
             const cluster = info.object ?? null;
 
-            props.onPointHover?.(cluster, cluster ? [info.x, info.y] : null);
+            props.onPointHover?.(
+              cluster,
+              cluster ? [info.x, info.y] : null
+            );
           },
         }),
       );
@@ -197,13 +270,17 @@ export default function Plot(props: PlotProps) {
           coordinateSystem: "cartesian",
           data: points,
           getPosition,
+
+          // Points are coloured according to colorBy.
           getFillColor: (point) => getPointColor()(point),
+
           radiusUnits: "pixels",
           getRadius: pointRadius * pointScale,
           opacity: 0.96,
           pickable: true,
           autoHighlight: true,
           highlightColor: [255, 255, 255, 80],
+
           transitions: {
             getPosition: { duration: 300 },
             getFillColor: {
@@ -212,16 +289,30 @@ export default function Plot(props: PlotProps) {
             },
             getRadius: { duration: 200 },
           },
+
           updateTriggers: {
-            getRadius: [props.plotPointScaleFactor, props.pointRadius],
-            getFillColor: [props.dataset, props.selectedEventIds],
+            getRadius: [
+              props.plotPointScaleFactor,
+              props.pointRadius,
+            ],
+
+            getFillColor: [
+              props.colorBy,
+              props.colorByFields,
+              colorFieldValues(),
+              selectedEventIds(),
+            ],
           },
+
           onHover: (info) => {
             if (isDragging) return;
 
             const point = info.object ?? null;
 
-            props.onPointHover?.(point, point ? [info.x, info.y] : null);
+            props.onPointHover?.(
+              point,
+              point ? [info.x, info.y] : null
+            );
           },
         }),
       );
@@ -230,23 +321,38 @@ export default function Plot(props: PlotProps) {
     return layersList;
   });
 
-  function flyTo(target: [number, number, number], newZoom: number, duration = 800) {
+  function flyTo(
+    target: [number, number, number],
+    newZoom: number,
+    duration = 800
+  ) {
     if (!deck) return;
 
     deck.setProps({
       initialViewState: {
         target,
-        zoom: Math.max(INITIAL_VIEW_STATE.minZoom as number, Math.min(INITIAL_VIEW_STATE.maxZoom as number, newZoom)),
+        zoom: Math.max(
+          INITIAL_VIEW_STATE.minZoom as number,
+          Math.min(
+            INITIAL_VIEW_STATE.maxZoom as number,
+            newZoom
+          )
+        ),
         minZoom: INITIAL_VIEW_STATE.minZoom,
         maxZoom: INITIAL_VIEW_STATE.maxZoom,
         transitionDuration: duration,
-        transitionInterpolator: new LinearInterpolator(["target", "zoom"]),
+        transitionInterpolator: new LinearInterpolator([
+          "target",
+          "zoom",
+        ]),
       } as OrthographicViewState,
     });
   }
 
   onMount(() => {
-    setFontFamily(window.getComputedStyle(document.body).fontFamily);
+    setFontFamily(
+      window.getComputedStyle(document.body).fontFamily
+    );
 
     deck = new Deck<OrthographicView>({
       canvas,
@@ -270,12 +376,14 @@ export default function Plot(props: PlotProps) {
     });
 
     controller.setChangeHandler((set) => {
-      // const points = set ? currentPoints.filter((point) => set.has(point.eventId)) : null;
-      // props.onSelectionChange?.(points);
-      props.onSelectionChange?.(set ?? new Set<string>());
+      props.onSelectionChange?.(
+        set ?? new Set<string>()
+      );
     });
 
-    controller.setDragPreview = (rect: ScreenRect | null) => {
+    controller.setDragPreview = (
+      rect: ScreenRect | null
+    ) => {
       isDragging = rect !== null;
       setDragRect(rect);
 
@@ -284,7 +392,9 @@ export default function Plot(props: PlotProps) {
       }
     };
 
-    controller.use(new DeckClickPlugin(deck, controller)).use(new CanvasDragPlugin(canvas, deck, controller));
+    controller
+      .use(new DeckClickPlugin(deck, controller))
+      .use(new CanvasDragPlugin(canvas, deck, controller));
 
     canvas.addEventListener("pointerdown", (event) => {
       pointerDownX = event.offsetX;
@@ -295,7 +405,10 @@ export default function Plot(props: PlotProps) {
       const dx = event.offsetX - pointerDownX;
       const dy = event.offsetY - pointerDownY;
 
-      if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX) {
+      if (
+        Math.sqrt(dx * dx + dy * dy) >
+        DRAG_THRESHOLD_PX
+      ) {
         return;
       }
 
@@ -307,7 +420,11 @@ export default function Plot(props: PlotProps) {
       const pickedPoints =
         pick
           ?.map((result) => result.object)
-          .filter((object): object is UmapPoint => !!object && typeof object.eventId === "string") ?? [];
+          .filter(
+            (object): object is UmapPoint =>
+              !!object &&
+              typeof object.eventId === "string"
+          ) ?? [];
 
       if (pickedPoints.length) {
         controller?.dispatch({
@@ -343,16 +460,29 @@ export default function Plot(props: PlotProps) {
     if (!fit) return;
 
     const padding = 1.2;
-    const canvasSize = Math.min(canvas.clientWidth, canvas.clientHeight);
+    const canvasSize = Math.min(
+      canvas.clientWidth,
+      canvas.clientHeight
+    );
 
     if (canvasSize <= 0 || fit.extent <= 0) return;
 
     const zoom = Math.max(
       INITIAL_VIEW_STATE.minZoom as number,
-      Math.min(INITIAL_VIEW_STATE.maxZoom as number, Math.log2(canvasSize / (fit.extent * padding))),
+      Math.min(
+        INITIAL_VIEW_STATE.maxZoom as number,
+        Math.log2(
+          canvasSize /
+          (fit.extent * padding)
+        )
+      )
     );
 
-    flyTo([fit.cx, fit.cy, 0], zoom, 400);
+    flyTo(
+      [fit.cx, fit.cy, 0],
+      zoom,
+      400
+    );
   });
 
   onCleanup(() => {
@@ -383,3 +513,4 @@ export default function Plot(props: PlotProps) {
     </article>
   );
 }
+
