@@ -1,12 +1,8 @@
-#!/usr/bin/env python
-
 """
-temporal_neighbour_delta.py
+Build neighbour-profile continuity signals for Tier 4 temporal lineage edges.
 
-Builds neighbour-profile continuity signals for Tier 4 temporal lineage edges.
-
-For each edge in temporal_cluster_edges, the module compares the lexical
-neighbour fields of the source and target year-clusters.
+For each edge in tier3.temporal_cluster_edges, compare the lexical neighbour
+fields of the source and target year-clusters.
 
 The signal is deliberately separate from centroid similarity:
 
@@ -16,32 +12,35 @@ The signal is deliberately separate from centroid similarity:
     neighbour delta
         = continuity/change in the lexical contextual field
 
-This module is invoked by Tier 4 rather than being a separate pipeline stage.
-It derives and persists the neighbour-delta table in the Tier 2/3 SQLite
-database so that lineage export can subsequently read it.
+The module is invoked by Tier 4 rather than being a separate pipeline stage.
+It derives and persists the neighbour-delta table in PostgreSQL so that
+lineage export can subsequently read it.
 
-The database is therefore the boundary between computation and presentation.
+The database is the boundary between computation and presentation.
 """
 
 from __future__ import annotations
 
 import json
 import math
-import sqlite3
 from collections import Counter
 from typing import Any, Iterable, Optional, Sequence
 
+from psycopg import Connection
+
 
 DELTA_SCHEMA = """
-CREATE TABLE IF NOT EXISTS temporal_neighbour_deltas (
+CREATE SCHEMA IF NOT EXISTS tier4;
+
+CREATE TABLE IF NOT EXISTS tier4.temporal_neighbour_deltas (
     concept TEXT NOT NULL,
     source_year INTEGER NOT NULL,
     source_cluster INTEGER NOT NULL,
     target_year INTEGER NOT NULL,
     target_cluster INTEGER NOT NULL,
 
-    jaccard REAL,
-    cosine REAL,
+    jaccard DOUBLE PRECISION,
+    cosine DOUBLE PRECISION,
     source_token_n INTEGER,
     target_token_n INTEGER,
     shared_token_n INTEGER,
@@ -60,10 +59,10 @@ CREATE TABLE IF NOT EXISTS temporal_neighbour_deltas (
 );
 
 CREATE INDEX IF NOT EXISTS idx_neighbour_deltas_concept
-    ON temporal_neighbour_deltas (concept);
+    ON tier4.temporal_neighbour_deltas (concept);
 
 CREATE INDEX IF NOT EXISTS idx_neighbour_deltas_transition
-    ON temporal_neighbour_deltas (
+    ON tier4.temporal_neighbour_deltas (
         concept,
         source_year,
         target_year
@@ -72,61 +71,70 @@ CREATE INDEX IF NOT EXISTS idx_neighbour_deltas_transition
 
 
 def initialise_delta_tables(
-    con: sqlite3.Connection,
+    con: Connection,
 ) -> None:
-    con.executescript(DELTA_SCHEMA)
+    with con.cursor() as cursor:
+        cursor.execute(DELTA_SCHEMA)
+
     con.commit()
 
 
 def clear_deltas(
-    con: sqlite3.Connection,
+    con: Connection,
     concept: Optional[str] = None,
 ) -> None:
-    if concept is None:
-        con.execute(
-            "DELETE FROM temporal_neighbour_deltas"
-        )
-    else:
-        con.execute(
-            """
-            DELETE FROM temporal_neighbour_deltas
-            WHERE concept=?
-            """,
-            (concept,),
-        )
+    with con.cursor() as cursor:
+        if concept is None:
+            cursor.execute(
+                """
+                DELETE FROM tier4.temporal_neighbour_deltas
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                DELETE FROM tier4.temporal_neighbour_deltas
+                WHERE concept = %s
+                """,
+                (concept,),
+            )
 
     con.commit()
 
 
 def load_cluster_event_ids(
-    con: sqlite3.Connection,
+    con: Connection,
     concept: str,
     pub_year: int,
     cluster_id: int,
 ) -> list[int]:
-    rows = con.execute(
-        """
-        SELECT event_id
-        FROM concept_year_event_cluster
-        WHERE concept=?
-          AND pub_year=?
-          AND cluster_id=?
-        ORDER BY event_id
-        """,
-        (
-            concept,
-            pub_year,
-            cluster_id,
-        ),
-    ).fetchall()
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT event_id
+            FROM tier3.concept_year_event_cluster
+            WHERE concept = %s
+              AND pub_year = %s
+              AND cluster_id = %s
+            ORDER BY event_id
+            """,
+            (
+                concept,
+                pub_year,
+                cluster_id,
+            ),
+        )
+
+        rows = cursor.fetchall()
 
     return [int(row[0]) for row in rows]
 
 
 def neighbour_token_counts(
-    con: sqlite3.Connection,
+    con: Connection,
     event_ids: Sequence[int],
     *,
+    concept: str,
     min_score: Optional[float] = None,
 ) -> Counter:
     """
@@ -136,10 +144,11 @@ def neighbour_token_counts(
     matches across cluster members therefore measure recurrence of a
     contextual neighbour within the cluster.
 
-    The current neighbours schema has no depth field: every row in
-    neighbours is treated as an available neighbour observation, filtered
-    only by event membership and optional similarity threshold.
+    A retrieval run is restricted to the requested concept so that an event
+    shared by multiple retrieval runs cannot acquire neighbours from an
+    unrelated concept.
     """
+
     if not event_ids:
         return Counter()
 
@@ -149,32 +158,39 @@ def neighbour_token_counts(
 
     for i in range(0, len(event_ids), chunk):
         batch = list(event_ids[i : i + chunk])
-        placeholders = ",".join("?" * len(batch))
-
-        params: list[Any] = list(batch)
 
         score_clause = ""
+        params: list[Any] = [
+            concept,
+            batch,
+        ]
 
         if min_score is not None:
-            score_clause = " AND n.score >= ? "
+            score_clause = "AND n.score >= %s"
             params.append(float(min_score))
 
-        rows = con.execute(
-            f"""
-            SELECT
-                lower(e.token) AS tok,
-                COUNT(*) AS c
-            FROM neighbours n
-            JOIN events e
-                ON e.event_id = n.neighbour_event_id
-            WHERE n.event_id IN ({placeholders})
-              AND e.token IS NOT NULL
-              AND length(e.token) > 0
-              {score_clause}
-            GROUP BY lower(e.token)
-            """,
-            params,
-        ).fetchall()
+        with con.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    lower(e.token) AS tok,
+                    COUNT(*) AS c
+                FROM tier2.neighbour_edges n
+                JOIN tier2.retrieval_runs rr
+                  ON rr.run_id = n.run_id
+                JOIN events e
+                  ON e.event_id = n.neighbour_event_id
+                WHERE rr.concept = %s
+                  AND n.seed_event_id = ANY(%s)
+                  AND e.token IS NOT NULL
+                  AND length(e.token) > 0
+                  {score_clause}
+                GROUP BY lower(e.token)
+                """,
+                params,
+            )
+
+            rows = cursor.fetchall()
 
         for tok, count in rows:
             if tok:
@@ -184,7 +200,7 @@ def neighbour_token_counts(
 
 
 def cluster_neighbour_profile(
-    con: sqlite3.Connection,
+    con: Connection,
     concept: str,
     pub_year: int,
     cluster_id: int,
@@ -201,6 +217,7 @@ def cluster_neighbour_profile(
     return neighbour_token_counts(
         con,
         event_ids,
+        concept=concept,
         min_score=min_score,
     )
 
@@ -291,6 +308,7 @@ def compute_neighbour_delta(
     Aggregate similarity metrics use the complete profiles. The explanatory
     gained/lost/stable lists are reduced to top_n entries for export.
     """
+
     all_tokens = set(source) | set(target)
 
     gained: list[dict[str, Any]] = []
@@ -350,14 +368,8 @@ def compute_neighbour_delta(
     )
 
     return {
-        "jaccard": _jaccard(
-            source,
-            target,
-        ),
-        "cosine": _cosine_counts(
-            source,
-            target,
-        ),
+        "jaccard": _jaccard(source, target),
+        "cosine": _cosine_counts(source, target),
         "source_token_n": len(source),
         "target_token_n": len(target),
         "shared_token_n": len(
@@ -370,27 +382,30 @@ def compute_neighbour_delta(
 
 
 def load_temporal_edges(
-    con: sqlite3.Connection,
+    con: Connection,
     concept: str,
 ) -> list[tuple[int, int, int, int, str]]:
-    rows = con.execute(
-        """
-        SELECT
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster,
-            edge_type
-        FROM temporal_cluster_edges
-        WHERE concept=?
-        ORDER BY
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster
-        """,
-        (concept,),
-    ).fetchall()
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster,
+                edge_type
+            FROM tier3.temporal_cluster_edges
+            WHERE concept = %s
+            ORDER BY
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster
+            """,
+            (concept,),
+        )
+
+        rows = cursor.fetchall()
 
     return [
         (
@@ -411,7 +426,7 @@ def load_temporal_edges(
 
 
 def build_neighbour_deltas_for_concept(
-    con: sqlite3.Connection,
+    con: Connection,
     concept: str,
     *,
     top_n: int = 20,
@@ -422,19 +437,21 @@ def build_neighbour_deltas_for_concept(
     Compute and store neighbour-token deltas for every temporal edge
     belonging to a concept.
 
-    This is a derived Tier 4 calculation. Temporal edges and neighbour
-    observations are treated as completed upstream inputs.
+    Temporal edges, cluster membership, and neighbour observations are
+    treated as completed upstream inputs.
     """
+
     initialise_delta_tables(con)
 
     if replace:
-        con.execute(
-            """
-            DELETE FROM temporal_neighbour_deltas
-            WHERE concept=?
-            """,
-            (concept,),
-        )
+        with con.cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM tier4.temporal_neighbour_deltas
+                WHERE concept = %s
+                """,
+                (concept,),
+            )
 
     edges = load_temporal_edges(
         con,
@@ -476,6 +493,7 @@ def build_neighbour_deltas_for_concept(
         target_cluster,
         _edge_type,
     ) in edges:
+
         source = profile(
             source_year,
             source_cluster,
@@ -519,31 +537,48 @@ def build_neighbour_deltas_for_concept(
             )
         )
 
-    con.executemany(
-        """
-        INSERT OR REPLACE INTO temporal_neighbour_deltas (
-            concept,
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster,
-            jaccard,
-            cosine,
-            source_token_n,
-            target_token_n,
-            shared_token_n,
-            gained_json,
-            lost_json,
-            stable_json
+    with con.cursor() as cursor:
+        cursor.executemany(
+            """
+            INSERT INTO tier4.temporal_neighbour_deltas (
+                concept,
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster,
+                jaccard,
+                cosine,
+                source_token_n,
+                target_token_n,
+                shared_token_n,
+                gained_json,
+                lost_json,
+                stable_json
+            )
+            VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s
+            )
+            ON CONFLICT (
+                concept,
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster
+            )
+            DO UPDATE SET
+                jaccard = EXCLUDED.jaccard,
+                cosine = EXCLUDED.cosine,
+                source_token_n = EXCLUDED.source_token_n,
+                target_token_n = EXCLUDED.target_token_n,
+                shared_token_n = EXCLUDED.shared_token_n,
+                gained_json = EXCLUDED.gained_json,
+                lost_json = EXCLUDED.lost_json,
+                stable_json = EXCLUDED.stable_json
+            """,
+            rows_out,
         )
-        VALUES (
-            ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
-            ?, ?, ?
-        )
-        """,
-        rows_out,
-    )
 
     con.commit()
 
@@ -551,26 +586,31 @@ def build_neighbour_deltas_for_concept(
 
 
 def build_neighbour_deltas_for_all(
-    con: sqlite3.Connection,
+    con: Connection,
     concepts: Optional[Iterable[str]] = None,
     **kwargs,
 ) -> dict[str, int]:
     """
     Build neighbour deltas for every requested concept.
 
-    If concepts is omitted, concepts are discovered from temporal_cluster_edges.
+    If concepts is omitted, concepts are discovered from Tier 3 temporal
+    edges rather than from an obsolete SQLite database.
     """
+
     if concepts is None:
-        concepts = [
-            row[0]
-            for row in con.execute(
+        with con.cursor() as cursor:
+            cursor.execute(
                 """
                 SELECT DISTINCT concept
-                FROM temporal_cluster_edges
+                FROM tier3.temporal_cluster_edges
                 ORDER BY concept
                 """
             )
-        ]
+
+            concepts = [
+                row[0]
+                for row in cursor.fetchall()
+            ]
 
     results: dict[str, int] = {}
 
@@ -585,36 +625,39 @@ def build_neighbour_deltas_for_all(
 
 
 def load_deltas_for_concept(
-    con: sqlite3.Connection,
+    con: Connection,
     concept: str,
 ) -> list[dict[str, Any]]:
     initialise_delta_tables(con)
 
-    rows = con.execute(
-        """
-        SELECT
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster,
-            jaccard,
-            cosine,
-            source_token_n,
-            target_token_n,
-            shared_token_n,
-            gained_json,
-            lost_json,
-            stable_json
-        FROM temporal_neighbour_deltas
-        WHERE concept=?
-        ORDER BY
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster
-        """,
-        (concept,),
-    ).fetchall()
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster,
+                jaccard,
+                cosine,
+                source_token_n,
+                target_token_n,
+                shared_token_n,
+                gained_json,
+                lost_json,
+                stable_json
+            FROM tier4.temporal_neighbour_deltas
+            WHERE concept = %s
+            ORDER BY
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster
+            """,
+            (concept,),
+        )
+
+        rows = cursor.fetchall()
 
     results = []
 
@@ -677,7 +720,7 @@ def load_deltas_for_concept(
 
 
 def deltas_for_export(
-    con: sqlite3.Connection,
+    con: Connection,
     concept: str,
 ) -> dict[str, Any]:
     """
@@ -686,6 +729,7 @@ def deltas_for_export(
     The by_edge mapping gives export_lineage O(1) lookup when annotating
     individual temporal links.
     """
+
     deltas = load_deltas_for_concept(
         con,
         concept,

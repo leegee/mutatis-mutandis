@@ -175,12 +175,26 @@ class VectorWriter:
 
         return len(new_rows)
 
+
     def _existing_ids(self, table, event_ids: set[int]) -> set[int]:
         if not event_ids or table.count_rows() == 0:
             return set()
 
-        arrow = table.to_arrow()
-        return set(arrow.column("event_id").to_pylist()) & event_ids
+        found: set[int] = set()
+        ids = sorted(event_ids)
+
+        # Chunk so the IN (...) predicate stays a reasonable size.
+        for i in range(0, len(ids), 5000):
+            chunk = ids[i:i + 5000]
+            arrow = (
+                table.search()
+                .where(f"event_id IN ({','.join(map(str, chunk))})")
+                .select(["event_id"])
+                .limit(len(chunk))
+                .to_arrow()
+            )
+            found.update(int(x) for x in arrow.column("event_id").to_pylist())
+        return found
 
     def _open_table(self, name: str, *, dim: int):
         if name in self.tables:
@@ -202,6 +216,61 @@ class VectorWriter:
 
         self.tables[name] = table
         return table
+
+    def purge_orphans(self, conn, *, year_range=None, apply=False, max_fraction=0.5) -> int:
+        prefix = f"{self.scale}__{self.model_name}__"
+        total = 0
+
+        for name in sorted(n for n in self.db.list_tables().tables if n.startswith(prefix)):
+            start, end = int(name[-9:-5]), int(name[-4:])
+            if year_range and (end < year_range[0] or start > year_range[1]):
+                continue
+
+            table = self.db.open_table(name)
+
+            # Lance first, Postgres second (see race above).
+            lance_ids = {
+                int(i) for i in
+                table.search()
+                    .select(["event_id"])
+                    .limit(table.count_rows())
+                    .to_arrow()
+                    .column("event_id")
+                    .to_pylist()
+            }
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT event_id FROM events WHERE pub_year BETWEEN %s AND %s",
+                    (start, end),
+                )
+                valid = {int(r[0]) for r in cur.fetchall()}
+
+            if not valid:
+                logger.warning("[purge] %s: no events in Postgres for %d-%d; skipping",
+                            name, start, end)
+                continue
+
+            orphans = sorted(lance_ids - valid)
+            missing = len(valid - lance_ids)
+            logger.info("[purge] %s: lance=%d postgres=%d orphans=%d missing_vectors=%d",
+                        name, len(lance_ids), len(valid), len(orphans), missing)
+
+            if orphans and len(orphans) > max_fraction * len(lance_ids):
+                raise RuntimeError(
+                    f"{name}: {len(orphans)}/{len(lance_ids)} rows are orphans; "
+                    "refusing to delete. Check the database connection."
+                )
+
+            if apply and orphans:
+                for i in range(0, len(orphans), 5000):
+                    chunk = orphans[i:i + 5000]
+                    table.delete(f"event_id IN ({','.join(map(str, chunk))})")
+                table.optimize()
+
+            total += len(orphans)
+
+        return total
 
     def index_existing_tables(self) -> None:
         """Load every table already on disk for this scale, then index them."""

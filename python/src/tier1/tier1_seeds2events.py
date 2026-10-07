@@ -17,6 +17,7 @@ from lib.corpus_config import CONCEPT_SETS, EMBED_BATCH_SIZE, LANCE_INDEXES_DIR
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.macberth import load_macberth
+from lib.stopwords_min import STOPWORDS
 from retrieval.models import SCALES
 from tier1.db_observation_backend import allocate_event_ids, insert_events, create_events_table
 from tier1.vector_writer import VectorWriter, lance_table_name, year_bucket
@@ -32,7 +33,9 @@ WINDOW_CONFIGS = (
     {"name": "medium", "size": 512, "stride": 256},
     {"name": "broad", "size": 512, "stride": 384},
 )
-ACTIVE_SCALES = ("medium",)
+SCALE_NAMES = tuple(c["name"] for c in WINDOW_CONFIGS)
+
+ACTIVE_SCALES = ("local", "medium")
 
 LANCE_MODEL_NAME = "macberth"
 LANCE_BUCKET_SIZE = 50
@@ -47,6 +50,23 @@ LANCE_BUCKET_SIZE = 50
 
 def normalise_token(token: str) -> str:
     return unicodedata.normalize("NFKC", token).strip().lower()
+
+
+def is_punctuation(token: str) -> bool:
+    value = normalise_token(token)
+    return bool(value) and all(
+        unicodedata.category(char).startswith("P")
+        for char in value
+    )
+
+
+def is_stopword(token: str) -> bool:
+    return normalise_token(token) in STOPWORDS
+
+
+def is_storable_event(token: str) -> bool:
+    return not is_stopword(token) and not is_punctuation(token)
+
 
 
 def seed_forms() -> set[str]:
@@ -176,10 +196,12 @@ class MacBERThPipeline:
         self.batch_size = batch_size
         self.mask_targets = mask_targets
 
+
     def embed(
         self,
         document: DocBuffer,
         target_positions: set[int],
+        scales: tuple[str, ...] = ACTIVE_SCALES,
     ) -> dict[int, dict[str, EmbeddedVector]]:
         if not target_positions:
             return {}
@@ -207,7 +229,7 @@ class MacBERThPipeline:
             )
 
         for config in WINDOW_CONFIGS:
-            if config["name"] not in ACTIVE_SCALES:
+            if config["name"] not in scales:
                 continue
 
             jobs = self._make_jobs(
@@ -247,11 +269,7 @@ class MacBERThPipeline:
         missing = []
 
         for position in sorted(target_positions):
-            missing_scales = [
-                scale
-                for scale in ACTIVE_SCALES
-                if scale not in results[position]
-            ]
+            missing_scales = [s for s in scales if s not in results[position]]
 
             if missing_scales:
                 missing.append(
@@ -263,10 +281,7 @@ class MacBERThPipeline:
                 )
 
         if missing:
-            logger.error(
-                "[tier1] incomplete embeddings: %d observations",
-                len(missing),
-            )
+            logger.error( "[tier1] incomplete embeddings: %d observations", len(missing) )
 
             for position, token, scales in missing[:20]:
                 logger.error(
@@ -331,11 +346,7 @@ class MacBERThPipeline:
             )
 
         if len(word_spans) != word_count:
-            raise RuntimeError(
-                "MacBERTh word alignment is incomplete: "
-                f"expected {word_count} corpus tokens, "
-                f"got {len(word_spans)} encoded spans."
-            )
+            raise RuntimeError( f"MacBERTh word alignment is incomplete: expected {word_count} corpus tokens, got {len(word_spans)} encoded spans." )
 
         jobs: list[dict] = []
         covered_targets: set[int] = set()
@@ -529,7 +540,11 @@ class MacBERThPipeline:
                         "MacBERTh tokenizer has no mask token."
                     )
 
-                window_ids[relative] = mask_token_id
+                # window_ids[relative] = mask_token_id
+                # Mask all word-pieces:
+                for i, wid in enumerate(relative_word_ids):
+                    if wid == word_position:
+                        window_ids[i] = mask_token_id
 
         jobs.append(
             {
@@ -641,6 +656,10 @@ class EventWriter:
             )
             for scale in ACTIVE_SCALES
         }
+
+    def purge_orphans(self, conn, *, year_range=None, apply=False):
+        return {s: w.purge_orphans(conn, year_range=year_range, apply=apply)
+                for s, w in self.vector_writers.items()}
 
     def write(
         self,
@@ -908,10 +927,7 @@ class CorpusProcessor:
             doc_id=doc_id,
         )
 
-        logger.info(
-            "[tier1] seed documents: %d",
-            len(documents),
-        )
+        logger.info( "[tier1] seed documents: %d", len(documents), )
 
         if documents:
             logger.info(
@@ -965,7 +981,7 @@ class CorpusProcessor:
 
             target_positions = self._select_neighbours(
                 seed_positions,
-                len(document.rows),
+                document,
             )
 
             embeddings = self.pipeline.embed(
@@ -1012,16 +1028,9 @@ class CorpusProcessor:
     ) -> None:
         started = time.perf_counter()
 
-        logger.info(
-            "[tier1] repair: %s/%s",
-            corpus,
-            doc_id,
-        )
+        logger.info( "[tier1] repair: %s/%s", corpus, doc_id, )
 
-        document = self._load_document(
-            corpus,
-            doc_id,
-        )
+        document = self._load_document( corpus, doc_id, )
 
         if document is None:
             raise RuntimeError(
@@ -1041,7 +1050,7 @@ class CorpusProcessor:
 
         target_positions = self._select_neighbours(
             seed_positions,
-            len(document.rows),
+            document,
         )
 
         logger.info(
@@ -1238,10 +1247,11 @@ class CorpusProcessor:
             ],
         )
 
+
     def _select_neighbours(
         self,
         seed_positions: set[int],
-        token_count: int,
+        document: DocBuffer,
     ) -> set[int]:
         positions: set[int] = set()
 
@@ -1252,16 +1262,166 @@ class CorpusProcessor:
             )
 
             end = min(
-                token_count,
+                len(document.rows),
                 seed_position + self.neighbour_radius + 1,
             )
 
             positions.update(
-                range(start, end)
+                position
+                for position in range(start, end)
+                if position in seed_positions
+                or is_storable_event(document.rows[position].token)
             )
 
         return positions
 
+
+    def backfill_scale(
+        self,
+        scale: str,
+        *,
+        corpus: str | None = None,
+        doc_id: str | None = None,
+    ) -> int:
+        """
+        Add one scale to existing events: reuse event_ids, write that scale's
+        Lance rows, then fill its window columns in Postgres. Never inserts events.
+        """
+        if scale not in SCALE_NAMES:
+            raise ValueError(f"unknown scale {scale!r}")
+
+        vw = self.writer.vector_writers.get(scale) or VectorWriter(
+            self.writer.lance_root,
+            scale=scale,
+            model_name=LANCE_MODEL_NAME,
+            bucket_size=LANCE_BUCKET_SIZE,
+        )
+
+        documents = self._documents_missing_scale(scale, corpus, doc_id)
+        logger.info("[backfill:%s] documents to process: %d", scale, len(documents))
+
+        for number, (doc_corpus, did) in enumerate(documents, start=1):
+            started = time.perf_counter()
+            n = self._backfill_document(doc_corpus, did, scale, vw)
+            logger.info(
+                "[backfill:%s] %d/%d %s/%s events=%d elapsed=%.2fs",
+                scale, number, len(documents), doc_corpus, did, n,
+                time.perf_counter() - started,
+            )
+
+        vw.index_existing_tables()
+        return len(documents)
+
+    def _documents_missing_scale(self, scale, corpus, doc_id):
+        clauses = [f"e.{scale}_window_id IS NULL"]
+        params: list[object] = []
+        if corpus is not None:
+            clauses.append("e.corpus = %s")
+            params.append(corpus)
+        if doc_id is not None:
+            clauses.append("e.doc_id = %s")
+            params.append(doc_id)
+
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT DISTINCT e.corpus, e.doc_id
+                FROM events e
+                WHERE {" AND ".join(clauses)}
+                ORDER BY e.corpus, e.doc_id
+                """,
+                params,
+            )
+            return cur.fetchall()
+
+    def _load_events(self, corpus, doc_id) -> dict[int, tuple[int, int | None]]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT token_idx, event_id, pub_year
+                FROM events
+                WHERE corpus = %s AND doc_id = %s
+                ORDER BY token_idx
+                """,
+                (corpus, doc_id),
+            )
+            rows = cur.fetchall()
+
+        events: dict[int, tuple[int, int | None]] = {}
+        for token_idx, event_id, pub_year in rows:
+            if token_idx in events:
+                raise RuntimeError(
+                    f"{corpus}/{doc_id}: multiple events at token_idx={token_idx}; "
+                    "backfill cannot attach a scale unambiguously"
+                )
+            events[token_idx] = (int(event_id), pub_year)
+        return events
+
+    def _backfill_document(self, corpus, doc_id, scale, vw: VectorWriter) -> int:
+        document = self._load_document(corpus, doc_id)
+        if document is None:
+            raise RuntimeError(f"Document not found: {corpus}/{doc_id}")
+
+        events = self._load_events(corpus, doc_id)
+
+        seed_positions = {
+            p for p, row in enumerate(document.rows) if is_seed(row.token)
+        }
+        targets = self._select_neighbours(
+            seed_positions,
+            document
+        )
+
+        # The recomputed observation set must match the stored one exactly.
+        expected = {document.rows[p].token_idx for p in targets}
+        stored = set(events)
+        if expected != stored:
+            raise RuntimeError(
+                f"{corpus}/{doc_id}: observation set changed since original run "
+                f"(only_expected={len(expected - stored)}, "
+                f"only_stored={len(stored - expected)}, "
+                f"e.g. {sorted(expected ^ stored)[:10]}). "
+                "Check CONCEPT_SETS / --neighbour-radius."
+            )
+
+        embeddings = self.pipeline.embed(document, targets, scales=(scale,))
+
+        by_year: dict[int, tuple[list[int], list[np.ndarray]]] = defaultdict(
+            lambda: ([], [])
+        )
+        updates: list[tuple[int, int, int]] = []
+
+        for p in sorted(targets):
+            row = document.rows[p]
+            event_id, pub_year = events[row.token_idx]
+            if pub_year is None or pub_year != row.pub_year:
+                raise RuntimeError(
+                    f"{corpus}/{doc_id}/{row.token_idx}: pub_year mismatch "
+                    f"(event={pub_year}, document={row.pub_year})"
+                )
+            emb = embeddings[p][scale]
+            ids, vecs = by_year[pub_year]
+            ids.append(event_id)
+            vecs.append(emb.vector)
+            updates.append((emb.window_id, emb.window_token_pos, event_id))
+
+        # Lance first: it dedups on event_id, so a retry after a crash is safe.
+        for pub_year, (ids, vecs) in by_year.items():
+            vw.write(event_ids=ids, pub_year=pub_year, vectors=np.stack(vecs))
+
+        # Postgres second: NULLs remaining here mark the doc as still to do.
+        with self.conn.cursor() as cur:
+            cur.executemany(
+                f"""
+                UPDATE events
+                SET {scale}_window_id = %s, {scale}_window_token_pos = %s
+                WHERE event_id = %s
+                """,
+                updates,
+            )
+        self.conn.commit()
+
+        return len(updates)
 
 def parse_repair_target(value: str) -> tuple[str, str]:
     if "/" not in value:
@@ -1331,6 +1491,9 @@ def repair_year_range(
         processor.repair(corpus=doc_corpus, doc_id=doc_id)
         repaired += 1
 
+    results = processor.writer.purge_orphans( conn, year_range=(bucket_start, bucket_end), apply=True )
+    logger.info("[repair] purged orphans: %s", results)
+
     logger.info(
         "[repair] Repaired %d documents for buckets %d-%d",
         repaired, bucket_start, bucket_end,
@@ -1353,6 +1516,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument( "--lance-root", type=Path, default=Path(LANCE_INDEXES_DIR), )
     parser.add_argument( "--batch-size", type=int, default=EMBED_BATCH_SIZE, )
     parser.add_argument( "--report-every", type=int, default=1, )
+
+    parser.add_argument("--add-scale", choices=SCALE_NAMES, default=None, help="Add this scale to existing events (reuses event_ids).")
 
     parser.add_argument(
         "--mask",
@@ -1401,11 +1566,17 @@ def parse_args() -> argparse.Namespace:
 
     args = parser.parse_args()
 
+    # if args.mask:
+    #     args.neighbour_radius = 0
+
     if args.repair is not None and (
         args.corpus is not None
         or args.doc_id is not None
     ):
         parser.error( "--repair cannot be combined with --corpus or --doc-id" )
+
+    if args.repair and args.repair_years:
+        parser.error( "--repair and --repair-years cannot be used together" )
 
     return args
 
@@ -1451,10 +1622,6 @@ def main() -> None:
             report_every=args.report_every,
         )
 
-        #
-        if args.repair and args.repair_years:
-            parser.error( "--repair and --repair-years cannot be used together" )
-
         if args.repair:
             corpus, doc_id = args.repair.split("/", 1)
 
@@ -1473,6 +1640,10 @@ def main() -> None:
                 end_year=end_year,
                 corpus=args.corpus,   # None = all corpora
             )
+
+        elif args.add_scale:
+            processor.backfill_scale(args.add_scale, corpus=args.corpus, doc_id=args.doc_id)
+            return
 
         else:
             processor.process(

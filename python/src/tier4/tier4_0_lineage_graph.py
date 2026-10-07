@@ -62,15 +62,16 @@ import argparse
 import json
 import time
 from collections import defaultdict
-from sqlite3 import Connection
-from lib.corpus_db import analysis_db_connection
 import networkx as nx
 import numpy as np
+from pathlib import Path
 
-from lib.corpus_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
+from psycopg import Connection
+
+from lib.corpus_db import get_connection
+from lib.corpus_config import GUI_PUBLIC_DIR
 from lib.corpus_logging import logger
 from lib.get_processed_concepts import get_processed_concepts
-from lib.sqlite_vector_blob import blob_to_vector
 
 from tier4.temporal_neighbour_delta import (
     build_neighbour_deltas_for_concept,
@@ -111,73 +112,109 @@ def cosine_similarity(a, b):
     return float(np.dot(a, b) / denom)
 
 
+def centroid_to_vector(value):
+    if value is None:
+        return None
+
+    vector = np.frombuffer(
+        value,
+        dtype=np.float32,
+    ).copy()
+
+    if vector.size == 0:
+        return None
+
+    norm = np.linalg.norm(vector)
+
+    if norm < 1e-12:
+        return None
+
+    return vector / norm
+
+
 def load_temporal_graph(con, concept):
     G = nx.DiGraph()
 
-    nodes = con.execute(
-        """
-        SELECT concept, pub_year, cluster_id, point_count, centroid_vector
-        FROM concept_year_cluster_info
-        WHERE concept=? AND cluster_id >= 0
-        ORDER BY pub_year, cluster_id
-        """,
-        (concept,),
-    )
-
-    for row in nodes:
-        concept_row, year, cluster, size, centroid_vector = row
-
-        node_id = f"{year}:{cluster}"
-
-        G.add_node(
-            node_id,
-            concept=concept_row,
-            year=int(year),
-            cluster=int(cluster),
-            size=int(size),
-            vector=(
-                blob_to_vector(centroid_vector)
-                if centroid_vector is not None
-                else None
-            ),
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                concept,
+                pub_year,
+                cluster_id,
+                point_count,
+                centroid_vector
+            FROM tier3.concept_year_cluster_info
+            WHERE concept = %s
+              AND cluster_id >= 0
+            ORDER BY pub_year, cluster_id
+            """,
+            (concept,),
         )
 
-    edges = con.execute(
-        """
-        SELECT
-            source_year,
-            source_cluster,
-            target_year,
-            target_cluster,
-            similarity,
-            edge_type,
-            confidence
-        FROM temporal_cluster_edges
-        WHERE concept=?
-        """,
-        (concept,),
-    )
+        nodes = cursor.fetchall()
 
-    for row in edges:
+        for row in nodes:
+            (
+                concept_row,
+                year,
+                cluster,
+                size,
+                centroid_vector,
+            ) = row
+
+            node_id = f"{year}:{cluster}"
+
+            G.add_node(
+                node_id,
+                concept=concept_row,
+                year=int(year),
+                cluster=int(cluster),
+                size=int(size),
+                vector=centroid_to_vector(
+                    centroid_vector
+                ),
+            )
+
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                source_year,
+                source_cluster,
+                target_year,
+                target_cluster,
+                similarity,
+                confidence,
+                edge_type
+            FROM tier3.temporal_cluster_edges
+            WHERE concept = %s
+            """,
+            (concept,),
+        )
+
+        edge_rows = cursor.fetchall()
+
+    for row in edge_rows:
         (
             source_year,
             source_cluster,
             target_year,
             target_cluster,
             similarity,
-            edge_type,
             confidence,
+            edge_type,
         ) = row
 
         source_id = f"{source_year}:{source_cluster}"
         target_id = f"{target_year}:{target_cluster}"
 
-        # Edges referring to filtered-out clusters must not create implicit
-        # NetworkX nodes without the attributes required by lineage analysis.
         if source_id not in G or target_id not in G:
             logger.warning(
-                f"[tier4] skipping edge referencing missing node: "
-                f"{source_id} -> {target_id}"
+                "[tier4] skipping edge referencing missing node: "
+                "%s -> %s",
+                source_id,
+                target_id,
             )
             continue
 
@@ -203,22 +240,25 @@ def aggregate_cluster_context(
     cluster_id,
     limit=10,
 ):
-    rows = con.execute(
-        """
-        SELECT e.token
-        FROM concept_year_event_cluster c
-        JOIN events e
-             ON e.event_id = c.event_id
-        WHERE c.concept=?
-          AND c.pub_year=?
-          AND c.cluster_id=?
-        """,
-        (
-            concept,
-            year,
-            cluster_id,
-        ),
-    )
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT e.token
+            FROM tier3.concept_year_event_cluster c
+            JOIN events e
+              ON e.event_id = c.event_id
+            WHERE c.concept = %s
+              AND c.pub_year = %s
+              AND c.cluster_id = %s
+            """,
+            (
+                concept,
+                year,
+                cluster_id,
+            ),
+        )
+
+        rows = cursor.fetchall()
 
     counts = {}
 
@@ -226,7 +266,7 @@ def aggregate_cluster_context(
         if not token:
             continue
 
-        token = token.lower()
+        token = str(token).lower()
         counts[token] = counts.get(token, 0) + 1
 
     return [
@@ -236,7 +276,7 @@ def aggregate_cluster_context(
         }
         for token, count in sorted(
             counts.items(),
-            key=lambda x: x[1],
+            key=lambda item: item[1],
             reverse=True,
         )[:limit]
     ]
@@ -420,39 +460,39 @@ def sample_cluster_events(
     """
     Pull a deterministic sample of concrete observations from a cluster.
 
-    Neighbours are grouped by lexical form so recurring contextual matches
-    remain visible without allowing individual neighbour rows to dominate
-    the exported detail.
+    Tier 3.1 supplies cluster membership. Tier 2 supplies retrieval
+    relationships, while events remains authoritative for event metadata.
     """
 
-    rows = con.execute(
-        """
-        SELECT
-            e.event_id,
-            e.doc_id,
-            e.token_idx,
-            e.token,
-            e.pub_year
-        FROM concept_year_event_cluster c
-        JOIN events e
-             ON e.event_id = c.event_id
-        WHERE c.concept=?
-          AND c.pub_year=?
-          AND c.cluster_id=?
-        ORDER BY e.event_id
-        """,
-        (
-            concept,
-            year,
-            cluster_id,
-        ),
-    ).fetchall()
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                e.event_id,
+                e.doc_id,
+                e.token_idx,
+                e.token,
+                e.pub_year
+            FROM tier3.concept_year_event_cluster c
+            JOIN events e
+              ON e.event_id = c.event_id
+            WHERE c.concept = %s
+              AND c.pub_year = %s
+              AND c.cluster_id = %s
+            ORDER BY e.event_id
+            """,
+            (
+                concept,
+                year,
+                cluster_id,
+            ),
+        )
+
+        rows = cursor.fetchall()
 
     if not rows:
         return []
 
-    # Membership should be unique, but defensive deduplication prevents
-    # malformed historical data from duplicating exported observations.
     seen_events = set()
     unique_rows = []
 
@@ -467,13 +507,11 @@ def sample_cluster_events(
 
     rows = unique_rows
 
-    # Even sampling gives a deterministic spread through the cluster rather
-    # than systematically favouring the first event ids.
     if len(rows) > event_limit:
         indices = sorted(
             {
-                int(round(i))
-                for i in np.linspace(
+                int(round(index))
+                for index in np.linspace(
                     0,
                     len(rows) - 1,
                     event_limit,
@@ -481,7 +519,7 @@ def sample_cluster_events(
             }
         )
 
-        rows = [rows[i] for i in indices]
+        rows = [rows[index] for index in indices]
 
     samples = []
 
@@ -492,27 +530,49 @@ def sample_cluster_events(
         token,
         ev_year,
     ) in rows:
-        neighbour_rows = con.execute(
-            """
-            SELECT
-                n.neighbour_event_id,
-                n.token,
-                n.doc_id,
-                n.pub_year,
-                n.token_idx,
-                n.score
-            FROM neighbours n
-            WHERE n.event_id=?
-              AND n.score >= ?
-            ORDER BY n.score DESC
-            LIMIT ?
-            """,
-            (
-                event_id,
-                min_neighbour_score,
-                neighbour_limit * 5,
+
+        with con.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (ne.neighbour_event_id)
+                    ne.neighbour_event_id,
+                    e.token,
+                    e.doc_id,
+                    e.pub_year,
+                    e.token_idx,
+                    ne.score
+                FROM tier2.neighbour_edges ne
+                JOIN tier2.retrieval_runs rr
+                  ON rr.run_id = ne.run_id
+                JOIN events e
+                  ON e.event_id = ne.neighbour_event_id
+                WHERE rr.concept = %s
+                  AND ne.seed_event_id = %s
+                  AND ne.score >= %s
+                ORDER BY
+                    ne.neighbour_event_id,
+                    ne.score DESC NULLS LAST
+                """,
+                (
+                    concept,
+                    event_id,
+                    min_neighbour_score,
+                ),
+            )
+
+            neighbour_rows = cursor.fetchall()
+
+        neighbour_rows.sort(
+            key=lambda row: (
+                row[5] is not None,
+                row[5] if row[5] is not None else 0.0,
             ),
-        ).fetchall()
+            reverse=True,
+        )
+
+        neighbour_rows = neighbour_rows[
+            :neighbour_limit * 5
+        ]
 
         grouped = defaultdict(list)
 
@@ -524,14 +584,19 @@ def sample_cluster_events(
             neighbour_token_idx,
             score,
         ) in neighbour_rows:
+
             if not neighbour_token:
                 continue
 
-            neighbour_token = str(neighbour_token).lower()
+            neighbour_token = str(
+                neighbour_token
+            ).lower()
 
             grouped[neighbour_token].append(
                 {
-                    "neighbour_event_id": int(neighbour_event_id),
+                    "neighbour_event_id": int(
+                        neighbour_event_id
+                    ),
                     "doc_id": neighbour_doc_id,
                     "pub_year": (
                         int(neighbour_year)
@@ -563,8 +628,6 @@ def sample_cluster_events(
             ) in grouped.items()
         ]
 
-        # Recurrence is ranked ahead of isolated matches; similarity breaks
-        # ties between equally recurrent contextual neighbours.
         neighbours.sort(
             key=lambda neighbour: (
                 neighbour["count"],
@@ -584,7 +647,9 @@ def sample_cluster_events(
                 ),
                 "token": token,
                 "pub_year": int(ev_year),
-                "neighbours": neighbours[:neighbour_limit],
+                "neighbours": neighbours[
+                    :neighbour_limit
+                ],
             }
         )
 
@@ -606,23 +671,26 @@ def export_lineage(
         concept,
     )
 
-    rows = con.execute(
-        """
-        SELECT
-            concept,
-            pub_year,
-            cluster_id,
-            point_count,
-            centroid_nx,
-            centroid_ny,
-            centroid_gnx,
-            centroid_gny
-        FROM concept_year_cluster_info
-        WHERE concept=?
-        ORDER BY pub_year, cluster_id
-        """,
-        (concept,),
-    )
+    with con.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                concept,
+                pub_year,
+                cluster_id,
+                point_count,
+                centroid_nx,
+                centroid_ny,
+                centroid_gnx,
+                centroid_gny
+            FROM tier3.concept_year_cluster_info
+            WHERE concept = %s
+            ORDER BY pub_year, cluster_id
+            """,
+            (concept,),
+        )
+
+        rows = cursor.fetchall()
 
     lineage_stability = G.graph.get(
         "lineage_stability",
@@ -717,8 +785,8 @@ def export_lineage(
             similarity,
             confidence,
             edge_type
-        FROM temporal_cluster_edges
-        WHERE concept=?
+        FROM tier3.temporal_cluster_edges
+        WHERE concept=%s
         """,
         (concept,),
     )
@@ -931,53 +999,50 @@ def service(
 
 
 def main():
-    parser = argparse.ArgumentParser()
-
+    parser = argparse.ArgumentParser(
+        description="Build provenance-preserving Tier 4 temporal lineages."
+    )
     parser.add_argument(
         "--concept",
+        help="Process only this concept.",
     )
-
     parser.add_argument(
-        "--json",
+        "--no-json",
         action="store_true",
-        default=True,
+        help="Do not write the per-concept lineage JSON export.",
     )
-
     parser.add_argument(
-        "--min-score",
-        default=MIN_NEIGHBOUR_SCORE,
+        "--min-neighbour-score",
         type=float,
-        help="Minimum neighbour similarity used by Tier 4 neighbour-profile analysis",
+        default=MIN_NEIGHBOUR_SCORE,
+        help="Minimum neighbour similarity retained in Tier 4 deltas.",
     )
-
     args = parser.parse_args()
 
-    con = analysis_db_connection( CORPUS_TIER2_DB_PATH )
+    with get_connection() as conn:
+        if args.concept:
+            concepts = {args.concept}
+        else:
+            concepts = get_processed_concepts(conn)
 
-    try:
-        concepts = (
-            [args.concept.upper()]
-            if args.concept
-            else get_processed_concepts(
-                CORPUS_TIER2_DB_PATH
-            )
+        if not concepts:
+            logger.info("[tier4] no processed concepts found")
+            return
+
+        logger.info(
+            "[tier4] processing %d concept(s)",
+            len(concepts),
         )
 
-        for concept in concepts:
-            result = service(
-                con=con,
+        for concept in sorted(concepts):
+            service(
+                con=conn,
                 concept=concept,
-                write_json=args.json,
-                min_neighbour_score=args.min_score,
+                write_json=not args.no_json,
+                min_neighbour_score=args.min_neighbour_score,
             )
 
-            logger.info(
-                f"[tier4-main] "
-                f"{result['concept']} complete"
-            )
-
-    finally:
-        con.close()
+        conn.commit()
 
 
 if __name__ == "__main__":

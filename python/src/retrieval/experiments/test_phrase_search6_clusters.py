@@ -33,7 +33,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.io import to_html
 
-from lib.corpus_config import LANCE_INDEXES_DIR
+from lib.corpus_config import LANCE_INDEXES_DIR, CORPUS_MIN_YEAR, CORPUS_MAX_YEAR
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from retrieval.lance_observation_index_store import LanceObservationIndexStore
@@ -60,8 +60,8 @@ PHRASE_PROBES = {
     ],
 }
 
-MIN_YEAR = 1500
-MAX_YEAR = 1949
+MIN_YEAR = CORPUS_MIN_YEAR
+MAX_YEAR = CORPUS_MAX_YEAR
 
 TOP_N = 10
 
@@ -602,15 +602,6 @@ def make_hover(observation: Observation):
 
     context = observation.context or ""
 
-    # Protect the <mark> tags while wrapping.
-    context = context.replace(
-        "<mark>",
-        "\x00MARK_OPEN\x00",
-    ).replace(
-        "</mark>",
-        "\x00MARK_CLOSE\x00",
-    )
-
     context = "<br>".join(
         textwrap.wrap(
             context,
@@ -902,137 +893,62 @@ def main():
     )
 
     parser = argparse.ArgumentParser(
-        description=(
-            "Cluster MacBERTh phrase-search observations "
-            "and create interactive PCA plots."
-        )
+        description=( "Cluster MacBERTh phrase-search observations and create interactive PCA plots." )
     )
 
-    parser.add_argument(
-        "--distance",
-        type=float,
-        default=CLUSTER_DISTANCE,
-        help=(
-            "Cosine-distance clustering threshold "
-            f"(default: {CLUSTER_DISTANCE})"
-        ),
-    )
+    parser.add_argument( "--distance", type=float, default=CLUSTER_DISTANCE, help=( f"Cosine-distance clustering threshold (default: {CLUSTER_DISTANCE})" ), )
 
-    parser.add_argument(
-        "--top-n",
-        type=int,
-        default=TOP_N,
-        help=(
-            "Number of observations retained per "
-            "probe per chronological bucket."
-        ),
-    )
+    parser.add_argument( "--top-n", type=int, default=TOP_N, help=( "Number of observations retained per probe per chronological bucket." ), )
 
-    parser.add_argument(
-        "--min-year",
-        type=int,
-        default=MIN_YEAR,
-    )
+    parser.add_argument( "--min-year", type=int, default=MIN_YEAR, )
 
-    parser.add_argument(
-        "--max-year",
-        type=int,
-        default=MAX_YEAR,
-    )
+    parser.add_argument( "--max-year", type=int, default=MAX_YEAR, )
 
-    parser.add_argument(
-        "--context",
-        type=int,
-        default=CONTEXT_TOKENS,
-        help=(
-            "Number of tokens of context either side "
-            "of the retrieved token."
-        ),
-    )
+    parser.add_argument( "--context", type=int, default=CONTEXT_TOKENS, help=( "Number of tokens of context either side of the retrieved token." ), )
 
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=DEFAULT_OUTPUT,
-        help=(
-            "Output HTML file."
-        ),
-    )
+    parser.add_argument( "--output", type=Path, default=DEFAULT_OUTPUT, help=( "Output HTML file." ), )
 
     args = parser.parse_args()
 
     if not 0 < args.distance < 2:
-        parser.error(
-            "--distance must be between 0 and 2"
-        )
+        parser.error( "--distance must be between 0 and 2" )
 
     if args.top_n < 1:
-        parser.error(
-            "--top-n must be at least 1"
-        )
+        parser.error( "--top-n must be at least 1" )
 
     if args.min_year > args.max_year:
-        parser.error(
-            "--min-year must not exceed --max-year"
-        )
+        parser.error( "--min-year must not exceed --max-year" )
 
-    logger.info(
-        f"years:                 "
-        f"{args.min_year}–{args.max_year}"
-    )
+    logger.info( f"years: {args.min_year}–{args.max_year}" )
 
-    logger.info(
-        f"top per bucket/probe:  {args.top_n}"
-    )
+    logger.info( f"top per bucket/probe:  {args.top_n}" )
 
-    logger.info(
-        f"cluster distance:      {args.distance:.3f}"
-    )
+    logger.info( f"cluster distance:      {args.distance:.3f}" )
 
-    logger.info(
-        f"scale:                 {SCALE}"
-    )
+    logger.info( f"scale:                 {SCALE}" )
 
-    logger.info(
-        f"probes:                "
-        f"{sum(len(v) for v in PHRASE_PROBES.values())}"
-    )
+    logger.info( f"probes:                {sum(len(v) for v in PHRASE_PROBES.values())}" )
 
-    # ------------------------------------------------------------------
     # Initialise retrieval
-    # ------------------------------------------------------------------
 
     logger.info(" ")
-    logger.info("Loading MacBERTh...")
 
     encoder = MacBertMeanPhraseEncoder()
 
-    store = LanceObservationIndexStore(
-        LANCE_INDEXES_DIR
-    )
+    store = LanceObservationIndexStore( LANCE_INDEXES_DIR )
 
     search_space = SearchSpace(
-        years=(
-            args.min_year,
-            args.max_year,
-        ),
+        years=( args.min_year, args.max_year ),
         scale=(SCALE,),
     )
 
-    # ------------------------------------------------------------------
     # Search
-    # ------------------------------------------------------------------
 
     all_results = []
 
     for probe_group, phrases in PHRASE_PROBES.items():
-
         for phrase in phrases:
-
-            logger.info(
-                f"searching {probe_group}: "
-                f"{phrase!r}"
-            )
+            logger.info( f"searching {probe_group}: {phrase!r}" )
 
             results = search_phrase(
                 store,
@@ -1045,39 +961,24 @@ def main():
 
             all_results.extend(results)
 
-    # ------------------------------------------------------------------
     # Merge duplicate observations
-    # ------------------------------------------------------------------
 
-    observations = merge_results(
-        all_results
-    )
+    observations = merge_results( all_results )
 
     logger.info(" ")
-    logger.info(
-        f"unique observations:  "
-        f"{len(observations)}"
-    )
+    logger.info( f"unique observations:  {len(observations)}" )
 
-    # ------------------------------------------------------------------
     # Metadata
-    # ------------------------------------------------------------------
 
-    logger.info(
-        "fetching PostgreSQL metadata..."
-    )
+    logger.info( "fetching PostgreSQL metadata..." )
 
     connection = get_connection()
 
     fetch_metadata( connection, observations )
 
-    # ------------------------------------------------------------------
     # Context
-    # ------------------------------------------------------------------
 
-    logger.info(
-        "fetching source context..."
-    )
+    logger.info( "fetching source context..." )
 
     for observation in observations:
         observation.context = fetch_context(
@@ -1086,23 +987,28 @@ def main():
             args.context,
         )
 
-    # ------------------------------------------------------------------
+        if (
+            observation.pub_year is not None
+            and observation.pub_year < 1200
+        ):
+            logger.info(
+                "[pre-1200] %s (%s) token=%s event_id=%s\n%s",
+                observation.title or observation.doc_id,
+                observation.pub_year,
+                observation.token,
+                observation.event_id,
+                observation.context,
+            )
+
+
     # Vectors
-    # ------------------------------------------------------------------
 
-    logger.info(
-        "reconstructing Lance vectors..."
-    )
+    logger.info( "reconstructing Lance vectors..." )
 
-    missing = fetch_vectors(
-        store,
-        observations,
-    )
+    missing = fetch_vectors( store, observations, )
 
     if missing:
-        logger.info(
-            f"vectors unavailable:    {missing}"
-        )
+        logger.info( f"vectors unavailable:    {missing}" )
 
     observations = [
         observation
@@ -1110,40 +1016,27 @@ def main():
         if observation.vector is not None
     ]
 
-    # ------------------------------------------------------------------
     # Cluster
-    # ------------------------------------------------------------------
 
     bucket_clusters = assign_clusters(
         observations,
         args.distance,
     )
 
-    print_summary(
-        bucket_clusters
-    )
+    print_summary( bucket_clusters )
 
-    # ------------------------------------------------------------------
     # PCA
-    # ------------------------------------------------------------------
 
     logger.info(" ")
-    logger.info(
-        "calculating PCA projections..."
-    )
+    logger.info( "calculating PCA projections..." )
 
-    assign_pca_coordinates(
-        observations
-    )
+    assign_pca_coordinates( observations )
 
-    # ------------------------------------------------------------------
     # Figures
-    # ------------------------------------------------------------------
 
     figures = []
 
     for bucket in sorted(bucket_clusters):
-
         bucket_observations = [
             observation
             for observation in observations
@@ -1163,14 +1056,10 @@ def main():
             )
         )
 
-    # ------------------------------------------------------------------
     # HTML
-    # ------------------------------------------------------------------
 
     logger.info(" ")
-    logger.info(
-        f"writing: {args.output}"
-    )
+    logger.info( f"writing: {args.output}" )
 
     write_html(
         figures,
@@ -1178,9 +1067,7 @@ def main():
     )
 
     logger.info(" ")
-    logger.info(
-        "done"
-    )
+    logger.info( "done" )
 
 
 if __name__ == "__main__":

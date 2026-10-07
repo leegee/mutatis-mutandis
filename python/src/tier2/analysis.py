@@ -528,6 +528,24 @@ def iter_neighbour_batches(
                         int(item["event_id"])
                     )
 
+            need = referenced_ids - set(metadata_by_id)
+            if need:
+                with connection.cursor() as cur:
+                    cur.execute("SELECT event_id FROM events WHERE event_id = ANY(%s)", (list(need),))
+                    present = {r[0] for r in cur.fetchall()}
+                orphans = need - present
+                if orphans:
+                    culprits = {}
+                    for seed_id, seed_neighbours in zip(year_seed_ids, neighbours):
+                        hit = [int(i["event_id"]) for i in seed_neighbours if int(i["event_id"]) in orphans]
+                        if hit:
+                            culprits[seed_id] = hit
+                    logger.error(
+                        "[tier2] year=%d orphans=%d range=%d-%d seeds_affected=%d/%d sample=%s",
+                        year, len(orphans), min(orphans), max(orphans),
+                        len(culprits), len(year_seed_ids), dict(list(culprits.items())[:3]),
+                    )
+
             metadata_by_id.update(
                 _fetch_event_metadata(
                     connection,

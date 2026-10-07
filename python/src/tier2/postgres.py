@@ -346,6 +346,8 @@ def write_tier2_postgres(
                 logger.info("[tier2] clearing PostgreSQL Tier 2 data")
 
                 with connection.cursor() as cur:
+                    cur.execute("DELETE FROM tier3.event_geometry")
+                    cur.execute("DELETE FROM tier3.concept_cluster_info")
                     cur.execute("DELETE FROM tier2.neighbour_edges")
                     cur.execute("DELETE FROM tier2.retrieval_runs")
                     cur.execute("DELETE FROM tier2.event_field")

@@ -88,3 +88,4 @@ python/data/
 python/*.data
 python/*.onnx
 python/macberth-huggingface.tar.gz
+python/*.html

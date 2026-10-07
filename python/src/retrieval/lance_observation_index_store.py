@@ -195,9 +195,14 @@ class LanceObservationIndexStore(ObservationIndexStore):
         )
 
         if not buckets:
-            raise ValueError(
-                "SearchSpace resolves to no chronological Lance buckets"
+            logger.error(
+                "[lance_observation_index_store.diachronic_search] SearchSpace resolves to no chronological Lance buckets"
+                "space.years=%r scales=%r available buckets=%s",
+                space.years,
+                scales,
+                sorted({(s, b0, b1) for (s, _m, b0, b1) in self._tables}),
             )
+            return
 
         for bucket_start, bucket_end in buckets:
             bucket_space = SearchSpace(
