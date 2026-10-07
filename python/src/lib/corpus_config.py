@@ -5,13 +5,12 @@ import sys
 from pathlib import Path
 from typing import TypedDict, Set, Dict
 
-CORPUS_MIN_YEAR = 1000
-CORPUS_MAX_YEAR = 2026
+CORPUS_MIN_YEAR = 1600
+CORPUS_MAX_YEAR = 1650
 
 FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
 MAX_TOKENS_IN_DOC = 400_000
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -61,7 +60,8 @@ JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
-LANCE_INDEXES_DIR = INDEXES_DIR / "lance"
+# LANCE_INDEXES_DIR = INDEXES_DIR / "lance" # Whiteness
+LANCE_INDEXES_DIR = INDEXES_DIR / "lance_pamphlets"
 LANCE_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
 MODELS_DIR = OUT_DIR / "models"
@@ -75,15 +75,12 @@ SCALES = ("local", "medium", "broad")
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
-EMBED_BATCH_SIZE = 64 # is faster by ~30% than 256
-
+EMBED_BATCH_SIZE = 64 # Tests showed is faster by ~30% than 256
 TOP_K = 30
 
 
 
 """
-Canonical normalisation configuration.
-
 CONCEPT_SETS is now the SINGLE source of truth.
 
 - dict keys: canonical heads (theory-driven)
@@ -99,34 +96,117 @@ artefacts rather than distinct lexical items. Semantic distinctions between cano
 concepts are preserved through explicit constraints, positive and negative, on allowable mappings.
 
 Since dropping FastText, most of the forms are discoverable from the keys. Eventually this will be
-a mere seed table and new terms will come from interactive search.
+a mere seed table and new terms will come from interactive search, and new false positives from user input.
 
 """
 class CanonicalRule(TypedDict):
     forms: Set[str]
+    expected: Set[str]
     false_positives: Set[str]
 
-CanonicalRules = Dict[str, CanonicalRule]
 
-# Canonical heads with per-head exclusion lists
-# liberty
-# authority
-# sovereignty
-# obedience
-# law
-# parliament
-# king
-# people
-# commonwealth
-# tyranny
-# conscience
-# religion
-# church
-# state
-# power
-# right
-# property
-CONCEPT_SETS: CanonicalRules = {
+CANONICAL_RULES: Dict[str, CanonicalRule] = {
+
+    "LIBERTY": {
+        "forms": {
+            "liberty",
+            "freedom",
+        },
+        "expected": {
+            "rights",
+            "right",
+            "property",
+            "privilege",
+            "immunity",
+            "freeborn",
+            "free-born",
+            "franchise",
+        },
+        "false_positives": set(),
+    },
+
+    "LEGITIMACY": {
+        "forms": {
+            "lawful",
+            "right",
+            "authority",
+        },
+        "expected": {
+            "consent",
+            "trust",
+            "commission",
+            "constitution",
+            "fundamental",
+            "custom",
+            "law",
+            "obedience",
+            "jurisdiction",
+            "title",
+        },
+        "false_positives": set(),
+    },
+
+    "TYRANNY": {
+        "forms": {
+            "tyranny",
+            "oppression",
+        },
+        "expected": {
+            "arbitrary",
+            "bondage",
+            "yoke",
+            "usurpation",
+            "usurper",
+            "encroachment",
+            "enslave",
+            "slavery",
+            "tyrannical",
+            "tyrant",
+        },
+        "false_positives": set(),
+    },
+
+    "PEOPLE": {
+        "forms": {
+            "people",
+            "commons",
+            "multitude",
+        },
+        "expected": {
+            "public",
+            "nation",
+            "community",
+            "inhabitants",
+            "subjects",
+            "voice",
+            "commonwealth",
+            "populous",
+            "general",
+        },
+        "false_positives": set(),
+    },
+
+    "PREROGATIVE": {
+        "forms": {
+            "prerogative",
+        },
+        "expected": {
+            "sovereignty",
+            "sovereign",
+            "royal",
+            "kingly",
+            "majesty",
+            "privilege",
+            "dominion",
+            "power",
+            "authority",
+            "arbitrary",
+        },
+        "false_positives": set(),
+    },
+}
+
+ALBINO_CONCEPT_SETS: CanonicalRules = {
     "WHITE": {
         "forms": {
             "white",
@@ -298,3 +378,18 @@ CIVIL_WAR_CONCEPT_SETS: CanonicalRules = {
 
 }
 
+# In lib.corpus_config (or here for a quick prototype)
+PHRASE_SETS: dict[str, dict] = {
+    "white_as_wool": {
+        "forms": [
+            # surface patterns; can be expanded later with regex / lemmas
+            ("hair", "as", "white", "as", "wool"),
+            ("white", "as", "wool"),
+            ("white", "like", "wool"),
+            ("hore", "as", "wool"),          # early spelling
+            # …
+        ],
+        "false_positives": [],
+    },
+    # other formulaic phrases …
+}

@@ -57,6 +57,8 @@ def create_events_table(conn: Connection) -> None:
                     broad_window_id BIGINT,
                     broad_window_token_pos INTEGER,
 
+                    span_end_idx BIGINT,
+
                     CONSTRAINT events_token_fk
                         FOREIGN KEY (doc_id, token_idx)
                         REFERENCES tokens(doc_id, token_idx)
@@ -150,7 +152,7 @@ def allocate_event_ids(
         return [int(row[0]) for row in cur.fetchall()]
 
 
-def insert_events(
+def insert__events(
     conn: Connection,
     *,
     event_id: Sequence[int],
@@ -158,6 +160,7 @@ def insert_events(
     doc_id: Sequence[str],
     token: Sequence[str],
     token_idx: Sequence[int],
+    span_end_idx: list[int | None],
     pub_year: Sequence[int | None],
     local_window_id: Sequence[int | None] | None = None,
     local_window_token_pos: Sequence[int | None] | None = None,
@@ -166,12 +169,6 @@ def insert_events(
     broad_window_id: Sequence[int | None] | None = None,
     broad_window_token_pos: Sequence[int | None] | None = None,
 ) -> None:
-    """
-    Insert a batch of event identities and metadata.
-
-    Vector data is intentionally absent: vectors are written directly to
-    Lance using the same event IDs.
-    """
     n = len(event_id)
 
     columns = {
@@ -179,6 +176,7 @@ def insert_events(
         "corpus": corpus,
         "doc_id": doc_id,
         "token": token,
+        "span_end_idx": span_end_idx,
         "token_idx": token_idx,
         "pub_year": pub_year,
         "local_window_id": local_window_id,
@@ -203,6 +201,7 @@ def insert_events(
                 doc_id,
                 token,
                 token_idx,
+                span_end_idx,
                 pub_year,
                 local_window_id,
                 local_window_token_pos,
@@ -219,6 +218,7 @@ def insert_events(
                     corpus[i],
                     doc_id[i],
                     token[i],
+                    span_end_idx[i],
                     int(token_idx[i]),
                     pub_year[i],
                     local_window_id[i] if local_window_id is not None else None,
@@ -228,4 +228,3 @@ def insert_events(
                     broad_window_id[i] if broad_window_id is not None else None,
                     broad_window_token_pos[i] if broad_window_token_pos is not None else None,
                 ))
-

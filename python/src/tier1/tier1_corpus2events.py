@@ -205,7 +205,7 @@ def populate_jobs(
         cur.execute(f"""
             INSERT INTO embedding_jobs (corpus, doc_id, scale)
             SELECT d.corpus, d.doc_id, %s
-            FROM documents d
+            FROM pamphlet_tokens d
             WHERE {where}
             ON CONFLICT (corpus, doc_id, scale) DO NOTHING
         """, [scale, *params])
@@ -311,8 +311,8 @@ def iter_windows(
     with conn.cursor() as cur:
         cur.execute("""
             SELECT t.token, d.pub_year
-            FROM tokens AS t
-            JOIN documents AS d
+            FROM pamphlet_tokens AS t
+            JOIN pamphlet_tokens AS d
                 ON d.corpus = t.corpus
                 AND d.doc_id = t.doc_id
             WHERE t.corpus = %s
