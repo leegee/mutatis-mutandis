@@ -3687,28 +3687,13 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main() -> None:
-
     args = parse_args()
 
-    torch.set_num_threads(
-        int(
-            os.environ.get(
-                "OMP_NUM_THREADS",
-                "4",
-            )
-        )
-    )
-
+    torch.set_num_threads( int( os.environ.get( "OMP_NUM_THREADS", "4", ) ) )
     torch.set_num_interop_threads(1)
 
-    conn = get_connection(
-        application_name="tier1-phrases2events",
-    )
+    conn = get_connection( application_name="tier1-creater", )
 
     if not args.worker and not os.environ.get("COLAB_MODE"):
         create_events_table(conn)
@@ -3764,7 +3749,7 @@ def main() -> None:
         return
 
     try:
-        if args.worker:
+        if not args.worker:
             ensure_jobs_table(conn)
 
         mac = load_macberth()
