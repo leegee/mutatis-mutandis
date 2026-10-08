@@ -2,6 +2,10 @@
 # Colab notebook – MacBERTh medium-window embedder
 # ============================================================
 """
+### DB
+
+Update `./macberth_pg_secrets.json` on Google Drive's root dir with the host/port output from `ngrok tcp 5432`.
+
 ### PostgreSQL permissions for the Colab worker
 
 The `colab_reader` role is used by the Colab embedding worker to read corpus data
@@ -219,14 +223,14 @@ os.environ["COLAB_MODE"] = "1"
 # ------------------------------------------------------------
 # 6. Run the window embedder
 # ------------------------------------------------------------
-print("Starting window embedder worker (Colab → Parquet on Drive) ...")
+print("Starting window embedder worker (Colab → Lance on Drive) ...")
 
 try:
     result = subprocess.run(
         [
             "uv", "run",
             "--directory", str(python_dir),
-            "-m", "tier1.tier1_corpus2events",
+            "-m", "tier1.tier1_new",
             "--backend", "auto",
             # "--max-docs", "5",       # useful for a quick test
             # "--dry-run",             # embed only, write nothing
