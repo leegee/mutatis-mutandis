@@ -71,12 +71,24 @@ LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 SCALES = ("local", "medium", "broad")
+ACTIVE_SCALES = ("local", "medium")
 
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 EMBED_BATCH_SIZE = 64 # Tests showed is faster by ~30% than 256
 TOP_K = 30
+
+WINDOW_CONFIGS = (
+    {"name": "local", "size": 256, "stride": 128},
+    {"name": "medium", "size": 512, "stride": 256},
+    {"name": "broad", "size": 512, "stride": 384},
+)
+
+SCALE_NAMES = tuple(config["name"] for config in WINDOW_CONFIGS)
+
+LANCE_MODEL_NAME = "macberth"
+LANCE_BUCKET_SIZE = 50
 
 
 
