@@ -1,4 +1,4 @@
-# db_observation_backend.py
+# tier1/db_observation_backend.py
 
 from typing import Sequence
 from psycopg import Connection
@@ -152,7 +152,7 @@ def allocate_event_ids(
         return [int(row[0]) for row in cur.fetchall()]
 
 
-def insert__events(
+def insert_events(
     conn: Connection,
     *,
     event_id: Sequence[int],
@@ -218,8 +218,8 @@ def insert__events(
                     corpus[i],
                     doc_id[i],
                     token[i],
-                    span_end_idx[i],
                     int(token_idx[i]),
+                    span_end_idx[i],
                     pub_year[i],
                     local_window_id[i] if local_window_id is not None else None,
                     local_window_token_pos[i] if local_window_token_pos is not None else None,

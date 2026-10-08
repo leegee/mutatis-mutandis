@@ -104,8 +104,10 @@ class CanonicalRule(TypedDict):
     expected: Set[str]
     false_positives: Set[str]
 
+CanonicalRules = Dict[str, CanonicalRule]
 
-CANONICAL_RULES: Dict[str, CanonicalRule] = {
+
+CONCEPT_SETS: CanonicalRules = {
 
     "LIBERTY": {
         "forms": {
