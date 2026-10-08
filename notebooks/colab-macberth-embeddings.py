@@ -115,39 +115,46 @@ print("Dependencies installed.")
 # ------------------------------------------------------------
 # 3b. Ensure MacBERTh model weights are present
 # ------------------------------------------------------------
-MODEL_DIR = src_dir / "lib" / "macberth-huggingface"
+MODEL_DIR = Path("/content/mutatis-mutandis/python/lib/macberth-huggingface")
 DRIVE_TGZ = Path("/content/drive/MyDrive/macberth_models/macberth-huggingface.tar.gz")
+
+CONFIG = MODEL_DIR / "config.json"
+WEIGHTS = MODEL_DIR / "pytorch_model.bin"
 
 print("Looking for model at:", MODEL_DIR)
 print("Drive archive at:", DRIVE_TGZ, "exists =", DRIVE_TGZ.exists())
 
-if not (MODEL_DIR / "config.json").exists():
+if not CONFIG.exists() or not WEIGHTS.exists():
     if not DRIVE_TGZ.exists():
         raise FileNotFoundError(
-            f"Model archive not found on Drive: {DRIVE_TGZ}\n"
-            "Upload macberth-huggingface.tar.gz to that location first."
+            f"Model archive not found on Drive: {DRIVE_TGZ}"
         )
-    print("Extracting MacBERTh model from Drive ...")
+
+    print("Model incomplete; extracting MacBERTh model from Drive ...")
+
     MODEL_DIR.parent.mkdir(parents=True, exist_ok=True)
+
     subprocess.run(
         ["tar", "-xzf", str(DRIVE_TGZ), "-C", str(MODEL_DIR.parent)],
         check=True,
     )
+
     print("Extraction finished.")
 else:
-    print("Model already present.")
+    print("Model already present and complete.")
 
-# Sanity check
-required = ["config.json"]
-has_weights = (
-    (MODEL_DIR / "pytorch_model.bin").exists()
-    or (MODEL_DIR / "model.safetensors").exists()
-)
-if not has_weights or any(not (MODEL_DIR / f).exists() for f in required):
-    print("Contents of model dir:")
-    for p in sorted(MODEL_DIR.iterdir()):
-        print(" ", p.name)
-    raise FileNotFoundError("Model files incomplete after extraction")
+# Final sanity check
+if not CONFIG.exists():
+    raise FileNotFoundError(f"Missing config: {CONFIG}")
+
+if not WEIGHTS.exists():
+    raise FileNotFoundError(f"Missing weights: {WEIGHTS}")
+
+print()
+print("MacBERTh model OK")
+print(f"  config : {CONFIG}")
+print(f"  weights: {WEIGHTS}")
+print(f"  size   : {WEIGHTS.stat().st_size:,} bytes")
 
 # ------------------------------------------------------------
 # 3c. Prefer GPU ONNX Runtime when a GPU is present
@@ -231,6 +238,7 @@ try:
             "uv", "run",
             "--directory", str(python_dir),
             "-m", "tier1.tier1_new",
+            "--worker",
             # "--max-docs", "5",       # useful for a quick test
             # "--dry-run",             # embed only, write nothing
         ],

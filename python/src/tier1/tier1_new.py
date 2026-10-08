@@ -1,4 +1,4 @@
-# tier1/tier1_phrases2events.py
+# tier1/tier1_new.py
 """
 Build Tier 1 token and phrase observations from the restricted pamphlet
 corpus through MacBERTh into Lance.
@@ -8,9 +8,9 @@ Two ways to run it:
 1. Direct (unchanged): iterate documents in-process, skipping any that
    already have events of the requested type.
 
-       python tier1_phrases2events.py [--corpus C] [--doc-id D] [--phrases]
-       python tier1_phrases2events.py --add-scale medium
-       python tier1_phrases2events.py --repair CORPUS/DOC_ID
+       python tier1_new.py [--corpus C] [--doc-id D] [--phrases]
+       python tier1_new.py --add-scale medium
+       python tier1_new.py --repair CORPUS/DOC_ID
        ...
 
 2. Job queue: any number of workers claim documents from the
@@ -27,11 +27,11 @@ Two ways to run it:
    queueing one never marks another done.
 
        # 1. enqueue (idempotent; add --phrases / --add-scale to pick a kind)
-       python tier1_phrases2events.py --populate [--corpus C] \\
+       python tier1_new.py --populate [--corpus C] \\
               [--min-year Y] [--max-year Y]
 
        # 2. run one or more workers
-       python tier1_phrases2events.py --worker [--worker-id W] \\
+       python tier1_new.py --worker [--worker-id W] \\
               [--max-docs N] [--dry-run] [--skip-indexing]
 
    With several workers, pass --skip-indexing to each and finish with a
@@ -89,10 +89,6 @@ os.environ.setdefault("MKL_NUM_THREADS", "4")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
 
 
-# ---------------------------------------------------------------------------
-# Window / scale configuration
-# ---------------------------------------------------------------------------
-
 WINDOW_CONFIGS = (
     {"name": "local", "size": 256, "stride": 128},
     {"name": "medium", "size": 512, "stride": 256},
@@ -108,10 +104,7 @@ LANCE_MODEL_NAME = "macberth"
 LANCE_BUCKET_SIZE = 50
 
 
-# ---------------------------------------------------------------------------
 # Token helpers
-# ---------------------------------------------------------------------------
-
 def normalise_token(token: str) -> str:
     return unicodedata.normalize("NFKC", token).strip().lower()
 
@@ -133,10 +126,7 @@ def is_storable_event(token: str) -> bool:
     return not is_stopword(token) and not is_punctuation(token)
 
 
-# ---------------------------------------------------------------------------
 # Seed / phrase forms
-# ---------------------------------------------------------------------------
-
 def seed_forms() -> set[str]:
     forms: set[str] = set()
 
@@ -200,10 +190,7 @@ def phrase_forms() -> list[tuple[str, ...]]:
 PHRASE_FORMS = phrase_forms()
 
 
-# ---------------------------------------------------------------------------
 # Data structures
-# ---------------------------------------------------------------------------
-
 @dataclass(slots=True)
 class TokenRow:
     corpus: str
@@ -308,10 +295,7 @@ class DocumentOutcome:
     written: int = 0
 
 
-# ---------------------------------------------------------------------------
 # Existing-event helpers
-# ---------------------------------------------------------------------------
-
 def existing_event_documents(
     conn,
     *,
@@ -338,12 +322,7 @@ def existing_event_documents(
 
     with conn.cursor() as cur:
         cur.execute(
-            f"""
-            SELECT DISTINCT e.doc_id
-            FROM events AS e
-            WHERE e.corpus = %s
-              AND {span_clause}
-            """,
+            f""" SELECT DISTINCT e.doc_id FROM events AS e WHERE e.corpus = %s AND {span_clause} """,
             (corpus,),
         )
 
@@ -375,12 +354,8 @@ def document_has_events(
         cur.execute(
             f"""
             SELECT EXISTS (
-                SELECT 1
-                FROM events
-                WHERE corpus = %s
-                  AND doc_id = %s
-                  AND {span_clause}
-            )
+                SELECT 1 FROM events
+                WHERE corpus = %s AND doc_id = %s AND {span_clause} )
             """,
             (corpus, doc_id),
         )
@@ -407,11 +382,7 @@ def document_missing_scale(
         cur.execute(
             f"""
             SELECT EXISTS (
-                SELECT 1
-                FROM events
-                WHERE corpus = %s
-                  AND doc_id = %s
-                  AND {scale}_window_id IS NULL
+                SELECT 1 FROM events WHERE corpus = %s AND doc_id = %s AND {scale}_window_id IS NULL
             )
             """,
             (corpus, doc_id),
@@ -420,7 +391,6 @@ def document_missing_scale(
         return bool(cur.fetchone()[0])
 
 
-# ---------------------------------------------------------------------------
 # Job queue
 #
 # Any number of workers (local or remote) can run at once: work is claimed
@@ -430,7 +400,6 @@ def document_missing_scale(
 # table is keyed on (corpus, doc_id, scale) for window passes, whereas
 # here the unit of work is (corpus, doc_id, kind) and a token pass, a
 # phrase pass and each scale backfill must complete independently.
-# ---------------------------------------------------------------------------
 
 JOBS_TABLE = "embedding_jobs"
 
@@ -641,10 +610,7 @@ def mark_job_failed(
     conn.commit()
 
 
-# ---------------------------------------------------------------------------
 # MacBERTh
-# ---------------------------------------------------------------------------
-
 class MacBERThPipeline:
     def __init__(
         self,
@@ -661,45 +627,71 @@ class MacBERThPipeline:
         self.mask_targets = mask_targets
 
 
-def _make_window_jobs(
-    self,
-    *,
-    document: DocBuffer,
-    target_positions: set[int],
-    window_size: int,
-    stride: int,
-) -> list[dict]:
-    """
-    Produce the same logical windows as the old _make_jobs, but never
-    materialise a full-document encoding.
-    """
-    word_count = len(document.rows)
-    jobs: list[dict] = []
-    covered: set[int] = set()
+    def _make_window_jobs(
+        self,
+        *,
+        document: DocBuffer,
+        target_positions: set[int],
+        window_size: int,
+        stride: int,
+    ) -> list[dict]:
+        """
+        Produce the same logical windows as the old _make_jobs, but never
+        materialise a full-document encoding.
+        """
+        word_count = len(document.rows)
+        jobs: list[dict] = []
+        covered: set[int] = set()
 
-    start_word = 0
-    while start_word < word_count:
-        end_word = min(word_count, start_word + window_size)
+        start_word = 0
+        while start_word < word_count:
+            end_word = min(word_count, start_word + window_size)
 
-        candidate_targets = sorted(
-            p for p in target_positions if start_word <= p < end_word
-        )
+            candidate_targets = sorted(
+                p for p in target_positions if start_word <= p < end_word
+            )
 
-        if candidate_targets:
-            # Same grouping logic as the original: keep targets whose
-            # encoded span will fit in 512 after subword expansion.
-            # We still have to be careful about subword blow-up, so we
-            # group conservatively and let the tokenizer tell us the
-            # real length.
-            group: list[int] = []
-            for target in candidate_targets:
-                trial = group + [target]
-                # Cheap upper bound: assume worst-case  the tokenizer
-                # expands every token.  In practice MacBERTh rarely
-                # expands historical English that much; adjust if needed.
-                if not group or (trial[-1] - trial[0] + 1) <= 512:
-                    group = trial
-                else:
+            if candidate_targets:
+                # Group targets greedily according to their actual encoded
+                # subword span.  Source-word count is not a reliable proxy
+                # for MacBERTh token count, especially for historical text.
+                group: list[int] = []
+
+                for target in candidate_targets:
+                    if not group:
+                        group = [target]
+                        continue
+
+                    trial = group + [target]
+
+                    span_start = trial[0]
+                    span_end = trial[-1] + 1
+
+                    span_tokens = document.tokens[span_start:span_end]
+                    encoded = self.tokenizer(
+                        span_tokens,
+                        is_split_into_words=True,
+                        truncation=False,
+                        return_tensors=None,
+                    )
+
+                    encoded_len = len(encoded["input_ids"])
+
+                    if encoded_len <= 512:
+                        group = trial
+                    else:
+                        jobs.append(
+                            self._build_one_window(
+                                document=document,
+                                target_positions=group,
+                                context_start_word=start_word,
+                                context_end_word=end_word,
+                            )
+                        )
+                        covered.update(group)
+                        group = [target]
+
+                if group:
                     jobs.append(
                         self._build_one_window(
                             document=document,
@@ -709,129 +701,138 @@ def _make_window_jobs(
                         )
                     )
                     covered.update(group)
-                    group = [target]
 
-            if group:
-                jobs.append(
-                    self._build_one_window(
-                        document=document,
-                        target_positions=group,
-                        context_start_word=start_word,
-                        context_end_word=end_word,
-                    )
-                )
-                covered.update(group)
+            if start_word + stride >= word_count:
+                break
 
-        if start_word + stride >= word_count:
-            break
-        start_word += stride
+            start_word += stride
 
-    missing = target_positions - covered
-    if missing:
-        raise RuntimeError(
-            "Some target observations were not assigned to a MacBERTh job: "
-            f"{sorted(missing)[:20]}"
-        )
-    return jobs
+        missing = target_positions - covered
+        if missing:
+            raise RuntimeError( f"Some target observations were not assigned to a MacBERTh job: {sorted(missing)[:20]}" )
 
+        return jobs
 
-def _build_one_window(
-    self,
-    *,
-    document: DocBuffer,
-    target_positions: list[int],
-    context_start_word: int,
-    context_end_word: int,
-) -> dict:
-    """
-    Tokenize only the concrete window that will be fed to the model.
-    Recentres around the targets exactly as the old _append_job did.
-    """
-    # 1. Decide the final token slice that will be encoded.
-    #    Start from the logical context window, then shrink/recenter
-    #    so the encoded length stays ≤ 512.
-    target_start_word = target_positions[0]
-    target_end_word = target_positions[-1] + 1
+    def _build_one_window(
+        self,
+        *,
+        document: DocBuffer,
+        target_positions: list[int],
+        context_start_word: int,
+        context_end_word: int,
+    ) -> dict:
+        """
+        Tokenize only the concrete window that will be fed to the model.
+        Recentres around the targets exactly as the old _append_job did.
+        """
+        # 1. Decide the final token slice that will be encoded. Start from the logical context window, then shrink/recenter so the encoded length stays ≤ 512.
+        target_start_word = target_positions[0]
+        target_end_word = target_positions[-1] + 1
 
-    # First try the full context window.
-    slice_start = context_start_word
-    slice_end = context_end_word
+        # First try the full context window.
+        slice_start = context_start_word
+        slice_end = context_end_word
 
-    # Tokenize a trial to learn the real subword length.
-    trial_tokens = document.tokens[slice_start:slice_end]
-    trial = self.tokenizer(
-        trial_tokens,
-        is_split_into_words=True,
-        truncation=False,
-        return_tensors=None,          # plain lists
-    )
-    encoded_len = len(trial["input_ids"])
-
-    if encoded_len > 512:
-        # Recentre around the targets (same idea as the original code).
-        # We work in *word* space first, then re-tokenize.
-        target_span_words = target_end_word - target_start_word
-        # Leave room on both sides; the exact arithmetic can be tuned.
-        side = max(0, (512 - target_span_words) // 2)
-        slice_start = max(context_start_word, target_start_word - side)
-        slice_end = min(context_end_word, slice_start + 512)
-        if slice_end - slice_start < 512:
-            slice_start = max(context_start_word, slice_end - 512)
-
+        # Tokenize a trial to learn the real subword length.
         trial_tokens = document.tokens[slice_start:slice_end]
         trial = self.tokenizer(
             trial_tokens,
             is_split_into_words=True,
             truncation=False,
-            return_tensors=None,
+            return_tensors=None,          # plain lists
         )
         encoded_len = len(trial["input_ids"])
+
         if encoded_len > 512:
-            raise RuntimeError(
-                f"Window still exceeds 512 after recentring: "
-                f"words={slice_start}:{slice_end}, encoded={encoded_len}"
+            # The model limit is in subword tokens, not source words. Shrink the word-space window around the target span until the actual tokenized length fits within 512.
+            # Always preserve the complete target span.
+            while encoded_len > 512:
+                left_available = target_start_word - slice_start
+                right_available = slice_end - target_end_word
+
+                removable = left_available + right_available
+                if removable <= 0:
+                    raise RuntimeError(
+                        f"Target span itself exceeds 512 encoded tokens: "
+                        f"words={target_start_word}:{target_end_word}, "
+                        f"encoded={encoded_len}"
+                    )
+
+                # Estimate how many words need to be removed.  Use the current token/word ratio, with a small safety margin.
+                word_count = slice_end - slice_start
+                excess = encoded_len - 512
+                tokens_per_word = encoded_len / max(1, word_count)
+
+                remove_words = max(
+                    1,
+                    int(np.ceil((excess / tokens_per_word) * 1.25)),
+                )
+                remove_words = min(remove_words, removable)
+
+                # Remove proportionally from the two sides, preferring the side with more available context.
+                if removable:
+                    remove_left = min(
+                        left_available,
+                        int(round(remove_words * left_available / removable)),
+                    )
+                    remove_right = remove_words - remove_left
+
+                    # If rounding pushed the right side beyond what is available, give the remainder to the left.
+                    if remove_right > right_available:
+                        overflow = remove_right - right_available
+                        remove_right = right_available
+                        remove_left = min( left_available, remove_left + overflow, )
+
+                    slice_start += remove_left
+                    slice_end -= remove_right
+
+                trial_tokens = document.tokens[slice_start:slice_end]
+                trial = self.tokenizer(
+                    trial_tokens,
+                    is_split_into_words=True,
+                    truncation=False,
+                    return_tensors=None,
+                )
+                encoded_len = len(trial["input_ids"])
+            # At this point the actual tokenized window is guaranteed to fit the model limit.
+
+        input_ids = trial["input_ids"]
+        attention_mask = trial["attention_mask"]
+        word_ids = trial.word_ids()          # local offsets 0..len(slice)-1
+
+        # 2. Map local word_ids back to global word positions. word_ids[i] is None for special tokens, otherwise an offset relative to the slice.
+        targets_in_window = []
+        for global_pos in target_positions:
+            local_word = global_pos - slice_start
+            try:
+                # first subword of this word
+                encoded_position = word_ids.index(local_word)
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"Target disappeared from its MacBERTh window: global={global_pos}, slice={slice_start}:{slice_end}"
+                ) from exc
+
+            targets_in_window.append(
+                {
+                    "word_position": global_pos,       # still the global index
+                    "encoded_position": encoded_position,
+                }
             )
 
-    input_ids = trial["input_ids"]
-    attention_mask = trial["attention_mask"]
-    word_ids = trial.word_ids()          # local offsets 0..len(slice)-1
+            if self.mask_targets:
+                mask_id = self.tokenizer.mask_token_id
+                if mask_id is None:
+                    raise RuntimeError("MacBERTh tokenizer has no mask token.")
+                for i, wid in enumerate(word_ids):
+                    if wid == local_word:
+                        input_ids[i] = mask_id
 
-    # 2. Map local word_ids back to global word positions.
-    #    word_ids[i] is None for special tokens, otherwise an offset
-    #    relative to the slice.
-    targets_in_window = []
-    for global_pos in target_positions:
-        local_word = global_pos - slice_start
-        try:
-            # first subword of this word
-            encoded_position = word_ids.index(local_word)
-        except ValueError as exc:
-            raise RuntimeError(
-                f"Target disappeared from its MacBERTh window: "
-                f"global={global_pos}, slice={slice_start}:{slice_end}"
-            ) from exc
-
-        targets_in_window.append(
-            {
-                "word_position": global_pos,       # still the global index
-                "encoded_position": encoded_position,
-            }
-        )
-
-        if self.mask_targets:
-            mask_id = self.tokenizer.mask_token_id
-            if mask_id is None:
-                raise RuntimeError("MacBERTh tokenizer has no mask token.")
-            for i, wid in enumerate(word_ids):
-                if wid == local_word:
-                    input_ids[i] = mask_id
-
-    return {
-        "input_ids": input_ids,
-        "attention_mask": attention_mask,
-        "window_id": slice_start,                 # global start word
-        "targets": targets_in_window,
-    }
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "window_id": slice_start,                 # global start word
+            "targets": targets_in_window,
+        }
 
 
     def _forward_windows(self, jobs: list[dict]) -> list[list[np.ndarray]]:
@@ -920,17 +921,12 @@ def _build_one_window(
                 scale for scale in scales if scale not in results[position]
             ]
             if missing_scales:
-                missing.append(
-                    (position, document.rows[position].token, missing_scales)
-                )
+                missing.append( (position, document.rows[position].token, missing_scales) )
 
         if missing:
             logger.error("[tier1] incomplete embeddings: %d observations", len(missing))
             for position, token, missing_scales in missing[:20]:
-                logger.error(
-                    "[tier1] position=%d token=%r missing=%s",
-                    position, token, missing_scales,
-                )
+                logger.error( "[tier1] position=%d token=%r missing=%s", position, token, missing_scales )
             raise RuntimeError(
                 f"{len(missing)} observations did not receive all requested embeddings."
             )
@@ -954,16 +950,10 @@ def _build_one_window(
         `end_position` is exclusive.
         """
 
-        if not (
-            0 <= start_position < end_position <= len(document.rows)
-        ):
-            raise ValueError(
-                f"Invalid span {start_position}:{end_position}"
-            )
+        if not ( 0 <= start_position < end_position <= len(document.rows) ):
+            raise ValueError( f"Invalid span {start_position}:{end_position}" )
 
-        positions = set(
-            range(start_position, end_position)
-        )
+        positions = set( range(start_position, end_position) )
 
         embedded = self.embed(
             document,
@@ -983,10 +973,7 @@ def _build_one_window(
             ]
 
             if not vectors:
-                raise RuntimeError(
-                    f"No vectors generated for span "
-                    f"{start_position}:{end_position}"
-                )
+                raise RuntimeError( f"No vectors generated for span {start_position}:{end_position}" )
 
             vector = np.mean(
                 np.stack(vectors),
@@ -1052,22 +1039,14 @@ def _build_one_window(
             )
 
         if len(word_spans) != word_count:
-            raise RuntimeError(
-                "MacBERTh word alignment is incomplete: "
-                f"expected {word_count} corpus tokens, "
-                f"got {len(word_spans)} encoded spans."
-            )
+            raise RuntimeError( f"MacBERTh word alignment is incomplete: expected {word_count} corpus tokens, got {len(word_spans)} encoded spans." )
 
         jobs: list[dict] = []
         covered_targets: set[int] = set()
-
         start_word = 0
 
         while start_word < word_count:
-            end_word = min(
-                word_count,
-                start_word + window_size,
-            )
+            end_word = min( word_count, start_word + window_size, )
 
             candidate_targets = sorted(
                 position
@@ -1100,7 +1079,6 @@ def _build_one_window(
                             context_start_word=start_word,
                             context_end_word=end_word,
                         )
-
                         group = [target]
 
                 if group:
@@ -1124,10 +1102,7 @@ def _build_one_window(
         missing_targets = target_positions - covered_targets
 
         if missing_targets:
-            raise RuntimeError(
-                "Some target observations were not assigned to "
-                f"a MacBERTh job: {sorted(missing_targets)[:20]}"
-            )
+            raise RuntimeError( f"Some target observations were not assigned to a MacBERTh job: {sorted(missing_targets)[:20]}" )
 
         return jobs
 
@@ -1148,30 +1123,14 @@ def _build_one_window(
         target_start_word = target_positions[0]
         target_end_word = target_positions[-1] + 1
 
-        context_start = word_spans[
-            context_start_word
-        ][0]
-
-        context_end = word_spans[
-            context_end_word - 1
-        ][1]
-
-        target_start = word_spans[
-            target_start_word
-        ][0]
-
-        target_end = word_spans[
-            target_end_word - 1
-        ][1]
-
+        context_start = word_spans[ context_start_word ][0]
+        context_end = word_spans[ context_end_word - 1 ][1]
+        target_start = word_spans[ target_start_word ][0]
+        target_end = word_spans[ target_end_word - 1 ][1]
         target_span = target_end - target_start
 
         if target_span > 512:
-            raise RuntimeError(
-                "A target group exceeds MacBERTh's 512-position "
-                f"limit: targets={target_start_word}:"
-                f"{target_end_word}, encoded_length={target_span}"
-            )
+            raise RuntimeError( f"A target group exceeds MacBERTh's 512-position limit: targets={target_start_word}: {target_end_word}, encoded_length={target_span}" )
 
         available_length = context_end - context_start
 
@@ -1180,21 +1139,11 @@ def _build_one_window(
                 512 - target_span
             ) // 2
 
-            encoded_start = max(
-                context_start,
-                desired_start,
-            )
-
-            encoded_end = min(
-                context_end,
-                encoded_start + 512,
-            )
+            encoded_start = max( context_start, desired_start, )
+            encoded_end = min( context_end, encoded_start + 512, )
 
             if encoded_end - encoded_start < 512:
-                encoded_start = max(
-                    context_start,
-                    encoded_end - 512,
-                )
+                encoded_start = max( context_start, encoded_end - 512, )
         else:
             encoded_start = context_start
             encoded_end = context_end
@@ -1203,25 +1152,12 @@ def _build_one_window(
             encoded_start <= target_start
             and target_end <= encoded_end
         ):
-            raise RuntimeError(
-                "Constructed MacBERTh context does not contain "
-                f"all targets: targets={target_start_word}:"
-                f"{target_end_word}, "
-                f"context={context_start_word}:"
-                f"{context_end_word}"
-            )
+            raise RuntimeError( "Constructed MacBERTh context does not contain all targets: targets={target_start_word}: {target_end_word}, context={context_start_word}: {context_end_word}" )
 
-        relative_word_ids = word_ids[
-            encoded_start:encoded_end
-        ]
+        relative_word_ids = word_ids[ encoded_start:encoded_end ]
+        window_ids = input_ids[ encoded_start:encoded_end ].copy()
 
-        window_ids = input_ids[
-            encoded_start:encoded_end
-        ].copy()
-
-        window_mask = attention_mask[
-            encoded_start:encoded_end
-        ]
+        window_mask = attention_mask[ encoded_start:encoded_end ]
 
         target_positions_in_window = []
 
@@ -1231,10 +1167,7 @@ def _build_one_window(
                     word_position
                 )
             except ValueError as exc:
-                raise RuntimeError(
-                    "Target disappeared from its MacBERTh "
-                    f"window: word_position={word_position}"
-                ) from exc
+                raise RuntimeError( f"Target disappeared from its MacBERTh window: word_position={word_position}" ) from exc
 
             target_positions_in_window.append(
                 {
@@ -1247,9 +1180,7 @@ def _build_one_window(
                 mask_token_id = self.tokenizer.mask_token_id
 
                 if mask_token_id is None:
-                    raise RuntimeError(
-                        "MacBERTh tokenizer has no mask token."
-                    )
+                    raise RuntimeError( "MacBERTh tokenizer has no mask token." )
 
                 # Mask every wordpiece belonging to the target.
                 for i, wid in enumerate(relative_word_ids):
@@ -1299,13 +1230,8 @@ def _build_one_window(
         for job in jobs:
             padding = max_length - len(job["input_ids"])
 
-            input_ids.append(
-                job["input_ids"] + [pad_token_id] * padding
-            )
-
-            attention_masks.append(
-                job["attention_mask"] + [0] * padding
-            )
+            input_ids.append( job["input_ids"] + [pad_token_id] * padding )
+            attention_masks.append( job["attention_mask"] + [0] * padding )
 
         input_tensor = torch.tensor(
             input_ids,
@@ -1340,10 +1266,7 @@ def _build_one_window(
         ]
 
 
-# ---------------------------------------------------------------------------
 # Event writer
-# ---------------------------------------------------------------------------
-
 class EventWriter:
     """
     Owns PostgreSQL event provenance and delegates vector persistence to
@@ -3792,11 +3715,7 @@ def main() -> None:
 
     if args.index_only:
         try:
-            writer = EventWriter(
-                conn,
-                args.lance_root,
-            )
-
+            writer = EventWriter( conn, args.lance_root, )
             writer.index_existing_tables()
         finally:
             conn.close()
@@ -3870,7 +3789,6 @@ def main() -> None:
         )
 
         if args.worker:
-
             kind = job_kind(
                 phrases=args.phrases,
                 add_scale=args.add_scale,
