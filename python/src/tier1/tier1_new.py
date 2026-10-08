@@ -3787,7 +3787,8 @@ def main() -> None:
         application_name="tier1-phrases2events",
     )
 
-    create_events_table(conn)
+    if not args.worker and not os.environ.get("COLAB_MODE"):
+        create_events_table(conn)
 
     if args.index_only:
         try:
