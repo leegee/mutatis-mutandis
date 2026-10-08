@@ -231,7 +231,6 @@ try:
             "uv", "run",
             "--directory", str(python_dir),
             "-m", "tier1.tier1_new",
-            "--backend", "auto",
             # "--max-docs", "5",       # useful for a quick test
             # "--dry-run",             # embed only, write nothing
         ],
