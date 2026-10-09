@@ -46,6 +46,10 @@ to populate an ANN (currently Lance after scaling-up from FAISS and Zarr).
 > [!INFO]
 > (reverse diachronic semantic search for embedded phrases - careful attention paid to "carrier" phrase that produces the embedding of the search term)
 
+* How did the image of the 1 Enoch's Noah, the Ancient Of Days, the Son Of Man end up as medicalised and/or grotseque and threatening in the 19th 20th century?
+
+* How does one identify in social media posts calls to violence against a specific group when the coded language constantly evolves?
+
 ### Specifically and in depth:
 
   * how has the typological symbol expressed by Enoch's Noah, The Ancient of Days, The Son Of Man, Stoker's Dracula and the villians of Eco,
