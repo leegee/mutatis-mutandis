@@ -30,6 +30,12 @@ MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
 logger.info(f"MACBERTH_MODEL_PATH {MACBERTH_MODEL_PATH}")
 
+# Passage support
+PASSAGE_CHUNK = 510
+PASSAGE_OVERLAP = 96
+PASSAGE_BATCH_SIZE = 32
+PASSAGE_REPRESENTATIONS = ("l8", "last", "mean4")
+
 
 @dataclass
 class MacberthModel:
@@ -655,3 +661,168 @@ def embed_query(
         raise RuntimeError( "MacBERTh produced zero-length query embedding" )
 
     return vector.astype(np.float32)[None, :]
+
+def _passage_layers(hidden_states):
+    """Match the layer selection used by colab_embed_passages.py."""
+    return {
+        "l8": hidden_states[8],
+        "last": hidden_states[-1],
+        "mean4": torch.stack(hidden_states[-4:]).mean(0),
+    }
+
+
+@torch.inference_mode()
+def encode_passage_words(
+    words: list[str],
+    macberth: MacberthModel,
+) -> dict[str, np.ndarray]:
+    """
+    Produce contextualised word vectors using the same subword,
+    chunk-overlap and layer-pooling procedure as the Colab job.
+
+    Returns one (n_words, hidden_size) float32 array per representation.
+    """
+    if not words:
+        raise ValueError("Cannot encode an empty passage.")
+
+    words = [word if word.strip() else "." for word in words]
+
+    tokenizer = macberth.tokenizer
+    device = macberth.device
+    dim = macberth.hidden_size
+
+    encoded = tokenizer(
+        words,
+        is_split_into_words=True,
+        add_special_tokens=False,
+        truncation=False,
+    )
+
+    input_ids = encoded["input_ids"]
+    word_ids = np.asarray(encoded.word_ids())
+
+    if len(input_ids) == 0:
+        raise ValueError("Tokenizer produced no subword tokens.")
+
+    chunks = []
+    start = 0
+
+    while True:
+        end = min(start + PASSAGE_CHUNK, len(input_ids))
+        chunks.append((start, end))
+
+        if end == len(input_ids):
+            break
+
+        start = end - PASSAGE_OVERLAP
+
+    sums = {
+        name: np.zeros((len(words), dim), dtype=np.float32)
+        for name in PASSAGE_REPRESENTATIONS
+    }
+    counts = np.zeros(len(words), dtype=np.float32)
+
+    # Preserve the chunk ordering used in the Colab implementation.
+    order = sorted(
+        range(len(chunks)),
+        key=lambda i: chunks[i][1] - chunks[i][0],
+    )
+
+    for offset in range(0, len(order), PASSAGE_BATCH_SIZE):
+        selected = [
+            chunks[i]
+            for i in order[offset:offset + PASSAGE_BATCH_SIZE]
+        ]
+        maxlen = max(end - start for start, end in selected) + 2
+
+        input_batch = torch.full(
+            (len(selected), maxlen),
+            tokenizer.pad_token_id,
+            dtype=torch.long,
+        )
+        attention_batch = torch.zeros(
+            (len(selected), maxlen),
+            dtype=torch.long,
+        )
+
+        for row, (start, end) in enumerate(selected):
+            sequence = (
+                [tokenizer.cls_token_id]
+                + input_ids[start:end]
+                + [tokenizer.sep_token_id]
+            )
+            input_batch[row, :len(sequence)] = torch.tensor(sequence)
+            attention_batch[row, :len(sequence)] = 1
+
+        output = macberth.encode(
+            input_ids=input_batch.to(device),
+            attention_mask=attention_batch.to(device),
+            output_hidden_states=True,
+        )
+
+        layers = {
+            name: tensor.float().cpu().numpy()
+            for name, tensor in _passage_layers(
+                output.hidden_states
+            ).items()
+        }
+
+        for row, (start, end) in enumerate(selected):
+            chunk_word_ids = word_ids[start:end]
+
+            first = np.flatnonzero(
+                np.r_[True, chunk_word_ids[1:] != chunk_word_ids[:-1]]
+            )
+            unique_words = chunk_word_ids[first]
+            sizes = np.diff(
+                np.r_[first, len(chunk_word_ids)]
+            ).astype(np.float32)
+
+            counts[unique_words] += sizes
+
+            for name in PASSAGE_REPRESENTATIONS:
+                hidden = layers[name][row, 1:1 + (end - start)]
+                sums[name][unique_words] += np.add.reduceat(
+                    hidden, first, axis=0
+                )
+
+    counts = np.maximum(counts, 1.0)[:, None]
+
+    return {
+        name: sums[name] / counts
+        for name in PASSAGE_REPRESENTATIONS
+    }
+
+
+def encode_passage_query(
+    text: str,
+    representation: str,
+    macberth: MacberthModel,
+) -> np.ndarray:
+    """
+    Encode a text query using the same word-vector aggregation as
+    the indexed passage vectors.
+
+    Returns an unnormalised float32 vector of shape (hidden_size,).
+    """
+    if representation not in PASSAGE_REPRESENTATIONS:
+        raise ValueError(
+            f"Unknown representation {representation!r}; "
+            f"choose from {PASSAGE_REPRESENTATIONS}"
+        )
+
+    words = text.split()
+    if not words:
+        raise ValueError("Query must contain at least one word.")
+
+    word_vectors = encode_passage_words(words, macberth)
+    vector = word_vectors[representation].mean(axis=0)
+    vector = np.asarray(vector, dtype=np.float32)
+
+    if not np.isfinite(vector).all():
+        raise ValueError("Query embedding contains non-finite values.")
+
+    if np.linalg.norm(vector) < 1e-12:
+        raise ValueError("Query embedding is a zero vector.")
+
+    return vector
