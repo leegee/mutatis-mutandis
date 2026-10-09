@@ -3,6 +3,7 @@ lib/macberth.py
 """
 
 from __future__ import annotations
+import os
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List, Union
@@ -20,7 +21,7 @@ BATCH_SIZE = 64
 ONNX_MODEL_DIR = MODELS_DIR / "./macberth-onnx-fp32"
 ONNX_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-logger.info(f"ONNX_MODEL_DIR {ONNX_MODEL_DIR}")
+logger.debug(f"ONNX_MODEL_DIR {ONNX_MODEL_DIR}")
 
 # This file lives at .../src/lib/macberth.py
 # Model path is D:\src\mutatis-mutandis\python\lib
@@ -28,7 +29,7 @@ _THIS_DIR = Path(__file__).resolve().parent.parent.parent
 MACBERTH_MODEL_PATH = _THIS_DIR / "lib" / "macberth-huggingface"
 MACBERTH_MODEL_NAME = "emanjavacas/MacBERTh"
 
-logger.info(f"MACBERTH_MODEL_PATH {MACBERTH_MODEL_PATH}")
+logger.debug(f"MACBERTH_MODEL_PATH {MACBERTH_MODEL_PATH}")
 
 # Passage support
 PASSAGE_CHUNK = 510
@@ -83,14 +84,11 @@ def load_macberth() -> MacberthModel:
     (The MLM head is currently used by Tier 1.4.)
     """
 
-    logger.info("Loading MacBERTh model...")
-    logger.info("MacBERTh model path: %s", MACBERTH_MODEL_PATH)
+    logger.debug("Loading MacBERTh model...")
+    logger.debug("MacBERTh model path: %s", MACBERTH_MODEL_PATH)
 
     if not MACBERTH_MODEL_PATH.is_dir():
-        raise FileNotFoundError(
-            f"MacBERTh model directory does not exist: "
-            f"{MACBERTH_MODEL_PATH}"
-        )
+        raise FileNotFoundError( f"MacBERTh model directory does not exist: {MACBERTH_MODEL_PATH}" )
 
     tokenizer = AutoTokenizer.from_pretrained(
         MACBERTH_MODEL_PATH,
@@ -242,7 +240,6 @@ class OnnxMacberthModel:
     def __init__(self, tokenizer, session):
         self.tokenizer = tokenizer
         self.session = session
-
         self.device = "cpu"
 
         # Read once from ONNX metadata rather than requiring transformers config.
@@ -298,10 +295,7 @@ def _export_macberth_onnx(export_dir: Path) -> None:
     export_dir = Path(export_dir)
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(
-        "[macberth] Exporting MacBERTh encoder to ONNX: %s",
-        export_dir,
-    )
+    logger.info( "[macberth] Exporting MacBERTh encoder to ONNX: %s", export_dir, )
 
     tokenizer = AutoTokenizer.from_pretrained(
         MACBERTH_MODEL_PATH,
@@ -439,10 +433,7 @@ def load_macberth_onnx(
 
     usable = [p for p in providers if p in ort.get_available_providers()]
     if not usable:
-        raise RuntimeError(
-            f"None of the requested providers are available: {providers}. "
-            f"Available: {ort.get_available_providers()}"
-        )
+        raise RuntimeError( f"None of the requested providers are available: {providers}. Available: {ort.get_available_providers()}" )
 
     provider_options = [
         {"device_id": 0} if p in ("CUDAExecutionProvider", "DmlExecutionProvider") else {}
@@ -492,8 +483,6 @@ def _configure_ort_session_options() -> ort.SessionOptions:
         interleaves non-trivial Python work between forward passes
         rather than running back-to-back inference in a tight loop.
     """
-    import os
-
     sess_options = ort.SessionOptions()
     sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
@@ -531,8 +520,6 @@ def load_macberth_onnx(
     Default provider is CPU-only (stable for long Tier 1 runs on Windows).
     Pass `providers=["DmlExecutionProvider", "CPUExecutionProvider"]`
     """
-    import os
-
     if export_dir is None:
         export_dir = ONNX_MODEL_DIR
     export_dir = Path(export_dir)
@@ -565,10 +552,7 @@ def load_macberth_onnx(
         providers=usable,
         provider_options=provider_options,
     )
-    logger.info(
-        "[macberth.load_macberth_onnx] Loaded ONNX MacBERTh, providers: %s",
-        session.get_providers(),
-    )
+    logger.info( "[macberth.load_macberth_onnx] Loaded ONNX MacBERTh, providers: %s", session.get_providers(), )
 
     tokenizer = AutoTokenizer.from_pretrained(export_dir, local_files_only=True)
 

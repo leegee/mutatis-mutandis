@@ -88,6 +88,7 @@ def search_passages(
                 "word_end",
                 "token_start",
                 "token_end",
+                 "_distance",
             ])
             .limit(per_table_limit)
             .to_arrow()
