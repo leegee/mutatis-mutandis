@@ -25,17 +25,8 @@ DEFAULT_QUERIES = [
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Benchmark MacBERTh passage representations "
-                    "across different political queries."
-    )
-    parser.add_argument(
-        "--query",
-        action="append",
-        dest="queries",
-        help="Query to test. Repeat this option to supply several. "
-             "Defaults to three diagnostic queries.",
-    )
+    parser = argparse.ArgumentParser( description="Benchmark MacBERTh passage representations across different political queries." )
+    parser.add_argument( "--query", action="append", dest="queries", help="Query to test. Repeat this option to supply several. " "Defaults to three diagnostic queries.", )
     parser.add_argument("--start-year", type=int, default=1600)
     parser.add_argument("--end-year", type=int, default=1650)
     parser.add_argument("--limit", type=int, default=20)

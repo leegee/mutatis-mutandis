@@ -165,3 +165,65 @@ Passage search and event search serve complementary purposes. Passage vectors lo
 * Present embeddings as tools for discovering historical evidence, not as substitutes for historical interpretation.
 
 **Immediate objective:** build a minimal end-to-end demonstration that accepts a research query and date range, returns the top 20 passages, and allows each result to be inspected in its original documentary context. Evaluate its ability to discover useful evidence beyond the existing event-search pipeline before developing a more sophisticated interface.
+
+## Sample Queries
+
+### Justifying violence against opponents
+
+Research concept: how writers justify, excuse or condemn violence against people regarded as enemies.
+
+Query:
+
+> When is it lawful or necessary to use force against those who threaten the religion, peace or safety of the kingdom?
+
+What it might uncover: passages using resistance, self-preservation, defence, rebellion, necessity, malignants or enemies of the kingdom.
+
+Why it is useful: the vocabulary may distinguish a defence of violence from a condemnation of it. The system must retrieve the context, not simply match a reference to violence.
+
+### Identifying an internal enemy
+
+Research concept: how writers portray a group as secretly threatening a community or its institutions.
+
+Query
+
+> People accused of secretly undermining the established religion, government or common good.
+
+What it might uncover: plots, conspiracies, machinations, sedition, corruption, designs and enemies within.
+
+Why it is useful: the same underlying accusation may be expressed without any one stable term for conspiracy or subversion.
+
+### Dehumanising or demonising a group
+
+Research concept: rhetoric that represents opponents as inherently wicked, dangerous or unworthy of ordinary treatment.
+
+Query
+
+> A group of people portrayed as wicked, dangerous, corrupt or enemies of humanity who deserve punishment.
+
+What it might uncover: expressions of moral pollution, disease, monstrosity, satanic influence or collective guilt.
+
+Why it is useful: it tests whether semantic retrieval connects different rhetorical strategies without treating every negative description as equivalent.
+
+### Allegations of religious disloyalty
+
+Research concept: accusations that a religious group is disloyal to the state or secretly serves another power.
+
+Query
+
+> People accused of placing loyalty to a foreign power or religious authority above their duty to their own country.
+
+What it might uncover: claims about divided allegiance, foreign influence, treachery, popery, corruption of the state or subjection to an external authority.
+
+Why it is useful: it tests whether the search retrieves the underlying accusation when the specific target group or historical terminology is absent from the query.
+
+### The language of political legitimacy
+
+Research concept: when obedience to authority is presented as a duty, and when resistance becomes justified.
+
+Query
+
+> en a ruler abuses lawful authority, whether the people may withdraw obedience or resist the ruler.
+
+What it might uncover: prerogative, tyranny, trust, consent, liberty, lawful resistance and arguments about the people's rights.
+
+Why it is useful: this extends the searches you have already run for royal power and liberty, but gives you a more explicit conceptual test.
