@@ -59,222 +59,32 @@ import argparse
 import os
 import time
 import unicodedata
-from collections import defaultdict
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import torch
 
 from lib.corpus_config import (
-    ACTIVE_SCALES,
-    CONCEPT_SETS,
-    PHRASE_SETS,
     EMBED_BATCH_SIZE,
     LANCE_INDEXES_DIR,
-    WINDOW_CONFIGS, SCALE_NAMES, LANCE_MODEL_NAME,LANCE_BUCKET_SIZE
+    SCALE_NAMES,
+    LANCE_BUCKET_SIZE
 )
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.macberth import load_macberth
-from lib.stopwords_min import STOPWORDS
 
 from tier1.models import *
-from tier1.db_observation_backend import (
-    allocate_event_ids,
-    insert_events,
-    create_events_table,
-)
-from tier1.vector_writer import VectorWriter
+from tier1.db_observation_backend import create_events_table
 from tier1.event_writer import EventWriter
-
-from tier1.doc_buffer import DocBuffer
+from tier1.corpus_processor import NEIGHBOUR_RADIUS
+from tier1.macberth_pipeline import MacBERThPipeline
+from tier1.corpus_processor import CorpusProcessor
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("OMP_NUM_THREADS", "4")
 os.environ.setdefault("MKL_NUM_THREADS", "4")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
-
-# Token helpers
-def normalise_token(token: str) -> str:
-    return unicodedata.normalize("NFKC", token).strip().lower()
-
-
-def is_punctuation(token: str) -> bool:
-    value = normalise_token(token)
-
-    return bool(value) and all(
-        unicodedata.category(char).startswith("P")
-        for char in value
-    )
-
-
-def is_stopword(token: str) -> bool:
-    return normalise_token(token) in STOPWORDS
-
-
-def is_storable_event(token: str) -> bool:
-    return not is_stopword(token) and not is_punctuation(token)
-
-
-# Seed / phrase forms
-def seed_forms() -> set[str]:
-    forms: set[str] = set()
-
-    for rule in CONCEPT_SETS.values():
-        forms.update(
-            normalise_token(form)
-            for form in rule["forms"]
-        )
-
-    return forms
-
-
-def false_positive_forms() -> set[str]:
-    forms: set[str] = set()
-
-    for rule in CONCEPT_SETS.values():
-        forms.update(
-            normalise_token(form)
-            for form in rule["false_positives"]
-        )
-
-    return forms
-
-
-SEED_FORMS = seed_forms()
-FALSE_POSITIVE_FORMS = false_positive_forms()
-
-
-def is_seed(token: str) -> bool:
-    value = normalise_token(token)
-
-    return (
-        value in SEED_FORMS
-        and value not in FALSE_POSITIVE_FORMS
-    )
-
-
-def phrase_forms() -> list[tuple[str, ...]]:
-    forms: list[tuple[str, ...]] = []
-
-    for phrase_set in PHRASE_SETS.values():
-        for phrase in phrase_set:
-            if isinstance(phrase, str):
-                tokens = tuple(
-                    normalise_token(token)
-                    for token in phrase.split()
-                    if token.strip()
-                )
-            else:
-                tokens = tuple(
-                    normalise_token(token)
-                    for token in phrase
-                )
-
-            if tokens:
-                forms.append(tokens)
-
-    return forms
-
-
-PHRASE_FORMS = phrase_forms()
-
-
-# Existing-event helpers
-def existing_event_documents(
-    conn,
-    *,
-    corpus: str,
-    phrases: bool = False,
-) -> set[str]:
-    """
-    Return documents which already have observations of the requested type.
-
-    Token observations:
-        span_end_idx IS NULL
-
-    Phrase observations:
-        span_end_idx IS NOT NULL
-
-    This deliberately keeps token and phrase completion independent.
-    """
-
-    span_clause = (
-        "e.span_end_idx IS NOT NULL"
-        if phrases
-        else "e.span_end_idx IS NULL"
-    )
-
-    with conn.cursor() as cur:
-        cur.execute(
-            f""" SELECT DISTINCT e.doc_id FROM events AS e WHERE e.corpus = %s AND {span_clause} """,
-            (corpus,),
-        )
-
-        return {
-            row[0]
-            for row in cur.fetchall()
-        }
-
-
-def document_has_events(
-    conn,
-    *,
-    corpus: str,
-    doc_id: str,
-    phrases: bool = False,
-) -> bool:
-    """
-    Single-document form of existing_event_documents(): does this document
-    already have observations of the requested type?
-    """
-
-    span_clause = (
-        "span_end_idx IS NOT NULL"
-        if phrases
-        else "span_end_idx IS NULL"
-    )
-
-    with conn.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT EXISTS (
-                SELECT 1 FROM events
-                WHERE corpus = %s AND doc_id = %s AND {span_clause} )
-            """,
-            (corpus, doc_id),
-        )
-
-        return bool(cur.fetchone()[0])
-
-
-def document_missing_scale(
-    conn,
-    *,
-    corpus: str,
-    doc_id: str,
-    scale: str,
-) -> bool:
-    """
-    Does this document still have events with no `scale` window
-    provenance (i.e. is there anything left to backfill)?
-    """
-
-    if scale not in SCALE_NAMES:
-        raise ValueError(f"unknown scale {scale!r}")
-
-    with conn.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT EXISTS (
-                SELECT 1 FROM events WHERE corpus = %s AND doc_id = %s AND {scale}_window_id IS NULL
-            )
-            """,
-            (corpus, doc_id),
-        )
-
-        return bool(cur.fetchone()[0])
 
 
 # Job queue
@@ -288,7 +98,6 @@ def document_missing_scale(
 # phrase pass and each scale backfill must complete independently.
 
 JOBS_TABLE = "embedding_jobs"
-
 JOB_KIND_TOKENS = "tokens"
 JOB_KIND_PHRASES = "phrases"
 JOB_KIND_BACKFILL_PREFIX = "backfill:"
@@ -527,12 +336,8 @@ def repair_year_range(
     end_year: int,
     corpus: str | None = None,
 ) -> int:
-
     if start_year > end_year:
-        raise ValueError(
-            f"start_year ({start_year}) must not exceed "
-            f"end_year ({end_year})"
-        )
+        raise ValueError( f"start_year ({start_year}) must not exceed  end_year ({end_year})" )
 
     bucket_start = (
         start_year // LANCE_BUCKET_SIZE
@@ -639,7 +444,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument( "--doc-id", default=None, )
 
-    parser.add_argument( "--neighbour-radius", type=int, default=256, )
+    parser.add_argument( "--neighbour-radius", type=int, default=NEIGHBOUR_RADIUS, )
 
     parser.add_argument( "--lance-root", type=Path, default=Path(LANCE_INDEXES_DIR), )
 
@@ -655,20 +460,9 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument( "--index-only", action="store_true", help=( "Rebuild incomplete indexes on existing active-scale Lance tables." ), )
 
-    parser.add_argument(
-        "--repair",
-        type=parse_repair_target,
-        metavar="CORPUS/DOC_ID",
-        help=( "Regenerate Lance vectors for one token-observation document without modifying PostgreSQL events." ),
-    )
+    parser.add_argument( "--repair", type=parse_repair_target, metavar="CORPUS/DOC_ID", help=( "Regenerate Lance vectors for one token-observation document without modifying PostgreSQL events." ), )
 
-    parser.add_argument(
-        "--repair-years",
-        nargs=2,
-        type=int,
-        metavar=("START_YEAR", "END_YEAR"),
-        help=( "Repair all token-observation documents in the complete 50-year Lance buckets containing this range." ),
-    )
+    parser.add_argument( "--repair-years", nargs=2, type=int, metavar=("START_YEAR", "END_YEAR"), help=( "Repair all token-observation documents in the complete 50-year Lance buckets containing this range." ), )
 
     parser.add_argument( "--skip-indexing", action="store_true", help=( "Skip the post-run Lance index rebuild." ), )
 

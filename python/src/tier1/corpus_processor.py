@@ -1,9 +1,197 @@
+import unicodedata
+import time
+
 from lib.corpus_logging import logger
+from lib.corpus_config import CONCEPT_SETS, PHRASE_SETS
+from lib.stopwords_min import STOPWORDS
 
 from tier1.models import *
 from tier1.macberth_pipeline import MacBERThPipeline
 from tier1.event_writer import EventWriter
 from tier1.vector_writer import VectorWriter
+
+NEIGHBOUR_RADIUS = 64
+
+def normalise_token(token: str) -> str:
+    return unicodedata.normalize("NFKC", token).strip().lower()
+
+
+def is_punctuation(token: str) -> bool:
+    value = normalise_token(token)
+
+    return bool(value) and all(
+        unicodedata.category(char).startswith("P")
+        for char in value
+    )
+
+
+def is_stopword(token: str) -> bool:
+    return normalise_token(token) in STOPWORDS
+
+
+def is_storable_event(token: str) -> bool:
+    return not is_stopword(token) and not is_punctuation(token)
+
+
+# Seed / phrase forms
+def seed_forms() -> set[str]:
+    forms: set[str] = set()
+
+    for rule in CONCEPT_SETS.values():
+        forms.update(
+            normalise_token(form)
+            for form in rule["forms"]
+        )
+
+    return forms
+
+
+def false_positive_forms() -> set[str]:
+    forms: set[str] = set()
+
+    for rule in CONCEPT_SETS.values():
+        forms.update(
+            normalise_token(form)
+            for form in rule["false_positives"]
+        )
+
+    return forms
+
+
+SEED_FORMS = seed_forms()
+FALSE_POSITIVE_FORMS = false_positive_forms()
+
+
+def is_seed(token: str) -> bool:
+    value = normalise_token(token)
+
+    return (
+        value in SEED_FORMS
+        and value not in FALSE_POSITIVE_FORMS
+    )
+
+
+def phrase_forms() -> list[tuple[str, ...]]:
+    forms: list[tuple[str, ...]] = []
+
+    for phrase_set in PHRASE_SETS.values():
+        for phrase in phrase_set:
+            if isinstance(phrase, str):
+                tokens = tuple(
+                    normalise_token(token)
+                    for token in phrase.split()
+                    if token.strip()
+                )
+            else:
+                tokens = tuple(
+                    normalise_token(token)
+                    for token in phrase
+                )
+
+            if tokens:
+                forms.append(tokens)
+
+    return forms
+
+
+PHRASE_FORMS = phrase_forms()
+
+
+def document_has_events(
+    conn,
+    *,
+    corpus: str,
+    doc_id: str,
+    phrases: bool = False,
+) -> bool:
+    """
+    Single-document form of existing_event_documents(): does this document
+    already have observations of the requested type?
+    """
+
+    span_clause = (
+        "span_end_idx IS NOT NULL"
+        if phrases
+        else "span_end_idx IS NULL"
+    )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT EXISTS (
+                SELECT 1 FROM events
+                WHERE corpus = %s AND doc_id = %s AND {span_clause} )
+            """,
+            (corpus, doc_id),
+        )
+
+        return bool(cur.fetchone()[0])
+
+
+
+def document_missing_scale(
+    conn,
+    *,
+    corpus: str,
+    doc_id: str,
+    scale: str,
+) -> bool:
+    """
+    Does this document still have events with no `scale` window
+    provenance (i.e. is there anything left to backfill)?
+    """
+
+    if scale not in SCALE_NAMES:
+        raise ValueError(f"unknown scale {scale!r}")
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT EXISTS (
+                SELECT 1 FROM events WHERE corpus = %s AND doc_id = %s AND {scale}_window_id IS NULL
+            )
+            """,
+            (corpus, doc_id),
+        )
+
+        return bool(cur.fetchone()[0])
+
+
+def existing_event_documents(
+    conn,
+    *,
+    corpus: str,
+    phrases: bool = False,
+) -> set[str]:
+    """
+    Return documents which already have observations of the requested type.
+
+    Token observations:
+        span_end_idx IS NULL
+
+    Phrase observations:
+        span_end_idx IS NOT NULL
+
+    This deliberately keeps token and phrase completion independent.
+    """
+
+    span_clause = (
+        "e.span_end_idx IS NOT NULL"
+        if phrases
+        else "e.span_end_idx IS NULL"
+    )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f""" SELECT DISTINCT e.doc_id FROM events AS e WHERE e.corpus = %s AND {span_clause} """,
+            (corpus,),
+        )
+
+        return {
+            row[0]
+            for row in cur.fetchall()
+        }
+
 
 class CorpusProcessor:
     def __init__(
@@ -12,7 +200,7 @@ class CorpusProcessor:
         pipeline: MacBERThPipeline | None,
         writer: EventWriter | None,
         *,
-        neighbour_radius: int = 256,
+        neighbour_radius: int = NEIGHBOUR_RADIUS,
         report_every: int = 25,
     ) -> None:
         self.conn = conn
@@ -1284,21 +1472,15 @@ class CorpusProcessor:
         ]
 
         params: list[object] = [
-            sorted(
-                SEED_FORMS - FALSE_POSITIVE_FORMS
-            ),
+            sorted( SEED_FORMS - FALSE_POSITIVE_FORMS ),
         ]
 
         if corpus is not None:
-            clauses.append(
-                "t.corpus = %s"
-            )
+            clauses.append( "t.corpus = %s" )
             params.append(corpus)
 
         if doc_id is not None:
-            clauses.append(
-                "t.doc_id = %s"
-            )
+            clauses.append( "t.doc_id = %s" )
             params.append(doc_id)
 
         join = ""

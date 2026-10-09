@@ -23,6 +23,7 @@ from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
 from lib.macberth import load_macberth
 from lib.stopwords_min import STOPWORDS
+from tier1.corpus_processor import NEIGHBOUR_RADIUS
 from tier1.db_observation_backend import (
     allocate_event_ids,
     insert_events,
@@ -41,8 +42,8 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
 # ---------------------------------------------------------------------------
 
 WINDOW_CONFIGS = (
-    {"name": "local", "size": 256, "stride": 128},
-    {"name": "medium", "size": 512, "stride": 256},
+    {"name": "local", "size": 128, "stride": 64},
+    {"name": "medium", "size": 256, "stride": 128},
     {"name": "broad", "size": 512, "stride": 384},
 )
 
@@ -1199,7 +1200,7 @@ class CorpusProcessor:
         pipeline: MacBERThPipeline,
         writer: EventWriter,
         *,
-        neighbour_radius: int = 256,
+        neighbour_radius: int = NEIGHBOUR_RADIUS,
         report_every: int = 25,
     ) -> None:
         self.conn = conn
@@ -2569,10 +2570,7 @@ def repair_year_range(
         apply=True,
     )
 
-    logger.info(
-        "[repair] purged orphans: %s",
-        results,
-    )
+    logger.info( "[repair] purged orphans: %s", results, )
 
     logger.info(
         "[repair] Repaired %d documents "
@@ -2585,115 +2583,23 @@ def repair_year_range(
     return repaired
 
 
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-
 def parse_args() -> argparse.Namespace:
-
     parser = argparse.ArgumentParser(
-        description=(
-            "Build Tier 1 token and phrase observations from "
-            "the restricted pamphlet corpus through MacBERTh "
-            "into Lance."
-        )
+        description=( "Build Tier 1 token and phrase observations from the restricted pamphlet corpus through MacBERTh into Lance." )
     )
 
-    parser.add_argument(
-        "--corpus",
-        default=None,
-    )
-
-    parser.add_argument(
-        "--doc-id",
-        default=None,
-    )
-
-    parser.add_argument(
-        "--neighbour-radius",
-        type=int,
-        default=256,
-    )
-
-    parser.add_argument(
-        "--lance-root",
-        type=Path,
-        default=Path(LANCE_INDEXES_DIR),
-    )
-
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=EMBED_BATCH_SIZE,
-    )
-
-    parser.add_argument(
-        "--report-every",
-        type=int,
-        default=1,
-    )
-
-    parser.add_argument(
-        "--phrases",
-        action="store_true",
-        help="Process phrase observations rather than token observations.",
-    )
-
-    parser.add_argument(
-        "--add-scale",
-        choices=SCALE_NAMES,
-        default=None,
-        help=(
-            "Add this scale to existing observations without "
-            "creating new event IDs."
-        ),
-    )
-
-    parser.add_argument(
-        "--mask",
-        action="store_true",
-        help=(
-            "Replace target tokens with [MASK] before embedding."
-        ),
-    )
-
-    parser.add_argument(
-        "--index-only",
-        action="store_true",
-        help=(
-            "Rebuild incomplete indexes on existing active-scale "
-            "Lance tables."
-        ),
-    )
-
-    parser.add_argument(
-        "--repair",
-        type=parse_repair_target,
-        metavar="CORPUS/DOC_ID",
-        help=(
-            "Regenerate Lance vectors for one token-observation "
-            "document without modifying PostgreSQL events."
-        ),
-    )
-
-    parser.add_argument(
-        "--repair-years",
-        nargs=2,
-        type=int,
-        metavar=("START_YEAR", "END_YEAR"),
-        help=(
-            "Repair all token-observation documents in the "
-            "complete 50-year Lance buckets containing this range."
-        ),
-    )
-
-    parser.add_argument(
-        "--skip-indexing",
-        action="store_true",
-        help=(
-            "Skip the post-run Lance index rebuild."
-        ),
-    )
+    parser.add_argument( "--corpus", default=None, )
+    parser.add_argument( "--doc-id", default=None, )
+    parser.add_argument( "--neighbour-radius", type=int, default=NEIGHBOUR_RADIUS, )
+    parser.add_argument( "--lance-root", type=Path, default=Path(LANCE_INDEXES_DIR), )
+    parser.add_argument( "--batch-size", type=int, default=EMBED_BATCH_SIZE, )
+    parser.add_argument( "--report-every", type=int, default=1, )
+    parser.add_argument( "--phrases", action="store_true", help="Process phrase observations rather than token observations.", )
+    parser.add_argument( "--add-scale", choices=SCALE_NAMES, default=None, help=( "Add this scale to existing observations without creating new event IDs." ), ) parser.add_argument( "--mask", action="store_true", help=( "Replace target tokens with [MASK] before embedding." ), )
+    parser.add_argument( "--index-only", action="store_true", help=( "Rebuild incomplete indexes on existing active-scale Lance tables." ), )
+    parser.add_argument( "--repair", type=parse_repair_target, metavar="CORPUS/DOC_ID", help=( "Regenerate Lance vectors for one token-observation document without modifying PostgreSQL events." ), )
+    parser.add_argument( "--repair-years", nargs=2, type=int, metavar=("START_YEAR", "END_YEAR"), help=( "Repair all token-observation documents in the complete 50-year Lance buckets containing this range." ), )
+    parser.add_argument( "--skip-indexing", action="store_true", help=( "Skip the post-run Lance index rebuild." ), )
 
     args = parser.parse_args()
 
@@ -2701,16 +2607,10 @@ def parse_args() -> argparse.Namespace:
         args.corpus is not None
         or args.doc_id is not None
     ):
-        parser.error(
-            "--repair cannot be combined with "
-            "--corpus or --doc-id"
-        )
+        parser.error( "--repair cannot be combined with --corpus or --doc-id" )
 
     if args.repair is not None and args.repair_years:
-        parser.error(
-            "--repair and --repair-years cannot "
-            "be used together"
-        )
+        parser.error( "--repair and --repair-years cannot be used together" )
 
     if args.index_only and any(
         (
@@ -2720,37 +2620,18 @@ def parse_args() -> argparse.Namespace:
             args.phrases,
         )
     ):
-        parser.error(
-            "--index-only cannot be combined with "
-            "processing, repair, or backfill options"
-        )
+        parser.error( "--index-only cannot be combined with processing, repair, or backfill options" )
 
     return args
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main() -> None:
-
     args = parse_args()
 
-    torch.set_num_threads(
-        int(
-            os.environ.get(
-                "OMP_NUM_THREADS",
-                "4",
-            )
-        )
-    )
+    torch.set_num_threads( int( os.environ.get( "OMP_NUM_THREADS", "4", ) ) )
 
     torch.set_num_interop_threads(1)
-
-    conn = get_connection(
-        application_name="tier1-phrases2events",
-    )
-
+    conn = get_connection( application_name="tier1-event-creator", )
     create_events_table(conn)
 
     if args.index_only:

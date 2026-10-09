@@ -43,13 +43,12 @@ class MacBERThPipeline:
             end_word = min(word_count, start_word + window_size)
 
             candidate_targets = sorted(
-                p for p in target_positions if start_word <= p < end_word
+                p for p in target_positions
+                if start_word <= p < min(end_word, start_word + stride)
             )
 
             if candidate_targets:
-                # Group targets greedily according to their actual encoded
-                # subword span.  Source-word count is not a reliable proxy
-                # for MacBERTh token count, especially for historical text.
+                # Group targets greedily according to their actual encoded subword span.  Source-word count is not a reliable proxy for MacBERTh token count, especially for historical text.
                 group: list[int] = []
 
                 for target in candidate_targets:

@@ -12,6 +12,24 @@ FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
 MAX_TOKENS_IN_DOC = 400_000
 
+
+EMBED_BATCH_SIZE = 64 # Tests showed is faster by ~30% than 256
+TOP_K = 30
+
+SCALES = ("local", "medium", "broad")
+ACTIVE_SCALES = ("local")
+
+WINDOW_CONFIGS = (
+    {"name": "local", "size": 30, "stride": 20},
+    {"name": "medium", "size": 256, "stride": 128},
+    {"name": "broad", "size": 512, "stride": 384},
+)
+SCALE_NAMES = SCALES # tuple(config["name"] for config in WINDOW_CONFIGS)
+
+LANCE_MODEL_NAME = "macberth"
+LANCE_BUCKET_SIZE = 50
+
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 ECCO_HEADER_DIR = Path( PROJECT_ROOT / "corpus/ecco_all/ecco/headers" )
@@ -32,7 +50,6 @@ COLAB_MODE = (
     or "google.colab" in sys.modules
 )
 
-# Could use env var
 OUT_DIR = Path("/content/drive/MyDrive/macberth_output") if COLAB_MODE else PROJECT_ROOT / "out"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -60,7 +77,7 @@ JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
-# LANCE_INDEXES_DIR = INDEXES_DIR / "lance" # Whiteness
+# LANCE_INDEXES_DIR = INDEXES_DIR / "lance" # For the Extreme Whiteness project
 LANCE_INDEXES_DIR = INDEXES_DIR / "lance_pamphlets"
 LANCE_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -70,26 +87,8 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR = OUT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-SCALES = ("local", "medium", "broad")
-ACTIVE_SCALES = ("local", "medium")
-
 PLOT_DIR = GUI_PUBLIC_DIR / "data" / "scatter"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
-
-EMBED_BATCH_SIZE = 64 # Tests showed is faster by ~30% than 256
-TOP_K = 30
-
-WINDOW_CONFIGS = (
-    {"name": "local", "size": 256, "stride": 128},
-    {"name": "medium", "size": 512, "stride": 256},
-    {"name": "broad", "size": 512, "stride": 384},
-)
-
-SCALE_NAMES = tuple(config["name"] for config in WINDOW_CONFIGS)
-
-LANCE_MODEL_NAME = "macberth"
-LANCE_BUCKET_SIZE = 50
-
 
 
 """
