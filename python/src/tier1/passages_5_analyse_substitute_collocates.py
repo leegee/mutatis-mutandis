@@ -1,5 +1,5 @@
-"""
 tier1/passages_5_analyse_substitute_collocates.py
+"""
 
 Compare substitute and seed collocate profiles using an existing
 passage_mask_fillers.py output CSV. This mode does not load MacBERTh.
