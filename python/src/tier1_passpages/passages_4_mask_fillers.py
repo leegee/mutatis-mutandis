@@ -52,6 +52,17 @@ Examples
     python passage_mask_fillers.py --seed libertie,liberty --period-size 25
     python passage_mask_fillers.py --seed resist --exclude-forms resistance
     python passage_mask_fillers.py --source csv --seed defence
+    python passage_mask_fillers.py --phrase "take/tooke/taketh heed/heede" \\
+        --scope all --start-year 1550 --end-year 1700 --phrase-gap 1
+
+Single words and phrases
+------------------------
+Use --seed for single words (comma-separated spelling variants). Use --phrase
+for multi-word seeds (db only): space separates words, "/" separates spelling
+variants within a word. --phrase-gap N allows up to N other tokens between
+consecutive words. The whole phrase is replaced by ONE [MASK] for the
+substitute analysis; its words are left out of the collocates and excluded
+from the alternatives.
 """
 
 from __future__ import annotations
@@ -80,6 +91,7 @@ from lib.passage_stem import (
 from lib.passage_db import (
     SCOPES,
     fetch_hits,
+    fetch_phrase_hits,
     fetch_doc_lengths,
     matched_hits,
     fetch_random_hits,
@@ -553,14 +565,37 @@ def make_periods(start, end, size):
     return out
 
 
+def parse_phrase(spec):
+    """
+    'take/tooke/taketh heed/heede' ->
+        ('take heed', [{'take', 'tooke', 'taketh'}, {'heed', 'heede'}])
+    """
+    parts = spec.split()
+    slots = []
+    for part in parts:
+        forms = {v.strip().lower() for v in part.split("/") if v.strip()}
+        if forms:
+            slots.append(forms)
+    if len(slots) < 2:
+        raise ValueError(f"A phrase needs at least two words: {spec!r}")
+    label = " ".join(part.split("/")[0].strip().lower() for part in parts)
+    return label, slots
+
+
 def csv_list(s):
     return {w.strip().lower() for w in s.split(",") if w.strip()}
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Discover vocabulary around seed words.")
-    p.add_argument("--seed", action="append", required=True,
+    p.add_argument("--seed", action="append", default=[],
                    help="Seed word, or comma-separated spelling variants. Repeatable.")
+    p.add_argument("--phrase", action="append", default=[],
+                   help="Seed phrase (db only): words separated by spaces, spelling "
+                        "variants by '/', e.g. \"take/tooke/taketh heed/heede\". "
+                        "Repeatable.")
+    p.add_argument("--phrase-gap", type=int, default=0,
+                   help="Max other tokens allowed between consecutive phrase words.")
     p.add_argument("--exclude-forms", default="",
                    help="Extra words (e.g. derivations such as 'resistance') to keep "
                         "out of the results. The seed's own inflections and spellings "
@@ -628,6 +663,12 @@ def main() -> None:
 
     if args.start_year > args.end_year:
         p.error("--start-year must not exceed --end-year")
+    if not args.seed and not args.phrase:
+        p.error("give at least one --seed or --phrase")
+    if args.phrase and args.source != "db":
+        p.error("--phrase needs --source db")
+    if args.phrase_gap < 0:
+        p.error("--phrase-gap must not be negative")
     if args.replicates < 1:
         p.error("--replicates must be at least 1")
 
@@ -636,9 +677,15 @@ def main() -> None:
     args.require_set = require
     extra_exclude = csv_list(args.exclude_forms)
     seed_groups = [
-        (s.split(",")[0].strip().lower(), csv_list(s))
+        (s.split(",")[0].strip().lower(), csv_list(s), None)
         for s in args.seed
     ]
+    for spec in args.phrase:
+        try:
+            plabel, slots = parse_phrase(spec)
+        except ValueError as exc:
+            p.error(str(exc))
+        seed_groups.append((plabel, set().union(*slots), slots))
     nprng = np.random.default_rng(args.seed_rng)
 
     print("Loading MacBERTh...")
@@ -671,15 +718,21 @@ def main() -> None:
         for lo, hi in periods:
             period = f"{lo}-{hi}" if lo is not None else "csv"
 
-            for label, variants in seed_groups:
+            for label, variants, slots in seed_groups:
                 doc_len = {}
                 if conn is not None:
                     want = args.max_occurrences * (
                         args.oversample if (require or forbid) else 1)
-                    hits, surfaces = fetch_hits(
-                        conn, args.scope, variants, args.match, lo, hi, want,
-                        args.max_per_doc,
-                    )
+                    if slots:
+                        hits, surfaces = fetch_phrase_hits(
+                            conn, args.scope, slots, args.match, lo, hi, want,
+                            args.max_per_doc, args.phrase_gap,
+                        )
+                    else:
+                        hits, surfaces = fetch_hits(
+                            conn, args.scope, variants, args.match, lo, hi, want,
+                            args.max_per_doc,
+                        )
                     passages, occ = windows_to_passages(
                         fetch_windows(conn, hits, args.context)
                     )

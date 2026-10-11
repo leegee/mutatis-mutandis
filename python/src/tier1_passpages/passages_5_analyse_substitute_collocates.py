@@ -28,12 +28,17 @@ measured against the same source corpus and period.
 Sampling is independent of the original CSV run; pass --random-seed for
 reproducible samples. Composition statistics are always reported.
 
+By default the seed is a single word (or spelling-variant group) via
+--seed-forms. A multi-word seed phrase can be given with
+--seed-phrase "take/tooke/taketh heed/heede" (spaces between words, '/'
+between spelling variants, --max-gap for gaps). Substitutes remain single
+words or spelling-variant groups either way.
+
 Matched documents (with year and title) are written to <prefix>_documents.csv
 (and <prefix>_decade_documents.csv with --match-decades) and logged per term.
 The text window around each hit, with the hit word marked [[like this]], is
 written to <prefix>_windows.csv (and <prefix>_decade_windows.csv).
 """
-
 
 from __future__ import annotations
 
@@ -69,6 +74,18 @@ def split_forms(value: str) -> list[str]:
         for part in value.split("/")
         if part.strip() and part.strip().isalpha()
     ]
+
+
+def parse_phrase(spec: str):
+    """'take/tooke heed/heede' -> [{'take','tooke'}, {'heed','heede'}]"""
+    slots = []
+    for part in spec.split():
+        forms = {v.strip().lower() for v in part.split("/") if v.strip()}
+        if forms:
+            slots.append(forms)
+    if len(slots) < 2:
+        raise ValueError(f"A phrase needs at least two words: {spec!r}")
+    return slots
 
 
 def read_candidates(path: Path, top_substitutes: int, top_collocates: int):
@@ -224,6 +241,74 @@ def fetch_term_hits(conn, scope, forms, lo, hi, per_doc, limit,
         ]
 
 
+def fetch_phrase_term_hits(conn, scope, slots, lo, hi, per_doc, limit,
+                           random_seed, allowed_docs=None, max_gap=0):
+    """Phrase version of fetch_term_hits: one token per slot, in order, with at
+    most max_gap tokens between consecutive slots. Hits carry end_idx."""
+    sc = SCOPES[scope]
+    k = len(slots)
+    aliases = ["t"] + [f"t{i}" for i in range(2, k + 1)]
+    params = {"lo": lo, "hi": hi, "per_doc": per_doc, "limit": limit,
+              "gap": int(max_gap), "slot1": sorted(slots[0])}
+    joins = []
+    for i in range(2, k + 1):
+        a, prev = aliases[i - 1], aliases[i - 2]
+        joins.append(
+            f"JOIN tokens {a} ON {a}.doc_id = t.doc_id AND {a}.corpus = t.corpus "
+            f"AND {a}.token_idx BETWEEN {prev}.token_idx + 1 "
+            f"AND {prev}.token_idx + 1 + %(gap)s "
+            f"AND lower({a}.token) = ANY(%(slot{i})s)"
+        )
+        params[f"slot{i}"] = sorted(slots[i - 1])
+
+    doc_filter = ""
+    if allowed_docs is not None:
+        if not allowed_docs:
+            return []
+        doc_filter = "AND t.doc_id = ANY(%(allowed_docs)s)"
+        params["allowed_docs"] = list(allowed_docs)
+
+    surface = " || ' ' || ".join(f"lower({a}.token)" for a in aliases)
+    last = aliases[-1]
+    rn_order = _stable_order_expr(random_seed, "spans")
+    final_order = _stable_order_expr(random_seed, "hits").replace("hits.", "")
+
+    query = f"""
+        WITH spans AS (
+            SELECT DISTINCT ON (t.doc_id, t.token_idx)
+                   t.doc_id, t.token_idx, {last}.token_idx AS end_idx,
+                   {surface} AS surface, d.pub_year
+            FROM tokens t
+            JOIN {sc['table']} d ON {sc['join']}
+            {' '.join(joins)}
+            WHERE lower(t.token) = ANY(%(slot1)s)
+              AND d.pub_year BETWEEN %(lo)s AND %(hi)s
+              {sc['where']}
+              {doc_filter}
+            ORDER BY t.doc_id, t.token_idx, {last}.token_idx
+        ), hits AS (
+            SELECT spans.doc_id, spans.token_idx, spans.end_idx, spans.surface,
+                   spans.pub_year,
+                   row_number() OVER (
+                       PARTITION BY spans.doc_id ORDER BY {rn_order}
+                   ) AS rn
+            FROM spans
+        )
+        SELECT doc_id, token_idx, end_idx, surface, pub_year
+        FROM hits
+        WHERE rn <= %(per_doc)s
+        ORDER BY {final_order}
+        LIMIT %(limit)s
+    """
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        return [
+            {"doc_id": r[0], "token_idx": r[1], "end_idx": r[2],
+             "surface": r[3], "year": r[4]}
+            for r in cur.fetchall()
+        ]
+
+
 def fetch_doc_metadata(conn, scope, doc_ids, title_column="title"):
     """Return {doc_id: {"title": ..., "year": ...}} for the given documents."""
     if not doc_ids:
@@ -248,11 +333,19 @@ def fetch_doc_metadata(conn, scope, doc_ids, title_column="title"):
         return {}
 
 
-def window_passes(words, centre_idx, require, forbid):
+def hit_span(hit, idxs):
+    """(start, end) positions of a hit within its window; phrases carry the
+    end token index in hit[2]. Raises ValueError if not in the window."""
+    start = idxs.index(hit[1])
+    end = idxs.index(hit[2]) if len(hit) > 2 else start
+    return start, end
+
+
+def window_passes(words, skip, require, forbid):
     context_words = {
         word.lower()
         for i, word in enumerate(words)
-        if i != centre_idx
+        if i not in skip
     }
     if require and not (context_words & require):
         return False
@@ -268,12 +361,12 @@ def presence_profile(windows, collocates, excluded_keys):
     by_key = {c["key"]: c for c in collocates}
     for hit, idxs, words in windows:
         try:
-            centre = idxs.index(hit[1])
+            centre, end = hit_span(hit, idxs)
         except ValueError:
             continue
         keys = set()
         for i, word in enumerate(words):
-            if i == centre:
+            if centre <= i <= end:
                 continue
             w = word.lower()
             if not w.isalpha() or len(w) < 2:
@@ -296,11 +389,12 @@ def decade_histogram(years: list[int]) -> str:
     return ";".join(f"{d}-{d+9}:{bins[d]}" for d in sorted(bins))
 
 
-def window_collocates(words, centre, by_key, excluded_keys):
-    """Return the selected collocate words present in a window (in text order)."""
+def window_collocates(words, span, by_key, excluded_keys):
+    """Return the selected collocate words present in a window (in text order);
+    span = (start, end) positions of the hit, which are skipped."""
     found = []
     for i, word in enumerate(words):
-        if i == centre:
+        if span[0] <= i <= span[1]:
             continue
         w = word.lower()
         if not w.isalpha() or len(w) < 2:
@@ -320,15 +414,14 @@ def build_window_rows(term, windows, hit_meta, collocates, excluded_keys,
     rows = []
     for hit, idxs, words in windows:
         try:
-            centre = idxs.index(hit[1])
+            centre, end = hit_span(hit, idxs)
         except ValueError:
             continue
         meta = hit_meta.get((hit[0], hit[1]))
         if meta is None:
             continue
-        passage = " ".join(
-            f"[[{w}]]" if i == centre else w for i, w in enumerate(words)
-        )
+        marked = ["[[" + " ".join(words[centre:end + 1]) + "]]"]
+        passage = " ".join(words[:centre] + marked + words[end + 1:])
         row = {
             "term": term,
             "doc_id": meta["doc_id"],
@@ -337,7 +430,7 @@ def build_window_rows(term, windows, hit_meta, collocates, excluded_keys,
             "token_idx": meta["token_idx"],
             "surface": meta["surface"],
             "collocates_present": ";".join(
-                window_collocates(words, centre, by_key, excluded_keys)
+                window_collocates(words, (centre, end), by_key, excluded_keys)
             ),
             "passage": passage,
         }
@@ -351,12 +444,19 @@ def build_window_rows(term, windows, hit_meta, collocates, excluded_keys,
 
 def retrieve_profile(conn, scope, forms, lo, hi, context, per_doc, limit,
                      require, forbid, collocates, excluded_keys,
-                     random_seed, allowed_docs=None):
-    hits = fetch_term_hits(
-        conn, scope, forms, lo, hi,
-        per_doc=per_doc, limit=limit, random_seed=random_seed,
-        allowed_docs=allowed_docs,
-    )
+                     random_seed, allowed_docs=None, slots=None, max_gap=0):
+    if slots:
+        hits = fetch_phrase_term_hits(
+            conn, scope, slots, lo, hi,
+            per_doc=per_doc, limit=limit, random_seed=random_seed,
+            allowed_docs=allowed_docs, max_gap=max_gap,
+        )
+    else:
+        hits = fetch_term_hits(
+            conn, scope, forms, lo, hi,
+            per_doc=per_doc, limit=limit, random_seed=random_seed,
+            allowed_docs=allowed_docs,
+        )
     if not hits:
         return {
             "n": 0,
@@ -371,7 +471,10 @@ def retrieve_profile(conn, scope, forms, lo, hi, context, per_doc, limit,
         }
 
     hit_by_key = {(h["doc_id"], h["token_idx"]): h for h in hits}
-    hit_pairs = list(hit_by_key.keys())
+    hit_pairs = [
+        (h["doc_id"], h["token_idx"], h.get("end_idx", h["token_idx"]))
+        for h in hit_by_key.values()
+    ]
     windows = fetch_windows(conn, hit_pairs, context=context)
 
     filtered = []
@@ -381,10 +484,10 @@ def retrieve_profile(conn, scope, forms, lo, hi, context, per_doc, limit,
     years = []
     for hit, idxs, words in windows:
         try:
-            centre = idxs.index(hit[1])
+            centre, end = hit_span(hit, idxs)
         except ValueError:
             continue
-        if not window_passes(words, centre, require, forbid):
+        if not window_passes(words, range(centre, end + 1), require, forbid):
             continue
         filtered.append((hit, idxs, words))
         meta = hit_by_key.get((hit[0], hit[1]))
@@ -467,6 +570,12 @@ def main():
                    help="Output path prefix; defaults to input stem + '_profiles'.")
     p.add_argument("--seed-forms", default="resist,resiste",
                    help="Comma-separated seed forms used to retrieve the seed profile.")
+    p.add_argument("--seed-phrase", default="",
+                   help="Seed is a phrase: words separated by spaces, spelling "
+                        "variants by '/', e.g. \"take/tooke/taketh heed/heede\". "
+                        "Overrides --seed-forms for retrieval.")
+    p.add_argument("--max-gap", type=int, default=0,
+                   help="Max other tokens between consecutive seed-phrase words.")
     p.add_argument("--top-substitutes", type=int, default=5)
     p.add_argument("--top-collocates", type=int, default=20)
     p.add_argument("--context", type=int, default=40,
@@ -518,6 +627,13 @@ def main():
         args.input, args.top_substitutes, args.top_collocates
     )
     seed_forms = csv_words(args.seed_forms)
+    seed_slots = None
+    if args.seed_phrase:
+        try:
+            seed_slots = parse_phrase(args.seed_phrase)
+        except ValueError as exc:
+            p.error(str(exc))
+        seed_forms = set().union(*seed_slots)
     require, forbid = csv_words(args.require), csv_words(args.forbid)
     excluded_keys = {stem_key(x) for x in csv_words(args.exclude_forms)}
     excluded_keys.update(stem_key(x) for x in seed_forms)
@@ -573,6 +689,8 @@ def main():
             excluded_keys=excluded_keys,
             random_seed=args.random_seed,
             allowed_docs=None,
+            slots=seed_slots,
+            max_gap=args.max_gap,
         )
         seed_n = seed_result["n"]
         seed_docs = seed_result["doc_ids"]

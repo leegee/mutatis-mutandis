@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-tier0/tier0_0_eebo_parse_tei.py - Multi-process streaming EEBO TEI XML ingestion pipeline
+tier0/tier0_0_text2db.py (tier0_0_eebo_parse_tei.py) - Multi-process streaming EEBO TEI XML/text ingestion pipeline
 
-NB Corpus roots are defined in config.CORPUS_INPUT_DIRS
+Corpus roots are defined in config.CORPUS_INPUT_DIRS
 
 """
 
@@ -43,7 +43,6 @@ ALLOWED_PUNCT = r"\.\,\;\:\!\?\'\"\-\(\)"
 # Per-worker lazy cache
 _ECCO_HEADER_INDEX = None
 
-# Threading these through everything is silly.
 MAX_DOCS: Optional[int] = None
 SKIP_EXISTING_DOCS  = True
 
