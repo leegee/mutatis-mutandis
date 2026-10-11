@@ -1,5 +1,5 @@
 """
-tier1/passages_4_mask_fillers.py
+tier1_passages/passages_4_mask_fillers.py
 
 Vocabulary discovery around seed words, two ways:
 
@@ -61,8 +61,6 @@ import csv
 import math
 import random
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
-from functools import lru_cache
 from itertools import combinations
 from pathlib import Path
 
@@ -71,126 +69,28 @@ import torch
 
 from lib.corpus_config import OUT_DIR
 from lib.macberth import load_macberth
+from lib.passage_stem import (
+    STOP,
+    stem_key,
+    Groups,
+    build_groups,
+    content_word,
+    span_of,
+)
+from lib.passage_db import (
+    SCOPES,
+    fetch_hits,
+    fetch_doc_lengths,
+    matched_hits,
+    fetch_random_hits,
+    fetch_windows,
+    windows_to_passages,
+    random_positions,
+    one_position_per_passage,
+)
 
 MAX_LEN = 512
 EPS = 1e-5
-
-# Function words, including Early Modern forms (adapted from
-# eebo_word_frequencies.py).
-STOP = set("""
-a an the and or but nor yet so if unless whether as than at by for from in
-into of off on onto out over through to up upon with within without about
-above across after against along among around before behind below beneath
-beside between beyond down during except inside near outside since toward
-towards under underneath until via i me my mine myself we us vs our ours
-ourselves you your yours yourself yourselves he him his himself she her hers
-herself it its itself they them their theirs themselves this that these those
-who whom whose which what whatever whichever when where why how all any
-anybody anyone anything both each either everybody everyone everything few
-many much neither nobody none no one nothing other others several some
-somebody someone something such here there everywhere nowhere somewhere am is
-are was were be bee been being have has had having do de doe does did done
-doing can cannot could may might must shall should will would ought need dare
-not never again already also always ever just merely only quite rather really
-very too almost enough especially even still then now once often sometimes
-usually because although though while whereas therefore thus hence indeed
-perhaps maybe yes thou thee thy thine thyself ye hath hast doth dost art
-wilt wouldst shouldst couldst whither whence hither thither hereof thereof
-wherein whereof whereby herewith therewith unto amidst amongst betwixt per
-mr est ad two three four five six seven eight nine ten haue hee shee wee vpon
-vnto vntill whilest yea nay
-""".split())
-
-
-# ---------------------------------------------------------------------------
-# Word grouping
-# ---------------------------------------------------------------------------
-
-def fold_key(t: str) -> str:
-    """Collapse u/v and i/j so 'preuent' and 'prevent' share a key."""
-    return t.lower().replace("v", "u").replace("j", "i")
-
-
-@lru_cache(maxsize=None)
-def stem_key(word: str) -> str:
-    """
-    Light stem for grouping variants of one word. Deliberately conservative:
-    a false split costs little (members are listed), a false merge hides
-    a word.
-
-      preuent/prevent/prevents/preventing/prevented -> one key
-      resist/resiste/resisted/resisteth/resists      -> one key
-      libertie/liberty/liberties; kingdome/kingdoms; repell/repelled
-    """
-    w = fold_key(word)
-
-    # plurals, third person, -ie
-    if w.endswith("ies") and len(w) > 4:
-        w = w[:-3] + "y"
-    elif w.endswith("ie") and len(w) > 4:
-        w = w[:-2] + "y"
-    elif w.endswith("es") and len(w) > 4:
-        w = w[:-2]
-    elif w.endswith("s") and not w.endswith("ss") and len(w) > 3:
-        w = w[:-1]
-
-    # verb endings
-    for suf, minimum in (("ing", 4), ("eth", 3), ("ed", 3)):
-        if w.endswith(suf) and len(w) - len(suf) >= minimum:
-            w = w[:-len(suf)]
-            break
-
-    # final -e
-    if w.endswith("e") and len(w) > 3:
-        w = w[:-1]
-
-    # doubled final consonant (repell -> repel)
-    if len(w) > 3 and w[-1] == w[-2] and w[-1] not in "aeiou":
-        w = w[:-1]
-
-    return w
-
-
-@dataclass
-class Groups:
-    group_of: np.ndarray        # vocab id -> group index, -1 if not a candidate
-    members: list               # group -> [vocab ids]
-    keys: list                  # group -> stem key
-    index: dict                 # stem key -> group
-    sel: np.ndarray = field(init=False)
-    cache: dict = field(default_factory=dict)   # device -> torch tensors
-
-    def __post_init__(self):
-        self.sel = self.group_of >= 0
-
-    @property
-    def n(self) -> int:
-        return len(self.members)
-
-
-def build_groups(tokenizer, vocab_size: int) -> Groups:
-    """Whole alphabetic non-stopword vocabulary entries, grouped by stem."""
-    tokens = tokenizer.convert_ids_to_tokens(
-        list(range(min(vocab_size, len(tokenizer))))
-    )
-    group_of = np.full(vocab_size, -1, dtype=np.int64)
-    index, members, keys = {}, [], []
-    for i, t in enumerate(tokens):
-        if t is None or not t.isalpha() or len(t) < 2 or t.lower() in STOP:
-            continue
-        k = stem_key(t)
-        if k not in index:
-            index[k] = len(members)
-            members.append([])
-            keys.append(k)
-        group_of[i] = index[k]
-        members[index[k]].append(i)
-    return Groups(group_of, members, keys, index)
-
-
-def content_word(w: str, excl_keys: set[str]) -> bool:
-    lw = w.lower()
-    return lw.isalpha() and len(lw) > 1 and lw not in STOP and stem_key(lw) not in excl_keys
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +98,7 @@ def content_word(w: str, excl_keys: set[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 def load_passages(path: Path) -> list[dict]:
-    """One row per passage_id; passages repeat across queries/representations."""
+    """One row per passage_id; passages repeat across queries/reps."""
     seen = set()
     passages = []
     with open(path, encoding="utf-8-sig", newline="") as f:
@@ -243,7 +143,9 @@ def filter_context(passages, occ, require, forbid):
         return occ
     out = []
     for p, w in occ:
-        window = {x.lower() for i, x in enumerate(passages[p]["words"]) if i != w}
+        s, e = span_of(passages[p], w)
+        window = {x.lower() for i, x in enumerate(passages[p]["words"])
+                  if not s <= i <= e}
         if require and not (window & require):
             continue
         if forbid and (window & forbid):
@@ -251,207 +153,6 @@ def filter_context(passages, occ, require, forbid):
         out.append((p, w))
     return out
 
-
-# ---------------------------------------------------------------------------
-# Database source
-# ---------------------------------------------------------------------------
-
-# Fixed SQL fragments (never built from user text).
-SCOPES = {
-    "pamphlet": {
-        "table": "pamphlet_corpus",
-        "join": "d.corpus = t.corpus AND d.doc_id = t.doc_id",
-        "where": "",
-    },
-    "all": {
-        "table": "documents",
-        "join": "d.doc_id = t.doc_id",
-        "where": "AND (d.lang = 'eng' OR d.lang IS NULL)",
-    },
-}
-
-# token: uses idx_tokens_token_lower. canonical: uses idx_tokens_canonical, so
-# the match is exact and variants are matched as given (lower-cased).
-MATCH_SQL = {
-    "token": "lower(t.token) = ANY(%(variants)s)",
-    "canonical": "t.canonical = ANY(%(variants)s)",
-}
-
-
-def fetch_hits(conn, scope, variants, match, lo, hi, n, per_doc):
-    """
-    Randomly sample up to n occurrences in the scope's documents for years
-    lo..hi, at most per_doc from any one document.
-
-    Returns ([(doc_id, token_idx)], {surface forms seen}).
-    """
-    sc = SCOPES[scope]
-    query = f"""
-        WITH hits AS (
-            SELECT t.doc_id, t.token_idx, lower(t.token) AS surface,
-                   row_number() OVER (
-                       PARTITION BY t.doc_id ORDER BY random()
-                   ) AS rn
-            FROM tokens t
-            JOIN {sc['table']} d ON {sc['join']}
-            WHERE {MATCH_SQL[match]}
-              AND d.pub_year BETWEEN %(lo)s AND %(hi)s
-              {sc['where']}
-        )
-        SELECT doc_id, token_idx, surface
-        FROM hits
-        WHERE rn <= %(per_doc)s
-        ORDER BY random()
-        LIMIT %(n)s
-    """
-    with conn.cursor() as cur:
-        cur.execute(query, {
-            "variants": sorted(variants), "lo": lo, "hi": hi,
-            "per_doc": per_doc, "n": n,
-        })
-        rows = cur.fetchall()
-    return [(r[0], r[1]) for r in rows], {r[2] for r in rows}
-
-
-def fetch_doc_lengths(conn, doc_ids):
-    """doc_id -> token_count, for matched baseline sampling."""
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT doc_id, token_count FROM documents WHERE doc_id = ANY(%s)",
-            (sorted(set(doc_ids)),),
-        )
-        return {d: tc for d, tc in cur.fetchall() if tc}
-
-
-def matched_hits(seed_hits, doc_len, context, rng, per_hit):
-    """
-    For each seed occurrence, pick per_hit baseline centres in the SAME
-    document whose windows do not overlap the seed's window.
-    """
-    out = []
-    for doc, idx in seed_hits:
-        tc = doc_len.get(doc)
-        if not tc or tc <= 2 * context + 1:
-            continue
-        for _ in range(per_hit):
-            for _try in range(30):
-                c = rng.randint(context, tc - context - 1)
-                if abs(c - idx) > 2 * context:
-                    out.append((doc, c))
-                    break
-    return out
-
-
-def fetch_random_hits(conn, scope, lo, hi, n, context, rng):
-    """
-    Random (doc_id, token_idx) centres from the whole period (the
-    `--baseline period` mode). Documents are drawn with replacement, weighted
-    by length (capped so a few huge texts can't dominate).
-    """
-    sc = SCOPES[scope]
-    with conn.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT d.doc_id, d.token_count
-            FROM {sc['table']} d
-            WHERE d.pub_year BETWEEN %s AND %s
-              AND d.token_count > %s
-              {sc['where']}
-            """,
-            (lo, hi, 2 * context + 1),
-        )
-        docs = cur.fetchall()
-    if not docs:
-        return []
-    picked = rng.choices(docs, weights=[min(tc, 50_000) for _, tc in docs], k=n)
-    return [(d, rng.randint(context, tc - context - 1)) for d, tc in picked]
-
-
-WINDOW_SQL = """
-    SELECT w.ord, t.token_idx, t.token
-    FROM unnest(%s::int[], %s::text[], %s::int[], %s::int[])
-         AS w(ord, doc_id, lo, hi)
-    JOIN tokens t
-      ON t.doc_id = w.doc_id
-     AND t.token_idx BETWEEN w.lo AND w.hi
-    ORDER BY w.ord, t.token_idx
-"""
-
-
-def fetch_windows(conn, hits, context, batch=200):
-    """
-    Context windows (context tokens either side) around each hit.
-    Returns [(hit, token_idxs, words)] in hit order.
-    """
-    out = []
-    for off in range(0, len(hits), batch):
-        chunk = hits[off:off + batch]
-        by_ord = defaultdict(list)
-        with conn.cursor() as cur:
-            cur.execute(WINDOW_SQL, (
-                list(range(len(chunk))),
-                [h[0] for h in chunk],
-                [max(0, h[1] - context) for h in chunk],
-                [h[1] + context for h in chunk],
-            ))
-            for o, idx, tok in cur.fetchall():
-                by_ord[o].append((idx, tok))
-
-        for o, hit in enumerate(chunk):
-            rows = by_ord.get(o)
-            if not rows:
-                continue
-            idxs = [r[0] for r in rows]
-            words = [r[1] if r[1].strip() else "." for r in rows]
-            out.append((hit, idxs, words))
-    return out
-
-
-def windows_to_passages(windows):
-    """Passages (each remembering its hit) plus the target position in each."""
-    passages, occ = [], []
-    for (doc_id, tidx), idxs, words in windows:
-        try:
-            w_idx = idxs.index(tidx)
-        except ValueError:
-            continue
-        passages.append({
-            "doc_id": doc_id, "word_start": idxs[0], "words": words,
-            "hit": (doc_id, tidx),
-        })
-        occ.append((len(passages) - 1, w_idx))
-    return passages, occ
-
-
-# ---------------------------------------------------------------------------
-# Baseline positions
-# ---------------------------------------------------------------------------
-
-def random_positions(passages, excl_keys, n, rng):
-    """Random content-word positions pooled over all passages (csv mode)."""
-    pool = [
-        (p_idx, w_idx)
-        for p_idx, p in enumerate(passages)
-        for w_idx, w in enumerate(p["words"])
-        if content_word(w, excl_keys)
-    ]
-    rng.shuffle(pool)
-    return pool[:n]
-
-
-def one_position_per_passage(passages, excl_keys, rng):
-    """One random content word per baseline window (db modes)."""
-    out = []
-    for p_idx, p in enumerate(passages):
-        cand = [i for i, w in enumerate(p["words"]) if content_word(w, excl_keys)]
-        if cand:
-            out.append((p_idx, rng.choice(cand)))
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Masked prediction
-# ---------------------------------------------------------------------------
 
 def _masked_batches(macberth, passages, occurrences, batch_size):
     """
@@ -474,7 +175,9 @@ def _masked_batches(macberth, passages, occurrences, batch_size):
                 max_length=MAX_LEN,
             )
             ids = enc["input_ids"]
-            pieces = [i for i, wid in enumerate(enc.word_ids()) if wid == w_idx]
+            s, e = span_of(passages[p_idx], w_idx)
+            pieces = [i for i, wid in enumerate(enc.word_ids())
+                      if wid is not None and s <= wid <= e]
             if not pieces:          # word fell off the truncated end
                 continue
             ids = ids[:pieces[0]] + [tok.mask_token_id] + ids[pieces[-1] + 1:]
@@ -630,10 +333,10 @@ def score_collocates(passages, occ, base_lists, excl_keys, min_c, args, rng):
     """
     surface = defaultdict(Counter)
 
-    def bag(words, skip=None, record=False):
+    def bag(words, skip=(), record=False):
         keys = set()
         for i, w in enumerate(words):
-            if i == skip:
+            if i in skip:
                 continue
             lw = w.lower()
             if not lw.isalpha() or len(lw) < 2 or lw in STOP:
@@ -646,7 +349,10 @@ def score_collocates(passages, occ, base_lists, excl_keys, min_c, args, rng):
             keys.add(k)
         return keys
 
-    seed_bags = [bag(passages[p]["words"], w, record=True) for p, w in occ]
+    seed_bags = []
+    for p, w in occ:
+        s, e = span_of(passages[p], w)
+        seed_bags.append(bag(passages[p]["words"], range(s, e + 1), record=True))
     seed_c = Counter()
     for b in seed_bags:
         seed_c.update(b)
@@ -739,9 +445,9 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
         checked.add(label)
         p_idx, w_idx = occ[0]
         words = list(passages[p_idx]["words"])
-        lo, hi = max(0, w_idx - 8), min(len(words), w_idx + 9)
-        shown = words[lo:hi]
-        shown[w_idx - lo] = "[MASK]"
+        s, e = span_of(passages[p_idx], w_idx)
+        lo, hi = max(0, s - 8), min(len(words), e + 9)
+        shown = words[lo:s] + ["[MASK]"] + words[e + 1:hi]
         print(f"  check: {' '.join(shown)}")
         print(f"         -> {', '.join(top_tokens(macberth, passages, occ[0]))}")
 

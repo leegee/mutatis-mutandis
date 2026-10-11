@@ -10,7 +10,7 @@ import lancedb
 from lib.corpus_config import LANCE_INDEXES_DIR, OUT_DIR
 from lib.corpus_db import get_connection
 from lib.macberth import load_macberth, encode_passage_query
-from tier1.passages_search import (
+from tier1_passages.passages_search import (
     REPRESENTATIONS,
     fetch_passage_text,
     search_passages,

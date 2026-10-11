@@ -1,5 +1,5 @@
 """
-tier1/passages_5b_phrase_analyse_substitute_collocates.py
+tier1_passages/passages_5b_phrase_analyse_substitute_collocates.py
 
 Compare substitute and seed collocate profiles using an existing
 passage_mask_fillers.py output CSV. This mode does not load MacBERTh.
@@ -58,7 +58,8 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from passage_mask_fillers import SCOPES, fetch_windows, stem_key
+from lib.passage_stem import stem_key
+from lib.passage_db import SCOPES, fetch_windows
 
 
 def csv_words(value: str) -> set[str]:
