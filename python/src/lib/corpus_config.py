@@ -3,7 +3,6 @@
 import os
 import sys
 from pathlib import Path
-from typing import TypedDict, Set, Dict
 
 from lib.corpus_pamphlets import CORPUS_MIN_YEAR, CORPUS_MAX_YEAR, CONCEPT_SETS, FILTER_DOCUMENT_SIZE, MIN_TOKENS_IN_DOC, MAX_TOKENS_IN_DOC
 

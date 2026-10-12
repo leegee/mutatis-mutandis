@@ -1,4 +1,4 @@
-from cannonical_rules import CanonicalRule, CanonicalRules
+from lib.cannonical_rules import CanonicalRule, CanonicalRules
 
 CORPUS_MIN_YEAR = 1600
 CORPUS_MAX_YEAR = 1650
