@@ -4,6 +4,8 @@ tier0/tier0_0_text2db.py (tier0_0_eebo_parse_tei.py) - Multi-process streaming E
 
 Corpus roots are defined in config.CORPUS_INPUT_DIRS
 
+    THE ALBINISM FILTER IS NOT YET APPLIED UNIVERSALLY!
+
 """
 
 from __future__ import annotations
@@ -469,7 +471,7 @@ def process_ecco_file(tree, xml_path):
             f"[tier0 worker {os.getpid()}] "
             f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}"
         )
-        # return None
+        return None
 
     lang = extract_language(tree, raw_text)
 
@@ -679,10 +681,10 @@ def process_eebo_file(tree, xml_path):
         eebo_ocr_fixes.apply_ocr_fixes(raw_text)
     )
 
-    if len(normalized) < 100:
+    if len(normalized) < config.MIN_TOKENS_IN_DOC:
         logger.warning(
             f"[tier0 worker {os.getpid()}] "
-            f"process_eebo_file bailing as normalised text length < 100 "
+            f"process_eebo_file bailing as normalised text length < {config.MIN_TOKENS_IN_DOC} "
             f"in {xml_path}"
         )
         return None
@@ -698,7 +700,7 @@ def process_eebo_file(tree, xml_path):
             f"which exceeds MAX_TOKENS_IN_DOC "
             f"{config.MAX_TOKENS_IN_DOC}"
         )
-        # return None
+        return None
 
     meta = {
         "doc_id": doc_id,
