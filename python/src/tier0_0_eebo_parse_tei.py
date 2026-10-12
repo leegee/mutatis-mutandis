@@ -1,32 +1,37 @@
 #!/usr/bin/env python
 """
-eebo_parse_tei.py - Multi-process streaming EEBO TEI XML ingestion pipeline
+tier0_0_eebo_parse_tei.py (tier0_0_eebo_parse_tei.py) - Multi-process streaming EEBO TEI XML/text ingestion pipeline
 
-NB Corpus roots are defined in config.CORPUS_INPUT_DIRS
+Corpus roots are defined in config.CORPUS_INPUT_DIRS
 
 """
 
 from __future__ import annotations
+
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 import argparse
-import os
-import csv
 import io
+import os
 import re
 import sys
-import tempfile
-import unicodedata
 import traceback
-from concurrent.futures import ProcessPoolExecutor
+import unicodedata
 
 from psycopg import sql
 import xml.etree.ElementTree as etree
+from lxml import etree as lxml_etree
 import langdetect
+
 import lib.corpus_config as config
 import lib.corpus_db as corpus_db
 import lib.eebo_ocr_fixes as eebo_ocr_fixes
 from lib.corpus_logging import logger
+# from lib.wordlist_whiteness import WHITENESS, WHITENESS_WEIGHTS, WEAK_WHITENESS_PATTERNS
+
+# MIN_WHITENESS_SCORE = 2.0
 
 NUM_WORKERS = 4
 BATCH_DOCS = 100
@@ -38,9 +43,63 @@ ALLOWED_PUNCT = r"\.\,\;\:\!\?\'\"\-\(\)"
 # Per-worker lazy cache
 _ECCO_HEADER_INDEX = None
 
-# Threading these through everything is silly.
 MAX_DOCS: Optional[int] = None
 SKIP_EXISTING_DOCS  = True
+
+# Files (by name) to leave out of ingestion entirely, quietly.
+SKIP_FILES: set[str] = set()
+
+TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
+TEI_URI = TEI_NS["tei"]
+XML_ID = "{http://www.w3.org/XML/1998/namespace}id"
+
+# Block-level elements: a space is appended after them when rendering, so
+# hand-written </p><p> or </l><l> with no whitespace cannot fuse words.
+BLOCK_TAGS = {"p", "l", "lg", "head", "div", "ab", "item", "sp", "speaker", "stage"}
+
+
+# def whiteness_seed_score(
+#     tokens: list[str],
+# ) -> tuple[int, Counter[str]]:
+#     hits = Counter(
+#         token.lower()
+#         for token in tokens
+#         if token.lower() in WHITENESS
+#     )
+
+#     score = sum(
+#         count * WHITENESS_WEIGHTS.get(lemma, 1)
+#         for lemma, count in hits.items()
+#     )
+
+#     return score, hits
+
+
+# def passes_whiteness_filter( doc_id: str, tokens: list[str] ) -> bool:
+#     score, hits = whiteness_seed_score(tokens)
+
+#     if not hits:
+#         return False
+
+#     seeds = set(hits)
+
+#     # White/grey/gray alone are too non-diagnostic,
+#     # regardless of how frequently they occur.
+#     if any(seeds <= weak for weak in WEAK_WHITENESS_PATTERNS):
+#         return False
+
+#     if score < MIN_WHITENESS_SCORE:
+#         return False
+
+#     logger.info( f"[tier0] Whiteness filter PASS: {doc_id} score={score}, hits={dict(hits)}" )
+#     return True
+
+
+def normalize_tei_namespace(root):
+    """Put un-namespaced elements (xmlns="") into the TEI namespace."""
+    for el in root.iter():
+        if isinstance(el.tag, str) and not el.tag.startswith("{"):
+            el.tag = f"{{{TEI_URI}}}{el.tag}"
 
 
 def normalize_early_modern(text: str) -> str:
@@ -62,6 +121,60 @@ def normalize_early_modern(text: str) -> str:
     return text.strip()
 
 
+def parse_tei(xml_path):
+    """Strict parse first; fall back to lxml's recovering parser, with a warning."""
+    try:
+        return etree.parse(str(xml_path))
+    except etree.ParseError as strict_err:
+        parser = lxml_etree.XMLParser(recover=True, huge_tree=True)
+        tree = lxml_etree.parse(str(xml_path), parser)
+        if tree.getroot() is None:
+            raise
+        logger.warning(f"[tier0] RECOVERED malformed XML {xml_path}: {strict_err}")
+        return tree
+
+
+def render_lic_text(node):
+    """
+    Render Literature in Context TEI into corpus text.
+
+    Literary textual content is retained while structural, media,
+    navigation, and editorial-note elements are excluded.
+    """
+
+    parts = []
+
+    if node.text:
+        parts.append(node.text)
+
+    for child in node:
+        if not isinstance(child.tag, str):   # comment / PI
+            if child.tail:
+                parts.append(child.tail)
+            continue
+
+        local_name = child.tag.rsplit("}", 1)[-1]
+
+        if local_name in {
+            "pb",
+            "graphic",
+            "note",
+        }:
+            # Page breaks, images, and editorial/media notes are
+            # provenance or presentation material, not corpus text.
+            pass
+
+        else:
+            parts.append(render_lic_text(child))
+            if local_name in BLOCK_TAGS:
+                parts.append(" ")
+
+        if child.tail:
+            parts.append(child.tail)
+
+    return "".join(parts)
+
+
 def render_text(node):
     """Render EEBO XML into plain text while preserving editorial GAP markers."""
     parts = []
@@ -70,11 +183,26 @@ def render_text(node):
         parts.append(node.text)
 
     for child in node:
-        if child.tag.upper() == "GAP":
-            extent = child.attrib.get("EXTENT", "")
+        if not isinstance(child.tag, str):   # comment / PI (lxml recovery path)
+            if child.tail:
+                parts.append(child.tail)
+            continue
+
+        local_name = child.tag.rsplit("}", 1)[-1]
+
+        if local_name == "gap":
+            extent = child.attrib.get("extent", "")
             m = re.search(r"(\d+)", extent)
             n = int(m.group(1)) if m else 1
             parts.append("_" * n)
+
+        elif (
+            local_name == "note"
+            and child.attrib.get("type") == "footnotelink"
+        ):
+            # Editorial footnote marker: do not include its content.
+            pass
+
         else:
             parts.append(render_text(child))
 
@@ -111,6 +239,79 @@ def safe_text(x):
     return x.text.strip() if x is not None and x.text else None
 
 
+def extract_person_name(elem):
+    if elem is None:
+        return None
+
+    names = []
+    for name_elem in elem.findall(".//tei:name", TEI_NS):
+        fore = " ".join(
+            (f.text or "").strip()
+            for f in name_elem.findall("tei:forename", TEI_NS)
+            if f.text and f.text.strip()
+        )
+        sur = " ".join(
+            (s.text or "").strip()
+            for s in name_elem.findall("tei:surname", TEI_NS)
+            if s.text and s.text.strip()
+        )
+        full = f"{fore} {sur}".strip()
+        if full:
+            names.append(full)
+
+    if names:
+        return "; ".join(names)
+
+    text = " ".join(" ".join(elem.itertext()).split())
+    return text or None
+
+
+def _year_from_date_elem(d):
+    """Return (raw, year) from a TEI <date>, trying attributes then text."""
+    for raw in (
+        d.attrib.get("when"),
+        d.attrib.get("notBefore"),
+        d.attrib.get("from"),
+        safe_text(d),
+    ):
+        y = extract_year(raw) if raw else None
+        if y and y > 0:                 # rejects when="0000" template junk
+            return raw, y
+    return None, None
+
+
+# Strongest source first. Composition dates are deliberately NOT here:
+# pub_year is the date of the text as we hold it, not of the original work.
+DATE_XPATHS = [
+    ("imprint",     ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:date"),
+    ("translation", ".//tei:teiHeader//tei:sourceDesc//tei:bibl/tei:date[@type='translation']"),
+    ("docDate",     ".//tei:text/tei:front//tei:docDate"),
+]
+
+
+def pick_pub_year(tree):
+    """First usable date, strongest source first. Returns (raw, year, source)."""
+    for source, xp in DATE_XPATHS:
+        for d in tree.findall(xp, TEI_NS):
+            raw, y = _year_from_date_elem(d)
+            if y:
+                return raw, y, source
+    return None, None, None
+
+
+def pick_composition_date(tree):
+    """Original composition date as a display string, or None. Never used for pub_year."""
+    d = tree.find(
+        ".//tei:teiHeader//tei:profileDesc/tei:creation/tei:date", TEI_NS
+    )
+    if d is None:
+        return None
+    nb, na = d.attrib.get("notBefore"), d.attrib.get("notAfter")
+    if nb or na:
+        return f"{nb or '?'}-{na or '?'}"
+    return d.attrib.get("when") or safe_text(d)
+
+
 def to_doc_row(meta: dict) -> tuple:
     return (
         meta["corpus"],
@@ -128,25 +329,37 @@ def to_doc_row(meta: dict) -> tuple:
 
 
 def extract_language(tree, raw_text):
-    lang = tree.findtext(".//PROFILEDESC//LANGUAGE")
+    lang_elem = tree.find(
+        ".//tei:profileDesc//tei:language",
+        TEI_NS,
+    )
+
+    lang = None
+
+    if lang_elem is not None:
+        lang = (
+            lang_elem.attrib.get("ident")
+            or safe_text(lang_elem)
+        )
 
     if not lang:
-        text_node = tree.find(".//TEXT")
+        text_node = tree.find(".//tei:text", TEI_NS)
         if text_node is not None:
-            lang = text_node.attrib.get("LANG")
+            lang = (
+                text_node.attrib.get("{http://www.w3.org/XML/1998/namespace}lang")
+                or text_node.attrib.get("lang")
+            )
 
     if lang:
-        langs = re.findall(r"[a-z]{2,3}", lang.lower())
+        lang = lang.lower()
 
-        # Normalise English variants
-        if "eng" in langs or "en" in langs:
+        if lang in {"eng", "en"}:
             return "eng"
 
-        # Otherwise keep first recognised code
+        langs = re.findall(r"[a-z]{2,3}", lang)
         if langs:
             return langs[0][:3]
 
-    # Last resort: detect from text
     try:
         detected = langdetect.detect(raw_text[:5000])
         return detected[:3] if detected else None
@@ -247,9 +460,16 @@ def process_ecco_file(tree, xml_path):
 
     tokens = re.findall( r"\w+|[^\w\s]", normalized )
 
-    if len(tokens) > config.MAX_TOKENS_IN_DOC:
-        logger.warning(f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}")
+    if not passes_whiteness_filter(doc_id, tokens):
+        logger.debug( f"[tier0] Rejecting {doc_id}: not enough extreme-whiteness hits" )
         return None
+
+    if len(tokens) > config.MAX_TOKENS_IN_DOC:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}"
+        )
+        # return None
 
     lang = extract_language(tree, raw_text)
 
@@ -262,7 +482,144 @@ def process_ecco_file(tree, xml_path):
         "pub_year": pub_year,
         "source_date_raw": metadata["date_raw"],
         "token_count": len(tokens),
-        "filepath": str( xml_path.relative_to(config.XML_ROOT_DIR).as_posix() ),
+        "filepath": str( xml_path.relative_to(config.CORPUS_ROOT_DIR).as_posix() ),
+        "lang": lang,
+    }
+
+    return meta, tokens
+
+
+def process_misc_file(tree, xml_path):
+    """
+    Process generic TEI sources in the misc corpus.
+
+    Supports LiC and other TEI sources whose document identity and
+    bibliographic metadata are expressed using the standard TEI namespace.
+    """
+
+    root = tree.getroot()
+    normalize_tei_namespace(root)
+
+    root_id = root.attrib.get(XML_ID)
+
+    if not root_id:
+        root_id = xml_path.stem
+        logger.info(
+            f"[tier0] No xml:id in {xml_path}; using filename stem {root_id!r}"
+        )
+
+    doc_id = root_id
+
+    title_elem = tree.find(
+        ".//tei:teiHeader//tei:titleStmt/tei:title",
+        TEI_NS,
+    )
+
+    author_elem = tree.find(
+        ".//tei:teiHeader//tei:titleStmt/tei:author",
+        TEI_NS,
+    )
+
+    publisher_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc"
+        "//tei:imprint/tei:publisher",
+        TEI_NS,
+    )
+
+    place_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc"
+        "//tei:imprint/tei:pubPlace",
+        TEI_NS,
+    )
+
+    date_raw, pub_year, date_source = pick_pub_year(tree)
+    composition_raw = pick_composition_date(tree)
+
+    if pub_year is None:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"No publication year in misc document "
+            f"{doc_id} at {xml_path}"
+        )
+        return None
+
+    if not year_in_corpus(pub_year):
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"Year not in corpus: {pub_year} "
+            f"for {doc_id} at {xml_path}"
+        )
+        return None
+
+    if date_source != "imprint":
+        logger.info(
+            f"[tier0] {doc_id}: year {pub_year} taken from {date_source} "
+            f"(no usable imprint date)"
+        )
+
+    source_date_raw = date_raw
+    if composition_raw:
+        source_date_raw = f"{date_raw} | composition {composition_raw}"
+
+    body = tree.findall(
+        ".//tei:text/tei:body",
+        TEI_NS,
+    )
+
+    if not body:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"No BODY in misc document "
+            f"{doc_id} at {xml_path}"
+        )
+        return None
+
+    raw_text = " ".join(
+        render_lic_text(b)
+        for b in body
+    )
+
+    normalized = normalize_early_modern(
+        eebo_ocr_fixes.apply_ocr_fixes(raw_text)
+    )
+
+    if len(normalized) < 100:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"misc document {doc_id} has normalized "
+            f"text length < 100 at {xml_path}"
+        )
+        return None
+
+    tokens = re.findall(
+        r"\w+|[^\w\s]",
+        normalized,
+    )
+
+    if len(tokens) > config.MAX_TOKENS_IN_DOC:
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"misc document {doc_id} has {len(tokens)} tokens, "
+            f"which exceeds MAX_TOKENS_IN_DOC "
+            f"{config.MAX_TOKENS_IN_DOC}"
+        )
+
+    lang = extract_language(tree, raw_text)
+
+    meta = {
+        "doc_id": doc_id,
+        "title": safe_text(title_elem),
+        "author": extract_person_name(author_elem),
+        "publisher": safe_text(publisher_elem),
+        "pub_place": safe_text(place_elem),
+        "pub_year": pub_year,
+        "source_date_raw": source_date_raw,
+        "token_count": len(tokens),
+        "filepath": str(
+            xml_path.relative_to(
+                config.CORPUS_ROOT_DIR
+            ).as_posix()
+        ),
         "lang": lang,
     }
 
@@ -270,29 +627,50 @@ def process_ecco_file(tree, xml_path):
 
 
 def process_eebo_file(tree, xml_path):
-    doc_id_elem = tree.find(".//HEADER//IDNO[@TYPE='DLPS']")
+    doc_id_elem = tree.find(".//tei:idno[@type='DLPS']", TEI_NS)
+
     if doc_id_elem is None or not doc_id_elem.text:
-        logger.warning(f"[tier0] process_file bailing as doc_id_elem not found in {xml_path}")
+        logger.warning(
+            f"[tier0] process_eebo_file bailing as doc_id_elem not found in {xml_path}"
+        )
         return None
+
     doc_id = doc_id_elem.text.strip()
 
-    title_elem = tree.find(".//HEADER//TITLESTMT/TITLE")
-    author_elem = tree.find(".//HEADER//TITLESTMT/AUTHOR")
-    pub_elem = tree.find(".//HEADER//SOURCEDESC//PUBLISHER")
-    place_elem = tree.find(".//HEADER//SOURCEDESC//PUBPLACE")
+    title_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:title", TEI_NS)
+    author_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:author", TEI_NS)
+    pub_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:publisher",
+        TEI_NS,
+    )
+    place_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:pubPlace",
+        TEI_NS,
+    )
+    date_elem = tree.find(
+        ".//tei:teiHeader//tei:sourceDesc//tei:date",
+        TEI_NS,
+    )
 
-    date_elem = tree.find(".//HEADER//SOURCEDESC//DATE")
     date_raw = safe_text(date_elem)
     pub_year = extract_year(date_raw)
+
     if pub_year is None:
-        logger.warning(f"[tier0] No pub_year in {doc_id}")
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] No pub_year in {doc_id} at {xml_path}"
+        )
         return None
+
     if not year_in_corpus(pub_year):
         return None
 
-    body = tree.findall(".//EEBO//TEXT//BODY")
+    body = tree.findall(".//tei:text/tei:body", TEI_NS)
+
     if not body:
-        logger.warning(f"[tier0] process_file bailing as BODY not defined in {xml_path}")
+        logger.warning(
+            f"[tier0 worker {os.getpid()} ]"
+            f"process_eebo_file bailing as BODY not defined in {xml_path}"
+        )
         return None
 
     raw_text = " ".join(render_text(b) for b in body)
@@ -302,7 +680,11 @@ def process_eebo_file(tree, xml_path):
     )
 
     if len(normalized) < 100:
-        logger.warning(f"[tier0] process_file bailing as normalised text length < 100 in {xml_path}")
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"process_eebo_file bailing as normalised text length < 100 "
+            f"in {xml_path}"
+        )
         return None
 
     lang = extract_language(tree, raw_text)
@@ -310,9 +692,13 @@ def process_eebo_file(tree, xml_path):
     tokens = re.findall(r"\w+|[^\w\s]", normalized)
 
     if len(tokens) > config.MAX_TOKENS_IN_DOC:
-        logger.warning(f"EEBO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}")
-        return None
-
+        logger.warning(
+            f"[tier0 worker {os.getpid()}] "
+            f"EEBO document {doc_id} has {len(tokens)} tokens, "
+            f"which exceeds MAX_TOKENS_IN_DOC "
+            f"{config.MAX_TOKENS_IN_DOC}"
+        )
+        # return None
 
     meta = {
         "doc_id": doc_id,
@@ -323,7 +709,9 @@ def process_eebo_file(tree, xml_path):
         "pub_year": pub_year,
         "source_date_raw": date_raw,
         "token_count": len(tokens),
-        "filepath": str( xml_path.relative_to(config.XML_ROOT_DIR).as_posix() ),
+        "filepath": str(
+            xml_path.relative_to(config.CORPUS_ROOT_DIR).as_posix()
+        ),
         "lang": lang,
     }
 
@@ -332,43 +720,24 @@ def process_eebo_file(tree, xml_path):
 
 def process_file(xml_path: Path, corpus):
     try:
-        tree = etree.parse(str(xml_path))
-    except Exception:
-        logger.warning(f"[tier0] Failed to parse {xml_path}")
+        tree = parse_tei(xml_path)
+    except etree.ParseError as e:
+        line, col = e.position
+        logger.warning(f"[tier0] Failed to parse {xml_path}: {e} (line {line}, col {col})")
+        return None
+    except Exception as e:
+        logger.warning(f"[tier0] Failed to read {xml_path}: {e!r}")
         return None
 
     if corpus == "eebo":
         return process_eebo_file(tree, xml_path)
     elif corpus == "ecco":
         return process_ecco_file(tree, xml_path)
+    elif corpus == "misc":
+        return process_misc_file(tree, xml_path)
     else:
         logger.warning(f"[tier0] Unknown corpus {corpus} - ignoring path {xml_path}")
         return None
-
-
-def process_file_to_temp(xml_path: Path, corpus: str):
-    result = process_file(xml_path, corpus)
-    if not result:
-        return None
-
-    meta, tokens = result
-
-    meta["corpus"] = corpus
-
-    tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="", suffix=".tsv")
-    writer = csv.writer(tmp, delimiter="\t")
-
-    for i, tok in enumerate(tokens):
-        writer.writerow([
-            meta["corpus"],
-            meta["doc_id"],
-            i,
-            tok
-        ])
-
-    tmp.close()
-
-    return meta, tmp.name, len(tokens)
 
 
 def stream_copy(table: str, columns: list[str], rows):
@@ -426,96 +795,101 @@ def filter_existing_docs(rows, corpus):
 
 
 def _worker_ingest(files, batch_docs, batch_tokens, skip_existing_docs, corpus):
-    logger.info( f"[tier0 worker {os.getpid()}] received {len(files)} {corpus} files" )
-    doc_batch = []
-    token_batch = []
-    inserted_doc_ids = set()
+    logger.info(f"[tier0 worker {os.getpid()}] received {len(files)} {corpus} files")
 
+    pending = []          # list of (doc_row, token_rows)
+    pending_tokens = 0
+    seen_ids = set()      # guards against duplicate ids across files in this worker
     docs_seen = 0
 
-    def log_progress():
-        if docs_seen % LOG_EVERY_N_DOCS == 0 and docs_seen > 0:
-            logger.info(f"[tier0 worker {os.getpid()}] ingested {docs_seen} docs")
-
-    def flush_docs():
-        nonlocal doc_batch, inserted_doc_ids
-        if not doc_batch:
+    def flush():
+        nonlocal pending, pending_tokens
+        if not pending:
             return
+        batch, pending, pending_tokens = pending, [], 0
 
-        rows = doc_batch
-        doc_batch = []
-
+        doc_rows = [d for d, _ in batch]
         if skip_existing_docs:
-            rows = filter_existing_docs(rows, corpus)
-
-        if not rows:
+            keep = {r[1] for r in filter_existing_docs(doc_rows, corpus)}
+            batch = [(d, t) for d, t in batch if d[1] in keep]
+        if not batch:
             return
 
-        inserted_doc_ids.update(
-            (r[0], r[1])
-            for r in rows
-        )
+        stream_copy("documents", [
+            "corpus", "doc_id", "title", "author", "pub_year",
+            "publisher", "pub_place", "source_date_raw",
+            "token_count", "filepath", "lang",
+        ], [d for d, _ in batch])
 
-        stream_copy(
-            "documents",
-            [
-                "corpus", "doc_id", "title", "author", "pub_year",
-                "publisher", "pub_place", "source_date_raw",
-                "token_count", "filepath", "lang",
-            ],
-            rows,
-        )
-
-    def flush_tokens():
-        nonlocal token_batch
-        if not token_batch:
-            return
-
-        rows = [
-            t for t in token_batch
-            if (t[0], t[1]) in inserted_doc_ids
-        ]
-
-        token_batch = []
-
-        if rows:
-            stream_copy(
-                "tokens",
-                ["corpus", "doc_id", "token_idx", "token"],
-                rows,
-            )
+        stream_copy("tokens", ["corpus", "doc_id", "token_idx", "token"],
+                    [row for _, toks in batch for row in toks])
 
     for fp in files:
         try:
-            result = process_file_to_temp(fp, corpus)
+            result = process_file(fp, corpus)
             if not result:
                 continue
+            meta, tokens = result
+            meta["corpus"] = corpus
 
-            meta, token_file, _ = result
+            if meta["doc_id"] in seen_ids:
+                # A copy-pasted xml:id in the source is the usual cause; fix it there.
+                new_id = f'{meta["doc_id"]}__{fp.stem}'
+                logger.warning(
+                    f"[tier0] Duplicate doc_id {meta['doc_id']} in {fp}; using {new_id}"
+                )
+                meta["doc_id"] = new_id
+            seen_ids.add(meta["doc_id"])
 
-            doc_batch.append(to_doc_row(meta))
-
-            with open(token_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    corpus, doc_id, idx, tok = line.rstrip("\n").split("\t")
-                    token_batch.append((corpus, doc_id, int(idx), tok))
-
-            if len(doc_batch) >= batch_docs:
-                flush_docs()
-
-            if len(token_batch) >= batch_tokens:
-                flush_tokens()
-
+            rows = [(corpus, meta["doc_id"], i, t) for i, t in enumerate(tokens)]
+            pending.append((to_doc_row(meta), rows))
+            pending_tokens += len(rows)
             docs_seen += 1
-            log_progress()
 
+            if len(pending) >= batch_docs or pending_tokens >= batch_tokens:
+                flush()
+
+            if docs_seen % LOG_EVERY_N_DOCS == 0:
+                logger.info(f"[tier0 worker {os.getpid()}] ingested {docs_seen} docs")
         except Exception:
             logger.error(f"[tier0] FAILED FILE: {fp}")
             logger.error(traceback.format_exc())
 
-    flush_docs()
-    flush_tokens()
+    try:
+        flush()
+    except Exception:
+        logger.error(traceback.format_exc())
     logger.info(f"[tier0 worker {os.getpid()}] finished: {docs_seen} docs processed")
+
+
+def resolve_input_file(file_arg: str, corpus: str) -> Path:
+    """
+    Locate a single input file for --file. Tries, in order: the path as given
+    (absolute or relative to cwd), relative to the corpus input dir, then
+    relative to CORPUS_ROOT_DIR. The file must live under CORPUS_ROOT_DIR,
+    since documents.filepath is stored relative to it.
+    """
+    p = Path(file_arg)
+    candidates = [p] if p.is_absolute() else [
+        Path.cwd() / p,
+        config.CORPUS_INPUT_DIRS[corpus] / p,
+        config.CORPUS_ROOT_DIR / p,
+    ]
+
+    for c in candidates:
+        if c.is_file():
+            # abspath (not resolve) so symlinks don't break relative_to below
+            found = Path(os.path.abspath(c))
+            try:
+                found.relative_to(config.CORPUS_ROOT_DIR)
+            except ValueError:
+                raise SystemExit( f"{found} is not under CORPUS_ROOT_DIR ({config.CORPUS_ROOT_DIR})" )
+            return found
+
+    raise SystemExit(
+        f"--file {file_arg!r} not found. Tried:\n  "
+        + "\n  ".join(str(c) for c in candidates)
+    )
 
 
 def ingest_xml_parallel(
@@ -523,9 +897,39 @@ def ingest_xml_parallel(
     max_workers: int     = 4,
     batch_docs: int      = 50,
     batch_tokens: int    = 50000,
-    corpus: str          = None
+    corpus: str          = None,
+    doc_id: str | None   = None,
+    file: Path | None    = None,
 ):
-    xml_files = list(xml_dir.rglob("*.xml"))
+    if file is not None:
+        xml_files = [file]
+    else:
+        xml_files = [
+            p for p in xml_dir.rglob("*.xml")
+            if p.name not in SKIP_FILES
+        ]
+
+    if doc_id:
+        with corpus_db.get_connection(
+            application_name="tier0-target"
+        ) as conn:
+            filepath = corpus_db.get_document_filepath( conn, doc_id, corpus=corpus, )
+
+        if filepath is None:
+            raise SystemExit( f"Document {doc_id!r} does not exist in corpus {corpus!r}" )
+
+        xml_file = Path(config.CORPUS_ROOT_DIR / Path(filepath))
+
+        if not xml_file.is_file():
+            raise FileNotFoundError( f"Document {doc_id!r} is registered at {xml_file}, but that file does not exist." )
+
+        with corpus_db.get_connection( application_name="tier0-replace" ) as conn:
+            deleted = corpus_db.delete_document( conn, doc_id, corpus=corpus, )
+        if not deleted:
+            logger.warning( "[tier0] --replace requested, but document %s does not currently exist in corpus %s", doc_id, corpus, )
+
+        # Only reprocess the targeted file, not the whole directory.
+        xml_files = [xml_file]
 
     logger.info(f"[tier0] Input directory: {xml_dir}")
     logger.info(f"[tier0] Found {len(xml_files)} XML files")
@@ -536,6 +940,7 @@ def ingest_xml_parallel(
     if MAX_DOCS is not None:
         xml_files = xml_files[:MAX_DOCS]
 
+    max_workers = max(1, min(max_workers, len(xml_files)))
     chunks = [xml_files[i::max_workers] for i in range(max_workers)]
 
     with ProcessPoolExecutor(max_workers=max_workers) as ex:
@@ -564,16 +969,32 @@ def validate_corpus_years():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--create", action="store_true")
-    parser.add_argument("--justindex", action="store_true")
+    parser.add_argument("--limit", type=int, default=None, help="Maximum number of documents to parse/add.")
+    parser.add_argument("--create", action="store_true", help="Creates the database from scratch, deleting existing data. Requires manual confirmation.")
+    parser.add_argument("--justindex", action="store_true", help="Does not parse any files but recreates database view and indicies.")
+    parser.add_argument( "--corpus", choices=sorted(config.CORPUS_INPUT_DIRS.keys()), default=None, help="Process only this predefined corpus.")
+    parser.add_argument( "--doc-id", default=None, help="Process only the specified document ID." )
+    parser.add_argument( "--replace", action="store_true", help="Replace an existing document when used with --doc-id." )
+    parser.add_argument("--file", default=None, help="Ingest only this XML file (requires --corpus). Path may be absolute, " "relative to cwd, to the corpus input dir, or to CORPUS_ROOT_DIR.")
+
     args = parser.parse_args()
+
+    if args.file and not args.corpus:
+        parser.error("--file requires --corpus")
+    if args.file and args.doc_id:
+        parser.error("--file and --doc-id are mutually exclusive")
+    if args.replace and not args.doc_id:
+        parser.error("--replace requires --doc-id")
+    if args.doc_id and not args.corpus:
+        parser.error("--doc-id requires --corpus")
 
     validate_corpus_years() # Eventually allow flags
 
     global MAX_DOCS, SKIP_EXISTING_DOCS
-    MAX_DOCS             = args.limit
-    SKIP_EXISTING_DOCS   = not args.create
+    MAX_DOCS           = args.limit
+    SKIP_EXISTING_DOCS = not (args.create or args.replace)
+
+    target_file = resolve_input_file(args.file, args.corpus) if args.file else None
 
     with corpus_db.get_connection() as conn:
         if args.create:
@@ -586,11 +1007,20 @@ def main():
         corpus_db.drop_tokens_fk(conn)
         conn.commit()
 
-    if not args.justindex:
-        for corpus, xml_dir in config.CORPUS_INPUT_DIRS.items():
+    if args.justindex:
+        logger.info("[tier0] === Just indexing the DB, not parsing or ingesting files ===")
+    else:
+        corpora = (
+            {args.corpus: config.CORPUS_INPUT_DIRS[args.corpus]}
+            if args.corpus
+            else config.CORPUS_INPUT_DIRS
+        )
+
+        for corpus, xml_dir in corpora.items():
             logger.info(f"[tier0] Process {corpus} from {xml_dir}")
+
             if not xml_dir.is_dir():
-                parser.error(f"Input directory for {corpus} does not exist: {xml_dir}")
+                parser.error( f"Input directory for {corpus} does not exist: {xml_dir}" )
 
             ingest_xml_parallel(
                 xml_dir=xml_dir,
@@ -598,18 +1028,24 @@ def main():
                 batch_docs=BATCH_DOCS,
                 batch_tokens=BATCH_TOKENS,
                 corpus=corpus,
+                doc_id=args.doc_id,
+                file=target_file,
             )
 
     # Wait for other connections to finish
     with corpus_db.get_connection() as conn:
         while True:
-            cur = conn.execute("""
-                SELECT count(*) FROM pg_stat_activity
-                WHERE datname = 'eebo'
-                  AND pid <> pg_backend_pid()
-                  AND state IN ('active', 'idle in transaction');
-            """)
+            cur = conn.execute(
+                """
+                SELECT count(*)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                AND pid <> pg_backend_pid()
+                AND state IN ('active', 'idle in transaction');
+                """
+            )
             n = cur.fetchone()[0]
+
             if n == 0:
                 break
 
@@ -624,3 +1060,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

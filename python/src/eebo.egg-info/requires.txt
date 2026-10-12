@@ -36,3 +36,4 @@ grok>=6.2
 openai>=2.48.0
 xxhash>=3.8.1
 onnxruntime>=1.28.0
+lxml>=6.1.3
