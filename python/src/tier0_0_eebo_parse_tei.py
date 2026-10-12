@@ -460,16 +460,16 @@ def process_ecco_file(tree, xml_path):
 
     tokens = re.findall( r"\w+|[^\w\s]", normalized )
 
-    if not passes_whiteness_filter(doc_id, tokens):
-        logger.debug( f"[tier0] Rejecting {doc_id}: not enough extreme-whiteness hits" )
-        return None
+    # if not passes_whiteness_filter(doc_id, tokens):
+    #     logger.debug( f"[tier0] Rejecting {doc_id}: not enough extreme-whiteness hits" )
+    #     return None
 
     if len(tokens) > config.MAX_TOKENS_IN_DOC:
         logger.warning(
             f"[tier0 worker {os.getpid()}] "
             f"ECCO document {doc_id} has {len(tokens)} which exceeds the limit of MAX_TOKENS_IN_DOC {config.MAX_TOKENS_IN_DOC}"
         )
-        # return None
+        return None
 
     lang = extract_language(tree, raw_text)
 
@@ -630,38 +630,26 @@ def process_eebo_file(tree, xml_path):
     doc_id_elem = tree.find(".//tei:idno[@type='DLPS']", TEI_NS)
 
     if doc_id_elem is None or not doc_id_elem.text:
-        logger.warning(
-            f"[tier0] process_eebo_file bailing as doc_id_elem not found in {xml_path}"
-        )
+        logger.warning( f"[tier0] process_eebo_file bailing as doc_id_elem not found in {xml_path}" )
         return None
 
     doc_id = doc_id_elem.text.strip()
 
     title_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:title", TEI_NS)
     author_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:author", TEI_NS)
-    pub_elem = tree.find(
-        ".//tei:teiHeader//tei:sourceDesc//tei:publisher",
-        TEI_NS,
-    )
-    place_elem = tree.find(
-        ".//tei:teiHeader//tei:sourceDesc//tei:pubPlace",
-        TEI_NS,
-    )
-    date_elem = tree.find(
-        ".//tei:teiHeader//tei:sourceDesc//tei:date",
-        TEI_NS,
-    )
+    pub_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:publisher", TEI_NS, )
+    place_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:pubPlace", TEI_NS, )
+    date_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:date", TEI_NS, )
 
     date_raw = safe_text(date_elem)
     pub_year = extract_year(date_raw)
 
     if pub_year is None:
-        logger.warning(
-            f"[tier0 worker {os.getpid()}] No pub_year in {doc_id} at {xml_path}"
-        )
+        logger.warning( f"[tier0 worker {os.getpid()}] No pub_year in {doc_id} at {xml_path}" )
         return None
 
     if not year_in_corpus(pub_year):
+        logger.info(f"[tier0 worker {os.getpid()}] pub_year out of range {pub_year} vs {config.CORPUS_MIN_YEAR}-{config.CORPUS_MAX_YEAR})")
         return None
 
     body = tree.findall(".//tei:text/tei:body", TEI_NS)
