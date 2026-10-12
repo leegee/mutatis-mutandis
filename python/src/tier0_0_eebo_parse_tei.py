@@ -1021,21 +1021,21 @@ def main():
             )
 
     # Wait for other connections to finish
-    with corpus_db.get_connection() as conn:
-        while True:
-            cur = conn.execute(
-                """
-                SELECT count(*)
-                FROM pg_stat_activity
-                WHERE datname = current_database()
-                AND pid <> pg_backend_pid()
-                AND state IN ('active', 'idle in transaction');
-                """
-            )
-            n = cur.fetchone()[0]
-
-            if n == 0:
-                break
+    # with corpus_db.get_connection() as conn:
+    #     while True:
+    #         cur = conn.execute(
+    #             """
+    #             SELECT count(*)
+    #             FROM pg_stat_activity
+    #             WHERE datname = current_database()
+    #             AND pid <> pg_backend_pid()
+    #             AND state IN ('active', 'idle in transaction');
+    #             """
+    #         )
+    #         n = cur.fetchone()[0]
+    #
+    #         if n == 0:
+    #             break
 
     with corpus_db.get_connection() as conn:
         corpus_db.create_tokens_fk(conn)
