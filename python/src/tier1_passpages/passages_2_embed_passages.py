@@ -7,68 +7,63 @@ No Postgres, no Lance. Each output shard is written to local /content first,
 copied to Drive under a .part name, then renamed, so a disconnect can never
 leave something that looks finished but isn't. Re-running skips finished shards.
 
-Colab cells:
-    from google.colab import drive; drive.mount("/content/drive")
     !pip install -q transformers pyarrow
-    %run embed_passages_colab.py
+
 """
+
 import os
 import shutil
 import time
+from datetime import datetime
 from pathlib import Path
-from google.colab import drive
 
+from google.colab import drive
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 from transformers import AutoModel, AutoTokenizer
 
+
+# ------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------
+
+RESUME_FROM_DOC = 9999
+STOP_AFTER_DOC  = 9999
 IN_DIR = Path("/content/drive/MyDrive/tier1/tokens")
 OUT_DIR = Path("/content/drive/MyDrive/tier1/passages")
+CHECKPOINT_DIR = OUT_DIR / "_checkpoints"
 LOCAL_TMP = Path("/content/tmp")
-
-SEG = 20000          # Max docs in RAM
 MODEL_NAME = "emanjavacas/MacBERTh"
-CHUNK = 510          # subwords per forward pass, excluding [CLS]/[SEP]
-OVERLAP = 96         # subwords shared between consecutive chunks
-BATCH = 32
-WINDOW = 40          # words per passage
-HOP = 20             # words between passage starts
+ASSEMBLE_FINAL_SHARD = False
+
+CHUNK = 510
+OVERLAP = 96
+BATCH = 16                  # Lower peak GPU memory than the original 32
+WINDOW = 40
+HOP = 20
 DIM = 768
 
-# Three representations per passage; choose after testing on labelled positives.
 LAYER_NAMES = ("l8", "last", "mean4")
 
 
-drive.mount("/content/drive")
+def log(message):
+    print(
+        f"[{datetime.now().isoformat(timespec='seconds')}] {message}",
+        flush=True,
+    )
 
-print(os.path.exists("/content/drive/MyDrive"))
-print(os.listdir("/content/drive/MyDrive")[:30])
 
+def passage_spans(n_words):
+    if n_words <= WINDOW:
+        return [(0, n_words)] if n_words else []
 
+    starts = list(range(0, n_words - WINDOW + 1, HOP))
+    if starts[-1] + WINDOW < n_words:
+        starts.append(n_words - WINDOW)
 
-def doc_passage_vectors(words, tok, model, device):
-    spans = passage_spans(len(words))
-    out = {n: [] for n in LAYER_NAMES}
-    i = 0
-    while i < len(spans):
-        seg_start = spans[i][0]
-        j = i
-        while j < len(spans) and spans[j][1] - seg_start <= SEG:
-            j += 1
-        j = max(j, i + 1)
-        seg_end = spans[j - 1][1]
-
-        wv = word_vectors(words[seg_start:seg_end], tok, model, device)
-        for n in LAYER_NAMES:
-            out[n].append(
-                np.stack([wv[n][s - seg_start:e - seg_start].mean(0)
-                          for s, e in spans[i:j]]).astype(np.float16)
-            )
-        del wv
-        i = j
-    return spans, {n: np.concatenate(v) for n, v in out.items()}
+    return [(s, s + WINDOW) for s in starts]
 
 
 def pick_layers(hidden_states):
@@ -81,16 +76,27 @@ def pick_layers(hidden_states):
 
 @torch.inference_mode()
 def word_vectors(words, tok, model, device):
-    """One vector per word per layer: mean of its subwords, averaged over chunk overlaps."""
-    words = [w if w.strip() else "." for w in words]  # empty tokens would vanish
+    """Return one float32 vector per word for each selected representation."""
+    words = [w if w.strip() else "." for w in words]
 
-    enc = tok(words, is_split_into_words=True, add_special_tokens=False,
-              truncation=False)
+    enc = tok(
+        words,
+        is_split_into_words=True,
+        add_special_tokens=False,
+        truncation=False,
+    )
     ids = enc["input_ids"]
-    wids = np.array(enc.word_ids())
+    wids = np.asarray(enc.word_ids(), dtype=np.int32)
     n_words = len(words)
 
-    chunks, start = [], 0
+    if len(ids) == 0:
+        return {
+            name: np.zeros((n_words, DIM), dtype=np.float32)
+            for name in LAYER_NAMES
+        }
+
+    chunks = []
+    start = 0
     while True:
         end = min(start + CHUNK, len(ids))
         chunks.append((start, end))
@@ -98,15 +104,27 @@ def word_vectors(words, tok, model, device):
             break
         start = end - OVERLAP
 
-    sums = {n: np.zeros((n_words, DIM), np.float32) for n in LAYER_NAMES}
-    cnt = np.zeros(n_words, np.float32)
+    sums = {
+        name: np.zeros((n_words, DIM), dtype=np.float32)
+        for name in LAYER_NAMES
+    }
+    cnt = np.zeros(n_words, dtype=np.float32)
 
-    order = sorted(range(len(chunks)), key=lambda i: chunks[i][1] - chunks[i][0])
+    # Process shorter chunks first to reduce padding.
+    order = sorted(
+        range(len(chunks)),
+        key=lambda i: chunks[i][1] - chunks[i][0],
+    )
 
     for b in range(0, len(order), BATCH):
         batch = [chunks[i] for i in order[b:b + BATCH]]
         maxlen = max(e - s for s, e in batch) + 2
-        inp = torch.full((len(batch), maxlen), tok.pad_token_id, dtype=torch.long)
+
+        inp = torch.full(
+            (len(batch), maxlen),
+            tok.pad_token_id,
+            dtype=torch.long,
+        )
         att = torch.zeros((len(batch), maxlen), dtype=torch.long)
 
         for k, (s, e) in enumerate(batch):
@@ -114,105 +132,323 @@ def word_vectors(words, tok, model, device):
             inp[k, :len(seq)] = torch.tensor(seq)
             att[k, :len(seq)] = 1
 
-        out = model(input_ids=inp.to(device), attention_mask=att.to(device),
-                    output_hidden_states=True)
-        layers = {n: t.float().cpu().numpy()
-                  for n, t in pick_layers(out.hidden_states).items()}
+        out = model(
+            input_ids=inp.to(device),
+            attention_mask=att.to(device),
+            output_hidden_states=True,
+        )
+
+        layers = {
+            name: tensor.float().cpu().numpy()
+            for name, tensor in pick_layers(out.hidden_states).items()
+        }
 
         for k, (s, e) in enumerate(batch):
             w = wids[s:e]
-            # word ids are non-decreasing, so group subwords with reduceat
-            first = np.flatnonzero(np.r_[True, w[1:] != w[:-1]])
+            if len(w) == 0:
+                continue
+
+            first = np.flatnonzero(
+                np.r_[True, w[1:] != w[:-1]]
+            )
             uniq = w[first]
-            sizes = np.diff(np.r_[first, len(w)]).astype(np.float32)
+            sizes = np.diff(
+                np.r_[first, len(w)]
+            ).astype(np.float32)
+
             cnt[uniq] += sizes
-            for n in LAYER_NAMES:
-                h = layers[n][k, 1:1 + (e - s)]
-                sums[n][uniq] += np.add.reduceat(h, first, axis=0)
+
+            for name in LAYER_NAMES:
+                h = layers[name][k, 1:1 + (e - s)]
+                sums[name][uniq] += np.add.reduceat(
+                    h, first, axis=0
+                )
+
+        del out, layers, inp, att
 
     cnt = np.maximum(cnt, 1.0)[:, None]
-    return {n: sums[n] / cnt for n in LAYER_NAMES}
+    return {name: sums[name] / cnt for name in LAYER_NAMES}
 
 
-def passage_spans(n_words):
-    if n_words <= WINDOW:
-        return [(0, n_words)]
-    starts = list(range(0, n_words - WINDOW + 1, HOP))
-    if starts[-1] + WINDOW < n_words:
-        starts.append(n_words - WINDOW)  # cover the tail
-    return [(s, s + WINDOW) for s in starts]
+def doc_passage_vectors(words, tok, model, device):
+    """Embed one document; never accumulate vectors from other documents."""
+    spans = passage_spans(len(words))
+    if not spans:
+        return spans, {
+            name: np.empty((0, DIM), dtype=np.float16)
+            for name in LAYER_NAMES
+        }
+
+    result = {name: [] for name in LAYER_NAMES}
+
+    # Work on bounded word segments. A passage belongs wholly to one segment.
+    i = 0
+    while i < len(spans):
+        seg_start = spans[i][0]
+        j = i
+
+        while (
+            j < len(spans)
+            and spans[j][1] - seg_start <= 2000
+        ):
+            j += 1
+
+        j = max(j, i + 1)
+        seg_end = spans[j - 1][1]
+
+        wv = word_vectors(
+            words[seg_start:seg_end], tok, model, device
+        )
+
+        for name in LAYER_NAMES:
+            result[name].append(
+                np.stack([
+                    wv[name][s - seg_start:e - seg_start].mean(axis=0)
+                    for s, e in spans[i:j]
+                ]).astype(np.float16)
+            )
+
+        del wv
+        i = j
+
+    return spans, {
+        name: np.concatenate(parts, axis=0)
+        for name, parts in result.items()
+    }
 
 
 def fixed_f16(arr):
-    arr = np.ascontiguousarray(arr.astype(np.float16))
-    return pa.FixedSizeListArray.from_arrays(pa.array(arr.ravel()), DIM)
+    arr = np.ascontiguousarray(arr, dtype=np.float16)
+    return pa.FixedSizeListArray.from_arrays(
+        pa.array(arr.ravel()), DIM
+    )
 
 
-def process_shard(in_path, tok, model, device):
-    cols = {k: [] for k in ("corpus", "doc_id", "pub_year", "word_start",
-                            "word_end", "token_start", "token_end")}
-    vecs = {n: [] for n in LAYER_NAMES}
-    d = 0
+def document_table(doc, tok, model, device):
+    """Create a Parquet table for one document."""
+    words = doc["tokens"]
+    tidx = doc["token_idx"]
 
-    pf = pq.ParquetFile(in_path)
-    for batch in pf.iter_batches(batch_size=16):
-        for doc in batch.to_pylist():
-            d += 1
-            if d % 25 == 0:
-                print(f"  doc {d}/{pf.metadata.num_rows}", flush=True)
-            words, tidx = doc["tokens"], doc["token_idx"]
-            if not words:
-                continue
+    if not words:
+        return None
 
-            spans, dv = doc_passage_vectors(words, tok, model, device)
-            for n in LAYER_NAMES:
-                vecs[n].append(dv[n])
-
-            for s, e in spans:
-                cols["corpus"].append(doc["corpus"])
-                cols["doc_id"].append(doc["doc_id"])
-                cols["pub_year"].append(doc["pub_year"])
-                cols["word_start"].append(s)
-                cols["word_end"].append(e)
-                cols["token_start"].append(tidx[s])
-                cols["token_end"].append(tidx[e - 1] + 1)
-
-    if not vecs["l8"]:
-        raise ValueError(
-            f"No passage vectors produced from {in_path}"
-        )
+    spans, vectors = doc_passage_vectors(
+        words, tok, model, device
+    )
+    if not spans:
+        return None
 
     arrays = {
-        "corpus": pa.array(cols["corpus"]),
-        "doc_id": pa.array(cols["doc_id"]),
-        "pub_year": pa.array(cols["pub_year"], pa.int32()),
-        "word_start": pa.array(cols["word_start"], pa.int32()),
-        "word_end": pa.array(cols["word_end"], pa.int32()),
-        "token_start": pa.array(cols["token_start"], pa.int32()),
-        "token_end": pa.array(cols["token_end"], pa.int32()),
+        "corpus": pa.array([doc["corpus"]] * len(spans)),
+        "doc_id": pa.array([doc["doc_id"]] * len(spans)),
+        "pub_year": pa.array(
+            [doc["pub_year"]] * len(spans), type=pa.int32()
+        ),
+        "word_start": pa.array(
+            [s for s, e in spans], type=pa.int32()
+        ),
+        "word_end": pa.array(
+            [e for s, e in spans], type=pa.int32()
+        ),
+        "token_start": pa.array(
+            [tidx[s] for s, e in spans], type=pa.int32()
+        ),
+        "token_end": pa.array(
+            [tidx[e - 1] + 1 for s, e in spans],
+            type=pa.int32(),
+        ),
     }
-    for n in LAYER_NAMES:
-        arrays[f"vec_{n}"] = fixed_f16(np.concatenate(vecs[n]))
+
+    for name in LAYER_NAMES:
+        arrays[f"vec_{name}"] = fixed_f16(vectors[name])
 
     return pa.table(arrays)
 
 
+def commit_file(local_path, final_path):
+    """Copy to Drive under a temporary name, then publish the final name."""
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    part_path = final_path.with_name(final_path.name + ".part")
+
+    if part_path.exists():
+        part_path.unlink()
+
+    shutil.copyfile(local_path, part_path)
+
+    # Validate the Drive copy before committing it.
+    pq.ParquetFile(part_path).metadata
+    os.replace(part_path, final_path)
+
+
+def valid_checkpoint(path):
+    """Trust only readable checkpoints with the expected schema."""
+    try:
+        pf = pq.ParquetFile(path)
+        names = set(pf.schema_arrow.names)
+        required = {
+            "corpus", "doc_id", "pub_year",
+            "word_start", "word_end",
+            "token_start", "token_end",
+            "vec_l8", "vec_last", "vec_mean4",
+        }
+        return pf.metadata.num_rows > 0 and required.issubset(names)
+    except Exception:
+        return False
+
+
+def process_shard(in_path, tok, model, device):
+    shard_name = in_path.name.replace("tokens_", "passages_")
+    final_path = OUT_DIR / shard_name
+
+    # Never blindly skip a final file that cannot be read.
+    if final_path.exists():
+        try:
+            pq.ParquetFile(final_path).metadata
+            log(f"Already complete; skipping {shard_name}")
+            return
+        except Exception:
+            log(f"Existing final file is unreadable; rebuilding {shard_name}")
+            final_path.unlink()
+
+    shard_checkpoints = CHECKPOINT_DIR / in_path.stem
+    shard_checkpoints.mkdir(parents=True, exist_ok=True)
+
+    pf = pq.ParquetFile(in_path)
+    total_docs = pf.metadata.num_rows
+
+    log(f"Processing {in_path.name}: {total_docs} documents")
+    doc_index = 0
+
+    for batch in pf.iter_batches(batch_size=1):
+        for doc in batch.to_pylist():
+            # Keep doc_index zero-based to match checkpoint filenames.
+            checkpoint = (
+                shard_checkpoints / f"doc_{doc_index:08d}.parquet"
+            )
+            current_index = doc_index
+            doc_index += 1
+
+            if current_index < RESUME_FROM_DOC or current_index > STOP_AFTER_DOC:
+                continue
+
+            if checkpoint.exists() and valid_checkpoint(checkpoint):
+                if doc_index % 25 == 0:
+                    log(f"Resume: document {doc_index}/{total_docs}")
+                continue
+
+            if checkpoint.exists():
+                checkpoint.unlink()
+
+            if not doc["tokens"]:
+                # Empty documents have no passages; no checkpoint needed.
+                continue
+
+            log(
+                f"Embedding document {doc_index}/{total_docs}: "
+                f"{doc['doc_id']}"
+            )
+            t0 = time.perf_counter()
+
+            table = document_table(doc, tok, model, device)
+            if table is None:
+                continue
+
+            local = LOCAL_TMP / checkpoint.name
+            pq.write_table(table, local, compression="zstd")
+            commit_file(local, checkpoint)
+            local.unlink(missing_ok=True)
+
+            log(
+                f"Committed {doc['doc_id']}: {table.num_rows} passages "
+                f"in {time.perf_counter() - t0:.1f}s"
+            )
+
+            del table
+
+            if device == "cuda":
+                # Releases cached blocks; does not change model results.
+                torch.cuda.empty_cache()
+
+    if doc_index != total_docs:
+        raise RuntimeError(
+            f"Document count mismatch: read {doc_index}, expected {total_docs}"
+        )
+
+    if not ASSEMBLE_FINAL_SHARD:
+        print(
+            f"CHECKPOINTS ONLY: {in_path.name}; "
+            "skipping final-shard assembly."
+        )
+        return
+
+    # Stream one checkpoint at a time into the final local Parquet file.
+    # This avoids reading the whole shard into RAM.
+    local_final = LOCAL_TMP / shard_name
+    if local_final.exists():
+        local_final.unlink()
+
+    writer = None
+    expected_rows = 0
+
+    try:
+        for checkpoint in sorted(shard_checkpoints.glob("doc_*.parquet")):
+            if not valid_checkpoint(checkpoint):
+                raise RuntimeError(f"Invalid checkpoint: {checkpoint}")
+
+            table = pq.read_table(checkpoint)
+            if writer is None:
+                writer = pq.ParquetWriter(
+                    local_final, table.schema, compression="zstd"
+                )
+            elif not table.schema.equals(writer.schema, check_metadata=False):
+                raise RuntimeError(
+                    f"Schema mismatch in checkpoint {checkpoint.name}"
+                )
+
+            writer.write_table(table)
+            expected_rows += table.num_rows
+            del table
+    finally:
+        if writer is not None:
+            writer.close()
+
+    if expected_rows == 0:
+        raise RuntimeError(
+            "No passage rows were produced; refusing to publish an empty shard"
+        )
+
+    # Validate the assembled local file before publishing it.
+    assembled = pq.ParquetFile(local_final)
+    if assembled.metadata.num_rows != expected_rows:
+        raise RuntimeError("Final row-count validation failed")
+
+    commit_file(local_final, final_path)
+    local_final.unlink(missing_ok=True)
+
+    log(
+        f"COMPLETE {shard_name}: {expected_rows} passages "
+        f"from {total_docs} documents"
+    )
+
+
 def main():
-    if not IN_DIR.exists():
-        raise SystemExit(f"IN_DIR not found: {IN_DIR} (is Drive mounted?)")
+    drive.mount("/content/drive")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     LOCAL_TMP.mkdir(parents=True, exist_ok=True)
 
     shards = sorted(IN_DIR.glob("tokens_*.parquet"))
-    print(f"found {len(shards)} input shards in {IN_DIR}")
+    log(f"Found {len(shards)} input shards in {IN_DIR}")
+
     if not shards:
-        print("contents:", [p.name for p in IN_DIR.iterdir()][:10])
-        raise SystemExit("no tokens_*.parquet files found")
+        raise SystemExit("No tokens_*.parquet files found")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    log(f"Device: {device}")
+
     if device == "cpu":
-        print("WARNING: no GPU. Expect this to be very slow.")
+        log("WARNING: CPU inference will be slow")
 
     tok = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = AutoModel.from_pretrained(MODEL_NAME).to(device).eval()
@@ -220,27 +456,13 @@ def main():
     if device == "cuda":
         model = model.half()
 
+    log("Model ready")
+
     for i, in_path in enumerate(shards, 1):
-        name = in_path.name.replace("tokens_", "passages_")
-        final = OUT_DIR / name
-        if final.exists():
-            print(f"[{i}/{len(shards)}] skip {name}")
-            continue
-
-        t0 = time.perf_counter()
-        table = process_shard(in_path, tok, model, device)
-
-        local = LOCAL_TMP / name
-        pq.write_table(table, local, compression="zstd")
-
-        part = OUT_DIR / (name + ".part")
-        shutil.copyfile(local, part)
-        os.replace(part, final)  # only now does the shard "exist"
-        local.unlink()
-
-        print(f"[{i}/{len(shards)}] {name} passages={table.num_rows} "
-              f"elapsed={time.perf_counter() - t0:.1f}s")
+        log(f"Shard {i}/{len(shards)}")
+        process_shard(in_path, tok, model, device)
 
 
 if __name__ == "__main__":
     main()
+
