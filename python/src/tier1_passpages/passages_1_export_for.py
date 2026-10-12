@@ -1,8 +1,6 @@
 """
 colab_export_for.py
 
-Run ONCE, locally, where Postgres lives.
-
 Exports one row per document (corpus, doc_id, pub_year, token_idx[], tokens[])
 into parquet shards of DOCS_PER_SHARD documents. Upload EMB_OUTPUT_DIR to Drive.
 
@@ -18,12 +16,14 @@ from lib.corpus_db import get_connection
 from lib.corpus_config import OUT_DIR
 from lib.corpus_logging import logger
 
+from lib.corpus_albinism import CORPUS_SQL
+
 # Local filesystem output directory
 EMB_OUTPUT_DIR = OUT_DIR / Path("export/tokens")
 
 # PostgreSQL tables
-TABLE = "pamphlet_tokens"
-DOC_TABLE = "pamphlet_corpus"
+DOC_TABLE = "documents"
+TABLE = "tokens"
 
 DOCS_PER_SHARD = 500
 
@@ -52,12 +52,34 @@ def main() -> None:
     # Named (server-side) cursor: streams instead of loading everything.
     with conn.cursor(name="export_tokens") as cur:
         cur.itersize = 100_000
+        # cur.execute(
+        #     f"""
+        #     SELECT t.corpus, t.doc_id, d.pub_year, t.token_idx, t.token
+        #     FROM {TABLE} AS t
+        #     JOIN {DOC_TABLE} AS d
+        #       ON d.corpus = t.corpus AND d.doc_id = t.doc_id
+        #     ORDER BY t.corpus, t.doc_id, t.token_idx
+        #     """
+        # )
+
         cur.execute(
             f"""
-            SELECT t.corpus, t.doc_id, d.pub_year, t.token_idx, t.token
+            WITH selected_docs AS (
+                {CORPUS_SQL}
+            )
+            SELECT
+                t.corpus,
+                t.doc_id,
+                d.pub_year,
+                t.token_idx,
+                t.token
             FROM {TABLE} AS t
             JOIN {DOC_TABLE} AS d
-              ON d.corpus = t.corpus AND d.doc_id = t.doc_id
+            ON d.corpus = t.corpus
+            AND d.doc_id = t.doc_id
+            JOIN selected_docs AS s
+            ON s.corpus = t.corpus
+            AND s.doc_id = t.doc_id
             ORDER BY t.corpus, t.doc_id, t.token_idx
             """
         )
