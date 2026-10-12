@@ -41,7 +41,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from pathlib import Path
-from lib.corpus_config import OUT_DIR, XML_ROOT_DIR
+from lib.corpus_config import OUT_DIR, CORPUS_ROOT_DIR
 from lib.corpus_logging import logger
 from tier2_5_concept_neighbours_temporal import OUTPUT_PATH as INPUT_PATH
 
@@ -60,7 +60,7 @@ def normalize_filepath(fp: str) -> str:
     p = Path(fp).expanduser().resolve()
 
     try:
-        p = p.relative_to(XML_ROOT_DIR)
+        p = p.relative_to(CORPUS_ROOT_DIR)
     except ValueError:
         # fallback: keep absolute but normalized
         return str(p)

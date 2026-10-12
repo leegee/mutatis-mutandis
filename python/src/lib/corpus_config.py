@@ -4,14 +4,19 @@ from pathlib import Path
 from typing import TypedDict, Set, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-XML_ROOT_DIR = PROJECT_ROOT / "corpus"
+
+CORPUS_ROOT_DIR = Path("G:/") / "corpus"
 
 CORPUS_INPUT_DIRS = {
-    "eebo": XML_ROOT_DIR / "eebo_all",
-    "ecco": XML_ROOT_DIR / "ecco_all",
+    "misc": CORPUS_ROOT_DIR / "misc",
+    "eebo": CORPUS_ROOT_DIR / "eebo_all",
+    "ecco": CORPUS_ROOT_DIR / "ecco_all",
 }
 
-ECCO_HEADER_DIR = XML_ROOT_DIR / "/ecco_all/ecco/headers"
+CLMET_CORPUS_INPUT_DIR = CORPUS_ROOT_DIR / "clmet" / "corpus" / "txt" / "plain"
+
+ECCO_HEADER_DIR = CORPUS_ROOT_DIR / "/ecco_all/ecco/headers"
+
 
 try:
     import google.colab  # noqa: F401

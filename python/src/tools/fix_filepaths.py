@@ -21,11 +21,11 @@ def extract_doc_id(xml_path: Path) -> str | None:
 
 
 def compute_relative_path(xml_path: Path) -> str:
-    return xml_path.relative_to(config.XML_ROOT_DIR).as_posix()
+    return xml_path.relative_to(config.CORPUS_ROOT_DIR).as_posix()
 
 
 def main():
-    xml_files = list(Path(config.XML_ROOT_DIR).rglob("*.xml"))
+    xml_files = list(Path(config.CORPUS_ROOT_DIR).rglob("*.xml"))
 
     updates = []
 
