@@ -404,64 +404,6 @@ def _export_macberth_onnx(export_dir: Path) -> None:
     )
 
 
-def load_macberth_onnx(
-    export_dir: Optional[Path] = None,
-    providers: Optional[List[str]] = None,
-) -> OnnxMacberthModel:
-    """
-    Loads the ONNX MacBERTh model for inference. Exports it first if it
-    doesn't already exist on disk.
-    """
-    import os
-
-    if export_dir is None:
-        export_dir = ONNX_MODEL_DIR
-    export_dir = Path(export_dir)
-
-    if not (export_dir / "model.onnx").exists():
-        _export_macberth_onnx(export_dir)
-
-    if providers is None:
-        # Auto-select the best available provider
-        available = ort.get_available_providers()
-        if "CUDAExecutionProvider" in available:
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        elif "DmlExecutionProvider" in available:
-            providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
-        else:
-            providers = ["CPUExecutionProvider"]
-
-    usable = [p for p in providers if p in ort.get_available_providers()]
-    if not usable:
-        raise RuntimeError( f"None of the requested providers are available: {providers}. Available: {ort.get_available_providers()}" )
-
-    provider_options = [
-        {"device_id": 0} if p in ("CUDAExecutionProvider", "DmlExecutionProvider") else {}
-        for p in usable
-    ]
-
-    sess_options = _configure_ort_session_options()
-
-    session = ort.InferenceSession(
-        str(export_dir / "model.onnx"),
-        sess_options=sess_options,
-        providers=usable,
-        provider_options=provider_options,
-    )
-
-    actual = session.get_providers()
-    logger.info(
-        "[macberth.load_macberth_onnx] Loaded ONNX MacBERTh | "
-        "requested=%s | actual=%s",
-        providers,
-        actual,
-    )
-
-    tokenizer = AutoTokenizer.from_pretrained(export_dir, local_files_only=True)
-
-    return OnnxMacberthModel(tokenizer=tokenizer, session=session)
-
-
 def _configure_ort_session_options() -> ort.SessionOptions:
     """
     Centralizes CPU thread/execution tuning for the ONNX session.
