@@ -108,11 +108,8 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ.setdefault("OMP_NUM_THREADS", "4")
-os.environ.setdefault("MKL_NUM_THREADS", "4")        # harmless no-op on this build, but keep for portability
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "4")   # the one that actually matters here
-
-# When/if using openblas rather than mkl
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
+os.environ.setdefault("MKL_NUM_THREADS", "4")        # harmless no-op on this build, but keeping for portability
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")   # When/if using openblas rather than mkl
 
 
 import argparse
@@ -128,15 +125,15 @@ import xxhash
 
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
+from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, CONCEPT_ZARR_PATH, EMBED_BATCH_SIZE, CONCEPT_SETS
 from lib.zarr_embedding_observation_store import ZarrEmbeddingObservationStore
 from lib.DocBuffer import DocBuffer
 from lib.stopwords_min import STOPWORDS
 
 WINDOW_CONFIGS = [
-    {"name": "local",  "size": 256,  "stride": 128},
-    {"name": "medium", "size": 512,  "stride": 256},
-    {"name": "broad",  "size": 512,  "stride": 384},
+    {"name": "local",  "size": 128,  "stride": 64},
+    {"name": "medium", "size": 512,  "stride": 128},
+    # {"name": "broad",  "size": 512,  "stride": 384},
 ]
 
 
@@ -161,6 +158,16 @@ def is_mask_target(token: str) -> bool:
         normalised in concept["forms"]
         for concept in CONCEPT_SETS.values()
     )
+
+
+def concept_raw_tokens(conn) -> list[str]:
+    forms = {f for c in CONCEPT_SETS.values() for f in c["forms"]}
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT token FROM pamphlet_tokens")
+    raw = [t for (t,) in cur
+           if unicodedata.normalize("NFKC", t).lower() in forms]
+    cur.close()
+    return raw
 
 
 @dataclass(slots=True)
@@ -618,12 +625,11 @@ class EmbeddingPipeline:
 
 class CorpusProcessor:
     def __init__(
-        self, conn,
-        zarr_path,
-        pipeline,
-        report_every=100,
-        shard=None,
-        num_shards=1
+        self, conn, zarr_path, pipeline,
+        report_every   = 100,
+        shard          = None,
+        num_shards     = 1,
+        concept_tokens = None
     ):
         self.zarr_path = zarr_path
         self.conn = conn
@@ -631,12 +637,20 @@ class CorpusProcessor:
         self.report_every = report_every
         self.shard = shard
         self.num_shards = num_shards
+        self.concept_tokens = concept_tokens   # None = no filtering
 
     def _shard_clause(self):
         if self.shard is None or self.num_shards <= 1:
             return "", []
         # abs() because hashtext can be negative; %% escapes the literal % for psycopg2
         return " AND abs(hashtext(corpus || ':' || doc_id)) %% %s = %s", [self.num_shards, self.shard]
+
+    def _concept_clause(self):
+        if not self.concept_tokens:
+            return "", []
+        return (" AND (corpus, doc_id) IN "
+                "(SELECT corpus, doc_id FROM pamphlet_tokens WHERE token = ANY(%s))",
+                [self.concept_tokens])
 
     def process(self, doc_id=None):
         store = ZarrEmbeddingObservationStore(
@@ -651,18 +665,19 @@ class CorpusProcessor:
         logger.info("[tier1] Already processed: %d", completed_docs)
 
         shard_sql, shard_params = self._shard_clause()
+        concept_sql, concept_params = self._concept_clause()
 
         # Count total documents in this run's scope
         count_cur = self.conn.cursor()
         if doc_id:
             count_cur.execute(
                 f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}",
-                [doc_id] + shard_params
+                [doc_id] + shard_params + concept_params
             )
         else:
             count_cur.execute(
                 f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE 1=1{shard_sql}",
-                shard_params
+                shard_params + concept_params
             )
         total_docs = count_cur.fetchone()[0]
         count_cur.close()
@@ -676,14 +691,14 @@ class CorpusProcessor:
                 f"""SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
                     FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}
                     ORDER BY token_idx""",
-                [doc_id] + shard_params
+                [doc_id] + shard_params + concept_params
             )
         else:
             cur.execute(
                 f"""SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
                     FROM pamphlet_tokens WHERE 1=1{shard_sql}
                     ORDER BY corpus, doc_id, token_idx""",
-                shard_params
+                shard_params + concept_params
             )
 
         logger.info("[tier1] Query executed for doc_id=%s", doc_id)
@@ -825,6 +840,7 @@ def parse_args():
     p.add_argument("--shard", type=int, default=None, help="This process's shard index (0-based)")
     p.add_argument("--num-shards", type=int, default=1, help="Total number of shards")
     p.add_argument("--backend", choices=["onnx", "pytorch"], default="onnx", help="Inference backend for embedding (default: onnx/DirectML)")
+    p.add_argument("--concept-docs", action="store_true", help="Only process documents containing a CONCEPT_SETS form")
     return p.parse_args()
 
 
@@ -842,6 +858,8 @@ def main():
 
     if args.mask:
         base_path = MASKED_ZARR_PATH
+    elif args.concept_docs:
+        base_path = CONCEPT_ZARR_PATH
     else:
         base_path = ZARR_PATH
 
@@ -857,6 +875,13 @@ def main():
         clear_output_dir(zarr_path)
 
     conn = get_connection()
+
+    concept_tokens = None
+    if args.concept_docs:
+        concept_tokens = concept_raw_tokens(conn)
+        if not concept_tokens:
+            raise SystemExit("--concept-docs set but no tokens matched CONCEPT_SETS; aborting")
+        logger.info("[tier1] Concept filter: %d raw token variants", len(concept_tokens))
 
     if args.backend == "onnx":
         from lib.macberth import load_macberth_onnx
@@ -876,9 +901,10 @@ def main():
 
     proc = CorpusProcessor(
         conn, zarr_path, pipeline,
-        report_every = args.report_every,
-        shard        = args.shard,
-        num_shards   = args.num_shards
+        report_every   = args.report_every,
+        shard          = args.shard,
+        num_shards     = args.num_shards,
+        concept_tokens = concept_tokens,
     )
     proc.process(doc_id=args.doc_id)
 

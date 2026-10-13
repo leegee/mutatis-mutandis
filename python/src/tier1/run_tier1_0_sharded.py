@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-run_tier1_sharded.py - Orchestrate sharded Tier 1 embedding + merge.
+run_tier1_0_sharded.py - Orchestrate sharded Tier 1 embedding + merge.
 
 Launches --num-shards worker processes running tier1_corpus2zarr.py,
 waits for all to finish, then merges their output stores into one.
 
 Usage:
-    python run_tier1_sharded.py --num-shards 3 --threads-per-shard 2 --clear
+    python run_tier1_0_sharded.py --num-shards 3 --threads-per-shard 2 --clear
 """
 
 import argparse
@@ -16,9 +16,8 @@ import sys
 import os
 from pathlib import Path
 
-from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, LOG_DIR
+from lib.corpus_config import ZARR_PATH, MASKED_ZARR_PATH, CONCEPT_ZARR_PATH, LOG_DIR
 from lib.corpus_logging import logger
-from tier1_0_corpus2zarr import clear_output_dir
 
 T1_PATH = "src/tier1/tier1_0_corpus2zarr.py"
 
@@ -26,18 +25,31 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--num-shards", type=int, default=3)
     p.add_argument("--threads-per-shard", type=int, default=1)
+    p.add_argument("--dim", type=int, default=768)
+    p.add_argument("--report-every", type=int, default=100)
+    p.add_argument("--concept-docs", action="store_true")
     p.add_argument("--mask", action="store_true")
     p.add_argument("--clear", action="store_true",
                    help="Wipe shard stores AND the final merged target for a fully fresh run")
-    p.add_argument("--dim", type=int, default=768)
-    p.add_argument("--report-every", type=int, default=100)
     args = p.parse_args()
 
-    base_path = MASKED_ZARR_PATH if args.mask else ZARR_PATH
+    if args.mask:
+        base_path = MASKED_ZARR_PATH
+    elif args.concept_docs:
+        base_path = CONCEPT_ZARR_PATH
+    else:
+        base_path = ZARR_PATH
+
 
     if args.clear:
         logger.info("Clearing final merge target: %s", base_path)
-        clear_output_dir(base_path)
+        def clear_output_dir(zarr_path):
+            zarr_path.mkdir(parents=True, exist_ok=True)   # ensure it exists, never remove the inode itself
+            for child in zarr_path.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
         # Note: each shard subprocess also receives --clear and wipes its own
         # _shardN path independently — see the cmd construction below.
 
@@ -61,6 +73,8 @@ def main():
             cmd.append("--mask")
         if args.clear:
             cmd.append("--clear")
+        if args.concept_docs:
+            cmd.append("--concept-docs")
 
         log_path = Path(LOG_DIR / f"shard_{i}.log")
         log_file = open(log_path, "w")
