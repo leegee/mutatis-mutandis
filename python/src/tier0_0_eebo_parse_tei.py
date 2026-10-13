@@ -635,10 +635,6 @@ def process_eebo_file(tree, xml_path):
 
     doc_id = doc_id_elem.text.strip()
 
-    title_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:title", TEI_NS)
-    author_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:author", TEI_NS)
-    pub_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:publisher", TEI_NS, )
-    place_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:pubPlace", TEI_NS, )
     date_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:date", TEI_NS, )
 
     date_raw = safe_text(date_elem)
@@ -651,6 +647,11 @@ def process_eebo_file(tree, xml_path):
     if not year_in_corpus(pub_year):
         logger.info(f"[tier0 worker {os.getpid()}] pub_year out of range {pub_year} vs {config.CORPUS_MIN_YEAR}-{config.CORPUS_MAX_YEAR})")
         return None
+
+    title_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:title", TEI_NS)
+    author_elem = tree.find(".//tei:teiHeader//tei:titleStmt/tei:author", TEI_NS)
+    pub_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:publisher", TEI_NS, )
+    place_elem = tree.find( ".//tei:teiHeader//tei:sourceDesc//tei:pubPlace", TEI_NS, )
 
     body = tree.findall(".//tei:text/tei:body", TEI_NS)
 
@@ -986,7 +987,7 @@ def main():
 
     with corpus_db.get_connection() as conn:
         if args.create:
-            confirm = input("DESTROY DB? type YES: ")
+            confirm = input(f"DESTROY DB {corpus_db.dbname}? type YES: ")
             if confirm != "YES":
                 sys.exit(1)
             corpus_db.init_db(conn)
