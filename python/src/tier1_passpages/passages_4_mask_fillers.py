@@ -733,6 +733,13 @@ def main() -> None:
     checked: set[str] = set()
     period_cache: dict = {}
 
+    occ_path = None
+    write_header = False
+    if args.occurrences_csv:
+        occ_path = Path(args.occurrences_csv)
+        write_header = not occ_path.exists()
+        occ_path.parent.mkdir(parents=True, exist_ok=True)
+
     try:
         for lo, hi in periods:
             period = f"{lo}-{hi}" if lo is not None else "csv"
@@ -790,6 +797,39 @@ def main() -> None:
                     return bp, one_position_per_passage(bp, excl_keys, rb)
 
                 analyse(macberth, label, period, scope_label, passages, occ, exclude, groups, baseline_for, args, rows, checked, nprng)
+
+                # write occurrences csv for this seed/period
+                if occ_path is not None and occ:
+                    doc_ids = [passages[p_idx]["doc_id"] for p_idx, _ in occ]
+                    meta = fetch_doc_meta(conn, doc_ids) if conn is not None else {}
+
+                    with occ_path.open("a", encoding="utf-8-sig", newline="") as f:
+                        w = csv.DictWriter(f, fieldnames=[
+                            "seed", "period", "scope",
+                            "doc_id", "corpus", "title", "pub_year",
+                            "token_idx", "word_start", "window_text",
+                        ])
+                        if write_header:
+                            w.writeheader()
+                            write_header = False          # only once
+
+                        for p_idx, w_idx in occ:
+                            p = passages[p_idx]
+                            m = meta.get(p["doc_id"], {})
+                            window = " ".join(p["words"])
+                            w.writerow({
+                                "seed": label,
+                                "period": period,
+                                "scope": scope_label,
+                                "doc_id": p["doc_id"],
+                                "corpus": m.get("corpus", ""),
+                                "title": m.get("title", ""),
+                                "pub_year": m.get("pub_year", ""),
+                                "token_idx": p["word_start"] + w_idx,
+                                "word_start": p["word_start"],
+                                "window_text": window,
+                            })
+                    logger.info(f"  wrote {len(occ)} occurrence rows → {occ_path}")
     finally:
         if conn is not None:
             conn.close()
@@ -808,38 +848,38 @@ def main() -> None:
 
     # Write occurrences CSV (with metadata)
     if args.occurrences_csv and occ:
-        occ_path = Path(args.occurrences_csv)
-        write_header = not occ_path.exists()
+        # occ_path = Path(args.occurrences_csv)
+        # write_header = not occ_path.exists()
 
         # fetch metadata once for all unique doc_ids
-        doc_ids = [passages[p_idx]["doc_id"] for p_idx, _ in occ]
-        meta = fetch_doc_meta(conn, doc_ids) if conn is not None else {}
+        # doc_ids = [passages[p_idx]["doc_id"] for p_idx, _ in occ]
+        # meta = fetch_doc_meta(conn, doc_ids) if conn is not None else {}
 
-        with occ_path.open("a", encoding="utf-8-sig", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=[
-                "seed", "period", "scope",
-                "doc_id", "corpus", "title", "pub_year",
-                "token_idx", "word_start", "window_text",
-            ])
-            if write_header:
-                w.writeheader()
+        # with occ_path.open("a", encoding="utf-8-sig", newline="") as f:
+        #     w = csv.DictWriter(f, fieldnames=[
+        #         "seed", "period", "scope",
+        #         "doc_id", "corpus", "title", "pub_year",
+        #         "token_idx", "word_start", "window_text",
+        #     ])
+        #     if write_header:
+        #         w.writeheader()
 
-            for p_idx, w_idx in occ:
-                p = passages[p_idx]
-                m = meta.get(p["doc_id"], {})
-                window = " ".join(p["words"])
-                w.writerow({
-                    "seed": label,
-                    "period": period,
-                    "scope": scope_label,
-                    "doc_id": p["doc_id"],
-                    "corpus": m.get("corpus", ""),
-                    "title": m.get("title", ""),
-                    "pub_year": m.get("pub_year", ""),
-                    "token_idx": p["word_start"] + w_idx,
-                    "word_start": p["word_start"],
-                    "window_text": window,
-                })
+        #     for p_idx, w_idx in occ:
+        #         p = passages[p_idx]
+        #         m = meta.get(p["doc_id"], {})
+        #         window = " ".join(p["words"])
+        #         w.writerow({
+        #             "seed": label,
+        #             "period": period,
+        #             "scope": scope_label,
+        #             "doc_id": p["doc_id"],
+        #             "corpus": m.get("corpus", ""),
+        #             "title": m.get("title", ""),
+        #             "pub_year": m.get("pub_year", ""),
+        #             "token_idx": p["word_start"] + w_idx,
+        #             "word_start": p["word_start"],
+        #             "window_text": window,
+        #         })
         logger.info(f"Saved {len(occ)} occurrence rows to: {occ_path.resolve()}")
 
 if __name__ == "__main__":
