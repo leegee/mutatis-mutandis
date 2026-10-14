@@ -1,4 +1,3 @@
-from lib.corpus_db import get_connection
 from lib.cannonical_rules import CanonicalRule, CanonicalRules
 
 CORPUS_MIN_YEAR = 0
@@ -146,7 +145,9 @@ ORDER BY d.pub_year NULLS LAST, d.title
 
 
 def select_white_corpus_doc_ids():
+    from lib.corpus_db import get_connection
     from lib.corpus_logging import logger
+
     con = get_connection()
     try:
         with con.cursor() as cur:

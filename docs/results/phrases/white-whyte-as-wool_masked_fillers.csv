@@ -1,0 +1,24 @@
+﻿kind,seed,period,scope,n_occurrences,rank,filler,mean_prob,baseline_prob,lift,score,ci_lo,ci_hi,support,top_share,stability
+substitute,white as wool,100-2020,all,25,1,scarlet,0.04764,0.000001,4447.83,0.57752,0.05234,1.50075,10,0.594,1.00
+substitute,white as wool,100-2020,all,25,2,clean,0.04900,0.001117,43.48,0.44079,0.02427,1.21069,10,0.410,1.00
+substitute,white as wool,100-2020,all,25,3,snow,0.02839,0.000125,210.17,0.28971,0.06906,0.61942,11,0.281,1.00
+substitute,white as wool,100-2020,all,25,4,black,0.01200,0.000014,495.34,0.11157,0.02976,0.21675,7,0.324,1.00
+substitute,white as wool,100-2020,all,25,5,forgiven/forgiuen,0.00479,0.000001,446.71,0.04221,0.00577,0.10403,3,0.526,1.00
+substitute,white as wool,100-2020,all,25,6,purple,0.00430,0.000001,403.74,0.03726,0.00929,0.08117,4,0.406,1.00
+substitute,white as wool,100-2020,all,25,7,pardoned/pardons,0.00483,0.000112,39.72,0.03072,0.00200,0.09531,5,0.547,1.00
+substitute,white as wool,100-2020,all,25,8,red,0.00390,0.000032,93.61,0.02756,0.01282,0.04969,8,0.175,1.00
+substitute,white as wool,100-2020,all,25,9,comely,0.00330,0.000054,51.70,0.02421,0.00300,0.05451,3,0.412,1.00
+substitute,white as wool,100-2020,all,25,10,soft,0.00291,0.000257,10.94,0.01898,0.00009,0.05160,5,0.430,0.80
+substitute,white as wool,100-2020,all,25,11,gold,0.00191,0.000100,17.42,0.01119,0.00132,0.02183,4,0.198,0.80
+substitute,white as wool,100-2020,all,25,12,healed/healing,0.00176,0.000069,22.36,0.00966,0.00037,0.02681,3,0.445,1.00
+substitute,white as wool,100-2020,all,25,13,sin/sins/sinne,0.00275,0.000317,8.43,0.00956,0.00106,0.03275,3,0.459,1.00
+collocate,white as wool,100-2020,all,25,1,scarlet,0.44000,0.019231,22.88,1.98705,0.97274,3.23621,11,,1.00
+collocate,white as wool,100-2020,all,25,2,sins,0.60000,0.088462,6.78,1.85024,0.70638,3.63715,15,,1.00
+collocate,white as wool,100-2020,all,25,3,snow,0.40000,0.019231,20.80,1.75140,0.76988,2.97808,10,,1.00
+collocate,white as wool,100-2020,all,25,4,red,0.36000,0.019231,18.72,1.52154,0.48905,2.72381,9,,1.00
+collocate,white as wool,100-2020,all,25,5,crimson,0.28000,0.019231,14.56,1.08190,0.31699,2.11352,7,,1.00
+collocate,white as wool,100-2020,all,25,6,hairs,0.24000,0.019231,12.48,0.87397,0.16453,1.98705,6,,1.00
+collocate,white as wool,100-2020,all,25,7,ancient,0.20000,0.026923,7.43,0.61230,0.03773,1.52154,5,,1.00
+collocate,white as wool,100-2020,all,25,8,dan,0.16000,0.019231,8.32,0.48905,0.04226,1.29811,4,,1.00
+collocate,white as wool,100-2020,all,25,9,sinner,0.16000,0.019231,8.32,0.48905,0.04226,1.19541,4,,1.00
+collocate,white as wool,100-2020,all,25,10,tender,0.12000,0.019231,6.24,0.31699,0.02008,0.87397,3,,1.00

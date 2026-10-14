@@ -13,6 +13,8 @@ from functools import lru_cache
 
 import numpy as np
 
+from lib.corpus_logging import logger
+
 
 # Function words, including Early Modern forms (adapted from
 # eebo_word_frequencies.py).

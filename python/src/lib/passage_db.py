@@ -37,8 +37,30 @@ MATCH_SQL = {
 
 
 # ---------------------------------------------------------------------------
-# Hit sampling
+# Hit sampling, meta
 # ---------------------------------------------------------------------------
+
+def fetch_doc_meta(conn, doc_ids):
+    """Return {doc_id: {"corpus": …, "title": …, "pub_year": …}}"""
+    if not doc_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT doc_id, corpus, title, pub_year
+            FROM documents
+            WHERE doc_id = ANY(%s)
+            """,
+            (list(set(doc_ids)),),
+        )
+        return {
+            row[0]: {
+                "corpus": row[1] or "",
+                "title": (row[2] or "")[:120],   # truncate for readability
+                "pub_year": row[3],
+            }
+            for row in cur.fetchall()
+        }
 
 def fetch_hits(
     conn,

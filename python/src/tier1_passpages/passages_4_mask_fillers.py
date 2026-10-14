@@ -78,6 +78,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from lib.corpus_logging import logger
 from lib.corpus_config import OUT_DIR
 from lib.macberth import load_macberth
 from lib.passage_stem import (
@@ -94,6 +95,7 @@ from lib.passage_db import (
     fetch_phrase_hits,
     fetch_doc_lengths,
     matched_hits,
+    fetch_doc_meta,
     fetch_random_hits,
     fetch_windows,
     windows_to_passages,
@@ -111,6 +113,7 @@ EPS = 1e-5
 
 def load_passages(path: Path) -> list[dict]:
     """One row per passage_id; passages repeat across queries/reps."""
+    logger.info(f"Loading passpages from {path}")
     seen = set()
     passages = []
     with open(path, encoding="utf-8-sig", newline="") as f:
@@ -442,9 +445,22 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
     tok = macberth.tokenizer
     R = args.replicates
 
-    print(f"\n=== {label} | {period} | scope={scope_label} ({len(occ)} occurrences) ===")
+    # --- diagnostic: list every seed occurrence ---
+    logger.info(f"\n== Seed occurrences ({len(occ)}) ==")
+    for p_idx, w_idx in occ:
+        p = passages[p_idx]
+        s, e = span_of(p, w_idx)          # already imported
+        lo = max(0, s - 12)
+        hi = min(len(p["words"]), e + 13)
+        window = " ".join(
+            ("[MASK]" if s <= i <= e else w)
+            for i, w in enumerate(p["words"][lo:hi])
+        )
+        logger.info(f"    {p['doc_id']}:{p['word_start'] + w_idx}  {window}")
+
+    logger.info(f"\n=== {label} | {period} | scope={scope_label} ({len(occ)} occurrences) ===")
     if len(occ) < args.min_occurrences:
-        print(f"  Skipped: {len(occ)} occurrences < --min-occurrences "
+        logger.info(f"  Skipped: {len(occ)} occurrences < --min-occurrences "
               f"{args.min_occurrences}. Widen the years, use --scope all, raise "
               f"--max-per-doc, loosen --require/--forbid, or lower the threshold.")
         return
@@ -460,14 +476,14 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
         s, e = span_of(passages[p_idx], w_idx)
         lo, hi = max(0, s - 8), min(len(words), e + 9)
         shown = words[lo:s] + ["[MASK]"] + words[e + 1:hi]
-        print(f"  check: {' '.join(shown)}")
-        print(f"         -> {', '.join(top_tokens(macberth, passages, occ[0]))}")
+        logger.info(f"  check: {' '.join(shown)}")
+        logger.info(f"         -> {', '.join(top_tokens(macberth, passages, occ[0]))}")
 
     # Seed side (computed once).
     M, n, vocab_sum = grouped_probs(macberth, passages, occ, groups,
                                     args.batch_size, keep_rows=True)
     if M is None:
-        print("  No occurrences could be masked.")
+        logger.info("  No occurrences could be masked.")
         return
     vocab_mean = vocab_sum / n
 
@@ -482,23 +498,23 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
         bases.append(total / nb)
         base_lists.append(bp)
     if not bases:
-        print("  No usable baseline positions.")
+        logger.info("  No usable baseline positions.")
         return
     B = np.stack(bases)
     R = len(bases)
 
     fam = M.mean(0)[excl_groups].sum() if excl_groups else 0.0
-    print(f"  baselines: {R} replicates; seed family "
+    logger.info(f"  baselines: {R} replicates; seed family "
           f"({', '.join(sorted(excl_keys))}) takes p={fam:.3f} of the mass "
           f"and is excluded below.")
 
     # ---- substitutes -----------------------------------------------------
     subs, ov_s = score_substitutes(M, B, excl_groups, args, nprng)
-    print(f"\n  SUBSTITUTES (alternatives in the seed's slot; variants pooled)")
+    logger.info(f"\n  SUBSTITUTES (alternatives in the seed's slot; variants pooled)")
     if ov_s is not None:
-        print(f"  stability: mean pairwise top-{args.stability_k} overlap "
+        logger.info(f"  stability: mean pairwise top-{args.stability_k} overlap "
               f"across baselines = {ov_s:.2f}")
-    print(f"  {'filler':<26}{'mean_p':>8}{'base_p':>9}{'score':>8}  "
+    logger.info(f"  {'filler':<26}{'mean_p':>8}{'base_p':>9}{'score':>8}  "
           f"{'95% CI':<15}{'support':>9}{'top%':>6}{'stab':>6}")
     for rank, it in enumerate(subs, start=1):
         g = it["group"]
@@ -519,7 +535,7 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
         })
         if rank <= args.top:
             ci = f"[{it['ci_lo']:.3f},{it['ci_hi']:.3f}]"
-            print(f"  {name:<26}{it['mean_p']:>8.4f}{it['base_p']:>9.5f}"
+            logger.info(f"  {name:<26}{it['mean_p']:>8.4f}{it['base_p']:>9.5f}"
                   f"{it['score']:>8.4f}  {ci:<15}{it['support']:>5}/{n:<3}"
                   f"{it['top_share']:>6.0%}{round(it['stability'] * R):>4}/{R}")
 
@@ -529,12 +545,12 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
     col_excl = excl_keys | {stem_key(w) for w in args.require_set}
     cols, ov_c = score_collocates(passages, occ, base_lists, col_excl, min_c,
                                   args, nprng)
-    print(f"\n  COLLOCATES (windows containing the word, min {min_c}; "
+    logger.info(f"\n  COLLOCATES (windows containing the word, min {min_c}; "
           f"--require words omitted)")
     if ov_c is not None:
-        print(f"  stability: mean pairwise top-{args.stability_k} overlap "
+        logger.info(f"  stability: mean pairwise top-{args.stability_k} overlap "
               f"across baselines = {ov_c:.2f}")
-    print(f"  {'word':<26}{'windows':>8}{'p_seed':>9}{'p_base':>9}{'score':>8}  "
+    logger.info(f"  {'word':<26}{'windows':>8}{'p_seed':>9}{'p_base':>9}{'score':>8}  "
           f"{'95% CI':<15}{'stab':>6}")
     for rank, it in enumerate(cols, start=1):
         rows.append({
@@ -550,7 +566,7 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
         })
         if rank <= args.top:
             ci = f"[{it['ci_lo']:.3f},{it['ci_hi']:.3f}]"
-            print(f"  {it['word']:<26}{it['support']:>8}{it['p_seed']:>9.3f}"
+            logger.info(f"  {it['word']:<26}{it['support']:>8}{it['p_seed']:>9.3f}"
                   f"{it['p_base']:>9.4f}{it['score']:>8.4f}  {ci:<15}"
                   f"{round(it['stability'] * R):>4}/{R}")
 
@@ -605,6 +621,8 @@ def main() -> None:
                    help="db only: pamphlet_corpus view, or all English documents.")
     p.add_argument("--input", default=OUT_DIR / "passage_vocabulary_benchmark.csv",
                    help="CSV path (--source csv).")
+    p.add_argument("--occurrences-csv", default=OUT_DIR / "passage_occurrences.csv",
+                help="Write one row per seed occurrence (doc_id, position, window).")
     p.add_argument("--output", default=OUT_DIR / "masked_fillers.csv")
     p.add_argument("--start-year", type=int, default=1600)
     p.add_argument("--end-year", type=int, default=1650)
@@ -688,8 +706,9 @@ def main() -> None:
         seed_groups.append((plabel, set().union(*slots), slots))
     nprng = np.random.default_rng(args.seed_rng)
 
-    print("Loading MacBERTh...")
+    logger.info("Loading MacBERTh...")
     macberth = load_macberth()
+    logger.info("Building groups...")
     groups = build_groups(macberth.tokenizer, macberth.model.config.vocab_size)
 
     conn = None
@@ -701,14 +720,14 @@ def main() -> None:
         scope_label = args.scope
     else:
         csv_passages = load_passages(Path(args.input))
-        print(f"Loaded {len(csv_passages)} unique passages from {args.input}")
+        logger.info(f"Loaded {len(csv_passages)} unique passages from {args.input}")
         periods = [(None, None)]
         scope_label = "csv"
 
     if require:
-        print(f"Requiring one of: {', '.join(sorted(require))}")
+        logger.info(f"Requiring one of: {', '.join(sorted(require))}")
     if forbid:
-        print(f"Forbidding: {', '.join(sorted(forbid))}")
+        logger.info(f"Forbidding: {', '.join(sorted(forbid))}")
 
     rows: list[dict] = []
     checked: set[str] = set()
@@ -745,15 +764,13 @@ def main() -> None:
                 fetched = len(occ)
                 occ = filter_context(passages, occ, require, forbid)[:args.max_occurrences]
                 if require or forbid:
-                    print(f"\n[{label}] {len(occ)} of {fetched} occurrences "
-                          f"pass --require/--forbid.")
+                    logger.info(f"\n[{label}] {len(occ)} of {fetched} occurrences pass --require/--forbid.")
 
                 if conn is not None and args.baseline == "matched" and occ:
                     seed_hits = [passages[pi]["hit"] for pi, _ in occ]
                     doc_len = fetch_doc_lengths(conn, [d for d, _ in seed_hits])
 
-                def baseline_for(r, excl_keys, *, label=label, lo=lo, hi=hi,
-                                 passages=passages, occ=occ, doc_len=doc_len):
+                def baseline_for(r, excl_keys, *, label=label, lo=lo, hi=hi, passages=passages, occ=occ, doc_len=doc_len):
                     rb = random.Random(f"{args.seed_rng}:{label}:{lo}:{r}")
                     if conn is None:
                         return csv_passages, random_positions(
@@ -767,15 +784,12 @@ def main() -> None:
                     else:
                         ck = (lo, hi, r)
                         if ck not in period_cache:
-                            hits = fetch_random_hits(conn, args.scope, lo, hi,
-                                                     args.baseline_n, args.context, rb)
-                            period_cache[ck], _ = windows_to_passages(
-                                fetch_windows(conn, hits, args.context))
+                            hits = fetch_random_hits(conn, args.scope, lo, hi, args.baseline_n, args.context, rb)
+                            period_cache[ck], _ = windows_to_passages( fetch_windows(conn, hits, args.context))
                         bp = period_cache[ck]
                     return bp, one_position_per_passage(bp, excl_keys, rb)
 
-                analyse(macberth, label, period, scope_label, passages, occ,
-                        exclude, groups, baseline_for, args, rows, checked, nprng)
+                analyse(macberth, label, period, scope_label, passages, occ, exclude, groups, baseline_for, args, rows, checked, nprng)
     finally:
         if conn is not None:
             conn.close()
@@ -790,8 +804,43 @@ def main() -> None:
         ])
         w.writeheader()
         w.writerows(rows)
-    print(f"\nSaved {len(rows)} rows to: {out.resolve()}")
+    logger.info(f"\nSaved {len(rows)} rows to: {out.resolve()}")
 
+    # Write occurrences CSV (with metadata)
+    if args.occurrences_csv and occ:
+        occ_path = Path(args.occurrences_csv)
+        write_header = not occ_path.exists()
+
+        # fetch metadata once for all unique doc_ids
+        doc_ids = [passages[p_idx]["doc_id"] for p_idx, _ in occ]
+        meta = fetch_doc_meta(conn, doc_ids) if conn is not None else {}
+
+        with occ_path.open("a", encoding="utf-8-sig", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=[
+                "seed", "period", "scope",
+                "doc_id", "corpus", "title", "pub_year",
+                "token_idx", "word_start", "window_text",
+            ])
+            if write_header:
+                w.writeheader()
+
+            for p_idx, w_idx in occ:
+                p = passages[p_idx]
+                m = meta.get(p["doc_id"], {})
+                window = " ".join(p["words"])
+                w.writerow({
+                    "seed": label,
+                    "period": period,
+                    "scope": scope_label,
+                    "doc_id": p["doc_id"],
+                    "corpus": m.get("corpus", ""),
+                    "title": m.get("title", ""),
+                    "pub_year": m.get("pub_year", ""),
+                    "token_idx": p["word_start"] + w_idx,
+                    "word_start": p["word_start"],
+                    "window_text": window,
+                })
+        logger.info(f"Saved {len(occ)} occurrence rows to: {occ_path.resolve()}")
 
 if __name__ == "__main__":
     main()
