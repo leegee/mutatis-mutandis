@@ -963,7 +963,7 @@ def validate_corpus_years():
         raise ValueError(
             "CORPUS_MIN_YEAR cannot be greater than CORPUS_MAX_YEAR"
         )
-    if config.CORPUS_MIN_YEAR < 1000:
+    if config.CORPUS_MIN_YEAR < 0:
         raise ValueError(f"Corpus CORPUS_MIN_YEAR appears invalid: '{config.CORPUS_MIN_YEAR}'")
     if config.CORPUS_MAX_YEAR > 2100:
         raise ValueError(f"Corpus CORPUS_MAX_YEAR appears invalid: '{config.CORPUS_MAX_YEAR}'")
@@ -1034,28 +1034,28 @@ def main():
                 file=target_file,
             )
 
-    # Wait for other connections to finish
-    with corpus_db.get_connection() as conn:
-        while True:
-            cur = conn.execute(
-                """
-                SELECT count(*)
-                FROM pg_stat_activity
-                WHERE datname = current_database()
-                AND pid <> pg_backend_pid()
-                AND state IN ('active', 'idle in transaction');
-                """
-            )
-            n = cur.fetchone()[0]
+    # # Wait for other connections to finish
+    # with corpus_db.get_connection() as conn:
+    #     while True:
+    #         cur = conn.execute(
+    #             """
+    #             SELECT count(*)
+    #             FROM pg_stat_activity
+    #             WHERE datname = current_database()
+    #             AND pid <> pg_backend_pid()
+    #             AND state IN ('active', 'idle in transaction');
+    #             """
+    #         )
+    #         n = cur.fetchone()[0]
 
-            if n == 0:
-                break
+    #         if n == 0:
+    #             break
 
     with corpus_db.get_connection() as conn:
         corpus_db.create_tokens_fk(conn)
         corpus_db.create_token_indexes(conn)
         corpus_db.create_views(conn)
-        corpus_db.create_tiered_token_indexes(conn)
+        # corpus_db.create_tiered_token_indexes(conn)
 
     corpus_db.create_concurrent_indexes()
 

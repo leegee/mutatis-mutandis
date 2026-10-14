@@ -14,8 +14,8 @@ import psycopg
 from psycopg import sql, Connection
 import time
 
-from lib.corpus_logging import logger
 import lib.corpus_config as config
+from lib.corpus_logging import logger
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
@@ -67,9 +67,7 @@ def get_connection(
 
         except Exception as exc:
             last_exc = exc
-            logger.warning(
-                f"PostgreSQL connection attempt {attempt}/{_DB_RETRIES} failed: {exc}"
-            )
+            logger.warning( f"[corpus_db] PostgreSQL connection attempt {attempt}/{_DB_RETRIES} failed: {exc}" )
             if attempt < _DB_RETRIES:
                 time.sleep(_DB_RETRY_DELAY)
 
@@ -113,9 +111,7 @@ def get_autocommit_connection(
 
         except Exception as exc:
             last_exc = exc
-            logger.warning(
-                f"PostgreSQL autocommit connection attempt {attempt}/{_DB_RETRIES} failed: {exc}"
-            )
+            logger.warning( f"[corpus_db] PostgreSQL autocommit connection attempt {attempt}/{_DB_RETRIES} failed: {exc}" )
             if attempt < _DB_RETRIES:
                 time.sleep(_DB_RETRY_DELAY)
 
@@ -139,7 +135,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 logger.info("[corpus_db] Dropping existing tables")
                 cur.execute("""
                     -- DROP MATERIALIZED VIEW IF EXISTS document_search CASCADE;
-                    DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
+                    -- DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
                     DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;
 
                     DROP TABLE IF EXISTS tokens CASCADE;
@@ -253,15 +249,17 @@ def create_views(conn: Connection) -> None:
             """)
 
             # Index for fast joins (non-concurrent)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(corpus, doc_id);")
+            # cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(corpus, doc_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(doc_id);")
 
             # Materialized view for pamphlet_tokens
             logger.info("[corpus_db] Creating materialised view pamphlet_tokens")
-            cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;")
+            # cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;")
 
             # TODO Drop vector_id, no longer used
             cur.execute("""
-                CREATE MATERIALIZED VIEW pamphlet_tokens AS
+                CREATE -- materialized
+                VIEW pamphlet_tokens AS
                 SELECT
                     (t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
                     t.corpus,
@@ -314,7 +312,7 @@ def create_views(conn: Connection) -> None:
             # """)
 
 
-def create_tiered_token_indexes(conn: Connection) -> None:
+# def create_tiered_token_indexes(conn: Connection) -> None:
     # logger.info("[corpus_db] Creating tiered token indexes")
     # earliest = config.CORPUS_MIN_YEAR
     # latest   = config.CORPUS_MAX_YEAR
@@ -325,7 +323,7 @@ def create_tiered_token_indexes(conn: Connection) -> None:
     #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
     #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
     # logger.info("[corpus_db] create_tiered_token_indexes complete")
-    logger.info("[corpus_db] create_tiered_token_indexes = noop")
+    # logger.info("[corpus_db] create_tiered_token_indexes = noop")
 
 
 def create_concurrent_indexes():
@@ -356,12 +354,10 @@ def refresh_views(conn: Connection) -> None:
 
     with conn.transaction():
         with conn.cursor() as cur:
-            for view in [
-                "pamphlet_tokens", "pamphlet_corpus",
-                # "document_search"
-            ]:
-                logger.info(f"[corpus_db] Refreshing {view}")
-                cur.execute( sql.SQL("REFRESH MATERIALIZED VIEW {view}").format( view=sql.Identifier(view) ) )
+            logger.info(f"[corpus_db] Refreshing pamphlet_corpus")
+            cur.execute("REFRESH MATERIALIZED VIEW pamphlet_corpus")
+            # logger.info(f"[corpus_db] Refreshing pamphlet_tokens")
+            # cur.execute("REFRESH MATERIALIZED VIEW pamphlet_tokens")
     logger.info("[corpus_db] All views refreshed and committed")
 
 
