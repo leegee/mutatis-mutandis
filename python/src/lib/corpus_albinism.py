@@ -9,6 +9,7 @@ MAX_TOKENS_IN_DOC = 400_000
 CONCEPT_SETS: CanonicalRules = {
     "WHITE": {
         "forms": {
+            # Add "albinovanus", "albino", "albinism", "Albinoes"
             "white",
             "whit",
             "hwit",

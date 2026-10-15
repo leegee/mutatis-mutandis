@@ -267,11 +267,17 @@ def import_shard(
                     f"{path.name}: invalid passage span {start}:{end}"
                 )
 
+            # pid = passage_id(
+            #     row["corpus"],
+            #     row["doc_id"],
+            #     start,
+            #     end,
+            # )
             pid = passage_id(
                 row["corpus"],
                 row["doc_id"],
-                start,
-                end,
+                int(row["token_start"]),
+                int(row["token_end"]),
             )
 
             common = {

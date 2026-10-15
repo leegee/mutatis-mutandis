@@ -78,8 +78,8 @@ JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
-# LANCE_INDEXES_DIR = INDEXES_DIR / "lance" # For the Extreme Whiteness project
-LANCE_INDEXES_DIR = INDEXES_DIR / "lance_pamphlets"
+LANCE_INDEXES_DIR = INDEXES_DIR / "lance_albinism"
+# LANCE_INDEXES_DIR = INDEXES_DIR / "lance_pamphlets"
 LANCE_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
 MODELS_DIR = OUT_DIR / "models"

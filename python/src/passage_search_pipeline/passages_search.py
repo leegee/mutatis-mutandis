@@ -176,13 +176,15 @@ def fetch_passage_text(conn, result):
                     ' ' ORDER BY t.token_idx
                 ) AS passage_text
             FROM documents d
-            JOIN tokens t ON t.doc_id = d.doc_id
-            WHERE d.doc_id = %s
+            JOIN tokens t ON t.corpus = d.corpus AND t.doc_id = d.doc_id
+            WHERE d.corpus = %s
+              AND d.doc_id = %s
               AND t.token_idx >= %s
               AND t.token_idx < %s
             GROUP BY d.title, d.author, d.filepath
             """,
             (
+                result["corpus"],
                 result["doc_id"],
                 result["token_start"],
                 result["token_end"],
@@ -222,6 +224,10 @@ def traverse(
             "source_type": "query",
             "source_id": "initial-query",
             "vector": query_vector,
+            "target_corpus": result["corpus"],
+            "token_start": result["token_start"],
+            "token_end": result["token_end"],
+            "title": None,
         }
     ]
     edges = []
