@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from typing import TypedDict
 
 import lancedb
 import numpy as np
@@ -21,6 +22,21 @@ from tier1.vector_writer import year_bucket
 
 
 REPRESENTATIONS = ("l8", "last", "mean4")
+
+
+class RetrievalEdge(TypedDict):
+    run_id: str
+    step: int
+    source_type: str
+    source_id: str
+    target_passage_id: str
+    target_doc_id: str
+    target_year: int
+    start_year: int
+    end_year: int
+    representation: str
+    distance: float
+    retrieval_method: str
 
 
 def table_name(representation: str, year: int) -> str:
@@ -170,6 +186,73 @@ def fetch_passage_text(conn, result):
         "filepath": row[2],
         "passage_text": row[3],
     }
+
+
+
+def traverse(
+    db,
+    query_vector,
+    periods,
+    representation,
+    limit,
+    top_k_per_step,
+):
+    validate_periods(periods)
+
+    frontier = [
+        {
+            "source_type": "query",
+            "source_id": "initial-query",
+            "vector": query_vector,
+        }
+    ]
+    edges = []
+
+    for step, (start_year, end_year) in enumerate(periods):
+        next_frontier = {}
+
+        for source in frontier:
+            results = search_passages(
+                db,
+                source["vector"],
+                representation,
+                start_year,
+                end_year,
+                limit,
+                include_vectors=True,
+            )
+
+            for result in results[:top_k_per_step]:
+                edges.append({
+                    "step": step,
+                    "source_type": source["source_type"],
+                    "source_id": source["source_id"],
+                    "target_passage_id": result["passage_id"],
+                    "target_doc_id": result["doc_id"],
+                    "target_year": result["pub_year"],
+                    "start_year": start_year,
+                    "end_year": end_year,
+                    "representation": representation,
+                    "distance": result["distance"],
+                    "retrieval_method": "representation_transfer",
+                })
+
+                passage_id = result["passage_id"]
+                if passage_id not in next_frontier:
+                    next_frontier[passage_id] = {
+                        "source_type": "passage",
+                        "source_id": passage_id,
+                        "vector": np.asarray(
+                            result["vector"],
+                            dtype=np.float32,
+                        ),
+                    }
+
+        frontier = list(next_frontier.values())
+        if not frontier:
+            break
+
+    return edges
 
 
 def main():
