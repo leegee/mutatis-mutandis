@@ -32,6 +32,7 @@ def table_name(representation: str, year: int) -> str:
 
 
 def pick_layers(hidden_states):
+    import torch
     return {
         "l8": hidden_states[8],
         "last": hidden_states[-1],
@@ -57,11 +58,24 @@ def search_passages(
     start_year,
     end_year,
     limit,
+    include_vectors=False,
 ):
     results = []
 
-    # Request enough candidates from each bucket to allow a
-    # reasonably complete global ranking after merging.
+    columns = [
+        "passage_id",
+        "corpus",
+        "doc_id",
+        "pub_year",
+        "word_start",
+        "word_end",
+        "token_start",
+        "token_end",
+        "_distance",
+    ]
+    if include_vectors:
+        columns.append("vector")
+
     per_table_limit = limit
 
     for name in candidate_tables(
@@ -79,17 +93,7 @@ def search_passages(
                 f"pub_year >= {int(start_year)} "
                 f"AND pub_year <= {int(end_year)}"
             )
-            .select([
-                "passage_id",
-                "corpus",
-                "doc_id",
-                "pub_year",
-                "word_start",
-                "word_end",
-                "token_start",
-                "token_end",
-                 "_distance",
-            ])
+            .select(columns)
             .limit(per_table_limit)
             .to_arrow()
         )
@@ -102,15 +106,11 @@ def search_passages(
                     "Check the installed LanceDB API."
                 )
 
-            # For cosine distance, smaller is better.
             row["distance"] = float(distance)
             row["table"] = name
             results.append(row)
 
     results.sort(key=lambda row: row["distance"])
-
-    # The same passage identity is shared across representations,
-    # but each search only visits one representation.
     return results[:limit]
 
 
