@@ -846,41 +846,7 @@ def main() -> None:
         w.writerows(rows)
     logger.info(f"\nSaved {len(rows)} rows to: {out.resolve()}")
 
-    # Write occurrences CSV (with metadata)
-    if args.occurrences_csv and occ:
-        # occ_path = Path(args.occurrences_csv)
-        # write_header = not occ_path.exists()
-
-        # fetch metadata once for all unique doc_ids
-        # doc_ids = [passages[p_idx]["doc_id"] for p_idx, _ in occ]
-        # meta = fetch_doc_meta(conn, doc_ids) if conn is not None else {}
-
-        # with occ_path.open("a", encoding="utf-8-sig", newline="") as f:
-        #     w = csv.DictWriter(f, fieldnames=[
-        #         "seed", "period", "scope",
-        #         "doc_id", "corpus", "title", "pub_year",
-        #         "token_idx", "word_start", "window_text",
-        #     ])
-        #     if write_header:
-        #         w.writeheader()
-
-        #     for p_idx, w_idx in occ:
-        #         p = passages[p_idx]
-        #         m = meta.get(p["doc_id"], {})
-        #         window = " ".join(p["words"])
-        #         w.writerow({
-        #             "seed": label,
-        #             "period": period,
-        #             "scope": scope_label,
-        #             "doc_id": p["doc_id"],
-        #             "corpus": m.get("corpus", ""),
-        #             "title": m.get("title", ""),
-        #             "pub_year": m.get("pub_year", ""),
-        #             "token_idx": p["word_start"] + w_idx,
-        #             "word_start": p["word_start"],
-        #             "window_text": window,
-        #         })
-        logger.info(f"Saved {len(occ)} occurrence rows to: {occ_path.resolve()}")
+    logger.info(f"Done")
 
 if __name__ == "__main__":
     main()
