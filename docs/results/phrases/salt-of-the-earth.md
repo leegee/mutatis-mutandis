@@ -1,7 +1,7 @@
 **“Salt of the earth” results (300 occurrences)**
 
 ```
-python src/tier1_passpages/passages_4_mask_fillers.py --phrase "salt of the earth" --start-year 100 --end-year 2020 --min-occurrences 1 --scope all
+python src/passage_search_pipeline/passages_4_mask_fillers.py --phrase "salt of the earth" --start-year 100 --end-year 2020 --min-occurrences 1 --scope all
 in-occurrences 1 --scope all
 2026-10-14 22:58:10 Loading MacBERTh...
 2026-10-14 22:58:11 Building groups...

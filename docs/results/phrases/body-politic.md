@@ -1,5 +1,5 @@
 ```
-python src/tier1_passpages/passages_4_mask_fillers.py --phrase "body politic/politicke/politike" --start-year 100 --end-year 2020 --min-occurrences 1 --scope all
+python src/passage_search_pipeline/passages_4_mask_fillers.py --phrase "body politic/politicke/politike" --start-year 100 --end-year 2020 --min-occurrences 1 --scope all
 -year 2020 --min-occurrences 1 --scope all
 2026-10-14 23:25:05 Loading MacBERTh...
 2026-10-14 23:25:06 Building groups...

@@ -1,7 +1,7 @@
 **Results summary for the phrase “white as wool” (25 occurrences, full corpus 100–2020, scope=all)**
 
 ```
-python src/tier1_passpages/passages_4_mask_fillers.py --phrase "white/whyte as wool" --start-year 100 --end-year 2020 --min-occurrences 1 --scope all
+python src/passage_search_pipeline/passages_4_mask_fillers.py --phrase "white/whyte as wool" --start-year 100 --end-year 2020 --min-occurrences 1 --scope all
 -min-occurrences 1 --scope all
 2026-10-14 21:38:14 Loading MacBERTh...
 2026-10-14 21:38:15 Building groups...
