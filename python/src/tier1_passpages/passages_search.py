@@ -40,6 +40,21 @@ def pick_layers(hidden_states):
     }
 
 
+def validate_periods(periods):
+    if not periods:
+        raise ValueError("At least one period is required")
+
+    for start, end in periods:
+        if start > end:
+            raise ValueError(f"Invalid period: {start}-{end}")
+
+    for current, earlier in zip(periods, periods[1:]):
+        if earlier[1] >= current[0]:
+            raise ValueError(
+                "Periods must be ordered backwards "
+                "and must not overlap"
+            )
+
 
 def candidate_tables(db, representation, start_year, end_year):
     available = set(db.list_tables().tables)
