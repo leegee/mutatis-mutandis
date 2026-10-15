@@ -24,21 +24,6 @@ from tier1.vector_writer import year_bucket
 REPRESENTATIONS = ("l8", "last", "mean4")
 
 
-class RetrievalEdge(TypedDict):
-    run_id: str
-    step: int
-    source_type: str
-    source_id: str
-    target_passage_id: str
-    target_doc_id: str
-    target_year: int
-    start_year: int
-    end_year: int
-    representation: str
-    distance: float
-    retrieval_method: str
-
-
 def table_name(representation: str, year: int) -> str:
     start, end = year_bucket(year, LANCE_BUCKET_SIZE)
     return (
