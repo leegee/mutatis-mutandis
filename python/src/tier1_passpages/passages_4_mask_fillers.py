@@ -445,16 +445,16 @@ def analyse(macberth, label, period, scope_label, passages, occ, exclude_forms,
     tok = macberth.tokenizer
     R = args.replicates
 
-    # --- diagnostic: list every seed occurrence ---
+    # diagnostic: list every seed occurrence
     logger.info(f"\n== Seed occurrences ({len(occ)}) ==")
     for p_idx, w_idx in occ:
         p = passages[p_idx]
-        s, e = span_of(p, w_idx)          # already imported
+        s, e = span_of(p, w_idx)
         lo = max(0, s - 12)
         hi = min(len(p["words"]), e + 13)
         window = " ".join(
-            ("[MASK]" if s <= i <= e else w)
-            for i, w in enumerate(p["words"][lo:hi])
+            ("[MASK]" if s <= (lo + j) <= e else w)
+            for j, w in enumerate(p["words"][lo:hi])
         )
         logger.info(f"    {p['doc_id']}:{p['word_start'] + w_idx}  {window}")
 
