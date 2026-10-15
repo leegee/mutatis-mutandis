@@ -1,5 +1,38 @@
-# passages_search.py
+#!/usr/bin/env python
+"""
+passage_search_pipeline/passages_search.py - search MacBERTh passage embeddings stored in LanceDB
 
+Queries one or more year-bucketed Lance tables using a supplied query vector,
+ranks results by cosine distance, and returns passage identifiers, corpus
+metadata, and token offsets. Passage text and bibliographic metadata can be
+retrieved separately from Postgres.
+
+The module supports both text-query search and representation-based retrieval.
+A query vector may be generated from text using `encode_passage_query` or
+obtained from a previously retrieved passage's stored embedding for iterative
+diachronic search.
+
+Vectors are excluded from results by default. Set `include_vectors=True` in
+`search_passages` when a caller needs the stored vectors for subsequent
+retrieval steps.
+
+Searches are restricted to the requested publication-year range. Results from
+available tables are merged and ranked globally by cosine distance, with
+smaller distances indicating greater similarity. Because each table contributes
+at most `limit` candidates, the merged results are not guaranteed to be the
+exact global nearest neighbours when approximate search is used.
+
+The module provides the retrieval primitives for reverse-diachronic search;
+it does not manage traversal between periods, deduplicate discovery paths,
+or persist retrieval provenance.
+
+The command-line interface accepts a text query, year range, representation,
+and result limit, then prints ranked passages with bibliographic metadata.
+
+Requires LanceDB tables written with compatible model, representation, vector
+dimensions, and year-bucket configuration, plus access to the Postgres corpus
+database for passage text and document metadata.
+"""
 
 from __future__ import annotations
 
