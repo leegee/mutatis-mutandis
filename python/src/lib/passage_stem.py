@@ -106,7 +106,12 @@ class Groups:
 
 
 def build_groups(tokenizer, vocab_size: int) -> Groups:
-    """Whole alphabetic non-stopword vocabulary entries, grouped by stem."""
+    """Whole alphabetic non-stopword vocabulary entries, grouped by stem.
+
+    WordPiece continuation markers ('##') are stripped only for the
+    alphabetic / length / stop-word filter; the original token ID is
+    retained so probability mass is pooled correctly.
+    """
     tokens = tokenizer.convert_ids_to_tokens(
         list(range(min(vocab_size, len(tokenizer))))
     )
@@ -114,16 +119,25 @@ def build_groups(tokenizer, vocab_size: int) -> Groups:
     index: dict[str, int] = {}
     members: list[list[int]] = []
     keys: list[str] = []
+
     for i, t in enumerate(tokens):
-        if t is None or not t.isalpha() or len(t) < 2 or t.lower() in STOP:
+        if t is None:
             continue
-        k = stem_key(t)
+
+        # Normalise only for the eligibility test
+        surf = t[2:] if t.startswith("##") else t
+
+        if not surf.isalpha() or len(surf) < 2 or surf.lower() in STOP:
+            continue
+
+        k = stem_key(surf)          # stem the cleaned surface form
         if k not in index:
             index[k] = len(members)
             members.append([])
             keys.append(k)
         group_of[i] = index[k]
         members[index[k]].append(i)
+
     return Groups(group_of, members, keys, index)
 
 
