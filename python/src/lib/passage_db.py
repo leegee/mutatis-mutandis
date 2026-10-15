@@ -209,20 +209,59 @@ def matched_hits(
     per_hit: int,
 ) -> list[tuple[str, int]]:
     """
-    For each seed occurrence, pick *per_hit* baseline centres in the SAME
-    document whose windows do not overlap the seed's window.
+    For each seed occurrence, pick up to *per_hit* baseline centres in
+    the SAME document.
+
+    Baseline windows must not overlap the seed window or any previously
+    selected baseline window in that document.
+
+    Windows are treated as inclusive intervals:
+        [centre - context, centre + context]
+
+    Returns fewer than requested controls when sampling is constrained.
+
+    TODO:
+
+    To guarantee non-overlap with all seed windows, prepopulate occupied with
+    every seed window before sampling any controls.
+
+    Sampling policy changes when a document is crowded. The function may return
+    fewer controls than requested after 100 failed attempts. Should record the
+    requested and achieved control counts so that baseline shortages are visible
+    rather than silently ignored.
     """
     out: list[tuple[str, int]] = []
+    occupied: dict[str, list[tuple[int, int]]] = defaultdict(list)
+
     for doc, idx in seed_hits:
         tc = doc_len.get(doc)
         if not tc or tc <= 2 * context + 1:
             continue
+
+        # Reserve the seed's context window so no control can overlap it.
+        seed_lo = max(0, idx - context)
+        seed_hi = min(tc - 1, idx + context)
+
+        # Seed windows may overlap one another; record each exclusion.
+        occupied[doc].append((seed_lo, seed_hi))
+
         for _ in range(per_hit):
-            for _try in range(30):
+            for _try in range(100):
                 c = rng.randint(context, tc - context - 1)
-                if abs(c - idx) > 2 * context:
-                    out.append((doc, c))
-                    break
+                lo, hi = c - context, c + context
+
+                # Inclusive intervals overlap unless one ends before
+                # the other begins.
+                if any(
+                    not (hi < old_lo or lo > old_hi)
+                    for old_lo, old_hi in occupied[doc]
+                ):
+                    continue
+
+                out.append((doc, c))
+                occupied[doc].append((lo, hi))
+                break
+
     return out
 
 
