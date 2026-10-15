@@ -798,7 +798,7 @@ def insert_document_with_tokens(
                         f"{copy_escape(corpus)}\t"
                         f"{copy_escape(doc_id)}\t"
                         f"{token_idx}\t"
-                        f"{copy_escape(token)}\n"
+                        f"{copy_escape(token.lower())}\n"
                     )
 
                     copy.write(row)
