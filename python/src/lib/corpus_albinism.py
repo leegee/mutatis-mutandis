@@ -9,7 +9,9 @@ MAX_TOKENS_IN_DOC = 400_000
 CONCEPT_SETS: CanonicalRules = {
     "WHITE": {
         "forms": {
-            # Add "albinovanus", "albino", "albinism", "Albinoes"
+            # Added 2026-10-15
+             "albinovanus", "albino", "albinism", "Albinoes",
+            # Older
             "white",
             "whit",
             "hwit",
@@ -27,20 +29,20 @@ CONCEPT_SETS: CanonicalRules = {
 }
 
 
-# In lib.corpus_config (or here for a quick prototype)
+# Update to match pattern in phrase_search
 PHRASE_SETS: CanonicalRules = {
     "white_as_wool": {
         "forms": [
             # surface patterns; can be expanded later with regex / lemmas
+            ("white", "hair"),
+            ("whyte", "hair"),
             ("hair", "as", "white", "as", "wool"),
             ("white", "as", "wool"),
             ("white", "like", "wool"),
-            ("hore", "as", "wool"),          # early spelling
-            # …
+            ("whyte", "as", "wool"),          # early spelling
         ],
         "false_positives": [],
     },
-    # other formulaic phrases …
 }
 
 
@@ -103,6 +105,16 @@ supernatural_tokens AS (
         'incubus', 'succubus'
     )
 ),
+albinism_tokens AS (
+    SELECT corpus, doc_id, token_idx
+    FROM tokens
+    WHERE lower(token) IN (
+        'albino', 'albinos', 'albinoes',
+        'albinism', 'albinisms',
+        'albinovanus', 'albinovani',
+        'albinovanum', 'albinovano'
+    )
+),
 selected_docs AS (
     -- Route 1: whiteness near appearance or luminosity
     SELECT w.corpus, w.doc_id
@@ -131,6 +143,12 @@ selected_docs AS (
       ON s.corpus = w.corpus
      AND s.doc_id = w.doc_id
      AND s.token_idx BETWEEN w.token_idx - 10 AND w.token_idx + 10
+
+    UNION
+
+    -- Route 4: explicit historical albinism-related vocabulary
+    SELECT a.corpus, a.doc_id
+    FROM albinism_tokens a
 )
 SELECT
     d.corpus,
@@ -140,7 +158,7 @@ SELECT
     d.title,
     d.filepath
 FROM selected_docs s
-JOIN documents d ON d.doc_id = s.doc_id
+JOIN documents d ON d.doc_id = s.doc_id AND d.corpus = s.corpus
 ORDER BY d.pub_year NULLS LAST, d.title
 """
 
@@ -167,6 +185,28 @@ def select_white_corpus_doc_ids():
 
     finally:
         con.close()
+
+
+BACKFILL_SQL = """WITH selected_docs AS (
+    SELECT DISTINCT corpus, doc_id
+    FROM tokens
+    WHERE token ILIKE 'albin%'
+)
+SELECT
+    t.corpus,
+    t.doc_id,
+    d.pub_year,
+    t.token_idx,
+    t.token
+FROM tokens AS t
+JOIN documents AS d
+    ON d.corpus = t.corpus
+   AND d.doc_id = t.doc_id
+JOIN selected_docs AS s
+    ON s.corpus = t.corpus
+   AND s.doc_id = t.doc_id
+ORDER BY t.corpus, t.doc_id, t.token_idx;
+"""
 
 if __name__ == "__main__":
     select_white_corpus_doc_ids()
