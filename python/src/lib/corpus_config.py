@@ -61,13 +61,16 @@ INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 ZARR_ROOT = OUT_DIR / "zarr"
 ZARR_ROOT.mkdir(parents=True, exist_ok=True)
 
-ZARR_PATH = ZARR_ROOT / "tier1"
-ZARR_PATH.mkdir(parents=True, exist_ok=True)
-
 MASKED_ZARR_PATH = ZARR_ROOT / "tier1-masked"
 MASKED_ZARR_PATH.mkdir(parents=True, exist_ok=True)
 
+# ZARR_PATH = ZARR_ROOT / "tier1"
+# ZARR_PATH.mkdir(parents=True, exist_ok=True)
+
 CONCEPT_ZARR_PATH = ZARR_ROOT / "tier1-concept-docs"
+CONCEPT_ZARR_PATH.mkdir(parents=True, exist_ok=True)
+
+ZARR_PATH = CONCEPT_ZARR_PATH ####################
 
 MODELS_DIR = OUT_DIR / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -177,6 +180,13 @@ TEST_CONCEPT_SETS: CanonicalRules = {
 }
 
 CONCEPT_SETS: CanonicalRules = {
+    "CHURCH": {
+        "forms": {"church"},
+        "false_positives": {"churchyard"}
+    },
+}
+
+ORIG_CONCEPT_SETS: CanonicalRules = {
     # "PREROGATIVE": {
     #     "forms": {
     #         "prerogative", # "prerogatiue", "prerogatives", "prerogatiues",

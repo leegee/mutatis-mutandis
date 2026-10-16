@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Union
 import onnxruntime as ort
 from types import SimpleNamespace
+import threading
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
@@ -36,6 +37,9 @@ PASSAGE_CHUNK = 510
 PASSAGE_OVERLAP = 96
 PASSAGE_BATCH_SIZE = 32
 PASSAGE_REPRESENTATIONS = ("l8", "last", "mean4")
+
+_PYTORCH_MODEL: Optional[MacberthModel] = None
+_PYTORCH_MODEL_LOCK = threading.Lock()
 
 
 @dataclass
@@ -113,6 +117,22 @@ def load_macberth() -> MacberthModel:
         model=model,
         device=device,
     )
+
+
+def get_pytorch_model() -> MacberthModel:
+    """
+    Return a process-wide cached PyTorch MacBERTh.
+
+    Passage encoding must use this backend: it needs per-layer hidden
+    states (l8 / last / mean4), which the ONNX export does not provide.
+    """
+    global _PYTORCH_MODEL
+    if _PYTORCH_MODEL is None:
+        with _PYTORCH_MODEL_LOCK:
+            if _PYTORCH_MODEL is None:
+                _PYTORCH_MODEL = load_macberth()
+    return _PYTORCH_MODEL
+
 
 def normalize(v: np.ndarray) -> Optional[np.ndarray]:
     n = np.linalg.norm(v)
@@ -404,8 +424,6 @@ def _export_macberth_onnx(export_dir: Path) -> None:
     )
 
 
-
-
 def _configure_ort_session_options() -> ort.SessionOptions:
     """
     Centralizes CPU thread/execution tuning for the ONNX session.
@@ -554,7 +572,7 @@ def get_macberth_embedder(
         macberth_model = load_macberth_onnx(providers=providers)
 
     elif backend == "pytorch":
-        macberth_model = load_macberth()          # already moves to CUDA if available
+        macberth_model = get_pytorch_model()
     else:
         raise ValueError(f"Unknown backend: {backend}")
 
@@ -609,7 +627,20 @@ def encode_passage_words(
     chunk-overlap and layer-pooling procedure as the Colab job.
 
     Returns one (n_words, hidden_size) float32 array per representation.
+
+    Always runs on PyTorch. If `macberth` is omitted, the cached
+    PyTorch model is used.
     """
+    if macberth is None:
+        macberth = get_pytorch_model()
+    elif not isinstance(macberth, MacberthModel):
+        raise TypeError(
+            "encode_passage_words requires the PyTorch MacberthModel "
+            "(it needs output_hidden_states); got "
+            f"{type(macberth).__name__}. Omit the argument to use "
+            "get_pytorch_model()."
+        )
+
     if not words:
         raise ValueError("Cannot encode an empty passage.")
 
@@ -725,7 +756,7 @@ def encode_passage_words(
 def encode_passage_query(
     text: str,
     representation: str,
-    macberth: MacberthModel,
+    macberth: Optional[MacberthModel] = None,
 ) -> np.ndarray:
     """
     Encode a text query using the same word-vector aggregation as

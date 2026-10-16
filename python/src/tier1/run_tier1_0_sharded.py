@@ -23,7 +23,7 @@ T1_PATH = "src/tier1/tier1_0_corpus2zarr.py"
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--num-shards", type=int, default=3)
+    p.add_argument("--num-shards", type=int, default=2)
     p.add_argument("--threads-per-shard", type=int, default=1)
     p.add_argument("--dim", type=int, default=768)
     p.add_argument("--report-every", type=int, default=100)
@@ -56,6 +56,7 @@ def main():
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(args.threads_per_shard)
     env["MKL_NUM_THREADS"] = str(args.threads_per_shard)
+    env["ORT_NUM_THREADS"] = str(args.threads_per_shard)
     env["OPENBLAS_NUM_THREADS"] = str(args.threads_per_shard)
     env["TOKENIZERS_PARALLELISM"] = "false"
 

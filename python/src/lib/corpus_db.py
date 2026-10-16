@@ -240,7 +240,9 @@ def create_views(conn: Connection) -> None:
             cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;")
 
             cur.execute(f"""
-                CREATE MATERIALIZED VIEW pamphlet_corpus AS
+                CREATE
+                    -- MATERIALIZED
+                    VIEW pamphlet_corpus AS
                 SELECT *
                 FROM documents
                 WHERE token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}

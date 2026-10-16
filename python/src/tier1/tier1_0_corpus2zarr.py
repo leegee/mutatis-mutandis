@@ -671,12 +671,12 @@ class CorpusProcessor:
         count_cur = self.conn.cursor()
         if doc_id:
             count_cur.execute(
-                f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}",
+                f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}{concept_sql}",
                 [doc_id] + shard_params + concept_params
             )
         else:
             count_cur.execute(
-                f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE 1=1{shard_sql}",
+                f"SELECT COUNT(DISTINCT (corpus, doc_id)) FROM pamphlet_tokens WHERE 1=1{shard_sql}{concept_sql}",
                 shard_params + concept_params
             )
         total_docs = count_cur.fetchone()[0]
@@ -689,14 +689,14 @@ class CorpusProcessor:
         if doc_id:
             cur.execute(
                 f"""SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
-                    FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}
+                    FROM pamphlet_tokens WHERE doc_id = %s{shard_sql}{concept_sql}
                     ORDER BY token_idx""",
                 [doc_id] + shard_params + concept_params
             )
         else:
             cur.execute(
                 f"""SELECT corpus, doc_id, token_idx, vector_id, token, pub_year
-                    FROM pamphlet_tokens WHERE 1=1{shard_sql}
+                    FROM pamphlet_tokens WHERE 1=1{shard_sql}{concept_sql}
                     ORDER BY corpus, doc_id, token_idx""",
                 shard_params + concept_params
             )
