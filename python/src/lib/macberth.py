@@ -631,7 +631,7 @@ def encode_passage_words(
     Always runs on PyTorch. If `macberth` is omitted, the cached
     PyTorch model is used.
     """
-     if macberth is None:
+    if macberth is None:
         macberth = get_pytorch_model()
     elif not isinstance(macberth, MacberthModel):
         raise TypeError(
