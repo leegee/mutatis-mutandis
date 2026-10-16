@@ -10,7 +10,7 @@ from lib.corpus_logging import logger
 
 # D:\src\mutatis-mutandis\out\tier1
 CHECKPOINT_DIR = OUT_DIR / "export" / "_checkpoints"
-OUTPUT_PATH = OUT_DIR / "tier1" / "passages"
+OUTPUT_PATH = OUT_DIR / "tier1" / "passages" / "passages_00000.parquet"
 
 REQUIRED_COLUMNS = {
     "corpus", "doc_id", "pub_year",
