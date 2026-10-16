@@ -6,10 +6,11 @@ import sys
 import pyarrow.parquet as pq
 
 from lib.corpus_config import OUT_DIR
+from lib.corpus_logging import logger
 
 # D:\src\mutatis-mutandis\out\tier1
-CHECKPOINT_DIR = OUT_DIR / "tier1" / "passages" / "_checkpoints" / "tokens_00000"
-OUTPUT_PATH = OUT_DIR / "tier1" / "passages" / "passages_00000.parquet"
+CHECKPOINT_DIR = OUT_DIR / "export" / "_checkpoints"
+OUTPUT_PATH = OUT_DIR / "tier1" / "passages"
 
 REQUIRED_COLUMNS = {
     "corpus", "doc_id", "pub_year",
@@ -26,9 +27,11 @@ def checkpoint_index(path):
 
 def main():
     files = sorted(
-        (p for p in CHECKPOINT_DIR.glob("doc_*.parquet")
-         if checkpoint_index(p) is not None),
-        key=checkpoint_index,
+        (
+            p for p in CHECKPOINT_DIR.rglob("doc_*.parquet")
+            if checkpoint_index(p) is not None
+        ),
+        key=lambda p: (p.parent.as_posix(), checkpoint_index(p)),
     )
 
     if not files:
@@ -58,8 +61,8 @@ def main():
 
         total_rows += pf.metadata.num_rows
 
-    print(f"Checkpoints: {len(files)}")
-    print(f"Expected passage rows: {total_rows:,}")
+    logger.info(f"Checkpoints: {len(files)}")
+    logger.info(f"Expected passage rows: {total_rows:,}")
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     temp_path = OUTPUT_PATH.with_suffix(".parquet.part")
@@ -82,9 +85,10 @@ def main():
             del table
 
             if i % 25 == 0 or i == len(files):
-                print(
+                logger.info(
                     f"Written {i}/{len(files)} checkpoints; "
-                    f"{written_rows:,} passage rows"
+                    f"{written_rows:,} passage rows; "
+                    f"current source: {path.parent.name}"
                 )
     finally:
         if writer is not None:
@@ -103,14 +107,14 @@ def main():
     # Replace the destination only after successful validation.
     temp_path.replace(OUTPUT_PATH)
 
-    print(f"ASSEMBLED: {OUTPUT_PATH}")
-    print(f"Passage rows: {actual_rows:,}")
-    print(f"Output size: {OUTPUT_PATH.stat().st_size / (1024**3):.2f} GiB")
+    logger.info(f"ASSEMBLED: {OUTPUT_PATH}")
+    logger.info(f"Passage rows: {actual_rows:,}")
+    logger.info(f"Output size: {OUTPUT_PATH.stat().st_size / (1024**3):.2f} GiB")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        logger.info(f"ERROR: {exc}", file=sys.stderr)
         raise
