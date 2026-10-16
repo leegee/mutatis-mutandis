@@ -9,8 +9,8 @@ import lancedb
 
 from lib.corpus_config import LANCE_INDEXES_DIR, OUT_DIR
 from lib.corpus_db import get_connection
-from lib.macberth import load_macberth, encode_passage_query
-from tier1_passages.passages_search import (
+from lib.macberth import get_pytorch_model, encode_passage_query
+from passage_search_pipeline.passages_search import (
     REPRESENTATIONS,
     fetch_passage_text,
     search_passages,
@@ -48,7 +48,7 @@ def main() -> None:
         print(f"  {i}. {query}")
 
     print("\nLoading MacBERTh...")
-    macberth = load_macberth()
+    get_pytorch_model()  # warm the cache so the first query isn't slower
     db = lancedb.connect(str(LANCE_INDEXES_DIR))
 
     all_rows = []
@@ -67,7 +67,6 @@ def main() -> None:
                 query_vector = encode_passage_query(
                     query,
                     representation,
-                    macberth,
                 )
 
                 results = search_passages(

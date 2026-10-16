@@ -37,11 +37,8 @@ database for passage text and document metadata.
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
-from typing import TypedDict
 
 import lancedb
-import numpy as np
 
 from lib.corpus_config import (
     LANCE_INDEXES_DIR,
@@ -50,11 +47,11 @@ from lib.corpus_config import (
 )
 from lib.corpus_db import get_connection
 from lib.corpus_logging import logger
-from lib.macberth import load_macberth, encode_passage_query
+from lib.macberth import PASSAGE_REPRESENTATIONS, encode_passage_query
 from tier1.vector_writer import year_bucket
 
 
-REPRESENTATIONS = ("l8", "last", "mean4")
+REPRESENTATIONS = PASSAGE_REPRESENTATIONS
 
 
 def table_name(representation: str, year: int) -> str:
@@ -64,30 +61,6 @@ def table_name(representation: str, year: int) -> str:
         f"__{start:04d}_{end:04d}"
     )
 
-
-def pick_layers(hidden_states):
-    import torch
-    return {
-        "l8": hidden_states[8],
-        "last": hidden_states[-1],
-        "mean4": torch.stack(hidden_states[-4:]).mean(0),
-    }
-
-
-def validate_periods(periods):
-    if not periods:
-        raise ValueError("At least one period is required")
-
-    for start, end in periods:
-        if start > end:
-            raise ValueError(f"Invalid period: {start}-{end}")
-
-    for current, earlier in zip(periods, periods[1:]):
-        if earlier[1] >= current[0]:
-            raise ValueError(
-                "Periods must be ordered backwards "
-                "and must not overlap"
-            )
 
 
 def candidate_tables(db, representation, start_year, end_year):
@@ -209,74 +182,6 @@ def fetch_passage_text(conn, result):
 
 
 
-def traverse(
-    db,
-    query_vector,
-    periods,
-    representation,
-    limit,
-    top_k_per_step,
-):
-    validate_periods(periods)
-
-    frontier = [
-        {
-            "source_type": "query",
-            "source_id": "initial-query",
-            "vector": query_vector,
-            "target_corpus": result["corpus"],
-            "token_start": result["token_start"],
-            "token_end": result["token_end"],
-            "title": None,
-        }
-    ]
-    edges = []
-
-    for step, (start_year, end_year) in enumerate(periods):
-        next_frontier = {}
-
-        for source in frontier:
-            results = search_passages(
-                db,
-                source["vector"],
-                representation,
-                start_year,
-                end_year,
-                limit,
-                include_vectors=True,
-            )
-
-            for result in results[:top_k_per_step]:
-                edges.append({
-                    "step": step,
-                    "source_type": source["source_type"],
-                    "source_id": source["source_id"],
-                    "target_passage_id": result["passage_id"],
-                    "target_doc_id": result["doc_id"],
-                    "target_year": result["pub_year"],
-                    "start_year": start_year,
-                    "end_year": end_year,
-                    "representation": representation,
-                    "distance": result["distance"],
-                    "retrieval_method": "representation_transfer",
-                })
-
-                passage_id = result["passage_id"]
-                if passage_id not in next_frontier:
-                    next_frontier[passage_id] = {
-                        "source_type": "passage",
-                        "source_id": passage_id,
-                        "vector": np.asarray(
-                            result["vector"],
-                            dtype=np.float32,
-                        ),
-                    }
-
-        frontier = list(next_frontier.values())
-        if not frontier:
-            break
-
-    return edges
 
 
 def main():
@@ -299,12 +204,9 @@ def main():
     if args.limit < 1:
         parser.error("--limit must be positive")
 
-    macberth = load_macberth()
-
     query_vector = encode_passage_query(
         args.query,
         args.representation,
-        macberth,
     )
 
     db = lancedb.connect(str(LANCE_INDEXES_DIR))

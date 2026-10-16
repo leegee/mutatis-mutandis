@@ -34,12 +34,16 @@ import numpy as np
 import lancedb
 
 
-from lib.macberth import encode_passage_query, load_macberth
+from lib.macberth import encode_passage_query
 from lib.corpus_config import LANCE_INDEXES_DIR
 from lib.corpus_logging import logger
 from lib.corpus_db import get_connection
 
-from passage_search_pipeline.passages_search import search_passages, fetch_passage_text
+from passage_search_pipeline.passages_search import (
+    REPRESENTATIONS,
+    search_passages,
+    fetch_passage_text,
+)
 
 class RetrievalEdge(TypedDict):
     run_id: str
@@ -49,6 +53,10 @@ class RetrievalEdge(TypedDict):
     source_id: str
     target_passage_id: str
     target_doc_id: str
+    target_key: str
+    target_corpus: str
+    token_start: int
+    token_end: int
     target_year: int
     start_year: int
     end_year: int
@@ -123,7 +131,7 @@ def reverse_diachronic_search(
     """
     if not query.strip():
         raise ValueError("Query must not be empty")
-    if representation not in {"l8", "last", "mean4"}:
+    if representation not in REPRESENTATIONS:
         raise ValueError(f"Unsupported representation: {representation}")
     if limit < 1:
         raise ValueError("limit must be positive")
@@ -145,9 +153,8 @@ def reverse_diachronic_search(
         top_k_per_step=top_k_per_step,
     )
 
-    macberth = load_macberth()
     query_vector = np.asarray(
-        encode_passage_query(query, representation, macberth),
+        encode_passage_query(query, representation),
         dtype=np.float32,
     ).reshape(-1)
 
@@ -255,20 +262,10 @@ def reverse_diachronic_search(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Iteratively search earlier periods using passage vectors."
-    )
+    parser = argparse.ArgumentParser( description="Iteratively search earlier periods using passage vectors." )
     parser.add_argument("--query", required=True)
-    parser.add_argument(
-        "--periods",
-        required=True,
-        help="Comma-separated inclusive ranges, newest first; e.g. 2000-2049,1950-1999,1900-1949",
-    )
-    parser.add_argument(
-        "--representation",
-        choices=("l8", "last", "mean4"),
-        default="mean4",
-    )
+    parser.add_argument( "--periods", required=True, help="Comma-separated inclusive ranges, newest first; e.g. 2000-2049,1950-1999,1900-1949", )
+    parser.add_argument( "--representation", choices=if representation not in REPRESENTATIONS: default="mean4", )
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--top-k-per-step", type=int, default=5)
     args = parser.parse_args()
@@ -295,36 +292,13 @@ def main() -> None:
     for summary in run.step_summaries:
         logger.info(summary)
 
-        with get_connection() as conn:
+        with get_connection(application_name="reverse-diachronic-search") as conn:
             for summary in run.step_summaries:
+                logger.info(summary)
                 step = summary["step"]
-                logger.info(
-                    f"Step {step}: "
-                    f"{summary['start_year']}-{summary['end_year']}"
-                )
 
-                edges = [
-                    edge for edge in run.edges
-                    if edge["step"] == step
-                ]
-
-                for edge in edges:
-                    passage = run.passages.get(
-                        next(
-                            (
-                                key for key, value in run.passages.items()
-                                if value["corpus"] == edge["target_corpus"]
-                                and value["doc_id"] == edge["target_doc_id"]
-                                and value["token_start"] == edge["token_start"]
-                                and value["token_end"] == edge["token_end"]
-                            ),
-                            "",
-                        )
-                    )
-
-                    if passage is None:
-                        continue
-
+                for edge in (e for e in run.edges if e["step"] == step):
+                    passage = run.passages[edge["target_key"]]
                     text = fetch_passage_text(conn, passage)
 
                     logger.info(
@@ -334,11 +308,10 @@ def main() -> None:
                         f"source={edge['source_type']}:{edge['source_id']} "
                         f"distance={edge['distance']:.4f} "
                         f"year={edge['target_year']} "
-                        f"title={text['title']!r}"
+                        f"title={text['title']!r} "
                         f"author={text['author']!r}"
                     )
                     logger.info(f"    {text['passage_text']}")
-
 
 if __name__ == "__main__":
     main()
