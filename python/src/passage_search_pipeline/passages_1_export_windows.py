@@ -1,12 +1,5 @@
-"""
-passages_1_export_windows.py
 
-Exports selected, not-yet-indexed documents as token windows around target terms.
-
-Each row contains the original token indices and token strings for retained
-positions. Gaps between windows are intentional; downstream passage generation
-must not treat non-contiguous original token positions as adjacent text.
-"""
+"""Export sparse token windows around qualifying historical albinism targets."""
 
 from collections import defaultdict
 from itertools import groupby
@@ -19,19 +12,15 @@ import pyarrow.parquet as pq
 from lib.corpus_db import get_connection
 from lib.corpus_config import OUT_DIR
 from lib.corpus_logging import logger
-from lib.corpus_albinism import CORPUS_SQL
 
-EMB_OUTPUT_DIR = OUT_DIR / "export/tokens"
+EMB_OUTPUT_DIR = OUT_DIR / "export/source_tokens"
 LANCE_DIR = OUT_DIR / "indexes/lance_albinism"
 
 DOC_TABLE = "documents"
 TABLE = "tokens"
 
-DOCS_PER_SHARD = 10 # 500
+DOCS_PER_SHARD = 10
 WINDOW_WORDS = 100
-
-# A 40-token window is centred on each hit; an even window has one more
-# token to the left than to the right. Original token_idx values are preserved.
 WINDOW_LEFT = WINDOW_WORDS // 2
 WINDOW_RIGHT = WINDOW_WORDS - WINDOW_LEFT - 1
 
@@ -43,8 +32,6 @@ SCHEMA = pa.schema([
     ("tokens", pa.list_(pa.string())),
 ])
 
-# These are the same vocabulary groups used by CORPUS_SQL. Keeping them here
-# allows the exporter to retain target windows without exporting whole books.
 WHITE = {
     "white", "whyte", "whight", "whit", "whyt", "wight", "wite", "whiet",
 }
@@ -77,7 +64,6 @@ ALBINISM = {
     "albino", "albinos", "albinoes", "albinism", "albinisms",
     "albinovanus", "albinovani", "albinovanum", "albinovano",
 }
-TARGET_TERMS = WHITE | APPEARANCE | LIGHT | SUPERNATURAL | ALBINISM
 
 
 def flush(docs: list[dict], shard_no: int) -> None:
@@ -86,119 +72,218 @@ def flush(docs: list[dict], shard_no: int) -> None:
     tmp = final.with_suffix(".tmp")
     pq.write_table(table, tmp, compression="zstd")
     tmp.replace(final)
-    logger.info("wrote %s (%d docs)", final, len(docs))
+    logger.info("Wrote %s (%d documents)", final, len(docs))
 
 
 def indexed_documents() -> set[tuple[str, str]]:
-    """Return documents represented in any existing passage table."""
+    """Collect document identities present in any passage representation."""
     db = lancedb.connect(str(LANCE_DIR))
     names = db.list_tables().tables
     indexed: set[tuple[str, str]] = set()
 
     for name in names:
-        if not name.startswith(("passage_l8__", "passage_last__", "passage_mean4__")):
+        if not name.startswith((
+            "passage_l8__",
+            "passage_last__",
+            "passage_mean4__",
+        )):
             continue
 
         table = db.open_table(name)
         rows = table.search().select(["corpus", "doc_id"]).to_arrow()
-        indexed.update(
-            (corpus, doc_id)
-            for corpus, doc_id in zip(rows["corpus"].to_pylist(),
-                                      rows["doc_id"].to_pylist())
-        )
+        indexed.update(zip(
+            rows["corpus"].to_pylist(),
+            rows["doc_id"].to_pylist(),
+        ))
 
-    logger.info("Found %d indexed documents across %d tables", len(indexed), len(names))
+    logger.info(
+        "Found %d indexed documents across %d Lance tables",
+        len(indexed), len(names),
+    )
     return indexed
 
 
-def retained_rows(rows: list[tuple], target_terms: set[str]) -> list[tuple]:
-    """Keep rows in the union of fixed-width windows around target occurrences."""
-    hits = [
-        i for i, row in enumerate(rows)
-        if row[4] is not None and row[4].lower() in target_terms
-    ]
-    if not hits:
-        return []
+def build_export_query() -> tuple[str, list]:
+    groups = {
+        "white": WHITE,
+        "appearance": APPEARANCE,
+        "light": LIGHT,
+        "supernatural": SUPERNATURAL,
+        "albinism": ALBINISM,
+    }
 
-    keep: set[int] = set()
-    for hit in hits:
-        lo = max(0, hit - WINDOW_LEFT)
-        hi = min(len(rows), hit + WINDOW_RIGHT + 1)
-        keep.update(range(lo, hi))
+    values = []
+    params = []
+    for group, terms in groups.items():
+        for term in sorted(terms):
+            values.append("(%s, %s)")
+            params.extend((term, group))
 
-    # Original token_idx values remain unchanged. Gaps identify omitted text.
-    return [rows[i] for i in sorted(keep)]
+    sql = f"""
+        WITH term_groups(term, grp) AS (
+            VALUES {", ".join(values)}
+        ),
+        target_tokens AS MATERIALIZED (
+            SELECT DISTINCT
+                t.corpus,
+                t.doc_id,
+                t.token_idx,
+                tg.grp
+            FROM {TABLE} AS t
+            JOIN term_groups AS tg
+              ON lower(t.token) = tg.term
+        ),
+        target_hits AS (
+            SELECT w.corpus, w.doc_id, w.token_idx
+            FROM target_tokens AS w
+            JOIN target_tokens AS a
+              ON a.corpus = w.corpus
+             AND a.doc_id = w.doc_id
+             AND a.grp = 'appearance'
+             AND a.token_idx BETWEEN w.token_idx - 10
+                                 AND w.token_idx + 10
+            WHERE w.grp = 'white'
+
+            UNION
+
+            SELECT l.corpus, l.doc_id, l.token_idx
+            FROM target_tokens AS l
+            JOIN target_tokens AS s
+              ON s.corpus = l.corpus
+             AND s.doc_id = l.doc_id
+             AND s.grp = 'supernatural'
+             AND s.token_idx BETWEEN l.token_idx - 10
+                                 AND l.token_idx + 10
+            WHERE l.grp = 'light'
+
+            UNION
+
+            SELECT w.corpus, w.doc_id, w.token_idx
+            FROM target_tokens AS w
+            JOIN target_tokens AS s
+              ON s.corpus = w.corpus
+             AND s.doc_id = w.doc_id
+             AND s.grp = 'supernatural'
+             AND s.token_idx BETWEEN w.token_idx - 10
+                                 AND w.token_idx + 10
+            WHERE w.grp = 'white'
+
+            UNION
+
+            SELECT corpus, doc_id, token_idx
+            FROM target_tokens
+            WHERE grp = 'albinism'
+        ),
+        eligible_hits AS (
+            SELECT DISTINCT h.corpus, h.doc_id, h.token_idx
+            FROM target_hits AS h
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM export_indexed_docs AS ix
+                WHERE ix.corpus = h.corpus
+                  AND ix.doc_id = h.doc_id
+            )
+        )
+        SELECT DISTINCT
+            t.corpus,
+            t.doc_id,
+            d.pub_year,
+            t.token_idx,
+            t.token
+        FROM eligible_hits AS h
+        JOIN {TABLE} AS t
+          ON t.corpus = h.corpus
+         AND t.doc_id = h.doc_id
+         AND t.token_idx BETWEEN
+             h.token_idx - {WINDOW_LEFT}
+             AND h.token_idx + {WINDOW_RIGHT}
+        JOIN {DOC_TABLE} AS d
+          ON d.corpus = t.corpus
+         AND d.doc_id = t.doc_id
+        ORDER BY t.corpus, t.doc_id, t.token_idx
+    """
+    return sql, params
+
+
+def populate_indexed_docs(conn, indexed: set[tuple[str, str]]) -> None:
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TEMP TABLE export_indexed_docs (
+                corpus text NOT NULL,
+                doc_id text NOT NULL,
+                PRIMARY KEY (corpus, doc_id)
+            ) ON COMMIT PRESERVE ROWS
+        """)
+
+        ordered = sorted(indexed)
+        for offset in range(0, len(ordered), 5000):
+            cur.executemany(
+                """
+                INSERT INTO export_indexed_docs (corpus, doc_id)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                ordered[offset:offset + 5000],
+            )
+
+    conn.commit()
 
 
 def main() -> None:
     EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    already_indexed = indexed_documents()
+
+    indexed = indexed_documents()
     conn = get_connection(application_name="export-token-windows")
 
-    # Keep the server-side cursor so selected documents do not require a
-    # corpus-sized result set in client memory.
-    with conn.cursor(name="export_tokens") as cur:
-        cur.itersize = 100_000
-        cur.execute(
-            f"""
-            WITH selected_docs AS (
-                {CORPUS_SQL}
-            )
-            SELECT
-                t.corpus,
-                t.doc_id,
-                d.pub_year,
-                t.token_idx,
-                t.token
-            FROM {TABLE} AS t
-            JOIN {DOC_TABLE} AS d
-              ON d.corpus = t.corpus
-             AND d.doc_id = t.doc_id
-            JOIN selected_docs AS s
-              ON s.corpus = t.corpus
-             AND s.doc_id = t.doc_id
-            ORDER BY t.corpus, t.doc_id, t.token_idx
-            """
-        )
+    try:
+        populate_indexed_docs(conn, indexed)
+        sql, params = build_export_query()
 
         docs: list[dict] = []
         shard_no = 0
-        skipped_indexed = 0
         exported = 0
+        rows_seen = 0
 
-        for (corpus, doc_id), grouped_rows in groupby(
-            cur, key=lambda row: (row[0], row[1])
-        ):
-            if (corpus, doc_id) in already_indexed:
-                skipped_indexed += 1
-                continue
+        with conn.cursor(name="export_tokens") as cur:
+            cur.itersize = 10_000
+            cur.execute(sql, params)
 
-            rows = list(grouped_rows)
-            kept = retained_rows(rows, TARGET_TERMS)
-            if not kept:
-                continue
+            for (corpus, doc_id), grouped_rows in groupby(
+                cur,
+                key=lambda row: (row[0], row[1]),
+            ):
+                rows = list(grouped_rows)
+                docs.append({
+                    "corpus": corpus,
+                    "doc_id": doc_id,
+                    "pub_year": rows[0][2],
+                    "token_idx": [row[3] for row in rows],
+                    "tokens": [row[4] for row in rows],
+                })
 
-            docs.append({
-                "corpus": corpus,
-                "doc_id": doc_id,
-                "pub_year": rows[0][2],
-                "token_idx": [row[3] for row in kept],
-                "tokens": [row[4] for row in kept],
-            })
-            exported += 1
+                exported += 1
+                rows_seen += len(rows)
 
-            if len(docs) >= DOCS_PER_SHARD:
+                if len(docs) >= DOCS_PER_SHARD:
+                    flush(docs, shard_no)
+                    docs = []
+                    shard_no += 1
+
+                if exported % 100 == 0:
+                    logger.info(
+                        "Exported %d documents; %d token rows",
+                        exported, rows_seen,
+                    )
+
+            if docs:
                 flush(docs, shard_no)
-                docs, shard_no = [], shard_no + 1
 
-        if docs:
-            flush(docs, shard_no)
-
-    conn.close()
-    logger.info(
-        "Done: exported %d documents; skipped %d already indexed",
-        exported, skipped_indexed,
-    )
+        logger.info(
+            "Done: exported %d documents and %d token rows",
+            exported, rows_seen,
+        )
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

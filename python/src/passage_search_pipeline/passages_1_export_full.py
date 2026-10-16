@@ -1,5 +1,5 @@
 """
-colab_export_for.py
+passages_1_export_full.py
 
 Exports one row per document (corpus, doc_id, pub_year, token_idx[], tokens[])
 into parquet shards of DOCS_PER_SHARD documents. Upload EMB_OUTPUT_DIR to Drive.
@@ -19,13 +19,13 @@ from lib.corpus_logging import logger
 from lib.corpus_albinism import CORPUS_SQL
 
 # Local filesystem output directory
-EMB_OUTPUT_DIR = OUT_DIR / Path("export/tokens")
+EMB_OUTPUT_DIR = OUT_DIR / Path("export/souroce_tokens")
 
 # PostgreSQL tables
 DOC_TABLE = "documents"
 TABLE = "tokens"
 
-DOCS_PER_SHARD = 500
+DOCS_PER_SHARD = 10 # 500
 
 SCHEMA = pa.schema([
     ("corpus", pa.string()),

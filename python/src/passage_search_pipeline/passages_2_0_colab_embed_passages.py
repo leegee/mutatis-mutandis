@@ -55,6 +55,7 @@ def log(message):
     )
 
 
+
 def passage_spans(n_words):
     if n_words <= WINDOW:
         return [(0, n_words)] if n_words else []
@@ -170,51 +171,94 @@ def word_vectors(words, tok, model, device):
     return {name: sums[name] / cnt for name in LAYER_NAMES}
 
 
-def doc_passage_vectors(words, tok, model, device):
-    """Embed one document; never accumulate vectors from other documents."""
-    spans = passage_spans(len(words))
-    if not spans:
-        return spans, {
+
+def doc_passage_vectors(words, tok, model, device, token_idx=None):
+    """
+    Embed passages without crossing gaps in original token positions.
+
+    Contiguous legacy exports produce the same spans and vector ordering as
+    before. Sparse exports are split into contiguous runs before windowing;
+    word offsets remain global offsets into the exported arrays.
+    """
+    n_words = len(words)
+    if not n_words:
+        return [], {
             name: np.empty((0, DIM), dtype=np.float16)
             for name in LAYER_NAMES
         }
 
-    result = {name: [] for name in LAYER_NAMES}
+    if token_idx is None:
+        # Preserve the legacy API: callers without source indices imply that
+        # every adjacent array entry is also adjacent in the original text.
+        token_idx = list(range(n_words))
 
-    # Work on bounded word segments. A passage belongs wholly to one segment.
-    i = 0
-    while i < len(spans):
-        seg_start = spans[i][0]
-        j = i
-
-        while (
-            j < len(spans)
-            and spans[j][1] - seg_start <= 2000
-        ):
-            j += 1
-
-        j = max(j, i + 1)
-        seg_end = spans[j - 1][1]
-
-        wv = word_vectors(
-            words[seg_start:seg_end], tok, model, device
+    if len(token_idx) != n_words:
+        raise ValueError(
+            f"token_idx/tokens length mismatch: {len(token_idx)} != {n_words}"
         )
 
-        for name in LAYER_NAMES:
-            result[name].append(
-                np.stack([
-                    wv[name][s - seg_start:e - seg_start].mean(axis=0)
-                    for s, e in spans[i:j]
-                ]).astype(np.float16)
+    # A passage must never bridge an omitted section of the source document.
+    run_starts = [0]
+    run_starts.extend(
+        i for i in range(1, n_words)
+        if token_idx[i] != token_idx[i - 1] + 1
+    )
+    run_ends = run_starts[1:] + [n_words]
+
+    all_spans = []
+    result = {name: [] for name in LAYER_NAMES}
+
+    for run_start, run_end in zip(run_starts, run_ends):
+        run_words = words[run_start:run_end]
+        local_spans = passage_spans(len(run_words))
+        if not local_spans:
+            continue
+
+        i = 0
+        while i < len(local_spans):
+            seg_start = local_spans[i][0]
+            j = i
+
+            while (
+                j < len(local_spans)
+                and local_spans[j][1] - seg_start <= 2000
+            ):
+                j += 1
+
+            j = max(j, i + 1)
+            seg_end = local_spans[j - 1][1]
+
+            wv = word_vectors(
+                run_words[seg_start:seg_end], tok, model, device
             )
 
-        del wv
-        i = j
+            for name in LAYER_NAMES:
+                result[name].append(
+                    np.stack([
+                        wv[name][s - seg_start:e - seg_start].mean(axis=0)
+                        for s, e in local_spans[i:j]
+                    ]).astype(np.float16)
+                )
 
-    return spans, {
-        name: np.concatenate(parts, axis=0)
+            # Convert run-local offsets to offsets in the exported token arrays.
+            all_spans.extend(
+                (run_start + s, run_start + e)
+                for s, e in local_spans[i:j]
+            )
+
+            del wv
+            i = j
+
+    vectors = {
+        name: (
+            np.concatenate(parts, axis=0)
+            if parts
+            else np.empty((0, DIM), dtype=np.float16)
+        )
         for name, parts in result.items()
     }
+
+    return all_spans, vectors
 
 
 def fixed_f16(arr):
@@ -233,8 +277,9 @@ def document_table(doc, tok, model, device):
         return None
 
     spans, vectors = doc_passage_vectors(
-        words, tok, model, device
+        words, tok, model, device, token_idx=tidx
     )
+
     if not spans:
         return None
 
