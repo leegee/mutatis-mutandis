@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 from collections import defaultdict
 from pathlib import Path
+import argparse
 
 import lancedb
 import numpy as np
@@ -38,10 +39,13 @@ def passage_id(
     doc_id: str,
     word_start: int,
     word_end: int,
+    *,
+    source: str = "full_text_v1",
 ) -> str:
-    """Stable identity for a passage, independent of its vector values."""
+    """Keep passage identities distinct across embedding generations."""
     identity = (
-        f"{corpus}\0{doc_id}\0{word_start}\0{word_end}"
+        f"{source}\0{corpus}\0{doc_id}\0"
+        f"{word_start}\0{word_end}"
     )
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
@@ -209,6 +213,7 @@ def flush_buffers(
 def import_shard(
     path: Path,
     writer: PassageWriter,
+    windowed_text: False
 ) -> tuple[int, int]:
     parquet = pq.ParquetFile(path)
 
@@ -263,22 +268,25 @@ def import_shard(
             start = int(row["word_start"])
             end = int(row["word_end"])
             if end <= start:
-                raise ValueError(
-                    f"{path.name}: invalid passage span {start}:{end}"
-                )
+                raise ValueError( f"{path.name}: invalid passage span {start}:{end}" )
 
-            # pid = passage_id(
-            #     row["corpus"],
-            #     row["doc_id"],
-            #     start,
-            #     end,
-            # )
-            pid = passage_id(
-                row["corpus"],
-                row["doc_id"],
-                int(row["token_start"]),
-                int(row["token_end"]),
-            )
+            # Legacy full-text imports only; preserves the original ID formula.
+            if windowed_text:
+                pid = passage_id(
+                    row["corpus"],
+                    row["doc_id"],
+                    start,
+                    end,
+                )
+            else:
+                # New sparse-window imports.
+                pid = passage_id(
+                    row["corpus"],
+                    row["doc_id"],
+                    int(row["token_start"]),
+                    int(row["token_end"]),
+                    source="target_windows_v1",
+                )
 
             common = {
                 "passage_id": pid,
@@ -332,22 +340,30 @@ def import_shard(
 
 
 def main() -> None:
-    input_dir = INPUT_DIR.resolve()
+    parser = argparse.ArgumentParser(
+        description="Import passage vectors into LanceDB."
+    )
+    parser.add_argument(
+        "--windowed-text",
+        action="store_true",
+        default=False,
+        help="Use windowed-text passage IDs instead of legacy full-text IDs.",
+    )
+    args = parser.parse_args()
+    windowed_text = args.windowed_text
 
+    input_dir = INPUT_DIR.resolve()
     if not input_dir.exists():
-        raise SystemExit(
-            f"Passage input directory does not exist: {input_dir}"
-        )
+        raise SystemExit( f"Passage input directory does not exist: {input_dir}" )
 
     shards = sorted(input_dir.glob("passages_*.parquet"))
     if not shards:
-        raise SystemExit(
-            f"No passages_*.parquet files found in {input_dir}"
-        )
+        raise SystemExit( f"No passages_*.parquet files found in {input_dir}" )
 
     logger.info("[passages] input: %s", input_dir)
     logger.info("[passages] Lance root: %s", LANCE_INDEXES_DIR)
     logger.info("[passages] found %d shard(s)", len(shards))
+    logger.info("[passages] windowed text: %s", windowed_text)
 
     writer = PassageWriter(LANCE_INDEXES_DIR)
 
@@ -355,23 +371,17 @@ def main() -> None:
     total_vectors = 0
 
     for shard in shards:
-        passages, vectors = import_shard(shard, writer)
+        passages, vectors = import_shard(shard, writer, windowed_text)
         total_passages += passages
         total_vectors += vectors
 
     if BUILD_INDEXES:
         writer.build_indexes()
 
-    logger.info(
-        "[passages] complete: passages read=%d, new vector rows=%d",
-        total_passages, total_vectors,
-    )
+    logger.info( "[passages] complete: passages read=%d, new vector rows=%d", total_passages, total_vectors, )
 
     for name, table in sorted(writer.tables.items()):
-        logger.info(
-            "[passages] table %s: %d rows",
-            name, table.count_rows(),
-        )
+        logger.info( "[passages] table %s: %d rows", name, table.count_rows(), )
 
 
 if __name__ == "__main__":
