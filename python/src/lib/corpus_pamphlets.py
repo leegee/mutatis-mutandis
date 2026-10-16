@@ -6,8 +6,11 @@ FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
 MAX_TOKENS_IN_DOC = 400_000
 
-CONCEPT_SETS: CanonicalRules = {
+# "bone fei", "bonne foy", "bonne foy", "bone fei", "bonne foi", "good faith", "bonne foi", "bona fidēs"
 
+
+
+CONCEPT_SETS: CanonicalRules = {
     "LIBERTY": {
         "forms": {
             "liberty",
