@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-tier3_project_cluster
+tier3_0_project_cluster
 
 Cluster Tier-2 semantic fields (local UMAP + Leiden) and write geometry
 back into the live store.
