@@ -548,6 +548,18 @@ class ZarrEventLookup:
         return _norm_rows(self.emb_medium[positions])
 
 
+    def get_broad_embeddings(self, event_ids) -> np.ndarray:
+        self._require_index()
+        positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
+
+        def _norm_rows(M):
+            norms = np.linalg.norm(M, axis=1, keepdims=True)
+            norms[norms == 0] = 1.0
+            return M / norms
+
+        return _norm_rows(self.emb_broad[positions])
+
+
     def get_window_events( self, doc_id, window_id, ):
         mask = (
             (self.doc_id == doc_id)

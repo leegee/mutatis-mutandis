@@ -72,6 +72,7 @@ import networkx as nx
 from pathlib import Path
 
 
+from lib.corpus_db import get_connection
 from lib.corpus_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
 from lib.corpus_logging import logger
@@ -79,6 +80,8 @@ from lib.get_processed_concepts import get_processed_concepts
 
 OUTPUT_DIR = GUI_PUBLIC_DIR / 'lineage'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+EVENT_TEXT_WINDOW_SIZE = 50
 
 # Below this cosine similarity to its lineage's founding centroid, a node
 # is considered to have drifted away from the original concept even if
@@ -95,6 +98,88 @@ CONFIDENCE_THRESHOLD = 0.95
 # back to the database.
 EVENT_SAMPLE_SIZE = 8
 NEIGHBOUR_SAMPLE_SIZE = 5
+
+
+def fetch_event_text(
+    pg_con,
+    doc_id,
+    token_idx,
+    *,
+    window_size=EVENT_TEXT_WINDOW_SIZE,
+    cache=None,
+):
+    """
+    Retrieve source metadata and a bounded excerpt from PostgreSQL.
+
+    Window bounds describe the actual first and last token indices returned,
+    inclusive. Token indices are not assumed to be contiguous.
+    """
+    if pg_con is None:
+        return {
+            "title": None,
+            "text_window": None,
+            "window_start_idx": None,
+            "window_end_idx": None,
+        }
+
+    doc_id = str(doc_id)
+    token_idx = int(token_idx)
+
+    if cache is None:
+        cache = {"titles": {}, "windows": {}}
+
+    if doc_id not in cache["titles"]:
+        with pg_con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT title
+                FROM documents
+                WHERE doc_id = %s
+                """,
+                (doc_id,),
+            )
+            row = cur.fetchone()
+
+        cache["titles"][doc_id] = row[0] if row else None
+
+    window_key = (doc_id, token_idx, window_size)
+
+    if window_key not in cache["windows"]:
+        requested_start = max(0, token_idx - window_size)
+        requested_end = token_idx + window_size
+
+        with pg_con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT token_idx, token
+                FROM tokens
+                WHERE doc_id = %s
+                  AND token_idx BETWEEN %s AND %s
+                ORDER BY token_idx
+                """,
+                (doc_id, requested_start, requested_end),
+            )
+            rows = cur.fetchall()
+
+        if rows:
+            cache["windows"][window_key] = {
+                "text_window": " ".join(
+                    str(token) for _, token in rows
+                ),
+                "window_start_idx": int(rows[0][0]),
+                "window_end_idx": int(rows[-1][0]),
+            }
+        else:
+            cache["windows"][window_key] = {
+                "text_window": None,
+                "window_start_idx": None,
+                "window_end_idx": None,
+            }
+
+    return {
+        "title": cache["titles"][doc_id],
+        **cache["windows"][window_key],
+    }
 
 
 def cosine_similarity(a, b):
@@ -306,8 +391,6 @@ def assign_lineages(G):
         if node_vector is not None and anchor_vector is not None:
             persistence = cosine_similarity(node_vector, anchor_vector)
         else:
-            # No vector available -- fall back to structural confidence
-            # only, since we can't evaluate semantic drift directly.
             persistence = confidence
 
         is_continuation = (
@@ -316,18 +399,14 @@ def assign_lineages(G):
         )
 
         if not is_continuation:
-            # Either the structural link is weak, or the cluster has
-            # drifted far enough from its lineage's origin that it no
-            # longer represents the same concept. Either way: new
-            # lineage, re-anchored at this node.
             lineage[node] = next_lineage
             lineage_anchor[next_lineage] = node_vector
             lineage_founder[next_lineage] = node
-            persistence_score[node] = 1.0
             next_lineage += 1
         else:
             lineage[node] = parent_lineage
-            persistence_score[node] = persistence
+
+        persistence_score[node] = persistence
 
         # Any other incoming edge represents a merge: an earlier lineage
         # folding into this node's lineage. Record it even though it
@@ -422,6 +501,10 @@ def sample_cluster_events(
     cluster_id,
     event_limit=EVENT_SAMPLE_SIZE,
     neighbour_limit=NEIGHBOUR_SAMPLE_SIZE,
+    *,
+    pg_con=None,
+    text_window_size=EVENT_TEXT_WINDOW_SIZE,
+    text_cache=None,
 ):
     """
     Pulls a small deterministic sample of concrete events belonging to
@@ -557,6 +640,14 @@ def sample_cluster_events(
 
         neighbours = neighbours[:neighbour_limit]
 
+        source_text = fetch_event_text(
+            pg_con,
+            doc_id,
+            token_idx,
+            window_size=text_window_size,
+            cache=text_cache,
+        )
+
         samples.append(
             {
                 "event_id": event_id,
@@ -564,6 +655,7 @@ def sample_cluster_events(
                 "token_idx": token_idx,
                 "token": token,
                 "pub_year": ev_year,
+                **source_text,
                 "neighbours": neighbours,
             }
         )
@@ -571,8 +663,17 @@ def sample_cluster_events(
     return samples
 
 
-def export_lineage(con, concept, G, analysis=None,):
+def export_lineage(
+    con,
+    concept,
+    G,
+    analysis=None,
+    *,
+    pg_con=None,
+    text_window_size=EVENT_TEXT_WINDOW_SIZE,
+):
     nodes = []
+    text_cache = {"titles": {}, "windows": {}}
 
     rows = con.execute(
         """
@@ -615,7 +716,13 @@ def export_lineage(con, concept, G, analysis=None,):
                 "y": gny if gny is not None else 0,
             },
             "event_sample": sample_cluster_events(
-                con, concept, year, cluster,
+                con,
+                concept,
+                year,
+                cluster,
+                pg_con=pg_con,
+                text_window_size=text_window_size,
+                text_cache=text_cache,
             ),
             "context_profile": aggregate_cluster_context(
                 con, concept, year, cluster,
@@ -695,6 +802,8 @@ def export_lineage(con, concept, G, analysis=None,):
 def analyse_concept_lineage(
     con: Connection,
     concept: str,
+    *,
+    pg_con=None,
 ) -> dict[str, object]:
     logger.info( f"[tier4] analysing {concept}" )
 
@@ -710,6 +819,7 @@ def analyse_concept_lineage(
         concept,
         G,
         analysis=analysis,
+        pg_con=pg_con,
     )
 
 
@@ -717,11 +827,12 @@ def service(
     *,
     con: Connection,
     concept: str,
-    write_json: bool = False,
+    write_json: bool = True,
+    pg_con=None,
 ) -> dict[str, object]:
 
     started = time.perf_counter()
-    result = analyse_concept_lineage( con, concept, )
+    result = analyse_concept_lineage( con, concept, pg_con=pg_con, )
     elapsed = time.perf_counter() - started
 
     result["elapsed_seconds"] = round( elapsed, 3, )
@@ -831,7 +942,15 @@ def build_lineage_diagnostic(
             events.append({
                 key: event.get(key)
                 for key in (
-                    "event_id", "doc_id", "token_idx", "token", "pub_year"
+                    "event_id",
+                    "doc_id",
+                    "token_idx",
+                    "token",
+                    "pub_year",
+                    "title",
+                    "text_window",
+                    "window_start_idx",
+                    "window_end_idx",
                 )
             } | {
                 "neighbours": [
@@ -907,6 +1026,7 @@ def build_lineage_diagnostic(
             "events_per_node": events_per_node,
             "neighbours_per_event": neighbours_per_event,
             "profile_size": profile_size,
+            "text_window_size": EVENT_TEXT_WINDOW_SIZE,
         },
         "summary": summary,
         "lineages": lineage_summaries,
@@ -998,8 +1118,11 @@ def main():
     args = parser.parse_args()
 
     con = sqlite3.connect( CORPUS_TIER2_DB_PATH )
+    pg_con = None
 
     try:
+        pg_con = get_connection()
+
         concepts = (
             [args.concept.upper()]
             if args.concept
@@ -1009,7 +1132,7 @@ def main():
         )
 
         for concept in concepts:
-            result = service( con=con, concept=concept, write_json=args.json, )
+            result = service( con=con, concept=concept, write_json=args.json, pg_con=pg_con, )
             if args.diagnostic:
                 diagnostic = build_lineage_diagnostic(result)
                 diagnostic_path = ( OUTPUT_DIR / f"{concept}_lineage_diagnostic.json" )
@@ -1022,6 +1145,8 @@ def main():
 
     finally:
         con.close()
+        if pg_con is not None:
+            pg_con.close()
 
 
 if __name__ == "__main__":
