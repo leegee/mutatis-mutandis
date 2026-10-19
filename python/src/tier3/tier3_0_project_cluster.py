@@ -445,7 +445,7 @@ def main():
     )
     parser.add_argument(
         "--publish-sqlite",
-        default=None,
+        default=True,
         help="After clustering, dump stage → this SQLite path (PG mode only)",
     )
     parser.add_argument(

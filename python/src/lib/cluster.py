@@ -297,14 +297,12 @@ def iter_embeddings_year_major(lookup, event_ids, sub_chunk_size=DEFAULT_EMBED_S
 
     for year in sorted(by_year):
         ids = by_year[year]
-        logger.info(
-            f"[tier3] embeddings year={year} n={len(ids):,} "
-            f"(of {len(event_ids):,} requested)"
-        )
+        logger.info( f"[tier3] embeddings year={year} n={len(ids):,} (of {len(event_ids):,} requested)" )
 
         for start in range(0, len(ids), sub_chunk_size):
             chunk_ids = ids[start:start + sub_chunk_size]
-            vecs = lookup.get_concatenated_embeddings(chunk_ids)
+            # vecs = lookup.get_concatenated_embeddings(chunk_ids)
+            vecs = lookup.get_local_embeddings(chunk_ids)
             vecs = np.asarray(vecs, dtype=np.float32)
             yield chunk_ids, vecs
             del vecs
