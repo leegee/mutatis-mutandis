@@ -69,6 +69,8 @@ import json
 from collections import defaultdict
 import numpy as np
 import networkx as nx
+from pathlib import Path
+
 
 from lib.corpus_config import CORPUS_TIER2_DB_PATH, GUI_PUBLIC_DIR
 from lib.sqlite_vector_blob import blob_to_vector
@@ -696,6 +698,8 @@ def analyse_concept_lineage(
 ) -> dict[str, object]:
     logger.info( f"[tier4] analysing {concept}" )
 
+    diagnose_temporal_edges(con, concept)
+
     G = load_temporal_graph( con, concept, )
 
     G = assign_lineages(G)
@@ -733,10 +737,264 @@ def service(
     return result
 
 
+def build_lineage_diagnostic(
+    result: dict,
+    *,
+    max_nodes: int = 16,
+    events_per_node: int = 2,
+    neighbours_per_event: int = 3,
+    profile_size: int = 8,
+) -> dict:
+    """Select graph structure and provenance evidence for manual review."""
+    nodes = result.get("nodes", [])
+    links = result.get("links", [])
+    summary = result.get("summary", {})
+
+    by_id = {node["id"]: node for node in nodes}
+    incoming = defaultdict(list)
+    outgoing = defaultdict(list)
+
+    for edge in links:
+        source = edge["source"]
+        target = edge["target"]
+
+        if source in by_id and target in by_id:
+            outgoing[source].append(edge)
+            incoming[target].append(edge)
+
+    by_lineage = defaultdict(list)
+
+    for node in nodes:
+        by_lineage[node.get("lineage")].append(node)
+
+    for members in by_lineage.values():
+        members.sort(key=lambda n: (n["year"], n["cluster"]))
+
+    # Prioritise structural events and weak persistence before filling
+    # remaining slots with chronologically distributed lineage samples.
+    selected = set()
+
+    structural_nodes = sorted(
+        (
+            node for node in nodes
+            if len(incoming[node["id"]]) > 1
+            or len(outgoing[node["id"]]) > 1
+            or node.get("lineage_stable") is False
+        ),
+        key=lambda n: (
+            n.get("persistence_score", 1.0) or 0.0,
+            n["year"],
+            n["cluster"],
+        ),
+    )
+
+    for node in structural_nodes:
+        if len(selected) >= max_nodes:
+            break
+        selected.add(node["id"])
+
+    # Include the beginning and end of each lineage where space permits.
+    for members in by_lineage.values():
+        for node in (members[0], members[-1]):
+            if len(selected) >= max_nodes:
+                break
+            selected.add(node["id"])
+
+    # Fill unused slots with evenly spaced observations across the corpus.
+    remaining = [
+        node for node in sorted(
+            nodes,
+            key=lambda n: (n["year"], n["cluster"]),
+        )
+        if node["id"] not in selected
+    ]
+
+    slots = max_nodes - len(selected)
+    if slots > 0 and remaining:
+        indices = np.linspace(
+            0, len(remaining) - 1, min(slots, len(remaining))
+        ).round().astype(int)
+        selected.update(remaining[i]["id"] for i in indices)
+
+    selected_nodes = []
+    for node_id in sorted(
+        selected,
+        key=lambda nid: (
+            by_id[nid]["year"],
+            by_id[nid]["cluster"],
+        ),
+    ):
+        node = by_id[node_id]
+
+        events = []
+        for event in node.get("event_sample", [])[:events_per_node]:
+            events.append({
+                key: event.get(key)
+                for key in (
+                    "event_id", "doc_id", "token_idx", "token", "pub_year"
+                )
+            } | {
+                "neighbours": [
+                    {
+                        key: neighbour.get(key)
+                        for key in ("token", "count", "max_score", "examples")
+                    }
+                    for neighbour in event.get("neighbours", [])[
+                        :neighbours_per_event
+                    ]
+                ]
+            })
+
+        selected_nodes.append({
+            key: node.get(key)
+            for key in (
+                "id", "year", "cluster", "size", "lineage",
+                "merged_from", "persistence_score", "lineage_stable",
+                "local", "global",
+            )
+        } | {
+            "context_profile": node.get("context_profile", [])[:profile_size],
+            "event_sample": events,
+            "in_degree": len(incoming[node_id]),
+            "out_degree": len(outgoing[node_id]),
+        })
+
+    # Retain edges touching sampled nodes, plus the strongest edges and
+    # all split/merge edges when the graph contains them.
+    selected_links = [
+        edge for edge in links
+        if edge["source"] in selected or edge["target"] in selected
+    ]
+
+    selected_links.sort(
+        key=lambda edge: (
+            edge.get("confidence") or 0.0,
+            edge.get("similarity") or 0.0,
+        ),
+        reverse=True,
+    )
+
+    lineage_summaries = []
+    for lineage_id, members in sorted(
+        by_lineage.items(),
+        key=lambda item: (
+            item[1][0]["year"] if item[1] else 0,
+            str(item[0]),
+        ),
+    ):
+        scores = [
+            n["persistence_score"]
+            for n in members
+            if n.get("persistence_score") is not None
+        ]
+
+        lineage_summaries.append({
+            "lineage": lineage_id,
+            "start_year": members[0]["year"],
+            "end_year": members[-1]["year"],
+            "cluster_count": len(members),
+            "total_observations": sum(n.get("size", 0) for n in members),
+            "min_persistence": min(scores) if scores else None,
+            "max_persistence": max(scores) if scores else None,
+            "stable": members[0].get("lineage_stable"),
+        })
+
+    return {
+        "generated": "tier4_0_lineage_diagnostic",
+        "concept": result.get("concept"),
+        "diagnostic_limits": {
+            "max_nodes": max_nodes,
+            "events_per_node": events_per_node,
+            "neighbours_per_event": neighbours_per_event,
+            "profile_size": profile_size,
+        },
+        "summary": summary,
+        "lineages": lineage_summaries,
+        "sampled_nodes": selected_nodes,
+        "sampled_links": selected_links,
+        "events": result.get("events", {}),
+    }
+
+
+
+def diagnose_temporal_edges(con, concept):
+    """Report persisted edge coverage before graph construction."""
+    queries = {
+        "concept_edges": """
+            SELECT COUNT(*)
+            FROM temporal_cluster_edges
+            WHERE concept=?
+        """,
+        "all_edges": """
+            SELECT COUNT(*)
+            FROM temporal_cluster_edges
+        """,
+        "edge_concepts": """
+            SELECT concept, COUNT(*)
+            FROM temporal_cluster_edges
+            GROUP BY concept
+            ORDER BY COUNT(*) DESC
+            LIMIT 20
+        """,
+        "edge_years": """
+            SELECT source_year, target_year, COUNT(*)
+            FROM temporal_cluster_edges
+            WHERE concept=?
+            GROUP BY source_year, target_year
+            ORDER BY source_year, target_year
+        """,
+        "confidence_distribution": """
+            SELECT
+                MIN(confidence),
+                AVG(confidence),
+                MAX(confidence),
+                SUM(CASE WHEN confidence >= ? THEN 1 ELSE 0 END)
+            FROM temporal_cluster_edges
+            WHERE concept=?
+        """,
+        "missing_endpoints": """
+            SELECT COUNT(*)
+            FROM temporal_cluster_edges e
+            WHERE e.concept=?
+              AND (
+                NOT EXISTS (
+                    SELECT 1
+                    FROM concept_year_cluster_info c
+                    WHERE c.concept=e.concept
+                      AND c.pub_year=e.source_year
+                      AND c.cluster_id=e.source_cluster
+                      AND c.cluster_id >= 0
+                )
+                OR NOT EXISTS (
+                    SELECT 1
+                    FROM concept_year_cluster_info c
+                    WHERE c.concept=e.concept
+                      AND c.pub_year=e.target_year
+                      AND c.cluster_id=e.target_cluster
+                      AND c.cluster_id >= 0
+                )
+              )
+        """,
+    }
+
+    for name, sql in queries.items():
+        params = (
+            (CONFIDENCE_THRESHOLD, concept)
+            if name == "confidence_distribution"
+            else (concept,)
+            if name in {"concept_edges", "edge_years", "missing_endpoints"}
+            else ()
+        )
+        rows = con.execute(sql, params).fetchall()
+        logger.info("[tier4-diagnostic] %s: %s", name, rows)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument( "--concept", )
     parser.add_argument( "--json", action="store_true", default=True)
+    parser.add_argument( "--diagnostic", action="store_true", help="Write a compact diagnostic JSON alongside the full graph.", )
+
     args = parser.parse_args()
 
     con = sqlite3.connect( CORPUS_TIER2_DB_PATH )
@@ -752,6 +1010,14 @@ def main():
 
         for concept in concepts:
             result = service( con=con, concept=concept, write_json=args.json, )
+            if args.diagnostic:
+                diagnostic = build_lineage_diagnostic(result)
+                diagnostic_path = ( OUTPUT_DIR / f"{concept}_lineage_diagnostic.json" )
+                diagnostic_path.write_text(
+                    json.dumps( diagnostic, ensure_ascii=False, indent=2, ),
+                    encoding="utf-8",
+                )
+                logger.info( "[tier4] wrote diagnostic to %s (%d nodes, %d edges)", diagnostic_path, len(diagnostic["sampled_nodes"]), len(diagnostic["sampled_links"]), )
             logger.info( f"[tier4-main] {result['concept']} complete" )
 
     finally:
