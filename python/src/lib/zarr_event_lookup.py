@@ -524,41 +524,34 @@ class ZarrEventLookup:
         return np.concatenate([local, medium, broad], axis=1).astype(np.float32)
 
 
-    def get_local_embeddings(self, event_ids) -> np.ndarray:
+    def _get_normalized_embeddings(self, event_ids, scale: str) -> np.ndarray:
         self._require_index()
-        positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
 
-        def _norm_rows(M):
-            norms = np.linalg.norm(M, axis=1, keepdims=True)
-            norms[norms == 0] = 1.0
-            return M / norms
+        if scale not in {"local", "medium", "broad"}:
+            raise ValueError(f"Unsupported embedding scale: {scale!r}")
 
-        return _norm_rows(self.emb_local[positions])
+        positions = np.array(
+            [self.get_pos(int(eid)) for eid in event_ids],
+            dtype=np.int64,
+        )
+        embeddings = getattr(self, f"emb_{scale}")[positions]
+
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+
+        return (embeddings / norms).astype(np.float32, copy=False)
+
+
+    def get_local_embeddings(self, event_ids) -> np.ndarray:
+        return self._get_normalized_embeddings(event_ids, "local")
 
 
     def get_medium_embeddings(self, event_ids) -> np.ndarray:
-        self._require_index()
-        positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
-
-        def _norm_rows(M):
-            norms = np.linalg.norm(M, axis=1, keepdims=True)
-            norms[norms == 0] = 1.0
-            return M / norms
-
-        return _norm_rows(self.emb_medium[positions])
+        return self._get_normalized_embeddings(event_ids, "medium")
 
 
     def get_broad_embeddings(self, event_ids) -> np.ndarray:
-        self._require_index()
-        positions = np.array([self.get_pos(int(eid)) for eid in event_ids], dtype=np.int64)
-
-        def _norm_rows(M):
-            norms = np.linalg.norm(M, axis=1, keepdims=True)
-            norms[norms == 0] = 1.0
-            return M / norms
-
-        return _norm_rows(self.emb_broad[positions])
-
+        return self._get_normalized_embeddings(event_ids, "broad")
 
     def get_window_events( self, doc_id, window_id, ):
         mask = (

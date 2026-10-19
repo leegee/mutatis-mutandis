@@ -62,6 +62,21 @@ def sqlite_connection(path: Path):
     return con
 
 
+def load_cluster_embeddings(lookup, event_ids, representation="concat"):
+    if representation == "local":
+        return lookup.get_local_embeddings(event_ids)
+
+    if representation == "medium":
+        return lookup.get_medium_embeddings(event_ids)
+
+    if representation == "concat":
+        return lookup.get_concatenated_embeddings(event_ids)
+
+    raise ValueError(
+        f"Unsupported embedding representation: {representation!r}"
+    )
+
+
 def write_geometry_sqlite(con, event_ids, local_coords, global_coords, clusters):
     rows = []
     for idx, event_id in enumerate(event_ids):
