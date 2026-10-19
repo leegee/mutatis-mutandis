@@ -540,6 +540,20 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
                         score
                     ))
 
+    logger.info(
+        "[tier3.1-diagnostic] concept=%s threshold=%.3f years=%d "
+        "candidate_pairs=%d accepted_edges=%d",
+        concept,
+        similarity_threshold,
+        len(years),
+        sum(
+            len(load_year_clusters(con, concept, source_year))
+            * len(load_year_clusters(con, concept, target_year))
+            for source_year, target_year in zip(years, years[1:])
+        ),
+        len(edges),
+    )
+
     con.executemany(
         """
         INSERT OR REPLACE INTO temporal_cluster_edges (
@@ -556,8 +570,6 @@ def build_temporal_edges( con, concept, similarity_threshold=0.95, ):
         """,
         edges,
     )
-
-    # con.commit()
     logger.info( f"[tier3.1] edges created: {len(edges)}" )
 
 
@@ -855,6 +867,7 @@ def main():
         for concept in concepts:
             process_concept( con, lookup, concept, global_coords, args.resolution, args.neighbors)
             build_temporal_edges( con, concept, args.similarity_threshold )
+            con.commit()
         con.close()
     logger.info( "[tier3.1] Done." )
 
