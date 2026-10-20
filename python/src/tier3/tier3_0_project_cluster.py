@@ -438,30 +438,10 @@ def service(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--concept", default=None)
-    parser.add_argument(
-        "--pg",
-        action="store_true",
-        help="Read/write Postgres tier2_stage (leave stage alive from Tier 2)",
-    )
-    parser.add_argument(
-        "--publish-sqlite",
-        default=True,
-        help="After clustering, dump stage → this SQLite path (PG mode only)",
-    )
-    parser.add_argument(
-        "-r",
-        "--resolution",
-        type=float,
-        default=0.8,
-        help="Leiden resolution parameter (default: 0.8)",
-    )
-    parser.add_argument(
-        "-n",
-        "--neighbors",
-        type=int,
-        default=15,
-        help="kNN graph neighbours (default: 15)",
-    )
+    parser.add_argument( "--pg", action="store_true", help="Read/write Postgres tier2_stage (leave stage alive from Tier 2)", )
+    parser.add_argument( "--publish-sqlite", default=True, help="After clustering, dump stage → this SQLite path (PG mode only)", )
+    parser.add_argument( "-n", "--neighbors", type=int, default=15, help="kNN graph neighbours (default: 15)", )
+    parser.add_argument( "-r", "--resolution", type=float, default=0.8, help="Leiden resolution parameter (default: 0.8)", )
     args = parser.parse_args()
 
     resources = build_tier3_resources(use_pg=args.pg)

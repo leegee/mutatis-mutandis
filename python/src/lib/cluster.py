@@ -303,6 +303,7 @@ def iter_embeddings_year_major(lookup, event_ids, sub_chunk_size=DEFAULT_EMBED_S
             chunk_ids = ids[start:start + sub_chunk_size]
             # vecs = lookup.get_concatenated_embeddings(chunk_ids)
             vecs = lookup.get_local_embeddings(chunk_ids)
+            # vecs = lookup.get_medium_embeddings(chunk_ids)
             vecs = np.asarray(vecs, dtype=np.float32)
             yield chunk_ids, vecs
             del vecs
