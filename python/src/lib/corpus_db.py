@@ -20,10 +20,10 @@ import lib.corpus_config as config
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
 
-dbname = "eebo_only"
-# dbname = os.environ.get("PGDATABASE", "eebo")
-# dbname = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
-# if not dbname:
+CORPUS_PG_DB_NAME = "eebo_only"
+# CORPUS_PG_DB_NAME = os.environ.get("PGDATABASE", "eebo")
+# CORPUS_PG_DB_NAME = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
+# if not CORPUS_PG_DB_NAME:
 #     raise RuntimeError("Database name must be set via CORPUS_PGDATABASE or PGDATABASE")
 
 host = os.environ.get("PGHOST", "localhost")
@@ -50,7 +50,7 @@ def get_connection(
     for attempt in range(1, _DB_RETRIES + 1):
         try:
             conn = psycopg.connect(
-                dbname=dbname,
+                dbname=CORPUS_PG_DB_NAME,
                 user=user,
                 password=password,
                 host=host,
@@ -96,7 +96,7 @@ def get_autocommit_connection(
     for attempt in range(1, _DB_RETRIES + 1):
         try:
             conn = psycopg.connect(
-                dbname=dbname,
+                CORPUS_PG_DB_NAME=CORPUS_PG_DB_NAME,
                 user=user,
                 password=password,
                 host=host,
@@ -245,7 +245,8 @@ def create_views(conn: Connection) -> None:
                     VIEW pamphlet_corpus AS
                 SELECT *
                 FROM documents
-                WHERE token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
+                WHERE
+                token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
                 AND pub_year >= {earliest}
                 AND pub_year <= {latest}
                 AND title !~* '(tragedy|comedy|farce|interlude|play)'
