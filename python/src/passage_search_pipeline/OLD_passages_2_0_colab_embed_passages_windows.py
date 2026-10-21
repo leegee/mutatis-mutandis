@@ -41,14 +41,14 @@ SOURCE_GLOB = "*.parquet"
 # Optional replacement for CORPUS_SQL: a parquet or CSV on Drive with columns
 # corpus, doc_id listing the documents to export. None = every document that
 # contains at least one target term.
-SELECTED_DOCS_PATH = None  # e.g. BASE / "selected_docs.parquet"
+SELECTED_DOCS_PATH = None  # eg BASE / "selected_docs.parquet"
 
 EMB_OUTPUT_DIR = BASE / "tokens"          # read by the embed job (IN_DIR)
 PASSAGES_DIR = BASE / "passages"          # embed job output (OUT_DIR)
 LOCAL_TMP = Path("/content/tmp")
 
 DOCS_PER_SHARD = 500
-WINDOW_WORDS = 40
+WINDOW_WORDS = 100 # Must match the data-generator script passages_1_export_windows.py WINDOW_WORDS
 
 # An even window has one more token to the left than to the right.
 WINDOW_LEFT = WINDOW_WORDS // 2

@@ -805,7 +805,7 @@ def main() -> None:
 
                     with occ_path.open("a", encoding="utf-8-sig", newline="") as f:
                         w = csv.DictWriter(f, fieldnames=[
-                            "seed", "period", "scope",
+                            "seed", "period", "pub_year", "scope",
                             "doc_id", "corpus", "title", "pub_year",
                             "token_idx", "word_start", "window_text",
                         ])
@@ -820,6 +820,7 @@ def main() -> None:
                             w.writerow({
                                 "seed": label,
                                 "period": period,
+                                "pub_year": m.get("pub_year"),
                                 "scope": scope_label,
                                 "doc_id": p["doc_id"],
                                 "corpus": m.get("corpus", ""),
@@ -838,7 +839,7 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=[
-            "kind", "seed", "period", "scope", "n_occurrences", "rank", "filler",
+            "kind", "seed", "period", "pub_year", "scope", "n_occurrences", "rank", "filler",
             "mean_prob", "baseline_prob", "lift", "score", "ci_lo", "ci_hi",
             "support", "top_share", "stability",
         ])

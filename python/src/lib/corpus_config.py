@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 # from lib.corpus_pamphlets import CORPUS_MIN_YEAR, CORPUS_MAX_YEAR, CONCEPT_SETS, FILTER_DOCUMENT_SIZE, MIN_TOKENS_IN_DOC, MAX_TOKENS_IN_DOC
-from lib.corpus_albinism import CORPUS_MIN_YEAR, CORPUS_MAX_YEAR, CONCEPT_SETS, FILTER_DOCUMENT_SIZE, MIN_TOKENS_IN_DOC, MAX_TOKENS_IN_DOC
+from lib.corpus_albinism import get_lance_indexes_dir, CORPUS_MIN_YEAR, CORPUS_MAX_YEAR, CONCEPT_SETS, FILTER_DOCUMENT_SIZE, MIN_TOKENS_IN_DOC, MAX_TOKENS_IN_DOC
 
 # CORPUS_MIN_YEAR = 1600
 # CORPUS_MAX_YEAR = 1650
@@ -78,8 +78,9 @@ JOBS_DB_PATH = OUT_DIR / "fastapi_jobs.sqlite3"
 INDEXES_DIR = OUT_DIR / "indexes"
 INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
-LANCE_INDEXES_DIR = INDEXES_DIR / "lance_albinism"
+# LANCE_INDEXES_DIR = INDEXES_DIR / "lance_albinism"
 # LANCE_INDEXES_DIR = INDEXES_DIR / "lance_pamphlets"
+LANCE_INDEXES_DIR = get_lance_indexes_dir(INDEXES_DIR)
 LANCE_INDEXES_DIR.mkdir(parents=True, exist_ok=True)
 
 MODELS_DIR = OUT_DIR / "models"

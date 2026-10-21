@@ -29,14 +29,14 @@ from transformers import AutoModel, AutoTokenizer
 # Configuration
 # ------------------------------------------------------------
 
-RESUME_FROM_DOC = 9999
+RESUME_FROM_DOC = 0
 STOP_AFTER_DOC  = 9999
-IN_DIR = Path("/content/drive/MyDrive/tier1/tokens")
+IN_DIR = Path("/content/drive/MyDrive/tier1/source_tokens")
 OUT_DIR = Path("/content/drive/MyDrive/tier1/passages")
 CHECKPOINT_DIR = OUT_DIR / "_checkpoints"
 LOCAL_TMP = Path("/content/tmp")
 MODEL_NAME = "emanjavacas/MacBERTh"
-ASSEMBLE_FINAL_SHARD = False
+ASSEMBLE_FINAL_SHARD = True
 
 CHUNK = 510
 OVERLAP = 96
@@ -506,6 +506,8 @@ def main():
     for i, in_path in enumerate(shards, 1):
         log(f"Shard {i}/{len(shards)}")
         process_shard(in_path, tok, model, device)
+
+    log("Done")
 
 
 if __name__ == "__main__":

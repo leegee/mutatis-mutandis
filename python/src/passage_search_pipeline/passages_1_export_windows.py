@@ -13,8 +13,9 @@ from lib.corpus_db import get_connection
 from lib.corpus_config import OUT_DIR
 from lib.corpus_logging import logger
 
-EMB_OUTPUT_DIR = OUT_DIR / "export/source_tokens"
 LANCE_DIR = OUT_DIR / "indexes/lance_albinism"
+EMB_OUTPUT_DIR = OUT_DIR / "export/source_tokens"
+EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DOC_TABLE = "documents"
 TABLE = "tokens"
@@ -36,7 +37,7 @@ WHITE = {
     "white", "whyte", "whight", "whit", "whyt", "wight", "wite", "whiet",
 }
 APPEARANCE = {
-    "hair", "haire", "hayre", "hayr", "heare", "hoary", "hoarie",
+    "hair", "haire", "hayre", "hayr", "heare", "hoary", "hoarie", "heeris", "heer",
     "skin", "skinne", "skyn", "complexion", "flesh", "fur", "furre",
     "furr", "coat", "fleece", "pale", "pallid", "pallide", "wan", "wann",
     "wanne", "bloodless", "luminous", "luminouse", "luminus", "luminious",
@@ -230,8 +231,6 @@ def populate_indexed_docs(conn, indexed: set[tuple[str, str]]) -> None:
 
 
 def main() -> None:
-    EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
     indexed = indexed_documents()
     conn = get_connection(application_name="export-token-windows")
 
@@ -270,18 +269,12 @@ def main() -> None:
                     shard_no += 1
 
                 if exported % 100 == 0:
-                    logger.info(
-                        "Exported %d documents; %d token rows",
-                        exported, rows_seen,
-                    )
+                    logger.info( "Exported %d documents; %d token rows", exported, rows_seen, )
 
             if docs:
                 flush(docs, shard_no)
 
-        logger.info(
-            "Done: exported %d documents and %d token rows",
-            exported, rows_seen,
-        )
+        logger.info( "Done: exported %d documents and %d token rows", exported, rows_seen, )
     finally:
         conn.close()
 

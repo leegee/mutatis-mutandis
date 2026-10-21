@@ -20,6 +20,7 @@ from lib.corpus_albinism import CORPUS_SQL
 
 # Local filesystem output directory
 EMB_OUTPUT_DIR = OUT_DIR / Path("export/souroce_tokens")
+EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # PostgreSQL tables
 DOC_TABLE = "documents"
@@ -46,22 +47,10 @@ def flush(docs: list[dict], shard_no: int) -> None:
 
 
 def main() -> None:
-    EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     conn = get_connection(application_name="export-tokens")
 
-    # Named (server-side) cursor: streams instead of loading everything.
     with conn.cursor(name="export_tokens") as cur:
         cur.itersize = 100_000
-        # cur.execute(
-        #     f"""
-        #     SELECT t.corpus, t.doc_id, d.pub_year, t.token_idx, t.token
-        #     FROM {TABLE} AS t
-        #     JOIN {DOC_TABLE} AS d
-        #       ON d.corpus = t.corpus AND d.doc_id = t.doc_id
-        #     ORDER BY t.corpus, t.doc_id, t.token_idx
-        #     """
-        # )
-
         cur.execute(
             f"""
             WITH selected_docs AS (

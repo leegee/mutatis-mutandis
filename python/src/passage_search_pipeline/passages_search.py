@@ -124,8 +124,7 @@ def search_passages(
             distance = row.get("_distance")
             if distance is None:
                 raise RuntimeError(
-                    "Lance search returned no _distance column. "
-                    "Check the installed LanceDB API."
+                    "Lance search returned no _distance column. Check the installed LanceDB API."
                 )
 
             row["distance"] = float(distance)
@@ -191,11 +190,7 @@ def main():
     parser.add_argument("--query", required=True)
     parser.add_argument("--start-year", type=int, required=True)
     parser.add_argument("--end-year", type=int, required=True)
-    parser.add_argument(
-        "--representation",
-        choices=REPRESENTATIONS,
-        default="mean4",
-    )
+    parser.add_argument( "--representation", choices=REPRESENTATIONS, default="mean4", )
     parser.add_argument("--limit", type=int, default=20)
     args = parser.parse_args()
 

@@ -630,6 +630,8 @@ def encode_passage_words(
 
     Always runs on PyTorch. If `macberth` is omitted, the cached
     PyTorch model is used.
+
+    NB This works on the pasages_* pipelne necoded on Colab
     """
     if macberth is None:
         macberth = get_pytorch_model()

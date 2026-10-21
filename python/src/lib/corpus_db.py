@@ -273,59 +273,6 @@ def create_views(conn: Connection) -> None:
                 JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
             """)
 
-            # Materialized view for document_search
-            # logger.info("[corpus_db] Creating materialised view document_search")
-            # cur.execute("""
-            #     CREATE MATERIALIZED VIEW IF NOT EXISTS document_search AS
-            #     WITH numbered_tokens AS (
-            #         SELECT
-            #             t.corpus,
-            #             t.doc_id,
-            #             t.token,
-            #             t.token_idx,
-            #             (row_number() OVER (PARTITION BY t.corpus, t.doc_id ORDER BY t.token_idx) - 1) / 50000 AS block_idx
-            #         FROM tokens t
-            #         JOIN pamphlet_corpus pc ON pc.doc_id = t.doc_id
-            #     ),
-            #     block_text AS (
-            #         SELECT
-            #             corpus,
-            #             doc_id,
-            #             block_idx,
-            #             string_agg(token, ' ') AS text
-            #         FROM numbered_tokens
-            #         GROUP BY corpus, doc_id, block_idx
-            #     )
-            #     SELECT
-            #         d.corpus,
-            #         d.doc_id,
-            #         d.title,
-            #         d.author,
-            #         d.pub_year,
-            #         d.pub_place,
-            #         d.publisher,
-            #         bt.block_idx,
-            #         bt.text,
-            #         to_tsvector('english', bt.text) AS tsv
-            #     FROM pamphlet_corpus d
-            #     JOIN block_text bt ON bt.doc_id = d.doc_id;
-            # """)
-
-
-# def create_tiered_token_indexes(conn: Connection) -> None:
-    # logger.info("[corpus_db] Creating tiered token indexes")
-    # earliest = config.CORPUS_MIN_YEAR
-    # latest   = config.CORPUS_MAX_YEAR
-    # Create non-concurrent indexes and materialized views inside a transaction
-    # with conn.transaction():
-    #     with conn.cursor() as cur:
-    #         # GIN index can stay in transaction
-    #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_tsv ON document_search USING GIN(tsv);")
-    #         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_search_docid ON document_search(corpus, doc_id);")
-    # logger.info("[corpus_db] create_tiered_token_indexes complete")
-    # logger.info("[corpus_db] create_tiered_token_indexes = noop")
-
-
 def create_concurrent_indexes():
     logger.info("[corpus_db] create_concurrent_indexes enter to create CONCURRENT indexes")
     with get_autocommit_connection() as conn:

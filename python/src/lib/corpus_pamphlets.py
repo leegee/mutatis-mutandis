@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from lib.cannonical_rules import CanonicalRule, CanonicalRules
 
 CORPUS_MIN_YEAR = 1600
@@ -6,9 +8,10 @@ FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
 MAX_TOKENS_IN_DOC = 400_000
 
+def get_lance_indexes_dir(indexes_dir: str | Path) -> Path:
+    return Path(indexes_dir) / "lance_pamphlets"
+
 # "bone fei", "bonne foy", "bonne foy", "bone fei", "bonne foi", "good faith", "bonne foi", "bona fidēs"
-
-
 
 CONCEPT_SETS: CanonicalRules = {
     "LIBERTY": {

@@ -72,7 +72,7 @@
 * **Old English**
   * Anglo-Saxon biblical/exegetical material.
   * Beowulf's faer?
-  * Bede apparently removing white as 'magical' symbol -> ancientness
+  * Bede apparently removing white as 'magical' symbol -> ancientness - https://www.ecatholic2000.com/bede/untitled-06.shtml#on-chapter-1
 
 * **Irish/Gaelic**
   * Comparative material where feasible: Finn is rich.

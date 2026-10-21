@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from lib.cannonical_rules import CanonicalRule, CanonicalRules
 
 CORPUS_MIN_YEAR = 0
@@ -5,6 +7,9 @@ CORPUS_MAX_YEAR = 2026
 FILTER_DOCUMENT_SIZE = False
 MIN_TOKENS_IN_DOC = 200
 MAX_TOKENS_IN_DOC = 400_000
+
+def get_lance_indexes_dir(indexes_dir: str | Path) -> Path:
+    return Path(indexes_dir) / "lance_albinism"
 
 CONCEPT_SETS: CanonicalRules = {
     "WHITE": {

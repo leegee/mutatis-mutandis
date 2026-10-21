@@ -22,6 +22,7 @@ from tier1.vector_writer import year_bucket, vector_index_partitions
 
 # Local export produced from Colab's passages_*.parquet files.
 INPUT_DIR = Path("../out/tier1/passages")
+# INPUT_DIR = Path("../out/export/tokens")
 
 REPRESENTATIONS = ("l8", "last", "mean4")
 VECTOR_DIM = 768

@@ -265,7 +265,7 @@ def main() -> None:
     parser = argparse.ArgumentParser( description="Iteratively search earlier periods using passage vectors." )
     parser.add_argument("--query", required=True)
     parser.add_argument( "--periods", required=True, help="Comma-separated inclusive ranges, newest first; e.g. 2000-2049,1950-1999,1900-1949", )
-    parser.add_argument( "--representation", choices=if representation not in REPRESENTATIONS: default="mean4", )
+    parser.add_argument( "--representation", choices=REPRESENTATIONS, default="mean4", )
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--top-k-per-step", type=int, default=5)
     args = parser.parse_args()
