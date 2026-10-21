@@ -2,7 +2,7 @@
 
 ```
 python src/passage_search_pipeline/passages_4_mask_fillers.py --phrase "white/whyte as wool" --start-year 100 --end-year 2020 --min-occurrences 1 --scope all
--min-occurrences 1 --scope all
+
 2026-10-14 21:38:14 Loading MacBERTh...
 2026-10-14 21:38:15 Building groups...
 2026-10-14 21:44:15
@@ -78,7 +78,7 @@ Virtually every high-scoring item is drawn from the well-known Isaianic / penite
 
 > “though your sins be as **scarlet**, they shall be as white as **snow**; though they be **red** like **crimson**, they shall be as **wool**.”
 
-“Hairs” and “ancient” point to the related image in Revelation 1:14 (“his head and his hairs were white like wool, as white as snow”). The model’s substitutes (“forgiven”, “pardoned”, “clean”, “healed”) show that it has also internalised the theological force of the simile, not merely the surface colours.
+“Hairs” and “ancient” point to the related image in Revelation 1:14 (“his head and his hairs were white like wool, as white as snow”).
 
 The matched-document baseline + multi-replicate design is working as intended: the genre/period effects that would otherwise dominate (religious vocabulary in general) are largely cancelled out, leaving the specific collocational and substitutable neighbourhood of the phrase.
 
