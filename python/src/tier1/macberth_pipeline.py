@@ -3,8 +3,11 @@ import numpy as np
 from lib.corpus_config import (
     EMBED_BATCH_SIZE, ACTIVE_SCALES, WINDOW_CONFIGS
  )
+from lib.corpus_logging import get_logger
 
 from tier1.models import *
+
+logger = get_logger(__name__)
 
 class MacBERThPipeline:
     def __init__(
