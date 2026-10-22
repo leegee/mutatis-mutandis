@@ -17,7 +17,6 @@ level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging_level = getattr(logging, level_name, logging.INFO)
 logger.setLevel(logging_level)
 
-
 if not logger.handlers:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8")
@@ -31,6 +30,8 @@ if not logger.handlers:
     _h.setLevel(logging_level)
     _h.setFormatter(formatter)
     logger.addHandler(_h)
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     _h = TimedRotatingFileHandler(
         LOG_DIR / "corpus.log",
@@ -122,3 +123,16 @@ def setEmit(
         tag=tag,
         context=context,
     )
+
+def get_logger(
+    name: str,
+    context: dict[str, Any] | None = None,
+    emit: EmitFn | None = None,
+) -> CorpusLogger:
+    return CorpusLogger(
+        logger,
+        emit=emit,
+        tag=f"[{name}]",
+        context=context,
+    )
+
