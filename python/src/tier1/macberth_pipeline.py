@@ -1,7 +1,7 @@
 import numpy as np
 
 from lib.corpus_config import (
-    EMBED_BATCH_SIZE, ACTIVE_SCALES
+    EMBED_BATCH_SIZE, ACTIVE_SCALES, WINDOW_CONFIGS
  )
 
 from tier1.models import *
@@ -241,6 +241,8 @@ class MacBERThPipeline:
         pad_id = self.tokenizer.pad_token_id
         if pad_id is None:
             raise RuntimeError("MacBERTh tokenizer has no pad token.")
+
+        import torch
 
         input_ids = []
         attention_masks = []
@@ -606,17 +608,14 @@ class MacBERThPipeline:
         )
 
         if max_length > 512:
-            raise RuntimeError(
-                f"Prepared MacBERTh batch exceeds 512 tokens: "
-                f"{max_length}"
-            )
+            raise RuntimeError( f"Prepared MacBERTh batch exceeds 512 tokens: {max_length}" )
 
         pad_token_id = self.tokenizer.pad_token_id
 
         if pad_token_id is None:
-            raise RuntimeError(
-                "MacBERTh tokenizer has no pad token."
-            )
+            raise RuntimeError( "MacBERTh tokenizer has no pad token." )
+
+        import torch
 
         input_ids = []
         attention_masks = []
