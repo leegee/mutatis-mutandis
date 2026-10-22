@@ -41,6 +41,9 @@ PHRASE_SETS: CanonicalRules = {
             # surface patterns; can be expanded later with regex / lemmas
             ("white", "hair"),
             ("whyte", "hair"),
+            {"whyte", "heeris"},
+            {"whyte", "woolle"},
+            {"whyte", "woll"},
             ("hair", "as", "white", "as", "wool"),
             ("white", "as", "wool"),
             ("white", "like", "wool"),
