@@ -1045,8 +1045,6 @@ def main():
 
         corpus_db.create_views(conn)
 
-    corpus_db.create_concurrent_indexes()
-
 
 if __name__ == "__main__":
     main()
