@@ -11,9 +11,11 @@ import lancedb
 from lib.corpus_config import LANCE_INDEXES_DIR
 from lib.corpus_db import get_connection
 from lib.macberth import encode_passage_query
-from lib.corpus_logging import logger
+from lib.corpus_logging import get_logger
 
 from passage_search_pipeline import passages_search as ps
+
+logger = get_logger("passages_vector_search")
 
 
 def parse_args():
@@ -22,8 +24,9 @@ def parse_args():
     )
     parser.add_argument(
         "--query",
-        default=( "his head and hairs were white as white wool, and as snow, and his eyes were as a flame" ),
-        help="Text to encode as the search query.",
+         #   default=( "his head and hairs were white as white wool, and as snow, and his eyes were as a flame" ),
+         default=( "white hair" ),
+         help="Text to encode as the search query.",
     )
     parser.add_argument( "--start-year", type=int, default=1000, help="Earliest publication year (default: 1000).", )
     parser.add_argument( "--end-year", type=int, default=2000, help="Latest publication year (default: 2000).", )
