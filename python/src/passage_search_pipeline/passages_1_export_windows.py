@@ -16,6 +16,7 @@ from lib.corpus_logging import logger
 LANCE_DIR = OUT_DIR / "indexes/lance_albinism"
 EMB_OUTPUT_DIR = OUT_DIR / "export/source_tokens"
 EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+SHARD_PREFIX = 'tokens_'
 
 DOC_TABLE = "documents"
 TABLE = "tokens"
@@ -69,7 +70,7 @@ ALBINISM = {
 
 def flush(docs: list[dict], shard_no: int) -> None:
     table = pa.Table.from_pylist(docs, schema=SCHEMA)
-    final = EMB_OUTPUT_DIR / f"tokens_{shard_no:05d}.parquet"
+    final = EMB_OUTPUT_DIR / f"{SHARD_PREFIX}_{shard_no:05d}.parquet"
     tmp = final.with_suffix(".tmp")
     pq.write_table(table, tmp, compression="zstd")
     tmp.replace(final)

@@ -45,14 +45,16 @@ Scope (db only)
 
 Examples
 --------
-    python passage_mask_fillers.py --seed resist,resiste
-    python passage_mask_fillers.py --seed resist,resiste --scope all \\
-        --start-year 1550 --end-year 1700 --max-per-doc 10 \\
+    python passages_4_mask_fillers.py --seed resist,resiste
+    python passages_4_mask_fillers.py --seed resist,resiste --scope all \
+        --start-year 1550 --end-year 1700 --max-per-doc 10 \
         --forbid god,lord,sathan,devil,christ,faith,temptation,sinne
-    python passage_mask_fillers.py --seed libertie,liberty --period-size 25
-    python passage_mask_fillers.py --seed resist --exclude-forms resistance
-    python passage_mask_fillers.py --source csv --seed defence
-    python passage_mask_fillers.py --phrase "take/tooke/taketh heed/heede" \\
+    python passages_4_mask_fillers.py --seed libertie,liberty --period-size 25
+    python passages_4_mask_fillers.py --seed resist --exclude-forms resistance
+    python passages_4_mask_fillers.py --source csv --seed defence
+    python passages_4_mask_fillers.py --phrase "take/tooke/taketh heed/heede" \
+        --scope all --start-year 1550 --end-year 1700 --phrase-gap 1
+    python passages_4_mask_fillers.py --phrase "white/whyte as white/whyte wool/wolle" \
         --scope all --start-year 1550 --end-year 1700 --phrase-gap 1
 
 Single words and phrases
