@@ -15,20 +15,24 @@ from psycopg import sql, Connection
 import time
 
 import lib.corpus_config as config
-from lib.corpus_logging import logger
+from lib.corpus_logging import get_logger
+
+logger = get_logger(__name__)
 
 _DB_RETRIES = 3
 _DB_RETRY_DELAY = 5  # seconds
 
-dbname = os.environ.get("PGDATABASE", "eebo")
-# dbname = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
+host     = os.environ.get("CORPUS_PGHOST")     or os.environ.get("PGHOST", "localhost")
+user     = os.environ.get("CORPUS_USER")       or os.environ.get("PGUSER", "postgres")
+port     = os.environ.get("CORPUS_PGPORT")     or os.environ.get("PGPORT", 5432)
+dbname   = os.environ.get("CORPUS_PGDATABASE") or os.environ.get("PGDATABASE")
+password = os.environ.get("CORPUS_PGPASSWORD") or os.environ.get("PGPASSWORD")
+
 if not dbname:
     raise RuntimeError("Database name must be set via CORPUS_PGDATABASE or PGDATABASE")
+if not password:
+    raise RuntimeError("Password name must be set via CORPUS_PGPASSWORD or PGPASSWORD")
 
-host = os.environ.get("PGHOST", "localhost")
-user = os.environ.get("PGUSER", "postgres")
-password = os.environ.get("PGPASSWORD")
-port = os.environ.get("PGPORT", 5432)
 
 def get_connection(
     *,
@@ -67,7 +71,7 @@ def get_connection(
 
         except Exception as exc:
             last_exc = exc
-            logger.warning( f"[corpus_db] PostgreSQL connection attempt {attempt}/{_DB_RETRIES} failed: {exc}" )
+            logger.warning( f"PostgreSQL connection attempt {attempt}/{_DB_RETRIES} failed: {exc}" )
             if attempt < _DB_RETRIES:
                 time.sleep(_DB_RETRY_DELAY)
 
@@ -111,7 +115,7 @@ def get_autocommit_connection(
 
         except Exception as exc:
             last_exc = exc
-            logger.warning( f"[corpus_db] PostgreSQL autocommit connection attempt {attempt}/{_DB_RETRIES} failed: {exc}" )
+            logger.warning( f"PostgreSQL autocommit connection attempt {attempt}/{_DB_RETRIES} failed: {exc}" )
             if attempt < _DB_RETRIES:
                 time.sleep(_DB_RETRY_DELAY)
 
@@ -127,12 +131,12 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
     If drop_existing=True, all existing tables are dropped first.
     Intended for clean re-ingestion runs.
     """
-    logger.info("[corpus_db] Initialising database schema")
+    logger.info("Initialising database schema")
 
     with conn.transaction():
         with conn.cursor() as cur:
             if drop_existing:
-                logger.info("[corpus_db] Dropping existing tables")
+                logger.info("Dropping existing tables")
                 cur.execute("""
                     -- DROP MATERIALIZED VIEW IF EXISTS document_search CASCADE;
                     -- DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;
@@ -144,7 +148,7 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     DROP SEQUENCE IF EXISTS vector_id_seq;
                 """)
 
-            logger.info("[corpus_db] Creating tables")
+            logger.info("Creating tables")
             # Prototype assumption: doc_id is globally unique across loaded corpora (EEBO/ECCO).
             # Introducing a joint corpus/doc_id PK introduced too much work for consumers so
             # was rolled back and kept in git history.
@@ -182,12 +186,12 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                 );
             """)
 
-    logger.info("[corpus_db] Database schema initiated")
+    logger.info("Database schema initiated")
 
 
 
 def drop_token_indexes(conn: Connection) -> None:
-    logger.info("[corpus_db] Dropping token indexes")
+    logger.info("Dropping token indexes")
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("""
@@ -198,14 +202,15 @@ def drop_token_indexes(conn: Connection) -> None:
                 DROP INDEX IF EXISTS idx_documents_lang;
                 DROP INDEX IF EXISTS idx_documents_filepath;
             """)
-    logger.info("[corpus_db] Token indexes dropped")
+    logger.info("Token indexes dropped")
 
 
 def create_token_indexes(conn: Connection) -> None:
-    logger.info("[corpus_db] Creating basic token indexes")
+    logger.info("Creating basic token indexes")
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token            ON tokens(token);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_d                   ON documents(doc_id);") #
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc              ON tokens(doc_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token_lower      ON tokens (lower(token));")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_lang          ON documents(lang);")
@@ -214,13 +219,13 @@ def create_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filter        ON documents(lang, pub_year, token_count);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_corpus_doc_idx   ON tokens(corpus, doc_id, token_idx);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token_idx    ON tokens(doc_id, token_idx);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token        ON tokens(doc_id, token);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token        ON tokens(doc_id, token);") #
 
-    logger.info("[corpus_db] Basic token indexes created")
+    logger.info("Basic token indexes created")
 
 
 def create_views(conn: Connection) -> None:
-    logger.info("[corpus_db] Creating view")
+    logger.info("Creating view")
 
     earliest = config.CORPUS_MIN_YEAR
     latest   = config.CORPUS_MAX_YEAR
@@ -229,10 +234,10 @@ def create_views(conn: Connection) -> None:
     with conn.transaction():
         with conn.cursor() as cur:
             # Materialized view for pamphlet_corpus
-            logger.info("[corpus_db] [corpus_db] Creating materialised view pamphlet_corpus")
+            logger.info("Creating materialised view pamphlet_corpus")
 
             # Just in case I previously messed-up - TODO check and tidy.
-            cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_corpus CASCADE;")
+            cur.execute("DROP VIEW IF EXISTS pamphlet_corpus CASCADE;")
 
             if config.FILTER_DOCUMENT_SIZE:
                 size_filter = f"""
@@ -241,9 +246,9 @@ def create_views(conn: Connection) -> None:
             else:
                 size_filter = ""
 
-            logger.info(f"[corpus_db] CREATE MATERIALIZED VIEW pamphlet_corpus with dates {earliest} and {latest} and size filter of '{size_filter}'")
+            logger.info(f"CREATE VIEW pamphlet_corpus with dates {earliest} and {latest} and size filter of '{size_filter}'")
             cur.execute(f"""
-                CREATE MATERIALIZED VIEW pamphlet_corpus AS
+                CREATE VIEW pamphlet_corpus AS
                 SELECT *
                 FROM documents
                 WHERE pub_year >= {earliest}
@@ -257,7 +262,7 @@ def create_views(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_pamphlet_corpus_docid ON pamphlet_corpus(doc_id);")
 
             # Materialized view for pamphlet_tokens
-            logger.info("[corpus_db] Creating materialised view pamphlet_tokens")
+            logger.info("Creating materialised view pamphlet_tokens")
             # cur.execute("DROP MATERIALIZED VIEW IF EXISTS pamphlet_tokens CASCADE;")
 
             # TODO Drop vector_id, no longer used
@@ -279,27 +284,27 @@ def create_views(conn: Connection) -> None:
 
 
 def drop_tokens_fk(conn: Connection) -> None:
-    logger.info("[corpus_db] Dropping tokens.doc_id foreign key")
+    logger.info("Dropping tokens.doc_id foreign key")
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE IF EXISTS tokens DROP CONSTRAINT IF EXISTS tokens_doc_id_fkey;")
-    logger.info("[corpus_db] tokens.doc_id foreign key dropped")
+    logger.info("tokens.doc_id foreign key dropped")
 
 
 def create_tokens_fk(conn: Connection) -> None:
-    logger.info("[corpus_db] NOT creating tokens.doc_id foreign key as v slow and immutable data  makes it irrelevant")
+    logger.info("NOT creating tokens.doc_id foreign key as v slow and immutable data  makes it irrelevant")
 
 
 def refresh_views(conn: Connection) -> None:
-    logger.info("[corpus_db] Refreshing materialized views")
+    logger.info("Refreshing materialized views")
 
     with conn.transaction():
         with conn.cursor() as cur:
-            logger.info(f"[corpus_db] Refreshing pamphlet_corpus")
+            logger.info(f"Refreshing pamphlet_corpus")
             cur.execute("REFRESH MATERIALIZED VIEW pamphlet_corpus")
-            # logger.info(f"[corpus_db] Refreshing pamphlet_tokens")
+            # logger.info(f"Refreshing pamphlet_tokens")
             # cur.execute("REFRESH MATERIALIZED VIEW pamphlet_tokens")
-    logger.info("[corpus_db] All views refreshed and committed")
+    logger.info("All views refreshed and committed")
 
 
 def create_tier2_schema(conn: Connection) -> None:
@@ -407,37 +412,14 @@ def create_tier2_schema(conn: Connection) -> None:
                 )
                 WHERE via_event_id IS NULL;
 
-                CREATE INDEX IF NOT EXISTS
-                    tier2_concept_seeds_concept_idx
-                ON tier2.concept_seeds (concept);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier2_retrieval_runs_concept_idx
-                ON tier2.retrieval_runs (concept);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier2_neighbour_edges_run_idx
-                ON tier2.neighbour_edges (run_id);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier2_neighbour_edges_seed_idx
-                ON tier2.neighbour_edges (seed_event_id);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier2_neighbour_edges_neighbour_idx
-                ON tier2.neighbour_edges (neighbour_event_id);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier2_event_field_concept_idx
-                ON tier2.event_field (concept);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier2_event_field_event_idx
-                ON tier2.event_field (event_id);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier2_concept_aggregate_concept_idx
-                ON tier2.concept_aggregate (concept);
+                CREATE INDEX IF NOT EXISTS tier2_concept_seeds_concept_idx ON tier2.concept_seeds (concept);
+                CREATE INDEX IF NOT EXISTS tier2_retrieval_runs_concept_idx ON tier2.retrieval_runs (concept);
+                CREATE INDEX IF NOT EXISTS tier2_neighbour_edges_run_idx ON tier2.neighbour_edges (run_id);
+                CREATE INDEX IF NOT EXISTS tier2_neighbour_edges_seed_idx ON tier2.neighbour_edges (seed_event_id);
+                CREATE INDEX IF NOT EXISTS tier2_neighbour_edges_neighbour_idx ON tier2.neighbour_edges (neighbour_event_id);
+                CREATE INDEX IF NOT EXISTS tier2_event_field_concept_idx ON tier2.event_field (concept);
+                CREATE INDEX IF NOT EXISTS tier2_event_field_event_idx ON tier2.event_field (event_id);
+                CREATE INDEX IF NOT EXISTS tier2_concept_aggregate_concept_idx ON tier2.concept_aggregate (concept);
             """)
 
 
@@ -476,17 +458,9 @@ def create_tier3_schema(conn: Connection) -> None:
                     PRIMARY KEY (concept, cluster_id)
                 );
 
-                CREATE INDEX IF NOT EXISTS
-                    tier3_event_geometry_concept_idx
-                ON tier3.event_geometry (concept);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier3_event_geometry_cluster_idx
-                ON tier3.event_geometry (concept, cluster_id);
-
-                CREATE INDEX IF NOT EXISTS
-                    tier3_cluster_info_concept_idx
-                ON tier3.concept_cluster_info (concept);
+                CREATE INDEX IF NOT EXISTS tier3_event_geometry_concept_idx ON tier3.event_geometry (concept);
+                CREATE INDEX IF NOT EXISTS tier3_event_geometry_cluster_idx ON tier3.event_geometry (concept, cluster_id);
+                CREATE INDEX IF NOT EXISTS tier3_cluster_info_concept_idx ON tier3.concept_cluster_info (concept);
             """)
 
 
@@ -549,7 +523,7 @@ def delete_document(
             )
 
     logger.info(
-        "[corpus_db] Deleted document %s%s",
+        "Deleted document %s%s",
         doc_id,
         f" (corpus={corpus})" if corpus else "",
     )
