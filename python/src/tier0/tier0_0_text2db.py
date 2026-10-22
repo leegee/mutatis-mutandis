@@ -974,6 +974,7 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="Maximum number of documents to parse/add.")
     parser.add_argument("--create", action="store_true", help="Creates the database from scratch, deleting existing data. Requires manual confirmation.")
     parser.add_argument("--justindex", action="store_true", help="Does not parse any files but recreates database view and indicies.")
+    parser.add_argument("--reindex", action="store_true", help="Drops and recreate indexes leading to faster ingestion of larger inputs")
     parser.add_argument( "--corpus", choices=sorted(config.CORPUS_INPUT_DIRS.keys()), default=None, help="Process only this predefined corpus.")
     parser.add_argument( "--doc-id", default=None, help="Process only the specified document ID." )
     parser.add_argument( "--replace", action="store_true", help="Replace an existing document when used with --doc-id." )
@@ -1005,8 +1006,10 @@ def main():
                 sys.exit(1)
             corpus_db.init_db(conn)
 
-        corpus_db.drop_token_indexes(conn)
-        corpus_db.drop_tokens_fk(conn)
+        if args.reindex:
+            corpus_db.drop_token_indexes(conn)
+            corpus_db.drop_tokens_fk(conn)
+
         conn.commit()
 
     if args.justindex:
@@ -1034,28 +1037,12 @@ def main():
                 file=target_file,
             )
 
-    # # Wait for other connections to finish
-    # with corpus_db.get_connection() as conn:
-    #     while True:
-    #         cur = conn.execute(
-    #             """
-    #             SELECT count(*)
-    #             FROM pg_stat_activity
-    #             WHERE datname = current_database()
-    #             AND pid <> pg_backend_pid()
-    #             AND state IN ('active', 'idle in transaction');
-    #             """
-    #         )
-    #         n = cur.fetchone()[0]
-
-    #         if n == 0:
-    #             break
-
     with corpus_db.get_connection() as conn:
-        corpus_db.create_tokens_fk(conn)
-        corpus_db.create_token_indexes(conn)
+        if args.reindex:
+            corpus_db.create_tokens_fk(conn)
+            corpus_db.create_token_indexes(conn)
+
         corpus_db.create_views(conn)
-        # corpus_db.create_tiered_token_indexes(conn)
 
     corpus_db.create_concurrent_indexes()
 
