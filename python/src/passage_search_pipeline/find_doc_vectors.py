@@ -36,7 +36,7 @@ def main():
     # Only inspect the MacBERTh passage tables for the requested
     # representations. Each table may contain many passage vectors.
     tables = []
-    for name in db.table_names():
+    for name in db.list_tables().tables:
         if not name.startswith("passage_"):
             continue
         if "__macberth__" not in name:
@@ -45,6 +45,13 @@ def main():
             continue
         tables.append(name)
 
+    print(f"LanceDB directory: {LANCE_INDEXES_DIR}")
+    print(f"Representations: {representations}")
+    print(f"Tables selected: {len(tables)}")
+    print(
+        "Target-period tables:",
+        [name for name in tables if "1950_1999" in name],
+    )
     args.output.mkdir(parents=True, exist_ok=True)
 
     matches = []

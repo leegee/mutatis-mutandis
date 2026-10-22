@@ -18,6 +18,10 @@ EMB_OUTPUT_DIR = OUT_DIR / "export/source_tokens"
 EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SHARD_PREFIX = 'tokens_'
 
+FORCE_EXPORT_DOC_IDS = {
+    "albinism_case_report_psaila_1972",
+}
+
 DOC_TABLE = "documents"
 TABLE = "tokens"
 
@@ -185,6 +189,7 @@ def build_export_query() -> tuple[str, list]:
                 WHERE ix.corpus = h.corpus
                   AND ix.doc_id = h.doc_id
             )
+            OR h.doc_id = ANY(%s)
         )
         SELECT DISTINCT
             t.corpus,
@@ -238,7 +243,7 @@ def main() -> None:
     try:
         populate_indexed_docs(conn, indexed)
         sql, params = build_export_query()
-
+        params.extend([sorted(FORCE_EXPORT_DOC_IDS)])
         docs: list[dict] = []
         shard_no = 0
         exported = 0
