@@ -285,9 +285,10 @@ def _year_from_date_elem(d):
 # Strongest source first. Composition dates are deliberately NOT here:
 # pub_year is the date of the text as we hold it, not of the original work.
 DATE_XPATHS = [
-    ("imprint",     ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:date"),
-    ("translation", ".//tei:teiHeader//tei:sourceDesc//tei:bibl/tei:date[@type='translation']"),
-    ("docDate",     ".//tei:text/tei:front//tei:docDate"),
+    ("publicationStmt", ".//tei:teiHeader/tei:fileDesc/tei:publicationStmt/tei:date", ),
+    ("imprint",         ".//tei:teiHeader//tei:sourceDesc//tei:imprint/tei:date"),
+    ("translation",     ".//tei:teiHeader//tei:sourceDesc//tei:bibl/tei:date[@type='translation']"),
+    ("docDate",         ".//tei:text/tei:front//tei:docDate"),
 ]
 
 
@@ -978,7 +979,7 @@ def main():
     parser.add_argument( "--corpus", choices=sorted(config.CORPUS_INPUT_DIRS.keys()), default=None, help="Process only this predefined corpus.")
     parser.add_argument( "--doc-id", default=None, help="Process only the specified document ID." )
     parser.add_argument( "--replace", action="store_true", help="Replace an existing document when used with --doc-id." )
-    parser.add_argument("--file", default=None, help="Ingest only this XML file (requires --corpus). Path may be absolute, " "relative to cwd, to the corpus input dir, or to CORPUS_ROOT_DIR.")
+    parser.add_argument("--file", default=None, help="Ingest only this XML file (requires --corpus). Path may be absolute, relative to cwd, to the corpus input dir, or to CORPUS_ROOT_DIR.")
 
     args = parser.parse_args()
 
