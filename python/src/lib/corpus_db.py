@@ -194,13 +194,18 @@ def drop_token_indexes(conn: Connection) -> None:
     logger.info("Dropping token indexes")
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute("""
-                DROP INDEX IF EXISTS idx_tokens_token;
-                DROP INDEX IF EXISTS idx_tokens_doc;
-                DROP INDEX IF EXISTS idx_tokens_canonical;
-                DROP INDEX IF EXISTS idx_tokens_token_lower;
-                DROP INDEX IF EXISTS idx_documents_lang;
-                DROP INDEX IF EXISTS idx_documents_filepath;
+            cur.executemany("""
+            DROP INDEX IF EXISTS idx_tokens_token            ;
+            DROP INDEX IF EXISTS idx_doc_id                  ;
+            DROP INDEX IF EXISTS idx_tokens_doc              ;
+            DROP INDEX IF EXISTS idx_tokens_token_lower      ;
+            DROP INDEX IF EXISTS idx_documents_lang          ;
+            DROP INDEX IF EXISTS idx_documents_filepath      ;
+            DROP INDEX IF EXISTS idx_tokens_canonical        ;
+            DROP INDEX IF EXISTS idx_documents_filter        ;
+            DROP INDEX IF EXISTS idx_tokens_corpus_doc_idx   ;
+            DROP INDEX IF EXISTS idx_tokens_doc_token_idx    ;
+            DROP INDEX IF EXISTS idx_tokens_doc_token        ;
             """)
     logger.info("Token indexes dropped")
 
@@ -210,7 +215,7 @@ def create_token_indexes(conn: Connection) -> None:
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token            ON tokens(token);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_d                   ON documents(doc_id);") #
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_id                  ON documents(doc_id);") #
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc              ON tokens(doc_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token_lower      ON tokens (lower(token));")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_lang          ON documents(lang);")
@@ -219,7 +224,7 @@ def create_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filter        ON documents(lang, pub_year, token_count);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_corpus_doc_idx   ON tokens(corpus, doc_id, token_idx);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token_idx    ON tokens(doc_id, token_idx);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token        ON tokens(doc_id, token);") #
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token        ON tokens(doc_id, token);")
 
     logger.info("Basic token indexes created")
 
@@ -248,7 +253,7 @@ def create_views(conn: Connection) -> None:
 
             logger.info(f"CREATE VIEW pamphlet_corpus with dates {earliest} and {latest} and size filter of '{size_filter}'")
             cur.execute(f"""
-                CREATE VIEW pamphlet_corpus AS
+                CREATE OR REPLACE VIEW pamphlet_corpus AS
                 SELECT *
                 FROM documents
                 WHERE pub_year >= {earliest}
@@ -267,19 +272,18 @@ def create_views(conn: Connection) -> None:
 
             # TODO Drop vector_id, no longer used
             cur.execute("""
-                CREATE -- materialized
-                VIEW pamphlet_tokens AS
+                CREATE OR REPLACE VIEW pamphlet_tokens AS
                 SELECT
                     (t.doc_id || '_' || t.token_idx) AS token_occurrence_id,
                     t.corpus,
                     t.doc_id,
                     t.token_idx,
-                    t.vector_id,
                     d.pub_year,
-                    t.token,
-                    t.canonical
+                    -- t.vector_id,
+                    -- t.canonical,
+                    t.token
                 FROM tokens t
-                JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
+                JOIN pamphlet_corpus d ON t.doc_id = d.doc_id AND t.corpus = d.corpus;
             """)
 
 

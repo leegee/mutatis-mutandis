@@ -9,28 +9,16 @@ from pathlib import Path
 import lancedb
 import numpy as np
 
-from lib.corpus_config import LANCE_INDEXES_DIR
+from lib.corpus_config import LANCE_INDEXES_DIR, OUT_DIR
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Find existing LanceDB passage vectors by document ID."
     )
-    parser.add_argument(
-        "doc_ids",
-        nargs="+",
-        help="Document IDs to find, e.g. CLMET3255 A12345",
-    )
-    parser.add_argument(
-        "--representation",
-        choices=["l8", "last", "mean4", "all"],
-        default="all",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("out/export/doc_vectors"),
-    )
+    parser.add_argument( "doc_ids", nargs="+", help="Document IDs to find, e.g. CLMET3255 A12345", )
+    parser.add_argument( "--representation", choices=["l8", "last", "mean4", "all"], default="all", )
+    parser.add_argument( "--output", type=Path, default=OUT_DIR / "doc_vectors" )
     return parser.parse_args()
 
 
