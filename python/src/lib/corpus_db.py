@@ -213,6 +213,8 @@ def create_token_indexes(conn: Connection) -> None:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_canonical        ON tokens(canonical);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filter        ON documents(lang, pub_year, token_count);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_corpus_doc_idx   ON tokens(corpus, doc_id, token_idx);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token_idx    ON tokens(doc_id, token_idx);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tokens_doc_token        ON tokens(doc_id, token);")
 
     logger.info("[corpus_db] Basic token indexes created")
 
@@ -274,16 +276,6 @@ def create_views(conn: Connection) -> None:
                 FROM tokens t
                 JOIN pamphlet_corpus d ON t.doc_id = d.doc_id;
             """)
-
-def create_concurrent_indexes():
-    logger.info("[corpus_db] create_concurrent_indexes enter to create CONCURRENT indexes")
-    with get_autocommit_connection() as conn:
-        with conn.cursor() as cur:
-            with conn.cursor() as cur:
-                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_token_occurrence_id ON pamphlet_tokens(token_occurrence_id);")
-                cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pt_doc_token_idx ON pamphlet_tokens(corpus, doc_id, token, token_idx);")
-    logger.info("[corpus_db] create_concurrent_indexes complete")
-
 
 
 def drop_tokens_fk(conn: Connection) -> None:

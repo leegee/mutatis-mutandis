@@ -11,7 +11,6 @@ from lib.corpus_db import (
     get_connection,
     create_views,
     create_tiered_token_indexes,
-    create_concurrent_indexes,
 )
 from lib.corpus_logging import logger
 
@@ -28,10 +27,6 @@ def main() -> None:
 
         # GIN + supporting indexes on document_search
         create_tiered_token_indexes(conn)
-
-    # Concurrent indexes must run outside a transaction
-    # (and therefore open their own autocommit connection).
-    create_concurrent_indexes()
 
     logger.info("Views and indexes successfully rebuilt")
 
