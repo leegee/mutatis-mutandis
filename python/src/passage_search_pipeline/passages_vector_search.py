@@ -56,11 +56,11 @@ def main():
     args = parse_args()
     lance_dir = Path(LANCE_INDEXES_DIR)
 
-    logger.info("Lance directory:", lance_dir)
-    logger.info("Query:", args.query)
+    logger.info("Lance directory: %s", lance_dir)
+    logger.info("Query: %s", args.query)
     logger.info(f"Years: {args.start_year}-{args.end_year}")
-    logger.info("Representation:", args.representation)
-    logger.info("Limit:", args.limit)
+    logger.info("Representation:%s", args.representation)
+    logger.info("Limit: %s", args.limit)
 
     db = lancedb.connect(str(lance_dir))
 
@@ -86,7 +86,7 @@ def main():
     with get_connection(application_name="revelation-vector-test") as conn:
         for rank, result in enumerate(results, start=1):
             metadata = ps.fetch_passage_text(conn, result)
-
+            logger.info("=============================================================")
             logger.info(
                 f"{rank}. year={result['pub_year']} "
                 f"distance={result['distance']:.4f}"
