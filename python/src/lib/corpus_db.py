@@ -163,6 +163,8 @@ def init_db(conn: Connection, drop_existing: bool = True) -> None:
                     source_date_raw TEXT,
                     token_count INTEGER,
                     lang CHAR(3) NOT NULL DEFAULT 'eng',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP GENERATED ALWAYS AS (CURRENT_TIMESTAMP) STORED, -- from v12
                     PRIMARY KEY (doc_id)
                 );
 
