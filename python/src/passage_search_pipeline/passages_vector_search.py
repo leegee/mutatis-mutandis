@@ -1,5 +1,28 @@
 """
 passage_search_pipeline/passages_vector_search.py
+
+Search using an existing passage vector found via `find_vector.py`:
+
+   $ python src/passage_search_pipeline/find_doc_vectors.py albinism_case_report_psaila_1972
+
+Yields:
+
+   passage_id=ef2f4aaf68dc6c924a2f1218e470a555060be2cb886a0ef1ebf169b800508f8a
+
+   python src/passage_search_pipeline/passages_vector_search.py \
+   --vector-id ef2f4aaf68dc6c924a2f1218e470a555060be2cb886a0ef1ebf169b800508f8a \
+   --representation mean4 \
+   --start-year 1000 \
+   --end-year 2000 \
+   --limit 10
+
+Or using a text query:
+
+   python src/passage_search_pipeline/passages_vector_search.py \
+   --query "white hair" \
+   --representation mean4 \
+   --limit 30
+
 """
 
 from pathlib import Path
@@ -18,6 +41,55 @@ from passage_search_pipeline import passages_search as ps
 logger = get_logger("passages_vector_search")
 
 
+def load_passage_vector(db, passage_id, representation):
+    """Load an existing passage vector from the selected MacBERTh representation."""
+    prefix = f"passage_{representation}__macberth__"
+    matches = []
+
+    for table_name in db.list_tables().tables:
+        if not table_name.startswith(prefix):
+            continue
+
+        table = db.open_table(table_name)
+        escaped_id = passage_id.replace("'", "''")
+
+        rows = (
+            table.search()
+            .where(f"passage_id = '{escaped_id}'")
+            .limit(2)
+            .to_list()
+        )
+
+        for row in rows:
+            matches.append((table_name, row))
+
+    if not matches:
+        raise ValueError(
+            f"No vector found for passage_id={passage_id!r}, "
+            f"representation={representation!r}"
+        )
+
+    if len(matches) > 1:
+        locations = [name for name, _ in matches]
+        raise ValueError(
+            f"Multiple vectors found for passage_id={passage_id!r}: "
+            f"{locations}"
+        )
+
+    table_name, row = matches[0]
+    vector = normalise_vector(row["vector"], "Stored passage vector")
+
+    logger.info(
+        "Loaded vector ID %s from %s (doc_id=%s, year=%s)",
+        passage_id,
+        table_name,
+        row.get("doc_id"),
+        row.get("pub_year"),
+    )
+
+    return vector
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Search historical passages using a MacBERTh query vector."
@@ -28,6 +100,7 @@ def parse_args():
          default=( "white hair" ),
          help="Text to encode as the search query.",
     )
+    parser.add_argument( "--vector-id", help="Use an existing passage vector by passage_id instead of encoding --query.", )
     parser.add_argument( "--start-year", type=int, default=1000, help="Earliest publication year (default: 1000).", )
     parser.add_argument( "--end-year", type=int, default=2000, help="Latest publication year (default: 2000).", )
     parser.add_argument( "--representation", default="mean4", help="Passage representation (default: mean4).", )
@@ -56,23 +129,32 @@ def normalise_vector(vector, description="query vector"):
 
 
 def main():
-    args = parse_args()
-    lance_dir = Path(LANCE_INDEXES_DIR)
+   args = parse_args()
+   lance_dir = Path(LANCE_INDEXES_DIR)
 
-    logger.info("Lance directory: %s", lance_dir)
-    logger.info("Query: %s", args.query)
-    logger.info(f"Years: {args.start_year}-{args.end_year}")
-    logger.info("Representation:%s", args.representation)
-    logger.info("Limit: %s", args.limit)
+   logger.info("Lance directory: %s", lance_dir)
+   logger.info("Query: %s", args.query)
+   logger.info(f"Years: {args.start_year}-{args.end_year}")
+   logger.info("Representation:%s", args.representation)
+   logger.info("Limit: %s", args.limit)
 
-    db = lancedb.connect(str(lance_dir))
+   db = lancedb.connect(str(lance_dir))
 
-    query_vector = normalise_vector(
-        encode_passage_query(args.query, args.representation),
-        "Text query",
-    )
+   if args.vector_id:
+      logger.info("Query vector ID: %s", args.vector_id)
+      query_vector = load_passage_vector(
+         db,
+         args.vector_id,
+         args.representation,
+      )
+   else:
+      logger.info("Text query: %s", args.query)
+      query_vector = normalise_vector(
+         encode_passage_query(args.query, args.representation),
+         "Text query",
+      )
 
-    results = ps.search_passages(
+   results = ps.search_passages(
         db=db,
         query_vector=query_vector,
         representation=args.representation,
@@ -80,13 +162,13 @@ def main():
         end_year=args.end_year,
         limit=args.limit,
         include_vectors=False,
-    )
+   )
 
-    if not results:
+   if not results:
         logger.info("No results found.")
         return
 
-    with get_connection(application_name="revelation-vector-test") as conn:
+   with get_connection(application_name="revelation-vector-test") as conn:
         for rank, result in enumerate(results, start=1):
             metadata = ps.fetch_passage_text(conn, result)
             logger.info("=============================================================")
