@@ -1,94 +1,185 @@
 #!/usr/bin/env python
 """
-passage_search_pipeline/passages_search.py - search MacBERTh passage embeddings stored in LanceDB
+passage_search_pipeline/passages_search.py
 
-Queries one or more year-bucketed Lance tables using a supplied query vector,
-ranks results by cosine distance, and returns passage identifiers, corpus
-metadata, and token offsets. Passage text and bibliographic metadata can be
-retrieved separately from Postgres.
+Search MacBERTh passage embeddings stored in year-bucketed LanceDB tables.
 
-The module supports both text-query search and representation-based retrieval.
-A query vector may be generated from text using `encode_passage_query` or
-obtained from a previously retrieved passage's stored embedding for iterative
-diachronic search.
+This single script is both a library (search_passages, load_passage_vector,
+fetch_passage_text, ...) and a command-line tool. It replaces the former
+passages_search.py + passages_vector_search.py pair.
 
-Vectors are excluded from results by default. Set `include_vectors=True` in
-`search_passages` when a caller needs the stored vectors for subsequent
-retrieval steps.
+Query vector sources (one is required):
+  --query TEXT        encode text with MacBERTh
+  --vector-id ID      reuse the stored vector of an existing passage
+                      (find IDs with find_doc_vectors.py)
 
-Searches are restricted to the requested publication-year range. Results from
-available tables are merged and ranked globally by cosine distance, with
-smaller distances indicating greater similarity. Because each table contributes
-at most `limit` candidates, the merged results are not guaranteed to be the
-exact global nearest neighbours when approximate search is used.
+Optional negative re-ranking:
+  --negative-id ID    passage to steer away from (repeatable)
+  --beta B            weight of the negative centroid (default 0.5)
+  --overfetch N       candidate multiplier per table when negatives are
+                      used (default 5), so the penalty can pull in
+                      passages that were not already in the top `limit`
 
-The module provides the retrieval primitives for reverse-diachronic search;
-it does not manage traversal between periods, deduplicate discovery paths,
-or persist retrieval provenance.
+    score = cos(query, doc) - beta * cos(negative_centroid, doc)
 
-The command-line interface accepts a text query, year range, representation,
-and result limit, then prints ranked passages with bibliographic metadata.
+Examples:
 
-Requires LanceDB tables written with compatible model, representation, vector
-dimensions, and year-bucket configuration, plus access to the Postgres corpus
-database for passage text and document metadata.
+    python src/passage_search_pipeline/passages_search.py \
+        --query "white hair" --limit 30
+
+    python src/passage_search_pipeline/passages_search.py \\
+        --vector-id ef2f4aaf68dc6c924a2f1218e470a555060be2cb886a0ef1ebf169b800508f8a \
+        --limit 30
+
+    python src/passage_search_pipeline/passages_search.py \
+        --query "white hair" --representation l8 --limit 50 \
+        --negative-id dfbee39870fbbababa5fc24da247fb8468a82350bca1170209458b84568be2c3 \
+        --negative-id afee38e3452766ffd28bc725ba733cec845fe8cb338c8ef93a52f850223fdbe7 \
+        --negative-id passage_id=b18fa10570b4402f240375c0f45fe9d179493486ab8abe32f285f112b7ff8126 \
+        --beta 0.6
+
+Notes:
+  * Results from all tables in the year range are merged and ranked
+    globally. Each table contributes at most `limit` candidates (or
+    `limit * overfetch` with negatives), so with approximate search the
+    merged list is not guaranteed to be the exact global top-k.
+  * Passage text and bibliographic metadata come from Postgres.
+  * This module provides retrieval primitives only; it does not manage
+    traversal between periods or persist retrieval provenance.
 """
 
 from __future__ import annotations
 
 import argparse
+from typing import List, Optional
 
 import lancedb
+import numpy as np
 
 from lib.corpus_config import (
     LANCE_INDEXES_DIR,
-    LANCE_BUCKET_SIZE,
     LANCE_MODEL_NAME,
 )
 from lib.corpus_db import get_connection
-from lib.corpus_logging import logger
+from lib.corpus_logging import get_logger
 from lib.macberth import PASSAGE_REPRESENTATIONS, encode_passage_query
-from tier1.vector_writer import year_bucket
+from tier1.vector_writer import year_bucket  # noqa: F401  (kept for callers)
 
+logger = get_logger("passages_search")
 
 REPRESENTATIONS = PASSAGE_REPRESENTATIONS
 
+RESULT_COLUMNS = [
+    "passage_id",
+    "corpus",
+    "doc_id",
+    "pub_year",
+    "word_start",
+    "word_end",
+    "token_start",
+    "token_end",
+    "_distance",
+]
 
-def table_name(representation: str, year: int) -> str:
-    start, end = year_bucket(year, LANCE_BUCKET_SIZE)
-    return (
-        f"passage_{representation}__{LANCE_MODEL_NAME}"
-        f"__{start:04d}_{end:04d}"
-    )
 
+# ---------------------------------------------------------------------------
+# Vector helpers
+# ---------------------------------------------------------------------------
+
+def normalise_vector(vector, description: str = "vector") -> np.ndarray:
+    """Return a finite, L2-normalised float32 copy of `vector`."""
+    vector = np.asarray(vector, dtype=np.float32).reshape(-1)
+
+    if not np.isfinite(vector).all():
+        raise ValueError(f"{description} contains NaN or infinity")
+
+    norm = np.linalg.norm(vector)
+    if norm < 1e-12:
+        raise ValueError(f"{description} has zero magnitude")
+
+    return vector / norm
+
+
+# ---------------------------------------------------------------------------
+# Table selection
+# ---------------------------------------------------------------------------
+
+def table_prefix(representation: str) -> str:
+    return f"passage_{representation}__{LANCE_MODEL_NAME}__"
 
 
 def candidate_tables(db, representation, start_year, end_year):
-    available = set(db.list_tables().tables)
-    names = set()
+    """Names of existing tables whose year bucket overlaps the range."""
+    prefix = table_prefix(representation)
+    names = []
 
-    for year in range(start_year, end_year + 1):
-        names.add(table_name(representation, year))
+    for name in db.list_tables().tables:
+        if not name.startswith(prefix):
+            continue
+        try:
+            b_start, b_end = (int(x) for x in name[len(prefix):].split("_"))
+        except ValueError:
+            logger.warning("Skipping table with unparseable name: %s", name)
+            continue
+        if b_start <= end_year and b_end >= start_year:
+            names.append(name)
 
-    return sorted(names & available)
+    return sorted(names)
 
 
-# Add near the top with the other imports
-import numpy as np
-from typing import Optional, List
+# ---------------------------------------------------------------------------
+# Loading stored vectors
+# ---------------------------------------------------------------------------
 
-def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
-    """Both vectors are expected to be L2-normalised."""
-    return float(np.dot(a, b))
+def load_passage_vector(db, passage_id, representation) -> np.ndarray:
+    """Load an existing passage's stored vector (normalised)."""
+    prefix = table_prefix(representation)
+    escaped_id = passage_id.replace("'", "''")
+    matches = []
+
+    for table_name in db.list_tables().tables:
+        if not table_name.startswith(prefix):
+            continue
+
+        table = db.open_table(table_name)
+        rows = (
+            table.search()
+            .where(f"passage_id = '{escaped_id}'")
+            .limit(2)
+            .to_list()
+        )
+        for row in rows:
+            matches.append((table_name, row))
+
+    if not matches:
+        raise ValueError(
+            f"No vector found for passage_id={passage_id!r}, "
+            f"representation={representation!r}"
+        )
+
+    if len(matches) > 1:
+        locations = [name for name, _ in matches]
+        raise ValueError(
+            f"Multiple vectors found for passage_id={passage_id!r}: "
+            f"{locations}"
+        )
+
+    table_name, row = matches[0]
+    vector = normalise_vector(row["vector"], "Stored passage vector")
+
+    logger.info(
+        "Loaded vector ID %s from %s (doc_id=%s, year=%s)",
+        passage_id,
+        table_name,
+        row.get("doc_id"),
+        row.get("pub_year"),
+    )
+    return vector
 
 
-def _l2_normalise(v: np.ndarray) -> np.ndarray:
-    v = np.asarray(v, dtype=np.float32).reshape(-1)
-    n = np.linalg.norm(v)
-    if n < 1e-12:
-        raise ValueError("zero-magnitude vector")
-    return v / n
-
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
 
 def search_passages(
     db,
@@ -100,47 +191,39 @@ def search_passages(
     include_vectors: bool = False,
     negative_vectors: Optional[List[np.ndarray]] = None,
     beta: float = 0.5,
+    overfetch: int = 5,
 ):
     """
-    Search + optional negative-centroid re-ranking.
+    Search year-bucketed tables, with optional negative-centroid re-ranking.
 
-    If negative_vectors is supplied, vectors are always retrieved and
-    results are re-ranked by:
+    Without negatives, results are ordered by cosine distance (ascending).
+
+    With negatives, each table is queried for `limit * overfetch`
+    candidates, which are re-ranked by
 
         score = sim(query, doc) - beta * sim(neg_centroid, doc)
 
-    Higher score is better. The original cosine distance is kept in the
-    result dict for inspection.
+    (higher is better) and truncated to `limit`. The original cosine
+    distance is kept in each result as `distance`; `sim_q`, `sim_neg` and
+    `score` are added.
     """
-    # Force vectors when we need to re-rank
-    need_vectors = include_vectors or (negative_vectors is not None)
+    query_vec = normalise_vector(query_vector, "Query vector")
+    use_negatives = bool(negative_vectors)
+    need_vectors = include_vectors or use_negatives
 
-    results = []
-
-    columns = [
-        "passage_id",
-        "corpus",
-        "doc_id",
-        "pub_year",
-        "word_start",
-        "word_end",
-        "token_start",
-        "token_end",
-        "_distance",
-    ]
+    columns = list(RESULT_COLUMNS)
     if need_vectors:
         columns.append("vector")
 
-    per_table_limit = limit
+    per_table_limit = limit * max(1, overfetch) if use_negatives else limit
+
+    results = []
 
     for name in candidate_tables(db, representation, start_year, end_year):
         table = db.open_table(name)
 
         arrow = (
-            table.search(
-                query_vector,
-                vector_column_name="vector",
-            )
+            table.search(query_vec, vector_column_name="vector")
             .metric("cosine")
             .where(
                 f"pub_year >= {int(start_year)} "
@@ -158,55 +241,45 @@ def search_passages(
                     "Lance search returned no _distance column. "
                     "Check the installed LanceDB API."
                 )
-
             row["distance"] = float(distance)
             row["table"] = name
-
             if need_vectors and "vector" in row:
-                # Ensure we have a clean float32 numpy vector
                 row["vector"] = np.asarray(row["vector"], dtype=np.float32)
-
             results.append(row)
 
     if not results:
         return []
 
-    # ------------------------------------------------------------------
-    # Optional negative-centroid re-ranking
-    # ------------------------------------------------------------------
-    if negative_vectors:
-        neg = np.stack([np.asarray(v, dtype=np.float32) for v in negative_vectors])
-        neg_centroid = neg.mean(axis=0)
-        norm = np.linalg.norm(neg_centroid)
-        if norm < 1e-12:
-            raise ValueError("Negative centroid has zero magnitude")
-        neg_centroid = neg_centroid / norm
-
-        neg = np.stack([_l2_normalise(v) for v in negative_vectors])
-        neg_centroid = _l2_normalise(neg.mean(axis=0))
-
-        query_vec = _l2_normalise(query_vector)
+    if use_negatives:
+        neg = np.stack(
+            [normalise_vector(v, "Negative vector") for v in negative_vectors]
+        )
+        neg_centroid = normalise_vector(neg.mean(axis=0), "Negative centroid")
 
         for row in results:
-            doc_vec = _l2_normalise(row["vector"])
-
-            # Lance cosine distance is normally 1 − cos for unit vectors
-            sim_q = 1.0 - row["distance"]
-            # (or, more robustly: sim_q = float(np.dot(query_vec, doc_vec)))
-
-            sim_neg = float(np.dot(doc_vec, neg_centroid))
-            row["score"] = sim_q - beta * sim_neg
+            doc_vec = normalise_vector(row["vector"], "Document vector")
+            sim_q = float(np.dot(query_vec, doc_vec))
+            sim_neg = float(np.dot(neg_centroid, doc_vec))
             row["sim_q"] = sim_q
             row["sim_neg"] = sim_neg
+            row["score"] = sim_q - beta * sim_neg
 
         results.sort(key=lambda r: r["score"], reverse=True)
-
     else:
-        # Original behaviour
         results.sort(key=lambda r: r["distance"])
 
-    return results[:limit]
+    results = results[:limit]
 
+    if not include_vectors:
+        for row in results:
+            row.pop("vector", None)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Postgres lookup
+# ---------------------------------------------------------------------------
 
 def fetch_passage_text(conn, result):
     with conn.cursor() as cur:
@@ -253,71 +326,154 @@ def fetch_passage_text(conn, result):
     }
 
 
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Search historical passages using MacBERTh embeddings."
+    )
+    parser.add_argument(
+        "--query",
+        help="Text to encode as the search query.",
+    )
+    parser.add_argument(
+        "--vector-id",
+        help="Use an existing passage vector (by passage_id) as the query "
+             "instead of encoding --query.",
+    )
+    parser.add_argument(
+        "--start-year", type=int, default=0,
+        help="Earliest publication year (default: 0).",
+    )
+    parser.add_argument(
+        "--end-year", type=int, default=3000,
+        help="Latest publication year (default: 3000).",
+    )
+    parser.add_argument(
+        "--representation", choices=REPRESENTATIONS, default="l8",
+        help="Passage representation (default: l8).",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=30,
+        help="Maximum number of results (default: 30).",
+    )
+    parser.add_argument(
+        "--negative-id", action="append", default=[],
+        help="Passage ID of a negative example (repeatable). These are "
+             "averaged into a centroid used for margin re-ranking.",
+    )
+    parser.add_argument(
+        "--beta", type=float, default=0.5,
+        help="Weight of the negative centroid in re-ranking "
+             "(score = sim_q - beta * sim_neg). Default: 0.5",
+    )
+    parser.add_argument(
+        "--overfetch", type=int, default=5,
+        help="Per-table candidate multiplier when negatives are used "
+             "(default: 5).",
+    )
+    args = parser.parse_args()
+
+    if not args.query and not args.vector_id:
+        parser.error("one of --query or --vector-id is required")
+    if args.query and args.vector_id:
+        logger.warning("Both --query and --vector-id given; using --vector-id")
+    if args.start_year > args.end_year:
+        parser.error("--start-year must be <= --end-year")
+    if args.limit < 1:
+        parser.error("--limit must be >= 1")
+    if args.overfetch < 1:
+        parser.error("--overfetch must be >= 1")
+
+    return args
+
+
+def log_result(rank, result, metadata):
+    logger.info("...............................................................")
+    if "score" in result:
+        logger.info(
+            f"{rank}. year={result['pub_year']} "
+            f"distance={result['distance']:.4f} "
+            f"score={result['score']:.4f} "
+            f"sim_neg={result['sim_neg']:.4f}"
+        )
+    else:
+        logger.info(
+            f"{rank}. year={result['pub_year']} "
+            f"distance={result['distance']:.4f}"
+        )
+    logger.info(f"   corpus={result['corpus']} doc_id={result['doc_id']}")
+    logger.info(f"   title={metadata['title'] or '(untitled)'}")
+    logger.info(f"   author={metadata['author'] or '(unknown)'}")
+    logger.info(f"   filepath={metadata['filepath']}")
+    logger.info(
+        f"   words={result['word_start']}:{result['word_end']} "
+        f"tokens={result['token_start']}:{result['token_end']}"
+    )
+    logger.info(f"   passage_id={result['passage_id']}")
+    logger.info(f"   {metadata['passage_text'] or '[Text unavailable]'}")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Search MacBERTh passage embeddings in Lance."
-    )
-    parser.add_argument("--query", required=True)
-    parser.add_argument("--start-year", type=int, required=True)
-    parser.add_argument("--end-year", type=int, required=True)
-    parser.add_argument( "--representation", choices=REPRESENTATIONS, default="mean4", )
-    parser.add_argument("--limit", type=int, default=20)
-    args = parser.parse_args()
+    args = parse_args()
 
-    if args.start_year > args.end_year:
-        parser.error("--start-year must not exceed --end-year")
-    if args.limit < 1:
-        parser.error("--limit must be positive")
-
-    query_vector = encode_passage_query(
-        args.query,
-        args.representation,
-    )
+    logger.info("Lance directory: %s", LANCE_INDEXES_DIR)
+    logger.info("Years: %s-%s", args.start_year, args.end_year)
+    logger.info("Representation: %s", args.representation)
+    logger.info("Limit: %s", args.limit)
 
     db = lancedb.connect(str(LANCE_INDEXES_DIR))
 
+    if args.vector_id:
+        logger.info("Query vector ID: %s", args.vector_id)
+        query_vector = load_passage_vector(
+            db, args.vector_id, args.representation
+        )
+    else:
+        logger.info("Text query: %s", args.query)
+        query_vector = normalise_vector(
+            encode_passage_query(args.query, args.representation),
+            "Text query",
+        )
+
+    negative_vectors = []
+    for nid in args.negative_id:
+        try:
+            negative_vectors.append(
+                load_passage_vector(db, nid, args.representation)
+            )
+            logger.info("Loaded negative vector: %s", nid)
+        except ValueError as e:
+            logger.warning("Skipping negative %s: %s", nid, e)
+
+    if args.negative_id and not negative_vectors:
+        logger.warning(
+            "No valid negative vectors loaded; proceeding without re-ranking"
+        )
+
     results = search_passages(
-        db,
-        query_vector,
-        args.representation,
-        args.start_year,
-        args.end_year,
-        args.limit,
+        db=db,
+        query_vector=query_vector,
+        representation=args.representation,
+        start_year=args.start_year,
+        end_year=args.end_year,
+        limit=args.limit,
+        include_vectors=False,
+        negative_vectors=negative_vectors or None,
+        beta=args.beta,
+        overfetch=args.overfetch,
     )
 
     if not results:
-        print("No passages found for this date range.")
+        logger.info("No results found.")
         return
 
-    with get_connection(
-        application_name="passage-search"
-    ) as conn:
+    with get_connection(application_name="passage-search") as conn:
         for rank, result in enumerate(results, start=1):
             metadata = fetch_passage_text(conn, result)
-
-            print()
-            print(
-                f"{rank}. year={result['pub_year']} "
-                f"distance={result['distance']:.4f}"
-            )
-            print(
-                f"   corpus={result['corpus']} "
-                f"doc_id={result['doc_id']}"
-            )
-            print(
-                f"   title={metadata['title'] or '(untitled)'}"
-            )
-            print(
-                f"   words={result['word_start']}:"
-                f"{result['word_end']} "
-                f"tokens={result['token_start']}:"
-                f"{result['token_end']}"
-            )
-            print(f"   filepath={metadata['filepath']}")
-            print(f"   {metadata['passage_text'] or '[Text unavailable]'}")
+            log_result(rank, result, metadata)
 
 
 if __name__ == "__main__":
