@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Passage Search</title>
+
+<!--
+  Passage Search UI: multi-file, no build step.
+  SolidJS is loaded as ES modules through an import map (pinned version).
+  To run offline, download the four solid-js files into ./vendor/ and point
+  the import map at /ui/vendor/... instead of the CDN.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "solid-js":       "https://cdn.jsdelivr.net/npm/solid-js@1.9.3/dist/solid.js",
+    "solid-js/web":   "https://cdn.jsdelivr.net/npm/solid-js@1.9.3/web/dist/web.js",
+    "solid-js/html":  "https://cdn.jsdelivr.net/npm/solid-js@1.9.3/html/dist/html.js",
+    "solid-js/store": "https://cdn.jsdelivr.net/npm/solid-js@1.9.3/store/dist/store.js"
+  }
+}
+</script>
+
+<link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+<div id="app"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
