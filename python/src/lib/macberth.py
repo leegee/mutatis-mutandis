@@ -608,6 +608,7 @@ def embed_query(
 
     return vector.astype(np.float32)[None, :]
 
+
 def _passage_layers(hidden_states):
     """Match the layer selection used by colab_embed_passages.py."""
     return {
