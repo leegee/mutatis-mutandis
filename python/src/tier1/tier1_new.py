@@ -525,19 +525,13 @@ def parse_args() -> argparse.Namespace:
         or args.repair_years
         or args.index_only
     ):
-        parser.error(
-            "--populate/--worker cannot be combined with "
-            "--repair, --repair-years or --index-only"
-        )
+        parser.error( "--populate/--worker cannot be combined with --repair, --repair-years or --index-only" )
 
     if args.worker and (
         args.corpus is not None
         or args.doc_id is not None
     ):
-        parser.error(
-            "--worker claims whatever is queued; narrow the queue with "
-            "--corpus/--doc-id at --populate time instead"
-        )
+        parser.error( "--worker claims whatever is queued; narrow the queue with --corpus/--doc-id at --populate time instead" )
 
     # These only act on the queue. Rejecting them elsewhere means a
     # direct run can never be mistaken for a dry run.
