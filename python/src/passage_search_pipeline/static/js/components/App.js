@@ -1,10 +1,12 @@
-import { createEffect, For, onMount, Show } from "solid-js";
+import { createEffect, onMount, Show } from "solid-js";
 import html from "solid-js/html";
 import { CONFIG } from "../config.js";
 import { store } from "../store.js";
-import { checkApi, addPane } from "../actions.js";
+import { checkApi } from "../actions.js";
 import { toast } from "../toast.js";
-import { Pane } from "./Pane.js";
+import { route, match, ROUTES } from "../router.js";
+import { SearchView } from "./SearchView.js";
+import { NotFound } from "./NotFound.js";
 
 export function App() {
   onMount(checkApi);
@@ -24,29 +26,14 @@ export function App() {
     }
   });
 
-  const apiLabel = () =>
-    store.apiOk === true
-      ? "API connected"
-      : store.apiOk === false
-        ? "API unreachable"
-        : "Checking API…";
+  // Treat / and /search as the same view for now; add more routes later.
+  const isSearch = () => match(ROUTES.home) || match(ROUTES.search);
 
   return html`
     <div class="shell">
-      <header class="top">
-        <h1>Passage Search</h1>
-        <span class=${() => "api" + (store.apiOk === true ? " ok" : store.apiOk === false ? " bad" : "")}
-              title=${() => store.apiError}>${apiLabel}</span>
-        <span class="spacer"></span>
-        <${Show} when=${() => CONFIG.maxPanes > 1}>
-          <button class="btn small" type="button" disabled=${() => store.panes.length >= CONFIG.maxPanes}
-                  onClick=${() => addPane()}>+ Add query</button>
-        <//>
-      </header>
-      <main class=${() => "panes" + (store.panes.length === 1 ? " single" : "")}
-            style=${() => `--cols:${store.panes.length}`}>
-        <${For} each=${() => store.panes}>${(p) => html`<${Pane} id=${p.id} />`}<//>
-      </main>
+      <${Show} when=${isSearch} fallback=${html`<${NotFound} />`}>
+        <${SearchView} />
+      <//>
       <div class=${() => "toast" + (toast() ? " show" : "")} role="status">${toast}</div>
     </div>`;
 }

@@ -11,14 +11,17 @@ passage-search-ui/
 │   └── styles.css          # All styles (light/dark)
 ├── js/
 │   ├── main.js             # render() entry
-│   ├── config.js           # URL params / constants
+│   ├── config.js           # URL query params / constants (?api, ?panes)
+│   ├── router.js           # minimal hash router (extendable)
 │   ├── store.js            # createStore + pane helpers
 │   ├── helpers.js          # pure utilities (highlight, bins, CSV…)
 │   ├── toast.js            # toast + clipboard + download
 │   ├── actions.js          # search, negatives, panes, export, health
 │   ├── overlaps.js         # cross-pane document overlap detection
 │   └── components/
-│       ├── App.js
+│       ├── App.js          # route switch + persistence effect
+│       ├── SearchView.js   # multi-pane search UI (route: / and /search)
+│       ├── NotFound.js     # fallback for unknown hashes
 │       ├── Pane.js
 │       ├── SearchForm.js
 │       ├── Negatives.js
@@ -30,6 +33,31 @@ passage-search-ui/
 └── README.md
 ```
 
+## Routing
+
+Hash-based, no external router dependency:
+
+| Hash            | View        |
+|-----------------|-------------|
+| `#/`            | Search      |
+| `#/search`      | Search      |
+| anything else   | Not found   |
+
+- `js/router.js` exports `route()` (reactive `{ path, params }`), `navigate(to)`, `match(pattern)`, and `ROUTES`.
+- Browser query string (`?api=…&panes=…`) stays independent of the hash and is still read by `config.js`.
+- To add a route later: register it in `ROUTES`, add a view component, and branch in `App.js` (or introduce a small `<Routes>` helper).
+
+Examples:
+
+```js
+import { navigate, route, match } from "./router.js";
+
+navigate("/search");
+navigate("/search?focus=A", { replace: true });
+if (match("/search")) { /* … */ }
+const q = route().params.get("q");
+```
+
 ## Running
 
 Serve the directory over HTTP (modules need a real origin):
@@ -38,11 +66,12 @@ Serve the directory over HTTP (modules need a real origin):
 # from the parent of passage-search-ui, or adjust paths
 python -m http.server 8080
 # then open http://localhost:8080/passage-search-ui/
+# → redirects to …/#/
 ```
 
 Or let your FastAPI app mount this folder and serve `index.html`.
 
-### Query params
+### Query params (not hash)
 
 - `?api=https://…` — API base (default: same origin)
 - `?panes=2` — enable multi-pane layout (1–6)
@@ -56,3 +85,4 @@ Download the four packages listed in the import map into `./vendor/` and change 
 - Components receive a pane `id` (string) and read the store; they never receive callbacks as props.
 - Actions live in `actions.js` and are imported where needed.
 - Cross-pane features (`overlaps`) are memos over `store.panes`.
+- Routing is hash-only so the app can be dropped behind any static file server without rewrite rules.
