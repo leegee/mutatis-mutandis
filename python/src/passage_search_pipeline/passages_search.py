@@ -73,6 +73,23 @@ def candidate_tables(db, representation, start_year, end_year):
     return sorted(names & available)
 
 
+# Add near the top with the other imports
+import numpy as np
+from typing import Optional, List
+
+def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+    """Both vectors are expected to be L2-normalised."""
+    return float(np.dot(a, b))
+
+
+def _l2_normalise(v: np.ndarray) -> np.ndarray:
+    v = np.asarray(v, dtype=np.float32).reshape(-1)
+    n = np.linalg.norm(v)
+    if n < 1e-12:
+        raise ValueError("zero-magnitude vector")
+    return v / n
+
+
 def search_passages(
     db,
     query_vector,
@@ -80,8 +97,24 @@ def search_passages(
     start_year,
     end_year,
     limit,
-    include_vectors=False,
+    include_vectors: bool = False,
+    negative_vectors: Optional[List[np.ndarray]] = None,
+    beta: float = 0.5,
 ):
+    """
+    Search + optional negative-centroid re-ranking.
+
+    If negative_vectors is supplied, vectors are always retrieved and
+    results are re-ranked by:
+
+        score = sim(query, doc) - beta * sim(neg_centroid, doc)
+
+    Higher score is better. The original cosine distance is kept in the
+    result dict for inspection.
+    """
+    # Force vectors when we need to re-rank
+    need_vectors = include_vectors or (negative_vectors is not None)
+
     results = []
 
     columns = [
@@ -95,14 +128,12 @@ def search_passages(
         "token_end",
         "_distance",
     ]
-    if include_vectors:
+    if need_vectors:
         columns.append("vector")
 
     per_table_limit = limit
 
-    for name in candidate_tables(
-        db, representation, start_year, end_year
-    ):
+    for name in candidate_tables(db, representation, start_year, end_year):
         table = db.open_table(name)
 
         arrow = (
@@ -124,14 +155,56 @@ def search_passages(
             distance = row.get("_distance")
             if distance is None:
                 raise RuntimeError(
-                    "Lance search returned no _distance column. Check the installed LanceDB API."
+                    "Lance search returned no _distance column. "
+                    "Check the installed LanceDB API."
                 )
 
             row["distance"] = float(distance)
             row["table"] = name
+
+            if need_vectors and "vector" in row:
+                # Ensure we have a clean float32 numpy vector
+                row["vector"] = np.asarray(row["vector"], dtype=np.float32)
+
             results.append(row)
 
-    results.sort(key=lambda row: row["distance"])
+    if not results:
+        return []
+
+    # ------------------------------------------------------------------
+    # Optional negative-centroid re-ranking
+    # ------------------------------------------------------------------
+    if negative_vectors:
+        neg = np.stack([np.asarray(v, dtype=np.float32) for v in negative_vectors])
+        neg_centroid = neg.mean(axis=0)
+        norm = np.linalg.norm(neg_centroid)
+        if norm < 1e-12:
+            raise ValueError("Negative centroid has zero magnitude")
+        neg_centroid = neg_centroid / norm
+
+        neg = np.stack([_l2_normalise(v) for v in negative_vectors])
+        neg_centroid = _l2_normalise(neg.mean(axis=0))
+
+        query_vec = _l2_normalise(query_vector)
+
+        for row in results:
+            doc_vec = _l2_normalise(row["vector"])
+
+            # Lance cosine distance is normally 1 − cos for unit vectors
+            sim_q = 1.0 - row["distance"]
+            # (or, more robustly: sim_q = float(np.dot(query_vec, doc_vec)))
+
+            sim_neg = float(np.dot(doc_vec, neg_centroid))
+            row["score"] = sim_q - beta * sim_neg
+            row["sim_q"] = sim_q
+            row["sim_neg"] = sim_neg
+
+        results.sort(key=lambda r: r["score"], reverse=True)
+
+    else:
+        # Original behaviour
+        results.sort(key=lambda r: r["distance"])
+
     return results[:limit]
 
 
