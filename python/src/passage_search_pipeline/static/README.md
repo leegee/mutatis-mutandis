@@ -37,11 +37,12 @@ passage-search-ui/
 
 Hash-based, no external router dependency:
 
-| Hash            | View        |
-|-----------------|-------------|
-| `#/`            | Search      |
-| `#/search`      | Search      |
-| anything else   | Not found   |
+| Hash            | View                 |
+|-----------------|----------------------|
+| `#/`            | Semantic search      |
+| `#/search`      | Semantic search      |
+| `#/text`        | Postgres text search |
+| anything else   | Not found            |
 
 - `js/router.js` exports `route()` (reactive `{ path, params }`), `navigate(to)`, `match(pattern)`, and `ROUTES`.
 - Browser query string (`?api=…&panes=…`) stays independent of the hash and is still read by `config.js`.

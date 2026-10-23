@@ -25,18 +25,33 @@ def _hit(rank=1):
         "sim_neg": None, "word_start": 0, "word_end": 40,
         "token_start": 260, "token_end": 300, "title": "Albinism",
         "author": "Psaila", "filepath": "misc/x.xml", "text": "her hair is whitish",
+        "match_start": None, "match_end": None,
     }
+
+
+def _text_hit(rank=1):
+    h = _hit(rank)
+    h["distance"] = 0.0
+    h["match_start"] = 270
+    h["match_end"] = 272
+    h["text"] = "her hair is whitish and pale"
+    return h
 
 
 class FakeService:
     def __init__(self):
         self.last = None
+        self.last_text = None
 
     def search(self, params):
         self.last = params
         if params.vector_id and params.vector_id.startswith("00"):
             raise VectorNotFoundError("no such passage")
         return SearchOutcome(results=[_hit()], warnings=["note"])
+
+    def text_search(self, params):
+        self.last_text = params
+        return SearchOutcome(results=[_text_hit()], warnings=[])
 
 
 @pytest.fixture
@@ -80,4 +95,26 @@ def test_unknown_vector_is_404(client):
 
 def test_year_order_validated(client):
     r = client.post("/search", json={"query": "x", "start_year": 1700, "end_year": 1600})
+    assert r.status_code == 422
+
+
+def test_text_search(client):
+    r = client.post("/text-search", json={"query": "white hair", "limit": 10, "window_tokens": 30})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == 1
+    assert body["results"][0]["match_start"] == 270
+    assert client.fake.last_text.query == "white hair"
+    assert client.fake.last_text.window_tokens == 30
+
+
+def test_text_search_requires_query(client):
+    assert client.post("/text-search", json={}).status_code == 422
+
+
+def test_text_search_year_order(client):
+    r = client.post(
+        "/text-search",
+        json={"query": "x", "start_year": 1800, "end_year": 1700},
+    )
     assert r.status_code == 422

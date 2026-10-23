@@ -29,8 +29,16 @@ from lib.corpus_config import LANCE_INDEXES_DIR
 from lib.macberth import PASSAGE_REPRESENTATIONS
 
 from passage_search_pipeline.core import VectorNotFoundError
-from passage_search_pipeline.schemas import SearchRequest, SearchResponse
-from passage_search_pipeline.service import PassageSearchService, SearchParams
+from passage_search_pipeline.schemas import (
+    SearchRequest,
+    SearchResponse,
+    TextSearchRequest,
+)
+from passage_search_pipeline.service import (
+    PassageSearchService,
+    SearchParams,
+    TextSearchParams,
+)
 
 
 @asynccontextmanager
@@ -45,7 +53,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Passage Search API",
     description="Semantic passage search over MacBERTh embeddings (LanceDB + Postgres).",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -96,6 +104,28 @@ def search(req: SearchRequest, service: PassageSearchService = Depends(get_servi
         outcome = service.search(params)
     except VectorNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return SearchResponse(
+        count=len(outcome.results),
+        results=outcome.results,
+        warnings=outcome.warnings,
+    )
+
+
+@app.post("/text-search", response_model=SearchResponse)
+def text_search(req: TextSearchRequest, service: PassageSearchService = Depends(get_service)):
+    """Keyword / phrase search over Postgres tokens (no embeddings)."""
+    params = TextSearchParams(
+        query=req.query,
+        start_year=req.start_year,
+        end_year=req.end_year,
+        limit=req.limit,
+        window_tokens=req.window_tokens,
+    )
+    try:
+        outcome = service.text_search(params)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

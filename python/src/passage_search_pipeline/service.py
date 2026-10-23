@@ -27,6 +27,7 @@ from passage_search_pipeline.core import (
     search_passages,
 )
 from passage_search_pipeline.texts import fetch_passage_texts
+from passage_search_pipeline.text_search import search_text_passages
 
 logger = get_logger("passage_search.service")
 
@@ -53,6 +54,25 @@ class SearchParams:
             raise ValueError("limit must be >= 1")
         if self.overfetch < 1:
             raise ValueError("overfetch must be >= 1")
+
+
+@dataclass(frozen=True)
+class TextSearchParams:
+    query: str
+    start_year: int = 0
+    end_year: int = 3000
+    limit: int = 30
+    window_tokens: int = 40
+
+    def __post_init__(self):
+        if not (self.query or "").strip():
+            raise ValueError("query must be non-empty")
+        if self.start_year > self.end_year:
+            raise ValueError("start_year must be <= end_year")
+        if self.limit < 1:
+            raise ValueError("limit must be >= 1")
+        if self.window_tokens < 1:
+            raise ValueError("window_tokens must be >= 1")
 
 
 @dataclass
@@ -118,6 +138,31 @@ class PassageSearchService:
             "text": meta.get("passage_text"),
         }
 
+    @staticmethod
+    def _to_text_hit(rank: int, row: dict) -> dict:
+        """Map a text_search row (already includes metadata) to API hit shape."""
+        return {
+            "rank": rank,
+            "passage_id": row["passage_id"],
+            "corpus": row["corpus"],
+            "doc_id": row["doc_id"],
+            "pub_year": row.get("pub_year") or 0,
+            "distance": float(row.get("distance") or 0.0),
+            "score": row.get("score"),
+            "sim_q": row.get("sim_q"),
+            "sim_neg": row.get("sim_neg"),
+            "word_start": row.get("word_start"),
+            "word_end": row.get("word_end"),
+            "token_start": row["token_start"],
+            "token_end": row["token_end"],
+            "title": row.get("title"),
+            "author": row.get("author"),
+            "filepath": row.get("filepath"),
+            "text": row.get("text"),
+            "match_start": row.get("match_start"),
+            "match_end": row.get("match_end"),
+        }
+
     # -- public API --------------------------------------------------------
 
     def warmup(self, representation: str = "l8") -> None:
@@ -175,3 +220,26 @@ class PassageSearchService:
             len(negatives),
         )
         return SearchOutcome(results=hits, warnings=warnings)
+
+    def text_search(self, params: TextSearchParams) -> SearchOutcome:
+        """Postgres phrase search over tokens; does not use Lance or the encoder."""
+        t0 = time.perf_counter()
+        with get_connection(application_name=self.application_name) as conn:
+            rows = search_text_passages(
+                conn,
+                params.query,
+                limit=params.limit,
+                start_year=params.start_year,
+                end_year=params.end_year,
+                window_tokens=params.window_tokens,
+            )
+        hits = [self._to_text_hit(rank, row) for rank, row in enumerate(rows, start=1)]
+        logger.info(
+            "text_search done: %d hits in %.0f ms (years=%s-%s window=%d)",
+            len(hits),
+            (time.perf_counter() - t0) * 1000,
+            params.start_year,
+            params.end_year,
+            params.window_tokens,
+        )
+        return SearchOutcome(results=hits, warnings=[])

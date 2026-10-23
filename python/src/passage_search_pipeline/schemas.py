@@ -47,6 +47,29 @@ class SearchRequest(BaseModel):
         return self
 
 
+class TextSearchRequest(BaseModel):
+    """Keyword / phrase search over Postgres tokens (not embeddings)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(..., min_length=1, max_length=500)
+    start_year: int = Field(0, ge=0, le=3000)
+    end_year: int = Field(3000, ge=0, le=3000)
+    limit: int = Field(30, ge=1, le=200)
+    window_tokens: int = Field(
+        40,
+        ge=5,
+        le=200,
+        description="Tokens of context on each side of the matched phrase.",
+    )
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.start_year > self.end_year:
+            raise ValueError("start_year must be <= end_year")
+        return self
+
+
 class Hit(BaseModel):
     rank: int
     passage_id: str
@@ -65,6 +88,9 @@ class Hit(BaseModel):
     author: Optional[str] = None
     filepath: Optional[str] = None
     text: Optional[str] = None
+    # Present on text-search hits: token range of the matched phrase itself.
+    match_start: Optional[int] = None
+    match_end: Optional[int] = None
 
 
 class SearchResponse(BaseModel):

@@ -3,6 +3,7 @@ import html from "solid-js/html";
 import { CONFIG } from "../config.js";
 import { store } from "../store.js";
 import { addPane } from "../actions.js";
+import { navigate, ROUTES } from "../router.js";
 import { Pane } from "./Pane.js";
 
 /**
@@ -13,6 +14,11 @@ export function SearchView() {
   return html`
     <header class="top">
       <h1>Passage Search</h1>
+      <nav class="nav">
+        <button type="button" class="btn small on">Semantic</button>
+        <button type="button" class="btn small ghost"
+                onClick=${() => navigate(ROUTES.text)}>Text</button>
+      </nav>
       <span class=${() => "api" + (store.apiOk === true ? " ok" : store.apiOk === false ? " bad" : "")}
             title=${() => store.apiError}>${() =>
         store.apiOk === true

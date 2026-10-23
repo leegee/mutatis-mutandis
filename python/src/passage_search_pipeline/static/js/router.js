@@ -80,5 +80,6 @@ export function disposeRouter() {
 export const ROUTES = {
   home: "/",
   search: "/search",
+  text: "/text",
   // about: "/about",
 };
