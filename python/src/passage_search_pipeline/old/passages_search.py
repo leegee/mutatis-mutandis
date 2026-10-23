@@ -35,7 +35,7 @@ Examples:
         --query "white hair" --representation l8 --limit 50 \
         --negative-id dfbee39870fbbababa5fc24da247fb8468a82350bca1170209458b84568be2c3 \
         --negative-id afee38e3452766ffd28bc725ba733cec845fe8cb338c8ef93a52f850223fdbe7 \
-        --negative-id passage_id=b18fa10570b4402f240375c0f45fe9d179493486ab8abe32f285f112b7ff8126 \
+        --negative-id b18fa10570b4402f240375c0f45fe9d179493486ab8abe32f285f112b7ff8126 \
         --beta 0.6
 
 Notes:

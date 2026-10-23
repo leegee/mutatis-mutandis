@@ -1,7 +1,9 @@
 """
 colab_embed_passages.py
 
-Colab job: token parquet shards (Drive) -> passage-vector parquet shards (Drive).
+Colab job: stand-alone token parquet shards (Drive) -> passage-vector parquet shards (Drive).
+
+Be sure to sync the config with lib.corpus_config and lib.macberth
 
 No Postgres, no Lance. Each output shard is written to local /content first,
 copied to Drive under a .part name, then renamed, so a disconnect can never
@@ -25,14 +27,12 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 
 
-# ------------------------------------------------------------
 # Configuration
-# ------------------------------------------------------------
 
 RESUME_FROM_DOC = 0
 STOP_AFTER_DOC  = 9999
-IN_DIR = Path("/content/drive/MyDrive/tier1/source_tokens")
-OUT_DIR = Path("/content/drive/MyDrive/tier1/passages")
+IN_DIR = Path("/content/drive/MyDrive/passage-pipeline/source_tokens")
+OUT_DIR = Path("/content/drive/MyDrive/passage-pipeline/output-passages")
 CHECKPOINT_DIR = OUT_DIR / "_checkpoints"
 LOCAL_TMP = Path("/content/tmp")
 MODEL_NAME = "emanjavacas/MacBERTh"
@@ -169,7 +169,6 @@ def word_vectors(words, tok, model, device):
 
     cnt = np.maximum(cnt, 1.0)[:, None]
     return {name: sums[name] / cnt for name in LAYER_NAMES}
-
 
 
 def doc_passage_vectors(words, tok, model, device, token_idx=None):

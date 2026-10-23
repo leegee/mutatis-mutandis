@@ -1,0 +1,116 @@
+"""
+passage_search_pipeline/api.py
+
+FastAPI application.
+
+Run (from the repo root, one worker: each worker loads its own MacBERTh copy):
+
+    uvicorn passage_search_pipeline.api:app --app-dir src --port 8000
+
+Environment:
+    PASSAGE_SEARCH_WARMUP        "1" (default) loads the encoder at startup
+    PASSAGE_SEARCH_CORS_ORIGINS  comma-separated origins to allow (optional)
+
+The single-file web UI in ./static is served at /ui/ (and / redirects there).
+"""
+
+from __future__ import annotations
+
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+
+from lib.corpus_config import LANCE_INDEXES_DIR
+from lib.macberth import PASSAGE_REPRESENTATIONS
+
+from passage_search_pipeline.core import VectorNotFoundError
+from passage_search_pipeline.schemas import SearchRequest, SearchResponse
+from passage_search_pipeline.service import PassageSearchService, SearchParams
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    service = PassageSearchService(LANCE_INDEXES_DIR, application_name="passage-search-api")
+    if os.getenv("PASSAGE_SEARCH_WARMUP", "1") == "1":
+        service.warmup()
+    app.state.search_service = service
+    yield
+
+
+app = FastAPI(
+    title="Passage Search API",
+    description="Semantic passage search over MacBERTh embeddings (LanceDB + Postgres).",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+_origins = [o.strip() for o in os.getenv("PASSAGE_SEARCH_CORS_ORIGINS", "").split(",") if o.strip()]
+if _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
+
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+def get_service(request: Request) -> PassageSearchService:
+    return request.app.state.search_service
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/representations")
+def representations():
+    return {"representations": list(PASSAGE_REPRESENTATIONS)}
+
+
+# Plain `def` on purpose: LanceDB, Postgres and the encoder are blocking,
+# so FastAPI runs this in its threadpool instead of stalling the event loop.
+@app.post("/search", response_model=SearchResponse)
+def search(req: SearchRequest, service: PassageSearchService = Depends(get_service)):
+    params = SearchParams(
+        query=req.query,
+        vector_id=req.vector_id,
+        negative_ids=tuple(req.negative_ids),
+        representation=req.representation,
+        start_year=req.start_year,
+        end_year=req.end_year,
+        limit=req.limit,
+        beta=req.beta,
+        overfetch=req.overfetch,
+        include_text=req.include_text,
+    )
+    try:
+        outcome = service.search(params)
+    except VectorNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return SearchResponse(
+        count=len(outcome.results),
+        results=outcome.results,
+        warnings=outcome.warnings,
+    )
+
+
+# --- Web UI -----------------------------------------------------------------
+# Same origin as the API, so the page needs no CORS configuration.
+if STATIC_DIR.is_dir():
+    app.mount("/ui", StaticFiles(directory=STATIC_DIR, html=True), name="ui")
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse(url="/ui/")

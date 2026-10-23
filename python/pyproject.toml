@@ -38,7 +38,7 @@ dependencies = [
     "torch==2.13.0+cpu",
     "transformers==4.57.6",
     "umap-learn==0.5.12",
-    "uvicorn==0.51.0",
+    "uvicorn[standard]==0.51.0",
     "grok>=6.2",
     "openai>=2.48.0",
     "xxhash>=3.8.1",
@@ -82,3 +82,11 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
 
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
