@@ -239,11 +239,9 @@ def create_views(conn: Connection) -> None:
     with conn.transaction():
         with conn.cursor() as cur:
             # Materialized view for pamphlet_corpus
-            logger.info("Creating materialised view pamphlet_corpus")
+            logger.info("Creating view pamphlet_corpus")
 
             # Just in case I previously messed-up - TODO check and tidy.
-            cur.execute("DROP VIEW IF EXISTS pamphlet_corpus CASCADE;")
-
             if config.FILTER_DOCUMENT_SIZE:
                 size_filter = f"""
                     AND token_count BETWEEN {config.MIN_TOKENS_IN_DOC} AND {config.MAX_TOKENS_IN_DOC}
