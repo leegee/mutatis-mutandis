@@ -538,6 +538,14 @@ def process_misc_file(tree, xml_path):
     date_raw, pub_year, date_source = pick_pub_year(tree)
     composition_raw = pick_composition_date(tree)
 
+    # Explicit publication-date override for the KJV translation.
+    # This is the translation's first publication year, not necessarily
+    # the date of the particular XML transcription.
+    if xml_path.name.lower() == "kjv.xml":
+        date_raw = "1611 (KJV first published)"
+        pub_year = 1611
+        date_source = "manual_override"
+
     if pub_year is None:
         logger.warning(
             f"[tier0 worker {os.getpid()}] "
@@ -605,6 +613,7 @@ def process_misc_file(tree, xml_path):
             f"misc document {doc_id} has {len(tokens)} tokens, "
             f"which exceeds MAX_TOKENS_IN_DOC "
             f"{config.MAX_TOKENS_IN_DOC}"
+            "- ingesting anyway."
         )
 
     lang = extract_language(tree, raw_text)
@@ -1006,6 +1015,7 @@ def main():
             if confirm != "YES":
                 sys.exit(1)
             corpus_db.init_db(conn)
+            corpus_db.create_views(conn)
 
         if args.reindex:
             corpus_db.drop_token_indexes(conn)
@@ -1042,8 +1052,6 @@ def main():
         if args.reindex:
             corpus_db.create_tokens_fk(conn)
             corpus_db.create_token_indexes(conn)
-
-        corpus_db.create_views(conn)
 
 
 if __name__ == "__main__":
