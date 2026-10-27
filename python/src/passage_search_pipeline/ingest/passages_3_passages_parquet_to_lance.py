@@ -22,7 +22,7 @@ from tier1.vector_writer import year_bucket, vector_index_partitions
 
 
 # Local export produced from Colab's passages_*.parquet files.
-INPUT_DIR = MAPPED_GOOGLE_DRIVE / "output-passages"
+INPUT_DIR = MAPPED_GOOGLE_DRIVE / "passages"
 REPRESENTATIONS = ("l8", "last", "mean4")
 VECTOR_DIM = 768
 

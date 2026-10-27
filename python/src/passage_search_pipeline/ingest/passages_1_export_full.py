@@ -32,7 +32,7 @@ from lib.corpus_logging import logger
 from lib.corpus_albinism import CORPUS_SQL
 
 # Defaults (all overridable from the CLI)
-DEFAULT_OUTPUT_DIR = MAPPED_GOOGLE_DRIVE / Path("souroce_tokens")
+DEFAULT_OUTPUT_DIR = MAPPED_GOOGLE_DRIVE / Path("source_tokens")
 DEFAULT_LANCE_DIR = LANCE_INDEXES_DIR
 DEFAULT_LANCE_PREFIXES = ("passage_l8__", "passage_last__", "passage_mean4__")
 DEFAULT_DOCS_PER_SHARD = 10  # 500
