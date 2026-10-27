@@ -1,7 +1,20 @@
 import { CONFIG } from "./config.js";
-import { CSV_COLS, csvCell, formatDetail, snippet, toInt, toNum } from "./helpers.js";
-import { newPane, pane, setStore, store, update } from "./store.js";
+import { store, setStore, pane, update, newPane } from "./store.js";
+import {
+	CSV_COLS,
+	csvCell,
+	formatDetail,
+	snippet,
+	toInt,
+	toNum,
+} from "./helpers.js";
 import { download } from "./toast.js";
+import { navigate, hrefFor, ROUTES } from "./router.js";
+import {
+	semanticParamsFromPane,
+	canonicalParams,
+	routeSync,
+} from "./urlState.js";
 
 const inflight = new Map(); // pane id -> AbortController
 
@@ -17,7 +30,8 @@ export function buildRequest(p) {
 		negative_ids: p.negatives.map((n) => n.id),
 		include_text: true,
 	};
-	if (req.start_year > req.end_year) throw new Error("Start year must not be after end year");
+	if (req.start_year > req.end_year)
+		throw new Error("Start year must not be after end year");
 	if (p.source.mode === "vector") {
 		if (!p.source.vectorId) throw new Error("No passage selected");
 		req.vector_id = p.source.vectorId;
@@ -29,7 +43,28 @@ export function buildRequest(p) {
 	return req;
 }
 
-export async function runSearch(id) {
+/**
+ * Write the first pane's (or this pane's, if it's the first) search into the hash.
+ * Creates a history entry unless `replace` is set.
+ */
+export function syncSemanticUrl(id, { replace = false } = {}) {
+	const first = store.panes[0];
+	// Only the primary pane is mirrored in the URL.
+	if (!first || first.id !== id) return;
+	const qs = canonicalParams(semanticParamsFromPane(pane(id)));
+	const target = hrefFor(ROUTES.search, qs);
+	const nextHash = `#${target}`;
+	if (location.hash === nextHash) return;
+	routeSync.suppressApply = true;
+	navigate(target, { replace });
+}
+
+/**
+ * @param {string} id pane id
+ * @param {{ updateUrl?: boolean, replaceUrl?: boolean }} [opts]
+ */
+export async function runSearch(id, opts = {}) {
+	const { updateUrl = true, replaceUrl = false } = opts;
 	const p = pane(id);
 	if (!p) return;
 
@@ -40,6 +75,8 @@ export async function runSearch(id) {
 		update(id, { status: "error", error: e.message });
 		return;
 	}
+
+	if (updateUrl) syncSemanticUrl(id, { replace: replaceUrl });
 
 	inflight.get(id)?.abort();
 	const ctrl = new AbortController();
@@ -68,7 +105,9 @@ export async function runSearch(id) {
 	} catch (e) {
 		if (e.name === "AbortError" || inflight.get(id) !== ctrl) return;
 		const msg =
-			e instanceof TypeError ? `Cannot reach the API at ${CONFIG.apiBase || location.origin}` : e.message || String(e);
+			e instanceof TypeError
+				? `Cannot reach the API at ${CONFIG.apiBase || location.origin}`
+				: e.message || String(e);
 		update(id, { status: "error", error: msg });
 	} finally {
 		if (inflight.get(id) === ctrl) inflight.delete(id);
@@ -79,13 +118,21 @@ export function addNegative(id, hit) {
 	update(id, "negatives", (ns) =>
 		ns.some((n) => n.id === hit.passage_id)
 			? ns
-			: [...ns, { id: hit.passage_id, year: hit.pub_year, snippet: snippet(hit.text, 120) }],
+			: [
+					...ns,
+					{
+						id: hit.passage_id,
+						year: hit.pub_year,
+						snippet: snippet(hit.text, 120),
+					},
+				],
 	);
 }
 
 export function toggleNegative(id, hit) {
 	const p = pane(id);
-	if (p.negatives.some((n) => n.id === hit.passage_id)) removeNegative(id, hit.passage_id, false);
+	if (p.negatives.some((n) => n.id === hit.passage_id))
+		removeNegative(id, hit.passage_id, false);
 	else addNegative(id, hit);
 	runSearch(id);
 }
@@ -142,7 +189,9 @@ export async function checkApi() {
 			const { representations } = await r.json();
 			if (Array.isArray(representations) && representations.length) {
 				setStore("representations", representations);
-				const fallback = representations.includes("l8") ? "l8" : representations[0];
+				const fallback = representations.includes("l8")
+					? "l8"
+					: representations[0];
 				for (const p of store.panes) {
 					if (!representations.includes(p.form.representation)) {
 						update(p.id, "form", { representation: fallback });
@@ -165,14 +214,21 @@ export function exportPane(id, kind) {
 		download(
 			`${base}.json`,
 			JSON.stringify(
-				{ request: JSON.parse(JSON.stringify(p.lastRequest)), count: hits.length, results: hits },
+				{
+					request: JSON.parse(JSON.stringify(p.lastRequest)),
+					count: hits.length,
+					results: hits,
+				},
 				null,
 				2,
 			),
 			"application/json",
 		);
 	} else {
-		const rows = [CSV_COLS.join(","), ...hits.map((h) => CSV_COLS.map((c) => csvCell(h[c])).join(","))];
+		const rows = [
+			CSV_COLS.join(","),
+			...hits.map((h) => CSV_COLS.map((c) => csvCell(h[c])).join(",")),
+		];
 		download(`${base}.csv`, `\ufeff${rows.join("\r\n")}`, "text/csv");
 	}
 }

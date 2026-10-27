@@ -1,7 +1,9 @@
 import { CONFIG } from "./config.js";
 import { CSV_COLS, csvCell, formatDetail, toInt } from "./helpers.js";
+import { hrefFor, navigate, ROUTES } from "./router.js";
 import { persistTextForm, setTextStore, textStore } from "./textStore.js";
 import { download } from "./toast.js";
+import { canonicalParams, routeSync, textParamsFromForm } from "./urlState.js";
 
 let inflight = null;
 
@@ -16,17 +18,32 @@ function buildTextRequest() {
 		limit: toInt(f.limit, "Limit"),
 		window_tokens: toInt(f.windowTokens, "Window"),
 	};
-	if (req.start_year > req.end_year) throw new Error("Start year must not be after end year");
+	if (req.start_year > req.end_year)
+		throw new Error("Start year must not be after end year");
 	return req;
 }
 
-export async function runTextSearch() {
+/**
+ * @param {{ updateUrl?: boolean, replaceUrl?: boolean }} [opts]
+ */
+export async function runTextSearch(opts = {}) {
+	const { updateUrl = true, replaceUrl = false } = opts;
+
 	let req;
 	try {
 		req = buildTextRequest();
 	} catch (e) {
 		setTextStore({ status: "error", error: e.message });
 		return;
+	}
+
+	if (updateUrl) {
+		const qs = canonicalParams(textParamsFromForm(textStore.form));
+		const target = hrefFor(ROUTES.text, qs);
+		if (location.hash !== `#${target}`) {
+			routeSync.suppressApply = true;
+			navigate(target, { replace: replaceUrl });
+		}
 	}
 
 	inflight?.abort();
@@ -57,7 +74,9 @@ export async function runTextSearch() {
 	} catch (e) {
 		if (e.name === "AbortError" || inflight !== ctrl) return;
 		const msg =
-			e instanceof TypeError ? `Cannot reach the API at ${CONFIG.apiBase || location.origin}` : e.message || String(e);
+			e instanceof TypeError
+				? `Cannot reach the API at ${CONFIG.apiBase || location.origin}`
+				: e.message || String(e);
 		setTextStore({ status: "error", error: msg });
 	} finally {
 		if (inflight === ctrl) inflight = null;
@@ -85,7 +104,10 @@ export function exportTextResults(kind) {
 		);
 	} else {
 		const cols = [...CSV_COLS, "match_start", "match_end"];
-		const rows = [cols.join(","), ...hits.map((h) => cols.map((c) => csvCell(h[c])).join(","))];
+		const rows = [
+			cols.join(","),
+			...hits.map((h) => cols.map((c) => csvCell(h[c])).join(",")),
+		];
 		download(`${base}.csv`, `\ufeff${rows.join("\r\n")}`, "text/csv");
 	}
 }

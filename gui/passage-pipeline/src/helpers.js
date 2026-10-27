@@ -7,13 +7,15 @@ export const snippet = (text, n = 90) => {
 
 export function toInt(s, name) {
 	const t = String(s ?? "").trim();
-	if (t === "" || !Number.isInteger(Number(t))) throw new Error(`${name} must be a whole number`);
+	if (t === "" || !Number.isInteger(Number(t)))
+		throw new Error(`${name} must be a whole number`);
 	return Number(t);
 }
 
 export function toNum(s, name) {
 	const t = String(s ?? "").trim();
-	if (t === "" || !Number.isFinite(Number(t))) throw new Error(`${name} must be a number`);
+	if (t === "" || !Number.isFinite(Number(t)))
+		throw new Error(`${name} must be a number`);
 	return Number(t);
 }
 
@@ -21,7 +23,9 @@ export function formatDetail(body, res) {
 	const d = body?.detail;
 	if (typeof d === "string") return d;
 	if (Array.isArray(d)) {
-		return d.map((x) => `${(x.loc || []).slice(1).join(".") || "request"}: ${x.msg}`).join("; ");
+		return d
+			.map((x) => `${(x.loc || []).slice(1).join(".") || "request"}: ${x.msg}`)
+			.join("; ");
 	}
 	return `HTTP ${res.status} ${res.statusText}`.trim();
 }
@@ -34,7 +38,11 @@ const STOP = new Set(
 );
 
 export const queryTerms = (q) => [
-	...new Set((q.toLowerCase().match(/[a-z\u00c0-\u024f']+/g) ?? []).filter((w) => w.length >= 3 && !STOP.has(w))),
+	...new Set(
+		(q.toLowerCase().match(/[a-z\u00c0-\u024f']+/g) ?? []).filter(
+			(w) => w.length >= 3 && !STOP.has(w),
+		),
+	),
 ];
 
 export const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -45,7 +53,7 @@ export function splitHighlight(text, terms) {
 	const out = [];
 	let last = 0,
 		m;
-	// biome-ignore lint/suspicious/noAssignInExpressions: <this is a quick prototype>
+	// biome-ignore lint/suspicious/noAssignInExpressions: <prototype>
 	while ((m = re.exec(text))) {
 		if (m.index > last) out.push({ t: text.slice(last, m.index), m: false });
 		out.push({ t: m[0], m: true });
@@ -60,19 +68,26 @@ export function computeBins(hits) {
 	const years = hits.map((h) => h.pub_year);
 	const min = Math.min(...years),
 		max = Math.max(...years);
-	const size = [1, 5, 10, 25, 50, 100, 250].find((s) => (max - min) / s <= 40) ?? 500;
+	const size =
+		[1, 5, 10, 25, 50, 100, 250].find((s) => (max - min) / s <= 40) ?? 500;
 	const first = Math.floor(min / size) * size;
 	const bins = [];
-	for (let s = first; s <= max; s += size) bins.push({ start: s, end: s + size - 1, count: 0 });
+	for (let s = first; s <= max; s += size)
+		bins.push({ start: s, end: s + size - 1, count: 0 });
 	for (const y of years) bins[Math.floor((y - first) / size)].count++;
 	return bins;
 }
 
-export const scoreLabel = (h) => (h.score != null ? `score ${h.score.toFixed(3)}` : `dist ${h.distance.toFixed(4)}`);
+export const scoreLabel = (h) =>
+	h.score != null
+		? `score ${h.score.toFixed(3)}`
+		: `dist ${h.distance.toFixed(4)}`;
 
 export const scoreTitle = (h) =>
 	`distance ${h.distance.toFixed(4)}` +
-	(h.sim_q != null ? ` · sim(query) ${h.sim_q.toFixed(4)} · sim(negatives) ${h.sim_neg.toFixed(4)}` : "");
+	(h.sim_q != null
+		? ` · sim(query) ${h.sim_q.toFixed(4)} · sim(negatives) ${h.sim_neg.toFixed(4)}`
+		: "");
 
 export const csvCell = (v) => {
 	const s = v == null ? "" : String(v);

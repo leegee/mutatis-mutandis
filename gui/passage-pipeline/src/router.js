@@ -16,7 +16,8 @@ function parseHash() {
 	// location.hash is "#/path?x=1" or ""
 	const raw = (location.hash || "#/").replace(/^#/, "") || "/";
 	const qIdx = raw.indexOf("?");
-	const pathPart = (qIdx === -1 ? raw : raw.slice(0, qIdx)).replace(/\/+$/, "") || "/";
+	const pathPart =
+		(qIdx === -1 ? raw : raw.slice(0, qIdx)).replace(/\/+$/, "") || "/";
 	const path = pathPart.startsWith("/") ? pathPart : `/${pathPart}`;
 	const params = new URLSearchParams(qIdx === -1 ? "" : raw.slice(qIdx + 1));
 	return { path, params };
@@ -39,20 +40,32 @@ if (typeof window !== "undefined") {
 
 /**
  * Navigate within the hash router.
- * @param {string} to  Absolute path, e.g. "/search" or "/search?focus=A"
+ * @param {string} to  Absolute path, e.g. "/search" or "/search?q=white"
  * @param {{ replace?: boolean }} opts
  */
 export function navigate(to, opts = {}) {
 	const path = to.startsWith("/") ? to : `/${to}`;
 	const next = `#${path}`;
 	if (opts.replace) {
-		history.replaceState(null, "", next);
+		if (location.hash !== next) history.replaceState(null, "", next);
 		syncFromLocation();
 	} else {
 		// Assigning location.hash always fires hashchange in modern browsers.
 		if (location.hash === next) syncFromLocation();
 		else location.hash = path;
 	}
+}
+
+/** Build "#/path?qs" style target from path + URLSearchParams / string. */
+export function hrefFor(path, params) {
+	const base = path.startsWith("/") ? path : `/${path}`;
+	const qs =
+		typeof params === "string"
+			? params
+			: params && [...params.keys()].length
+				? params.toString()
+				: "";
+	return qs ? `${base}?${qs}` : base;
 }
 
 /** Current route: { path, params }. Reactive. */
