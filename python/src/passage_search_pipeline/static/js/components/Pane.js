@@ -1,16 +1,16 @@
 import { Show } from "solid-js";
 import html from "solid-js/html";
-import { store, pane } from "../store.js";
 import { removePane } from "../actions.js";
-import { SearchForm } from "./SearchForm.js";
-import { Negatives } from "./Negatives.js";
-import { StatusBar } from "./StatusBar.js";
+import { pane, store } from "../store.js";
 import { Histogram } from "./Histogram.js";
+import { Negatives } from "./Negatives.js";
 import { Results } from "./Results.js";
+import { SearchForm } from "./SearchForm.js";
+import { StatusBar } from "./StatusBar.js";
 
 export function Pane(props) {
-  const id = props.id;
-  return html`
+	const id = props.id;
+	return html`
     <section class="pane">
       <div class="pane-head">
         <span class="badge">${() => pane(id)?.label}</span>

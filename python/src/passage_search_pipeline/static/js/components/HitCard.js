@@ -1,22 +1,22 @@
 import { Show } from "solid-js";
 import html from "solid-js/html";
-import { pane } from "../store.js";
-import { shortId, scoreLabel, scoreTitle } from "../helpers.js";
 import { findSimilar, toggleNegative } from "../actions.js";
-import { copyText } from "../toast.js";
+import { scoreLabel, scoreTitle, shortId } from "../helpers.js";
 import { overlaps } from "../overlaps.js";
+import { pane } from "../store.js";
+import { copyText } from "../toast.js";
 import { Highlight } from "./Highlight.js";
 
 export function HitCard(props) {
-  const id = props.paneId;
-  const hit = props.hit;
-  const p = () => pane(id);
-  const isNeg = () => !!p()?.negatives.some((n) => n.id === hit.passage_id);
-  const isSrc = () => p()?.lastRequest?.vector_id === hit.passage_id;
-  const also = () => overlaps(id, hit);
+	const id = props.paneId;
+	const hit = props.hit;
+	const p = () => pane(id);
+	const isNeg = () => !!p()?.negatives.some((n) => n.id === hit.passage_id);
+	const isSrc = () => p()?.lastRequest?.vector_id === hit.passage_id;
+	const also = () => overlaps(id, hit);
 
-  return html`
-    <li class=${() => "hit" + (isNeg() ? " is-neg" : "") + (isSrc() ? " is-src" : "")}>
+	return html`
+    <li class=${() => `hit${isNeg() ? " is-neg" : ""}${isSrc() ? " is-src" : ""}`}>
       <div class="hit-head">
         <span class="rank">${hit.rank}</span>
         <span class="year">${hit.pub_year}</span>
@@ -38,7 +38,7 @@ export function HitCard(props) {
       <div class="actions">
         <button class="btn small" type="button" title="Search for passages similar to this one"
                 onClick=${() => findSimilar(id, hit)}>Find similar</button>
-        <button type="button" class=${() => "btn small" + (isNeg() ? " on" : "")}
+        <button type="button" class=${() => `btn small${isNeg() ? " on" : ""}`}
                 onClick=${() => toggleNegative(id, hit)}>${() => (isNeg() ? "Undo exclude" : "Not relevant")}</button>
         <button class="btn small ghost" type="button" title=${hit.passage_id}
                 onClick=${() => copyText(hit.passage_id)}>Copy ID ${shortId(hit.passage_id)}</button>

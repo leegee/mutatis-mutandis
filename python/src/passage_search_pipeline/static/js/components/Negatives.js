@@ -1,13 +1,13 @@
 import { For, Show } from "solid-js";
 import html from "solid-js/html";
-import { pane } from "../store.js";
+import { clearNegatives, removeNegative } from "../actions.js";
 import { snippet } from "../helpers.js";
-import { removeNegative, clearNegatives } from "../actions.js";
+import { pane } from "../store.js";
 
 export function Negatives(props) {
-  const id = props.id;
-  const p = () => pane(id);
-  return html`
+	const id = props.id;
+	const p = () => pane(id);
+	return html`
     <${Show} when=${() => (p()?.negatives.length ?? 0) > 0}>
       <div class="negs">
         <span class="label">Excluding:</span>

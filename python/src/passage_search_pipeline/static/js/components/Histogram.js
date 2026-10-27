@@ -1,14 +1,14 @@
 import { createMemo, For, Show } from "solid-js";
 import html from "solid-js/html";
-import { pane } from "../store.js";
-import { computeBins } from "../helpers.js";
 import { narrowYears } from "../actions.js";
+import { computeBins } from "../helpers.js";
+import { pane } from "../store.js";
 
 export function Histogram(props) {
-  const id = props.id;
-  const bins = createMemo(() => computeBins(pane(id)?.hits ?? []));
-  const maxCount = createMemo(() => Math.max(1, ...bins().map((b) => b.count)));
-  return html`
+	const id = props.id;
+	const bins = createMemo(() => computeBins(pane(id)?.hits ?? []));
+	const maxCount = createMemo(() => Math.max(1, ...bins().map((b) => b.count)));
+	return html`
     <${Show} when=${() => bins().length > 1}>
       <div class="hist">
         <div class="bars">
