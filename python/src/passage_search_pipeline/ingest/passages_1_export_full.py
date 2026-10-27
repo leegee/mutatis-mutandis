@@ -7,7 +7,10 @@ into parquet shards of --docs-per-shard documents. Upload the output dir to Driv
 By default, documents are skipped if they are:
   * already present in any passage Lance table (--lance-dir), or
   * already present in a parquet shard in the output dir (re-run safety).
-Docs listed via --force-doc-id are exported regardless.
+
+If --force-doc-id is given, ONLY those doc_ids are exported, regardless of
+whether they are in Lance, in existing shards, or in CORPUS_SQL. No other
+documents are processed in that mode.
 
 New shards are numbered after the highest existing shard, so reruns never
 overwrite earlier output (use --overwrite to wipe and start from 0).
@@ -61,7 +64,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--docs-per-shard", type=int, default=DEFAULT_DOCS_PER_SHARD, help="Documents per parquet shard (default: %(default)s)")
     p.add_argument("--force-doc-id", action="append", default=[],
                    dest="force_doc_ids", metavar="DOC_ID",
-                   help="Export this doc_id even if already indexed/exported. Repeatable.")
+                   help="Export ONLY this doc_id, ignoring Lance, existing shards and the corpus filter. "
+                        "Repeatable; when used, no other documents are exported.")
     p.add_argument("--no-skip-indexed", action="store_true", help="Do not skip documents found in Lance")
     p.add_argument("--no-skip-exported", action="store_true", help="Do not skip documents already in existing parquet shards")
     p.add_argument("--overwrite", action="store_true", help="Delete existing shards in the output dir and start numbering at 0 (implies --no-skip-exported)")
@@ -71,6 +75,9 @@ def parse_args() -> argparse.Namespace:
 
     if args.docs_per_shard < 1:
         p.error("--docs-per-shard must be >= 1")
+    if args.force_doc_ids and args.overwrite:
+        p.error("--force-doc-id cannot be combined with --overwrite "
+                "(it would delete existing shards before a targeted export)")
     if args.lance_prefixes is None:
         args.lance_prefixes = list(DEFAULT_LANCE_PREFIXES)
     return args
@@ -143,10 +150,33 @@ def populate_skip_docs(conn, skip: set[tuple[str, str]]) -> None:
     conn.commit()
 
 
-def build_query() -> str:
+def populate_force_docs(conn, doc_ids: set[str]) -> None:
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TEMP TABLE export_force_docs (
+                doc_id text PRIMARY KEY
+            ) ON COMMIT PRESERVE ROWS
+        """)
+        cur.executemany(
+            "INSERT INTO export_force_docs (doc_id) VALUES (%s) ON CONFLICT DO NOTHING",
+            [(d,) for d in sorted(doc_ids)],
+        )
+    conn.commit()
+
+
+def build_query(force_mode: bool) -> str:
     # No bind parameters, so any literal % inside CORPUS_SQL keeps working.
-    return f"""
-        WITH selected_docs AS (
+    if force_mode:
+        # Only the forced doc_ids: ignore CORPUS_SQL and all skip sets.
+        ctes = f"""
+        eligible_docs AS (
+            SELECT d.corpus, d.doc_id
+            FROM {DOC_TABLE} AS d
+            JOIN export_force_docs AS f ON f.doc_id = d.doc_id
+        )"""
+    else:
+        ctes = f"""
+        selected_docs AS (
             {CORPUS_SQL}
         ),
         eligible_docs AS (
@@ -158,7 +188,10 @@ def build_query() -> str:
                 WHERE x.corpus = s.corpus
                   AND x.doc_id = s.doc_id
             )
-        )
+        )"""
+
+    return f"""
+        WITH {ctes}
         SELECT
             t.corpus,
             t.doc_id,
@@ -203,31 +236,38 @@ def main() -> None:
         shards = []
     shard_no = shards[-1][0] + 1 if shards else 0
 
-    # Build skip set
+    # Build skip set (not used at all in force mode)
     skip: set[tuple[str, str]] = set()
-    if not args.no_skip_indexed:
-        skip |= indexed_documents(args.lance_dir, args.lance_prefixes)
-    if not args.no_skip_exported and shards:
-        skip |= exported_documents(shards)
     if force:
-        skip = {k for k in skip if k[1] not in force}
-        logger.info("Forcing export of doc_ids: %s", sorted(force))
-    logger.info("Skipping %d documents; first new shard is %05d",
-                len(skip), shard_no)
+        logger.info("Force mode: exporting ONLY doc_ids %s "
+                    "(ignoring Lance, existing shards, and CORPUS_SQL); "
+                    "first new shard is %05d", sorted(force), shard_no)
+    else:
+        if not args.no_skip_indexed:
+            skip |= indexed_documents(args.lance_dir, args.lance_prefixes)
+        if not args.no_skip_exported and shards:
+            skip |= exported_documents(shards)
+        logger.info("Skipping %d documents; first new shard is %05d",
+                    len(skip), shard_no)
 
     conn = get_connection(application_name="export-tokens")
     try:
-        populate_skip_docs(conn, skip)
+        if force:
+            populate_force_docs(conn, force)
+        else:
+            populate_skip_docs(conn, skip)
 
         docs: list[dict] = []
         exported = 0
+        seen_ids: set[str] = set()
 
         with conn.cursor(name="export_tokens") as cur:
             cur.itersize = args.itersize
-            cur.execute(build_query())
+            cur.execute(build_query(force_mode=bool(force)))
 
             for (corpus, doc_id), grouped in groupby(cur, key=lambda r: (r[0], r[1])):
                 rows = list(grouped)
+                seen_ids.add(doc_id)
                 docs.append({
                     "corpus": corpus,
                     "doc_id": doc_id,
@@ -249,6 +289,12 @@ def main() -> None:
 
             if docs:
                 flush(docs, shard_no, output_dir)
+
+        if force:
+            missing = force - seen_ids
+            if missing:
+                logger.warning("Forced doc_ids not found in %s/%s: %s",
+                               DOC_TABLE, TABLE, sorted(missing))
 
         logger.info("Done: exported %d documents", exported)
     finally:
