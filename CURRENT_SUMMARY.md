@@ -87,8 +87,7 @@
   * **Olwen**;
   * **Gwyn ap Nudd**;
   * *gwyn/gwen* personal names and epithets;
-  * the Very White Witch;
-  * the Black Witch;
+  * the Very White Witch vs the Black Witch;
   * other extraordinary white figures in *Culhwch ac Olwen*;
   * material from *Pwyll* and *Manawydan*.
   * Investigate whether *gwyn/gwen* is disproportionately associated with:

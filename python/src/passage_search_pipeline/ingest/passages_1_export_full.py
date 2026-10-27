@@ -23,14 +23,14 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from lib.corpus_db import get_connection
-from lib.corpus_config import MAPPED_GOOGLE_DRIVE, OUT_DIR
+from lib.corpus_config import MAPPED_GOOGLE_DRIVE, OUT_DIR, LANCE_INDEXES_DIR
 from lib.corpus_logging import logger
 
 from lib.corpus_albinism import CORPUS_SQL
 
 # Defaults (all overridable from the CLI)
 DEFAULT_OUTPUT_DIR = MAPPED_GOOGLE_DRIVE / Path("souroce_tokens")
-DEFAULT_LANCE_DIR = OUT_DIR / "indexes/lance_albinism"
+DEFAULT_LANCE_DIR = LANCE_INDEXES_DIR
 DEFAULT_LANCE_PREFIXES = ("passage_l8__", "passage_last__", "passage_mean4__")
 DEFAULT_DOCS_PER_SHARD = 10  # 500
 
@@ -52,36 +52,21 @@ SCHEMA = pa.schema([
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Export full-document tokens to parquet shards, "
-                    "skipping documents already indexed in Lance."
-    )
-    p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
-                   help="Directory for parquet shards (default: %(default)s)")
-    p.add_argument("--lance-dir", type=Path, default=DEFAULT_LANCE_DIR,
-                   help="LanceDB directory to read indexed docs from "
-                        "(default: %(default)s)")
+        description="Export full-document tokens to parquet shards, skipping documents already indexed in Lance." )
+    p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Directory for parquet shards (default: %(default)s)")
+    p.add_argument("--lance-dir", type=Path, default=DEFAULT_LANCE_DIR, help="LanceDB directory to read indexed docs from " "(default: %(default)s)")
     p.add_argument("--lance-prefix", action="append", dest="lance_prefixes",
                    metavar="PREFIX",
-                   help="Lance table-name prefix to treat as 'indexed'. "
-                        "Repeatable. Default: "
-                        + ", ".join(DEFAULT_LANCE_PREFIXES))
-    p.add_argument("--docs-per-shard", type=int, default=DEFAULT_DOCS_PER_SHARD,
-                   help="Documents per parquet shard (default: %(default)s)")
+                   help="Lance table-name prefix to treat as 'indexed'. Repeatable. Default: " + ", ".join(DEFAULT_LANCE_PREFIXES))
+    p.add_argument("--docs-per-shard", type=int, default=DEFAULT_DOCS_PER_SHARD, help="Documents per parquet shard (default: %(default)s)")
     p.add_argument("--force-doc-id", action="append", default=[],
                    dest="force_doc_ids", metavar="DOC_ID",
-                   help="Export this doc_id even if already indexed/exported. "
-                        "Repeatable.")
-    p.add_argument("--no-skip-indexed", action="store_true",
-                   help="Do not skip documents found in Lance")
-    p.add_argument("--no-skip-exported", action="store_true",
-                   help="Do not skip documents already in existing parquet shards")
-    p.add_argument("--overwrite", action="store_true",
-                   help="Delete existing shards in the output dir and start "
-                        "numbering at 0 (implies --no-skip-exported)")
-    p.add_argument("--limit-docs", type=int, default=None,
-                   help="Stop after exporting this many documents (for testing)")
-    p.add_argument("--itersize", type=int, default=100_000,
-                   help="Server-side cursor fetch size (default: %(default)s)")
+                   help="Export this doc_id even if already indexed/exported. Repeatable.")
+    p.add_argument("--no-skip-indexed", action="store_true", help="Do not skip documents found in Lance")
+    p.add_argument("--no-skip-exported", action="store_true", help="Do not skip documents already in existing parquet shards")
+    p.add_argument("--overwrite", action="store_true", help="Delete existing shards in the output dir and start numbering at 0 (implies --no-skip-exported)")
+    p.add_argument("--limit-docs", type=int, default=None, help="Stop after exporting this many documents (for testing)")
+    p.add_argument("--itersize", type=int, default=100_000, help="Server-side cursor fetch size (default: %(default)s)")
     args = p.parse_args()
 
     if args.docs_per_shard < 1:
