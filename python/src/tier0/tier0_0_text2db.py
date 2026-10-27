@@ -305,7 +305,7 @@ def pick_pub_year(tree):
 def pick_composition_date(tree):
     """Original composition date as a display string, or None. Never used for pub_year."""
     d = tree.find(
-        ".//tei:teiHeader//tei:profileDesc/tei:creation/tei:date", TEI_NS
+        ".//tei:teiHeader//tei:;/tei:creation/tei:date", TEI_NS
     )
     if d is None:
         return None
@@ -538,35 +538,16 @@ def process_misc_file(tree, xml_path):
     date_raw, pub_year, date_source = pick_pub_year(tree)
     composition_raw = pick_composition_date(tree)
 
-    # Explicit publication-date override for the KJV translation.
-    # This is the translation's first publication year, not necessarily
-    # the date of the particular XML transcription.
-    if xml_path.name.lower() == "kjv.xml":
-        date_raw = "1611 (KJV first published)"
-        pub_year = 1611
-        date_source = "manual_override"
-
     if pub_year is None:
-        logger.warning(
-            f"[tier0 worker {os.getpid()}] "
-            f"No publication year in misc document "
-            f"{doc_id} at {xml_path}"
-        )
+        logger.warning( f"[tier0 worker {os.getpid()}] - No publication year in misc document {doc_id} at {xml_path}" )
         return None
 
     if not year_in_corpus(pub_year):
-        logger.warning(
-            f"[tier0 worker {os.getpid()}] "
-            f"Year not in corpus: {pub_year} "
-            f"for {doc_id} at {xml_path}"
-        )
+        logger.warning( f"[tier0 worker {os.getpid()}] Year not in corpus: {pub_year} for {doc_id} at {xml_path}" )
         return None
 
     if date_source != "imprint":
-        logger.info(
-            f"[tier0] {doc_id}: year {pub_year} taken from {date_source} "
-            f"(no usable imprint date)"
-        )
+        logger.info( f"[tier0] {doc_id}: year {pub_year} taken from {date_source}(no usable imprint date)" )
 
     source_date_raw = date_raw
     if composition_raw:
