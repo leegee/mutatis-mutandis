@@ -1,5 +1,18 @@
 # Passage Search API
 
+## Usage Synopsis
+
+To add a doc to the corpus:
+
+    python src/tier0/tier0_0_text2db.py --file enoch_charles_1917.xml --corpus misc
+    python src/passage_search_pipeline/ingest/passages_1_export_full.py --force-doc-id enoch_charles_1917
+    # Run on Colab passages_2_0_colab_embed_passages.py
+    python src/passage_search_pipeline/ingest/passages_3_passages_parquet_to_lance.py
+
+Run the search servers:
+
+    start-servers.sh
+
 ## Layout
 
 | File | Role |

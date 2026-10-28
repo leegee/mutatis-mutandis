@@ -6,7 +6,9 @@
         We all declare for liberty but in using the same word we do not all mean the same thing
         -- Abraham Lincoln, Address at the Sanitary Fair in Baltimore, Maryland, on April 18, 186
 
-## Code Synopsis
+## Usage Synopsis
+
+### Ensemble Embeddings
 
     cd $PROJECT_ROOT/gui/research && bun dev    #  Research graph
 
@@ -15,8 +17,21 @@
 
     cd $PROJECT_ROOT
     uv sync
-    uv pip install -e .
     python src/tier.... in order
+
+
+### Passage Search Usage Synopsis
+
+To add a doc to the corpus:
+
+    python src/tier0/tier0_0_text2db.py --file enoch_charles_1917.xml --corpus misc
+    python src/passage_search_pipeline/ingest/passages_1_export_full.py --force-doc-id enoch_charles_1917
+    # Run on Colab passages_2_0_colab_embed_passages.py
+    python src/passage_search_pipeline/ingest/passages_3_passages_parquet_to_lance.py
+
+Run the search servers:
+
+    start-servers.sh
 
 ## Conceptual Synopsis
 
