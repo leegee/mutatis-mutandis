@@ -215,7 +215,7 @@ The frequency of recorded reactions can be measured within the retrieved materia
 
 ## 7. Researcher position and reflexivity
 
-The project is undertaken by a researcher who has albinism. This informs the choice of questions and brings an awareness of the consequences of historical representation, but it does not determine the meanings identified in the evidence.
+The project is undertaken by a researcher who himself has albinism. This informs the choice of questions and brings an awareness of the consequences of historical representation, but it does not determine the meanings identified in the evidence.
 
 The project does not assume that albinism or extraordinary bodily whiteness has an inherent symbolic, moral or cultural value. Its object is historical: the meanings that particular writers, communities and traditions attached to visibly marked bodies. Interpretive claims will be grounded in textual, linguistic and historical evidence, with evidence, scholarly interpretation and the researcher's own judgement kept distinct.
 
@@ -229,16 +229,16 @@ Subject to copyright, licensing and source restrictions, the project will also p
 
 ### 8.2 Beneficiaries and impact
 
-The principal contribution is scholarly. Beyond academia, the research may be relevant to people with albinism and their families, educators, and organisations concerned with albinism and disability representation.
+The principal contribution is scholarly. Beyond academia, the research is expected to be relevant to people with albinism and their families, educators, and organisations concerned with albinism and disability representation.
 
-The project will investigate whether the historical record contains a wider range of representations than those most familiar in modern accounts, including positive, ambiguous, contradictory and matter-of-fact examples. It will not assume in advance that a positive historical inheritance exists or that literary depictions correspond to the experiences of people with albinism.
+Above all, the project will demonstrate that the historical record contains a wider range of representations than those negative depictions most familiar in modern accounts and hopes to go some way to reinforce Thomas White's assertion (Ibid. p. 14) that "Albinism does not exist," that is merely "a term used in western medicine and ophthalmology" with its own "specific history and etymology" that should not be allowed to define the identity with those classified thus.
 
-The project will seek to share its findings in accessible language and consult relevant organisations, such as Standing Voice and national support groups, on how results are presented. Any statement about prevalence will use a reliable, appropriately scoped source. [Verify the proposed estimate of approximately 1 in 17,000 in Europe and North America, and cite the source if retained.]
+The project will seek to share its findings as much as possible in accessible language and consider consulting relevant organisations, such as Standing Voice and national support groups, on how results are presented. Any statement about prevalence will use a reliable, appropriately scoped source.
 
 ### 8.3 Three-year plan
 
-| Period | Work |
-|---|---|
+| Period     | Work                                                |
+|------------|-----------------------------------------------------|
 | **Year 1** | Literature review; define and pilot the object and annotation scheme; assemble and assess corpora; compile seed lexicons; conduct bounded Old English searches and close readings; decide the feasible scale of the Middle English component; test time slices and controls |
 | **Year 2** | Conduct and refine two-ended retrieval; validate a hand-annotated sample; undertake close-reading case studies across selected religious, literary, early modern, natural-historical and medical material; trace documented reception where the evidence warrants it |
 | **Year 3** | Synthesize findings on representation, historical change and the limits of demonstrable connection; complete thesis; prepare research outputs and, where permitted, release the annotated dataset and code |

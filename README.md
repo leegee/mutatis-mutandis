@@ -4,7 +4,7 @@
     https://github.com/leegee/mutatis-mutandis.git
 
         We all declare for liberty but in using the same word we do not all mean the same thing
-        -- Abraham Lincoln, Address at the Sanitary Fair in Baltimore, Maryland, on April 18, 186
+        -- Abraham Lincoln, Address at the Sanitary Fair in Baltimore, Maryland, on April 18, 1864
 
 ## Usage Synopsis
 
