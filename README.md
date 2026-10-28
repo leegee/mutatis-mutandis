@@ -14,15 +14,13 @@
 
     cd $PROJECT_ROOT/python
     source .venv/Scripts/activate               # Load environment
-
-    cd $PROJECT_ROOT
     uv sync
     python src/tier.... in order
 
 
 ### Passage Search Usage Synopsis
 
-To add a doc to the corpus:
+To add a doc to the passages' corpus:
 
     python src/tier0/tier0_0_text2db.py --file enoch_charles_1917.xml --corpus misc
     python src/passage_search_pipeline/ingest/passages_1_export_full.py --force-doc-id enoch_charles_1917
