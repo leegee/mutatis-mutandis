@@ -53,10 +53,10 @@ src/passage_search_pipeline/__init__.py
 src/passage_search_pipeline/api.py
 src/passage_search_pipeline/cli.py
 src/passage_search_pipeline/core.py
-src/passage_search_pipeline/passages_search.py
 src/passage_search_pipeline/schemas.py
 src/passage_search_pipeline/service.py
 src/passage_search_pipeline/test_api.py
+src/passage_search_pipeline/text_search.py
 src/passage_search_pipeline/texts.py
 src/passage_search_pipeline/ingest/__init__.py
 src/passage_search_pipeline/ingest/passages_1_export_full.py

@@ -2,7 +2,6 @@ agents
 embedding
 experiments
 lib
-mutatis-mutandis
 passage_search_pipeline
 retrieval
 scripts

@@ -1,15 +1,77 @@
 """
 colab_embed_passages.py
 
-Colab job: stand-alone token parquet shards (Drive) -> passage-vector parquet shards (Drive).
+Colab job: *stand-alone* token parquet shards (Drive) -> passage-vector parquet shards (Drive).
 
 Be sure to sync the config with lib.corpus_config and lib.macberth
 
-No Postgres, no Lance. Each output shard is written to local /content first,
-copied to Drive under a .part name, then renamed, so a disconnect can never
-leave something that looks finished but isn't. Re-running skips finished shards.
+Google Colab pipeline phase for converting standalone token Parquet shards stored on Google Drive into passage-embedding Parquet shards, using **MacBERTh**. Runs independently of PostgreSQL and LanceDB.
 
-    !pip install -q transformers pyarrow
+### What it does
+
+- Reads `tokens_*.parquet` shards from `source_tokens/`.
+- Processes each document independently, dividing its tokens into **40-word passages with a 20-word hop** (50% overlap), without crossing gaps in the original token positions.
+- Generates 768-dimensional passage vectors using three representations: `l8` (layer 8), `last` (final layer), and `mean4` (mean of the final four layers).
+- Stores passage metadata, including corpus, document ID, publication year, word offsets, and original token offsets.
+- Writes vectors as `float16` and uses Zstandard compression for compact storage.
+
+### Resumability and fault tolerance
+
+- Saves each document's results as an individual checkpoint.
+- Skips valid existing checkpoints when resuming and skips completed output shards.
+- Writes files to local Colab storage first, then copies them to Drive under a temporary `.part` filename. Validates the copy before renaming it to the final filename.
+- Assembles each output shard by streaming checkpoints into a local Parquet file, avoiding loading the entire shard into memory.
+- Validates checkpoint schemas and the assembled output before publishing the final shard.
+
+A Colab disconnection should therefore not leave a partially copied file appearing complete. Re-running the job reuses valid checkpoints and completed shards.
+
+### Configuration
+
+Key settings include:
+
+- `IN_DIR`, `OUT_DIR`: Google Drive input and output directories.
+- `RESUME_FROM_DOC`, `STOP_AFTER_DOC`: document-index range for selective processing.
+- `CHUNK`, `OVERLAP`, `BATCH`: model tokenisation and inference settings.
+- `WINDOW`, `HOP`: passage size and stride.
+- `LAYER_NAMES`: embedding representations to generate.
+- `ASSEMBLE_FINAL_SHARD`: whether to assemble document checkpoints into final output shards.
+
+**Keep the model and pipeline configuration synchronised with `lib.corpus_config` and `lib.macberth`.**
+
+### Setup and execution
+
+Install the dependencies in Colab:
+
+```python
+!pip install -q transformers pyarrow
+```
+
+Run the script in Google Colab. It mounts Google Drive, selects CUDA when available (otherwise CPU), loads MacBERTh, and processes the input shards in sorted order. CPU inference is supported but may be slow.
+
+### Input and output
+
+```text
+passage-pipeline/
+├── source_tokens/
+│   └── tokens_*.parquet
+└── output-passages/
+    ├── passages_*.parquet
+    └── _checkpoints/
+        └── tokens_*/
+            └── doc_*.parquet
+```
+
+Each final output shard contains passage metadata and the three embedding vectors. Empty documents produce no passage rows.
+
+**Note:** `RESUME_FROM_DOC` and `STOP_AFTER_DOC` use zero-based document indices, with the stop index inclusive. If processing only a subset of documents, ensure the checkpoint set is complete before assembling a final shard; otherwise, assembly may omit documents without checkpoints.
+
+## To Do
+
+* Unweighted mean. In 40 words, function words contribute as much as “whyte” or “wolle”. Try down-weighting stopwords, or weighting by inverse frequency (SIF-style).
+
+* What counts as a “word”. Check that punctuation tokens aren’t counted in the 40-word window. Empty tokens are replaced with “.” in the script.
+
+* Storage. One 768-dimension fp16 vector is about 1.5 KB, and there is one passage per 20 words. That is roughly 7–8 GB per representation per 100 million words. A billion words would be about 75 GB per representation, and this script stores three.
 
 """
 
