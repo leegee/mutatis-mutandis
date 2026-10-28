@@ -1,266 +1,226 @@
-# Marked Whiteness: Hair, Skin and Eyes in English Writing from the Old English Period to the Nineteenth Century
+# Representing Visible Difference: Extraordinary Paleness of Hair, Skin and Eyes in English Writing, c. 700–1900
 
-*Preliminary research outline, third revised draft. The title remains provisional. Items in square brackets require verification or a decision.*
+*Preliminary research outline, fourth revised draft. The title remains provisional. Items in square brackets require verification or a decision.*
 
 ## 1. Starting point and contribution
 
-Thomas White's thesis, *Their Whiteness Is Not Like Ours: A Social and Cultural History of Albinism and Albino Identities, 1650–1914* (University of Manchester, 2011), provides an essential starting point. White traces the changing cultural and scientific significance of albinism through travel writing, encounters with unusually white people, natural history, medical classification, biological research and the self-representation of people with albinism. His work demonstrates that albinism was not simply a timeless medical condition awaiting scientific discovery, but that its meanings and social consequences developed through historically specific discourses of human difference, race, pathology and identity.
+Thomas White's thesis, *Their Whiteness Is Not Like Ours: A Social and Cultural History of Albinism and Albino Identities, 1650–1914* (University of Manchester, 2011), is the essential starting point. White traces the changing significance of albinism through travel writing, natural history, medical classification, biological research and the self-representation of people with albinism. He shows that albinism was not a timeless condition awaiting scientific discovery, but a category whose meanings and social consequences developed through historically specific discourses of human difference, race, pathology and identity.
 
-The present project does not repeat that work but takes as its subject the representation and interpretation of extraordinary bodily whiteness in English writing from an earlier period, extending from Old English literature to the 1650s, and to compare that with later representations. It investigates descriptions of unusually white hair, very pale skin and distinctive eyes, including their appearance in religious, literary, supernatural, natural-historical and medical contexts. It asks what meanings these descriptions acquired, how those meanings changed, and whether specific historical connections can be demonstrated between earlier representations and the later category of albinism.
+This project does not repeat that work. It studies how unusually pale hair, skin and eyes were described and interpreted in English writing from the Old English period to the seventeenth century, and compares that evidence with the later period White covers. It asks what meanings these descriptions acquired in religious, literary, supernatural, natural-historical and medical contexts, how those meanings changed, and whether specific historical connections can be demonstrated between earlier representations and the later category of albinism.
 
-White's work is relevant both as scholarship to build on and as a boundary against which to define the proposed research. His discussion of earlier attempts to identify historical figures as albinos does not amount to a systematic investigation of the longer literary history of extraordinary bodily whiteness. The proposed project would investigate that history in its own right, while drawing on White's account when the earlier material encounters the period and discourses he studies.
+White's discussion of earlier attempts to identify historical figures as albinos is not a systematic study of the longer literary history of such descriptions; that history is this project's subject. The emphasis shifts from the history of a category to the history of a cluster of bodily descriptions. The project does not presume that these descriptions are an early form of a medical condition, that they belong to a single tradition, or that their meanings culminate in modern albinism. Whether any such relationship exists, and on what evidence it can be claimed, is part of the research.
 
-The project therefore shifts the emphasis from the history of a category to the history of a cluster of bodily descriptions and their cultural meanings. It does not presume that these descriptions constitute an early form of a medical condition, that they belong to a single tradition, nor that their meanings culminate in the modern construct of albinism. Establishing whether any such relationships existed, and on what evidence they can be claimed, is part of the research.
+The project is framed within the study of how visible bodily difference has been represented. It draws on literary history and disability studies, and attends to stigma, embodiment and the consequences of representation, without claiming that every description it examines concerns a disabled or medicalised body.
 
-## 2. Summary and central question
+## 2. Summary, central question and hypotheses
 
-The project asks how a recurring cluster of bodily features - unusually white hair, very pale skin, distinctive pale or fiery eyes, and occasionally bodily radiance - was described and interpreted in English writing from the Old English period to the nineteenth century.
+The project asks how a recurring cluster of bodily features (unusually white hair, very pale skin, distinctive pale or fiery eyes, and occasionally bodily radiance) was described and interpreted in English writing across more than a millennium. Its central question is:
 
-Its principal research question is:
+**How was extraordinary paleness of the body represented and interpreted in English writing from the Old English period to the nineteenth century, and what historical relationships, if any, can be demonstrated between these representations and the later medical category of albinism?**
 
-**How was extraordinary bodily whiteness represented and interpreted in English writing from the Old English period to the nineteenth century, and what historical relationships, if any, can be demonstrated between these representations and the later medical category of albinism?**
+The project combines close reading with a bounded computational method: passage-level semantic retrieval over large historical corpora, started from two directions (early bodily descriptions such as "heeris weren whyte as whyte wolle and as snow," and the later vocabulary of albinism). Retrieved passages are examined in their textual, linguistic and historical contexts. Retrieval is a means of finding evidence that conventional reading may miss, not an independent research objective.
 
-The project combines literary-historical research and close reading with the bounded computational method of diachronic semantic search across a large historical corpora. Retrieval begins both with descriptions of bodily features in early material ("heeris weren whyte as whyte wolle and as snow") and with the later terminology of albinism. The resulting passages are examined in their textual, linguistic and historical contexts. The computational method is a means of finding evidence that conventional reading may miss, not an independent research objective.
+Two working hypotheses are stated so that they can fail.
 
-The working hypothesis is that extraordinary bodily whiteness has acquired multiple meanings including the numinous and the wondrous beyond the the ominous, the monstrous and the medical identified by White, whose availability and significance vary by period and genre. These meanings need not form a continuous tradition, and apparently similar descriptions need not have the same significance: their interaction is part of the research.
+- **H1 (period-specific meanings).** Before about 1550, English descriptions of extraordinarily pale bodies attach mainly to the numinous, otherworldly or wondrous, and carry no naturalistic explanation of the body as a human variation. Natural-historical and medical explanation of such bodies emerges in English chiefly in the seventeenth century, with travel writing and natural history. H1 fails if matter-of-fact or naturalistic accounts are found substantially earlier, or if numinous framings persist unchanged into the medical period.
+- **H2 (limited reception).** Later naturalistic accounts draw on classical, travel and medical authorities rather than on the earlier religious and literary imagery. H2 fails if chains of quotation, allusion or translation link the two bodies of material.
 
-The project welcomes findings that complicate or disprove this hypothesis. Earlier and later representations may prove largely unrelated; matter-of-fact descriptions may be scarce; and some apparent patterns may be attributable to conventional imagery, textual transmission or the survival of particular kinds of writing.
+The project welcomes findings that complicate or disprove either hypothesis. Earlier and later representations may prove largely unrelated; matter-of-fact descriptions may be scarce; apparent patterns may be attributable to conventional imagery, textual transmission or the accidents of survival.
 
 ## 3. Research questions
 
-The project addresses four related humanities questions.
+1. **Representation and historical change.** How is extraordinary paleness described in English writing, and what meanings attach to it across periods and genres (religious, literary, supernatural, natural-historical, medical), including differences of moral or emotional valence?
+2. **The body and its interpretation.** How do writers distinguish or conflate unusual hair, skin, eyes, bodily radiance and the function of the eyes (for example, claims about sight)? When are these features signs of holiness, wonder, danger, monstrosity, physical difference or a condition requiring explanation? What survives of descriptions that provoke no explicit reaction?
+3. **Historical relationship and discontinuity.** Where can specific connections be demonstrated between earlier representations and later accounts of "albinism"? What roles do quotation, allusion, translation, shared authorities and genre conventions play? Where does the evidence indicate discontinuity or an unresolved relationship?
+4. **The English tradition in context.** What do biblical, classical and other sources contribute where a demonstrable channel of reception exists, and what can bounded comparison clarify about the specificity of English representations?
 
-1. **Representation and historical change.** How is extraordinary bodily whiteness described in English writing, and what meanings are attached to it across periods and genres? How do mundane, religious, literary, supernatural, natural-historical and medical interpretations compare, including differences in moral or emotional valence?
-
-1. **The body and its interpretation.** How do writers distinguish, or conflate, unusual hair, skin, eyes and bodily radiance? When are these features presented as signs of holiness, wonder, danger, monstrosity, physical difference or a condition requiring explanation? What evidence survives of descriptions that do not provoke an explicit reaction?
-
-1. **Historical relationship and discontinuity.** Where can specific connections be demonstrated between earlier representations and later accounts of "albinism"? What roles do quotation, allusion, translation, shared authorities and genre conventions play? Where does the evidence indicate discontinuity, independent development or an unresolved relationship?
-
-1. **The English tradition in context.** What do biblical, classical and non-English sources contribute to the English evidence when there is a demonstrable channel of reception? Where comparison is useful without such a channel, what can it clarify about the specificity of English representations?
-
-The computational question is subordinate to these: can passage-level semantic retrieval help identify relevant descriptions without assuming that resemblance establishes equivalence or historical transmission?
+The computational question is subordinate: can passage-level semantic retrieval help identify relevant descriptions without assuming that resemblance establishes equivalence or transmission?
 
 ## 4. Object of study and scope
 
-### 4.1 Defining extraordinary bodily whiteness
+### 4.1 Defining extraordinary paleness, and a note on terminology
 
-"Extraordinary bodily whiteness" is an analytical term developed for this project to escape the constraints of the medical term "albinism", not a historical category assumed to have been recognised consistently across the period. It encompasses several distinct features whose relationships must be established through the evidence.
+"Extraordinary paleness" is an analytical term developed for this project, not a historical category assumed to have been recognised consistently. It is used in preference to "whiteness" to avoid confusion with the racial sense of that word in modern scholarship, and to avoid presupposing the medical category of albinism. Historical sources' own terms ("white", "hoar", "wan", and others) are reported in quotation and analysed in context. Outside quotation the project uses "person with albinism" and avoids "albino" as a noun. Some historical terms in the later corpus (for example "white negro" and "kakerlak") are racialised or offensive; they are evidence to be analysed and will be flagged as such in any output.
 
 The core object comprises descriptions of human or human-like bodies, including divine, angelic, supernatural and monstrous figures, in which:
 
 - white or very pale hair occurs alongside at least one further marked bodily feature, such as unusually pale skin or distinctive pale, red or flame-like eyes; or
 - white or very pale hair, or very pale skin, is presented as a bodily peculiarity in its own right.
 
-Associated features will be recorded separately: bodily luminosity or radiance; fiery or piercing eyes without accompanying pallor; whiteness of clothing or surroundings; and the reactions of observers. These may illuminate the interpretation of a description but do not, by themselves, establish that it belongs to the core object.
+Associated features are recorded separately: bodily luminosity; fiery or piercing eyes without accompanying pallor (for example Grendel's eyes); the function ascribed to the eyes, such as better sight at night; whiteness of clothing or surroundings; and the reactions of observers. These may illuminate a description without establishing that it belongs to the core object.
 
-The project excludes generic symbolism of white as purity or holiness when it is not attached to a described body, similes involving snow or wool applied to non-bodies, and conventional descriptions of fair complexion. Borderline cases will be retained in separate categories where excluding them would obscure a potentially significant relationship.
+Excluded are generic symbolism of white as purity or holiness not attached to a described body, similes of snow or wool applied to non-bodies, and conventional descriptions of fair complexion. Borderline cases are kept in separate categories where excluding them would obscure a potentially significant relationship.
+
+**Known confounds.** "White-headed", "towhead", "flaxen" and similar words often describe fair-haired children and will pollute retrieval. Lexical work will draw on Biggam's studies of Old English colour terms, the *Thesaurus of Old English* and the *Historical Thesaurus of English*.
 
 ### 4.2 White hair, age and markedness
 
-White hair can carry different meanings, including age, wisdom, purity, radiance and divine authority. Early Christian interpretations of Daniel 7:9 illustrate this plurality: Jerome associates the figure's apparent age with the maturity of divine judgement, while interpreting the wool-like hair in terms of impartial judgement; Origen connects its whiteness with heavenly radiance, and Cyril of Jerusalem with innocence and freedom from sin. Bede's interpretation of Revelation 1:14, which relates the whiteness of Christ's head and hair to the antiquity and immortality of divine majesty, provides a further perspective on the application of this imagery to the Son of Man. These interpretations offer historical evidence that whiteness did not have a single, self-evident meaning, although their circulation and influence in English writing must be established rather than presumed.
+White hair can signify age, wisdom, purity, radiance and divine authority. Patristic interpretations of Daniel 7:9 show this plurality: Jerome relates the figure's apparent age to the maturity of divine judgement and the wool-like hair to impartial judgement; others connect whiteness with heavenly radiance or freedom from sin \[verify each attribution against primary citations before use; the Daniel commentaries of Origen survive only in part, and Hippolytus's commentary should be considered\]. Bede's interpretation of Revelation 1:14 relates the whiteness of Christ's head and hair to the antiquity and immortality of divine majesty. These interpretations are evidence that whiteness had no single, self-evident meaning; their circulation in English writing must be established, not presumed.
 
-Each relevant passage will therefore be annotated for explicit or implicit age cues, explicit youth, and the absence of a discernible age cue. Strongly age-related cases will be retained as a separate analytical group rather than automatically treated as evidence of the core phenomenon. This will help distinguish whiteness associated with ordinary ageing from descriptions in which extraordinary bodily whiteness may signify something else, while allowing for passages in which the distinction remains ambiguous.
+Revelation 1:14 applies to the Son of Man the imagery of the Ancient of Days in Daniel 7:9 (hair white like wool). The project will examine this relationship in the Latin exegetical tradition, beginning with Bede's *Explanatio Apocalypsis* and comparing earlier commentary on Daniel, and will trace demonstrable transmission into English biblical and literary writing. Neither passage is assumed to represent the same phenomenon as the descriptions of bodily difference that motivate the project; their importance lies in the interpretive questions they raise.
 
-Daniel 7 and Revelation 1 provide important textual and reception-historical points of reference. Revelation applies to the Son of Man imagery resembling the Ancient of Days in Daniel 7:9, including hair white like wool. The project will examine how this relationship was interpreted in the Latin exegetical tradition, beginning with Bede's *Explanatio Apocalypsis* and comparing it with earlier commentary on Daniel, particularly Jerome, and other relevant commentators. Particular attention will be paid to interpretations involving divine majesty, eternity, purity and related attributes, and to the demonstrable transmission of such interpretations into English biblical and literary writing. The aim is to establish how the imagery was understood in particular historical contexts, rather than to assume a continuous tradition or a connection with descriptions of bodily difference.
-
-Neither biblical passage is assumed in advance to represent the same phenomenon as the descriptions of bodily difference that motivate the project. Their importance lies partly in the interpretive questions they raise and in the evidence they provide for historically variable meanings of extraordinary whiteness.
+Each relevant passage is annotated for explicit or implicit age cues, explicit youth, or absence of any age cue. Strongly age-related cases form a separate analytical group, not automatically evidence of the core phenomenon. Cases of whiteness without age, such as the premature whitening of Fionn's hair in Irish tradition \[verify source\], are of particular interest.
 
 ### 4.3 Controls
 
-The project will use a small set of controls to test whether apparent patterns are specific to extraordinary whiteness or reflect more general literary conventions. These will include other hair and skin colours, such as red, black and yellow; other bodily extremes, including "giants," "dwarves" and the very old; and ordinary descriptions of white, hoary and grey hair, including age-related hair and snow-covered beards.
+Controls test whether apparent patterns are specific to extraordinary paleness or reflect general literary convention: other hair and skin colours (red, black, yellow); other bodily extremes (giants, dwarves, the very old); and ordinary descriptions of white, hoary and grey hair, including snow-covered beards. The final set will be determined by the pilot. Its purpose is interpretive as well as quantitative.
 
-The final control set will be determined by the pilot study. Its purpose is interpretive as well as quantitative: to help distinguish marked bodily descriptions from conventional imagery and to identify which comparisons genuinely illuminate the core object.
+### 4.4 Corpus and periods
 
-### 4.4 English writing and historical periods
+The primary corpus is English writing from the Old English period to the nineteenth century, in three tiers.
 
-The primary corpus comprises English literary, religious, natural-historical and medical writing from the Old English period to the nineteenth century. Biblical, classical, Welsh and Nordic sources are included insofar as their transmission into English writing can be established.
+1. **Old English, c. 700–1150.** Lexical and collocational searches in the Dictionary of Old English Corpus, followed by close reading of the original texts. Starting points include *Wonders of the East* and the wider marvellous-peoples tradition, Grendel's eyes, and *ælfscȳne* and related vocabulary (Hall). Translations may help locate candidates but are not evidence of Old English meaning.
+2. **Middle English, c. 1150–1450.** Targeted lexical searches and selected close readings, without a claim to systematic computational coverage. The focus is the channels through which earlier authorities reached English readers: Wycliffite and other biblical translations, Isidore \[check his treatment of the Albani\], Higden's *Polychronicon* and Trevisa's translation, Bartholomaeus Anglicus in Trevisa's version, and Mandeville. \[Specify resources and assess scale during the pilot.\]
+3. **c. 1450–1900.** The principal computational and interpretive corpus: EEBO-TCP (hand-keyed) and ECCO for the early modern and eighteenth-century material, and a nineteenth-century source to be chosen in the pilot \[candidates: HathiTrust, Gale's nineteenth-century collections, Wellcome Collection texts, the *Philosophical Transactions*\]. CLMET may serve as a small test set but is too small to carry the nineteenth century.
 
-The work is divided into three tiers:
+The weight of interpretive effort falls on the Old English and Middle English material and on the early modern period before 1650. White's period (c. 1650–1914) functions as a comparator and as a large-scale test of the method, using his findings as a source of known passages (see 6.7).
 
-1. **Old English, approximately 700–1150.** A bounded investigation using lexical and collocational searches in the Dictionary of Old English Corpus, followed by close reading of the original texts. Modern translations and other finding aids may help locate candidates but will not be treated as evidence of the Old English text's meaning.
+### 4.5 What is core, what is contextual, and what is excluded
 
-1. **Middle English, approximately 1150–1450.** Targeted lexical searches and selected close readings will bridge the other periods, without a claim to systematic computational coverage. [Specify the resources and assess the scale of this component during the pilot.]
+The project is deliberately bounded. A three-year doctorate cannot provide complete coverage of all the traditions that touch this topic, and the design treats breadth as a risk to be managed, not a virtue.
 
-1. **Approximately 1450–1900.** The principal computational and interpretive corpus, drawing on EEBO, ECCO and CLMET. Passage-level semantic retrieval will support the analysis of early modern and later representations.
+**Core (committed).** Old English close reading (4.4, tier 1); Middle English channel studies (tier 2); early modern retrieval and close reading before 1650; the backward search from the later vocabulary of albinism; and the assessment of reception and discontinuity (H1, H2).
 
-The main weight of the project falls on the under-explored early period, with the later period already covered by White being a comparator largely at which the computational approach can be tested at scale.
+**Contextual (bounded, in service of the core).**
 
-### 4.5 Biblical, apocryphal and classical sources
+- *Biblical and exegetical reception.* Daniel 7 and Revelation 1 and one case study of Bede (4.2), as a section of the Old English or Middle English work. Apocryphal comparison is limited to the *Similitudes of Enoch* (1 Enoch 46) and the birth of Noah (1 Enoch 106), where Noah's luminous, unusual body provokes paternal fear; their reception is traced only through demonstrable channels such as Richard Laurence's English translation of 1821. The Genesis Apocryphon's version of Noah's birth (Qumran) is comparative only.
+- *Classical ethnography and paradoxography.* Pliny and Solinus on the white-haired, pale-eyed Albani (including the claim of better sight at night) and on the *leucaethiopes*, considered where their reception in English can be shown, chiefly through the Middle English encyclopaedic channels above.
+- *Latin and Anglo-Norman writing from England.* A small control set, not a systematic search, to test whether conventions for recording anomalous bodies differ from those of English-language writing (for example, twelfth-century Latin reports of the Green Children of Woolpit). The exclusion of Latin from the primary corpus is a practical limit and is acknowledged as such.
 
-The project will examine biblical and apocryphal representations of extraordinary whiteness alongside classical accounts, distinguishing textual comparison from demonstrable historical influence.
+**Comparative (one chapter, reception and translation only).** Welsh, Irish and Norse material, treated in 4.6. This chapter is limited to a short list of cases, depends on specialist editions and translations, and the researcher's language competence will be stated plainly \[state competences\]. It will be the first strand reduced if the schedule requires.
 
-Daniel 7 and Revelation 1 provide important textual and reception-historical points of reference. The *Similitudes of Enoch* (1 Enoch 37–71), particularly chapter 46, provide a Jewish apocalyptic comparison in which the white-haired Head of Days and the Son of Man remain distinct figures. The account of Noah's birth in 1 Enoch 106 presents a different and more ambivalent treatment of extraordinary whiteness: Noah's unusual appearance, including its luminous quality, provokes paternal fear and questions about his parentage. These passages offer contrasting contexts in which extraordinary appearance may signify heavenly authority, exceptional status or disturbing difference. Their relationships to biblical and Christian representations will be examined without presupposing direct literary influence.
+**Not undertaken.** Systematic coverage of non-English originals; computational coverage of Old and Middle English; a second general history of albinism after 1650; and the twentieth century (see 4.7). The annotated dataset is a secondary output, released only where rights allow.
 
-The transmission history of these sources will be central to the analysis. The availability of particular texts, translations and commentaries to English writers varied by period and will be established where possible. The *Similitudes* will serve primarily as comparative evidence unless a specific route of reception can be demonstrated. More generally, the project will distinguish the survival of an earlier text from evidence of its reception or influence in later writing.
-
-Classical ethnography and paradoxography, including accounts by Pliny and Solinus of unusually white-haired or pale-eyed peoples associated with Caucasian Albania, will be considered where their reception in English writing can be demonstrated. Otherwise, such material will serve as comparative context rather than evidence of influence.
+**Review point.** At the end of Year 1 the scale of the Middle English and comparative components is fixed on the basis of pilot results, and anything infeasible is dropped, not compressed.
 
 ### 4.6 Welsh, Irish and Norse traditions: reception and comparison
 
-Welsh Arthurian and related vernacular traditions provide an important field of comparative investigation. The analysis will begin with Olwen, Gwyn ap Nudd, the Very White Witch and the Black Witch, and other potentially relevant figures in *Culhwch ac Olwen*, alongside material from *Pwyll* and *Manawydan*. It will investigate the meanings and narrative functions of *gwyn/gwen*, terms whose semantic range includes whiteness, fairness and brightness, and whether their use is associated with beauty, heroism, supernatural status, Otherworldliness or liminality. These associations will be established through textual analysis rather than inferred from names alone. Particular attention will be paid to whether descriptions of hair, skin and eyes occur together, and to the distinction between a name or epithet and an explicit description of bodily appearance.
+The comparative chapter tests a small number of cases against the definition in 4.1, and distinguishes a name or epithet from an explicit description of bodily appearance.
 
-The project will not assume that Christianity created these associations. Instead, it will investigate possible interactions between inherited Welsh vocabulary and literary conventions, Christian symbolism, and the transmission and transformation of vernacular narrative. Irish *fionn/find* material may provide a controlled comparison where it illuminates a specific question. Claims about common linguistic or cultural inheritance will require evidence beyond resemblance in vocabulary or physical description.
+*Welsh.* Within *Culhwch ac Olwen*, Olwen is described with hair yellower than broom and skin whiter than the foam of the wave \[verify against edition and translation\]. This looks like conventional fair complexion and will be tested as a control, not assumed to be a core case. The white hounds with red ears in *Pwyll* are animals and fall outside the definition, though they may illuminate the pairing of white and red as an Otherworld marker. Gwyn ap Nudd, the Very White Witch and other figures are candidates only. The analysis will examine the semantic range of *gwyn/gwen* (whiteness, fairness, brightness, blessedness) and whether its use associates with beauty, heroism, supernatural status or liminality. It will not assume that Christianity created these associations, and will consider inherited vocabulary, Christian symbolism and the transformation of vernacular narrative as interacting possibilities.
 
-Old Norse material offers a further comparison, particularly the representation of Baldr in Snorri's *Edda*. Baldr's exceptional beauty, exceptionally bright white appearance  raise questions about the relationship between physical appearance, divine status and perhaps Christian imagery. The relationship between Norse and Christian traditions has been debated, as has the etymology of the name Baldr, and the earlier poetic material presents a different configuration of the figure. The project will investigate these differences without treating Baldr as an independent witness to a single, continuous tradition of extraordinary whiteness.
+*Irish.* Fionn/Find, whose hair is said to have turned white prematurely \[verify in the primary texts\], is a strong candidate for whiteness without an age cue. A route into English exists through Macpherson's Ossianic poems of the 1760s, a contested source that will be handled as evidence of eighteenth-century reception, not of Irish tradition.
 
-Welsh, Irish and Norse material will be used in two distinct ways. Reception evidence will comprise texts demonstrably available to English readers through translation, antiquarian scholarship or literary adaptation. This includes relevant nineteenth-century Eddic translations and medievalist writing, including William Morris's reception of Norse material. Translated vocabulary will be treated as evidence of the choices made by translators and the imagery made available to English readers, not as an unmediated account of the source tradition.
+*Norse.* Snorri describes Baldr as so fair of face and so bright that light shines from him, and names a very white plant after his brow \[verify\]. This is radiance and beauty, not necessarily white hair or skin, and the project will not treat Baldr as an independent witness to a continuous tradition of extraordinary paleness. Relations between Norse and Christian imagery, the etymology of Baldr's name, and differences between the poetic and Snorri's accounts are debated and will be handled through the secondary literature. Reception evidence includes Percy's English translation (1770) of Mallet's history of Denmark, later Eddic translations, and the medievalist writing of William Morris.
 
-Comparative material will be used where no channel of transmission can be established, to clarify a specific interpretive problem raised by the English evidence. Such comparisons will not imply descent, equivalence or a shared origin. Where the evidence permits, the analysis will consider whether recurring associations are best explained by inherited linguistic or cultural patterns, borrowing, Christian convergence, independent development or some combination of these processes.
+Reception evidence comprises texts demonstrably available to English readers; translated vocabulary is treated as evidence of translators' choices, not of the source tradition. Comparative material is used only to clarify a specific problem raised by the English evidence, and claims of common inheritance require evidence beyond resemblance of vocabulary or description.
 
 ### 4.7 Later appropriation
 
-Twentieth-century racial-nationalist and occult appropriations of Norse imagery fall outside the principal period of study. They may be relevant to the reception history and to explaining why the meanings of whiteness should be historicised rather than treated as inherent. See the works of Goodrick-Clarke and Van Deusen for relevant research.
+Twentieth-century racial-nationalist and occult appropriations of Norse imagery lie outside the period of study. They matter only as a reason for historicising meanings of whiteness instead of treating them as inherent. Goodrick-Clarke and Van Deusen \[complete citation\] provide relevant research. The project does not endorse such appropriations.
 
-The project does not endorse such appropriations. Its purpose is to investigate how meanings were produced, contested and changed in particular historical contexts.
+## 5. Existing scholarship
 
-## 5. Existing scholarship and contribution
+White's thesis is the principal point of departure for the history of albinism as a category. The present research uses it to identify sources and debates while avoiding a second general history over the same period. The difference is one of emphasis and object: the project begins from a broader and earlier set of bodily descriptions and asks how their meanings developed whether or not they were ever associated with albinism.
 
-White's thesis provides the principal point of departure for the history of albinism as a category and for the relationship between scientific accounts and the social identities of people with albinism. Its coverage of travel encounters, medical thought, biological research and life writing is indispensable to the proposed project's later material. The present research will use White to identify relevant sources and debates, while avoiding a second general history of the same category over substantially the same period.
+Charlotte Baker's work on representations of albinism in Francophone and African contexts shows the importance of examining representation within particular social and discursive settings and engages critical disability studies, which informs the treatment of stigma and embodiment. For Old English, Alaric Hall's *Elves in Anglo-Saxon England* (2007) offers a framework for supernatural beings, radiance and unusual bodies. Jackson Crawford's 2014 thesis, *The Historical Development of Basic Color Terms in Old Norse-Icelandic*, is a comparative resource where it bears on a defined problem.
 
-The difference is one of emphasis and research object, not a claim that White ignores cultural representation. The proposed study begins with a broader and earlier set of bodily descriptions and asks how their meanings developed within English writing, whether or not those descriptions were ever associated with albinism. It then investigates the extent to which the later medical category intersected with this longer cultural history.
-
-Charlotte Baker's work on representations of albinism in Francophone and African contexts offers a further point of reference. It demonstrates the importance of examining representations within particular social and discursive settings, rather than assuming a universal meaning for visible bodily difference. Her engagement with critical disability studies is also relevant to the project's treatment of stigma, embodiment and the consequences of representation.
-
-For Old English material, Alaric Hall's work on supernatural beings, including *Elves in Anglo-Saxon England* (2007), offers a relevant framework for examining radiance, whiteness and the interpretation of unusual bodies. Jackson Crawford's thesis 2014 thesis *The Historical Development of Basic Color Terms in Old Norse-Icelandic
-* may offer a comparative resource where it bears directly on English reception or a defined interpretive problem.
-
-The literature review will also need to establish the relevant scholarship on biblical reception, medieval and early modern descriptions of the body, historical colour terminology, and the emergence of medical understandings of albinism. These strands will be brought together around the central humanities question rather than presented as separate background surveys.
-
-The project's intended contribution is a historically grounded account of the range and change of meanings attached to extraordinary bodily whiteness in English writing, together with a critical assessment of any demonstrable relationship to the later category of albinism. Its computational contribution is a reproducible means of identifying and validating relevant passages across large and historically uneven corpora.
+The literature review will also establish scholarship on biblical reception, medieval and early modern descriptions of the body, historical colour terminology (including Biggam), and the emergence of medical understandings of albinism, organised around the central question rather than as separate surveys.
 
 ## 6. Methodology
 
-### 6.1 Literary-historical design
+### 6.1 Design
 
-The project combines corpus-scale retrieval with close reading. Computational methods will identify candidate passages and help reveal patterns that are difficult to survey through conventional reading alone. Interpretation will then consider each passage's wording, genre, authorship where known, textual context, historical setting and relationship to other sources.
+Computational methods identify candidate passages and reveal patterns hard to survey by reading alone. Interpretation then considers each passage's wording, genre, authorship, context and relationship to other sources. Embedding similarity, keyword frequency and cluster membership are not treated as evidence of meaning; they guide investigation, and literary-historical evidence determines what can be claimed.
 
-The project will not treat embedding similarity, keyword frequency or cluster membership as self-sufficient evidence of meaning. Quantitative patterns will guide investigation; literary-historical evidence will determine what can be claimed.
+### 6.2 Two-ended retrieval
 
-### 6.2 Two-ended semantic retrieval
+- **Forward from bodily description.** Queries drawn from early anchors and related descriptions: white hair like wool or snow, very pale skin, pale or fiery eyes, radiance. Retrieved passages inform later queries.
+- **Backward from the later category.** Searches begin from *albino* and the historical vocabulary that preceded and accompanied it ("white negro", *leucaethiops*, Dondos, *kakerlak*, and spelling variants), expanded through contextual vocabulary and neighbouring passages.
 
-The retrieval process begins from two directions.
-
-- Forward from bodily description: initial queries are drawn from early textual anchors and related descriptions: white hair like wool or snow, very pale skin, pale or fiery eyes, and associated forms of radiance. Candidate passages are examined, and their relevant vocabulary and vectors can inform subsequent queries.
-
-- Backward from the later category: searches begin with *albino* to identify relevant passages in the later corpus which can be expanded through contextual vocabulary and neighbouring passages.
-
-The two chains are investigated separately before their results are compared. Their overlap identifies places for close reading; it does not establish that the two bodies of material are historically connected.
-
-A claim of connection requires evidence appropriate to the case, such as identifiable quotation, allusion, translation, a shared authority or a demonstrable genre convention. Where the evidence establishes resemblance but no channel of transmission, the relationship remains unproven. Where the available evidence cannot decide the matter, the conclusion will remain open.
+The two chains are investigated separately before comparison. Overlap identifies places for close reading; it does not establish historical connection. A claim of connection requires evidence such as identifiable quotation, allusion, translation, a shared authority or a demonstrable genre convention. Where only resemblance is established, the relationship remains unproven.
 
 ### 6.3 Passage-level retrieval and annotation
 
-Retrieval will operate at sentence or short-passage level because completed research has demonstrated that relevant features are often distributed across several clauses. Each candidate passage will retain its bibliographic provenance and location within the source to enable hyperlinking to the text in context.
+Retrieval operates on overlapping 40-word windows with a 20-word hop, so that each stretch of text appears in two windows and overlapping hits are merged for review, because pilot work suggests that relevant features are often distributed across several clauses. Each passage retains its bibliographic provenance and location so that it can be linked to the text in context. The annotation scheme distinguishes hair, skin, eyes, radiance and the function ascribed to the eyes; co-occurrence or independence of features; age cues and other explanations; the figure's status; genre and discourse; the presence and character of any recorded reaction; quotation, allusion or independent use; and confidence and interpretive uncertainty. It will be piloted and revised before full annotation, and borderline examples are retained, not forced into a binary.
 
-The annotation scheme will distinguish:
+### 6.4 Models and baselines
 
-- hair, skin, eyes and radiance;
-- whether features occur together or independently;
-- age cues and other explanations for the appearance;
-- the figure's status, where identifiable;
-- genre and discourse;
-- the presence and character of any recorded reaction;
-- quotation, allusion or independent use;
-- confidence in inclusion and relevant interpretive uncertainties.
+The encoder under evaluation is MacBERTh (Manjavacas and Fonteyn 2022), a BERT-base model pre-trained on English from 1450 to 1950. It is a masked-language model, not a sentence-embedding model, and raw pooled vectors from such models are known to retrieve unreliably. The current prototype is a working proof of concept: it embeds 40-word windows with MacBERTh using vectors from the eighth hidden layer (each passage vector is the unweighted mean of its 40 word vectors, which are averaged from subword states computed over 510-subword chunks of the whole document, so passages are embedded in document context, not in isolation; final-layer and mean-of-last-four-layers vectors are also stored), stores them in a Lance index with date filtering, and supports query by example. One worked example, starting from a twentieth-century medical passage on albinism, retrieved plausible earlier leads, including a Middle English rendering of Revelation 1:14. No recall or precision has yet been measured and no comparison with keyword retrieval has been run, so its suitability for passage retrieval is a question to be answered, not assumed. The evaluation therefore compares, on the same gold set (6.7):
 
-The scheme will be piloted and revised before full annotation. Borderline examples will be retained where useful, rather than forced into a binary classification.
+1. a lexical baseline (BM25 and pattern matching over normalised and lemmatised text, with the hand-built lexicons);
+2. a modern off-the-shelf sentence-embedding model, on lightly normalised text;
+3. MacBERTh with the stored layer variants (layer 8, final layer, mean of the last four layers), with and without post-processing such as corpus-mean centring or whitening;
+4. MacBERTh fine-tuned contrastively for sentence similarity \[method to be chosen in the pilot, for example unsupervised or with pairs from the annotated sample\]; and
+5. a hybrid in which lexical retrieval secures recall and a dense or fine-tuned model reranks.
 
-### 6.4 Models, time slices and corpus limitations
+The method is adopted only if it demonstrably improves on the lexical baseline for this object. Because the prototype's neighbours include white animals as well as bodies (white hounds, a boar and a horse appeared beside the Apocalypse passage), a second stage will be needed to enforce the requirement in 4.1 that the described figure be human or human-like: annotation, or a classifier or reranker trained on the annotated sample. Several anchors, including the Wycliffite Bible phrase quoted above, predate 1450 and lie outside MacBERTh's training range. The prototype nonetheless retrieved a Middle English rendering of Revelation 1:14, so how well the model generalises to earlier English is treated as an empirical question: a pre-1450 subset of the gold set will compare it with the lexical baseline, and Middle English remains primarily a matter of lexical search and close reading. Early modern biblical translations of the same verses serve as in-range queries. Overlap between MacBERTh's pre-training data and the corpora searched will be documented \[confirm composition\]. Time slicing is not used. If volume is excessive, clustering may be used to organise results by genre. As a complement to passage retrieval, token-level MacBERTh vectors may be stored for a small set of target words (white/whyte, hair/heer, wool/wolle, eye) and clustered by sense in context, which draws on the model's published strength in word-level tasks.
 
-Pilot work has established that Manjavacas & Fonteyn's 2022 MacBERTh model has proven effective across historical English material within and later than its training range of 1450-1950. If necessary further models for earlier periods can be introduced as independent (non-aligned) query mechanisms.
+Old and Middle English are investigated by lexical and collocational methods and close reading, not represented as having equivalent model coverage.
 
-Time slicing will not be used for querying unless additional models are introduced.
-
-Clustering may be employed to differentiate genre in the unlikely event raw results prove too verbose.
-
-Old English and Middle English material will be investigated through lexical and collocational methods and close reading, not represented as if it had equivalent model coverage. Non-English sources searched in translation will be handled according to the reception and comparison rules in section 4.6, and examined in their original language.
-
-### 6.5 Status and development of the method
-
-The current state of the work is as follows:
+### 6.5 Status of the method
 
 | Component | Status |
-|---|---|
-| MacBERTh passage retrieval over EEBO/ECCO/CLMET/selected earlier texts | Prototype built and tested; further tuning and evaluation required |
-| Descriptive query, including "hair as white as wool" | Prototype run; retrieved candidate material requiring source and reception checks |
-| Seed lexicons for both search directions | To be compiled and evaluated |
-| Lexicon expansion and convergence analysis | Development and evaluation required; the extent already implemented needs to be specified |
-| Old English lexical and collocational work | To be developed in year 1 |
-| Annotation scheme | To be developed and piloted in year 1 |
-| Genre design | To be specified and tested |
-| Retrieval precision by period | To be evaluated |
-| Double annotation and agreement | To be attempted where feasible and reported with its limitations |
+| --- | --- |
+| MacBERTh passage retrieval over EEBO/ECCO/CLMET/selected earlier texts | Working prototype: Postgres ingest from TEI and plain text, Colab embedding of 40-word windows (20-word hop, layer-8 vectors), Lance index with date filtering and query by example, FastAPI and SolidJS interface. Corpus actually indexed to be stated; no vector normalisation or centring yet \[confirm distance metric in Lance\]; no evaluation yet |
+| Lexical (BM25) and off-the-shelf sentence-embedding baselines | To be built in Year 1 |
+| Contrastive fine-tuning and hybrid reranking | To be tested after baselines |
+| Descriptive query, including "hair as white as wool" | Prototype run; retrieved material requires source and reception checks |
+| Seed lexicons for both search directions (including historical terms) | To be compiled and evaluated |
+| Nineteenth-century corpus | To be chosen in the pilot |
+| Old English lexical and collocational work | Year 1 |
+| Annotation scheme and genre design | Year 1 pilot |
+| Retrieval precision and recall by period | To be evaluated |
+| Double annotation and agreement | Where feasible, with limitations reported |
 
-Sample diachronic retrieval available on [GitHub](github.com/leegee/mutatis-mutandis-passage-search)
+Sample diachronic retrieval: https://github.com/leegee/mutatis-mutandis-passage-search
 
 ### 6.6 Quotation and reception
 
-Biblical and other identifiable quotations will not be discarded as duplicates or noise. They are evidence of reception and of the continued availability of particular images. Passages will be annotated for quotation, allusion or independent use where this can be established.
-
-Summaries of patterns will distinguish results that include quotations from results that exclude them. This will help assess whether apparent continuity reflects repeated textual transmission, broader conventions or independent descriptions.
+Biblical and other identifiable quotations are not discarded as noise. They are evidence of reception and of the continued availability of particular images. Passages are annotated as quotation, allusion or independent use where this can be established, and summaries distinguish results that include quotations from those that exclude them, to assess whether continuity reflects repeated transmission, convention or independent description.
 
 ### 6.7 Validation
 
-A hand-annotated sample will assess whether the retrieval process identifies passages relevant to the project's object. Where feasible, a second annotator will independently assess a subset, allowing disagreements and the limits of agreement measures to be reported.
-
-Precision will be examined by period and, where sample sizes allow, by feature or genre. False positives and borderline cases will be analysed as evidence about the method and the definition of the object, not merely discarded. The annotated sample will be a research output in its own right.
+A hand-annotated sample assesses whether retrieval identifies passages relevant to the object. Precision is examined by period and, where samples allow, by feature and genre. Recall is addressed through a gold set built from known cases: the passages in White's thesis for 1650–1914, the anchor passages named in this outline, and passages found independently by close reading. Where feasible a second annotator assesses a subset and the limits of agreement are reported. False positives and borderline cases are analysed as evidence about the method and the definition of the object. The annotated sample is a research output in its own right.
 
 ### 6.8 Selection and the recording of reactions
 
-The surviving record may preserve unusual encounters precisely because they provoked a response. The project will therefore distinguish two questions: whether a text records a reaction to a described body, and what kind of reaction it records.
-
-Where a reaction is present, it will be annotated for its character, such as astonishment, veneration, fear, disgust or theological or medical interpretation. Matter-of-fact descriptions will receive particular attention because they provide an important counterpoint to explicitly symbolic or sensational accounts.
-
-The frequency of recorded reactions can be measured within the retrieved material. The probability that an ordinary encounter was recorded at all cannot be measured directly from that material. The project will keep these questions distinct and avoid treating the surviving textual record as a representative sample of lived encounters.
+The surviving record may preserve unusual encounters because they provoked a response. The project separates whether a text records a reaction to a described body from what kind of reaction it records (astonishment, veneration, fear, disgust, theological or medical interpretation). Matter-of-fact descriptions receive particular attention as a counterpoint to symbolic or sensational accounts. The frequency of recorded reactions can be measured in the retrieved material; the probability that an ordinary encounter was recorded at all cannot, and the surviving record is not treated as a representative sample of lived encounters.
 
 ## 7. Researcher position and reflexivity
 
-The project is undertaken by a researcher who himself has albinism. This informs the choice of questions and brings an awareness of the consequences of historical representation, but it does not determine the meanings identified in the evidence.
+The project is undertaken by a researcher who himself has albinism. This informs the choice of questions and an awareness of the consequences of historical representation, but does not determine the meanings found in the evidence. The project does not assume that albinism or extraordinary paleness has an inherent symbolic, moral or cultural value. Its object is historical: the meanings that writers, communities and traditions attached to visibly marked bodies. Evidence, scholarly interpretation and the researcher's own judgement are kept distinct.
 
-The project does not assume that albinism or extraordinary bodily whiteness has an inherent symbolic, moral or cultural value. Its object is historical: the meanings that particular writers, communities and traditions attached to visibly marked bodies. Interpretive claims will be grounded in textual, linguistic and historical evidence, with evidence, scholarly interpretation and the researcher's own judgement kept distinct.
+## 8. Chapters, outputs, beneficiaries and plan
 
-## 8. Outputs, beneficiaries and three-year plan
+### 8.1 Provisional chapter structure
 
-### 8.1 Expected outputs
+1. Introduction: object, terminology, method and the argument about reception.
+2. Old English: radiance, bodies and the marvellous.
+3. Middle English: exegesis, marvels and the encyclopaedic channels.
+4. The early modern period before 1650: wonder, natural history and the pale body.
+5. Naming and classifying, c. 1650–1900: the vocabulary of albinism and its relation to the earlier material (in dialogue with White; tests H2).
+6. Comparative chapter: Welsh, Irish and Norse material in reception.
+7. Conclusion: representation, change and the limits of demonstrable connection (tests H1 and H2).
 
-The principal output will be a PhD thesis presenting a literary-historical account of extraordinary bodily whiteness in English writing and assessing the extent to which its representations can be related to the later category of albinism.
+The contribution to literary history is a historically grounded account of how a recurring bodily description acquired and lost meanings in English, and of what can and cannot be shown about its relation to later medical categories.
 
-Subject to copyright, licensing and source restrictions, the project will also produce an annotated collection of passages, a reproducible retrieval pipeline and research outputs for digital humanities and literary or disability studies. The public release will document provenance, annotation decisions and limitations so that the collection can be critically reused.
+### 8.2 Outputs and beneficiaries
 
-### 8.2 Beneficiaries and impact
+The principal output is a PhD thesis. Secondary outputs, subject to copyright and licensing, are an annotated passage collection, a reproducible retrieval pipeline and articles for digital humanities, literary and disability studies; any release will document provenance, annotation decisions and limitations.
 
-The principal contribution is scholarly. Beyond academia, the research is expected to be relevant to people with albinism and their families, educators, and organisations concerned with albinism and disability representation.
-
-Above all, the project will demonstrate that the historical record contains a wider range of representations than those negative depictions most familiar in modern accounts and hopes to go some way to reinforce Thomas White's assertion (Ibid. p. 14) that "Albinism does not exist," that is merely "a term used in western medicine and ophthalmology" with its own "specific history and etymology" that should not be allowed to define the identity with those classified thus.
-
-The project will seek to share its findings as much as possible in accessible language and consider consulting relevant organisations, such as Standing Voice and national support groups, on how results are presented. Any statement about prevalence will use a reliable, appropriately scoped source.
+The contribution is mainly scholarly, but the research should also be relevant to people with albinism and their families, educators, and organisations concerned with albinism and disability representation. It will show that the historical record holds a wider range of representations than the negative ones most familiar in modern accounts, and supports White's argument that albinism is a historically specific category of Western medicine and ophthalmology, with its own history and etymology, which should not by itself define the identity of those classified by it \[verify wording and page, White 2011, p. 14\]. Findings will be shared in accessible language, and the project will consider consulting organisations such as Standing Voice and national support groups on presentation.
 
 ### 8.3 Three-year plan
 
-| Period     | Work                                                |
-|------------|-----------------------------------------------------|
-| **Year 1** | Literature review; define and pilot the object and annotation scheme; assemble and assess corpora; compile seed lexicons; conduct bounded Old English searches and close readings; decide the feasible scale of the Middle English component; test time slices and controls |
-| **Year 2** | Conduct and refine two-ended retrieval; validate a hand-annotated sample; undertake close-reading case studies across selected religious, literary, early modern, natural-historical and medical material; trace documented reception where the evidence warrants it |
-| **Year 3** | Synthesize findings on representation, historical change and the limits of demonstrable connection; complete thesis; prepare research outputs and, where permitted, release the annotated dataset and code |
+| Period | Work |
+| --- | --- |
+| **Year 1** | Literature review; define and pilot the object and annotation scheme; assemble and assess corpora, including a nineteenth-century source; compile seed lexicons; build lexical and sentence-embedding baselines and the gold set; bounded Old English searches and close readings; test controls; end-of-year review fixing the scale of Middle English and comparative work |
+| **Year 2** | Two-ended retrieval and fine-tuning/hybrid evaluation; validate the annotated sample; close-reading case studies (Middle English, early modern); trace documented reception |
+| **Year 3** | Comparative chapter; the 1650–1900 chapter and synthesis; complete the thesis; prepare outputs and, where permitted, release data and code |
 
 ## 9. Risks and limitations
 
-- **Sparse evidence.** The phenomenon may be rare or unevenly distributed. The project will use passage-level retrieval, expand its lexicons cautiously and rely on close reading rather than statistical generalisation where counts are low.
-
-- **Corpus and OCR bias.** Digitised texts, spelling variation and OCR errors may distort retrieval. The project will document corpus coverage, inspect source texts and use minimal normalisation where possible.
-
-- **Uneven chronological coverage.** Computational retrieval is feasible for only part of the period. Old English work will be bounded, Middle English targeted, and the principal computational analysis concentrated on the early modern and later corpora.
-
-- **An unstable object of study.** Age-related whiteness and the distinction between core and associated features may remain ambiguous. The pilot will refine the working definition, retain borderline categories and test the effect of alternative inclusion decisions.
-
-- **False historical continuity.** Similar descriptions may be mistaken for evidence of transmission. The project will distinguish semantic resemblance from documented reception and leave unresolved relationships unresolved.
-
-- **Circularity in retrieval.** The seed descriptions shape what the system can find. Two-ended retrieval, controls, examination of false positives and validation against close reading will help expose this limitation rather than eliminate it by assertion.
-
-- **Limits of the surviving record.** Literary and medical texts cannot establish how representative their depictions were of ordinary encounters. The project will distinguish what can be said about textual representation from what remains unknown about lived experience.
+- **Breadth.** The topic touches many traditions. Mitigation: the core, contextual and excluded strands in 4.5, a Year 1 review, and a comparative chapter that can be reduced.
+- **Method performance.** MacBERTh may not outperform a lexical baseline for this object. Mitigation: baselines, a hybrid design, and a thesis whose claims rest on close reading, with retrieval as support.
+- **Sparse evidence.** The phenomenon may be rare or unevenly distributed. Mitigation: passage-level retrieval, cautious lexicon expansion, and close reading where counts are low.
+- **Corpus and OCR bias.** EEBO-TCP is hand-keyed, but ECCO and nineteenth-century material carry OCR error, and spelling varies. Mitigation: document coverage, inspect sources, normalise minimally.
+- **An unstable object.** Age-related whiteness and the core/associated distinction may stay ambiguous. Mitigation: borderline categories and sensitivity tests of alternative inclusion decisions.
+- **False continuity.** Similar descriptions may be mistaken for transmission. Mitigation: separating resemblance from documented reception, and leaving unresolved relationships unresolved.
+- **Circularity.** The seed descriptions shape what the system finds. Mitigation: two-ended retrieval, controls, analysis of false positives and validation by close reading.
+- **Limits of the record.** Texts cannot show how representative their depictions were of ordinary encounters.
+- **Language competence.** Old English, Latin and the comparative languages are read at different levels. Mitigation: stated competences, specialist editions and an Old English adviser.
 
 ## 10. Supervision and research environment
 
-Dr Barbara McGillivray (digital humanities, King's College London) has agreed to co-supervise. A primary supervisor in English or a closely related humanities field-potentially literary history, medical humanities or disability studies-is still needed. Charlotte Baker (Lancaster) has been approached but has not yet replied. An Old English or medieval specialist would be valuable for the bounded early component.
-
-The supervisory team should collectively support the project's central literary-historical question, its treatment of the history of albinism, and the use of computational retrieval as a research method rather than as the principal claim to originality.
+&#91;Internal note, to be removed from any submitted version.\] Dr Barbara McGillivray (digital humanities, King's College London) has agreed to co-supervise. A primary supervisor in English or a closely related humanities field (literary history, medical humanities or disability studies) is still needed, with an Old English or medieval specialist valuable for the early component. The supervisory team should collectively support the central literary-historical question, the treatment of the history of albinism, and retrieval as a method rather than the principal claim to originality.
