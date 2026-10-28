@@ -106,13 +106,13 @@ The project is deliberately bounded. A three-year doctorate cannot provide compl
 
 ### 4.6 Welsh, Irish and Norse traditions: reception and comparison
 
-The comparative chapter tests a small number of cases against the definition in 4.1, and distinguishes a name or epithet from an explicit description of bodily appearance.
+~~The selection of figures and passages will be guided by their relevance to the project's central concern: the representation and interpretation of extraordinary bodily whiteness. Each case will be assessed according to whether it provides evidence of the core phenomenon, offers a useful contrast with it, or raises a specific interpretive question about the relationship between bodily description and its cultural meanings. Descriptions of radiance, supernatural beauty, white clothing or symbolic whiteness will therefore not be treated as equivalent to descriptions of unusually white hair, pale skin or distinctive eyes. They may nevertheless be relevant where the text connects these features, or where their relationship helps clarify how bodily whiteness is represented. Names and epithets will likewise be distinguished from explicit descriptions of physical appearance. This approach allows the study to investigate meaningful similarities without presuming that superficially comparable figures belong to a single tradition or represent the same phenomenon.~~
 
 *Welsh.* Within *Culhwch ac Olwen*, Olwen is described with hair yellower than broom and skin whiter than the foam of the wave. This looks like conventional fair complexion and will be tested as a control, not assumed to be a core case. The white hounds with red ears in *Pwyll* are animals and fall outside the definition, though they may illuminate the pairing of white and red as an Otherworld marker. Gwyn ap Nudd, the Very White Witch and other figures are candidates only. The analysis will examine the semantic range of *gwyn/gwen* (whiteness, fairness, brightness, blessedness) and whether its use associates with beauty, heroism, supernatural status or liminality. It will not assume that Christianity created these associations, and will consider inherited vocabulary, Christian symbolism and the transformation of vernacular narrative as interacting possibilities.
 
-*Irish.* Fionn/Find, whose hair is said to have turned white prematurely is a strong candidate for whiteness without an age cue. A route into English exists through Macpherson's Ossianic poems of the 1760s, a contested source that will be handled as evidence of eighteenth-century reception, not of Irish tradition.
+*Irish.* Fionn/Find is a potential comparative case, subject to verification of the source and circumstances of the reported whitening of his hair. The analysis will distinguish an explicit description of bodily change from a name or epithet. Macpherson's Ossianic poems of the 1760s provide a route into English-language reception, but will be treated as evidence of eighteenth-century literary reception rather than as transparent evidence of earlier Irish tradition.
 
-*Norse.* Snorri describes Baldr as so fair of face and so bright that light shines from him, and names a very white plant after his brow. This is radiance and beauty, not necessarily white hair or skin, and the project will examine this alongside depictions in Vǫlundarkviða of "hvítan hals Völundar" (the white neck of Völundar) and Heimdallr, "hvítastr ása" (the whitest of the Æsir). Relations between Norse and Christian imagery, the etymology of Baldr's name, and differences between the poetic and Snorri's accounts and the semantics of the underlying terms are debated and will be handled through the secondary literature (see Section 5). Reception evidence includes Percy's English translation (1770) of Mallet's history of Denmark, later Eddic translations, and the medievalist writing of William Morris.
+*Norse.* Snorri describes Baldr as so fair of face and so bright that light shines from him, and names a very white plant after his brow. This is radiance and beauty, not necessarily white hair or skin, and the project will examine this alongside depictions in Vǫlundarkviða (stanza 2) of "hvítan hals Völundar" (the white neck of Völundar) and Heimdallr (Þrymskviða, stanza 15), "hvítastr ása" (the whitest of the Æsir). Relations between Norse and Christian imagery, the etymology of Baldr's name, and differences between the poetic and Snorri's accounts and the semantics of the underlying terms are debated and will be handled through the secondary literature (see Section 5) and close reading where none exists. Reception evidence includes Percy's English translation (1770) of Mallet's history of Denmark, later Eddic translations, and the medievalist writing of William Morris.
 
 Reception evidence comprises texts demonstrably available to English readers; translated vocabulary is treated as evidence of translators' choices, not of the source tradition, and will be presented with a close reading of the term in context. Comparative material is used only to clarify a specific problem raised by the English evidence, and claims of common inheritance require evidence beyond resemblance of vocabulary or description.
 
@@ -128,7 +128,9 @@ Charlotte Baker's work on representations of albinism in Francophone and African
 
 The literature review will also establish scholarship on biblical reception, medieval and early modern descriptions of the body, historical colour terminology (including Biggam), and the emergence of medical understandings of albinism, organised around the central question rather than as separate surveys.
 
-## 6. Methodology
+## 6. Computational Methodology
+
+The technical work builds on my background as a professional software developer, with more than 25 years' experience, and an MSc in Knowledge-based Systems from the Centre for Cognitive Science at the University of Sussex. This experience has enabled me to develop a working prototype for passage-level retrieval across historical texts. The proposed research does not depend on developing a new language model or retrieval architecture from scratch; its methodological contribution lies in evaluating how existing techniques can support the discovery and interpretation of historically significant evidence.
 
 ### 6.1 Design
 
@@ -147,34 +149,58 @@ Retrieval operates on overlapping 40-word windows with a 20-word hop, so that ea
 
 ### 6.4 Models and baselines
 
-The encoder under evaluation is MacBERTh (Manjavacas and Fonteyn 2022), a BERT-base model pre-trained on English from 1450 to 1950. The current working proof of concept using an ensemble of vectors from various layers. Each passage vector is the unweighted mean of its 40 word vectors, which are averaged from subword states computed over 510-subword chunks of the whole document, so passages are embedded in document context, not in isolation. Layer eight, final-layer and mean-of-last-four-layers vectors are selected, and stored in a Lance index with date filtering. In addition to term and phrase search, query by example has proven effective. One worked example, starting from a twentieth-century medical passage on albinism, retrieved plausible earlier leads, including Middle English renderings of Revelation 1:14. No recall or precision has yet been measured and no comparison with keyword retrieval has been run, so its suitability for passage retrieval is a question to be answered, not assumed. The evaluation therefore should compare, on the same gold set (6.7) as many as feasible of:
+The project builds on an existing prototype for passage-level semantic retrieval across dated historical texts. The system represents passages using contextual embeddings and retains their textual provenance, allowing candidate evidence to be retrieved, inspected in context and associated with its source and period. This provides a practical foundation for investigating whether semantic retrieval can identify historically relevant passages whose vocabulary differs from that of the initial query.
 
-1. a lexical baseline (BM25 and pattern matching over normalised and lemmatised text, with the hand-built lexicons);
-2. a modern off-the-shelf sentence-embedding model, on lightly normalised text;
-3. MacBERTh with the stored layer variants (layer 8, final layer, mean of the last four layers), with and without post-processing such as corpus-mean centring or whitening;
-4. MacBERTh fine-tuned contrastively for sentence similarity, with the method to be chosen in the pilot, for example unsupervised or with pairs from the annotated sample;
-5. a hybrid in which lexical retrieval secures recall and a dense or fine-tuned model reranks.
+The central methodological question is whether iterative semantic retrieval can discover historically relevant evidence that conventional lexical methods miss. The method will be adopted only if it demonstrably improves on an appropriate lexical baseline for this research object. Evaluation will use the annotated gold set described in Section 6.7, with relevance assessed in historical context rather than inferred from semantic similarity alone. The evaluation will measure precision and recall where the annotation permits, as well as the discovery of additional relevant evidence, the historical interpretability of results, retrieval-path validity, source provenance, reproducibility and computational cost. Plausible but misleading matches will be included in the assessment. Any data used for model fine-tuning will be separated from held-out evaluation data to avoid inflating performance.
 
-The method is adopted only if it demonstrably improves on the lexical baseline for this object. Because the prototype's neighbours include white animals as well as bodies (white hounds, a boar and a horse appeared beside the Apocalypse passage), a second stage will be needed to enforce the requirement in 4.1 that the described figure be human or human-like: annotation, or a classifier or reranker trained on the annotated sample. Several anchors, including the Wycliffite Bible phrase quoted above, predate 1450 and lie outside MacBERTh's training range. The prototype nonetheless retrieved a Middle English rendering of Revelation 1:14, so how well the model generalises to earlier English is treated as an empirical question: a pre-1450 subset of the gold set will compare it with the lexical baseline, and Middle English remains primarily a matter of lexical search and close reading. Early modern biblical translations of the same verses serve as in-range queries. Overlap between MacBERTh's pre-training data and the corpora searched will be documented. Time slicing is not envisaged as necessary for a model with such a wide training set. If results volume is excessive, clustering may be used to organise results by genre/semantic field. As a complement to passage retrieval, token-level MacBERTh vectors may be stored for a small set of target words (white/whyte, hair/heer, wool/wolle, eye) and clustered by sense in context, which draws on the model's published strength in word-level tasks.
+The initial historical experiment will investigate descriptions associated with *albino* across periods in which the term's availability and meaning changed. The modern term will serve as a retrieval starting point, not as evidence that earlier writers recognised an equivalent category. The investigation will ask whether passage representations can guide the discovery of earlier descriptions relevant to the research question but expressed in different vocabulary. Subsequent experiments may examine concepts such as *liberty* and *prerogative*, testing whether the approach is useful beyond the initial case.
 
-Old and Middle English are investigated by lexical and collocational methods and close reading, not represented as having equivalent model coverage.
+The encoder under evaluation is MacBERTh (Manjavacas and Fonteyn 2022), a BERT-base model pre-trained on English from approximately 1450 to 1950. The current prototype uses contextual word representations derived from document-level processing. Documents are processed in chunks of up to 510 subword tokens; the resulting subword states are combined to obtain word-level representations. Each stored passage representation is the unweighted mean of the vectors for its 40 words, with a 20-word hop between successive windows. This allows a passage representation to retain information from its wider document context rather than being calculated from an isolated passage alone. The prototype supports representations drawn from layer eight, the final layer and the mean of the last four layers. The current retrieval index uses layer-eight vectors; the other variants will be compared experimentally. Vectors are stored in LanceDB, with date filtering and query-by-example supported by the retrieval interface.
+
+A preliminary query-by-example experiment, starting from a twentieth-century medical passage about albinism, retrieved plausible earlier leads, including Middle English renderings of Revelation 1:14. This demonstrates the feasibility of generating candidates, not the method's accuracy or historical validity. The retrieved passages require source verification and reception-historical assessment. The prototype has not yet undergone formal precision or recall evaluation, and no comparison with keyword retrieval has been completed. The suitability of contextual embeddings for this task therefore remains an empirical question.
+
+The evaluation will compare as many of the following approaches as feasible, using the same gold set and consistent relevance criteria:
+
+1. **Lexical baseline:** BM25 and pattern matching over normalised and lemmatised text, supplemented by hand-built lexicons and historically informed variants.
+2. **Off-the-shelf sentence embeddings:** a contemporary general-purpose sentence-embedding model applied to lightly normalised text.
+3. **MacBERTh representations:** layer-eight, final-layer and mean-of-last-four-layer vectors, with and without post-processing such as corpus-mean centring or whitening.
+4. **Contrastively fine-tuned MacBERTh:** fine-tuning for sentence similarity, with the approach selected during the pilot. Options include unsupervised contrastive learning or training on suitable pairs derived from the annotated sample, subject to held-out evaluation.
+5. **Hybrid retrieval:** lexical retrieval to secure candidate coverage, followed by dense or fine-tuned reranking.
+
+The comparison will establish whether the additional complexity of contextual or hybrid retrieval is justified by improved discovery of relevant evidence. Post-processing and fine-tuning will be treated as experimental options rather than assumed improvements.
+
+The prototype also exposes a limitation in the definition of the research object. Its nearest neighbours for the Revelation passage included white animals, such as hounds, a boar and a horse, as well as descriptions of human bodies. Because Section 4.1 requires the described figure to be human or human-like, a further stage will assess this criterion through annotation and, if justified by the pilot, a classifier or reranker trained on annotated examples. This stage will be evaluated separately so that gains in retrieval relevance are not confused with gains in identifying the appropriate subject.
+
+Several important textual anchors, including Wycliffite renderings of Revelation 1:14, predate 1450 and fall outside MacBERTh's principal pre-training range. The prototype's retrieval of a Middle English rendering is therefore a promising lead, not evidence of reliable generalisation to earlier English. A pre-1450 subset of the gold set will be used to compare MacBERTh with the lexical baseline. Old and Middle English will remain primarily a matter of lexical and collocational search and close reading, rather than being treated as periods with equivalent model coverage. Early modern biblical translations of the same verses will provide in-range queries for comparison. Potential overlap between MacBERTh's pre-training data and the corpora searched will be documented.
+
+Time slicing is not envisaged as necessary for MacBERTh itself, given the breadth of its training period. Chronological filtering will nevertheless remain available in the retrieval system and will be central to evaluating diachronic discovery. If retrieval produces an unmanageable volume of results, clustering may be used to organise candidates by genre or semantic field, without treating cluster membership as evidence of historical equivalence.
+
+As a complementary experiment, token-level MacBERTh vectors may be stored for a small set of target words, including *white/whyte*, *hair/heer*, *wool/wolle* and *eye*. Clustering their contextual representations may help investigate variation in use and sense across contexts and periods. This experiment draws on the model's potential for word-level analysis but will remain subordinate to the main task of retrieving and interpreting passages.
+
+Further extensions, including LLM-guided query expansion, orchestration frameworks or graph-based representations of passages and retrieval paths, will be considered only where they address a demonstrated limitation of the simpler methods. Their contribution will be assessed empirically; none is a prerequisite for the core investigation.
 
 ### 6.5 Status of the method
 
-| Component | Status |
-| --- | --- |
-| MacBERTh passage retrieval over EEBO/ECCO/CLMET/selected earlier texts | Working prototype: Postgres ingest from TEI and plain text, Colab embedding of 40-word windows (20-word hop, layer-8 vectors), Lance index with date filtering and query by example, FastAPI and SolidJS interface. Corpus actually indexed to be stated; no formal evaluation yet |
-| Lexical (BM25) and off-the-shelf sentence-embedding baselines | To be built in Year 1 |
-| Contrastive fine-tuning and hybrid reranking | To be tested after baselines |
-| Descriptive query, including "hair as white as wool" | Prototype run; retrieved material requires source and reception checks |
-| Seed lexicons for both search directions (including historical terms) | To be compiled and evaluated |
-| Nineteenth-century corpus | To be chosen in the pilot |
-| Old English lexical and collocational work | Year 1 |
-| Annotation scheme and genre design | Year 1 pilot |
-| Retrieval precision and recall by period | To be evaluated |
-| Double annotation and agreement | Where feasible, with limitations reported |
+The project begins with a working retrieval prototype, but its research effectiveness has not yet been established. The following table distinguishes implemented components from work planned for the pilot and subsequent evaluation.
 
-Sample diachronic retrieval: https://github.com/leegee/mutatis-mutandis-passage-search
+| Component | Current status and planned work |
+|---|---|
+| MacBERTh passage retrieval | Working prototype with Postgres ingestion from TEI and plain text, document-context processing, 40-word passage windows with a 20-word hop, LanceDB indexing, date filtering and query-by-example. The indexed corpus and coverage will be stated explicitly in the application. |
+| Stored representation variants | Layer-eight retrieval currently implemented; final-layer and mean-of-last-four-layer variants available for comparative evaluation. |
+| Retrieval interface | FastAPI backend and SolidJS interface support passage inspection, source provenance, date filtering and query-by-example. |
+| Lexical baseline | BM25, normalised and lemmatised pattern matching, and historical lexicons to be implemented in Year 1. |
+| General-purpose sentence embeddings | Off-the-shelf baseline to be selected and implemented during the pilot. |
+| Contrastive fine-tuning and hybrid reranking | To be tested after baseline evaluation, with held-out data used to assess any improvements. |
+| Query-by-example | Preliminary prototype run retrieved plausible historical leads, including Middle English biblical material; results require source and reception checks. |
+| Seed lexicons | Lexicons for both search directions, including historical spellings and relevant descriptive vocabulary, to be compiled and evaluated. |
+| Nineteenth-century corpus | To be selected during the pilot, taking account of coverage, accessibility, genre and research relevance. |
+| Old English lexical and collocational analysis | Planned for Year 1, supported by close reading. |
+| Annotation scheme and genre design | To be developed and piloted in Year 1, including the distinction between core cases, controls and misleading matches. |
+| Precision and recall by period | To be evaluated against the annotated gold set, with pre-1450 performance examined separately. |
+| Double annotation and agreement | To be undertaken where feasible; the extent of independent annotation and any limitations will be reported. |
+| Token-level contextual analysis | Optional extension, contingent on the results and feasibility of passage-level evaluation. |
+
+Sample diachronic retrieval prototype: https://github.com/leegee/mutatis-mutandis-passage-search
 
 ### 6.6 Quotation and reception
 
@@ -235,3 +261,9 @@ The contribution is mainly scholarly, but the research should also be relevant t
 ## 10. Supervision and research environment
 
 > ** Internal note, to be removed from any submitted version.** Dr Barbara McGillivray (digital humanities, King's College London) has agreed to co-supervise the DH side. A primary supervisor in English or a closely related humanities field (literary history, medical humanities or disability studies) is still needed, with an Old English or medieval specialist valuable for the early component. The supervisory team should collectively support the central literary-historical question, the treatment of the history of albinism, and retrieval as a method rather than the principal claim to originality.
+
+## References
+
+_Vǫlundarkviða_, in Gustav Neckel and Hans Kuhn, eds., Edda: Die Lieder des Codex Regius nebst verwandten Denkmälern, vol. 1, Text, 5th revised ed. (Heidelberg: Carl Winter, 1983).
+
+_Þrymskviða_, in Neckel and Kuhn, Edda, vol. 1.
