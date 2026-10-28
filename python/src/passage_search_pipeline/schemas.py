@@ -24,9 +24,9 @@ class SearchRequest(BaseModel):
     vector_id: Optional[PassageId] = None
     negative_ids: List[PassageId] = Field(default_factory=list, max_length=50)
     representation: str = "l8"
-    start_year: int = Field(0, ge=0, le=3000)
-    end_year: int = Field(3000, ge=0, le=3000)
-    limit: int = Field(30, ge=1, le=200)
+    start_year: int = Field(0, ge=0, le=2030)
+    end_year: int = Field(2030, ge=0, le=3030)
+    limit: int = Field(30, ge=1, le=1000)
     beta: float = Field(0.5, ge=0.0, le=5.0)
     overfetch: int = Field(5, ge=1, le=20)
     include_text: bool = True
@@ -53,9 +53,9 @@ class TextSearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(..., min_length=1, max_length=500)
-    start_year: int = Field(0, ge=0, le=3000)
-    end_year: int = Field(3000, ge=0, le=3000)
-    limit: int = Field(30, ge=1, le=200)
+    start_year: int = Field(0, ge=0, le=2030)
+    end_year: int = Field(2030, ge=0, le=2030)
+    limit: int = Field(30, ge=1, le=1000)
     window_tokens: int = Field(
         40,
         ge=5,

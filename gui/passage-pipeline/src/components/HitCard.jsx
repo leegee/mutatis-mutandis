@@ -1,11 +1,10 @@
 import { Show } from "solid-js";
-
 import { findSimilar, toggleNegative } from "../actions.js";
 import { scoreLabel, scoreTitle, shortId } from "../helpers.js";
 import { overlaps } from "../overlaps.js";
 import { pane } from "../store.js";
 import { copyText } from "../toast.js";
-
+import { FilterMark } from "./FilterMark.jsx";
 import { Highlight } from "./Highlight.jsx";
 
 export function HitCard(props) {
@@ -29,10 +28,7 @@ export function HitCard(props) {
 					<span class="tag neg">excluded</span>
 				</Show>
 				<Show when={also().length > 0}>
-					<span
-						class="tag also"
-						title="A passage from the same document overlaps in the other pane(s)"
-					>
+					<span class="tag also" title="A passage from the same document overlaps in the other pane(s)">
 						also in {also().join(", ")}
 					</span>
 				</Show>
@@ -41,8 +37,12 @@ export function HitCard(props) {
 				<Highlight paneId={id} text={hit.text ?? "[text unavailable]"} />
 			</p>
 			<div class="src">
-				<span class="title">{hit.title ?? "(untitled)"}</span>
-				<span>{hit.author ?? "(unknown author)"}</span>
+				<span class="title">
+					<FilterMark text={hit.title ?? "(untitled)"} filter={p()?.filter} />
+				</span>
+				<span>
+					<FilterMark text={hit.author ?? "(unknown author)"} filter={p()?.filter} />
+				</span>
 				<span>
 					{hit.corpus} / {hit.doc_id} · tokens {hit.token_start}:{hit.token_end}
 				</span>
@@ -56,19 +56,10 @@ export function HitCard(props) {
 				>
 					Find similar
 				</button>
-				<button
-					type="button"
-					class={`btn small${isNeg() ? " on" : ""}`}
-					onClick={() => toggleNegative(id, hit)}
-				>
+				<button type="button" class={`btn small${isNeg() ? " on" : ""}`} onClick={() => toggleNegative(id, hit)}>
 					{isNeg() ? "Undo exclude" : "Not relevant"}
 				</button>
-				<button
-					class="btn small ghost"
-					type="button"
-					title={hit.passage_id}
-					onClick={() => copyText(hit.passage_id)}
-				>
+				<button class="btn small ghost" type="button" title={hit.passage_id} onClick={() => copyText(hit.passage_id)}>
 					Copy ID {shortId(hit.passage_id)}
 				</button>
 			</div>

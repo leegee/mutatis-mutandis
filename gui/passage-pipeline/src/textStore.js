@@ -29,6 +29,7 @@ function loadTextForm() {
 
 export const [textStore, setTextStore] = createStore({
 	form: loadTextForm(),
+	filter: "", // client-side results filter
 	status: "idle", // idle | loading | ok | error
 	error: "",
 	warnings: [],
