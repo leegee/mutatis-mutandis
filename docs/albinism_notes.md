@@ -123,15 +123,29 @@ VÖLUNDR
 
 In Vǫlundarkviða, Völundr's neck is described as hvítr.
 
+Vǫlundarkviða, stanza 2:
+
+  en in þriðja
+  þeira systir
+  varði hvítan
+  hals Völundar.
+
 Alaric Hall discusses this specifically because it is unusual. He notes that whiteness and brightness in Eddic poetry are overwhelmingly associated with female beauty, and argues that Völundr's whiteness may associate him with the swan-maidens who have taken him into their protection. https://www.alarichall.org.uk/ahphd7.pdf
 Hall points out that Völundr is one of the very few adult male figures in the Poetic Edda described with hvítr, alongside Heimdallr.
 
 
 HEIMDALLR
 
-Heimdallr is described as hvítastr ása, conventionally:
+Heimdallr is described as hvítastr ása, conventionally: “whitest/fairest of the Æsir.”
 
-“whitest/fairest of the Æsir.”
+Stanza 15 of Þrymskviða (The Lay of Thrym) in the Poetic Edda:
+
+  Þá kvað þat Heimdallr,
+  hvítastr ása,
+  vissi hann vel fram
+  sem vanir aðrir:
+
+  - https://northerntales.se/en/eddas/poetic-edda/thrymskvida/
 
 This is particularly fascinating because Heimdallr is himself a liminal figure:
 
