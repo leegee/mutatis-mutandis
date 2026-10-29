@@ -80,6 +80,16 @@ body {
 	color: var(--accent);
 	font-weight: 600;
 }
+.linkbtn {
+	font: inherit;
+	font-size: 11px;
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--accent);
+	cursor: pointer;
+	text-decoration: underline;
+}
 .spacer {
 	flex: 1;
 }

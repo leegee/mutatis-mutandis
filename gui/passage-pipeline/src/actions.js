@@ -1,20 +1,9 @@
 import { CONFIG } from "./config.js";
-import { store, setStore, pane, update, newPane } from "./store.js";
-import {
-	CSV_COLS,
-	csvCell,
-	formatDetail,
-	snippet,
-	toInt,
-	toNum,
-} from "./helpers.js";
+import { CSV_COLS, csvCell, formatDetail, snippet, toInt, toNum } from "./helpers.js";
+import { hrefFor, navigate, ROUTES } from "./router.js";
+import { newPane, pane, setStore, store, update } from "./store.js";
 import { download } from "./toast.js";
-import { navigate, hrefFor, ROUTES } from "./router.js";
-import {
-	semanticParamsFromPane,
-	canonicalParams,
-	routeSync,
-} from "./urlState.js";
+import { canonicalParams, routeSync, semanticParamsFromPane } from "./urlState.js";
 
 const inflight = new Map(); // pane id -> AbortController
 
@@ -30,8 +19,7 @@ export function buildRequest(p) {
 		negative_ids: p.negatives.map((n) => n.id),
 		include_text: true,
 	};
-	if (req.start_year > req.end_year)
-		throw new Error("Start year must not be after end year");
+	if (req.start_year > req.end_year) throw new Error("Start year must not be after end year");
 	if (p.source.mode === "vector") {
 		if (!p.source.vectorId) throw new Error("No passage selected");
 		req.vector_id = p.source.vectorId;
@@ -105,9 +93,7 @@ export async function runSearch(id, opts = {}) {
 	} catch (e) {
 		if (e.name === "AbortError" || inflight.get(id) !== ctrl) return;
 		const msg =
-			e instanceof TypeError
-				? `Cannot reach the API at ${CONFIG.apiBase || location.origin}`
-				: e.message || String(e);
+			e instanceof TypeError ? `Cannot reach the API at ${CONFIG.apiBase || location.origin}` : e.message || String(e);
 		update(id, { status: "error", error: msg });
 	} finally {
 		if (inflight.get(id) === ctrl) inflight.delete(id);
@@ -131,8 +117,7 @@ export function addNegative(id, hit) {
 
 export function toggleNegative(id, hit) {
 	const p = pane(id);
-	if (p.negatives.some((n) => n.id === hit.passage_id))
-		removeNegative(id, hit.passage_id, false);
+	if (p.negatives.some((n) => n.id === hit.passage_id)) removeNegative(id, hit.passage_id, false);
 	else addNegative(id, hit);
 	runSearch(id);
 }
@@ -189,9 +174,7 @@ export async function checkApi() {
 			const { representations } = await r.json();
 			if (Array.isArray(representations) && representations.length) {
 				setStore("representations", representations);
-				const fallback = representations.includes("l8")
-					? "l8"
-					: representations[0];
+				const fallback = representations.includes("l8") ? "l8" : representations[0];
 				for (const p of store.panes) {
 					if (!representations.includes(p.form.representation)) {
 						update(p.id, "form", { representation: fallback });
@@ -225,10 +208,12 @@ export function exportPane(id, kind) {
 			"application/json",
 		);
 	} else {
-		const rows = [
-			CSV_COLS.join(","),
-			...hits.map((h) => CSV_COLS.map((c) => csvCell(h[c])).join(",")),
-		];
+		const rows = [CSV_COLS.join(","), ...hits.map((h) => CSV_COLS.map((c) => csvCell(h[c])).join(","))];
 		download(`${base}.csv`, `\ufeff${rows.join("\r\n")}`, "text/csv");
 	}
+}
+
+export function resetYears(id) {
+	update(id, "form", { startYear: "0", endYear: "3000" });
+	runSearch(id);
 }
