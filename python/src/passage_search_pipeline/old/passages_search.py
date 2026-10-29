@@ -348,8 +348,8 @@ def parse_args():
         help="Earliest publication year (default: 0).",
     )
     parser.add_argument(
-        "--end-year", type=int, default=3000,
-        help="Latest publication year (default: 3000).",
+        "--end-year", type=int, default=2030,
+        help="Latest publication year (default: 2030).",
     )
     parser.add_argument(
         "--representation", choices=REPRESENTATIONS, default="l8",

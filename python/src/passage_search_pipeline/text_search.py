@@ -8,7 +8,7 @@ expands each match to a window of surrounding tokens, and returns hits in
 roughly the same shape as vector search (so the UI can reuse cards).
 
 Year filtering uses documents.pub_year when the column is present; if your
-schema lacks it, pass start_year=0 and end_year=3000 and the filter is a
+schema lacks it, pass start_year=0 and end_year=2030 and the filter is a
 no-op only if the column exists — see the SQL below.
 """
 
@@ -124,7 +124,7 @@ def search_text_passages(
     *,
     limit: int = 30,
     start_year: int = 0,
-    end_year: int = 3000,
+    end_year: int = 2030,
     window_tokens: int = 40,
     use_year_filter: bool = True,
 ) -> List[dict]:

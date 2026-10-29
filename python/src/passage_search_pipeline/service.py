@@ -39,7 +39,7 @@ class SearchParams:
     negative_ids: Tuple[str, ...] = ()
     representation: str = "l8"
     start_year: int = 0
-    end_year: int = 3000
+    end_year: int = 2030
     limit: int = 30
     beta: float = 0.5
     overfetch: int = 5
@@ -60,7 +60,7 @@ class SearchParams:
 class TextSearchParams:
     query: str
     start_year: int = 0
-    end_year: int = 3000
+    end_year: int = 2030
     limit: int = 30
     window_tokens: int = 40
 

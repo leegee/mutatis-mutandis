@@ -42,7 +42,7 @@ def parse_args():
     p.add_argument("--query", help="Text to encode as the search query.")
     p.add_argument("--vector-id", help="Use an existing passage vector (passage_id) as the query.")
     p.add_argument("--start-year", type=int, default=0)
-    p.add_argument("--end-year", type=int, default=3000)
+    p.add_argument("--end-year", type=int, default=2030)
     p.add_argument("--representation", choices=PASSAGE_REPRESENTATIONS, default="l8")
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--negative-id", action="append", default=[],
