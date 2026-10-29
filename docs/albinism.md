@@ -329,6 +329,8 @@ Biggam, C. P. *Blue in Old English: An Interdisciplinary Semantic Study*. Amster
 
 Bucur, Bogdan. *The Son of Man and the Ancient of Days Observations on the Early Christian Reception of Daniel 7*.  2018. https://www.researchgate.net/publication/324329176_The_Son_of_Man_and_the_Ancient_of_Days_Observations_on_the_Early_Christian_Reception_of_Daniel_7/citation/download
 
+*Handbook of Medieval Studies: Terms - Methods - Trends*, Classen, Albrecht (ed.). De Gruyter, 2010.
+
 Copeland,Rita. *Rhetoric, Hermeneutics, and Translation in the Middle Ages*. Cambridge University Press, 1991 (paperback 1995). https://archive.org/details/rhetorichermeneu0000cope
 
 Crawford, Jackson. *The Historical Development of Basic Color Terms in Old Norse-Icelandic.* PhD thesis, University of California, Los Angeles, 2014.
