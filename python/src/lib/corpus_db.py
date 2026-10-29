@@ -36,7 +36,7 @@ if not password:
 
 def get_connection(
     *,
-    connect_timeout: int = 5,
+    connect_timeout: int = 30,
     application_name: str = "corpus",
 ) -> Connection:
     """
