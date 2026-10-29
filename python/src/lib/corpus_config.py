@@ -42,6 +42,7 @@ CORPUS_INPUT_DIRS = {
     "misc": CORPUS_ROOT_DIR / "misc",
     "eebo": CORPUS_ROOT_DIR / "eebo_all",
     "ecco": CORPUS_ROOT_DIR / "ecco_all",
+    "cme": CORPUS_ROOT_DIR / "cme_all",
 }
 
 CLMET_CORPUS_INPUT_DIR = CORPUS_ROOT_DIR / "clmet" / "corpus" / "txt" / "plain"

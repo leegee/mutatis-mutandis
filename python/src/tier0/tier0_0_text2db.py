@@ -492,6 +492,91 @@ def process_ecco_file(tree, xml_path):
     return meta, tokens
 
 
+def process_cme_file(tree, xml_path):
+    """
+    Handle University of Michigan Corpus of Middle English (CME) files.
+    These use a custom <ETS> root + EEBO-like inner structure without TEI namespaces.
+    """
+    root = tree.getroot()
+    if root.tag != "ETS":
+        logger.warning(f"[tier0] Expected root <ETS>, got <{root.tag}> in {xml_path}")
+        return None
+
+    # Prefer the ID attribute on <IDG>, fall back to <IDNO TYPE="dlps">
+    idg = root.find(".//IDG")
+    doc_id = None
+    if idg is not None:
+        doc_id = idg.attrib.get("ID")
+
+    if not doc_id:
+        idno = root.find(".//IDNO[@TYPE='dlps']") or root.find(".//IDNO[@type='dlps']")
+        if idno is not None and idno.text:
+            doc_id = idno.text.strip()
+
+    if not doc_id:
+        doc_id = xml_path.stem
+        logger.info(f"[tier0] No reliable doc_id in {xml_path}; using stem {doc_id}")
+
+    # Metadata from HEADER
+    title = safe_text(root.find(".//TITLESTMT/TITLE"))
+    author = safe_text(root.find(".//TITLESTMT/AUTHOR"))
+    publisher = safe_text(root.find(".//PUBLICATIONSTMT/PUBLISHER"))
+    pub_place = safe_text(root.find(".//PUBLICATIONSTMT/PUBPLACE"))
+    date_raw = safe_text(root.find(".//PUBLICATIONSTMT/DATE"))
+    pub_year = extract_year(date_raw)
+
+    # For CME we usually want the modern transcription date for filtering,
+    # but you may prefer to override or ignore the year check entirely.
+    if pub_year is None:
+        logger.warning(f"[tier0] No pub_year for CME {doc_id} at {xml_path}")
+        # return None   # uncomment if you want strict year filtering
+        pub_year = 2020  # or leave as None and adjust year_in_corpus
+
+    if pub_year is not None and not year_in_corpus(pub_year):
+        # Many CME files will hit this; decide whether to keep or skip
+        logger.info(f"[tier0] CME {doc_id} year {pub_year} outside corpus range – keeping anyway")
+        # return None
+
+    body = root.findall(".//BODY")
+    if not body:
+        logger.warning(f"[tier0] No BODY in CME {doc_id} at {xml_path}")
+        return None
+
+    # Re-use the existing EEBO-style renderer (handles <NOTE>, gaps, etc.)
+    raw_text = " ".join(render_text(b) for b in body)
+
+    normalized = normalize_early_modern(
+        eebo_ocr_fixes.apply_ocr_fixes(raw_text)
+    )
+
+    if len(normalized) < 50:          # CME texts can be short
+        logger.warning(f"[tier0] CME {doc_id} too short after normalization")
+        return None
+
+    tokens = re.findall(r"\w+|[^\w\s]", normalized)
+
+    # Language
+    lang = "enm"
+    text_elem = root.find(".//TEXT")
+    if text_elem is not None:
+        lang = text_elem.attrib.get("LANG") or text_elem.attrib.get("lang") or "enm"
+
+    meta = {
+        "doc_id": doc_id,
+        "title": title,
+        "author": author,
+        "publisher": publisher,
+        "pub_place": pub_place,
+        "pub_year": pub_year,
+        "source_date_raw": date_raw,
+        "token_count": len(tokens),
+        "filepath": str(xml_path.relative_to(config.CORPUS_ROOT_DIR).as_posix()),
+        "lang": lang,
+    }
+
+    return meta, tokens
+
+
 def process_misc_file(tree, xml_path):
     """
     Process generic TEI sources in the misc corpus.
@@ -726,6 +811,8 @@ def process_file(xml_path: Path, corpus):
         return process_eebo_file(tree, xml_path)
     elif corpus == "ecco":
         return process_ecco_file(tree, xml_path)
+    elif corpus == "cme":
+        return process_cme_file(tree, xml_path)
     elif corpus == "misc":
         return process_misc_file(tree, xml_path)
     else:
