@@ -555,11 +555,20 @@ def process_cme_file(tree, xml_path):
 
     tokens = re.findall(r"\w+|[^\w\s]", normalized)
 
-    # Language
-    lang = "enm"
+    # Language: CME source metadata may list multiple language codes.
+    # The documents table stores one primary language code (CHAR(3)).
+    lang_raw = "enm"
     text_elem = root.find(".//TEXT")
+
     if text_elem is not None:
-        lang = text_elem.attrib.get("LANG") or text_elem.attrib.get("lang") or "enm"
+        lang_raw = (
+            text_elem.attrib.get("LANG")
+            or text_elem.attrib.get("lang")
+            or "enm"
+        )
+
+    langs = re.findall(r"[a-z]{2,3}", lang_raw.lower())
+    lang = langs[0][:3] if langs else "enm"
 
     meta = {
         "doc_id": doc_id,
