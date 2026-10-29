@@ -79,7 +79,7 @@ The primary corpus is English writing from the Old English period to 1914, organ
 
 1. **Old English, c. 700-1150.** Lexical and collocational searches in the Dictionary of Old English Corpus, followed by close reading of the original texts. Starting points include *Wonders of the East* and the wider marvellous-peoples tradition, Grendel's eyes, and *ælfscȳne* and related vocabulary. Readings will use existing scholarship where appropriate and detailed analysis of the Old English where necessary, following the philological approach exemplified by Alaric Hall.
 
-2. **Middle English, c. 1150-1450:** Targeted lexical searches and close reading, rather than systematic computational coverage. Particular attention will be paid to encyclopaedic and historical works that may preserve or transmit earlier accounts of unusual bodily characteristics. A priority is Bartholomaeus Anglicus's *De proprietatibus rerum*, Book XV, chapter 7 ("De Albania"), and John Trevisa's Middle English translation, to investigate the reception of descriptions of the *Albani* associated with Isidore of Seville's *Etymologiae* IX.2.65. The account describes white hair, distinctive eyes and unusually good night vision. Whether the relevant details survive in the English translation, and how they are rendered, remains to be verified. Other possible channels include Middle English biblical translations, Mandeville's *Travels*, and selected historical or encyclopaedic works, including Higden's *Polychronicon* where relevant passages can be established. The scale and availability of these materials will be assessed during the pilot study.
+2. **Middle English, c. 1150-1450:** Targeted lexical searches and close reading, along with an attept at systematic computational coverage. Particular attention will be paid to encyclopaedic and historical works that may preserve or transmit earlier accounts of unusual bodily characteristics. A priority is Bartholomaeus Anglicus's *De proprietatibus rerum*, Book XV, chapter 7 ("De Albania"), and John Trevisa's Middle English translation, to investigate the reception of descriptions of the *Albani* associated with Isidore of Seville's *Etymologiae* IX.2.65. The account describes white hair, distinctive eyes and unusually good night vision. Whether the relevant details survive in the English translation, and how they are rendered, remains to be verified. The University of Michigan's Corpus of Middle English Prose and Verse will be examined. Other possible channels include Middle English biblical translations, Mandeville's *Travels*, and selected historical or encyclopaedic works, including Higden's *Polychronicon* where relevant passages can be established. The scale and availability of these materials will be assessed during the pilot study.
 
 3. **c. 1450-1650.** The principal computational and interpretive corpus will be EEBO-TCP, providing a substantial body of searchable early printed English texts across religious, literary, historical, natural-philosophical and medical writing. This period is central to the investigation of how descriptions of the subject were interpreted across different genres, and whether older religious or literary imagery coexisted with, or was reinterpreted through, emerging natural-historical explanations of bodily variation. Semantic retrieval will identify candidate passages that may not be found through searches for a single historical or modern label; lexical and collocational searches will provide complementary routes into the material. Retrieved passages will be examined in context, with attention to genre, date, source relationships and the distinction between descriptions of bodily features and their symbolic or narrative functions.
 
@@ -142,9 +142,11 @@ Twentieth-century racial-nationalist and occult appropriations of Norse and rela
 
 White's thesis is the principal point of departure for the history of albinism as a category. This research uses it to identify sources and debates while avoiding a second general history of the same period. The difference is one of emphasis and object: the project begins from a broader and earlier set of bodily descriptions and asks how their meanings developed, whether or not they were ever associated with albinism.
 
-Charlotte Baker's work on representations of albinism in Francophone and African contexts demonstrates the importance of examining representation within particular social and discursive settings and engages critical disability studies. This informs the project's treatment of stigma and embodiment. For Old English, Alaric Hall's *Elves in Anglo-Saxon England* (2007) offers a framework for supernatural beings, radiance and unusual bodies. Jackson Crawford's 2014 thesis, *The Historical Development of Basic Color Terms in Old Norse-Icelandic*, provides a comparative resource where it bears on a defined problem.
+For Old English, Alaric Hall's *Elves in Anglo-Saxon England* (2007) offers a framework for supernatural beings, radiance and unusual bodies. Jackson Crawford's 2014 thesis on basic colour terms in Old Norse-Icelandic provides a comparative resource where it bears on a defined problem. Scholarship on biblical transmission and the Latin exegetical tradition (especially Bede's *Expositio Apocalypseos*) supplies the necessary foundation for tracing the reception of the Daniel and Revelation imagery that forms the project's central working hypothesis.
 
-The literature review will also establish the relevant scholarship on biblical transmission, reception, medieval and early modern descriptions of the body, historical colour terminology (including Biggam), and the emergence of medical understandings of albinism. These strands will be organised around the central question rather than presented as separate surveys.
+Work in critical disability studies and African literary studies has examined the stigma and symbolic loading attached to albinism in other cultural contexts (e.g. Baker 2010). The present project remains focused on the English literary and historical record and does not seek to extend those findings.
+
+The literature review will also establish the relevant scholarship on historical colour terminology (including Biggam), medieval and early modern descriptions of the body, and the emergence of medical understandings of albinism. These strands will be organised around the central question rather than presented as separate surveys.
 
 ## 6. Computational methodology
 
@@ -233,7 +235,7 @@ Where feasible, a second annotator will assess a subset, and the limits of agree
 
 The surviving record may preserve unusual encounters precisely because they provoked a response. The project will distinguish whether a text records a reaction to a described body from the kind of reaction recorded: astonishment, veneration, fear, disgust, or theological or medical interpretation. More mundane, matter-of-fact descriptions will receive particular attention as a counterpoint to symbolic or sensational accounts.
 
-The frequency of recorded reactions can be measured in the surviving material, but the probability that an ordinary encounter was recorded at all cannot. The surviving texts must therefore not be treated as a representative sample of lived encounters.
+The frequency of recorded reactions can be measured in the surviving material, but the probability that an ordinary encounter was recorded at all cannot, just as the lack of texts cannot be taken as a lack of transmission as Eyal Poleg deatils (2013). The surviving texts must therefore not be treated as a representative sample of lived encounters.
 
 ## 7. Researcher position and reflexivity
 
@@ -318,18 +320,22 @@ Origen. *Homilies on Numbers*. Translated by Thomas P. Scheck. 2009.
 
 **Secondary scholarship**
 
-Baker, Charlotte. (Multiple works on representations of albinism in Francophone and African contexts, no available in full at my present location in Hungary)
+Baker, C., Lund, P., Nyathi, R. & Taylor, J. (2010). *The myths surrounding people with albinism in South Africa and Zimbabwe.* Journal of African Cultural Studies 22(2): 169–181.
 
 Biggam, C. P. *Blue in Old English: An Interdisciplinary Semantic Study*. Amsterdam: Rodopi, 1997.
 ———. *Grey in Old English: An Interdisciplinary Semantic Study*. London: Runetree Press, 1998.
 ———. *The Semantics of Colour: A Historical Approach*. Cambridge: Cambridge University Press, 2012.
 ———. *"Sociolinguistic aspects of Old English colour lexemes,"* *Anglo-Saxon England* 24 (1995): 51–65).
 
+Bucur, Bogdan. *The Son of Man and the Ancient of Days Observations on the Early Christian Reception of Daniel 7*.  2018. https://www.researchgate.net/publication/324329176_The_Son_of_Man_and_the_Ancient_of_Days_Observations_on_the_Early_Christian_Reception_of_Daniel_7/citation/download
+
+Copeland,Rita. *Rhetoric, Hermeneutics, and Translation in the Middle Ages*. Cambridge University Press, 1991 (paperback 1995). https://archive.org/details/rhetorichermeneu0000cope
+
 Crawford, Jackson. *The Historical Development of Basic Color Terms in Old Norse-Icelandic.* PhD thesis, University of California, Los Angeles, 2014.
 
-Hall, Alaric. *Elves in Anglo-Saxon England: Matters of Belief, Health, Gender and Identity*. Anglo-Saxon Studies 8. Woodbridge: Boydell Press, 2007.
-
 Fabiny, Tibor. *Typology: Pros and Cons in Biblical Hermeneutics and Literary Criticism (from Leonhard Goppelt to Northrop Frye).* Rilce-Revista De Filologia Hispanica, 2009. https://doi.org/10.15581/008.25.26308.
+
+Hall, Alaric. *Elves in Anglo-Saxon England: Matters of Belief, Health, Gender and Identity*. Anglo-Saxon Studies 8. Woodbridge: Boydell Press, 2007.
 
 Manjavacas, Enrique, and Lauren Fonteyn. *MacBERTh: Contextualised Embeddings for Historical English.* 2021. . MacBERTh: Development and Evaluation of a Historically Pre-trained Language Model for English (1450-1950). In Proceedings of the Workshop on Natural Language Processing for Digital Humanities, pages 23–36, NIT Silchar, India. NLP Association of India (NLPAI).
 
@@ -338,6 +344,10 @@ McGillivray, Barbara. *Computational Methods for Semantic Analysis of Historical
 McGillivray, Barbara, Federico Nanni, and Kaspar Beelen. *Why Does Digital History Need Diachronic Semantic Search?* In Computational Humanities, edited by Lauren Tilton, David Mimno, and Jessica Marie Johnson. Debates in the Digital Humanities. Minneapolis: University of Minnesota Press, 2024 (accepted 2023).
 
 McGregor, Stephen, and Barbara McGillivray. *A Distributional Semantic Methodology for Enhanced Search in Historical Records: A Case Study on Smell.* In Proceedings of the 14th Conference on Natural Language Processing (KONVENS 2018), 1–10. Vienna: Austrian Academy of Sciences Press, 2018.
+
+Minnis, Alastair. *Medieval Theory of Authorship: Scholastic Literary Attitudes in the Later Middle Ages* (2nd ed., University of Pennsylvania Press, 2010).
+
+Poleg, Eyal. *Approaching the Bible in Medieval England*. Manchester: Manchester University Press, 2013.
 
 Schlechtweg, Dominik, Barbara McGillivray, Simon Hengchen, Haim Dubossarsky, and Nina Tahmasebi. *SemEval-2020 Task 1: Unsupervised Lexical Semantic Change Detection.* In Proceedings of the Fourteenth Workshop on Semantic Evaluation (SemEval-2020), 1–23. Barcelona (Online): Association for Computational Linguistics, 2020.
 
@@ -354,7 +364,7 @@ White, Thomas. *"Their Whiteness Is Not Like Ours": A Social and Cultural Histor
 **Biblical reception and the Ancient of Days / Son of Man imagery**
 - Collins, John J. *Daniel: A Commentary on the Book of Daniel*. Hermeneia. Minneapolis: Fortress Press, 1993 (or later).
 - Rowland, Christopher. *The Open Heaven: A Study of Apocalyptic in Judaism and Early Christianity*. London: SPCK, 1982.
-- Recent reception studies of Revelation 1 and Daniel 7 in the Latin West and early medieval England (search for work by Faith Wallis beyond her Bede translation, or studies of Bede’s exegesis more broadly).
+- Recent reception studies of Revelation 1 and Daniel 7 in the Latin West and early medieval England (search for work by Faith Wallis beyond her Bede translation, or studies of Bede's exegesis more broadly).
 - Standard editions/translations of the Greek versions of Daniel and of 1 Enoch 46 & 106 if you keep the apocryphal comparison.
 
 **Old English colour, radiance, and marvels**
@@ -362,18 +372,9 @@ White, Thomas. *"Their Whiteness Is Not Like Ours": A Social and Cultural Histor
 - Studies of *ælfscȳne* and related vocabulary beyond Hall.
 
 **Medical humanities / visible difference / albinism representation**
-- Baker’s key monographs and articles (you already cite the strand; list the most relevant titles fully).
 - Broader critical disability studies or medical-humanities work on pre-modern visible difference and stigma that you find useful for section 7 and the later chapters.
-- Any recent work that engages White’s thesis directly.
-
-**Computational / historical semantics (you said you have some papers)**
-You already have Manjavacas & Fonteyn 2022. Useful complementary items often include:
-- Papers evaluating historical word embeddings or diachronic semantic change detection (e.g. work by Hamilton et al. on diachronic word embeddings, or more recent historical BERT evaluations).
-- Methodological pieces on passage-level or window-based retrieval versus document-level embeddings.
-- Anything on evaluation frameworks for semantic search in noisy or orthographically variable historical corpora (OCR, spelling variation).
-- If you use contrastive fine-tuning or hybrid lexical + dense retrieval, the standard contrastive-learning or dense-retrieval survey papers from the NLP side.
+- Any recent work that engages White's thesis directly.
 
 **Reception theory / distinguishing resemblance from transmission**
-- A short methodological piece or two on intertextuality and reception in medieval literature that you find congenial (this will help police H2).
+- A short methodological piece or two on intertextuality and reception in medieval literature that you find congenial.
 
-Would you like me to turn the "already cited" list into a fully consistent Chicago or MHRA bibliography with placeholders clearly marked for the incomplete items, or shall I expand any of the suggestion categories with more specific titles once you tell me which DH papers you already hold?
