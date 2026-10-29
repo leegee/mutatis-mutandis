@@ -331,7 +331,7 @@ Bucur, Bogdan. *The Son of Man and the Ancient of Days Observations on the Early
 
 *Handbook of Medieval Studies: Terms - Methods - Trends*, Classen, Albrecht (ed.). De Gruyter, 2010.
 
-Copeland,Rita. *Rhetoric, Hermeneutics, and Translation in the Middle Ages*. Cambridge University Press, 1991 (paperback 1995). https://archive.org/details/rhetorichermeneu0000cope
+Copeland, Rita. *Rhetoric, Hermeneutics, and Translation in the Middle Ages*. Cambridge University Press, 1991 (paperback 1995). https://archive.org/details/rhetorichermeneu0000cope
 
 Crawford, Jackson. *The Historical Development of Basic Color Terms in Old Norse-Icelandic.* PhD thesis, University of California, Los Angeles, 2014.
 
