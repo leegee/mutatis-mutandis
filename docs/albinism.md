@@ -152,7 +152,9 @@ The technical work builds on my background as a professional software developer,
 
 ### 6.1 Design
 
-Computational methods will identify candidate passages and patterns that are difficult to survey through reading alone, alongside the study of pre-determined texts. Each passage will then be interpreted in relation to its wording, genre, authorship, context and relationship to other sources. Embedding similarity, keyword frequency and cluster membership guide the investigation; they do not establish historical meaning. Claims will rest on the interpretation of passages in their textual and historical contexts.
+As detailed by McGillivray et al (2024), diachronic semantic search remains an open question in which computational methods are employed to identify candidate passages and patterns that are difficult to survey through reading alone. It is stressed that theyo serve here in a secondary capacity alongside the study of pre-determined texts. Each passage will then be interpreted in relation to its wording, genre, authorship, context and relationship to other sources. Embedding similarity, keyword frequency and cluster membership guide the investigation; they do not establish historical meaning. Claims will rest on the interpretation of passages in their textual and historical contexts.
+
+While individual components of the below method have precedents, the specific combination of two-ended retrieval over small overlapping windows, oriented to a millennium of English writing, has not, to my knowledge, been published.
 
 ### 6.2 Two-ended retrieval
 
@@ -296,32 +298,82 @@ The core historical work and evaluation against the lexical baseline take priori
 
 ## References
 
-*Vǫlundarkviða*, in Gustav Neckel and Hans Kuhn, eds., *Edda: Die Lieder des Codex Regius nebst verwandten Denkmälern*, vol. 1, *Text*, 5th revised ed. (Heidelberg: Carl Winter, 1983).
+**Primary and early sources**
 
-*Þrymskviða*, in Neckel and Kuhn, *Edda*, vol. 1.
+Bede. *Expositio Apocalypseos*. Edited by Roger Gryson. Corpus Christianorum Series Latina 121A. Turnhout: Brepols, 2001.
 
-Biggam's studies of Old English colour terms,
+———. *Commentary on Revelation*. Translated by Faith Wallis. Translated Texts for Historians 58. Liverpool: Liverpool University Press, 2013.
 
-*Thesaurus of Old English*
+Cyril of Jerusalem. *Catechetical Lectures*. (Lecture 15.21 cited; standard edition/translation to be confirmed.)
 
-*Historical Thesaurus of English*
+Isidore of Seville. *Etymologiae*. (Book IX.2.65 on the Albani cited; modern edition to be specified.)
 
-*Commentarii in Danielem*, on Daniel 7:9; translated by Gleason L. Archer, 2024.
+Jerome. *Commentarii in Danielem*. Translated by Gleason L. Archer (2024 edition cited).
 
-Origen, in *Homilies on Numbers* translated by Thomas P. Scheck, 2009
+Origen. *Homilies on Numbers*. Translated by Thomas P. Scheck. 2009.
 
-Cyril of Jerusalem, in *Catechetical Lecture* 15.21
+*Vǫlundarkviða* and *Þrymskviða*. In *Edda: Die Lieder des Codex Regius nebst verwandten Denkmälern*, vol. 1, *Text*, edited by Gustav Neckel and Hans Kuhn, 5th revised ed. Heidelberg: Carl Winter, 1983.
 
-Bede's *Expositio Apocalypseos*
+*Wonders of the East*. (Manuscript and edition details to be added.)
 
-*Wonders of the East*
+**Secondary scholarship**
 
-Alaric Hall's thesis and book *Elves in Anglo-Saxon England* (2007)
+Baker, Charlotte. (Multiple works on representations of albinism in Francophone and African contexts, no available in full at my present location in Hungary)
 
-Jackson Crawford's 2014 thesis, *The Historical Development of Basic Color Terms in Old Norse-Icelandic*
+Biggam, C. P. *Blue in Old English: An Interdisciplinary Semantic Study*. Amsterdam: Rodopi, 1997.
+———. *Grey in Old English: An Interdisciplinary Semantic Study*. London: Runetree Press, 1998.
+———. *The Semantics of Colour: A Historical Approach*. Cambridge: Cambridge University Press, 2012.
+———. *"Sociolinguistic aspects of Old English colour lexemes,"* *Anglo-Saxon England* 24 (1995): 51–65).
 
-Isidore of Seville's Etymologiae
+Crawford, Jackson. *The Historical Development of Basic Color Terms in Old Norse-Icelandic.* PhD thesis, University of California, Los Angeles, 2014.
 
-Tibor Fabiny
+Hall, Alaric. *Elves in Anglo-Saxon England: Matters of Belief, Health, Gender and Identity*. Anglo-Saxon Studies 8. Woodbridge: Boydell Press, 2007.
 
-MacBERTh (Manjavacas and Fonteyn 2022
+Fabiny, Tibor. *Typology: Pros and Cons in Biblical Hermeneutics and Literary Criticism (from Leonhard Goppelt to Northrop Frye).* Rilce-Revista De Filologia Hispanica, 2009. https://doi.org/10.15581/008.25.26308.
+
+Manjavacas, Enrique, and Lauren Fonteyn. *MacBERTh: Contextualised Embeddings for Historical English.* 2021. . MacBERTh: Development and Evaluation of a Historically Pre-trained Language Model for English (1450-1950). In Proceedings of the Workshop on Natural Language Processing for Digital Humanities, pages 23–36, NIT Silchar, India. NLP Association of India (NLPAI).
+
+McGillivray, Barbara. *Computational Methods for Semantic Analysis of Historical Texts.* In Routledge International Handbook of Research Methods in Digital Humanities, edited by Kristen Schuster and Stuart Dunn, 261–74. London: Routledge, 2020.
+
+McGillivray, Barbara, Federico Nanni, and Kaspar Beelen. *Why Does Digital History Need Diachronic Semantic Search?* In Computational Humanities, edited by Lauren Tilton, David Mimno, and Jessica Marie Johnson. Debates in the Digital Humanities. Minneapolis: University of Minnesota Press, 2024 (accepted 2023).
+
+McGregor, Stephen, and Barbara McGillivray. *A Distributional Semantic Methodology for Enhanced Search in Historical Records: A Case Study on Smell.* In Proceedings of the 14th Conference on Natural Language Processing (KONVENS 2018), 1–10. Vienna: Austrian Academy of Sciences Press, 2018.
+
+Schlechtweg, Dominik, Barbara McGillivray, Simon Hengchen, Haim Dubossarsky, and Nina Tahmasebi. *SemEval-2020 Task 1: Unsupervised Lexical Semantic Change Detection.* In Proceedings of the Fourteenth Workshop on Semantic Evaluation (SemEval-2020), 1–23. Barcelona (Online): Association for Computational Linguistics, 2020.
+
+White, Thomas. *"Their Whiteness Is Not Like Ours": A Social and Cultural History of Albinism and Albino Identities, 1650–1914.* PhD thesis, University of Manchester, 2011.
+
+**Reference works**
+
+*Thesaurus of Old English*.
+*Historical Thesaurus of English*.
+
+
+### Suggested further reading
+
+**Biblical reception and the Ancient of Days / Son of Man imagery**
+- Collins, John J. *Daniel: A Commentary on the Book of Daniel*. Hermeneia. Minneapolis: Fortress Press, 1993 (or later).
+- Rowland, Christopher. *The Open Heaven: A Study of Apocalyptic in Judaism and Early Christianity*. London: SPCK, 1982.
+- Recent reception studies of Revelation 1 and Daniel 7 in the Latin West and early medieval England (search for work by Faith Wallis beyond her Bede translation, or studies of Bede’s exegesis more broadly).
+- Standard editions/translations of the Greek versions of Daniel and of 1 Enoch 46 & 106 if you keep the apocryphal comparison.
+
+**Old English colour, radiance, and marvels**
+- Scholarship on *Wonders of the East* and the monstra tradition (e.g. work by Asa Simon Mittman, or the introductions to the major manuscript editions).
+- Studies of *ælfscȳne* and related vocabulary beyond Hall.
+
+**Medical humanities / visible difference / albinism representation**
+- Baker’s key monographs and articles (you already cite the strand; list the most relevant titles fully).
+- Broader critical disability studies or medical-humanities work on pre-modern visible difference and stigma that you find useful for section 7 and the later chapters.
+- Any recent work that engages White’s thesis directly.
+
+**Computational / historical semantics (you said you have some papers)**
+You already have Manjavacas & Fonteyn 2022. Useful complementary items often include:
+- Papers evaluating historical word embeddings or diachronic semantic change detection (e.g. work by Hamilton et al. on diachronic word embeddings, or more recent historical BERT evaluations).
+- Methodological pieces on passage-level or window-based retrieval versus document-level embeddings.
+- Anything on evaluation frameworks for semantic search in noisy or orthographically variable historical corpora (OCR, spelling variation).
+- If you use contrastive fine-tuning or hybrid lexical + dense retrieval, the standard contrastive-learning or dense-retrieval survey papers from the NLP side.
+
+**Reception theory / distinguishing resemblance from transmission**
+- A short methodological piece or two on intertextuality and reception in medieval literature that you find congenial (this will help police H2).
+
+Would you like me to turn the "already cited" list into a fully consistent Chicago or MHRA bibliography with placeholders clearly marked for the incomplete items, or shall I expand any of the suggestion categories with more specific titles once you tell me which DH papers you already hold?
