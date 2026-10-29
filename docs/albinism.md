@@ -34,7 +34,7 @@ These hypotheses do not presume a continuous tradition. Earlier and later repres
 
 3. **Historical relationship and discontinuity.** Where can specific connections be demonstrated between earlier representations and later accounts of albinism? What roles do quotation, allusion, translation, shared authorities and genre conventions play? Where does the evidence indicate discontinuity or leave the relationship unresolved?
 
-4. **The English tradition in context.** What do biblical, classical and other sources contribute where a demonstrable channel of reception exists? What can bounded comparison clarify about the specificity of English representations?
+4. **The English tradition in context.** What do biblical, classical and other sources contribute where a demonstrable channel of reception exists? What can bounded comparison clarify about the specificity (or otherwise) of the English reception of the biblical repertoire?
 
 ## 4. Object of study and scope
 
@@ -63,7 +63,7 @@ Origen, in *Homilies on Numbers* 27.12.5, discusses Libnah, whose name he interp
 
 These readings show that Christian interpreters assigned different, sometimes overlapping theological meanings to the imagery. Their significance for English writing must be established through evidence of transmission and reception, rather than presumed from the existence of the commentaries.
 
-Daniel 7:9 and Revelation 1:13-14 provide focused textual and reception-historical case studies. The analysis will begin with the Aramaic wording of Daniel 7:9, examining the description of the Ancient of Days, the imagery of white clothing and wool-like hair, and the relationship between these features and the surrounding vision of divine judgement and sovereignty. Relevant parallels elsewhere in the Hebrew Bible and ancient Near Eastern traditions will be considered where they clarify the wording or imagery, without assuming that they establish a single inherited convention.
+The analysis of Daniel 7:9 and Revelation 1:13–14, and of their Latin exegetical tradition, therefore constitutes the necessary starting point for tracing reception. The analysis will begin with the Aramaic wording of Daniel 7:9, examining the description of the Ancient of Days, the imagery of white clothing and wool-like hair, and the relationship between these features and the surrounding vision of divine judgement and sovereignty. Relevant parallels elsewhere in the Hebrew Bible and ancient Near Eastern traditions will be considered where they clarify the wording or imagery, without assuming that they establish a single inherited convention.
 
 The project will then examine the Greek versions of Daniel and the reuse of the imagery in Revelation 1:13-14, asking what was preserved, reinterpreted or potentially altered in transmission. The subsequent Latin exegetical tradition will be explored through selected commentaries, beginning with Bede and considering relevant interpretations of Daniel and Revelation. The analysis will trace demonstrable transmission into English biblical and literary writing, distinguishing the availability of a text or interpretation from evidence of its reception.
 
@@ -77,7 +77,7 @@ Controls will test whether apparent patterns are specific to extraordinary palen
 
 The primary corpus is English writing from the Old English period to 1914, organised into tiers as below. These are presented in addition to the foundational examination of the biblical material.
 
-1. **Old English, c. 700-1150.** Lexical and collocational searches in the Dictionary of Old English Corpus, followed by close reading of the original texts. Starting points include *Wonders of the East* and the wider marvellous-peoples tradition, Grendel's eyes, and *ælfscȳne* and related vocabulary. Readings will use existing scholarship where appropriate and detailed analaysis of the Old English where necessary, following the philological approach exemplified by Alaric Hall.
+1. **Old English, c. 700-1150.** Lexical and collocational searches in the Dictionary of Old English Corpus, followed by close reading of the original texts. Starting points include *Wonders of the East* and the wider marvellous-peoples tradition, Grendel's eyes, and *ælfscȳne* and related vocabulary. Readings will use existing scholarship where appropriate and detailed analysis of the Old English where necessary, following the philological approach exemplified by Alaric Hall.
 
 2. **Middle English, c. 1150-1450:** Targeted lexical searches and close reading, rather than systematic computational coverage. Particular attention will be paid to encyclopaedic and historical works that may preserve or transmit earlier accounts of unusual bodily characteristics. A priority is Bartholomaeus Anglicus's *De proprietatibus rerum*, Book XV, chapter 7 ("De Albania"), and John Trevisa's Middle English translation, to investigate the reception of descriptions of the *Albani* associated with Isidore of Seville's *Etymologiae* IX.2.65. The account describes white hair, distinctive eyes and unusually good night vision. Whether the relevant details survive in the English translation, and how they are rendered, remains to be verified. Other possible channels include Middle English biblical translations, Mandeville's *Travels*, and selected historical or encyclopaedic works, including Higden's *Polychronicon* where relevant passages can be established. The scale and availability of these materials will be assessed during the pilot study.
 
@@ -120,7 +120,7 @@ Systematic coverage of non-English originals; computational coverage of Old and 
 
 **Review point.**
 
-At the end of Year 1, assess the productivity of the biblical hypotheis. the scale of the Middle English and comparative components will be fixed on the basis of pilot results. Anything infeasible will be dropped rather than compressed.
+At the end of Year 1, assess the productivity of the biblical hypothesis. The scale of the Middle English and comparative components will be fixed on the basis of pilot results. Anything infeasible will be dropped rather than compressed.
 
 ### 4.6 On the Welsh, Irish and Norse traditions: reception and comparison
 
@@ -207,7 +207,7 @@ Further extensions, including LLM-guided query expansion, orchestration framewor
 | Retrieval interface | FastAPI backend and SolidJS interface support passage inspection, source provenance, date filtering and query-by-example. |
 | Lexical baseline | BM25, normalised and lemmatised pattern matching, and historical lexicons to be implemented in Year 1. |
 | General-purpose sentence embeddings | Off-the-shelf baseline to be selected and implemented during the pilot. Expected to perform poorly against OCR'd and earlier than contemporary English |
-| Contrastive fine-tuning and hybrid reranking | Expectexed to be unncessary but could be tested after baseline evaluation, with held-out data used to assess improvements. |
+| Contrastive fine-tuning and hybrid reranking | Expected to be unnecessary but could be tested after baseline evaluation, with held-out data used to assess improvements. |
 | Query-by-example | Preliminary prototype run retrieved plausible historical leads, including Middle English biblical material |
 | Seed lexicons | Lexicons for both search directions, including historical spellings and relevant descriptive vocabulary, to be compiled and evaluated. |
 | Nineteenth-century corpus | To be selected during the pilot, taking account of coverage, accessibility, genre and research relevance. |
@@ -241,8 +241,8 @@ The project is undertaken by a researcher who himself has albinism. This informs
 
 ### 8.1 Provisional chapter structure
 
-1. **Introduction:** object, terminology, method and the argument about reception.
-1. **Biblical Imagery:** Daniel, Issiah, John of Patmos, Enoch
+1. **Introduction:** object, terminology, method, and the working hypothesis concerning the biblical repertoire and its reception.
+1. **Biblical Imagery:** Daniel, Isaiah, John of Patmos, Enoch
 1. **Old English:** radiance, bodies and the marvellous.
 1. **Middle English:** exegesis, marvels and the encyclopaedic channels.
 1. **The early modern period before 1650:** wonder, natural history and the pale body.
