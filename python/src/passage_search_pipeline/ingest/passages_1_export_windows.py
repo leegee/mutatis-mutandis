@@ -1,5 +1,11 @@
 
-"""Export sparse token windows around qualifying historical albinism targets."""
+"""
+passages_1_export_windows.py
+
+As `passages_1_export_full.py` but exports sparse token windows around qualifying historical albinism targets.
+
+NB currently makes no use of the corpus SQL used in `passages_1_export_full.py`.
+"""
 
 from collections import defaultdict
 from itertools import groupby
@@ -10,12 +16,12 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from lib.corpus_db import get_connection
-from lib.corpus_config import OUT_DIR
+from lib.corpus_config import OUT_DIR, MAPPED_GOOGLE_DRIVE
 from lib.corpus_logging import logger
 
 LANCE_DIR = OUT_DIR / "indexes/lance_albinism"
-PARQ_OUTPUT_DIR = OUT_DIR / "export/source_tokens"
-PARQ_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+EMB_OUTPUT_DIR = MAPPED_GOOGLE_DRIVE / "source_tokens"
+EMB_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SHARD_PREFIX = 'tokens_'
 
 FORCE_EXPORT_DOC_IDS = {
@@ -74,7 +80,7 @@ ALBINISM = {
 
 def flush(docs: list[dict], shard_no: int) -> None:
     table = pa.Table.from_pylist(docs, schema=SCHEMA)
-    final = PARQ_OUTPUT_DIR / f"{SHARD_PREFIX}_{shard_no:05d}.parquet"
+    final = EMB_OUTPUT_DIR / f"{SHARD_PREFIX}_{shard_no:05d}.parquet"
     tmp = final.with_suffix(".tmp")
     pq.write_table(table, tmp, compression="zstd")
     tmp.replace(final)
