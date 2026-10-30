@@ -10,7 +10,7 @@ function loadTextForm() {
 			return {
 				query: String(raw.query ?? ""),
 				startYear: String(raw.startYear ?? "0"),
-				endYear: String(raw.endYear ?? "3000"),
+				endYear: String(raw.endYear ?? "2030"),
 				limit: String(raw.limit ?? "30"),
 				windowTokens: String(raw.windowTokens ?? "40"),
 			};
@@ -21,7 +21,7 @@ function loadTextForm() {
 	return {
 		query: "",
 		startYear: "0",
-		endYear: "3000",
+		endYear: "2030",
 		limit: "30",
 		windowTokens: "40",
 	};

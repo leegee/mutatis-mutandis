@@ -32,7 +32,7 @@ export const SHARED_PARAM_KEYS = ["q", "from", "to", "limit"];
 
 const DEFAULTS = {
 	from: "0",
-	to: "3000",
+	to: "2030",
 	limit: "30",
 	rep: "l8",
 	beta: "0.5",
@@ -251,21 +251,11 @@ export function applySemanticParams(params, paneId) {
  */
 export function applyTextParams(params) {
 	const form = {
-		query: params.has("q")
-			? params.get("q")?.trim() || ""
-			: textStore.form.query,
-		startYear: params.has("from")
-			? params.get("from")
-			: textStore.form.startYear || DEFAULTS.from,
-		endYear: params.has("to")
-			? params.get("to")
-			: textStore.form.endYear || DEFAULTS.to,
-		limit: params.has("limit")
-			? params.get("limit")
-			: textStore.form.limit || DEFAULTS.limit,
-		windowTokens: params.has("window")
-			? params.get("window")
-			: textStore.form.windowTokens || DEFAULTS.window,
+		query: params.has("q") ? params.get("q")?.trim() || "" : textStore.form.query,
+		startYear: params.has("from") ? params.get("from") : textStore.form.startYear || DEFAULTS.from,
+		endYear: params.has("to") ? params.get("to") : textStore.form.endYear || DEFAULTS.to,
+		limit: params.has("limit") ? params.get("limit") : textStore.form.limit || DEFAULTS.limit,
+		windowTokens: params.has("window") ? params.get("window") : textStore.form.windowTokens || DEFAULTS.window,
 	};
 	setTextStore("form", form);
 

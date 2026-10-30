@@ -9,11 +9,11 @@ export function Histogram(props) {
 	const bins = createMemo(() => computeBins(pane(id)?.hits ?? []));
 	const maxCount = createMemo(() => Math.max(1, ...bins().map((b) => b.count)));
 
-	// A year restriction exists when the form differs from the defaults (0–3000).
+	// A year restriction exists when the form differs from the defaults (0–2030).
 	const form = () => pane(id)?.form;
 	const yearsActive = () => {
 		const f = form();
-		return !!f && (f.startYear.trim() !== "0" || f.endYear.trim() !== "3000");
+		return !!f && (f.startYear.trim() !== "0" || f.endYear.trim() !== "2030");
 	};
 	const reset = () => (
 		<button class="linkbtn" type="button" onClick={() => resetYears(id)}>

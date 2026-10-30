@@ -214,6 +214,6 @@ export function exportPane(id, kind) {
 }
 
 export function resetYears(id) {
-	update(id, "form", { startYear: "0", endYear: "3000" });
+	update(id, "form", { startYear: "0", endYear: "2030" });
 	runSearch(id);
 }

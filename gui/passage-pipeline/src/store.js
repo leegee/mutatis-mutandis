@@ -13,7 +13,7 @@ export function newPane(seed = {}) {
 		form: {
 			representation: "l8",
 			startYear: "0",
-			endYear: "3000",
+			endYear: "2030",
 			limit: "30",
 			beta: "0.5",
 			overfetch: "5",
