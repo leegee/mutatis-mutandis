@@ -496,6 +496,8 @@ def process_cme_file(tree, xml_path):
     """
     Handle University of Michigan Corpus of Middle English (CME) files.
     These use a custom <ETS> root + EEBO-like inner structure without TEI namespaces.
+
+    TODO NB the date detection is kaput for the CME format.
     """
     root = tree.getroot()
     if root.tag != "ETS":
